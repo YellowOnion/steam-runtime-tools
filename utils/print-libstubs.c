@@ -295,7 +295,7 @@ static int
 dso_name_matches (const char *target, const char *maybe)
 {
     const char *dir = strrchr( maybe, '/' );
-    const int   len = strlen( target );
+    const size_t len = strlen( target );
 
     // maybe contains a full path:
     if( !dir )

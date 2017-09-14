@@ -17,7 +17,7 @@
 
 AUTOMAKE_OPTIONS        = subdir-objects
 ACLOCAL_AMFLAGS         = -I m4
-AM_CFLAGS               = --std=c99 -D_GNU_SOURCE -Wall -Werror \
+AM_CFLAGS               = --std=c99 -Wall -Werror \
                           $(LIBELF_CFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start
 

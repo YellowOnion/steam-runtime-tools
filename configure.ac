@@ -15,6 +15,8 @@ dnl GNU Lesser General Public License for more details.
 dnl You should have received a copy of the GNU Lesser General Public
 dnl License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+AC_PREREQ([2.60])
+
 AC_INIT(libcapsule, 0.1)
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -22,6 +24,7 @@ dnl don't kvetch about gnu makefile syntax
 dnl and don't require ChangeLog &co if they don't exist
 AM_INIT_AUTOMAKE([-Wno-portability foreign])
 AM_SILENT_RULES([yes])
+AC_USE_SYSTEM_EXTENSIONS
 
 LT_INIT
 

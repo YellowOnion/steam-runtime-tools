@@ -30,7 +30,7 @@
     {                                                  \
         fprintf(stderr, "! SHIM " #name " called\n" ); \
         backtrace_shim_call();                         \
-        return;                                        \
+        abort();                                       \
     }
 
 #define VERSIONED_STUB(name,version) \

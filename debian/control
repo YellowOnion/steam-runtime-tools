@@ -11,8 +11,9 @@ Build-Depends:
  libelf-dev,
  gtk-doc-tools,
  xsltproc
-Vcs-Git: git://git.collabora.com/git/user/vivek/libcapsule.git
-Vcs-Browser: https://git.collabora.com/cgit/user/vivek/libcapsule.git/
+Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
+Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule
+Homepage: https://gitlab.collabora.com/vivek/libcapsule
 
 Package: libcapsule0
 Architecture: i386 amd64

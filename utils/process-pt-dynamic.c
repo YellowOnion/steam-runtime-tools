@@ -63,7 +63,8 @@ static int
 find_value (ElfW(Addr) base, void *start, size_t size, int what)
 {
     const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
-    return entry ? entry->d_un.d_val : -1;
+    // TODO: what if it doesn't fit in an int?
+    return entry ? (int) entry->d_un.d_val : -1;
 }
 
 // find a sub-entry of a given DT_* type and return its d_ptr field:

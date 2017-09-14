@@ -22,7 +22,7 @@ static_docs             = Building Debugging Limitations Quick-Start
 
 # installable items:
 libexec_PROGRAMS        = capsule-symbols capsule-version
-libexec_SCRIPTS         = data/capsule-mkstublib data/capsule-init-project
+dist_libexec_SCRIPTS    = data/capsule-mkstublib data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
 pkgconfig_DATA          = data/capsule.pc

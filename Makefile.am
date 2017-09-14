@@ -17,8 +17,10 @@
 
 AUTOMAKE_OPTIONS        = subdir-objects
 ACLOCAL_AMFLAGS         = -I m4
-AM_CFLAGS               = --std=c99 -Wall -Werror \
+AM_CFLAGS               = --std=c99 \
+                          $(WARN_CFLAGS) \
                           $(LIBELF_CFLAGS)
+AM_LDFLAGS              = $(WARN_LDFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start
 
 # installable items:

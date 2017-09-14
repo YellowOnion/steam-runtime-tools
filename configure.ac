@@ -23,6 +23,8 @@ AC_INIT([libcapsule],
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 
+m4_pattern_forbid([^AX_], [Please install GNU autoconf-archive])
+
 dnl don't kvetch about gnu makefile syntax
 dnl and don't require ChangeLog &co if they don't exist
 AM_INIT_AUTOMAKE([-Wno-portability foreign])
@@ -31,6 +33,15 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_SYS_LARGEFILE
 
 LT_INIT
+
+AX_IS_RELEASE([dash-version])
+dnl -Wno-pointer-arith: We do a lot of arithmetic on void *, relying on gcc
+dnl     making (void * + int) the same as (char * + int)
+dnl -Wno-declaration-after-statement: Stylistic choice, this is C99
+AX_COMPILER_FLAGS([], [], [], [], [ \
+    -Wno-pointer-arith \
+    -Wno-declaration-after-statement \
+])
 
 dnl make sure we've got the _right_ libelf (doesn't always ship a .pc)
 PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [

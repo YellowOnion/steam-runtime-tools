@@ -47,7 +47,7 @@ Architecture: i386 amd64
 Multi-Arch: foreign
 Section: libdevel
 Priority: optional
-Depends: libcapsule-dev (= ${binary:Version}), bash
+Depends: libcapsule-dev (= ${binary:Version})
 Description:
  libcapsule is a helper library used to implement segregated run-time
  dynamic linking proxy libraries - used (for example) to load a library

@@ -76,6 +76,7 @@ libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
 libcapsule_la_LDFLAGS   = -version-number 0:1
 libcapsule_la_LIBADD    = -lelf
 libcapsule_la_SOURCES  += utils/utils.h              \
+                          utils/debug.h              \
                           utils/dump.h               \
                           utils/process-pt-dynamic.h \
                           utils/mmap-info.h          \

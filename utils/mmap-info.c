@@ -122,7 +122,7 @@ load_mmap_info (int *err, const char **errstr)
 
     while( fgets(&map_line[0], sizeof(map_line), maps) )
     {
-        int offs;
+        size_t offs;
         char *s = NULL;
         int skip = 0;
         map_parse_state p = MAPS_START;

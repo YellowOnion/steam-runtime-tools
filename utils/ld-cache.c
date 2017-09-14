@@ -123,7 +123,7 @@ ld_cache_open (ldcache_t *cache, const char *path)
     fstat( cache->fd, &ldcache );
 
     // cache file must be at least this big or it's invalid:
-    if( ldcache.st_size < sizeof( struct cache_file ) )
+    if( ldcache.st_size < (off_t) sizeof( struct cache_file ) )
         goto cleanup;
 
     cache->mmap =

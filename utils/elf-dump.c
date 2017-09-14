@@ -372,7 +372,7 @@ d_tag (unsigned long tag, int *tag_type)
     return rval;
 }
 
-const char *
+static const char *
 st_bind(int bind)
 {
     switch( bind )
@@ -507,7 +507,8 @@ dump_symtab (const char *indent,
     }
 }
 
-void dump_interp (const char *indent, void *start, size_t size, ElfW(Addr) base)
+static void
+dump_interp (const char *indent, void *start, size_t size, ElfW(Addr) base)
 {
     char interpreter[PATH_MAX + 1] = "";
     interpreter[PATH_MAX] = '\0';
@@ -519,7 +520,7 @@ void dump_interp (const char *indent, void *start, size_t size, ElfW(Addr) base)
     return;
 }
 
-void *
+static void *
 addr (ElfW(Addr) base, ElfW(Addr) ptr)
 {
     if( ptr > base )
@@ -541,14 +542,14 @@ find_dyn (ElfW(Addr) base, void *start, size_t size, int what)
     return NULL;
 }
 
-int
+static int
 find_value (ElfW(Addr) base, void *start, size_t size, int what)
 {
     const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
     return entry ? entry->d_un.d_val : -1;
 }
 
-ElfW(Addr)
+static ElfW(Addr)
 find_ptr (ElfW(Addr) base, void *start, size_t size, int what)
 {
     const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
@@ -556,7 +557,7 @@ find_ptr (ElfW(Addr) base, void *start, size_t size, int what)
 }
 
 
-const ElfW(Sym) *
+static const ElfW(Sym) *
 find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
 {
     ElfW(Sym) *entry;
@@ -584,7 +585,7 @@ find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
     return NULL;
 }
 
-const char *
+static const char *
 find_strtab (ElfW(Addr) base, void *start, size_t size, int *siz)
 {
     ElfW(Dyn) *entry;
@@ -608,7 +609,7 @@ find_strtab (ElfW(Addr) base, void *start, size_t size, int *siz)
     return tab;
 }
 
-const char *
+static const char *
 reloc_type (int rtype)
 {
     switch( __ELF_NATIVE_CLASS )
@@ -688,7 +689,7 @@ reloc_type (int rtype)
     return "???";
 }
 
-void
+static void
 dump_rel (const char *indent,
           const void *start,
           int relsz,
@@ -739,7 +740,7 @@ dump_rel (const char *indent,
     }
 }
 
-void
+static void
 dump_rela (const char *indent,
            const void *start,
            int relasz,
@@ -810,7 +811,7 @@ dump_rela (const char *indent,
     }
 }
 
-void
+static void
 dump_verneed(const char *indent,
              const void *start,
              int entries,
@@ -845,7 +846,7 @@ dump_verneed(const char *indent,
     }
 }
 
-void
+static void
 dump_verdef(const char *indent,
             const void *start,
             int entries,

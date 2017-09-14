@@ -28,7 +28,7 @@ typedef struct
     unsigned int protect;
 } mmapinfo_t;
 
-mmapinfo_t *load_mmap_info (int *err, char **errstr);
+mmapinfo_t *load_mmap_info (int *err, const char **errstr);
 mmapinfo_t *find_mmap_info (mmapinfo_t *maps, void *addr);
 void        free_mmap_info (mmapinfo_t *ptr);
 

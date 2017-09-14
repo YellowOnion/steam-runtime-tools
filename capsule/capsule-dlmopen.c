@@ -85,7 +85,7 @@ wrap (const char *name,
       capsule_item *wrappers)
 {
     int mmap_errno = 0;
-    char *mmap_error = NULL;
+    const char *mmap_error = NULL;
     ElfW(Addr) start = (ElfW(Addr)) dyn - base;
     // we don't know the size so we'll have to rely on the linker putting
     // well formed entries into the mmap()ed DSO region.

@@ -86,7 +86,7 @@ int capsule_relocate (const char *target,
     relocation_data_t rdata = { 0 };
     capsule_item *map;
     int mmap_errno = 0;
-    char *mmap_error = NULL;
+    const char *mmap_error = NULL;
     int rval = 0;
 
     rdata.target    = target;

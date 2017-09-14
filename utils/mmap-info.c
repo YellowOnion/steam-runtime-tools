@@ -97,7 +97,7 @@ reset_mmap_protection(mmapinfo_t *mmap_info)
 }
 
 mmapinfo_t *
-load_mmap_info (int *err, char **errstr)
+load_mmap_info (int *err, const char **errstr)
 {
     FILE *maps = fopen( PROC_FILE, "r" );
     char map_line[80 + PATH_MAX];

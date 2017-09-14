@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 void
-capsule_init ()
+capsule_init (void)
 {
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 }

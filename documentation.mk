@@ -31,6 +31,8 @@ XSLT_MAN = http://$(XSLT_DOMAIN)/release/xsl/current/manpages/docbook.xsl
 XSLT_CAPARGS = --stringparam fsinfo "\#include <capsule.h>" --stringparam target
 XSLTPROC_STD = $(XSLTPROC) $(XSLTPROC_FLAGS)
 
+if ENABLE_GTK_DOC
+
 %.1: doc/%.xml
 	$(AM_V_GEN) $(XSLTPROC_STD) $(XSLT_MAN) $<
 
@@ -50,3 +52,5 @@ man_MANS   += capsule_shim_dlopen.3
 man_MANS   += capsule_shim_dlsym.3
 
 CLEANFILES += $(man_MANS)
+
+endif # ENABLE_GTK_DOC

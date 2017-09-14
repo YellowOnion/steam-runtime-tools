@@ -217,7 +217,7 @@ ld_cache_foreach (ldcache_t *cache, ld_cache_entry_cb cb, void *data)
     switch( cache->type )
     {
       case CACHE_OLD:
-        for (int i = 0; !rval && (i < cache->file.old->nlibs); i++)
+        for (unsigned i = 0; !rval && (i < cache->file.old->nlibs); i++)
         {
             struct file_entry *f = &cache->file.old->libs[i];
             rval = cb( base + f->key, f->flags, 0, 0, base + f->value, data );
@@ -225,7 +225,7 @@ ld_cache_foreach (ldcache_t *cache, ld_cache_entry_cb cb, void *data)
         break;
 
       case CACHE_NEW:
-        for (int i = 0; !rval && (i < cache->file.new->nlibs); i++)
+        for (unsigned i = 0; !rval && (i < cache->file.new->nlibs); i++)
         {
             struct file_entry_new *f = &cache->file.new->libs[i];
             rval = cb( base + f->key, f->flags,

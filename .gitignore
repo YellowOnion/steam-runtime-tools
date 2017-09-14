@@ -1,6 +1,7 @@
 .deps
+/.version
 /INSTALL
-/build-aux
+/build-aux/*
 Makefile.in
 aclocal.m4
 autom4te.cache
@@ -59,3 +60,4 @@ libcapsule-*.txt
 *.interfaces
 *.prerequisites
 *.signals
+!/build-aux/git-version-gen

@@ -17,7 +17,9 @@ dnl License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ([2.60])
 
-AC_INIT(libcapsule, 0.1)
+AC_INIT([libcapsule],
+        m4_esyscmd([build-aux/git-version-gen .tarball-version]),
+        [], [], [https://gitlab.collabora.com/vivek/libcapsule])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 

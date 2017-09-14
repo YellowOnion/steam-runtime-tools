@@ -88,7 +88,16 @@ dist_pkgdata_DATA       = data/capsule-shim.h     \
                           data/capsule-shim.mk.in \
                           disabled.mk
 
-BUILT_SOURCES = $(shim_srcs)
+BUILT_SOURCES           = $(shim_srcs)
+BUILT_SOURCES          += $(top_srcdir)/.version
+
+$(top_srcdir)/.version:
+	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@
+
+dist-hook: dist-hook-git-version-gen
+.PHONY: dist-hook-git-version-gen
+dist-hook-git-version-gen:
+	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 
 include $(top_srcdir)/disabled.mk
 
@@ -119,3 +128,7 @@ CLEANFILES    += $(shim_files) $(shim_srcs)
 # ============================================================================
 # standalone man pages
 include  $(top_srcdir)/documentation.mk
+
+# This needs to come after we include gtk-doc.make, which unconditionally
+# defines it
+EXTRA_DIST             += $(top_srcdir)/.version

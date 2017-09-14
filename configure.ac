@@ -25,14 +25,23 @@ AM_SILENT_RULES([yes])
 
 LT_INIT
 
-dnl make sure we've got the _right_ libelf (doesn't ship a .pc)
-AC_CHECK_TYPE([Elf_Cmd], [], [], [#include <libelf.h>])
-AC_MSG_CHECKING([Elf_Cmd ELF_C_READ_MMAP])
-AC_RUN_IFELSE([AC_LANG_PROGRAM([#include <libelf.h>],
-                               [Elf_Cmd x = ELF_C_READ_MMAP;])],
-              [AC_MSG_RESULT([yes])],
-              [AC_MSG_RESULT([no])]
-              [AC_MSG_ERROR([ELF_C_READ_MMAP missing: libelfg vs libelf0?])])
+dnl make sure we've got the _right_ libelf (doesn't always ship a .pc)
+PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
+    AC_MSG_WARN([libelf.pc not found])
+    AC_MSG_WARN([Set LIBELF_CFLAGS, LIBELF_LIBS if -lelf is insufficient])
+    save_LIBS="$LIBS"
+    AC_CHECK_TYPE([Elf_Cmd], [], [], [#include <libelf.h>])
+    AC_CHECK_LIB([elf], [elf_begin], [],
+                 [AC_MSG_ERROR([libelf not found])])
+    AC_MSG_CHECKING([Elf_Cmd ELF_C_READ_MMAP])
+    AC_RUN_IFELSE([AC_LANG_PROGRAM([#include <libelf.h>],
+                                   [Elf_Cmd x = ELF_C_READ_MMAP;])],
+                  [AC_MSG_RESULT([yes])],
+                  [AC_MSG_RESULT([no])]
+                  [AC_MSG_ERROR([ELF_C_READ_MMAP missing: libelfg vs libelf0?])])
+    LIBS="$save_LIBS"
+    LIBELF_LIBS=-lelf
+])
 
 AC_SEARCH_LIBS([dlmopen], [dl])
 AC_PATH_PROG([XSLTPROC], [xsltproc])

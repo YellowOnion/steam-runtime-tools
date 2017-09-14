@@ -17,7 +17,8 @@
 
 AUTOMAKE_OPTIONS        = subdir-objects
 ACLOCAL_AMFLAGS         = -I m4
-AM_CFLAGS               = --std=c99 -D_GNU_SOURCE -Wall -Werror
+AM_CFLAGS               = --std=c99 -D_GNU_SOURCE -Wall -Werror \
+                          $(LIBELF_CFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start
 
 # installable items:
@@ -45,7 +46,7 @@ capsule_symbols_SOURCES += \
                           utils/utils.h          \
                           utils/ld-cache.h       \
                           utils/ld-libs.h
-capsule_symbols_LDADD   = -ldl -lelf
+capsule_symbols_LDADD   = -ldl $(LIBELF_LIBS)
 # this looks like a no-op but it gives capsule_symbols its own target
 # so that libtool doesn't get bent out of shape about using an object
 # (ld-cache.o, ld-libs.o) as both part of a library and a standalone
@@ -60,7 +61,7 @@ capsule_version_SOURCES += \
                           utils/utils.h          \
                           utils/ld-cache.h       \
                           utils/ld-libs.h
-capsule_version_LDADD   = -ldl -lelf
+capsule_version_LDADD   = -ldl $(LIBELF_LIBS)
 capsule_version_CFLAGS  = $(AM_CFLAGS)
 
 
@@ -74,7 +75,7 @@ libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           utils/ld-cache.c           \
                           utils/ld-libs.c
 libcapsule_la_LDFLAGS   = -version-number 0:1
-libcapsule_la_LIBADD    = -lelf
+libcapsule_la_LIBADD    = $(LIBELF_LIBS)
 libcapsule_la_SOURCES  += utils/utils.h              \
                           utils/debug.h              \
                           utils/dump.h               \

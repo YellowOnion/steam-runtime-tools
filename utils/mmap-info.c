@@ -104,7 +104,7 @@ load_mmap_info (int *err, const char **errstr)
     int map_entries = 0;
     mmapinfo_t *entries = NULL;
 
-    if( maps <= 0 )
+    if( !maps )
         ERROR("Warning: could not open " PROC_FILE);
 
     while( fgets(&map_line[0], sizeof(map_line), maps) )

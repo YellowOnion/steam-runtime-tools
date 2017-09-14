@@ -14,7 +14,7 @@ Build-Depends:
 Vcs-Git: git://git.collabora.com/git/user/vivek/libcapsule.git
 Vcs-Browser: https://git.collabora.com/cgit/user/vivek/libcapsule.git/
 
-Package: libcapsule
+Package: libcapsule0
 Architecture: i386 amd64
 Multi-Arch: same
 Section: libs

@@ -18,6 +18,7 @@ dnl License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 AC_PREREQ([2.60])
 
 AC_INIT(libcapsule, 0.1)
+AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 
 dnl don't kvetch about gnu makefile syntax

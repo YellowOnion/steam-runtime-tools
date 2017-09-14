@@ -33,7 +33,7 @@ dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 noinst_PROGRAMS         = elf-dump
 
 elf_dump_SOURCES        = utils/elf-dump.c
-elf_dump_LDFLAGS        = -ldl
+elf_dump_LDADD          = -ldl
 elf_dump_SOURCES       += utils/utils.h
 
 # now the rules for building our installables:
@@ -45,7 +45,7 @@ capsule_symbols_SOURCES += \
                           utils/utils.h          \
                           utils/ld-cache.h       \
                           utils/ld-libs.h
-capsule_symbols_LDFLAGS = -ldl -lelf
+capsule_symbols_LDADD   = -ldl -lelf
 # this looks like a no-op but it gives capsule_symbols its own target
 # so that libtool doesn't get bent out of shape about using an object
 # (ld-cache.o, ld-libs.o) as both part of a library and a standalone
@@ -60,7 +60,7 @@ capsule_version_SOURCES += \
                           utils/utils.h          \
                           utils/ld-cache.h       \
                           utils/ld-libs.h
-capsule_version_LDFLAGS = -ldl -lelf
+capsule_version_LDADD   = -ldl -lelf
 capsule_version_CFLAGS  = $(AM_CFLAGS)
 
 
@@ -73,7 +73,8 @@ libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           utils/mmap-info.c          \
                           utils/ld-cache.c           \
                           utils/ld-libs.c
-libcapsule_la_LDFLAGS   = -lelf -version-number 0:1  \
+libcapsule_la_LDFLAGS   = -version-number 0:1
+libcapsule_la_LIBADD    = -lelf
 libcapsule_la_SOURCES  += utils/utils.h              \
                           utils/dump.h               \
                           utils/process-pt-dynamic.h \

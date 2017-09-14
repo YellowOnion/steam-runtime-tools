@@ -214,35 +214,6 @@ find_ptr (ElfW(Addr) base, void *start, int what)
     return entry ? entry->d_un.d_ptr : (ElfW(Addr)) NULL;
 }
 
-
-const ElfW(Sym) *
-find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
-{
-    ElfW(Sym) *entry;
-    ElfW(Sym) *target = (ElfW(Sym) *)stab + idx;
-
-    if( idx < 0 )
-        return NULL;
-
-    // we could just accept the index as legitimate but then we'd
-    // run the risk of popping off into an unknown hyperspace coordinate
-    // this way we stop if the target is past the known end of the table:
-    for( entry = (ElfW(Sym) *)stab;
-         ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
-           (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
-         entry++ )
-    {
-        if( entry == target )
-        {
-            if( name )
-                *name = (char *)str + entry->st_name;
-            return target;
-        }
-    }
-
-    return NULL;
-}
-
 const char *
 find_strtab (ElfW(Addr) base, void *start, int *siz)
 {

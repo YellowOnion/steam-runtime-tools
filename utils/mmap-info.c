@@ -217,6 +217,10 @@ load_mmap_info (int *err, const char **errstr)
                 if( !path && !isblank(*c) )
                     path = c;
                 break;
+
+              default:
+                // invalid state reached: can't happen
+                abort();
             }
         }
     }

@@ -176,6 +176,10 @@ parse_symtab (const void *start,
                      defversym ? "@"     : "" ,
                      version   ? version : "" );
             break;
+
+          default:
+            // Assumed to be uninteresting?
+            break;
         }
     }
 }

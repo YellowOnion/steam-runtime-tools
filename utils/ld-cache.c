@@ -233,6 +233,7 @@ ld_cache_foreach (ldcache_t *cache, ld_cache_entry_cb cb, void *data)
         }
         break;
 
+      case CACHE_NONE:
       default:
         fprintf( stderr, "Invalid ld cache type %d", cache->type );
         break;

@@ -642,6 +642,7 @@ reloc_type (int rtype)
           case R_X86_64_DTPOFF32:  return "DTPOFF32";  // Offset in TLS block
           case R_X86_64_GOTTPOFF:  return "GOTTPOFF";  // 32 bit PC relative offset to GOT entry for IE symbol
           case R_X86_64_TPOFF32:   return "TPOFF32";   // Offset in initial TLS
+          default:                 break;
         }
         break;
       case 32:
@@ -683,7 +684,12 @@ reloc_type (int rtype)
           case R_386_TLS_DTPMOD32: return "TLS_DTPMOD32"; // ID of module containing symbol
           case R_386_TLS_DTPOFF32: return "TLS_DTPOFF32"; // Offset in TLS block
           case R_386_TLS_TPOFF32:  return "TLS_TPOFF32";  // Negated offset in static TLS block
+          default:                 break;
         }
+        break;
+      default:
+        fprintf( stderr, "Unknown __ELF_NATIVE_CLASS\n" );
+        abort();
         break;
     }
 

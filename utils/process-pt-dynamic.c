@@ -526,6 +526,10 @@ process_dt_rel (const void *start,
             slot = addr( base, entry->r_offset, 0 );
             try_relocation( slot, name, data );
             break;
+
+          default:
+            // Do nothing? Is this right?
+            break;
         }
     }
 
@@ -651,6 +655,10 @@ process_pt_dynamic (void *start,
                 ret = 1;
                 break;
             }
+
+          default:
+            // Not relevant to us?
+            break;
         }
 
     return ret;

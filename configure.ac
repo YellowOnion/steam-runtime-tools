@@ -25,6 +25,7 @@ dnl and don't require ChangeLog &co if they don't exist
 AM_INIT_AUTOMAKE([-Wno-portability foreign])
 AM_SILENT_RULES([yes])
 AC_USE_SYSTEM_EXTENSIONS
+AC_SYS_LARGEFILE
 
 LT_INIT
 

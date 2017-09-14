@@ -21,6 +21,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "debug.h"
+#include "utils.h"
 
 unsigned long debug_flags;
 

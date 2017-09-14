@@ -28,6 +28,7 @@
 #include <limits.h>
 
 #include <link.h>
+#include "dump.h"
 #include "utils.h"
 
 // this file is a home for the various ways of parsing the ELF layout

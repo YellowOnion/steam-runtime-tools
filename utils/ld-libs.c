@@ -39,7 +39,7 @@ struct dso_cache_search
     ld_libs_t *ldlibs;
 };
 
-static const struct stat *stat_caller ();
+static const struct stat *stat_caller (void);
 
 // make sure the prefix buffer is properly NUL terminated
 static inline void sanitise_ldlibs(ld_libs_t *ldlibs)
@@ -960,7 +960,7 @@ ld_libs_finish (ld_libs_t *ldlibs)
 // This is to support the libcapsule-proxies-will-not-reopen-themselves
 // infinite loop prevention mechanism.
 static const struct stat *
-stat_caller ()
+stat_caller (void)
 {
     static struct stat cdso = { 0 };
     static int done = 0;

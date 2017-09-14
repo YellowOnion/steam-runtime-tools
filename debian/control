@@ -34,7 +34,7 @@ Architecture: i386 amd64
 Multi-Arch: same
 Section: libdevel
 Priority: optional
-Depends: libcapsule (= ${binary:Version}), libc6-dev, libelf-dev
+Depends: libcapsule0 (= ${binary:Version}), libc6-dev, libelf-dev
 Description: 
  libcapsule is a helper library used to implement segregated run-time
  dynamic linking proxy libraries - used (for example) to load a library

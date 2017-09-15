@@ -74,8 +74,12 @@ void capsule_init (void);
  * @target: The DSO from which to export symbols (currently unused)
  * @source: The dl handle from which to export symbols
  * @debug: Internal debug flag. Pass 0 here.
- * @relocations: Array of capsule_item specifying which symbols to export
- * @error: location in which to store an error string on failure
+ * @relocations: (array zero-terminated=1): Array of capsule_item
+ *               specifying which symbols to export, terminated by a
+ *               #capsule_item whose @name is %NULL
+ * @error: (out) (transfer full) (optional): location in which to store
+ *         an error message on failure, or %NULL to ignore.
+ *         Free with free().
  *
  * Returns: 0 on success, non-zero on failure.
  *
@@ -104,9 +108,12 @@ int capsule_relocate (const char *target,
  * @namespace: Address of an #Lmid_t value (usually %LM_ID_NEWLM)
  * @wrappers: Array of #capsule_item used to replace symbols in the namespace
  * @debug: Internal debug flags. Pass 0 here.
- * @exclude: an array of char *, each specfying a DSO not to load
- * @errcode: location in which to store the error code on failure
- * @error: location in which to store an error message on failure
+ * @exclude: (array zero-terminated=1): an array of char *, each
+ *           specifying a DSO not to load, terminated by a %NULL entry
+ * @errcode: (out): location in which to store the error code (errno) on failure
+ * @error: (out) (transfer full) (optional): location in which to store
+ *         an error message on failure, or %NULL to ignore.
+ *         Free with free().
  *
  * Returns: A (void *) DSO handle, as per dlopen(3), or %NULL on error
  *

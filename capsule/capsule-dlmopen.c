@@ -165,6 +165,11 @@ excluded_from_wrap (const char *name, char **exclude)
     return 0;
 }
 
+/*
+ * @exclude: (array zero-terminated=1): same as for capsule_dlmopen()
+ * @errcode: (out): errno
+ * @error: (out) (transfer full) (optional): Error string
+ */
 // replace calls out to dlopen in the encapsulated DSO with a wrapper
 // which should take care of preserving the /path-prefix and namespace
 // wrapping of the original capsule_dlmopen() call.

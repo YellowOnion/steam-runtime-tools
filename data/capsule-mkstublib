@@ -123,6 +123,16 @@ fi
 
 if [ -f ${dlsym_file} ];
 then
+    echo "// DSOs to restrict dlsym lookups to:";
+    echo "static const char *valid_dlsym_sources[] = ";
+    echo "{";
+    for pt in $proxied_dso $(cat $proxy_extra);
+    do
+        echo "  \"$pt\",";
+    done;
+    echo "  NULL";
+    echo "};";
+
     echo "// -------------------------------------------------------------";
     echo "// start of ${proxy_src%.c} dlsym wrapper";
     cat $dlsym_file;

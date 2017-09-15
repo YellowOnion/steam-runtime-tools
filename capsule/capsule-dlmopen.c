@@ -182,13 +182,15 @@ static int install_wrappers ( void *dl_handle,
 
     if( dlinfo( dl_handle, RTLD_DI_LINKMAP, &map ) != 0 )
     {
+        const char *local_error = dlerror();
+
         if( error )
-            *error = strdup( dlerror() );
+            *error = strdup( local_error );
 
         if( errcode )
             *errcode = EINVAL;
 
-        DEBUG( DEBUG_WRAPPERS, "mangling capsule symbols: %s", *error );
+        DEBUG( DEBUG_WRAPPERS, "mangling capsule symbols: %s", local_error );
 
         return -1;
     }

@@ -8,6 +8,10 @@ confflags = --libexecdir=\$${libdir}/capsule --enable-gtk-doc
 override_dh_auto_configure:
 	dh_auto_configure -- $(confflags)
 
+override_dh_install:
+	rm -f debian/tmp/usr/lib/*/*.la
+	dh_install --fail-missing
+
 override_dh_autoreconf:
 	NOCONFIGURE=1 dh_autoreconf ./autogen.sh -- $(confflags)
 

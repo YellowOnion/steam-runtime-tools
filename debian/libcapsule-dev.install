@@ -1,4 +1,3 @@
-usr/lib/*/libcapsule.la
 usr/lib/*/libcapsule.a
 usr/lib/*/libcapsule.so
 usr/lib/*/pkgconfig/

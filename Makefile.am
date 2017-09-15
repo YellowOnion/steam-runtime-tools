@@ -107,14 +107,14 @@ include $(top_srcdir)/disabled.mk
 # gtk-doc configuration: see /usr/share/doc/gtk-doc-tools/examples/Makefile.am
 DOC_MODULE           = libcapsule
 DOC_MAIN_SGML_FILE   = $(DOC_MODULE)-docs.xml
-DOC_SOURCE_DIR       = capsule
+DOC_SOURCE_DIR       = $(top_srcdir)/capsule
 SCAN_OPTIONS         =
 MKDB_OPTIONS         = --xml-mode --output-format=xml
 MKTMPL_OPTIONS       =
 MKHTML_OPTIONS       =
 FIXXREF_OPTIONS      =
-HFILE_GLOB           = capsule/capsule.h
-CFILE_GLOB           =
+HFILE_GLOB           = $(top_srcdir)/capsule/capsule.h
+CFILE_GLOB           = $(top_srcdir)/capsule/*.c
 EXTRA_HFILES         =
 IGNORE_HFILES        =
 HTML_IMAGES          =

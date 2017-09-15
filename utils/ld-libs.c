@@ -47,10 +47,11 @@ static inline void sanitise_ldlibs(ld_libs_t *ldlibs)
     ldlibs->prefix.path[ ldlibs->prefix.len ] = '\0';
 }
 
+// Note that this is not re-entrant. In this context we don't care.
 static const char *
 _rtldstr(int flag)
 {
-    char flags[160] = { 0 };
+    static char flags[160] = { 0 };
     char *f = &flags[0];
 
     if( !flag)

@@ -108,7 +108,7 @@ include $(top_srcdir)/disabled.mk
 DOC_MODULE           = libcapsule
 DOC_MAIN_SGML_FILE   = $(DOC_MODULE)-docs.xml
 DOC_SOURCE_DIR       = $(top_srcdir)/capsule
-SCAN_OPTIONS         =
+SCAN_OPTIONS         = --rebuild-sections --rebuild-types
 MKDB_OPTIONS         = --xml-mode --output-format=xml
 MKTMPL_OPTIONS       =
 MKHTML_OPTIONS       =

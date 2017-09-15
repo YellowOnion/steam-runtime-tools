@@ -762,7 +762,7 @@ dump_rela (const char *indent,
     {
         int sym;
         int chr;
-        char *name;
+        char *name = NULL;
 
         const ElfW(Sym) *symbol;
 

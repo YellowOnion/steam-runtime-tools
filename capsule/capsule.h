@@ -19,6 +19,8 @@
 
 #include <link.h>
 
+#define _CAPSULE_PUBLIC __attribute__((visibility("default"))) extern
+
 /**
  * capsule_addr:
  *
@@ -64,6 +66,7 @@ struct _capsule_item
  * Currently just initialises the debug flags from the CAPSULE_DEBUG
  * environment variable.
  */
+_CAPSULE_PUBLIC
 void capsule_init (void);
 
 /**
@@ -87,6 +90,7 @@ void capsule_init (void);
  * In the unlikely event that an error message is returned in @error it is the
  * caller's responsibility to free() it.
  */
+_CAPSULE_PUBLIC
 int capsule_relocate (const char *target,
                       void *source,
                       unsigned long debug,
@@ -130,6 +134,7 @@ int capsule_relocate (const char *target,
  *
  * An empty ("") or void (%NULL) @prefix is equivalent to "/".
  */
+_CAPSULE_PUBLIC
 void *capsule_dlmopen (const char *dso,
                        const char *prefix,
                        Lmid_t *namespace,
@@ -165,6 +170,7 @@ void *capsule_dlmopen (const char *dso,
  * Limitations: RTLD_GLOBAL is not supported in @flag. This is a glibc
  * limitation in the dlmopen() implementation.
  */
+_CAPSULE_PUBLIC
 void *capsule_shim_dlopen(Lmid_t ns,
                           const char *prefix,
                           const char **exclude,
@@ -199,6 +205,7 @@ void *capsule_shim_dlopen(Lmid_t ns,
  * intended for use in a suitable wrapper implemented in the the shim
  * library.
  */
+_CAPSULE_PUBLIC
 void *
 capsule_shim_dlsym (void *capsule,
                     void *handle,

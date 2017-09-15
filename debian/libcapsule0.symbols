@@ -1,0 +1,2 @@
+libcapsule.so.0 libcapsule0 #MINVER#
+* Build-Depends-Package: libcapsule-dev

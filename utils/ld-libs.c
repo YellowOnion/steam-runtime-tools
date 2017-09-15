@@ -446,7 +446,7 @@ search_ldpath (const char *name, const char *ldpath, ld_libs_t *ldlibs, int i)
 
         end = strchr( sp, ':' );
         if( end )
-            len = MIN((end - sp), PATH_MAX - plen - 1);
+            len = MIN((size_t) (end - sp), PATH_MAX - plen - 1);
         else
             len = MIN(strlen( sp ), PATH_MAX - plen - 1);
 

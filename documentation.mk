@@ -39,7 +39,7 @@ if ENABLE_GTK_DOC
 xml/capsule.xml: docs
 
 %.3.xml: xml/capsule.xml doc/devhelp2man.xslt
-	$(AM_V_GEN) $(XSLTPROC_STD) $(XSLT_CAPARGS) $* doc/devhelp2man.xslt $< > $@
+	$(AM_V_GEN) $(XSLTPROC_STD) $(XSLT_CAPARGS) $* $(srcdir)/doc/devhelp2man.xslt $< > $@
 
 %.3: %.3.xml
 	$(AM_V_GEN) $(XSLTPROC_STD) $(XSLT_MAN) $<

@@ -27,14 +27,14 @@ typedef struct
     char *end;
     unsigned int protect;
     int invalid;
-} mmapinfo_t;
+} mmapinfo;
 
-mmapinfo_t *load_mmap_info (int *err, const char **errstr);
-mmapinfo_t *find_mmap_info (mmapinfo_t *maps, void *addr);
-void        free_mmap_info (mmapinfo_t *ptr);
+mmapinfo *load_mmap_info (int *err, const char **errstr);
+mmapinfo *find_mmap_info (mmapinfo *maps, void *addr);
+void        free_mmap_info (mmapinfo *ptr);
 
-int add_mmap_protection   (mmapinfo_t *mmap_info, unsigned int flags);
-int reset_mmap_protection (mmapinfo_t *mmap_info);
+int add_mmap_protection   (mmapinfo *mmap_info, unsigned int flags);
+int reset_mmap_protection (mmapinfo *mmap_info);
 
-int mmap_entry_should_be_writable (mmapinfo_t *mmap_info);
+int mmap_entry_should_be_writable (mmapinfo *mmap_info);
 

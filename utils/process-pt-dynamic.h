@@ -35,7 +35,7 @@ typedef struct
     struct { int success; int failure; } count;
     int debug;
     char *error;
-    mmapinfo_t *mmap_info;
+    mmapinfo *mmap_info;
 } relocation_data_t;
 
 typedef int (*relocate_cb_t)(const void *start,

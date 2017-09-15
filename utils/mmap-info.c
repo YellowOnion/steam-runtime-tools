@@ -49,14 +49,14 @@ typedef enum
        return NULL; })
 
 void
-free_mmap_info(mmapinfo_t *ptr)
+free_mmap_info(mmapinfo *ptr)
 {
     if( ptr )
         free( ptr );
 }
 
-mmapinfo_t *
-find_mmap_info(mmapinfo_t *maps, void *addr)
+mmapinfo *
+find_mmap_info(mmapinfo *maps, void *addr)
 {
     if( !maps )
         return NULL;
@@ -76,7 +76,7 @@ find_mmap_info(mmapinfo_t *maps, void *addr)
 }
 
 int
-add_mmap_protection(mmapinfo_t *mmap_info, unsigned int flags)
+add_mmap_protection(mmapinfo *mmap_info, unsigned int flags)
 {
     ElfW(Addr)   start = (ElfW(Addr)) mmap_info->start;
     ElfW(Addr)   end   = (ElfW(Addr)) mmap_info->end;
@@ -87,7 +87,7 @@ add_mmap_protection(mmapinfo_t *mmap_info, unsigned int flags)
 }
 
 int
-reset_mmap_protection(mmapinfo_t *mmap_info)
+reset_mmap_protection(mmapinfo *mmap_info)
 {
     ElfW(Addr)    start = (ElfW(Addr)) mmap_info->start;
     ElfW(Addr)    end   = (ElfW(Addr)) mmap_info->end;
@@ -96,13 +96,13 @@ reset_mmap_protection(mmapinfo_t *mmap_info)
     return mprotect( (void *)start, size, mmap_info->protect );
 }
 
-mmapinfo_t *
+mmapinfo *
 load_mmap_info (int *err, const char **errstr)
 {
     FILE *maps = fopen( PROC_FILE, "r" );
     char map_line[80 + PATH_MAX];
     int map_entries = 0;
-    mmapinfo_t *entries = NULL;
+    mmapinfo *entries = NULL;
 
     if( !maps )
         ERROR("Warning: could not open " PROC_FILE);
@@ -114,7 +114,7 @@ load_mmap_info (int *err, const char **errstr)
         ERROR("Warning: Unable to seek to start of " PROC_FILE);
 
     if( map_entries > 0 )
-        entries = calloc( map_entries + 1, sizeof(mmapinfo_t) );
+        entries = calloc( map_entries + 1, sizeof(mmapinfo) );
     else
         ERROR("Warning: no mmap entries found in " PROC_FILE);
 
@@ -244,7 +244,7 @@ load_mmap_info (int *err, const char **errstr)
 }
 
 int
-mmap_entry_should_be_writable (mmapinfo_t *mmap_info)
+mmap_entry_should_be_writable (mmapinfo *mmap_info)
 {
     // malformed or unparseable entry - cannot handle:
     if( mmap_info->invalid )

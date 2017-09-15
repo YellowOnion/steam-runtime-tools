@@ -29,7 +29,7 @@ TAGS
 tags
 *~
 debian/*.log
-debian/libcapsule
+debian/libcapsule0
 debian/*-dev
 debian/*-dev-bin
 debian/tmp

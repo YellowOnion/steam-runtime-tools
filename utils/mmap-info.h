@@ -26,6 +26,7 @@ typedef struct
     char *start;
     char *end;
     unsigned int protect;
+    int invalid;
 } mmapinfo_t;
 
 mmapinfo_t *load_mmap_info (int *err, const char **errstr);

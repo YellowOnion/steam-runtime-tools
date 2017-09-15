@@ -219,9 +219,17 @@ load_mmap_info (int *err, const char **errstr)
                 break;
 
               default:
-                // invalid state reached: can't happen
-                abort();
+                // invalid state reached: flag and move on:
+                fprintf( stderr, "Cannot parse mmap info: %s\n", map_line );
+                entries[l].invalid = 1;
+                entries[l].protect = PROT_NONE;
+                entries[l].path[PATH_MAX - 1] = '\0';
+                break;
             }
+
+            // bogus/unparseable line, proceed to next entry:
+            if( entries[l].invalid )
+                continue;
         }
     }
 
@@ -238,6 +246,10 @@ load_mmap_info (int *err, const char **errstr)
 int
 mmap_entry_should_be_writable (mmapinfo_t *mmap_info)
 {
+    // malformed or unparseable entry - cannot handle:
+    if( mmap_info->invalid )
+        return 0;
+
     // already has write permissions, don't care:
     if( mmap_info->protect & PROT_WRITE )
         return 0;

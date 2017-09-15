@@ -183,7 +183,7 @@ static int install_wrappers ( void *dl_handle,
     if( dlinfo( dl_handle, RTLD_DI_LINKMAP, &map ) != 0 )
     {
         if( error )
-            *error = dlerror();
+            *error = strdup( dlerror() );
 
         if( errcode )
             *errcode = EINVAL;

@@ -523,13 +523,127 @@ process_dt_rel (const void *start,
             void *slot;
 
        // case R_386_JMP_SLOT: secretly the same
+          case R_X86_64_GLOB_DAT:
           case R_X86_64_JUMP_SLOT:
+          case R_X86_64_64:
             slot = addr( base, entry->r_offset, 0 );
+            DEBUG( DEBUG_ELF,
+                   "%s: %p ← { offset: %"FMT_ADDR"; addend: n/a }",
+                   reloc_type_name( chr ),
+                   slot, entry->r_offset );
             try_relocation( slot, name, data );
             break;
 
+          case R_X86_64_NONE:
+            DUMP_SLOTINFO(name, R_X86_64_NONE);
+            break;
+          case R_X86_64_PC32:
+            DUMP_SLOTINFO(name, R_X86_64_PC32);
+            break;
+          case R_X86_64_GOT32:
+            DUMP_SLOTINFO(name, R_X86_64_GOT32);
+            break;
+          case R_X86_64_PLT32:
+            DUMP_SLOTINFO(name, R_X86_64_PLT32);
+            break;
+          case R_X86_64_COPY:
+            DUMP_SLOTINFO(name, R_X86_64_COPY);
+            break;
+          case R_X86_64_RELATIVE:
+            DUMP_SLOTINFO(name, R_X86_64_RELATIVE);
+            break;
+          case R_X86_64_GOTPCREL:
+            DUMP_SLOTINFO(name, R_X86_64_GOTPCREL);
+            break;
+          case R_X86_64_32:
+            DUMP_SLOTINFO(name, R_X86_64_32);
+            break;
+          case R_X86_64_32S:
+            DUMP_SLOTINFO(name, R_X86_64_32S);
+            break;
+          case R_X86_64_16:
+            DUMP_SLOTINFO(name, R_X86_64_16);
+            break;
+          case R_X86_64_PC16:
+            DUMP_SLOTINFO(name, R_X86_64_PC16);
+            break;
+          case R_X86_64_8:
+            DUMP_SLOTINFO(name, R_X86_64_8);
+            break;
+          case R_X86_64_PC8:
+            DUMP_SLOTINFO(name, R_X86_64_PC8);
+            break;
+          case R_X86_64_DTPMOD64:
+            DUMP_SLOTINFO(name, R_X86_64_DTPMOD64);
+            break;
+          case R_X86_64_DTPOFF64:
+            DUMP_SLOTINFO(name, R_X86_64_DTPOFF64);
+            break;
+          case R_X86_64_TPOFF64:
+            DUMP_SLOTINFO(name, R_X86_64_TPOFF64);
+            break;
+          case R_X86_64_TLSGD:
+            DUMP_SLOTINFO(name, R_X86_64_TLSGD);
+            break;
+          case R_X86_64_TLSLD:
+            DUMP_SLOTINFO(name, R_X86_64_TLSLD);
+            break;
+          case R_X86_64_DTPOFF32:
+            DUMP_SLOTINFO(name, R_X86_64_DTPOFF32);
+            break;
+          case R_X86_64_GOTTPOFF:
+            DUMP_SLOTINFO(name, R_X86_64_GOTTPOFF);
+            break;
+          case R_X86_64_TPOFF32:
+            DUMP_SLOTINFO(name, R_X86_64_TPOFF32);
+            break;
+          case R_X86_64_PC64:
+            DUMP_SLOTINFO(name, R_X86_64_PC64);
+            break;
+          case R_X86_64_GOTOFF64:
+            DUMP_SLOTINFO(name, R_X86_64_GOTOFF64);
+            break;
+          case R_X86_64_GOTPC32:
+            DUMP_SLOTINFO(name, R_X86_64_GOTPC32);
+            break;
+          case R_X86_64_GOT64:
+            DUMP_SLOTINFO(name, R_X86_64_GOT64);
+            break;
+          case R_X86_64_GOTPCREL64:
+            DUMP_SLOTINFO(name, R_X86_64_GOTPCREL64);
+            break;
+          case R_X86_64_GOTPC64:
+            DUMP_SLOTINFO(name, R_X86_64_GOTPC64);
+            break;
+          case R_X86_64_GOTPLT64:
+            DUMP_SLOTINFO(name, R_X86_64_GOTPLT64);
+            break;
+          case R_X86_64_PLTOFF64:
+            DUMP_SLOTINFO(name, R_X86_64_PLTOFF64);
+            break;
+          case R_X86_64_SIZE32:
+            DUMP_SLOTINFO(name, R_X86_64_SIZE32);
+            break;
+          case R_X86_64_SIZE64:
+            DUMP_SLOTINFO(name, R_X86_64_SIZE64);
+            break;
+          case R_X86_64_GOTPC32_TLSDESC:
+            DUMP_SLOTINFO(name, R_X86_64_GOTPC32_TLSDESC);
+            break;
+          case R_X86_64_TLSDESC_CALL:
+            DUMP_SLOTINFO(name, R_X86_64_TLSDESC_CALL);
+            break;
+          case R_X86_64_TLSDESC:
+            DUMP_SLOTINFO(name, R_X86_64_TLSDESC);
+            break;
+          case R_X86_64_IRELATIVE:
+            DUMP_SLOTINFO(name, R_X86_64_IRELATIVE);
+            break;
+          case R_X86_64_RELATIVE64:
+            DUMP_SLOTINFO(name, R_X86_64_RELATIVE64);
+            break;
           default:
-            // Do nothing? Is this right?
+            DUMP_SLOTINFO(name, chr);
             break;
         }
     }

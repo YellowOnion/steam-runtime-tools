@@ -6,6 +6,7 @@ Standards-Version: 3.9.8
 Build-Depends:
  dh-autoreconf,
  autoconf,
+ autoconf-archive (>= 20160916-1),
  automake,
  debhelper,
  libelf-dev,

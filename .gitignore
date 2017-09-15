@@ -2,6 +2,7 @@
 /.version
 /INSTALL
 /build-aux/*
+/m4/*
 Makefile.in
 aclocal.m4
 autom4te.cache
@@ -9,8 +10,6 @@ config.status
 config.log
 configure
 libtool
-m4
-m4/*
 update
 Makefile
 .*stamp
@@ -61,3 +60,4 @@ libcapsule-*.txt
 *.prerequisites
 *.signals
 !/build-aux/git-version-gen
+!/m4/ax_is_release.m4

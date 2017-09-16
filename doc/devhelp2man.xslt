@@ -85,7 +85,7 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:if>
   </xsl:template>
 
-  <xsl:template name="paramdef" match="parameter">
+  <xsl:template name="paramdef" match="parameter" mode="funcsig">
     <xsl:param name="tok"   select="string:tokenize(., ' ')"/>
     <xsl:param name="last"  select="ext:node-set($tok)[last()]"/>
     <xsl:param name="name"  select="string:tokenize($last, '*')"/>
@@ -112,7 +112,7 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:value-of select="indexterm/primary"/>
           </xsl:element>
         </xsl:element>
-        <xsl:apply-templates select="programlisting"/>
+        <xsl:apply-templates select="programlisting" mode="funcsig"/>
       </xsl:element>
     </xsl:if>
   </xsl:template>
@@ -164,15 +164,18 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
       </xsl:element>
       <xsl:element name="refsect1">
         <xsl:element name="title">Description:</xsl:element>
-        <xsl:apply-templates select="refsect1[@role='details']/refsect2"
-                             mode="voiddesc"/>
+        <xsl:apply-templates
+            select="refsect1[@role='details' and contains(@id,'functions_details')]/refsect2"
+            mode="voiddesc"/>
         <xsl:element name="refsect2">
-          <xsl:apply-templates select="refsect1[@role='details']/refsect2"
+          <xsl:apply-templates
+              select="refsect1[@role='details' and contains(@id,'functions_details')]/refsect2"
                                mode="paramdesc"/>
         </xsl:element>
         <xsl:element name="refsect2">
-          <xsl:apply-templates select="refsect1[@role='details']/refsect2"
-                               mode="retdesc"/>
+          <xsl:apply-templates
+              select="refsect1[@role='details' and contains(@id,'functions_details')]/refsect2"
+              mode="retdesc"/>
         </xsl:element>
       </xsl:element>
 

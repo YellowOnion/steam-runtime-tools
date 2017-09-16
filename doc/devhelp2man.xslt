@@ -137,6 +137,11 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
           <xsl:element name="firstname">Vivek</xsl:element>
           <xsl:element name="surname">Das Mohapatra</xsl:element>
         </xsl:element>
+        <xsl:element name="authorgroup">
+          <xsl:element name="contrib">Author</xsl:element>
+          <xsl:element name="firstname">Simon</xsl:element>
+          <xsl:element name="surname">McVittie</xsl:element>
+        </xsl:element>
       </xsl:element>
       <xsl:element name="refmeta">
         <xsl:element name="refentrytitle">

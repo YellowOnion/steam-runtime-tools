@@ -347,6 +347,8 @@ int main (int argc, char **argv)
         exit( 1 );
     }
 
+    set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
+
     if( argc > 2 )
         prefix = argv[2];
 

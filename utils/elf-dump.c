@@ -599,7 +599,7 @@ find_strtab (ElfW(Addr) base, void *start, size_t size, int *siz)
     {
         if( entry->d_tag == DT_STRTAB )
         {
-            tab  = (char *)addr(base, entry->d_un.d_ptr);
+            tab  = (const char *) entry->d_un.d_ptr;
         }
         else if( entry->d_tag == DT_STRSZ  )
         {
@@ -928,7 +928,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
                      indent, x++,
                      tag,
                      entry->d_tag,
-                     addr( base, entry->d_un.d_ptr ) );
+                     (const void *) entry->d_un.d_ptr );
             break;
           case TTYPE_STR:
             fprintf( stderr, "%s    { #%03d %20s(%"FMT_WORD") = str:%s }\n",
@@ -956,19 +956,19 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
           case DT_SYMTAB:
             if( versym == NULL )
-                versym = addr( base, find_ptr( base, start, size, DT_VERSYM ) );
+                versym = (const void *) find_ptr( base, start, size, DT_VERSYM );
             if( verdef == NULL )
-                verdef = addr( base, find_ptr( base, start, size, DT_VERDEF ) );
+                verdef = (const void *) find_ptr( base, start, size, DT_VERDEF );
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, size, DT_VERDEFNUM );
-            symtab = addr( base, entry->d_un.d_ptr );
+            symtab = (const void *) entry->d_un.d_ptr;
             dump_symtab( indent, symtab, strtab, versym, verdef, verdefnum );
             break;
 
           case DT_RELA:
             if( relasz == -1 )
                 relasz = find_value( base, start, size, DT_RELASZ );
-            dump_rela( indent, addr(base, entry->d_un.d_ptr), relasz,
+            dump_rela( indent, (const void *) entry->d_un.d_ptr, relasz,
                        strtab, symtab, base );
             break;
 
@@ -991,12 +991,12 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
                 int unused;
 
               case DT_REL:
-                dump_rel( indent, addr(base, entry->d_un.d_ptr), jmprelsz,
+                dump_rel( indent, (const void *) entry->d_un.d_ptr, jmprelsz,
                           strtab, symtab );
                 break;
 
               case DT_RELA:
-                dump_rela( indent, addr(base, entry->d_un.d_ptr), jmprelsz,
+                dump_rela( indent, (const void *) entry->d_un.d_ptr, jmprelsz,
                            strtab, symtab, base );
                 break;
 
@@ -1015,7 +1015,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
           case DT_VERNEED:
             if( verneednum == -1 )
                 verneednum = find_value( base, start, size, DT_VERNEEDNUM );
-            dump_verneed( indent, addr(base, entry->d_un.d_ptr), verneednum,
+            dump_verneed( indent, (const void *) entry->d_un.d_ptr, verneednum,
                           strtab, base );
             break;
 
@@ -1026,13 +1026,13 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
           case DT_VERDEF:
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, size, DT_VERDEFNUM );
-            verdef = addr( base, entry->d_un.d_ptr );
+            verdef = (const void *) entry->d_un.d_ptr;
             dump_verdef( indent, verdef, verdefnum, strtab, base );
             break;
 
           case DT_VERSYM:
             if( versym == NULL )
-                versym = addr( base, entry->d_un.d_ptr );
+                versym = (const void *) entry->d_un.d_ptr;
             break;
 
           default:

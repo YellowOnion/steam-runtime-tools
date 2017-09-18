@@ -39,10 +39,7 @@ addr (ElfW(Addr) base, ElfW(Addr) ptr, ElfW(Sxword) addend)
 #error "Unsupported __ELF_NATIVE_CLASS size (not 32 or 64)"
 #endif
 {
-    if( (ptr + addend) > base )
-        return (void *)(ptr + addend);
-    else
-        return (void *)(base + ptr + addend);
+    return (void *)(base + ptr + addend);
 }
 
 static const ElfW(Dyn) *
@@ -91,7 +88,7 @@ find_strtab (ElfW(Addr) base, void *start, size_t size, int *siz)
     {
         if( entry->d_tag == DT_STRTAB )
         {
-            tab  = (char *)addr(base, entry->d_un.d_ptr, 0);
+            tab  = (const char *) entry->d_un.d_ptr;
         }
         else if( entry->d_tag == DT_STRSZ  )
         {
@@ -690,7 +687,7 @@ process_pt_dynamic (void *start,
             break;
 
           case DT_SYMTAB:
-            symtab = addr( base, entry->d_un.d_ptr, 0 );
+            symtab = (const void *) entry->d_un.d_ptr;
             DEBUG( DEBUG_ELF, "symtab is %p", symtab );
             break;
 
@@ -700,7 +697,7 @@ process_pt_dynamic (void *start,
                 DEBUG( DEBUG_ELF, "processing DT_RELA section" );
                 if( relasz == -1 )
                     relasz = find_value( base, start, size, DT_RELASZ );
-                relstart = addr( base, entry->d_un.d_ptr, 0 );
+                relstart = (void *) entry->d_un.d_ptr;
                 process_rela( relstart, relasz, strtab, symtab, base, data );
             }
             else
@@ -735,7 +732,7 @@ process_pt_dynamic (void *start,
                 {
                     DEBUG( DEBUG_ELF|DEBUG_RELOCS,
                            "processing DT_JMPREL/DT_REL section" );
-                    relstart = addr( base, entry->d_un.d_ptr, 0 );
+                    relstart = (void *) entry->d_un.d_ptr;
                     DEBUG( DEBUG_ELF, "  -> REL antry #0 at %p", relstart );
                     ret = process_rel( relstart, jmprelsz, strtab,
                                        symtab, base, data );
@@ -752,7 +749,7 @@ process_pt_dynamic (void *start,
                 {
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_RELA section" );
-                    relstart = addr( base, entry->d_un.d_ptr, 0 );
+                    relstart = (void *) entry->d_un.d_ptr;
                     ret = process_rela( relstart, jmprelsz, strtab,
                                         symtab, base, data );
                 }

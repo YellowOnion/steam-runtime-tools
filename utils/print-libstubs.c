@@ -184,15 +184,6 @@ parse_symtab (const void *start,
     }
 }
 
-static void *
-addr (ElfW(Addr) base, ElfW(Addr) ptr)
-{
-    if( ptr > base )
-        return (void *)ptr;
-    else
-        return (void *)(base + ptr);
-}
-
 static const ElfW(Dyn) *
 find_dyn (ElfW(Addr) base, void *start, int what)
 {
@@ -229,7 +220,7 @@ find_strtab (ElfW(Addr) base, void *start, int *siz)
 
     for( entry = start + base; entry->d_tag != DT_NULL; entry++ )
         if( entry->d_tag == DT_STRTAB )
-            tab  = (char *)addr(base, entry->d_un.d_ptr);
+            tab  = (const char *) entry->d_un.d_ptr;
         else if( entry->d_tag == DT_STRSZ  )
             *siz = entry->d_un.d_val;
 
@@ -258,13 +249,13 @@ parse_dynamic (ElfW(Addr) base, ElfW(Dyn) *dyn)
         {
           case DT_SYMTAB:
             if( versym == NULL )
-                versym = addr( base, find_ptr( base, start, DT_VERSYM ) );
+                versym = (const void *) find_ptr( base, start, DT_VERSYM );
             if( verdef == NULL )
-                verdef = addr( base, find_ptr( base, start, DT_VERDEF ) );
+                verdef = (const void *) find_ptr( base, start, DT_VERDEF );
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, DT_VERDEFNUM );
 
-            symtab = addr( base, entry->d_un.d_ptr );
+            symtab = (const void *) entry->d_un.d_ptr;
             parse_symtab( symtab, strtab, versym, verdef, verdefnum );
             break;
 
@@ -275,13 +266,13 @@ parse_dynamic (ElfW(Addr) base, ElfW(Dyn) *dyn)
           case DT_VERDEF:
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, DT_VERDEFNUM );
-            verdef = addr( base, entry->d_un.d_ptr );
+            verdef = (const void *) entry->d_un.d_ptr;
             // parse_verdef( verdef, strtab, verdefnum );
             break;
 
           case DT_VERSYM:
             if( versym == NULL )
-                versym = addr( base, entry->d_un.d_ptr );
+                versym = (const void *) entry->d_un.d_ptr;
             break;
 
           default:

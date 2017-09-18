@@ -1,0 +1,4 @@
+Tests: smoke
+Depends:
+ build-essential,
+ libcapsule-dev,

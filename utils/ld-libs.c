@@ -995,7 +995,18 @@ stat_caller (void)
         {
             DEBUG( DEBUG_SEARCH|DEBUG_ELF,
                    "initial libcapsule user is %s", caller );
-            stat( caller, &cdso );
+            if( soname_matches_path( "libc.so", caller ) )
+            {
+                // if we get back to here we're looking at a normal
+                // library from one of the build helper tools and
+                // we don't care about loop protection:
+                DEBUG( DEBUG_SEARCH|DEBUG_ELF,
+                       "  … which is not a capsule: disabling loop protection" );
+            }
+            else
+            {
+                stat( caller, &cdso );
+            }
         }
     }
 

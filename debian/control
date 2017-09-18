@@ -4,39 +4,28 @@ Priority: optional
 Maintainer: Vivek Das Mohapatra <vivek@collabora.com>
 Standards-Version: 3.9.8
 Build-Depends:
- dh-autoreconf,
  autoconf,
  autoconf-archive (>= 20160916-1),
  automake,
  debhelper,
- libelf-dev,
+ dh-autoreconf,
  gtk-doc-tools,
- xsltproc
+ libelf-dev,
+ xsltproc,
 Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
 Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule
 Homepage: https://gitlab.collabora.com/vivek/libcapsule
 
-Package: libcapsule0
-Architecture: i386 amd64
-Multi-Arch: same
-Section: libs
-Priority: optional
-Depends: ${shlibs:Depends}
-Description: Segregated run-time linker library
- libcapsule is a helper library used to implement segregated run-time
- dynamic linking proxy libraries - used (for example) to load a library
- that has dependencies incompatible with the regular libraries that are
- part of the host OS, such as an incompatible libstdc++ version.
- .
- This package contains the run-time component(s) of libcapsule.
-
 Package: libcapsule-dev
-Architecture: i386 amd64
+Architecture: amd64 i386
 Multi-Arch: same
 Section: libdevel
 Priority: optional
-Depends: libcapsule0 (= ${binary:Version}), libc6-dev, libelf-dev
-Description: 
+Depends:
+ libc6-dev,
+ libcapsule0 (= ${binary:Version}),
+ libelf-dev,
+Description:
  libcapsule is a helper library used to implement segregated run-time
  dynamic linking proxy libraries - used (for example) to load a library
  that has dependencies incompatible with the regular libraries that are
@@ -45,13 +34,13 @@ Description:
  This package contains the files needed to build libcapsule proxy libraries.
 
 Package: libcapsule-dev-bin
-Architecture: i386 amd64
+Architecture: amd64 i386
 Multi-Arch: foreign
 Section: libdevel
 Priority: optional
 Depends:
- ${shlibs:Depends},
  libcapsule-dev (= ${binary:Version}),
+ ${shlibs:Depends},
 Description:
  libcapsule is a helper library used to implement segregated run-time
  dynamic linking proxy libraries - used (for example) to load a library
@@ -59,3 +48,18 @@ Description:
  part of the host OS, such as an incompatible libstdc++ version.
  .
  This package contains the files needed to generate libcapsule proxy libraries.
+
+Package: libcapsule0
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libs
+Priority: optional
+Depends:
+ ${shlibs:Depends},
+Description: Segregated run-time linker library
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains the run-time component(s) of libcapsule.

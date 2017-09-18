@@ -351,11 +351,13 @@ process_dt_rela (const void *start,
         switch( chr )
         {
             void *slot;
-
-       // case R_386_JMP_SLOT:  // these are secretly the same:
+       // details at: https://github.com/hjl-tools/x86-psABI/wiki/X86-psABI
+       // case R_386_32:       // These are the same as their 64 counterparts
+       // case R_386_GLOB_DAT: // see /glibc-x.y/elf/elf.h
+       // case R_386_JMP_SLOT:
+          case R_X86_64_64:
           case R_X86_64_GLOB_DAT:
           case R_X86_64_JUMP_SLOT:
-          case R_X86_64_64:
             slot = addr( base, entry->r_offset, entry->r_addend );
             DEBUG( DEBUG_ELF,
                    "%s: %p ← { offset: %"FMT_ADDR"; addend: %"FMT_SIZE" }",
@@ -518,11 +520,13 @@ process_dt_rel (const void *start,
         switch( chr )
         {
             void *slot;
-
-       // case R_386_JMP_SLOT: secretly the same
+       // details at: https://github.com/hjl-tools/x86-psABI/wiki/X86-psABI
+       // case R_386_32:       // These are the same as their 64 counterparts
+       // case R_386_GLOB_DAT: // see /glibc-x.y/elf/elf.h
+       // case R_386_JMP_SLOT:
+          case R_X86_64_64:
           case R_X86_64_GLOB_DAT:
           case R_X86_64_JUMP_SLOT:
-          case R_X86_64_64:
             slot = addr( base, entry->r_offset, 0 );
             DEBUG( DEBUG_ELF,
                    "%s: %p ← { offset: %"FMT_ADDR"; addend: n/a }",

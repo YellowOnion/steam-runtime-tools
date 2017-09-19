@@ -35,9 +35,16 @@ me=$(basename $0);
 usage ()
 {
 cat << EOF
-Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT DSO-VERSION TREE"
+Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT DSO-VERSION [TREE]"
     Options:
         --capsule-symbols=PATH  Use replacement capsule-symbols(1)
+        --search-tree=PATH      Find libraries to be proxied in this
+                                chroot, sysroot or container now
+                                [default: TREE or /]
+        --runtime-tree=PATH     Generated code will find proxied
+                                libraries in this chroot, sysroot or
+                                container at runtime if CAPSULE_PREFIX
+                                is unset [default: TREE or /host]
     Positional parameters:
         TARGET                  SONAME of shared library to proxy,
                                 for example libGL.so.1
@@ -51,13 +58,15 @@ Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT DSO-VERSION TREE"
         DSO-VERSION             Major or MAJOR:MINOR:MICRO version (as for
                                 libtool -version-number) to export, for
                                 example 1 or 1:x:y for libGL.so.1
-        TREE                    Chroot or container to find libraries in
+        TREE                    Chroot or container to find libraries in,
+                                both now and at runtime; overridden by
+                                --runtime-tree and --search-tree
 EOF
     exit "${1:-0}"
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols:,help' \
+    -l 'capsule-symbols:,search-tree:,runtime-tree:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -66,6 +75,18 @@ do
     case "$1" in
         (--capsule-symbols)
             CAPSULE_SYMBOLS="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--runtime-tree)
+            runtime_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--search-tree)
+            search_tree="$2"
             shift 2;
             continue;
             ;;
@@ -87,7 +108,7 @@ done
 
 : "${CAPSULE_SYMBOLS:="$top/capsule-symbols"}"
 
-if [ "$#" -ne 6 ];
+if [ "$#" -lt 5 ] || [ "$#" -gt 6 ];
 then
     usage 2 >&2;
 fi;
@@ -97,9 +118,20 @@ proxy_excluded=$1; shift;
 proxy_extra=$1;    shift;
 proxy_src=$1;      shift;
 ltver=$1;          shift;
-proxy_tree=$1;     shift;
+
+if [ "$#" -gt 0 ];
+then
+    proxy_tree=$1; shift;
+else
+    proxy_tree=
+fi
 
 parse_ltver $ltver;
+
+: "${runtime_tree:="$proxy_tree"}"
+: "${runtime_tree:=/host}"
+: "${search_tree:="$proxy_tree"}"
+: "${search_tree:=/}"
 
 dso_base=${proxied_dso#lib}
 dso_base=${dso_base%.so*}
@@ -124,11 +156,11 @@ then
         do
             if [ x$V = x1 ];
             then
-                echo "  $CAPSULE_SYMBOLS $pt $proxy_tree" >&2;
+                echo "  $CAPSULE_SYMBOLS $pt $search_tree" >&2;
             else
-                echo "  SYMBOLS $pt $proxy_tree" >&2;
+                echo "  SYMBOLS $pt $search_tree" >&2;
             fi;
-            $CAPSULE_SYMBOLS $pt $proxy_tree || exit 1;
+            $CAPSULE_SYMBOLS $pt $search_tree || exit 1;
         done) > $symbol_file.tmp;
     then
         mv $symbol_file.tmp $symbol_file;
@@ -241,7 +273,7 @@ cat - <<EOF
     symbol_ns = LM_ID_NEWLM;
     prefix = secure_getenv( "CAPSULE_PREFIX" );
     if( !prefix )
-        prefix = "$proxy_tree";
+        prefix = "$runtime_tree";
 
     capsule_init();
 

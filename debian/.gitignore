@@ -1,0 +1,10 @@
+/*.debhelper
+/*.log
+/*.substvars
+/autoreconf*
+/files
+/libcapsule-dev
+/libcapsule-dev-bin
+/libcapsule-tests
+/libcapsule0
+/tmp

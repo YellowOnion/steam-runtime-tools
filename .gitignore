@@ -27,15 +27,6 @@ capsule-version
 TAGS
 tags
 *~
-debian/*.log
-debian/libcapsule0
-debian/*-dev
-debian/*-dev-bin
-debian/tmp
-debian/autoreconf*
-debian/files
-debian/*substvars
-debian/*debhelper
 data/*.pc
 data/dirconf.txt
 *.swp

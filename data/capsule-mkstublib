@@ -20,13 +20,6 @@
 set -u
 set -e
 
-major_version=0;
-
-parse_ltver ()
-{
-    major_version=${1%%:*};
-}
-
 declare -A NODE;
 top=$(dirname $0);
 top=${top:-.};
@@ -35,7 +28,7 @@ me=$(basename $0);
 usage ()
 {
 cat << EOF
-Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT DSO-VERSION [TREE]"
+Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
     Options:
         --capsule-symbols=PATH  Use replacement capsule-symbols(1)
         --search-tree=PATH      Find libraries to be proxied in this
@@ -58,6 +51,7 @@ Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT DSO-VERSION [TREE]"
         DSO-VERSION             Major or MAJOR:MINOR:MICRO version (as for
                                 libtool -version-number) to export, for
                                 example 1 or 1:x:y for libGL.so.1
+                                [default: parse SONAME]
         TREE                    Chroot or container to find libraries in,
                                 both now and at runtime; overridden by
                                 --runtime-tree and --search-tree
@@ -108,7 +102,7 @@ done
 
 : "${CAPSULE_SYMBOLS:="$top/capsule-symbols"}"
 
-if [ "$#" -lt 5 ] || [ "$#" -gt 6 ];
+if [ "$#" -lt 4 ] || [ "$#" -gt 6 ];
 then
     usage 2 >&2;
 fi;
@@ -117,7 +111,11 @@ proxied_dso=$1;    shift;
 proxy_excluded=$1; shift;
 proxy_extra=$1;    shift;
 proxy_src=$1;      shift;
-ltver=$1;          shift;
+
+if [ "$#" -gt 0 ];
+then
+    ltver=$1; shift;
+fi
 
 if [ "$#" -gt 0 ];
 then
@@ -126,7 +124,12 @@ else
     proxy_tree=
 fi
 
-parse_ltver $ltver;
+if [ -n "${ltver:-}" ];
+then
+    major_version="${ltver%%:*}"
+elif [ "x${proxied_dso%.so.*}" != "x$proxied_dso" ]; then
+    major_version="${proxied_dso##*.so.}"
+fi
 
 : "${runtime_tree:="$proxy_tree"}"
 : "${runtime_tree:=/host}"

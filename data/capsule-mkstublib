@@ -31,6 +31,12 @@ cat << EOF
 Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
     Options:
         --capsule-symbols=PATH  Use replacement capsule-symbols(1)
+        --dlopen-implementation=PATH
+                                An implementation of _dlopen()
+                                [default: OUTPUT.dlopen]
+        --dlsym-implementation=PATH
+                                An implementation of _dlsym()
+                                [default: OUTPUT.dlsym, if it exists]
         --search-tree=PATH      Find libraries to be proxied in this
                                 chroot, sysroot or container now
                                 [default: TREE or /]
@@ -60,7 +66,7 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols:,search-tree:,runtime-tree:,help' \
+    -l 'capsule-symbols:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -69,6 +75,18 @@ do
     case "$1" in
         (--capsule-symbols)
             CAPSULE_SYMBOLS="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--dlopen-implementation)
+            dlopen_file="$2";
+            shift 2;
+            continue;
+            ;;
+
+        (--dlsym-implementation)
+            dlsym_file="$2";
             shift 2;
             continue;
             ;;
@@ -142,8 +160,18 @@ proxied_dso=lib${dso_base}.so.${major_version};
 
 symbol_file=${proxy_src%.c}.symbols;
 map_file=${proxy_src%.c}.map;
-dlopen_file=${proxy_src}.dlopen;
-dlsym_file=${proxy_src}.dlsym;
+
+if [ -z "${dlopen_file:-}" ];
+then
+    # This is mandatory, so no test -f here
+    dlopen_file=${proxy_src}.dlopen;
+fi
+
+if [ -z "${dlsym_file:-}" ] && [ -f "${proxy_src}.dlsym" ];
+then
+    dlsym_file="${proxy_src}.dlsym";
+fi
+
 sharedir=$(pkg-config --variable=makeinc capsule)
 
 exec >$proxy_src.tmp;
@@ -217,7 +245,7 @@ then
     echo "// -------------------------------------------------------------";
 fi
 
-if [ -f ${dlsym_file} ];
+if [ -n "${dlsym_file}" ];
 then
     echo "// DSOs to restrict dlsym lookups to:";
     echo "static const char *valid_dlsym_sources[] = ";
@@ -250,7 +278,7 @@ EOF
 
 while read sym x; do echo "         { \"$sym\" },"; done < $symbol_file;
 
-if [ -f $dlsym_file ];
+if [ -n "$dlsym_file" ];
 then
     cat - <<EOF
          { "dlsym", (capsule_addr) _dlsym },

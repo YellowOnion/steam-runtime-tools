@@ -3,6 +3,13 @@ Depends:
  build-essential,
  libcapsule-dev,
 
+Tests: version
+Depends:
+ bubblewrap,
+ libcapsule-dev,
+ libcapsule-dev-bin,
+ zlib1g,
+
 Tests: gnome-desktop-testing
 Depends:
  gnome-desktop-testing,

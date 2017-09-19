@@ -71,6 +71,20 @@ is () {
     fi
 }
 
+like () {
+    local got="$1"
+    local expected="$2"
+    shift 2
+
+    if [[ $got == $expected ]]; then
+        pass "$* ($got matches $expected)"
+    else
+        echo "# Got: $got"
+        echo "# Expected extglob: $expected"
+        fail "$* ($got does not match $expected)"
+    fi
+}
+
 isnt () {
     local got="$1"
     local unexpected="$2"

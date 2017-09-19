@@ -37,6 +37,8 @@ Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
         --dlsym-implementation=PATH
                                 An implementation of _dlsym()
                                 [default: OUTPUT.dlsym, if it exists]
+        --symbols-from=PATH     Use symbols from this file
+                                [default: \${OUTPUT%.c}.symbols]
         --search-tree=PATH      Find libraries to be proxied in this
                                 chroot, sysroot or container now
                                 [default: TREE or /]
@@ -66,7 +68,7 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,help' \
+    -l 'capsule-symbols:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,symbols-from:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -99,6 +101,12 @@ do
 
         (--search-tree)
             search_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--symbols-from)
+            symbol_file="$2"
             shift 2;
             continue;
             ;;
@@ -158,8 +166,12 @@ dso_base=${proxied_dso#lib}
 dso_base=${dso_base%.so*}
 proxied_dso=lib${dso_base}.so.${major_version};
 
-symbol_file=${proxy_src%.c}.symbols;
 map_file=${proxy_src%.c}.map;
+
+if [ -z "${symbol_file:-}" ];
+then
+    symbol_file=${proxy_src%.c}.symbols;
+fi
 
 if [ -z "${dlopen_file:-}" ];
 then

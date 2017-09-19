@@ -95,7 +95,7 @@ done < $symbol_file;
 
 cat - <<EOF
 static Lmid_t symbol_ns;
-static char *prefix;
+static const char *prefix;
 static void *dso;
 // should we exclude libpthread here?
 // in any case, these are DSOs we do _not_ want to isolate

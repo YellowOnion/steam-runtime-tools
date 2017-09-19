@@ -26,7 +26,7 @@
 #include <capsule.h>
 
 #define UNVERSIONED_STUB(name) \
-    void name (void) __attribute__((noreturn));        \
+    void name (void) __attribute__((noreturn,visibility("default"))); \
     void name (void)                                   \
     {                                                  \
         fprintf(stderr, "! SHIM " #name " called\n" ); \

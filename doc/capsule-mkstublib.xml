@@ -76,7 +76,7 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <term><option>TARGET</option></term>
         <listitem>
           <para>
-            The base name of the target, of the form libFOO.so.X (eg libz.so.1)
+            The SONAME of the target, of the form libFOO.so.X (eg libz.so.1)
           </para>
         </listitem>
       </varlistentry>
@@ -85,13 +85,13 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <term><option>EXCLUDES</option></term>
         <listitem>
           <para>
-            A file containing a list of DSOs (one on each line) not to
+            A file containing a list of SONAMEs (one on each line) not to
             include in the libcapsule proxy: DSOs listed here will not
             be loaded from the foreign tree and must come from the
             normal set searched by the linker.
           </para>
           <para>
-            For example i libz.so.1 is listed here, and TARGET depends
+            For example if libz.so.1 is listed here, and TARGET depends
             on libz.so.1 then it will be run-time linked against the
             copy of libz from / - not any copies which are found under TREE
           </para>
@@ -105,7 +105,7 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <term><option>EXPORTS</option></term>
         <listitem>
           <para>
-            A file containing a list of DSOs (one on each line) whose
+            A file containing a list of SONAMEs (one on each line) whose
             symbols should be exported.
           </para>
           <para>Symbols from TARGET are always exported.</para>

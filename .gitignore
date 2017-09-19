@@ -3,6 +3,13 @@
 /INSTALL
 /build-aux/*
 /m4/*
+/test-suite.log
+/tests/*.log
+/tests/*.test
+/tests/*.trs
+/tests/notgl-helper-user
+/tests/notgl-user
+/tests/shim/libnotgl.so.c
 Makefile.in
 aclocal.m4
 autom4te.cache
@@ -50,6 +57,7 @@ libcapsule-*.txt
 *.interfaces
 *.prerequisites
 *.signals
+
 !/build-aux/git-version-gen
 !/build-aux/tap-test.sh
 !/m4/ax_is_release.m4

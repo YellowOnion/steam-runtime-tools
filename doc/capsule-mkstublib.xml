@@ -113,17 +113,6 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
       </varlistentry>
 
       <varlistentry>
-        <term><option>EXPORTS</option></term>
-        <listitem>
-          <para>
-            A file containing a list of DSOs (one on each line) whose
-            symbols should be exported.
-          </para>
-          <para>Symbols from TARGET are always exported.</para>
-        </listitem>
-      </varlistentry>
-
-      <varlistentry>
         <term><option>OUTPUT</option></term>
         <listitem>
           <para>

@@ -64,4 +64,4 @@ PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
 AC_SEARCH_LIBS([dlmopen], [dl])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 GTK_DOC_CHECK
-AC_OUTPUT([Makefile data/capsule.pc data/dirconf.txt])
+AC_OUTPUT([Makefile data/capsule.pc data/capsule-uninstalled.pc data/dirconf.txt])

@@ -39,6 +39,8 @@ Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
                                 [default: OUTPUT.dlsym, if it exists]
         --symbols-from=PATH     Use symbols from this file
                                 [default: \${OUTPUT%.c}.symbols]
+        --[no-]update-symbols   Do or don't update symbols list if EXPORTS
+                                is newer than it [default: do]
         --search-tree=PATH      Find libraries to be proxied in this
                                 chroot, sysroot or container now
                                 [default: TREE or /]
@@ -67,8 +69,10 @@ EOF
     exit "${1:-0}"
 }
 
+update_symbols=
+
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,symbols-from:,help' \
+    -l 'capsule-symbols:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,symbols-from:,update-symbols,no-update-symbols,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -108,6 +112,18 @@ do
         (--symbols-from)
             symbol_file="$2"
             shift 2;
+            continue;
+            ;;
+
+        (--update-symbols)
+            update_symbols=yes;
+            shift;
+            continue;
+            ;;
+
+        (--no-update-symbols)
+            update_symbols=;
+            shift;
             continue;
             ;;
 
@@ -192,7 +208,7 @@ cat $sharedir/capsule-shim.h
 
 # generate the .symbols file if it doesn't exist, or if the proxy_extra
 # control file has been updated:
-if [ $symbol_file -ot $proxy_extra ];
+if [ -n "$update_symbols" ] && [ $symbol_file -ot $proxy_extra ];
 then
     echo -n > $symbol_file;
     if (for pt in $proxied_dso $(cat $proxy_extra);

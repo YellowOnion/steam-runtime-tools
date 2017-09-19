@@ -30,6 +30,34 @@ parse_ltver ()
 declare -A NODE;
 top=$(dirname $0);
 top=${top:-.};
+me=$(basename $0);
+
+getopt_temp="$(getopt -o '' \
+    -l 'capsule-symbols:' \
+    -n "$me" -- "$@")"
+eval set -- "$getopt_temp"
+
+while true;
+do
+    case "$1" in
+        (--capsule-symbols)
+            CAPSULE_SYMBOLS="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--)
+            shift;
+            break;
+            ;;
+        (*)
+            echo "$me: Internal error" >&2;
+            exit 2;
+            ;;
+    esac
+done
+
+: "${CAPSULE_SYMBOLS:="$top/capsule-symbols"}"
 
 proxied_dso=$1;    shift;
 proxy_excluded=$1; shift;
@@ -63,11 +91,11 @@ then
         do
             if [ x$V = x1 ];
             then
-                echo "  $top/capsule-symbols $pt $proxy_tree" >&2;
+                echo "  $CAPSULE_SYMBOLS $pt $proxy_tree" >&2;
             else
                 echo "  SYMBOLS $pt $proxy_tree" >&2;
             fi;
-            $top/capsule-symbols $pt $proxy_tree || exit 1;
+            $CAPSULE_SYMBOLS $pt $proxy_tree || exit 1;
         done) > $symbol_file.tmp;
     then
         mv $symbol_file.tmp $symbol_file;

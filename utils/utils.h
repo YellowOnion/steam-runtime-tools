@@ -20,6 +20,11 @@
 #include <link.h> // for __ELF_NATIVE_CLASS
 #include "debug.h"
 
+// these macros are secretly the same for elf32 & elf64:
+#define ELFW_ST_TYPE(a)       ELF32_ST_TYPE(a)
+#define ELFW_ST_BIND(a)       ELF32_ST_BIND(a)
+#define ELFW_ST_VISIBILITY(a) ELF32_ST_VISIBILITY(a)
+
 #if __ELF_NATIVE_CLASS == 64
 #define FMT_OFF   "lu"
 #define FMT_SWORD "lu"
@@ -41,3 +46,12 @@
 char *safe_strncpy (char *dest, const char *src, size_t n);
 int   resolve_link (const char *prefix, char *path, char *dir);
 int soname_matches_path (const char *soname, const char *path);
+
+const ElfW(Dyn) * find_dyn (ElfW(Addr) base, void *start, int what);
+int               find_value (ElfW(Addr) base, void *start, int what);
+ElfW(Addr)        find_ptr (ElfW(Addr) base, void *start, int what);
+const char *      find_strtab (ElfW(Addr) base, void *start, int *siz);
+const ElfW(Sym) * find_symbol (int idx,
+                               const ElfW(Sym) *stab,
+                               const char *str,
+                               char **name);

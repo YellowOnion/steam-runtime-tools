@@ -25,6 +25,94 @@
 
 unsigned long debug_flags;
 
+// ==========================================================================
+// these are for finding entries in the dynamic section
+// note that tha d_un.d_ptr member may be pre-offset by the
+// linker, or we may beed to adjust it by the value of base ourselves:
+// this is effectively private linker information and there's no
+// hard and fast rule:
+const ElfW(Dyn) *
+find_dyn (ElfW(Addr) base, void *start, int what)
+{
+    ElfW(Dyn) *entry = start + base;
+
+    for( ; entry->d_tag != DT_NULL; entry++ )
+        if( entry->d_tag == what )
+            return entry;
+
+    return NULL;
+}
+
+int
+find_value (ElfW(Addr) base, void *start, int what)
+{
+    const ElfW(Dyn) *entry = find_dyn( base, start, what );
+    // TODO: what if it doesn't fit in an int?
+    return entry ? (int) entry->d_un.d_val : -1;
+}
+
+ElfW(Addr)
+find_ptr (ElfW(Addr) base, void *start, int what)
+{
+    const ElfW(Dyn) *entry = find_dyn( base, start, what );
+
+    if( entry )
+    {
+        if( entry->d_un.d_ptr < base )
+            return base + entry->d_un.d_ptr;
+        else
+            return entry->d_un.d_ptr;
+    }
+
+    return (ElfW(Addr)) NULL;
+}
+
+const char *
+find_strtab (ElfW(Addr) base, void *start, int *siz)
+{
+    ElfW(Dyn) *entry;
+
+    const char *tab = NULL;
+
+    for( entry = start + base; entry->d_tag != DT_NULL; entry++ )
+        if( entry->d_tag == DT_STRTAB )
+            tab  = (const char *) entry->d_un.d_ptr;
+        else if( entry->d_tag == DT_STRSZ  )
+            *siz = entry->d_un.d_val;
+
+    return tab;
+}
+
+const ElfW(Sym) *
+find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
+{
+    ElfW(Sym) *entry;
+    ElfW(Sym) *target = (ElfW(Sym) *)stab + idx;
+
+    if( idx < 0 )
+        return NULL;
+
+    // we could just accept the index as legitimate but then we'd
+    // run the risk of popping off into an unknown hyperspace coordinate
+    // this way we stop if the target is past the known end of the table:
+    for( entry = (ElfW(Sym) *)stab;
+         ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
+           (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
+         entry++ )
+    {
+        if( entry == target )
+        {
+            if( name )
+                *name = (char *)str + entry->st_name;
+            return target;
+        }
+    }
+
+    return NULL;
+}
+
+// ==========================================================================
+
 // like strncpy except it guarantees the final byte is NUL in
 // case we truncated the string. does not yet warn you in any
 // way about truncation though, should probably fix that:

@@ -36,9 +36,10 @@ dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 # demo program - keep this hanging around as it's a useful PoC
 noinst_PROGRAMS         = elf-dump
 
-elf_dump_SOURCES        = utils/elf-dump.c
+elf_dump_SOURCES        = utils/elf-dump.c utils/utils.c
 elf_dump_LDADD          = -ldl
 elf_dump_SOURCES       += utils/utils.h
+elf_dump_CFLAGS         = $(AM_CFLAGS)
 
 # now the rules for building our installables:
 capsule_symbols_SOURCES = utils/print-libstubs.c \

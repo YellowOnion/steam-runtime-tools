@@ -184,49 +184,6 @@ parse_symtab (const void *start,
     }
 }
 
-static const ElfW(Dyn) *
-find_dyn (ElfW(Addr) base, void *start, int what)
-{
-    ElfW(Dyn) *entry = start + base;
-
-    for( ; entry->d_tag != DT_NULL; entry++ )
-        if( entry->d_tag == what )
-            return entry;
-
-    return NULL;
-}
-
-static int
-find_value (ElfW(Addr) base, void *start, int what)
-{
-    const ElfW(Dyn) *entry = find_dyn( base, start, what );
-    // TODO: what if it doesn't fit in an int?
-    return entry ? (int) entry->d_un.d_val : -1;
-}
-
-static ElfW(Addr)
-find_ptr (ElfW(Addr) base, void *start, int what)
-{
-    const ElfW(Dyn) *entry = find_dyn( base, start, what );
-    return entry ? entry->d_un.d_ptr : (ElfW(Addr)) NULL;
-}
-
-static const char *
-find_strtab (ElfW(Addr) base, void *start, int *siz)
-{
-    ElfW(Dyn) *entry;
-
-    const char *tab = NULL;
-
-    for( entry = start + base; entry->d_tag != DT_NULL; entry++ )
-        if( entry->d_tag == DT_STRTAB )
-            tab  = (const char *) entry->d_un.d_ptr;
-        else if( entry->d_tag == DT_STRSZ  )
-            *siz = entry->d_un.d_val;
-
-    return tab;
-}
-
 static void
 parse_dynamic (ElfW(Addr) base, ElfW(Dyn) *dyn)
 {

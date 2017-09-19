@@ -37,11 +37,6 @@
 // or useful for our eventual goals, but as this knowledge is hard
 // to come by it is [literally] codified here
 
-// these macros are secretly the same for elf32 & elf64:
-#define ELFW_ST_TYPE(a)       ELF32_ST_TYPE(a)
-#define ELFW_ST_BIND(a)       ELF32_ST_BIND(a)
-#define ELFW_ST_VISIBILITY(a) ELF32_ST_VISIBILITY(a)
-
 typedef enum
 {
     TTYPE_VAL,
@@ -529,87 +524,6 @@ addr (ElfW(Addr) base, ElfW(Addr) ptr)
         return (void *)(base + ptr);
 }
 
-static const ElfW(Dyn) *
-find_dyn (ElfW(Addr) base, void *start, size_t size, int what)
-{
-    ElfW(Dyn) *entry = start + base;
-    void *limit = start + base + size;
-
-    for( ; (entry->d_tag != DT_NULL) && ((void *)entry < limit); entry++ )
-        if( entry->d_tag == what )
-            return entry;
-
-    return NULL;
-}
-
-static int
-find_value (ElfW(Addr) base, void *start, size_t size, int what)
-{
-    const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
-    // TODO: what if it doesn't fit in an int?
-    return entry ? (int) entry->d_un.d_val : -1;
-}
-
-static ElfW(Addr)
-find_ptr (ElfW(Addr) base, void *start, size_t size, int what)
-{
-    const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
-    return entry ? entry->d_un.d_ptr : (ElfW(Addr)) NULL;
-}
-
-
-static const ElfW(Sym) *
-find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
-{
-    ElfW(Sym) *entry;
-    ElfW(Sym) *target = (ElfW(Sym) *)stab + idx;
-
-    if( idx < 0 )
-        return NULL;
-
-    // we could just accept the index as legitimate but then we'd
-    // run the risk of popping off into an unknown hyperspace coordinate
-    // this way we stop if the target is past the known end of the table:
-    for( entry = (ElfW(Sym) *)stab;
-         ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
-           (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
-         entry++ )
-    {
-        if( entry == target )
-        {
-            if( name )
-                *name = (char *)str + entry->st_name;
-            return target;
-        }
-    }
-
-    return NULL;
-}
-
-static const char *
-find_strtab (ElfW(Addr) base, void *start, size_t size, int *siz)
-{
-    ElfW(Dyn) *entry;
-
-    const char *tab = NULL;
-
-    for( entry = start + base;
-         (entry->d_tag != DT_NULL) && ((void *)entry < (start + base + size));
-         entry++ )
-    {
-        if( entry->d_tag == DT_STRTAB )
-        {
-            tab  = (const char *) entry->d_un.d_ptr;
-        }
-        else if( entry->d_tag == DT_STRSZ  )
-        {
-            *siz = entry->d_un.d_val;
-        }
-    }
-
-    return tab;
-}
-
 static const char *
 reloc_type (int rtype)
 {
@@ -903,7 +817,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const void *symtab = NULL;
     const void *versym = NULL;
     const void *verdef = NULL;
-    const char *strtab = find_strtab( base, start, size, &strsiz );
+    const char *strtab = find_strtab( base, start, &strsiz );
     int tag_type = TTYPE_VAL;
 
     fprintf( stderr, "%s{\n", indent );
@@ -956,18 +870,18 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
           case DT_SYMTAB:
             if( versym == NULL )
-                versym = (const void *) find_ptr( base, start, size, DT_VERSYM );
+                versym = (const void *) find_ptr( base, start, DT_VERSYM );
             if( verdef == NULL )
-                verdef = (const void *) find_ptr( base, start, size, DT_VERDEF );
+                verdef = (const void *) find_ptr( base, start, DT_VERDEF );
             if( verdefnum == -1 )
-                verdefnum = find_value( base, start, size, DT_VERDEFNUM );
+                verdefnum = find_value( base, start, DT_VERDEFNUM );
             symtab = (const void *) entry->d_un.d_ptr;
             dump_symtab( indent, symtab, strtab, versym, verdef, verdefnum );
             break;
 
           case DT_RELA:
             if( relasz == -1 )
-                relasz = find_value( base, start, size, DT_RELASZ );
+                relasz = find_value( base, start, DT_RELASZ );
             dump_rela( indent, (const void *) entry->d_un.d_ptr, relasz,
                        strtab, symtab, base );
             break;
@@ -982,9 +896,9 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
           case DT_JMPREL:
             if( jmprelsz == -1 )
-                jmprelsz = find_value( base, start, size, DT_PLTRELSZ );
+                jmprelsz = find_value( base, start, DT_PLTRELSZ );
             if( jmpreltype == DT_NULL )
-                jmpreltype = find_value( base, start, size, DT_PLTREL );
+                jmpreltype = find_value( base, start, DT_PLTREL );
 
             switch( jmpreltype )
             {
@@ -1014,7 +928,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
           case DT_VERNEED:
             if( verneednum == -1 )
-                verneednum = find_value( base, start, size, DT_VERNEEDNUM );
+                verneednum = find_value( base, start, DT_VERNEEDNUM );
             dump_verneed( indent, (const void *) entry->d_un.d_ptr, verneednum,
                           strtab, base );
             break;
@@ -1025,7 +939,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
           case DT_VERDEF:
             if( verdefnum == -1 )
-                verdefnum = find_value( base, start, size, DT_VERDEFNUM );
+                verdefnum = find_value( base, start, DT_VERDEFNUM );
             verdef = (const void *) entry->d_un.d_ptr;
             dump_verdef( indent, verdef, verdefnum, strtab, base );
             break;

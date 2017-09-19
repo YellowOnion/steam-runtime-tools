@@ -42,90 +42,6 @@ addr (ElfW(Addr) base, ElfW(Addr) ptr, ElfW(Sxword) addend)
     return (void *)(base + ptr + addend);
 }
 
-static const ElfW(Dyn) *
-find_dyn (ElfW(Addr) base, void *start, size_t size, int what)
-{
-    ElfW(Dyn) *entry = start + base;
-    void *limit = start + base + size;
-
-    for( ; (entry->d_tag != DT_NULL) && ((void *)entry < limit); entry++ )
-        if( entry->d_tag == what )
-            return entry;
-
-    return NULL;
-}
-
-// find a sub-entry of a given DT_* type and return its d_val field:
-static int
-find_value (ElfW(Addr) base, void *start, size_t size, int what)
-{
-    const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
-    // TODO: what if it doesn't fit in an int?
-    return entry ? (int) entry->d_un.d_val : -1;
-}
-
-// find a sub-entry of a given DT_* type and return its d_ptr field:
-#if 0
-static void *
-find_ptr (ElfW(Addr) base, void *start, size_t size, int what)
-{
-    const ElfW(Dyn) *entry = find_dyn( base, start, size, what );
-    return entry ? (void *)entry->d_un.d_ptr : NULL;
-}
-#endif
-
-static const char *
-find_strtab (ElfW(Addr) base, void *start, size_t size, int *siz)
-{
-    ElfW(Dyn) *entry;
-
-    const char *tab = NULL;
-
-    for( entry = start + base;
-         (entry->d_tag != DT_NULL) &&
-           ((size == 0) || ((void *)entry < (start + base + size)));
-         entry++ )
-    {
-        if( entry->d_tag == DT_STRTAB )
-        {
-            tab  = (const char *) entry->d_un.d_ptr;
-        }
-        else if( entry->d_tag == DT_STRSZ  )
-        {
-            *siz = entry->d_un.d_val;
-        }
-    }
-
-    return tab;
-}
-
-static const ElfW(Sym) *
-find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
-{
-    ElfW(Sym) *entry;
-    ElfW(Sym) *target = (ElfW(Sym) *)stab + idx;
-
-    if( idx < 0 )
-        return NULL;
-
-    // we could just accept the index as legitimate but then we'd
-    // run the risk of popping off into an unknown hyperspace coordinate
-    // this way we stop if the target is past the known end of the table:
-    for( entry = (ElfW(Sym) *)stab;
-         ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
-           (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
-         entry++ )
-    {
-        if( entry == target )
-        {
-            if( name )
-                *name = (char *)str + entry->st_name;
-            return target;
-        }
-    }
-
-    return NULL;
-}
 
 static int
 try_relocation (ElfW(Addr) *reloc_addr, const char *name, void *data)
@@ -669,7 +585,7 @@ process_pt_dynamic (void *start,
     int jmpreltype = DT_NULL;
     void *relstart;
     const void *symtab = NULL;
-    const char *strtab = find_strtab( base, start, size, &strsiz );
+    const char *strtab = find_strtab( base, start, &strsiz );
 
     DEBUG( DEBUG_ELF,
            "start: %p; size: %"FMT_SIZE"; base: %p; handlers: %p %p; …",
@@ -700,7 +616,7 @@ process_pt_dynamic (void *start,
             {
                 DEBUG( DEBUG_ELF, "processing DT_RELA section" );
                 if( relasz == -1 )
-                    relasz = find_value( base, start, size, DT_RELASZ );
+                    relasz = find_value( base, start, DT_RELASZ );
                 relstart = (void *) entry->d_un.d_ptr;
                 process_rela( relstart, relasz, strtab, symtab, base, data );
             }
@@ -725,9 +641,9 @@ process_pt_dynamic (void *start,
 
           case DT_JMPREL:
             if( jmprelsz == -1 )
-                jmprelsz = find_value( base, start, size, DT_PLTRELSZ );
+                jmprelsz = find_value( base, start, DT_PLTRELSZ );
             if( jmpreltype == DT_NULL )
-                jmpreltype = find_value( base, start, size, DT_PLTREL );
+                jmpreltype = find_value( base, start, DT_PLTREL );
 
             switch( jmpreltype )
             {

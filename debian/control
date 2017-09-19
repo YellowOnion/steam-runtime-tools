@@ -7,6 +7,7 @@ Build-Depends:
  autoconf,
  autoconf-archive (>= 20160916-1),
  automake,
+ bubblewrap,
  debhelper,
  dh-autoreconf,
  gtk-doc-tools,
@@ -48,6 +49,21 @@ Description:
  part of the host OS, such as an incompatible libstdc++ version.
  .
  This package contains the files needed to generate libcapsule proxy libraries.
+
+Package: libcapsule-tests
+Architecture: amd64 i386
+Section: misc
+Priority: optional
+Depends:
+ bubblewrap,
+ ${shlibs:Depends},
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains automated tests.
 
 Package: libcapsule0
 Architecture: amd64 i386

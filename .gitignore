@@ -60,4 +60,5 @@ libcapsule-*.txt
 *.prerequisites
 *.signals
 !/build-aux/git-version-gen
+!/build-aux/tap-test.sh
 !/m4/ax_is_release.m4

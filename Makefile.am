@@ -92,8 +92,7 @@ dist_pkgdata_DATA       = data/capsule-shim.h     \
                           data/capsule-shim.mk.in \
                           disabled.mk
 
-BUILT_SOURCES           = $(shim_srcs)
-BUILT_SOURCES          += $(top_srcdir)/.version
+BUILT_SOURCES           = $(top_srcdir)/.version
 
 $(top_srcdir)/.version:
 	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@
@@ -104,6 +103,127 @@ dist-hook-git-version-gen:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 
 include $(top_srcdir)/disabled.mk
+
+# ============================================================================
+# GNOME-style installed-tests
+
+insttestsdir                         = $(libexecdir)/installed-tests/$(PACKAGE_TARNAME)
+
+# /!\ Order is important here: the helper library must come first
+nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
+                                       tests/green/libhelper.la                \
+                                       tests/lib/libhelper.la                  \
+                                       tests/red/libnotgl.la                   \
+                                       tests/green/libnotgl.la                 \
+                                       tests/lib/libnotgl.la                   \
+                                       tests/shim/libnotgl.la
+# Install the source code so we can rebuild it inside a container if we want to
+nobase_dist_insttests_DATA           = tests/libtest.sh                        \
+                                       tests/notgl.h                           \
+                                       tests/notgl-green.c                     \
+                                       tests/notgl-red.c                       \
+                                       tests/notgl-ref.c                       \
+                                       tests/notgl-helper.h                    \
+                                       tests/notgl-helper-green.c              \
+                                       tests/notgl-helper-red.c                \
+                                       tests/notgl-helper-ref.c                \
+                                       tests/shim/libnotgl.so.c.dlopen         \
+                                       tests/shim/libnotgl.so.c.dlsym          \
+                                       tests/shim/libnotgl.so.c.excluded       \
+                                       tests/shim/libnotgl.so.c.shared         \
+                                       tests/shim/libnotgl.so.c.symbols
+
+tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
+                                       tests/notgl.h                           \
+                                       tests/notgl-helper.h
+tests_lib_libnotgl_la_LDFLAGS        = -shared -version-number 0:42:23
+tests_lib_libnotgl_la_LIBADD         = tests/lib/libhelper.la
+
+tests_red_libnotgl_la_SOURCES        = tests/notgl-red.c                       \
+                                       tests/notgl.h                           \
+                                       tests/notgl-helper.h
+# Give it a gratuitously higher version number
+tests_red_libnotgl_la_LDFLAGS        = -shared -version-number 0:123:456
+# We want the RUNPATH to point to tests/lib here, so link to that helper
+tests_red_libnotgl_la_LIBADD         = tests/lib/libhelper.la
+
+tests_green_libnotgl_la_SOURCES      = tests/notgl-green.c                     \
+                                       tests/notgl.h                           \
+                                       tests/notgl-helper.h
+# Give this one a gratuitously *lower* version number
+tests_green_libnotgl_la_LDFLAGS      = -shared -version-number 0:23:42
+# Again, we want the RUNPATH to point to tests/lib here, so link to that helper
+tests_green_libnotgl_la_LIBADD       = tests/lib/libhelper.la
+
+tests_lib_libhelper_la_SOURCES       = tests/notgl-helper-ref.c                \
+                                       tests/notgl-helper.h
+tests_lib_libhelper_la_LDFLAGS       = -shared -version-number 0:42:23
+
+tests_red_libhelper_la_SOURCES       = tests/notgl-helper-red.c                \
+                                       tests/notgl-helper.h
+tests_red_libhelper_la_LDFLAGS       = -shared -version-number 0:123:456
+
+tests_green_libhelper_la_SOURCES     = tests/notgl-helper-green.c              \
+                                       tests/notgl-helper.h
+tests_green_libhelper_la_LDFLAGS     = -shared -version-number 0:23:42
+
+nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.c
+tests_shim_libnotgl_la_LIBADD        = libcapsule.la
+tests_shim_libnotgl_la_LDFLAGS       = -shared -version-number 0:0:0
+tests_shim_libnotgl_la_CFLAGS        = $(AM_CFLAGS) -I$(top_srcdir)/capsule
+
+tests/shim/lib%.so.c: tests/shim/lib%.so.c.excluded tests/shim/lib%.so.c.dlopen tests/shim/lib%.so.c.dlsym tests/shim/lib%.so.c.shared tests/shim/lib%.so.c.symbols data/capsule-mkstublib Makefile
+	$(AM_V_GEN)\
+	PKG_CONFIG_PATH=$(abs_builddir)/data \
+	V=$V \
+	$(top_srcdir)/data/capsule-mkstublib \
+		--dlopen-implementation=$(srcdir)/$@.dlopen \
+		--dlsym-implementation=$(srcdir)/$@.dlsym \
+		--symbols-from=$(srcdir)/$@.symbols \
+		--no-update-symbols \
+		--runtime-tree=/host \
+		$$(basename $@ .c).0 \
+		$(srcdir)/$@.excluded \
+		$(srcdir)/$@.shared \
+		$@
+
+LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
+                                       $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
+LOG_COMPILER                         = $(top_srcdir)/build-aux/tap-test.sh
+TEST_EXTENSIONS                      = .sh
+SH_LOG_DRIVER                        = $(LOG_DRIVER)
+SH_LOG_COMPILER                      = $(LOG_COMPILER)
+AM_TESTS_ENVIRONMENT                 = export CAPSULE_TESTS_UNINSTALLED=1;     \
+                                       export G_TEST_SRCDIR="$(abs_srcdir)";   \
+                                       export G_TEST_BUILDDIR="$(abs_builddir)";\
+                                       export G_DEBUG=gc-friendly;             \
+                                       export MALLOC_CHECK_=2;
+test_extra_programs                  = tests/notgl-user                        \
+                                       tests/notgl-helper-user
+tests_notgl_user_LDADD               = tests/lib/libnotgl.la
+tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
+                                       tests/lib/libhelper.la
+test_extra_scripts                   =
+
+test_programs                        =
+test_scripts                         = tests/notgl.sh
+nobase_insttests_PROGRAMS            = $(test_programs)                        \
+                                       $(test_extra_programs)
+nobase_dist_insttests_SCRIPTS        = $(test_scripts)                         \
+                                       $(test_extra_scripts)
+TESTS                                = $(test_programs)                        \
+                                       $(test_scripts)
+testmetadir                          = $(datadir)/installed-tests/$(PACKAGE_TARNAME)
+testmeta_DATA                        = $(patsubst %,%.test,$(test_programs) $(test_scripts))
+$(testmeta_DATA): tests/%.test: tests/% Makefile
+	@$(MKDIR_P) $(dir $@)
+	$(AM_V_GEN)set -e; \
+	(\
+		echo "[Test]"; \
+		echo "Type=session"; \
+		echo "Output=TAP"; \
+		echo "Exec=$(insttestsdir)/tests/$* --tap"; \
+	) > $@.tmp && mv $@.tmp $@
 
 # ============================================================================
 # gtk-doc configuration: see /usr/share/doc/gtk-doc-tools/examples/Makefile.am
@@ -126,13 +246,12 @@ GTKDOC_CFLAGS        =
 GTKDOC_LIBS          =
 
 include $(top_srcdir)/gtk-doc.make
-# ============================================================================
-# CLEANFILES is unconditionally set by gtk-doc.make, have to do these after:
-CLEANFILES    += $(shim_files) $(shim_srcs)
-# ============================================================================
 # standalone man pages
 include  $(top_srcdir)/documentation.mk
 
-# This needs to come after we include gtk-doc.make, which unconditionally
-# defines it
+# These need to come after we include gtk-doc.make, which unconditionally
+# defines these variables
+CLEANFILES             += $(testmeta_DATA)
+CLEANFILES             += tests/shim/libnotgl.so.c
 EXTRA_DIST             += $(top_srcdir)/.version
+EXTRA_DIST             += build-aux/tap-test.sh

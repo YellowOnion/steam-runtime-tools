@@ -2,3 +2,8 @@ Tests: smoke
 Depends:
  build-essential,
  libcapsule-dev,
+
+Tests: gnome-desktop-testing
+Depends:
+ gnome-desktop-testing,
+ libcapsule-tests,

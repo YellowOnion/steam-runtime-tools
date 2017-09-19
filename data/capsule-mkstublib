@@ -32,8 +32,32 @@ top=$(dirname $0);
 top=${top:-.};
 me=$(basename $0);
 
-getopt_temp="$(getopt -o '' \
-    -l 'capsule-symbols:' \
+usage ()
+{
+cat << EOF
+Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT DSO-VERSION TREE"
+    Options:
+        --capsule-symbols=PATH  Use replacement capsule-symbols(1)
+    Positional parameters:
+        TARGET                  SONAME of shared library to proxy,
+                                for example libGL.so.1
+        EXCLUDES                List of SONAMEs never loaded from TREE
+                                in addition to libdl.so.2
+        EXPORTS                 List of extra SONAMEs whose symbols are
+                                to be exported from the shim, in addition
+                                to TARGET itself
+        OUTPUT                  C source code filename to output,
+                                for example libGL.so.c
+        DSO-VERSION             Major or MAJOR:MINOR:MICRO version (as for
+                                libtool -version-number) to export, for
+                                example 1 or 1:x:y for libGL.so.1
+        TREE                    Chroot or container to find libraries in
+EOF
+    exit "${1:-0}"
+}
+
+getopt_temp="$(getopt -o 'h' \
+    -l 'capsule-symbols:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -46,18 +70,27 @@ do
             continue;
             ;;
 
+        (--help|-h)
+            usage 0;
+            ;;
+
         (--)
             shift;
             break;
             ;;
         (*)
             echo "$me: Internal error" >&2;
-            exit 2;
+            usage 2 >&2;
             ;;
     esac
 done
 
 : "${CAPSULE_SYMBOLS:="$top/capsule-symbols"}"
+
+if [ "$#" -ne 6 ];
+then
+    usage 2 >&2;
+fi;
 
 proxied_dso=$1;    shift;
 proxy_excluded=$1; shift;

@@ -26,6 +26,7 @@
 #include <capsule.h>
 
 #define UNVERSIONED_STUB(name) \
+    void name (void) __attribute__((noreturn));        \
     void name (void)                                   \
     {                                                  \
         fprintf(stderr, "! SHIM " #name " called\n" ); \
@@ -36,7 +37,8 @@
 #define VERSIONED_STUB(name,version) \
     UNVERSIONED_STUB(name);
 
-void backtrace_shim_call (void)
+static void
+backtrace_shim_call (void)
 {
     void *trace[16] = { NULL };
     int traced = 0;

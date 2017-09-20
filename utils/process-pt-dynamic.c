@@ -25,7 +25,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "capsule/capsule.h"
+#include <capsule/capsule.h>
 #include "utils.h"
 #include "process-pt-dynamic.h"
 #include "mmap-info.h"

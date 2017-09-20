@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <execinfo.h>
 
-#include <capsule.h>
+#include <capsule/capsule.h>
 
 #define UNVERSIONED_STUB(name) \
     void name (void) __attribute__((noreturn,visibility("default"))); \

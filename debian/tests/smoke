@@ -33,7 +33,7 @@ cat > trivial.c <<'EOF'
 
 #include <stdio.h>
 
-#include <capsule.h>
+#include <capsule/capsule.h>
 
 int
 main (void)

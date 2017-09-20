@@ -28,7 +28,7 @@ XSLTPROC_FLAGS = \
 
 XSLT_DOMAIN = docbook.sourceforge.net
 XSLT_MAN = http://$(XSLT_DOMAIN)/release/xsl/current/manpages/docbook.xsl
-XSLT_CAPARGS = --stringparam fsinfo "$$(printf "\#define _GNU_SOURCE\012\#include <capsule.h>")" --stringparam target
+XSLT_CAPARGS = --stringparam fsinfo "$$(printf "\#define _GNU_SOURCE\012\#include <capsule/capsule.h>")" --stringparam target
 XSLTPROC_STD = $(XSLTPROC) $(XSLTPROC_FLAGS)
 
 if ENABLE_GTK_DOC

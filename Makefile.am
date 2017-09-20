@@ -30,7 +30,7 @@ dist_libexec_SCRIPTS    = data/capsule-mkstublib data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
 pkgconfig_DATA          = data/capsule.pc
-include_HEADERS         = capsule/capsule.h
+nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
 # demo program - keep this hanging around as it's a useful PoC
@@ -170,7 +170,6 @@ tests_green_libhelper_la_LDFLAGS     = -shared -version-number 0:23:42
 nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.c
 tests_shim_libnotgl_la_LIBADD        = libcapsule.la
 tests_shim_libnotgl_la_LDFLAGS       = -shared -version-number 0:0:0
-tests_shim_libnotgl_la_CFLAGS        = $(AM_CFLAGS) -I$(top_srcdir)/capsule
 
 tests/shim/lib%.so.c: tests/shim/lib%.so.c.excluded tests/shim/lib%.so.c.dlopen tests/shim/lib%.so.c.dlsym tests/shim/lib%.so.c.shared tests/shim/lib%.so.c.symbols data/capsule-mkstublib Makefile
 	$(AM_V_GEN)\

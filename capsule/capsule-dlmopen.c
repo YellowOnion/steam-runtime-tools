@@ -33,7 +33,7 @@
 #include <gelf.h>
 #include <dlfcn.h>
 
-#include "capsule.h"
+#include <capsule/capsule.h>
 #include "utils/utils.h"
 #include "utils/dump.h"
 #include "utils/mmap-info.h"

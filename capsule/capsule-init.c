@@ -1,4 +1,4 @@
-#include "capsule.h"
+#include <capsule/capsule.h>
 #include "utils/utils.h"
 #include <stdlib.h>
 #include <dlfcn.h>

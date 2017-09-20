@@ -25,18 +25,12 @@ if ! bwrap --ro-bind / / true; then
     skip_all "1..0 # SKIP - cannot run bwrap"
 fi
 
-if ! [ -d /mnt ]; then
-    skip_all "1..0 # SKIP - this test needs /mnt"
-fi
-
 scratch="$(mktemp -d)"
 echo "# Working directory: $scratch"
 cd "$scratch"
 trap 'cd /; rm -fr $scratch' EXIT
-# Work around what appears to be a recent regression?
-#host="${scratch}/host"
-#mkdir "${host}"
-host=/mnt
+host="${scratch}/host"
+mkdir "${host}"
 
 CAPSULE_VERSION="$(pkg-config --variable=libexecdir capsule)/capsule-version"
 

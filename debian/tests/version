@@ -44,6 +44,41 @@ like "$4" "${host}/@(usr/lib|lib)/*-linux-gnu*/libz.so.$3"
 test -e "${4#${host}}"
 pass "successfully found libz"
 
+# Try the same thing without a prefix
+output="$(${CAPSULE_VERSION} libz.so.1 "/")"
+set -- $output
+is "$1" "/"
+is "$2" libz.so.1
+# TODO: This just returns 1?
+#like "$3" "1.*.*"
+# TODO: Would be nice if this didn't start with //
+like "$4" "+(/)@(usr/lib|lib)/*-linux-gnu*/libz.so.$3"
+test -e "$4"
+pass "successfully found libz"
+
+# A different way
+output="$(${CAPSULE_VERSION} libz.so.1 "")"
+set -- $output
+is "$1" libz.so.1
+# TODO: This just returns 1?
+#like "$2" "1.*.*"
+like "$3" "/@(usr/lib|lib)/*-linux-gnu*/libz.so.$2"
+test -e "$3"
+pass "successfully found libz"
+
+# Another different way
+output="$(${CAPSULE_VERSION} libz.so.1 "/")"
+set -- $output
+# TODO: This should probably not try to print NULL
+#is "$1" "(null)"
+is "$2" libz.so.1
+# TODO: This just returns 1?
+#like "$3" "1.*.*"
+# TODO: Would be nice if this didn't start with //
+like "$4" "+(/)@(usr/lib|lib)/*-linux-gnu*/libz.so.$3"
+test -e "$4"
+pass "successfully found libz"
+
 done_testing
 
 # vim:set sw=4 sts=4 et:

@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Copyright © 2017 Collabora Ltd
+#
+# This file is part of libcapsule.
+#
+# libcapsule is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation; either version 2.1 of the
+# License, or (at your option) any later version.
+#
+# libcapsule is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
+
+set -eu -o pipefail
+
+. "$(dirname "$0")"/../../tests/libtest.sh
+
+if ! bwrap --ro-bind / / true; then
+    skip_all "1..0 # SKIP - cannot run bwrap"
+fi
+
+scratch="$(mktemp -d)"
+echo "# Working directory: $scratch"
+cd "$scratch"
+trap 'cd /; rm -fr $scratch' EXIT
+host="${scratch}/host"
+mkdir "${host}"
+
+CAPSULE_SYMBOLS="$(pkg-config --variable=libexecdir capsule)/capsule-symbols"
+
+# We need a well-behaved library with a simple ABI to inspect. Let's use
+# libcapsule itself :-)
+bwrap --ro-bind / / --ro-bind / "${host}" --dev-bind /dev /dev \
+    ${CAPSULE_SYMBOLS} libcapsule.so.0 "${host}" > output
+pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 ${host}"
+
+exec_is 'grep "^capsule_init" output' 0 "capsule_init " \
+    "capsule_init is part of libcapsule's ABI"
+exec_is 'grep -v "^capsule" output' 1 "" \
+    "all of libcapsule's ABI matches /^capsule/"
+
+# Try the same thing without a prefix
+${CAPSULE_SYMBOLS} libcapsule.so.0 / > output
+pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 /"
+
+exec_is 'grep "^capsule_init" output' 0 "capsule_init " \
+    "capsule_init is an unversioned symbol"
+exec_is 'grep -v "^capsule" output' 1 "" \
+    "all of libcapsule's ABI matches /^capsule/"
+
+# How about versioned symbols?
+${CAPSULE_SYMBOLS} libjpeg.so.62 / > output
+pass "Ran ${CAPSULE_SYMBOLS} libjpeg.so.62 /"
+
+exec_is 'grep "^jpeg_destroy " output' 0 'jpeg_destroy @@LIBJPEG_6.2' \
+    "jpeg_destroy is a versioned symbol"
+
+done_testing
+
+# vim:set sw=4 sts=4 et:

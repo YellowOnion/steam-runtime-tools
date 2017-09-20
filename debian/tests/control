@@ -3,11 +3,12 @@ Depends:
  build-essential,
  libcapsule-dev,
 
-Tests: version
+Tests: symbols version
 Depends:
  bubblewrap,
  libcapsule-dev,
  libcapsule-dev-bin,
+ libjpeg62 (>= 6b1) | libjpeg62-turbo,
  zlib1g,
 
 Tests: gnome-desktop-testing

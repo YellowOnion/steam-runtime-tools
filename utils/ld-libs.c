@@ -403,7 +403,8 @@ search_ldcache (const char *name, ld_libs_t *ldlibs, int i)
         else
         {
             safe_strncpy( &cachepath[0], ldlibs->prefix.path, PATH_MAX );
-            safe_strncpy( &cachepath[ldlibs->prefix.len], "/etc/ld.so.cache", PATH_MAX );
+            safe_strncpy( &cachepath[ldlibs->prefix.len], "/etc/ld.so.cache",
+                          PATH_MAX - ldlibs->prefix.len );
             cachepath[ PATH_MAX - 1 ] = '\0';
         }
 

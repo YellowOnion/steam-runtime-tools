@@ -26,7 +26,7 @@ if ! bwrap --ro-bind / / true; then
 fi
 
 scratch="$(mktemp -d)"
-echo "# Working directory: $scratch"
+echo_tap "# Working directory: $scratch"
 cd "$scratch"
 trap 'cd /; rm -fr $scratch' EXIT
 host="${scratch}/host"
@@ -38,6 +38,7 @@ CAPSULE_SYMBOLS="$(pkg-config --variable=libexecdir capsule)/capsule-symbols"
 # libcapsule itself :-)
 bwrap --ro-bind / / --ro-bind / "${host}" --dev-bind /dev /dev \
     ${CAPSULE_SYMBOLS} libcapsule.so.0 "${host}" > output
+capture_tap sed -e 's/^/#  /' < output
 pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 ${host}"
 
 shell_is 'grep "^capsule_init" output' 0 "capsule_init " \
@@ -47,6 +48,7 @@ shell_is 'grep -v "^capsule" output' 1 "" \
 
 # Try the same thing without a prefix
 ${CAPSULE_SYMBOLS} libcapsule.so.0 / > output
+capture_tap sed -e 's/^/#  /' < output
 pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 /"
 
 shell_is 'grep "^capsule_init" output' 0 "capsule_init " \
@@ -56,6 +58,7 @@ shell_is 'grep -v "^capsule" output' 1 "" \
 
 # How about versioned symbols?
 ${CAPSULE_SYMBOLS} libjpeg.so.62 / > output
+capture_tap sed -e 's/^/#  /' < output
 pass "Ran ${CAPSULE_SYMBOLS} libjpeg.so.62 /"
 
 shell_is 'grep "^jpeg_destroy " output' 0 'jpeg_destroy @@LIBJPEG_6.2' \

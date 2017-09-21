@@ -26,7 +26,7 @@ if ! bwrap --ro-bind / / true; then
 fi
 
 scratch="$(mktemp -d)"
-echo "# Working directory: $scratch"
+echo_tap "# Working directory: $scratch"
 cd "$scratch"
 trap 'cd /; rm -fr $scratch' EXIT
 host="${scratch}/host"

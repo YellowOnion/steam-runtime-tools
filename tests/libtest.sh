@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+exec {test_tap_fd}>&1
+exec >&2
 test_tempdir="$(mktemp -d /tmp/libcapsule.XXXXXXXX)"
 trap 'rm -fr --one-file-system $test_tempdir' EXIT
 mkdir "$test_tempdir/host"
@@ -25,25 +27,33 @@ export CAPSULE_PREFIX="$test_tempdir/host"
 test_num=0
 any_failed=0
 
+capture_tap () {
+    "$@" >&${test_tap_fd}
+}
+
+echo_tap () {
+    echo "$*" >&${test_tap_fd}
+}
+
 skip_all () {
-    echo "1..0 # SKIP - $*"
+    echo_tap "1..0 # SKIP - $*"
     exit 0
 }
 
 pass () {
     test_num=$((test_num + 1))
-    echo "ok $test_num - $*"
+    echo_tap "ok $test_num - $*"
 }
 
 fail () {
     test_num=$((test_num + 1))
-    echo "not ok $test_num - $*"
+    echo_tap "not ok $test_num - $*"
     any_failed=1
 }
 
 skip () {
     test_num=$((test_num + 1))
-    echo "ok $test_num # SKIP - $*"
+    echo_tap "ok $test_num # SKIP - $*"
 }
 
 ok () {
@@ -65,8 +75,8 @@ is () {
     if [ "x$got" = "x$expected" ]; then
         pass "$* ($got)"
     else
-        echo "# Got: $got"
-        echo "# Expected: $expected"
+        echo_tap "# Got: $got"
+        echo_tap "# Expected: $expected"
         fail "$* ($got != $expected)"
     fi
 }
@@ -79,8 +89,8 @@ like () {
     if [[ $got == $expected ]]; then
         pass "$* ($got matches $expected)"
     else
-        echo "# Got: $got"
-        echo "# Expected extglob: $expected"
+        echo_tap "# Got: $got"
+        echo_tap "# Expected extglob: $expected"
         fail "$* ($got does not match $expected)"
     fi
 }
@@ -91,8 +101,8 @@ isnt () {
     shift 2
 
     if [ "x$got" != "x$unexpected" ]; then
-        echo "# Got: $got"
-        echo "# Expected: anything but $unexpected"
+        echo_tap "# Got: $got"
+        echo_tap "# Expected: anything but $unexpected"
         fail "$* (expected anything but $unexpected)"
     else
         pass "$* ($got)"
@@ -115,19 +125,19 @@ shell_is () {
     if [ "x$got" = "x$expected" ]; then
         pass "$* ($got)"
     else
-        echo "# Got: $got"
-        echo "# Expected: $expected"
+        echo_tap "# Got: $got"
+        echo_tap "# Expected: $expected"
         fail "$* ($got != $expected)"
     fi
 }
 
 run_verbose () {
-    echo "# \$($*)..."
+    echo_tap "# \$($*)..."
     "$@"
 }
 
 done_testing () {
-    echo "# End of tests"
-    echo "1..$test_num"
+    echo_tap "# End of tests"
+    echo_tap "1..$test_num"
     exit $any_failed
 }

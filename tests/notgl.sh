@@ -28,27 +28,27 @@ fi
 : ${G_TEST_SRCDIR:="$(cd "$(dirname "$0")"/..; pwd)"}
 : ${G_TEST_BUILDDIR:="$(cd "$(dirname "$0")"/..; pwd)"}
 
-echo "# Source or installation directory: $G_TEST_SRCDIR"
-echo "# Build or installation directory: $G_TEST_BUILDDIR"
+echo_tap "# Source or installation directory: $G_TEST_SRCDIR"
+echo_tap "# Build or installation directory: $G_TEST_BUILDDIR"
 
 if [ -n "${CAPSULE_TESTS_UNINSTALLED:-}" ]; then
-    echo "# Running uninstalled: yes"
+    echo_tap "# Running uninstalled: yes"
     # We need to bypass libtool because it plays around with
     # LD_LIBRARY_PATH, and so do we.
     libs=/.libs
     notgl_user="$("$G_TEST_BUILDDIR/libtool" --mode=execute ls -1 "$G_TEST_BUILDDIR/tests/notgl-user")"
     notgl_helper_user="$("$G_TEST_BUILDDIR/libtool" --mode=execute ls -1 "$G_TEST_BUILDDIR/tests/notgl-helper-user")"
 else
-    echo "# Running uninstalled: no"
+    echo_tap "# Running uninstalled: no"
     libs=
     notgl_user="$G_TEST_BUILDDIR/tests/notgl-user"
     notgl_helper_user="$G_TEST_BUILDDIR/tests/notgl-helper-user"
 fi
 
-echo
-echo "# Without special measures:"
+echo_tap
+echo_tap "# Without special measures:"
 run_verbose env LD_LIBRARY_PATH="$G_TEST_BUILDDIR/tests/lib$libs" "$notgl_user" > "$test_tempdir/output"
-sed -e 's/^/#   /' "$test_tempdir/output"
+capture_tap sed -e 's/^/#   /' "$test_tempdir/output"
 shell_is \
     'sed -ne "s/^NotGL implementation: //p" $test_tempdir/output' \
     0 reference
@@ -65,9 +65,9 @@ shell_is \
     'sed -ne "s/^notgl_extension_green: //p" $test_tempdir/output' \
     0 "(not found)"
 
-echo
+echo_tap
 run_verbose env LD_LIBRARY_PATH="$G_TEST_BUILDDIR/tests/lib$libs" "$notgl_helper_user" > "$test_tempdir/output"
-sed -e 's/^/#   /' "$test_tempdir/output"
+capture_tap sed -e 's/^/#   /' "$test_tempdir/output"
 shell_is \
     'sed -ne "s/^NotGL implementation: //p" $test_tempdir/output' \
     0 reference
@@ -84,8 +84,8 @@ shell_is \
     'sed -ne "s/^NotGL helper implementation as seen by executable: //p" $test_tempdir/output' \
     0 "container (reference)"
 
-echo
-echo "# With libcapsule:"
+echo_tap
+echo_tap "# With libcapsule:"
 # We mount the "host system" on $test_tempdir/host.
 #
 # In the "container", the shim libnotgl is picked up from tests/shim because
@@ -103,7 +103,7 @@ run_verbose bwrap \
     --ro-bind "$G_TEST_BUILDDIR/tests/red" "$CAPSULE_PREFIX$G_TEST_BUILDDIR/tests/lib" \
     --setenv LD_LIBRARY_PATH "$G_TEST_BUILDDIR/tests/shim$libs:$G_TEST_BUILDDIR/tests/lib$libs" \
     "$notgl_user" > "$test_tempdir/output"
-sed -e 's/^/#   /' "$test_tempdir/output"
+capture_tap sed -e 's/^/#   /' "$test_tempdir/output"
 # Functions from libnotgl get dispatched through the shim to the "red"
 # implementation from the "host system". This mirrors functions from libGL
 # being dispatched through the shim to the AMD implementation of libGL.
@@ -130,7 +130,7 @@ shell_is \
     'sed -ne "s/^notgl_extension_green: //p" $test_tempdir/output' \
     0 "(not found)"
 
-echo
+echo_tap
 # Similar to the above, but now the host system is using the "green"
 # implementation of libnotgl, mirroring the NVIDIA implementation of libGL.
 run_verbose bwrap \
@@ -141,7 +141,7 @@ run_verbose bwrap \
     --ro-bind "$G_TEST_BUILDDIR/tests/green" "$CAPSULE_PREFIX$G_TEST_BUILDDIR/tests/lib" \
     --setenv LD_LIBRARY_PATH "$G_TEST_BUILDDIR/tests/shim$libs:$G_TEST_BUILDDIR/tests/lib$libs" \
     "$notgl_helper_user" > "$test_tempdir/output"
-sed -e 's/^/#   /' "$test_tempdir/output"
+capture_tap sed -e 's/^/#   /' "$test_tempdir/output"
 shell_is \
     'sed -ne "s/^NotGL implementation: //p" $test_tempdir/output' \
     0 green

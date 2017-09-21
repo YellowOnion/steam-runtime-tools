@@ -116,6 +116,7 @@ shell_is () {
     local status=0
     shift 3
 
+    echo_tap "# \$($command)..."
     got="$(eval "$command")" || status="$?"
 
     if [ "x$status" != "x$expected_status" ]; then

@@ -5,7 +5,7 @@ Maintainer: Vivek Das Mohapatra <vivek@collabora.com>
 Standards-Version: 3.9.8
 Build-Depends:
  autoconf,
- autoconf-archive (>= 20160916-1),
+ autoconf-archive (>= 20160916-1~),
  automake,
  bubblewrap,
  debhelper,

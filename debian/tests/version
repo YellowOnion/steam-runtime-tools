@@ -25,12 +25,9 @@ if ! bwrap --ro-bind / / true; then
     skip_all "1..0 # SKIP - cannot run bwrap"
 fi
 
-scratch="$(mktemp -d)"
-echo_tap "# Working directory: $scratch"
-cd "$scratch"
-trap 'cd /; rm -fr $scratch' EXIT
-host="${scratch}/host"
-mkdir "${host}"
+echo_tap "# Working directory: $test_tempdir"
+cd "$test_tempdir"
+host="${test_tempdir}/host"
 
 CAPSULE_VERSION="$(pkg-config --variable=libexecdir capsule)/capsule-version"
 

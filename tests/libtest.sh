@@ -132,6 +132,29 @@ shell_is () {
     fi
 }
 
+shell_like () {
+    local command="$1"
+    local expected_status="$2"
+    local expected="$3"
+    local status=0
+    shift 3
+
+    echo_tap "# \$($command)..."
+    got="$(eval "$command")" || status="$?"
+
+    if [ "x$status" != "x$expected_status" ]; then
+        fail "$* (status $status != $expected_status)"
+    fi
+
+    if [[ $got == $expected ]]; then
+        pass "$* ($got matches $expected)"
+    else
+        echo_tap "# Got: $got"
+        echo_tap "# Expected extglob: $expected"
+        fail "$* ($got does not match extglob $expected)"
+    fi
+}
+
 run_verbose () {
     echo_tap "# \$($*)..."
     "$@"

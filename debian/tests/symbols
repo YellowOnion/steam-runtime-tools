@@ -40,25 +40,25 @@ bwrap --ro-bind / / --ro-bind / "${host}" --dev-bind /dev /dev \
     ${CAPSULE_SYMBOLS} libcapsule.so.0 "${host}" > output
 pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 ${host}"
 
-exec_is 'grep "^capsule_init" output' 0 "capsule_init " \
+shell_is 'grep "^capsule_init" output' 0 "capsule_init " \
     "capsule_init is part of libcapsule's ABI"
-exec_is 'grep -v "^capsule" output' 1 "" \
+shell_is 'grep -v "^capsule" output' 1 "" \
     "all of libcapsule's ABI matches /^capsule/"
 
 # Try the same thing without a prefix
 ${CAPSULE_SYMBOLS} libcapsule.so.0 / > output
 pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 /"
 
-exec_is 'grep "^capsule_init" output' 0 "capsule_init " \
+shell_is 'grep "^capsule_init" output' 0 "capsule_init " \
     "capsule_init is an unversioned symbol"
-exec_is 'grep -v "^capsule" output' 1 "" \
+shell_is 'grep -v "^capsule" output' 1 "" \
     "all of libcapsule's ABI matches /^capsule/"
 
 # How about versioned symbols?
 ${CAPSULE_SYMBOLS} libjpeg.so.62 / > output
 pass "Ran ${CAPSULE_SYMBOLS} libjpeg.so.62 /"
 
-exec_is 'grep "^jpeg_destroy " output' 0 'jpeg_destroy @@LIBJPEG_6.2' \
+shell_is 'grep "^jpeg_destroy " output' 0 'jpeg_destroy @@LIBJPEG_6.2' \
     "jpeg_destroy is a versioned symbol"
 
 done_testing

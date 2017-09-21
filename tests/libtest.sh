@@ -99,7 +99,7 @@ isnt () {
     fi
 }
 
-exec_is () {
+shell_is () {
     local command="$1"
     local expected_status="$2"
     local expected="$3"

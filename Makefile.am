@@ -248,6 +248,10 @@ include $(top_srcdir)/gtk-doc.make
 # standalone man pages
 include  $(top_srcdir)/documentation.mk
 
+# Workaround for https://bugzilla.gnome.org/show_bug.cgi?id=786174
+$(DOC_MAIN_SGML_FILE): sgml-build.stamp
+	@true
+
 # These need to come after we include gtk-doc.make, which unconditionally
 # defines these variables
 CLEANFILES             += $(testmeta_DATA)

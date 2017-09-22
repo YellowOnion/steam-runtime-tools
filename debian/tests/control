@@ -2,6 +2,7 @@ Tests: smoke
 Depends:
  build-essential,
  libcapsule-dev,
+ pkg-config,
 
 Tests: symbols version
 Depends:

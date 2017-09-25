@@ -12,6 +12,7 @@ Build-Depends:
  dh-autoreconf,
  gtk-doc-tools,
  libelf-dev,
+ libipc-run-perl,
  xsltproc,
 Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
 Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule

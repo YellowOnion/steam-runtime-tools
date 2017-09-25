@@ -23,6 +23,8 @@ AC_INIT([libcapsule],
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
+AC_ARG_VAR([PERL])
+AC_PATH_PROG([PERL], [perl], [perl])
 
 m4_pattern_forbid([^AX_], [Please install GNU autoconf-archive])
 

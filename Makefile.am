@@ -117,9 +117,9 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/green/libnotgl.la                 \
                                        tests/lib/libnotgl.la                   \
                                        tests/shim/libnotgl.la
+nobase_dist_insttests_DATA           = tests/CapsuleTest.pm
 # Install the source code so we can rebuild it inside a container if we want to
-nobase_dist_insttests_DATA           = tests/libtest.sh                        \
-                                       tests/notgl.h                           \
+nobase_dist_insttests_DATA          += tests/notgl.h                           \
                                        tests/notgl-green.c                     \
                                        tests/notgl-red.c                       \
                                        tests/notgl-ref.c                       \
@@ -188,10 +188,10 @@ tests/shim/lib%.so.c: tests/shim/lib%.so.c.excluded tests/shim/lib%.so.c.dlopen 
 
 LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
                                        $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
-LOG_COMPILER                         = $(top_srcdir)/build-aux/tap-test.sh
-TEST_EXTENSIONS                      = .sh
-SH_LOG_DRIVER                        = $(LOG_DRIVER)
-SH_LOG_COMPILER                      = $(LOG_COMPILER)
+LOG_COMPILER                         =
+TEST_EXTENSIONS                      = .pl
+PL_LOG_DRIVER                        = $(LOG_DRIVER)
+PL_LOG_COMPILER                      = $(PERL)
 AM_TESTS_ENVIRONMENT                 = export CAPSULE_TESTS_UNINSTALLED=1;     \
                                        export G_TEST_SRCDIR="$(abs_srcdir)";   \
                                        export G_TEST_BUILDDIR="$(abs_builddir)";\
@@ -205,7 +205,7 @@ tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
 test_extra_scripts                   =
 
 test_programs                        =
-test_scripts                         = tests/notgl.sh
+test_scripts                         = tests/notgl.pl
 nobase_insttests_PROGRAMS            = $(test_programs)                        \
                                        $(test_extra_programs)
 nobase_dist_insttests_SCRIPTS        = $(test_scripts)                         \
@@ -221,7 +221,7 @@ $(testmeta_DATA): tests/%.test: tests/% Makefile
 		echo "[Test]"; \
 		echo "Type=session"; \
 		echo "Output=TAP"; \
-		echo "Exec=$(insttestsdir)/tests/$* --tap"; \
+		echo "Exec=$(insttestsdir)/tests/$*"; \
 	) > $@.tmp && mv $@.tmp $@
 
 # ============================================================================

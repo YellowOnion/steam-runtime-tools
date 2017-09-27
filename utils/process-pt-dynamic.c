@@ -594,7 +594,7 @@ process_pt_dynamic (void *start,
     DEBUG( DEBUG_ELF, "dyn entry: %p", start + base );
 
     DEBUG( DEBUG_ELF,
-           "strtab is at %p: %s%s", strtab, strtab, strtab ? "…" : "");
+           "strtab is at %p: %s", strtab, strtab ? "…" : "");
 
     for( entry = start + base;
          (entry->d_tag != DT_NULL) &&

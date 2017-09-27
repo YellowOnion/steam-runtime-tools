@@ -117,7 +117,7 @@ echo Preparing proxy source files
 touch shim/$base.so.c.{shared,excluded};
 
 cat - <<EOF > shim/$base.so.c.dlopen
-static void *_dlopen (const char *filename, int flag)
+static void *_int_dlopen (const char *filename, int flag)
 {
     if( flag & RTLD_GLOBAL )
     {

@@ -1,4 +1,4 @@
-static void *_dlopen (const char *filename, int flag)
+static void *_int_dlopen (const char *filename, int flag)
 {
     if( flag & RTLD_GLOBAL )
     {

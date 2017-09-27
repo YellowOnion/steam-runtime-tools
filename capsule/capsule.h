@@ -43,7 +43,7 @@ typedef struct _capsule *capsule;
  * @shim: address of the ‘fake’ symbol in the proxy library
  * @real: address of the ‘real’ symbol in the target library
  *
- * @shim may typically be left empty in calls to capsule_dlmopen()
+ * @shim may typically be left empty in calls to capsule_load()
  * and capsule_relocate().
  *
  * @real may also be left empty in calls to capsule_relocate()
@@ -104,13 +104,17 @@ capsule capsule_init (Lmid_t namespace,
  *
  * Returns: 0 on success, non-zero on failure.
  *
- * @source is typically the value returned by a successful capsule_dlmopen()
+ * @source is typically the value returned by a successful capsule_load()
  * call (although a handle returned by dlmopen() would also be reasonable).
  *
  * The #capsule_item entries in @relocations need only specify the symbol
  * name: The shim and real fields will be populated automatically if they
  * are not pre-filled (this is the normal use case, as it would be unusual
  * to know these value in advance).
+ *
+ * This function updates the GOT entries in all DSOs outside the capsule
+ * so that when they call any function listed in @relocations they invoke
+ * the copy of that function inside the capsule.
  *
  * In the unlikely event that an error message is returned in @error it is the
  * caller's responsibility to free() it.

@@ -167,8 +167,16 @@ set_elf_constraints (ld_libs_t *ldlibs)
     struct link_map *map;
     struct link_map *m;
 
-    if( (handle = dlopen( NULL, RTLD_LAZY|RTLD_NOLOAD )) &&
-        (dlinfo( handle, RTLD_DI_LINKMAP, &map ) == 0)   )
+    static int elf_class = ELFCLASSNONE;
+    static Elf64_Half elf_machine = EM_NONE;
+
+    if( elf_class != ELFCLASSNONE )
+    {
+        ldlibs->elf_class   = elf_class;
+        ldlibs->elf_machine = elf_machine;
+    }
+    else if( (handle = dlmopen( LM_ID_BASE, NULL, RTLD_LAZY|RTLD_NOLOAD )) &&
+             (dlinfo( handle, RTLD_DI_LINKMAP, &map ) == 0)   )
     {
         // we're not guaranteed to be at the start of the link map chain:
         while( map->l_prev )

@@ -31,6 +31,12 @@ unsigned long debug_flags;
 // linker, or we may beed to adjust it by the value of base ourselves:
 // this is effectively private linker information and there's no
 // hard and fast rule:
+ElfW(Addr)
+fix_addr (ElfW(Addr) base, ElfW(Addr) addr)
+{
+    return ( addr < base ) ? base + addr : addr;
+}
+
 const ElfW(Dyn) *
 find_dyn (ElfW(Addr) base, void *start, int what)
 {
@@ -71,16 +77,19 @@ const char *
 find_strtab (ElfW(Addr) base, void *start, int *siz)
 {
     ElfW(Dyn) *entry;
+    const char *rval;
 
-    const char *tab = NULL;
+    ElfW(Addr) stab = NULL;
 
     for( entry = start + base; entry->d_tag != DT_NULL; entry++ )
         if( entry->d_tag == DT_STRTAB )
-            tab  = (const char *) entry->d_un.d_ptr;
+            stab = entry->d_un.d_ptr;
         else if( entry->d_tag == DT_STRSZ  )
             *siz = entry->d_un.d_val;
 
-    return tab;
+    rval = (const char *) ( (stab < base) ? base + stab : stab );
+
+    return rval;
 }
 
 const ElfW(Sym) *

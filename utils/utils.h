@@ -47,6 +47,7 @@ char *safe_strncpy (char *dest, const char *src, size_t n);
 int   resolve_link (const char *prefix, char *path, char *dir);
 int soname_matches_path (const char *soname, const char *path);
 
+ElfW(Addr)        fix_addr (ElfW(Addr) base, ElfW(Addr) addr);
 const ElfW(Dyn) * find_dyn (ElfW(Addr) base, void *start, int what);
 int               find_value (ElfW(Addr) base, void *start, int what);
 ElfW(Addr)        find_ptr (ElfW(Addr) base, void *start, int what);

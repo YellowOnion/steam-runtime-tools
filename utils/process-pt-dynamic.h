@@ -35,6 +35,7 @@ typedef struct
     int debug;
     char *error;
     mmapinfo *mmap_info;
+    const char **blacklist;
 } relocation_data_t;
 
 typedef int (*relocate_cb_t)(const void *start,

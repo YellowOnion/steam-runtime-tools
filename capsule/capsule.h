@@ -120,6 +120,45 @@ int capsule_relocate (const capsule capsule,
                       capsule_item *relocations,
                       char **error);
 
+
+/**
+ * capsule_relocate_restricted:
+ * @capsule: a #capsule handle as returned by capsule_init()
+ * @relocations: (array zero-terminated=1): Array of capsule_item
+ *               specifying which symbols to export, terminated by a
+ *               #capsule_item whose @name is %NULL
+ * @dso_blacklist: (array zero-terminated=1) (optional): Array of sonames
+ *                 which should not have their GOT entries updated.
+ * @error: (out) (transfer full) (optional): location in which to store
+ *         an error message on failure, or %NULL to ignore.
+ *         Free with free().
+ *
+ * Returns: 0 on success, non-zero on failure.
+ *
+ * @source is typically the value returned by a successful capsule_load()
+ * call (although a handle returned by dlmopen() would also be reasonable).
+ *
+ * The #capsule_item entries in @relocations need only specify the symbol
+ * name: The shim and real fields will be populated automatically if they
+ * are not pre-filled (this is the normal use case, as it would be unusual
+ * to know these value in advance).
+ *
+ * This function updates the GOT entries in all DSOs outside the capsule
+ * _except_ those listed in @dso_blacklist: When they call any function
+ * listed in @relocations they invoke the copy of that function inside
+ * the capsule. These sonames should be of the form "libfoo.so.X"
+ * or "libfoo.so". You may specify further minor version numbers in the
+ * usual "libfoo.so.X.Y" format if you wish.
+ *
+ * In the unlikely event that an error message is returned in @error it is the
+ * caller's responsibility to free() it.
+ */
+_CAPSULE_PUBLIC
+int capsule_relocate_restricted (const capsule cap,
+                                 capsule_item *relocations,
+                                 const char **dso_blacklist,
+                                 char **error);
+
 /**
  * capsule_load:
  * @capsule: a #capsule handle as returned by capsule_init()

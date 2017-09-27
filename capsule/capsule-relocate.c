@@ -62,6 +62,21 @@ process_phdr (struct dl_phdr_info *info,
     return ret;
 }
 
+static int
+dso_is_blacklisted (const char *path, const char **blacklist)
+{
+    char **soname;
+
+    if( blacklist == NULL )
+        return 0;
+
+    for( soname = (char **) blacklist; soname && *soname; soname++ )
+        if( soname_matches_path( *soname, path ) )
+            return 1;
+
+    return 0;
+}
+
 // first level of the callback: all we're doing here is skipping over
 // any program headers that (for whatever reason) we decide we're not
 // interested in.
@@ -71,16 +86,20 @@ static int
 relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 {
     relocation_data_t *rdata = data;
+    const char *dso_path = *info->dlpi_name ? info->dlpi_name : "-elf-";
 
-    DEBUG( DEBUG_RELOCS, "processing %s",
-           *info->dlpi_name ? info->dlpi_name : "-elf-" );
+    DEBUG( DEBUG_RELOCS, "processing %s", dso_path );
+
+    if( dso_is_blacklisted( dso_path, rdata->blacklist ) )
+        return 0;
 
     return process_phdr( info, size, rdata );
 }
 
-int capsule_relocate (const capsule cap,
-                      capsule_item *relocations,
-                      char **error)
+static int relocate (const capsule cap,
+                     capsule_item *relocations,
+                     const char **dso_blacklist,
+                     char **error)
 {
     relocation_data_t rdata = { 0 };
     capsule_item *map;
@@ -88,9 +107,21 @@ int capsule_relocate (const capsule cap,
     const char *mmap_error = NULL;
     int rval = 0;
 
+    if( cap->relocations != NULL && cap->relocations != relocations )
+    {
+        DEBUG( DEBUG_RELOCS,
+               "relocations array updated: "
+               "if unintentional capsule may behave unpredictably" );
+    }
+
+    if( relocations != NULL )
+        cap->relocations = relocations;
+
+    // load the relevant metadata into the callback argument:
     rdata.debug     = debug_flags;
     rdata.error     = NULL;
-    rdata.relocs    = relocations;
+    rdata.relocs    = cap->relocations;
+    rdata.blacklist = dso_blacklist;
     rdata.mmap_info = load_mmap_info( &mmap_errno, &mmap_error );
 
     if( mmap_errno || mmap_error )
@@ -102,7 +133,6 @@ int capsule_relocate (const capsule cap,
                "relocation will be unable to handle relro linked libraries" );
     }
 
-    cap->relocations = relocations;
     // no source dl handle means we must have a pre-populated
     // map of shim-to-real function pointers in `relocations',
     // otherwise populate the map using dlsym():
@@ -145,4 +175,19 @@ int capsule_relocate (const capsule cap,
     rdata.mmap_info = NULL;
 
     return rval;
+}
+
+int
+capsule_relocate (const capsule cap, capsule_item *relocations, char **error)
+{
+    return relocate( cap, relocations, NULL, error );
+}
+
+int
+capsule_relocate_restricted (const capsule cap,
+                             capsule_item *relocations,
+                             const char **dso_blacklist,
+                             char **error)
+{
+    return relocate( cap, relocations, dso_blacklist, error );
 }

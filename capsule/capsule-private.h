@@ -10,8 +10,8 @@ struct _capsule
     Lmid_t namespace;
     void  *dl_handle;
     const char *prefix;
-    const char **exclude;
-    const char **exported;
+    const char **exclude;  // list of DSOs _not_ to install in the capsule
+    const char **exported; // list of DSOs from which to export
     capsule_item *relocations;
     dlsymfunc get_symbol;
     dlopnfunc load_dso;

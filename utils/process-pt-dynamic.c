@@ -445,7 +445,8 @@ process_dt_rel (const void *start,
           case R_X86_64_JUMP_SLOT:
             slot = addr( base, entry->r_offset, 0 );
             DEBUG( DEBUG_ELF,
-                   "%s: %p ← { offset: %"FMT_ADDR"; addend: n/a }",
+                   " %30s %30s: %p ← { offset: %"FMT_ADDR"; addend: n/a }",
+                   name,
                    reloc_type_name( chr ),
                    slot, entry->r_offset );
             try_relocation( slot, name, data );

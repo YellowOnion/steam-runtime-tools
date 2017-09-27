@@ -216,7 +216,7 @@ dump_link_map( void *dl_handle )
 
     fprintf( stderr, "(dl-handle %s", dl_handle ? "CAPSULE" : "DEFAULT" );
     for( struct link_map *m = map; m; m = m->l_next )
-        fprintf( stderr, "\n  [%p] %s [%p]\n",
+        fprintf( stderr, "\n  [%p] %s [%p]",
                  m->l_prev, m->l_name, m->l_next );
     fprintf( stderr, ")\n" );
 }

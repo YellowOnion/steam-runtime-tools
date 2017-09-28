@@ -79,7 +79,7 @@ find_strtab (ElfW(Addr) base, void *start, int *siz)
     ElfW(Dyn) *entry;
     const char *rval;
 
-    ElfW(Addr) stab = NULL;
+    ElfW(Addr) stab = 0;
 
     for( entry = start + base; entry->d_tag != DT_NULL; entry++ )
         if( entry->d_tag == DT_STRTAB )

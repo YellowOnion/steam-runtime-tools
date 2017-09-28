@@ -58,6 +58,8 @@ Section: misc
 Priority: optional
 Depends:
  bubblewrap,
+ libipc-run-perl,
+ perl,
  ${shlibs:Depends},
 Description:
  libcapsule is a helper library used to implement segregated run-time

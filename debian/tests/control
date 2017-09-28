@@ -1,19 +1,14 @@
-Tests: smoke
-Restrictions: allow-stderr
-Depends:
- build-essential,
- libcapsule-dev,
- pkg-config,
-
-Tests: symbols version
+Tests: smoke symbols version
 Restrictions: allow-stderr
 Depends:
  bubblewrap,
+ build-essential,
  libcapsule-dev,
  libcapsule-dev-bin,
  libipc-run-perl,
  libjpeg62 (>= 6b1) | libjpeg62-turbo,
  perl,
+ pkg-config,
  zlib1g,
 
 Tests: gnome-desktop-testing

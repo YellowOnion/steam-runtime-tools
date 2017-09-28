@@ -202,7 +202,7 @@ test_extra_programs                  = tests/notgl-user                        \
 tests_notgl_user_LDADD               = tests/lib/libnotgl.la
 tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
                                        tests/lib/libhelper.la
-test_extra_scripts                   =
+test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =
 test_scripts                         = tests/notgl.pl

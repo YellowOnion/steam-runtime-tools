@@ -259,7 +259,6 @@ CLEANFILES             += tests/shim/libnotgl.so.c
 EXTRA_DIST             += $(top_srcdir)/.version
 EXTRA_DIST             += autogen.sh
 EXTRA_DIST             += build-aux/git-version-gen
-EXTRA_DIST             += build-aux/tap-test.sh
 EXTRA_DIST             += doc/Strategy.txt
 EXTRA_DIST             += doc/capsule-init-project.xml
 EXTRA_DIST             += doc/capsule-mkstublib.xml

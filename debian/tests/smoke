@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/perl
 
 # Copyright © 2017 Collabora Ltd.
 #
@@ -15,20 +15,16 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
-set -eu -o pipefail
+use autodie;
+use File::Temp qw();
+use IPC::Run qw(run);
+use Test::More;
 
-exec 3>&1
-BASH_XTRACEFD=3
-PS4='# execute: '
-set -x
+my $scratch = File::Temp->newdir();
+chdir($scratch);
 
-scratch="$(mktemp -d)"
-cd "$scratch"
-trap 'cd /; rm -fr $scratch' EXIT
-
-echo "1..5"
-
-cat > trivial.c <<'EOF'
+open(my $fh, '>', 'trivial.c');
+print {$fh} <<'EOF';
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -39,16 +35,20 @@ int
 main (void)
 {
   capsule_init();
-  printf( "ok 4 - capsule_init() didn't crash\n" );
+  printf( "capsule_init() didn't crash\n" );
   return 0;
 }
 EOF
+close($fh);
 
-gcc -c -o trivial.o trivial.c $(pkg-config --cflags capsule)
-echo "ok 1 - compiled"
-gcc -o trivial trivial.o $(pkg-config --libs capsule)
-echo "ok 2 - linked"
-test -x trivial
-echo "ok 3 - result is executable"
-./trivial
-echo "ok 5 - exited successfully"
+ok(! system('gcc -c -o trivial.o trivial.c $(pkg-config --cflags capsule)'),
+    'compiled');
+ok(! system('gcc -o trivial trivial.o $(pkg-config --libs capsule)'),
+    'linked');
+ok(-x 'trivial', 'executable');
+my $output;
+ok(run(['./trivial'], '>', \$output), 'executed successfully');
+is($output, "capsule_init() didn't crash\n", 'printed desired output');
+
+chdir('/');
+done_testing;

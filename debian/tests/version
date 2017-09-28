@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/perl
 
 # Copyright © 2017 Collabora Ltd
 #
@@ -17,65 +17,112 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
-set -eu -o pipefail
+use autodie;
+use warnings;
+use strict;
 
-. "$(dirname "$0")"/../../tests/libtest.sh
+use File::Temp qw();
+use IPC::Run qw(run);
+use Test::More;
 
-if ! bwrap --ro-bind / / true; then
-    skip_all "1..0 # SKIP - cannot run bwrap"
-fi
+use FindBin;
+use lib "$FindBin::Bin/../../tests";
 
-echo_tap "# Working directory: $test_tempdir"
-cd "$test_tempdir"
-host="${test_tempdir}/host"
+use CapsuleTest;
 
-CAPSULE_VERSION="$(pkg-config --variable=libexecdir capsule)/capsule-version"
+skip_all_unless_bwrap;
 
-output="$(bwrap --ro-bind / / --ro-bind / "${host}" --dev-bind /dev /dev \
-    ${CAPSULE_VERSION} libz.so.1 "${host}")"
-set -- $output
-is "$1" "${host}"
-is "$2" libz.so.1
-like "$3" "1.*.*"
-like "$4" "${host}/@(usr/lib|lib)/*-linux-gnu*/libz.so.$3"
-test -e "${4#${host}}"
-pass "successfully found libz"
+my $test_tempdir = File::Temp->newdir();
+diag "Working directory: $test_tempdir";
+my $host = "${test_tempdir}/host";
+mkdir($host);
+
+my $libexecdir = `pkg-config --variable=libexecdir capsule`;
+chomp $libexecdir;
+my $CAPSULE_VERSION = "$libexecdir/capsule-version";
+
+my $output;
+my ($root, $soname, $version, $path);
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        qw(--dev-bind /dev /dev), $CAPSULE_VERSION, 'libz.so.1',
+        $host], '>', \$output);
+like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
+$output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
+$root = $1;
+$soname = $2;
+$version = $3;
+$path = $4;
+is($root, $host);
+is($soname, 'libz.so.1');
+like($version, qr{^1\.[0-9]+\.[0-9]+$});
+like($path, qr{^\Q$host\E(/(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+$path =~ s/^\Q$host\E//;
+ok(-e $path);
 
 # Try the same thing without a prefix
-output="$(${CAPSULE_VERSION} libz.so.1 "/")"
-set -- $output
-is "$1" "/"
-is "$2" libz.so.1
-# TODO: This just returns 1?
-#like "$3" "1.*.*"
-# TODO: Would be nice if this didn't start with //
-like "$4" "+(/)@(usr/lib|lib)/*-linux-gnu*/libz.so.$3"
-test -e "$4"
-pass "successfully found libz"
+run_ok([$CAPSULE_VERSION, 'libz.so.1', '/'], '>', \$output);
+like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
+$output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
+$root = $1;
+$soname = $2;
+$version = $3;
+$path = $4;
+is($root, '/');
+is($soname, 'libz.so.1');
+TODO: {
+    local $TODO = 'returns 1 for some reason';
+    like($version, qr{^1\.[0-9]+\.[0-9]+$});
+}
+TODO: {
+    local $TODO = "would be nice if this didn't start with //";
+    like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+}
+like($4, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+ok(-e $1);
 
 # A different way
-output="$(${CAPSULE_VERSION} libz.so.1 "")"
-set -- $output
-is "$1" libz.so.1
-# TODO: This just returns 1?
-#like "$2" "1.*.*"
-like "$3" "/@(usr/lib|lib)/*-linux-gnu*/libz.so.$2"
-test -e "$3"
-pass "successfully found libz"
+run_ok([$CAPSULE_VERSION, 'libz.so.1', ''], '>', \$output);
+like($output, qr{^(\S*)\s+(\S+)\s+(\S+)\s+(\S+)$});
+$output =~ m{^(\S*)\s+(\S+)\s+(\S+)\s+(\S+)$};
+$root = $1;
+$soname = $2;
+$version = $3;
+$path = $4;
+like($root, qr{/?});
+is($soname, 'libz.so.1');
+TODO: {
+    local $TODO = 'returns 1 for some reason';
+    like($version, qr{^1\.[0-9]+\.[0-9]+$});
+}
+TODO: {
+    local $TODO = "would be nice if this didn't start with //";
+    like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+}
+like($path, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+ok(-e $path);
 
 # Another different way
-output="$(${CAPSULE_VERSION} libz.so.1 "/")"
-set -- $output
+run_ok([$CAPSULE_VERSION, 'libz.so.1'], '>', \$output);
+like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
+$output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
+$root = $1;
+$soname = $2;
+$version = $3;
+$path = $4;
 # TODO: This should probably not try to print NULL
-#is "$1" "(null)"
-is "$2" libz.so.1
-# TODO: This just returns 1?
-#like "$3" "1.*.*"
-# TODO: Would be nice if this didn't start with //
-like "$4" "+(/)@(usr/lib|lib)/*-linux-gnu*/libz.so.$3"
-test -e "$4"
-pass "successfully found libz"
+unlike($root, qr{^/.+$});   # actually it's (null)
+is($soname, 'libz.so.1');
+TODO: {
+    local $TODO = 'returns 1 for some reason';
+    like($version, qr{^1\.[0-9]+\.[0-9]+$});
+}
+TODO: {
+    local $TODO = "would be nice if this didn't start with //";
+    like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$3\E)$});
+}
+like($path, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$3\E)$});
+ok(-e $path);
 
-done_testing
+done_testing;
 
 # vim:set sw=4 sts=4 et:

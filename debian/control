@@ -13,6 +13,7 @@ Build-Depends:
  gtk-doc-tools,
  libelf-dev,
  libipc-run-perl,
+ perl,
  xsltproc,
 Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
 Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule

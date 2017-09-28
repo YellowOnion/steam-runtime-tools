@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/perl
 
 # Copyright © 2017 Collabora Ltd
 #
@@ -17,50 +17,57 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
-set -eu -o pipefail
+use autodie;
+use warnings;
+use strict;
 
-. "$(dirname "$0")"/../../tests/libtest.sh
+use File::Temp qw();
+use IPC::Run qw(run);
+use Test::More;
 
-if ! bwrap --ro-bind / / true; then
-    skip_all "1..0 # SKIP - cannot run bwrap"
-fi
+use FindBin;
+use lib "$FindBin::Bin/../../tests";
 
-echo_tap "# Working directory: $test_tempdir"
-cd "$test_tempdir"
-host="${test_tempdir}/host"
+use CapsuleTest;
 
-CAPSULE_SYMBOLS="$(pkg-config --variable=libexecdir capsule)/capsule-symbols"
+skip_all_unless_bwrap;
+
+my $test_tempdir = File::Temp->newdir();
+diag "Working directory: $test_tempdir";
+my $host = "${test_tempdir}/host";
+mkdir($host);
+
+my $libexecdir = `pkg-config --variable=libexecdir capsule`;
+chomp $libexecdir;
+my $CAPSULE_SYMBOLS = "$libexecdir/capsule-symbols";
 
 # We need a well-behaved library with a simple ABI to inspect. Let's use
 # libcapsule itself :-)
-bwrap --ro-bind / / --ro-bind / "${host}" --dev-bind /dev /dev \
-    ${CAPSULE_SYMBOLS} libcapsule.so.0 "${host}" > output
-capture_tap sed -e 's/^/#  /' < output
-pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 ${host}"
+my $output;
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        qw(--dev-bind /dev /dev),
+        $CAPSULE_SYMBOLS, 'libcapsule.so.0', $host], '>', \$output);
+diag_multiline $output;
 
-shell_is 'grep "^capsule_init" output' 0 "capsule_init " \
-    "capsule_init is part of libcapsule's ABI"
-shell_is 'grep -v "^capsule" output' 1 "" \
-    "all of libcapsule's ABI matches /^capsule/"
+like($output, qr{^capsule_init $}m, "capsule_init is an unversioned symbol");
+unlike($output, qr{^(?!capsule)}m, "all of libcapsule's ABI matches /^capsule/");
 
 # Try the same thing without a prefix
-${CAPSULE_SYMBOLS} libcapsule.so.0 / > output
-capture_tap sed -e 's/^/#  /' < output
-pass "Ran ${CAPSULE_SYMBOLS} libcapsule.so.0 /"
+run_ok([$CAPSULE_SYMBOLS, 'libcapsule.so.0', '/'], '>', \$output);
+diag_multiline $output;
 
-shell_is 'grep "^capsule_init" output' 0 "capsule_init " \
-    "capsule_init is an unversioned symbol"
-shell_is 'grep -v "^capsule" output' 1 "" \
-    "all of libcapsule's ABI matches /^capsule/"
+like($output, qr{^capsule_init $}m, "capsule_init is an unversioned symbol");
+unlike($output, qr{^(?!capsule)}m, "all of libcapsule's ABI matches /^capsule/");
 
 # How about versioned symbols?
-${CAPSULE_SYMBOLS} libjpeg.so.62 / > output
-capture_tap sed -e 's/^/#  /' < output
-pass "Ran ${CAPSULE_SYMBOLS} libjpeg.so.62 /"
+run_ok([$CAPSULE_SYMBOLS, 'libjpeg.so.62', '/'], '>', \$output);
+diag_multiline $output;
 
-shell_is 'grep "^jpeg_destroy " output' 0 'jpeg_destroy @@LIBJPEG_6.2' \
-    "jpeg_destroy is a versioned symbol"
+like($output, qr{^jpeg_destroy \@\@LIBJPEG_6\.2$}m,
+    "jpeg_destroy is a versioned symbol");
+unlike($output, qr{^jpeg_destroy (?!\@\@LIBJPEG_6\.2)}m,
+    "jpeg_destroy does not appear unversioned");
 
-done_testing
+done_testing;
 
 # vim:set sw=4 sts=4 et:

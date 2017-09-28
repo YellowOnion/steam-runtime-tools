@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+use autodie;
 use warnings;
 use strict;
 
@@ -28,6 +29,7 @@ use Test::More;
 
 use FindBin;
 use lib $FindBin::Bin;
+
 use CapsuleTest;
 
 skip_all_unless_bwrap;

@@ -57,7 +57,7 @@ installed-tests.
 
 # G_TEST_* convention stolen from GLib, even though we aren't using GTest
 our $srcdir = $ENV{G_TEST_SRCDIR};
-$srcdir = abs_path($FindBin::Bin) unless defined $srcdir;
+$srcdir = abs_path($FindBin::Bin."/..") unless defined $srcdir;
 
 =item $builddir
 
@@ -68,7 +68,7 @@ installed-tests.
 =cut
 
 our $builddir = $ENV{G_TEST_BUILDDIR};
-$builddir = abs_path($FindBin::Bin) unless defined $builddir;
+$builddir = abs_path($FindBin::Bin."/..") unless defined $builddir;
 
 diag "Source or installation directory: $srcdir";
 diag "Build or installation directory: $builddir";

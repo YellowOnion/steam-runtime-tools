@@ -112,7 +112,7 @@ insttestsdir                         = $(libexecdir)/installed-tests/$(PACKAGE_T
 # /!\ Order is important here: the helper library must come first
 nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/green/libhelper.la                \
-                                       tests/lib/libhelper.la                  \
+                                       tests/helper/libhelper.la               \
                                        tests/red/libnotgl.la                   \
                                        tests/green/libnotgl.la                 \
                                        tests/lib/libnotgl.la                   \
@@ -137,27 +137,29 @@ tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
 tests_lib_libnotgl_la_LDFLAGS        = -shared -version-number 0:42:23
-tests_lib_libnotgl_la_LIBADD         = tests/lib/libhelper.la
+tests_lib_libnotgl_la_LIBADD         = tests/helper/libhelper.la
 
 tests_red_libnotgl_la_SOURCES        = tests/notgl-red.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
 # Give it a gratuitously higher version number
 tests_red_libnotgl_la_LDFLAGS        = -shared -version-number 0:123:456
-# We want the RUNPATH to point to tests/lib here, so link to that helper
-tests_red_libnotgl_la_LIBADD         = tests/lib/libhelper.la
+# We want the RUNPATH or RPATH to point to tests/helper here, so we can
+# demonstrate the functionality of loading two different libraries from the
+# same path on host and container
+tests_red_libnotgl_la_LIBADD         = tests/helper/libhelper.la
 
 tests_green_libnotgl_la_SOURCES      = tests/notgl-green.c                     \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
 # Give this one a gratuitously *lower* version number
 tests_green_libnotgl_la_LDFLAGS      = -shared -version-number 0:23:42
-# Again, we want the RUNPATH to point to tests/lib here, so link to that helper
-tests_green_libnotgl_la_LIBADD       = tests/lib/libhelper.la
+# Again, we want the RUNPATH or RPATH to point to tests/helper here
+tests_green_libnotgl_la_LIBADD       = tests/helper/libhelper.la
 
-tests_lib_libhelper_la_SOURCES       = tests/notgl-helper-ref.c                \
+tests_helper_libhelper_la_SOURCES    = tests/notgl-helper-ref.c                \
                                        tests/notgl-helper.h
-tests_lib_libhelper_la_LDFLAGS       = -shared -version-number 0:42:23
+tests_helper_libhelper_la_LDFLAGS    = -shared -version-number 0:42:23
 
 tests_red_libhelper_la_SOURCES       = tests/notgl-helper-red.c                \
                                        tests/notgl-helper.h
@@ -201,7 +203,7 @@ test_extra_programs                  = tests/notgl-user                        \
                                        tests/notgl-helper-user
 tests_notgl_user_LDADD               = tests/lib/libnotgl.la
 tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
-                                       tests/lib/libhelper.la
+                                       tests/helper/libhelper.la
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =

@@ -61,7 +61,10 @@ else {
 }
 
 diag 'Without special measures:';
-run_ok(['env', "LD_LIBRARY_PATH=$builddir/tests/lib$libs", $notgl_user],
+run_ok(['env',
+        'LD_LIBRARY_PATH='.join(':', "$builddir/tests/lib$libs",
+            "$builddir/tests/helper$libs"),
+        $notgl_user],
     '>', \$stdout);
 diag_multiline $stdout;
 like($stdout, qr/^NotGL implementation: reference$/m);
@@ -72,7 +75,9 @@ like($stdout, qr/^notgl_extension_red: \(not found\)$/m);
 like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
 
 diag 'Without special measures (linked to libhelper):';
-run_ok(['env', "LD_LIBRARY_PATH=$builddir/tests/lib$libs",
+run_ok(['env',
+        'LD_LIBRARY_PATH='.join(':', "$builddir/tests/lib$libs",
+            "$builddir/tests/helper$libs"),
         $notgl_helper_user],
     '>', \$stdout);
 diag_multiline $stdout;
@@ -90,21 +95,45 @@ diag 'With libcapsule loading red implementation:';
 #
 # In the "container", the shim libnotgl is picked up from tests/shim because
 # it was prepended to the LD_LIBRARY_PATH. The helper library used by
-# libnotgl, libhelper, is picked up from tests/lib as usual.
+# libnotgl, libhelper, is picked up from tests/helper as usual, and
+# we mount a tmpfs over tests/lib to avoid libnotgl being picked up
+# from the RPATH (in older toolchains that produce those instead
+# of RUNPATH, and cannot be overridden by LD_LIBRARY_PATH):
+#
+# emulated container on /
+# $builddir/
+#   tests/
+#     helper/ (contains reference libhelper)
+#     lib/ (empty)
+#     shim/ (contains shim libnotgl)
 #
 # In the "host system", there is a tmpfs over the build or installation
 # directory to avoid tests/shim being found *again*, and the "red"
-# implementations of libnotgl and libhelper is mounted over tests/lib.
+# implementations of libnotgl and libhelper are mounted over tests/lib
+# and tests/helper:
+#
+# emulated host filesystem on $capsule_prefix
+# $builddir/
+#   tests/
+#     helper/ (contains red libnotgl and libhelper)
+#     lib/ (contains red libnotgl and libhelper)
+#     shim/ (does not exist)
 run_ok([qw(bwrap
         --ro-bind / /
         --dev-bind /dev /dev
         --ro-bind /), $capsule_prefix,
+        '--tmpfs', "$builddir/tests/lib$libs",
         '--tmpfs', "$capsule_prefix$builddir",
+        '--ro-bind', "$builddir/tests/red",
+            "$capsule_prefix$builddir/tests/helper",
         '--ro-bind', "$builddir/tests/red",
             "$capsule_prefix$builddir/tests/lib",
         '--setenv', 'CAPSULE_PREFIX', $capsule_prefix,
-        '--setenv', 'LD_LIBRARY_PATH',
-            "$builddir/tests/shim$libs:$builddir/tests/lib$libs",
+        '--setenv', 'LD_LIBRARY_PATH', join(':',
+            "$builddir/tests/shim$libs",
+            "$builddir/tests/helper$libs",
+            "$builddir/tests/lib$libs",
+        ),
         $notgl_user],
     '>', \$stdout);
 diag_multiline $stdout;
@@ -131,17 +160,24 @@ like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
 
 diag 'With libcapsule loading green implementation:';
 # Similar to the above, but now the host system is using the "green"
-# implementation of libnotgl, mirroring the NVIDIA implementation of libGL.
+# implementation of libnotgl, mirroring the NVIDIA implementation of
+# libGL; and the binary is linked to libhelper, so we can demonstrate
+# that libcapsule gives us the necessary cognitive dissonance to have
+# two copies of libhelper loaded simultaneously.
 run_ok([qw(bwrap
         --ro-bind / /
         --dev-bind /dev /dev
         --ro-bind /), $capsule_prefix,
+        '--tmpfs', "$builddir/tests/lib$libs",
         '--tmpfs', "$capsule_prefix$builddir",
         '--ro-bind', "$builddir/tests/green",
             "$capsule_prefix$builddir/tests/lib",
         '--setenv', 'CAPSULE_PREFIX', $capsule_prefix,
-        '--setenv', 'LD_LIBRARY_PATH',
-            "$builddir/tests/shim$libs:$builddir/tests/lib$libs",
+        '--setenv', 'LD_LIBRARY_PATH', join(':',
+            "$builddir/tests/shim$libs",
+            "$builddir/tests/helper$libs",
+            "$builddir/tests/lib$libs",
+        ),
         $notgl_helper_user],
     '>', \$stdout);
 diag_multiline $stdout;

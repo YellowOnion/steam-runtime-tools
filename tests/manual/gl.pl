@@ -892,7 +892,9 @@ if (@dri_path) {
 }
 
 push @bwrap, '--setenv', 'DISPLAY', $ENV{DISPLAY};
-push @bwrap, '--ro-bind', "$ENV{HOME}/.Xauthority", "$ENV{HOME}/.Xauthority";
+
+push @bwrap, '--ro-bind', "$ENV{HOME}/.Xauthority",
+    "$ENV{HOME}/.Xauthority" if -e "$ENV{HOME}/.Xauthority";
 
 if (@ARGV) {
     run_ok([@bwrap, @ARGV]);

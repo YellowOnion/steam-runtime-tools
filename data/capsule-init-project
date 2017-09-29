@@ -183,9 +183,13 @@ echo Bootstrapping autoconf templates for $target;
 ############################################################################
 # this stage generates the capsule-shim.mk from a template, which
 # we need to be in place before we generate the _real_ Makefile.in:
-(autoreconf -if;
+if ! (autoreconf -if;
  ./configure;
- sed -i -re 's@##(include .*)##@\1@' Makefile.am) > preconfigure.log 2>&1
+ sed -i -re 's@##(include .*)##@\1@' Makefile.am) > preconfigure.log 2>&1;
+then
+    cat preconfigure.log
+    exit 1
+fi
 ############################################################################
 
 echo Running initial configuration;

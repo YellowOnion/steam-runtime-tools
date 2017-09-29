@@ -706,9 +706,9 @@ if (defined $flatpak_runtime) {
 
 $CAPSULE_VERSION = "$capsule_libexecdir/capsule-version"
     unless defined $CAPSULE_VERSION;
-$app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/scout_beta/active/files"
+$app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/master/active/files"
     unless defined $app;
-$container_tree = "$data_home/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/$arch/scout_beta/active/files"
+$container_tree = "$data_home/flatpak/runtime/net.debian.flatpak.Games.Platform/$arch/stretch/active/files"
     unless defined $container_tree;
 
 run_verbose(['glxinfo'], '>', \$stdout);

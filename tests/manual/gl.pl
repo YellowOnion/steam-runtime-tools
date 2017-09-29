@@ -24,6 +24,7 @@ use strict;
 
 use autodie;
 use File::Path qw(make_path);
+use File::Spec qw();
 use File::Temp qw();
 use Getopt::Long;
 use IPC::Run qw(run);

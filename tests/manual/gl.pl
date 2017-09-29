@@ -610,7 +610,8 @@ sub capture_gl_provider_libs_if_newer {
                         $gl_provider_version =~ s/.*\.so\.//;
 
                         my $container_version = $container_impl;
-                        $container_version =~ s/.*\.so\.//;
+                        $container_version =~ s/.*\.so\.//
+                            if defined $container_version;
 
                         if (! defined $container_impl) {
                             diag "${ansi_green}Using GL provider's ".

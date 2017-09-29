@@ -9,7 +9,10 @@ me=$(basename $0);
 usage ()
 {
 cat << EOF
-Usage: $me TARGET [TREE [PROJECT-NAME]]"
+Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]"
+    Options:
+        --capsule-symbols=PATH  Use replacement capsule-symbols(1)
+        --capsule-version=PATH  Use replacement capsule-symbols(1)
     Positional parameters:
         TARGET                  SONAME of the library to be proxied
         TREE                    Chroot or container to find libraries in,
@@ -29,6 +32,18 @@ do
     case "$1" in
         (--help|-h)
             usage 0;
+            ;;
+
+        (--capsule-symbols)
+            CAPSULE_SYMBOLS="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--capsule-version)
+            CAPSULE_VERSION="$2"
+            shift 2;
+            continue;
             ;;
 
         (--)
@@ -58,7 +73,10 @@ lcbase=${base,,};
 dest=${3:-$base-proxy};
 ver=0;
 
-read x x ver x < <($libexec/capsule-version $target $tree);
+: "${CAPSULE_SYMBOLS:="$libexec/capsule-symbols"}"
+: "${CAPSULE_VERSION:="$libexec/capsule-version"}"
+
+read x x ver x < <("$CAPSULE_VERSION" "$target" "$tree");
 
 echo Generating project for $tree : $target $ver proxy;
 
@@ -93,7 +111,7 @@ EOF
 
 echo Extracting dynamic symbols from $tree : $target;
 
-$libexec/capsule-symbols $target $tree > shim/$base.so.symbols;
+"$CAPSULE_SYMBOLS" "$target" "$tree" > "shim/$base.so.symbols";
 
 echo Preparing proxy source files
 touch shim/$base.so.c.{shared,excluded};

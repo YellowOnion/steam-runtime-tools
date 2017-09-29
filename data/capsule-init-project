@@ -4,6 +4,48 @@ set -e;
 set -u;
 
 libexec=$(dirname $0);
+me=$(basename $0);
+
+usage ()
+{
+cat << EOF
+Usage: $me TARGET [TREE [PROJECT-NAME]]"
+    Positional parameters:
+        TARGET                  SONAME of the library to be proxied
+        TREE                    Chroot or container to find libraries in,
+                                both now and at runtime [default: /host]
+        PROJECT-NAME            Project to create [default: libfoo-proxy]
+EOF
+    exit "${1:-0}"
+}
+
+getopt_temp="$(getopt -o 'h' \
+    -l 'help' \
+    -n "$me" -- "$@")"
+eval set -- "$getopt_temp"
+
+while true;
+do
+    case "$1" in
+        (--help|-h)
+            usage 0;
+            ;;
+
+        (--)
+            shift;
+            break;
+            ;;
+        (*)
+            echo "$me: Internal error" >&2;
+            usage 2 >&2;
+            ;;
+    esac
+done
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ];
+then
+    usage 2 >&2;
+fi;
 
 target=$1;
 tree=${2:-/host};

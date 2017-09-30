@@ -247,6 +247,9 @@ done < $symbol_file;
 
 cat - <<EOF
 static capsule cap;
+static void *_dlsym (void *handle, const char *symbol);
+static void *_ext_dlopen (const char *filename, int flag);
+
 // should we exclude libpthread here?
 // in any case, these are DSOs we do _not_ want to isolate
 static const char *exclude[] = { // MUST NOT be pulled from the capsule
@@ -258,40 +261,110 @@ while read excluded x;
 do
     case $excluded in lib*) printf "%32s \"%s\",\n" "" $excluded; ;; esac;
 done < $proxy_excluded;
+
 cat - <<EOF
                                  NULL };
+
+// -------------------------------------------------------------
+// this is an array of the functions we want to act as a shim for:
+static capsule_item relocs[] =
+{
+EOF
+
+while read sym x;
+do
+    cat - <<EOF
+  { "$sym" },
+EOF
+done < $symbol_file;
+
+if [ -n "$dlsym_file" ];
+then
+    cat - <<EOF
+  { "dlsym", (capsule_addr) _dlsym },
+EOF
+fi;
+
+cat - <<EOF
+  { NULL }
+};
+
+static const char *invalid_dl_reloc_targets[] =
+{
+  "$proxied_dso",
+  "libc.so",
+  "libdl.so",
+  "libpthread.so",
+  "libcapsule.so",
+  NULL
+};
+
+// DSOs to restrict dlsym lookups to:    
+static const char *valid_dlsym_sources[] =
+{
+  "$proxied_dso",
+EOF
+
+if [ -f "${proxy_extra}" ];
+then
+    for pt in $(cat $proxy_extra);
+    do
+        cat - <<EOF
+  "$pt",
+EOF
+    done;
+fi;
+
+cat - <<EOF
+  NULL
+};
 EOF
 
 if [ -f ${dlopen_file} ];
 then
-    echo "// -------------------------------------------------------------";
-    echo "// start of ${proxy_src%.c} dlopen wrapper";
-    cat $dlopen_file;
-    echo "// end of ${proxy_src%.c} dlopen wrapper";
-    echo "// -------------------------------------------------------------";
-fi
+    cat - <<EOF
+static capsule_item dl_relocs[] =
+{
+  { "dlopen", (capsule_addr) _ext_dlopen, (capsule_addr) _ext_dlopen },
+  { NULL }
+};
+EOF
+else
+    cat - <<EOF
+static capsule_item dl_relocs[] =
+{
+  { NULL }
+};
+EOF
+fi;
 
 if [ -n "${dlsym_file}" ];
 then
-    echo "// DSOs to restrict dlsym lookups to:";
-    echo "static const char *valid_dlsym_sources[] = ";
-    echo "{";
-    for pt in $proxied_dso $(cat $proxy_extra);
-    do
-        echo "  \"$pt\",";
-    done;
-    echo "  NULL";
-    echo "};";
-
-    echo "// -------------------------------------------------------------";
-    echo "// start of ${proxy_src%.c} dlsym wrapper";
+    cat - <<EOF
+// -------------------------------------------------------------
+// start of ${proxy_src%.c} dlsym wrapper
+EOF
     cat $dlsym_file;
-    echo "// end of ${proxy_src%.c} dlsym wrapper";
-    echo "// -------------------------------------------------------------";
+    cat - <<EOF
+// end of ${proxy_src%.c} dlsym wrapper
+// -------------------------------------------------------------
+EOF
+fi
+
+if [ -f ${dlopen_file} ];
+then
+    cat - <<EOF
+// -------------------------------------------------------------
+// start of ${proxy_src%.c} dlopen wrapper
+EOF
+    cat $dlopen_file;
+    cat - <<EOF
+// end of ${proxy_src%.c} dlopen wrapper
+// -------------------------------------------------------------
+EOF
 fi
 
 cat - <<EOF
-
 static void __attribute__ ((constructor)) _capsule_init (void)
 {
     int   capsule_errno = 0;
@@ -299,24 +372,6 @@ static void __attribute__ ((constructor)) _capsule_init (void)
     const char *prefix;
     Lmid_t symbol_ns;
     void * dso;
-
-    // this is an array of the functions we want to act as a shim for:
-    capsule_item relocs[] =
-      {
-EOF
-
-while read sym x; do echo "         { \"$sym\" },"; done < $symbol_file;
-
-if [ -n "$dlsym_file" ];
-then
-    cat - <<EOF
-         { "dlsym", (capsule_addr) _dlsym },
-EOF
-fi;
-
-cat - <<EOF
-         { NULL }
-      };
 
     // and this is an aray of functions we must override in the DSOs
     // inside the capsule (mostly to take account of the fact that
@@ -338,11 +393,18 @@ cat - <<EOF
     cap = capsule_init( symbol_ns, prefix, exclude, valid_dlsym_sources );
 
     dso = capsule_load( cap, "$proxied_dso", &symbol_ns, wrappers,
-                           &capsule_errno, &capsule_error );
+                        &capsule_errno, &capsule_error );
 
     if( dso )
     {
-        capsule_relocate( cap, relocs, &capsule_error );
+        int rloc = capsule_relocate( cap, relocs, &capsule_error );
+
+        if( rloc == 0 )
+        {
+            capsule_relocate_except( cap, dl_relocs,
+                                     &invalid_dl_reloc_targets[0],
+                                     &capsule_error );
+        }
     }
     else
     {

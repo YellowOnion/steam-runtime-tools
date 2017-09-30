@@ -126,13 +126,13 @@ int capsule_relocate (const capsule capsule,
 
 
 /**
- * capsule_relocate_restricted:
+ * capsule_relocate_except:
  * @capsule: a #capsule handle as returned by capsule_init()
  * @relocations: (array zero-terminated=1): Array of capsule_item
  *               specifying which symbols to export, terminated by a
  *               #capsule_item whose @name is %NULL
- * @dso_blacklist: (array zero-terminated=1) (optional): Array of sonames
- *                 which should not have their GOT entries updated.
+ * @except: (array zero-terminated=1) (optional): Array of sonames
+ *          which should not have their GOT entries updated.
  * @error: (out) (transfer full) (optional): location in which to store
  *         an error message on failure, or %NULL to ignore.
  *         Free with free().
@@ -148,7 +148,7 @@ int capsule_relocate (const capsule capsule,
  * to know these value in advance).
  *
  * This function updates the GOT entries in all DSOs outside the capsule
- * _except_ those listed in @dso_blacklist: When they call any function
+ * _except_ those listed in @except: When they call any function
  * listed in @relocations they invoke the copy of that function inside
  * the capsule. These sonames should be of the form "libfoo.so.X"
  * or "libfoo.so". You may specify further minor version numbers in the
@@ -158,10 +158,10 @@ int capsule_relocate (const capsule capsule,
  * caller's responsibility to free() it.
  */
 _CAPSULE_PUBLIC
-int capsule_relocate_restricted (const capsule cap,
-                                 capsule_item *relocations,
-                                 const char **dso_blacklist,
-                                 char **error);
+int capsule_relocate_except (const capsule capsule,
+                             capsule_item *relocations,
+                             const char **except,
+                             char **error);
 
 /**
  * capsule_load:
@@ -257,3 +257,6 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
  */
 _CAPSULE_PUBLIC
 void *capsule_external_dlsym (capsule cap, void *handle, const char *symbol);
+
+_CAPSULE_PUBLIC
+void *capsule_external_dlopen(const capsule cap, const char *file, int flag);

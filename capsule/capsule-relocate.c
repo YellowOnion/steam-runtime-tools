@@ -102,6 +102,7 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 static int relocate (const capsule cap,
                      capsule_item *relocations,
                      const char **dso_blacklist,
+                     int keep_relocs,
                      char **error)
 {
     relocation_data_t rdata = { 0 };
@@ -110,20 +111,46 @@ static int relocate (const capsule cap,
     const char *mmap_error = NULL;
     int rval = 0;
 
-    if( cap->relocations != NULL && cap->relocations != relocations )
+    if( keep_relocs )
     {
-        DEBUG( DEBUG_RELOCS,
-               "relocations array updated: "
-               "if unintentional capsule may behave unpredictably" );
-    }
+        if( cap->relocations == NULL )
+        {
+            DEBUG( DEBUG_RELOCS,
+                   "caching relocation list: %p", relocations );
+            cap->relocations = relocations;
+        }
+        else if( cap->relocations != NULL &&
+                 relocations      != NULL &&
+                 cap->relocations != relocations )
+        {
+            DEBUG( DEBUG_RELOCS,
+                   "overwriting cached relocation list (bug?): %p ← %p",
+                   cap->relocations, relocations );
+            cap->relocations = relocations;
+        }
 
-    if( relocations != NULL )
-        cap->relocations = relocations;
+        if( relocations != NULL &&
+            relocations != cap->relocations )
+        {
+            DEBUG( DEBUG_RELOCS,
+                   "using one-shot relocation list %p", relocations );
+            rdata.relocs = relocations;
+        }
+        else
+        {
+            DEBUG( DEBUG_RELOCS,
+                   "using cached relocation list %p", cap->relocations );
+            rdata.relocs = cap->relocations;
+        }
+    }
+    else
+    {
+        rdata.relocs = relocations;
+    }
 
     // load the relevant metadata into the callback argument:
     rdata.debug     = debug_flags;
     rdata.error     = NULL;
-    rdata.relocs    = cap->relocations;
     rdata.blacklist = dso_blacklist;
     rdata.mmap_info = load_mmap_info( &mmap_errno, &mmap_error );
 
@@ -183,14 +210,21 @@ static int relocate (const capsule cap,
 int
 capsule_relocate (const capsule cap, capsule_item *relocations, char **error)
 {
-    return relocate( cap, relocations, NULL, error );
+    return relocate( cap, relocations, NULL, 1, error );
 }
 
 int
-capsule_relocate_restricted (const capsule cap,
-                             capsule_item *relocations,
-                             const char **dso_blacklist,
-                             char **error)
+capsule_relocate_except (const capsule cap,
+                         capsule_item *relocations,
+                         const char **except,
+                         char **error)
 {
-    return relocate( cap, relocations, dso_blacklist, error );
+    unsigned long df = debug_flags;
+    debug_flags |= DEBUG_RELOCS;
+
+    int rv = relocate( cap, relocations, except, 0, error );
+
+    debug_flags = df;
+
+    return rv;
 }

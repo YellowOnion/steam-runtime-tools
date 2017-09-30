@@ -4,6 +4,7 @@
 #include "utils/ld-libs.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -40,6 +41,41 @@ capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
     return addr;
 }
 
+void *
+capsule_external_dlopen(const capsule cap, const char *file, int flag)
+{
+    void *handle = NULL;
+    char *error  = NULL;
+
+    if( cap->load_dso )
+    {
+        fprintf( stderr, "dlopen<%p>( %s, %d )\n", cap->load_dso, file, flag );
+        handle = cap->load_dso( file, flag );
+    }
+    else
+    {
+        fprintf( stderr,
+                 "capsule_external_dlopen() has no dlopen() implementation\n" );
+    }
+
+    if( handle != NULL )
+    {
+        unsigned long df = debug_flags;
+        debug_flags = DEBUG_RELOCS|DEBUG_SEARCH;
+        // This may not even be necessary, so it should not be fatal.
+        // We do want to log it though as it might be an important clue:
+        if( capsule_relocate( cap, NULL, &error ) != 0 )
+        {
+            fprintf( stderr, "relocation after dlopen(%s, …) failed: %s\n",
+                     file, error );
+            free( error );
+        }
+
+        debug_flags = df;
+    }
+
+    return handle;
+}
 
 void *
 capsule_shim_dlopen(const capsule cap, const char *file, int flag)

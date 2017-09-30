@@ -131,6 +131,23 @@ static void *_int_dlopen (const char *filename, int flag)
     }
     return capsule_shim_dlopen( cap, filename, flag );
 }
+
+static void *_ext_dlopen (const char *filename, int flag)
+{
+    char *capsule_error = NULL;
+    void *handle = capsule_external_dlopen( cap, filename, flag );
+    capsule_relocate_except( cap, dl_relocs,
+                             &invalid_dl_reloc_targets[0],
+                             &capsule_error );
+    if( capsule_error )
+    {
+        fprintf( stderr, "post-dlopen hook secondary relocate failed: %s\n",
+                 capsule_error );
+        free( capsule_error );
+        capsule_error = NULL;
+    }
+    return handle;
+}
 EOF
 
 cat - <<EOF > shim/$base.so.c.dlsym

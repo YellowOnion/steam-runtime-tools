@@ -30,7 +30,6 @@
 
 typedef struct
 {
-    const char *target; // name of shim DSO to have its symbols relocated
     capsule_item *relocs;
     struct { int success; int failure; } count;
     int debug;

@@ -26,6 +26,7 @@
 #include <fcntl.h>
 
 #include <capsule/capsule.h>
+#include "capsule-private.h"
 
 #include "utils/dump.h"
 #include "utils/utils.h"
@@ -77,9 +78,7 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
     return process_phdr( info, size, rdata );
 }
 
-int capsule_relocate (const char *target,
-                      void *source,
-                      unsigned long dbg,
+int capsule_relocate (const capsule cap,
                       capsule_item *relocations,
                       char **error)
 {
@@ -89,8 +88,7 @@ int capsule_relocate (const char *target,
     const char *mmap_error = NULL;
     int rval = 0;
 
-    rdata.target    = target;
-    rdata.debug     = dbg ? dbg : debug_flags;
+    rdata.debug     = debug_flags;
     rdata.error     = NULL;
     rdata.relocs    = relocations;
     rdata.mmap_info = load_mmap_info( &mmap_errno, &mmap_error );
@@ -104,17 +102,18 @@ int capsule_relocate (const char *target,
                "relocation will be unable to handle relro linked libraries" );
     }
 
+    cap->relocations = relocations;
     // no source dl handle means we must have a pre-populated
     // map of shim-to-real function pointers in `relocations',
     // otherwise populate the map using dlsym():
-    if( source )
-        for( map = relocations; map->name; map++ )
+    if( cap->dl_handle )
+        for( map = cap->relocations; map->name; map++ )
         {
             if( !map->shim )
                 map->shim = (ElfW(Addr)) dlsym( RTLD_DEFAULT, map->name );
 
             if( !map->real )
-                map->real = (ElfW(Addr)) dlsym( source, map->name );
+                map->real = (ElfW(Addr)) dlsym( cap->dl_handle, map->name );
         }
 
     // time to enter some sort of ... dangerous... zone:

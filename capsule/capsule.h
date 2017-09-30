@@ -30,6 +30,14 @@
 typedef ElfW(Addr) capsule_addr;
 
 /**
+ * capsule
+ *
+ * A handle returned by capsule_init: A required parameter for all
+ * other capsule calls.
+ */
+typedef struct _capsule *capsule;
+
+/**
  * capsule_item:
  * @name: The name of the symbol to be relocated
  * @shim: address of the ‘fake’ symbol in the proxy library
@@ -61,19 +69,32 @@ struct _capsule_item
 
 /**
  * capsule_init:
+ * @namespace: An #Lmid_t value. (usually %LM_ID_NEWLM)
+ * @prefix: The mount point of the foreign tree in wich to find DSOs
+ * @exclude: (array zero-terminated=1): an array of char *, each
+ *           specifying a DSO not to load, terminated by a %NULL entry
+ * @exported: An array of DSO names considered to ba valid symbol sources
+ *
+ * Returns a #capsule handle.
  *
  * Does any initialisation necessary to use libcapsule's functions.
  * Currently just initialises the debug flags from the CAPSULE_DEBUG
  * environment variable.
+ *
+ * The #Lmid_t value @namespace should normally be %LM_ID_NEWLM
+ * to create a new namespace.
+ *
+ * An empty ("") or void (%NULL) @prefix is equivalent to "/".
  */
 _CAPSULE_PUBLIC
-void capsule_init (void);
+capsule capsule_init (Lmid_t namespace,
+                      const char *prefix,
+                      const char **exclude,
+                      const char **exported);
 
 /**
  * capsule_relocate:
- * @target: The DSO from which to export symbols (currently unused)
- * @source: The dl handle from which to export symbols
- * @debug: Internal debug flag. Pass 0 here.
+ * @capsule: a #capsule handle as returned by capsule_init()
  * @relocations: (array zero-terminated=1): Array of capsule_item
  *               specifying which symbols to export, terminated by a
  *               #capsule_item whose @name is %NULL
@@ -95,21 +116,16 @@ void capsule_init (void);
  * caller's responsibility to free() it.
  */
 _CAPSULE_PUBLIC
-int capsule_relocate (const char *target,
-                      void *source,
-                      unsigned long debug,
+int capsule_relocate (const capsule capsule,
                       capsule_item *relocations,
                       char **error);
 
 /**
- * capsule_dlmopen:
+ * capsule_load:
+ * @capsule: a #capsule handle as returned by capsule_init()
  * @dso: The name of the DSO to open (cf dlopen()) - eg libGL.so.1
- * @prefix: The location of the foreign tree in which @dso should be found
- * @namespace: Address of an #Lmid_t value (usually %LM_ID_NEWLM)
+ * @namespace: (out) Address of an #Lmid_t value.
  * @wrappers: Array of #capsule_item used to replace symbols in the namespace
- * @debug: Internal debug flags. Pass 0 here.
- * @exclude: (array zero-terminated=1): an array of char *, each
- *           specifying a DSO not to load, terminated by a %NULL entry
  * @errcode: (out): location in which to store the error code (errno) on failure
  * @error: (out) (transfer full) (optional): location in which to store
  *         an error message on failure, or %NULL to ignore.
@@ -126,36 +142,26 @@ int capsule_relocate (const char *target,
  * This is normally used to replace calls from inside the namespace to
  * dlopen() (which would cause a segfault) with calls to dlmopen().
  *
- * The #Lmid_t valu addressed by @namespace should normally include
- * %LM_ID_NEWLM to create a new namespace. The actual namespace used
- * will be stored in @namespace after a successful call.
- *
- * If a value other than %LM_ID_NEWLM was passed in via @namespace it
- * is not expected to change (and a change would indicate a bug or
- * undefined behaviour).
+ * The #Lmid_t value stored in @namespace gives the symbol namespace
+ * into which the target DSO was loaded.
  *
  * In addition to a bare libFOO.so.X style name, @dso may be an
  * absolute path (or even a relative one) and in those cases should
  * have the same effect as passing those values to dlopen(). This is
- * not a normal use case though, and has not been heavily tested.
+ * not a normal use case and has not been heavily tested.
  *
- * An empty ("") or void (%NULL) @prefix is equivalent to "/".
  */
 _CAPSULE_PUBLIC
-void *capsule_dlmopen (const char *dso,
-                       const char *prefix,
-                       Lmid_t *namespace,
-                       capsule_item *wrappers,
-                       unsigned long debug,
-                       const char **exclude,
-                       int *errcode,
-                       char **error);
+void *capsule_load (const capsule capsule,
+                    const char *dso,
+                    Lmid_t *namespace,
+                    capsule_item *wrappers,
+                    int *errcode,
+                    char **error);
 
 /**
  * capsule_shim_dlopen:
- * @ns: An #Lmid_t value giving the namespace in which to operate
- * @prefix: the mount point of the foreign tree in wich to find DSOs
- * @exclude: Array of DSO names to ignore
+ * @capsule: a #capsule handle as returned by capsule_init()
  * @file: base name of the target DSO (eg libz.so.1)
  * @flag: dlopen() flags to pass to the real dlmopen() call
  *
@@ -163,33 +169,27 @@ void *capsule_dlmopen (const char *dso,
  *
  * This helper function exists because dlopen() cannot safely be called
  * by a DSO opened into a private namespace. It takes @file and @flag
- * arguments (cf dlopen()) and @prefix, @exclude, and @namespace arguments
- * (cf capsule_dlmopen(), although namespace is an #Lmid_t and not a pointer
- * to one as in capsule_dlmopen()) and performs a safe dlmopen() call instead,
- *  respecting the same restrictions as capsule_dlmopen().
+ * arguments (cf dlopen()) and a @capsule handle (cf capsule_load())
+ * and performs a safe dlmopen() call instead, respecting the same
+ * restrictions as capsule_load().
  *
  * Typically this function is used to implement a safe wrapper for dlopen()
- * which is passed via the wrappers argument to capsule_dlmopen(). This
+ * which is passed via the wrappers argument to capsule_load(). This
  * replaces calls to dlopen() by all DSOs in the capsule produced by
- * capsule_dlmopen(), allowing libraries which use dlopen() to work inside
+ * capsule_load(), allowing libraries which use dlopen() to work inside
  * the capsule.
  *
  * Limitations: RTLD_GLOBAL is not supported in @flag. This is a glibc
  * limitation in the dlmopen() implementation.
  */
 _CAPSULE_PUBLIC
-void *capsule_shim_dlopen(Lmid_t ns,
-                          const char *prefix,
-                          const char **exclude,
-                          const char *file,
-                          int flag);
+void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
 
 /**
- * capsule_shim_dlsym:
- * @capsule: A dl handle as returned by capsule_dlmopen()
+ * capsule_external_dlsym:
+ * @capsule: A dl handle as returned by capsule_load()
  * @handle: A dl handle, as passed to dlsym()
  * @symbol: A symbol name, as passed to dlsym()
- * @exported: An array of DSO names considered to ba valid symbol sources
  *
  * Returns: a void * symbol address (cf dlsym())
  *
@@ -213,8 +213,4 @@ void *capsule_shim_dlopen(Lmid_t ns,
  * library.
  */
 _CAPSULE_PUBLIC
-void *
-capsule_shim_dlsym (void *capsule,
-                    void *handle,
-                    const char *symbol,
-                    const char **exported);
+void *capsule_external_dlsym (capsule cap, void *handle, const char *symbol);

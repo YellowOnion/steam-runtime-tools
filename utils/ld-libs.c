@@ -1013,3 +1013,30 @@ stat_caller (void)
 
     return (cdso.st_size > 0) ? &cdso : NULL;
 }
+
+// map the ld.so.cache for the system into memory so that we can search it
+// for DSOs in the same way as the dynamic linker.
+//
+// returns true on success, false otherwise.
+//
+// this function respects any path prefix specified in ldlibs
+int
+ld_libs_load_cache (ld_libs_t *libs, const char *path)
+{
+    int rv;
+
+    if( libs->prefix.len == 0 )
+    {
+        libs->ldcache.fd = open( path, O_RDONLY );
+    }
+    else
+    {
+        safe_strncpy( libs->prefix.path + libs->prefix.len,
+                      path, PATH_MAX - libs->prefix.len );
+        libs->ldcache.fd = open( libs->prefix.path, O_RDONLY );
+    }
+
+    rv = ld_cache_open( &libs->ldcache, libs->prefix.path );
+
+    return rv;
+}

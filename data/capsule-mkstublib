@@ -246,9 +246,7 @@ do
 done < $symbol_file;
 
 cat - <<EOF
-static Lmid_t symbol_ns;
-static const char *prefix;
-static void *dso;
+static capsule cap;
 // should we exclude libpthread here?
 // in any case, these are DSOs we do _not_ want to isolate
 static const char *exclude[] = { // MUST NOT be pulled from the capsule
@@ -298,6 +296,9 @@ static void __attribute__ ((constructor)) _capsule_init (void)
 {
     int   capsule_errno = 0;
     char *capsule_error = NULL;
+    const char *prefix;
+    Lmid_t symbol_ns;
+    void * dso;
 
     // this is an array of the functions we want to act as a shim for:
     capsule_item relocs[] =
@@ -334,14 +335,14 @@ cat - <<EOF
     if( !prefix )
         prefix = "$runtime_tree";
 
-    capsule_init();
+    cap = capsule_init( symbol_ns, prefix, exclude, valid_dlsym_sources );
 
-    dso = capsule_dlmopen( "$proxied_dso", prefix, &symbol_ns, wrappers,
-                           0, exclude, &capsule_errno, &capsule_error );
+    dso = capsule_load( cap, "$proxied_dso", &symbol_ns, wrappers,
+                           &capsule_errno, &capsule_error );
 
     if( dso )
     {
-        capsule_relocate( "$proxied_dso", dso, 0, relocs, &capsule_error );
+        capsule_relocate( cap, relocs, &capsule_error );
     }
     else
     {

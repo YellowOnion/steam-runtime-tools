@@ -8,5 +8,5 @@
 // export list even if the target libGL has them)
 static void *_dlsym (void *handle, const char *symbol)
 {
-    return capsule_shim_dlsym( dso, handle, symbol, valid_dlsym_sources );
+    return capsule_external_dlsym( cap, handle, symbol );
 }

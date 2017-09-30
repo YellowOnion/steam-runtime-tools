@@ -7,5 +7,5 @@ static void *_dlopen (const char *filename, int flag)
                  filename );
         flag = (flag & ~RTLD_GLOBAL) & 0xfffff;
     }
-    return capsule_shim_dlopen( symbol_ns, prefix, exclude, filename, flag );
+    return capsule_shim_dlopen( cap, filename, flag );
 }

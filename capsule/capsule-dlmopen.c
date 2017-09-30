@@ -34,39 +34,14 @@
 #include <dlfcn.h>
 
 #include <capsule/capsule.h>
+#include "capsule-private.h"
+
 #include "utils/utils.h"
 #include "utils/dump.h"
 #include "utils/mmap-info.h"
 #include "utils/process-pt-dynamic.h"
 #include "utils/ld-cache.h"
 #include "utils/ld-libs.h"
-
-// map the ld.so.cache for the system into memory so that we can search it
-// for DSOs in the same way as the dynamic linker.
-//
-// returns true on success, false otherwise.
-//
-// this function respects any path prefix specified in ldlibs
-static int
-load_ld_cache (ld_libs_t *libs, const char *path)
-{
-    int rv;
-
-    if( libs->prefix.len == 0 )
-    {
-        libs->ldcache.fd = open( path, O_RDONLY );
-    }
-    else
-    {
-        safe_strncpy( libs->prefix.path + libs->prefix.len,
-                      path, PATH_MAX - libs->prefix.len );
-        libs->ldcache.fd = open( libs->prefix.path, O_RDONLY );
-    }
-
-    rv = ld_cache_open( &libs->ldcache, libs->prefix.path );
-
-    return rv;
-}
 
 // ==========================================================================
 // some pretty printers for debugging:
@@ -99,7 +74,6 @@ wrap (const char *name,
     // something suitably large:
     relocation_data_t rdata = { 0 };
 
-    rdata.target    = name;
     rdata.debug     = debug_flags;
     rdata.error     = NULL;
     rdata.relocs    = wrappers;
@@ -249,22 +223,17 @@ dump_link_map( void *dl_handle )
 
 // ==========================================================================
 void *
-capsule_dlmopen (const char *dso,
-                 const char *prefix,
-                 Lmid_t *namespace,
-                 capsule_item *wrappers,
-                 unsigned long dbg,
-                 const char **exclude,
-                 int *errcode,
-                 char **error)
+capsule_load (const capsule cap,
+              const char *dso,
+              Lmid_t *namespace,
+              capsule_item *wrappers,
+              int *errcode,
+              char **error)
 {
     void *ret = NULL;
     ld_libs_t ldlibs = {};
 
-    if( dbg == 0 )
-        dbg = debug_flags;
-
-    ld_libs_init( &ldlibs, exclude, prefix, dbg, errcode );
+    ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags, errcode );
 
     if( errcode && *errcode )
         return NULL;
@@ -272,7 +241,7 @@ capsule_dlmopen (const char *dso,
     // ==================================================================
     // read in the ldo.so.cache - this will contain all architectures
     // currently installed (x86_64, i386, x32) in no particular order
-    if( load_ld_cache( &ldlibs, "/etc/ld.so.cache" ) )
+    if( ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache" ) )
     {
         if( debug_flags & DEBUG_LDCACHE )
             dump_ld_cache( &ldlibs );
@@ -333,6 +302,7 @@ capsule_dlmopen (const char *dso,
     // ==================================================================
     // load the stack of DSOs we need:
     ret = ld_libs_load( &ldlibs, namespace, 0, errcode );
+    cap->namespace = *namespace;
 
     if( debug_flags & DEBUG_CAPSULE )
     {
@@ -346,83 +316,12 @@ capsule_dlmopen (const char *dso,
     // TODO: failure in the dlopen fixup phase should probably be fatal:
     if( ret      != NULL && // no errors so far
         wrappers != NULL )  // have a dlopen fixup function
-        install_wrappers( ret, wrappers, exclude, errcode, error );
+        install_wrappers( ret, wrappers, cap->exclude, errcode, error );
+
+    cap->dl_handle = ret;
 
 cleanup:
     ld_libs_finish( &ldlibs );
     return ret;
 }
 
-void *
-capsule_shim_dlopen(Lmid_t ns,
-                    const char *prefix,
-                    const char **exclude,
-                    const char *file,
-                    int flag)
-{
-    void *res = NULL;
-    int code = 0;
-    char *errors = NULL;
-    ld_libs_t ldlibs = {};
-
-    DEBUG( DEBUG_WRAPPERS,
-           "dlopen(%s, %x) wrapper: LMID: %ld; prefix: %s;",
-           file, flag, ns, prefix );
-
-    if( prefix && strcmp(prefix, "/") )
-    {
-        ld_libs_init( &ldlibs, exclude, prefix, debug_flags, &code );
-
-        if( !load_ld_cache( &ldlibs, "/etc/ld.so.cache" ) )
-        {
-            int rv = (errno == 0) ? EINVAL : errno;
-
-            DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS,
-                   "Loading ld.so.cache from %s (error: %d)", prefix, rv );
-            goto cleanup;
-        }
-
-        // find the initial DSO (ie what the caller actually asked for):
-        if( !ld_libs_set_target( &ldlibs, file ) )
-        {
-            int rv = (errno == 0) ? EINVAL : errno;
-
-            DEBUG( DEBUG_SEARCH|DEBUG_WRAPPERS,
-                           "Not found: %s under %s (error: %d)",
-                           file, prefix, rv );
-            goto cleanup;
-        }
-
-        // harvest all the requested DSO's dependencies:
-        ld_libs_find_dependencies( &ldlibs );
-
-        if( ldlibs.error )
-        {
-            DEBUG( DEBUG_WRAPPERS, "capsule dlopen error: %s", ldlibs.error );
-            goto cleanup;
-        }
-
-        // load them up in reverse dependency order:
-        res = ld_libs_load( &ldlibs, &ns, flag, &code );
-
-        if( !res )
-            DEBUG( DEBUG_WRAPPERS,
-                   "capsule dlopen error %d: %s", code, errors );
-
-        goto cleanup;
-    }
-    else // no prefix: straightforward dlmopen into our capsule namespace:
-    {
-        res = dlmopen( ns, file, flag );
-
-        if( !res )
-            DEBUG( DEBUG_WRAPPERS,
-                   "capsule dlopen error %s: %s", file, dlerror() );
-    }
-
-    return res;
-
-cleanup:
-    ld_libs_finish( &ldlibs );
-    return res;
-}

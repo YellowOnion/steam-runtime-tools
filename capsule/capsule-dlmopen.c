@@ -101,7 +101,7 @@ wrap (const char *name,
     // will end up in a path that's normally only DEBUG_ELF
     // debugged:
     if( debug_flags & DEBUG_WRAPPERS )
-        debug_flags = debug_flags | DEBUG_ELF;
+        debug_flags = debug_flags | DEBUG_RELOCS;
 
     // install any required wrappers inside the capsule:
     process_pt_dynamic( (void *)start, // offset from phdr to dyn section

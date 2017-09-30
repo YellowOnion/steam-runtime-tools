@@ -88,10 +88,13 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
     relocation_data_t *rdata = data;
     const char *dso_path = *info->dlpi_name ? info->dlpi_name : "-elf-";
 
-    DEBUG( DEBUG_RELOCS, "processing %s", dso_path );
-
     if( dso_is_blacklisted( dso_path, rdata->blacklist ) )
+    {
+        DEBUG( DEBUG_RELOCS, "skipping %s (blacklisted)", dso_path );
         return 0;
+    }
+
+    DEBUG( DEBUG_RELOCS, "processing %s", dso_path );
 
     return process_phdr( info, size, rdata );
 }

@@ -76,7 +76,11 @@ try_relocation (ElfW(Addr) *reloc_addr, const char *name, void *data)
 
         // our work here is already done, apparently
         if( *reloc_addr == map->real )
+        {
+            DEBUG( DEBUG_RELOCS, "==target %p already contains %p (%p)",
+                   reloc_addr, (void *)*reloc_addr, (void *)map->real );
             return 0;
+        }
         // ======================================================================
         // exegesis:
 
@@ -125,7 +129,7 @@ try_relocation (ElfW(Addr) *reloc_addr, const char *name, void *data)
 
         *reloc_addr = map->real;
         rdata->count.success++;
-        DEBUG( DEBUG_RELOCS, "--relocated" );
+        DEBUG( DEBUG_RELOCS, "++relocated" );
         return 0;
     }
 
@@ -276,8 +280,8 @@ process_dt_rela (const void *start,
           case R_X86_64_JUMP_SLOT:
             slot = addr( base, entry->r_offset, entry->r_addend );
             DEBUG( DEBUG_ELF,
-                   "%s: %p ← { offset: %"FMT_ADDR"; addend: %"FMT_SIZE" }",
-                   reloc_type_name( chr ),
+                   " %30s %30s: %p ← { offset: %"FMT_ADDR"; add: %"FMT_SIZE" }",
+                   name, reloc_type_name( chr ),
                    slot, entry->r_offset, entry->r_addend );
             try_relocation( slot, name, data );
             break;
@@ -623,7 +627,7 @@ process_pt_dynamic (void *start,
             }
             else
             {
-                DEBUG( DEBUG_ELF|DEBUG_RELOCS,
+                DEBUG( DEBUG_ELF,
                        "skipping DT_RELA section: no handler" );
             }
             break;
@@ -651,16 +655,16 @@ process_pt_dynamic (void *start,
               case DT_REL:
                 if( process_rel != NULL )
                 {
-                    DEBUG( DEBUG_ELF|DEBUG_RELOCS,
+                    DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_REL section" );
                     relstart = (void *) fix_addr( base, entry->d_un.d_ptr );
-                    DEBUG( DEBUG_ELF, "  -> REL antry #0 at %p", relstart );
+                    DEBUG( DEBUG_ELF, "  -> REL entry #0 at %p", relstart );
                     ret = process_rel( relstart, jmprelsz, strtab,
                                        symtab, base, data );
                 }
                 else
                 {
-                    DEBUG( DEBUG_ELF|DEBUG_RELOCS,
+                    DEBUG( DEBUG_ELF,
                            "skipping DT_JMPREL/DT_REL section: no handler" );
                 }
                 break;
@@ -682,7 +686,7 @@ process_pt_dynamic (void *start,
                 break;
 
               default:
-                DEBUG( DEBUG_RELOCS|DEBUG_ELF,
+                DEBUG( DEBUG_ELF,
                        "Unknown DT_PLTREL value: %d (expected %d or %d)",
                        jmpreltype, DT_REL, DT_RELA );
                 ret = 1;

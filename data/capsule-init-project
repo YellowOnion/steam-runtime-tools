@@ -72,11 +72,14 @@ lcbase=${base,,};
 
 dest=${3:-$base-proxy};
 ver=0;
+maj=0;
 
 : "${CAPSULE_SYMBOLS:="$libexec/capsule-symbols"}"
 : "${CAPSULE_VERSION:="$libexec/capsule-version"}"
 
 read x x ver x < <("$CAPSULE_VERSION" "$target" "$tree");
+
+maj=${ver%%.*};
 
 echo Generating project for $tree : $target $ver proxy;
 
@@ -153,6 +156,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 dnl basename of the main library we are proxying for:
 AC_SUBST([LIB],[$name])
+AC_SUBST([MAJ],[$maj])
 
 dnl don't kvetch about gnu makefile syntax
 dnl and don't require ChangeLog &co if they don't exist
@@ -173,6 +177,7 @@ cat - <<EOF > Makefile.am
 CAPSULE_LIBRARY := $name
 CAPSULE_VERSION := $ver
 CAPSULE_TREE    := $tree
+CAPSULE_MAJOR   := $maj
 
 include @CAPSULE_MKINC@/disabled.mk
 ##include capsule-shim.mk##

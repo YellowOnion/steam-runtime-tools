@@ -1,2 +1,9 @@
 libcapsule.so.0 libcapsule0 #MINVER#
 * Build-Depends-Package: libcapsule-dev
+ capsule_external_dlopen@Base 0.1
+ capsule_external_dlsym@Base 0.1
+ capsule_init@Base 0.1
+ capsule_load@Base 0.1
+ capsule_relocate@Base 0.1
+ capsule_relocate_except@Base 0.1
+ capsule_shim_dlopen@Base 0.1

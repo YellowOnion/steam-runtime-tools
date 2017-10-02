@@ -268,7 +268,7 @@ ptr_list_alloc(size_t size)
 
             return list;
         }
-        fprintf( stderr, "failed to allocate %d item ptr_list\n", size );
+        fprintf( stderr, "failed to allocate %zd item ptr_list\n", size );
         free( list );
         abort();
     }

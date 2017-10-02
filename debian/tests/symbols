@@ -39,28 +39,28 @@ mkdir($host);
 
 my $libexecdir = `pkg-config --variable=libexecdir capsule`;
 chomp $libexecdir;
-my $CAPSULE_SYMBOLS = "$libexecdir/capsule-symbols";
+my $CAPSULE_SYMBOLS_TOOL = "$libexecdir/capsule-symbols";
 
 # We need a well-behaved library with a simple ABI to inspect. Let's use
 # libcapsule itself :-)
 my $output;
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         qw(--dev-bind /dev /dev),
-        $CAPSULE_SYMBOLS, 'libcapsule.so.0', $host], '>', \$output);
+        $CAPSULE_SYMBOLS_TOOL, 'libcapsule.so.0', $host], '>', \$output);
 diag_multiline $output;
 
 like($output, qr{^capsule_init $}m, "capsule_init is an unversioned symbol");
 unlike($output, qr{^(?!capsule)}m, "all of libcapsule's ABI matches /^capsule/");
 
 # Try the same thing without a prefix
-run_ok([$CAPSULE_SYMBOLS, 'libcapsule.so.0', '/'], '>', \$output);
+run_ok([$CAPSULE_SYMBOLS_TOOL, 'libcapsule.so.0', '/'], '>', \$output);
 diag_multiline $output;
 
 like($output, qr{^capsule_init $}m, "capsule_init is an unversioned symbol");
 unlike($output, qr{^(?!capsule)}m, "all of libcapsule's ABI matches /^capsule/");
 
 # How about versioned symbols?
-run_ok([$CAPSULE_SYMBOLS, 'libjpeg.so.62', '/'], '>', \$output);
+run_ok([$CAPSULE_SYMBOLS_TOOL, 'libjpeg.so.62', '/'], '>', \$output);
 diag_multiline $output;
 
 like($output, qr{^jpeg_destroy \@\@LIBJPEG_6\.2$}m,

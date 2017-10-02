@@ -39,12 +39,12 @@ mkdir($host);
 
 my $libexecdir = `pkg-config --variable=libexecdir capsule`;
 chomp $libexecdir;
-my $CAPSULE_VERSION = "$libexecdir/capsule-version";
+my $CAPSULE_VERSION_TOOL = "$libexecdir/capsule-version";
 
 my $output;
 my ($root, $soname, $version, $path);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
-        qw(--dev-bind /dev /dev), $CAPSULE_VERSION, 'libz.so.1',
+        qw(--dev-bind /dev /dev), $CAPSULE_VERSION_TOOL, 'libz.so.1',
         $host], '>', \$output);
 like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
@@ -60,7 +60,7 @@ $path =~ s/^\Q$host\E//;
 ok(-e $path);
 
 # Try the same thing without a prefix
-run_ok([$CAPSULE_VERSION, 'libz.so.1', '/'], '>', \$output);
+run_ok([$CAPSULE_VERSION_TOOL, 'libz.so.1', '/'], '>', \$output);
 like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;
@@ -81,7 +81,7 @@ like($4, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
 ok(-e $1);
 
 # A different way
-run_ok([$CAPSULE_VERSION, 'libz.so.1', ''], '>', \$output);
+run_ok([$CAPSULE_VERSION_TOOL, 'libz.so.1', ''], '>', \$output);
 like($output, qr{^(\S*)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S*)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;
@@ -102,7 +102,7 @@ like($path, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
 ok(-e $path);
 
 # Another different way
-run_ok([$CAPSULE_VERSION, 'libz.so.1'], '>', \$output);
+run_ok([$CAPSULE_VERSION_TOOL, 'libz.so.1'], '>', \$output);
 like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;

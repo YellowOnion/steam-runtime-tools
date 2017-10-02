@@ -30,7 +30,8 @@ usage ()
 cat << EOF
 Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
     Options:
-        --capsule-symbols=PATH  Use replacement capsule-symbols(1)
+        --capsule-symbols-tool=PATH
+                                Use replacement capsule-symbols(1)
         --dlopen-implementation=PATH
                                 An implementation of _dlopen()
                                 [default: OUTPUT.dlopen]
@@ -72,15 +73,15 @@ EOF
 update_symbols=
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,symbols-from:,update-symbols,no-update-symbols,help' \
+    -l 'capsule-symbols-tool:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,symbols-from:,update-symbols,no-update-symbols,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
 while true;
 do
     case "$1" in
-        (--capsule-symbols)
-            CAPSULE_SYMBOLS="$2"
+        (--capsule-symbols-tool)
+            CAPSULE_SYMBOLS_TOOL="$2"
             shift 2;
             continue;
             ;;
@@ -142,7 +143,7 @@ do
     esac
 done
 
-: "${CAPSULE_SYMBOLS:="$top/capsule-symbols"}"
+: "${CAPSULE_SYMBOLS_TOOL:="$top/capsule-symbols"}"
 
 if [ "$#" -lt 4 ] || [ "$#" -gt 6 ];
 then
@@ -215,11 +216,11 @@ then
         do
             if [ x$V = x1 ];
             then
-                echo "  $CAPSULE_SYMBOLS $pt $search_tree" >&2;
+                echo "  $CAPSULE_SYMBOLS_TOOL $pt $search_tree" >&2;
             else
                 echo "  SYMBOLS $pt $search_tree" >&2;
             fi;
-            $CAPSULE_SYMBOLS $pt $search_tree || exit 1;
+            $CAPSULE_SYMBOLS_TOOL $pt $search_tree || exit 1;
         done) > $symbol_file.tmp;
     then
         mv $symbol_file.tmp $symbol_file;

@@ -60,7 +60,7 @@ Mount I<APP> on F</app>
 
 Look for B<capsule-version>(1) in I<PATH>
 
-=item --capsule-version=I<EXECUTABLE>
+=item --capsule-version-tool=I<EXECUTABLE>
 
 Run I<EXECUTABLE> as B<capsule-version>(1)
 
@@ -203,7 +203,7 @@ sub run_in_container {
     return run([@bwrap, @$argv], @run_params);
 }
 
-my $CAPSULE_VERSION;
+my $CAPSULE_VERSION_TOOL;
 
 =item get_lib_implementation(I<SONAME>, I<TREE>)
 
@@ -220,7 +220,7 @@ sub get_lib_implementation {
     my $sysroot = $tree;
 
     if (-d "$tree/usr") {
-        run([$CAPSULE_VERSION, $soname, $sysroot], '>', \$output);
+        run([$CAPSULE_VERSION_TOOL, $soname, $sysroot], '>', \$output);
     }
     else {
         $sysroot = '/tmp/sysroot';
@@ -230,7 +230,7 @@ sub get_lib_implementation {
             --symlink usr/etc /tmp/sysroot/etc
             --symlink usr/var /tmp/sysroot/var
             --bind), $tree, '/tmp/sysroot/usr',
-            $CAPSULE_VERSION, $soname, '/tmp/sysroot'], '>', \$output);
+            $CAPSULE_VERSION_TOOL, $soname, '/tmp/sysroot'], '>', \$output);
     }
 
     chomp $output;
@@ -682,7 +682,7 @@ my $capsule_libexecdir = '/usr/lib/libcapsule';
 GetOptions(
     'app=s' => \$app,
     'capsule-libexecdir=s' => \$capsule_libexecdir,
-    'capsule-version=s' => \$CAPSULE_VERSION,
+    'capsule-version-tool=s' => \$CAPSULE_VERSION_TOOL,
     'container=s' => \$container_tree,
     'flatpak-app=s' => \$flatpak_app,
     'flatpak-runtime=s' => \$flatpak_runtime,
@@ -704,8 +704,8 @@ if (defined $flatpak_runtime) {
     $container_tree = "$data_home/flatpak/runtime/$flatpak_runtime/active/files";
 }
 
-$CAPSULE_VERSION = "$capsule_libexecdir/capsule-version"
-    unless defined $CAPSULE_VERSION;
+$CAPSULE_VERSION_TOOL = "$capsule_libexecdir/capsule-version"
+    unless defined $CAPSULE_VERSION_TOOL;
 $app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/master/active/files"
     unless defined $app;
 $container_tree = "$data_home/flatpak/runtime/net.debian.flatpak.Games.Platform/$arch/stretch/active/files"

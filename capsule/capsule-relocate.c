@@ -59,6 +59,9 @@ process_phdr (struct dl_phdr_info *info,
                                       process_dt_rel,
                                       rdata );
 
+    if( ret == 0 && rdata->seen != NULL )
+        ptr_list_push( rdata->seen, info->dlpi_addr );
+
     return ret;
 }
 
@@ -66,6 +69,10 @@ static int
 dso_is_blacklisted (const char *path, const char **blacklist)
 {
     char **soname;
+    static const char *never = "libcapsule.so";
+
+    if( soname_matches_path( never, path ) )
+        return 1;
 
     if( blacklist == NULL )
         return 0;
@@ -73,6 +80,18 @@ dso_is_blacklisted (const char *path, const char **blacklist)
     for( soname = (char **) blacklist; soname && *soname; soname++ )
         if( soname_matches_path( *soname, path ) )
             return 1;
+
+    return 0;
+}
+
+static int
+dso_has_been_relocated (ptr_list *seen, ElfW(Addr) base)
+{
+    if( seen == NULL )
+        return 0;
+
+    if( ptr_list_contains( seen, base ) )
+        return 1;
 
     return 0;
 }
@@ -90,11 +109,20 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 
     if( dso_is_blacklisted( dso_path, rdata->blacklist ) )
     {
-        DEBUG( DEBUG_RELOCS, "skipping %s (blacklisted)", dso_path );
+        DEBUG( DEBUG_RELOCS, "skipping %s %p (blacklisted)",
+               dso_path, (void *) info->dlpi_addr );
         return 0;
     }
 
-    DEBUG( DEBUG_RELOCS, "processing %s", dso_path );
+    if( dso_has_been_relocated( rdata->seen, info->dlpi_addr ) )
+    {
+        DEBUG( DEBUG_RELOCS, "skipping %s %p (already relocated)",
+               dso_path, (void *) info->dlpi_addr );
+        return 0;
+    }
+
+    DEBUG( DEBUG_RELOCS, "processing %s %p",
+           dso_path, (void *) info->dlpi_addr );
 
     return process_phdr( info, size, rdata );
 }
@@ -102,6 +130,7 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 static int relocate (const capsule cap,
                      capsule_item *relocations,
                      const char **dso_blacklist,
+                     ptr_list *seen,
                      int keep_relocs,
                      char **error)
 {
@@ -153,6 +182,7 @@ static int relocate (const capsule cap,
     rdata.error     = NULL;
     rdata.blacklist = dso_blacklist;
     rdata.mmap_info = load_mmap_info( &mmap_errno, &mmap_error );
+    rdata.seen      = seen;
 
     if( mmap_errno || mmap_error )
     {
@@ -210,7 +240,8 @@ static int relocate (const capsule cap,
 int
 capsule_relocate (const capsule cap, capsule_item *relocations, char **error)
 {
-    return relocate( cap, relocations, NULL, 1, error );
+    DEBUG( DEBUG_RELOCS, "\nRELOC ALL" );
+    return relocate( cap, relocations, NULL, cap->seen.all, 1, error );
 }
 
 int
@@ -220,9 +251,13 @@ capsule_relocate_except (const capsule cap,
                          char **error)
 {
     unsigned long df = debug_flags;
-    debug_flags |= DEBUG_RELOCS;
 
-    int rv = relocate( cap, relocations, except, 0, error );
+    if( debug_flags & DEBUG_DLFUNC )
+        debug_flags |= DEBUG_RELOCS;
+
+    DEBUG( DEBUG_RELOCS, "\nRELOC SOME" );
+
+    int rv = relocate( cap, relocations, except, cap->seen.some, 0, error );
 
     debug_flags = df;
 

@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "debug.h"
 #include "utils.h"
 
@@ -249,4 +250,74 @@ int soname_matches_path (const char *soname, const char *path)
     const char *end = pattern + slen;
 
     return ( *end == '\0' || *end == '.' );
+}
+
+ptr_list *
+ptr_list_alloc(size_t size)
+{
+    ptr_list *list = calloc( 1, sizeof(ptr_list) );
+
+    if( list )
+    {
+        list->loc = calloc( size, sizeof(ptr_item) );
+
+        if( list->loc != NULL )
+        {
+            list->allocated = size;
+            list->next = 0;
+
+            return list;
+        }
+        fprintf( stderr, "failed to allocate %d item ptr_list\n", size );
+        free( list );
+        abort();
+    }
+    else
+    {
+        fprintf( stderr, "failed to allocate ptr_list\n" );
+        abort();
+    }
+
+    return NULL;
+}
+
+void
+ptr_list_free (ptr_list *list)
+{
+    free( list->loc );
+    list->loc = NULL;
+    list->allocated = 0;
+    list->next = 0;
+    free( list );
+}
+
+void
+ptr_list_push (ptr_list *list, ElfW(Addr) addr)
+{
+    if( list->next >= list->allocated )
+    {
+        list->loc = realloc( list->loc,
+                             (list->allocated + 16) * sizeof(ptr_item) );
+        if( !list->loc )
+        {
+            fprintf( stderr, "failed to realloc ptr_list\n" );
+            abort();
+        }
+
+        list->allocated += 16;
+    }
+
+    list->loc[ list->next++ ].addr = addr;
+}
+
+int
+ptr_list_contains (ptr_list *list, ElfW(Addr) addr)
+{
+    if( list->next == 0 )
+        return 0;
+
+    for( size_t n = 0; n < list->next; n++ )
+        if( list->loc[ n ].addr == addr )
+            return 1;
+    return 0;
 }

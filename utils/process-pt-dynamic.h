@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <link.h>
+#include "utils/utils.h"
 #include "mmap-info.h"
 
 // these macros are secretly the same for elf32 & elf64:
@@ -36,6 +37,7 @@ typedef struct
     char *error;
     mmapinfo *mmap_info;
     const char **blacklist;
+    ptr_list *seen;
 } relocation_data_t;
 
 typedef int (*relocate_cb_t)(const void *start,

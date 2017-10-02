@@ -43,6 +43,24 @@
 #define FMT_XU64  "llx"
 #endif
 
+typedef union ptr_item
+{
+    ElfW(Addr) addr;
+    void *ptr;
+} ptr_item;
+
+typedef struct ptr_list
+{
+    size_t allocated;
+    size_t next;
+    ptr_item *loc;
+} ptr_list;
+
+ptr_list *ptr_list_alloc (size_t size);
+void ptr_list_free (ptr_list *list);
+void ptr_list_push (ptr_list *list, ElfW(Addr) addr);
+int ptr_list_contains (ptr_list *list, ElfW(Addr) addr);
+
 char *safe_strncpy (char *dest, const char *src, size_t n);
 int   resolve_link (const char *prefix, char *path, char *dir);
 int soname_matches_path (const char *soname, const char *path);

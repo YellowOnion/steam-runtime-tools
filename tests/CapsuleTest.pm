@@ -142,6 +142,23 @@ sub skip_all_unless_bwrap {
 
 =back
 
+=head1 ENVIRONMENT
+
+=over
+
+=item CAPSULE_TESTS_KEEP_TEMP
+
+If set to a non-empty value, temporary directories created by this test
+will not be cleaned up.
+
+=cut
+
+if (length $ENV{CAPSULE_TESTS_KEEP_TEMP}) {
+    $File::Temp::KEEP_ALL = 1;
+}
+
+=back
+
 =head1 SEE ALSO
 
 B<Test::More>(3pm), B<bwrap>(1)

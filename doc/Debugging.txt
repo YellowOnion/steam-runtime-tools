@@ -18,3 +18,7 @@ At this point gdb does not yet know about dlmopen()ed DSOs and their
 symbols, so debugging a libcapsule proxy library with gdb isn't very
 convenient. It's on the list of things to fix.
 
+If you are debugging the unit tests, you might want to set
+CAPSULE_TESTS_KEEP_TEMP to a non-empty value so temporary
+directories will not be cleaned up. See tests/CapsuleTest.pm
+or `perldoc -F tests/CapsuleTest.pm` for more details.

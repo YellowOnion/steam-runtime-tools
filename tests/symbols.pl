@@ -40,9 +40,8 @@ mkdir($host);
 my $CAPSULE_SYMBOLS_TOOL = $ENV{CAPSULE_SYMBOLS_TOOL};
 
 unless (defined $CAPSULE_SYMBOLS_TOOL) {
-    my $libexecdir = `pkg-config --variable=libexecdir capsule`;
-    chomp $libexecdir;
-    $CAPSULE_SYMBOLS_TOOL = "$libexecdir/capsule-symbols";
+    $CAPSULE_SYMBOLS_TOOL = `pkg-config --variable=CAPSULE_SYMBOLS_TOOL capsule`;
+    chomp $CAPSULE_SYMBOLS_TOOL;
 }
 
 if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {

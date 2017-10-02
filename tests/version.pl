@@ -40,9 +40,8 @@ mkdir($host);
 my $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
 
 unless (defined $CAPSULE_VERSION_TOOL) {
-    my $libexecdir = `pkg-config --variable=libexecdir capsule`;
-    chomp $libexecdir;
-    $CAPSULE_VERSION_TOOL = "$libexecdir/capsule-version";
+    $CAPSULE_VERSION_TOOL = `pkg-config --variable=CAPSULE_VERSION_TOOL capsule`;
+    chomp $CAPSULE_VERSION_TOOL;
 }
 
 my $output;

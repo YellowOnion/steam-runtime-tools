@@ -56,10 +56,6 @@ is given, run B<glxinfo>(1) and make some assertions about its output.
 
 Mount I<APP> on F</app>
 
-=item --capsule-libexecdir=I<PATH>
-
-Look for B<capsule-version>(1) in I<PATH>
-
 =item --capsule-version-tool=I<EXECUTABLE>
 
 Run I<EXECUTABLE> as B<capsule-version>(1)
@@ -203,7 +199,7 @@ sub run_in_container {
     return run([@bwrap, @$argv], @run_params);
 }
 
-my $CAPSULE_VERSION_TOOL;
+my $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
 
 =item get_lib_implementation(I<SONAME>, I<TREE>)
 
@@ -677,11 +673,9 @@ my @multiarch_tuples = qw(x86_64-linux-gnu);
 my $app;
 my $gl_stack;
 my $arch = 'x86_64';
-my $capsule_libexecdir = '/usr/lib/libcapsule';
 
 GetOptions(
     'app=s' => \$app,
-    'capsule-libexecdir=s' => \$capsule_libexecdir,
     'capsule-version-tool=s' => \$CAPSULE_VERSION_TOOL,
     'container=s' => \$container_tree,
     'flatpak-app=s' => \$flatpak_app,
@@ -704,8 +698,11 @@ if (defined $flatpak_runtime) {
     $container_tree = "$data_home/flatpak/runtime/$flatpak_runtime/active/files";
 }
 
-$CAPSULE_VERSION_TOOL = "$capsule_libexecdir/capsule-version"
-    unless defined $CAPSULE_VERSION_TOOL;
+unless (defined $CAPSULE_VERSION_TOOL) {
+    $CAPSULE_VERSION_TOOL = `pkg-config --variable=CAPSULE_VERSION_TOOL capsule`;
+    chomp $CAPSULE_VERSION_TOOL;
+}
+
 $app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/master/active/files"
     unless defined $app;
 $container_tree = "$data_home/flatpak/runtime/net.debian.flatpak.Games.Platform/$arch/stretch/active/files"

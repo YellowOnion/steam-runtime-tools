@@ -22,6 +22,7 @@ dso_is_exported (const char *dsopath, const char **exported)
 void *
 capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
 {
+    DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
     void *addr = cap->get_symbol( cap->dl_handle, symbol );
 
     if( addr )
@@ -36,7 +37,12 @@ capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
     }
 
     if( addr == NULL )
+    {
+        DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+               "symbol %s not found or not exportable, fall back to default",
+               symbol );
         addr = cap->get_symbol( handle, symbol );
+    }
 
     return addr;
 }
@@ -61,7 +67,9 @@ capsule_external_dlopen(const capsule cap, const char *file, int flag)
     if( handle != NULL )
     {
         unsigned long df = debug_flags;
-        debug_flags = DEBUG_RELOCS|DEBUG_SEARCH;
+
+        if( debug_flags & DEBUG_DLFUNC )
+            debug_flags = DEBUG_RELOCS|DEBUG_SEARCH;
         // This may not even be necessary, so it should not be fatal.
         // We do want to log it though as it might be an important clue:
         if( capsule_relocate( cap, NULL, &error ) != 0 )
@@ -85,7 +93,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
     char *errors = NULL;
     ld_libs_t ldlibs = {};
 
-    DEBUG( DEBUG_WRAPPERS,
+    DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
            "dlopen(%s, %x) wrapper: LMID: %ld; prefix: %s;",
            file, flag, cap->namespace, cap->prefix );
 
@@ -97,7 +105,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         {
             int rv = (errno == 0) ? EINVAL : errno;
 
-            DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS,
+            DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
                    "Loading ld.so.cache from %s (error: %d)", cap->prefix, rv );
             goto cleanup;
         }
@@ -107,7 +115,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         {
             int rv = (errno == 0) ? EINVAL : errno;
 
-            DEBUG( DEBUG_SEARCH|DEBUG_WRAPPERS,
+            DEBUG( DEBUG_SEARCH|DEBUG_WRAPPERS|DEBUG_DLFUNC,
                            "Not found: %s under %s (error: %d)",
                            file, cap->prefix, rv );
             goto cleanup;
@@ -118,7 +126,8 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
         if( ldlibs.error )
         {
-            DEBUG( DEBUG_WRAPPERS, "capsule dlopen error: %s", ldlibs.error );
+            DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
+                   "capsule dlopen error: %s", ldlibs.error );
             goto cleanup;
         }
 
@@ -126,7 +135,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         res = ld_libs_load( &ldlibs, &cap->namespace, flag, &code );
 
         if( !res )
-            DEBUG( DEBUG_WRAPPERS,
+            DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
                    "capsule dlopen error %d: %s", code, errors );
 
         goto cleanup;
@@ -136,7 +145,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         res = dlmopen( cap->namespace, file, flag );
 
         if( !res )
-            DEBUG( DEBUG_WRAPPERS,
+            DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
                    "capsule dlopen error %s: %s", file, dlerror() );
     }
 

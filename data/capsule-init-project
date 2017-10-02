@@ -9,7 +9,7 @@ me=$(basename $0);
 usage ()
 {
 cat << EOF
-Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]"
+Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
     Options:
         --capsule-symbols-tool=PATH
                                 Use replacement capsule-symbols(1)

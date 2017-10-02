@@ -43,6 +43,13 @@ if (! length $CAPSULE_INIT_PROJECT_TOOL) {
     chomp $CAPSULE_INIT_PROJECT_TOOL;
 }
 
+my $CAPSULE_SYMBOLS_TOOL = $ENV{CAPSULE_SYMBOLS_TOOL};
+
+if (! length $CAPSULE_SYMBOLS_TOOL) {
+    $CAPSULE_SYMBOLS_TOOL = `pkg-config --variable=CAPSULE_SYMBOLS_TOOL capsule`;
+    chomp $CAPSULE_SYMBOLS_TOOL;
+}
+
 run_ok([$CAPSULE_INIT_PROJECT_TOOL, 'libz.so.1', '/']);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; time ./configure "$@"',
@@ -50,6 +57,38 @@ run_ok([
     ], '>&2');
 run_ok(['sh', '-euc', 'time "$@"', 'sh',
         'make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
+ok(-e "$test_tempdir/libz-proxy/libz.la");
+ok(-e "$test_tempdir/libz-proxy/.libs/libz.so");
+ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1");
+ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1.0.0");
+
+my $output;
+run_ok([$CAPSULE_SYMBOLS_TOOL, 'libz.so.1'],
+    '>', \$output);
+my @symbols_wanted = sort(split /\n/, $output);
+foreach my $sym (@symbols_wanted) {
+    diag "- $sym";
+}
+
+sub uniq {
+    my @unique;
+    my %seen;
+    foreach my $item (@_) {
+        push @unique, $item unless $seen{$item};
+        $seen{$item} = 1;
+    }
+    return @unique;
+}
+
+run_ok([$CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
+    '>', \$output);
+# TODO: For some reason each symbol in the proxy library shows up twice
+my @symbols_produced = uniq(sort(split /\n/, $output));
+foreach my $sym (@symbols_produced) {
+    diag "- $sym";
+}
+
+is_deeply \@symbols_wanted, \@symbols_produced;
 
 chdir '/';
 done_testing;

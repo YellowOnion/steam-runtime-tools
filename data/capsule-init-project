@@ -13,8 +13,10 @@ Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
     Options:
         --capsule-symbols-tool=PATH
                                 Use replacement capsule-symbols(1)
+                                [default: ${CAPSULE_SYMBOLS_TOOL:-"$libexec/capsule-symbols"}]
         --capsule-version-tool=PATH
                                 Use replacement capsule-version(1)
+                                [default: ${CAPSULE_VERSION_TOOL:-"$libexec/capsule-version"}]
     Positional parameters:
         TARGET                  SONAME of the library to be proxied
         TREE                    Chroot or container to find libraries in,

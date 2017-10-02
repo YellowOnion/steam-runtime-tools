@@ -92,7 +92,7 @@ libcapsule_la_SOURCES  += utils/utils.h              \
 
 dist_pkgdata_DATA       = data/capsule-shim.h     \
                           data/capsule-shim.mk.in \
-                          disabled.mk
+                          data/disabled.mk
 
 BUILT_SOURCES           = $(top_srcdir)/.version
 
@@ -104,7 +104,7 @@ dist-hook: dist-hook-git-version-gen
 dist-hook-git-version-gen:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 
-include $(top_srcdir)/disabled.mk
+include $(top_srcdir)/data/disabled.mk
 
 # ============================================================================
 # GNOME-style installed-tests

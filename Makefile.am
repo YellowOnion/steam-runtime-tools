@@ -195,7 +195,9 @@ LOG_COMPILER                         =
 TEST_EXTENSIONS                      = .pl
 PL_LOG_DRIVER                        = $(LOG_DRIVER)
 PL_LOG_COMPILER                      = $(PERL)
-AM_TESTS_ENVIRONMENT                 = export CAPSULE_TESTS_UNINSTALLED=1;     \
+AM_TESTS_ENVIRONMENT                 = export CAPSULE_SYMBOLS_TOOL="$(abs_builddir)/capsule-symbols";\
+                                       export CAPSULE_TESTS_UNINSTALLED=1;     \
+                                       export CAPSULE_VERSION_TOOL="$(abs_builddir)/capsule-version";\
                                        export G_TEST_SRCDIR="$(abs_srcdir)";   \
                                        export G_TEST_BUILDDIR="$(abs_builddir)";\
                                        export G_DEBUG=gc-friendly;             \
@@ -208,7 +210,9 @@ tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =
-test_scripts                         = tests/notgl.pl
+test_scripts                         = tests/notgl.pl                          \
+                                       tests/symbols.pl                        \
+                                       tests/version.pl
 nobase_insttests_PROGRAMS            = $(test_programs)                        \
                                        $(test_extra_programs)
 nobase_dist_insttests_SCRIPTS        = $(test_scripts)                         \

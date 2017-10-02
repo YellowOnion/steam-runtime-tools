@@ -13,8 +13,10 @@ Build-Depends:
  gtk-doc-tools,
  libelf-dev,
  libipc-run-perl,
+ libjpeg62-turbo <!nocheck> | libjpeg62 (>= 6b1) <!nocheck>,
  perl,
  xsltproc,
+ zlib1g <!nocheck>,
 Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
 Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule
 Homepage: https://gitlab.collabora.com/vivek/libcapsule

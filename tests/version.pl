@@ -26,7 +26,7 @@ use IPC::Run qw(run);
 use Test::More;
 
 use FindBin;
-use lib "$FindBin::Bin/../../tests";
+use lib $FindBin::Bin;
 
 use CapsuleTest;
 
@@ -37,15 +37,20 @@ diag "Working directory: $test_tempdir";
 my $host = "${test_tempdir}/host";
 mkdir($host);
 
-my $libexecdir = `pkg-config --variable=libexecdir capsule`;
-chomp $libexecdir;
-my $CAPSULE_VERSION_TOOL = "$libexecdir/capsule-version";
+my $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
+
+unless (defined $CAPSULE_VERSION_TOOL) {
+    my $libexecdir = `pkg-config --variable=libexecdir capsule`;
+    chomp $libexecdir;
+    $CAPSULE_VERSION_TOOL = "$libexecdir/capsule-version";
+}
 
 my $output;
 my ($root, $soname, $version, $path);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         qw(--dev-bind /dev /dev), $CAPSULE_VERSION_TOOL, 'libz.so.1',
         $host], '>', \$output);
+diag("→ $output");
 like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;
@@ -61,6 +66,7 @@ ok(-e $path);
 
 # Try the same thing without a prefix
 run_ok([$CAPSULE_VERSION_TOOL, 'libz.so.1', '/'], '>', \$output);
+diag("→ $output");
 like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;
@@ -82,6 +88,7 @@ ok(-e $1);
 
 # A different way
 run_ok([$CAPSULE_VERSION_TOOL, 'libz.so.1', ''], '>', \$output);
+diag("→ $output");
 like($output, qr{^(\S*)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S*)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;
@@ -94,15 +101,12 @@ TODO: {
     local $TODO = 'returns 1 for some reason';
     like($version, qr{^1\.[0-9]+\.[0-9]+$});
 }
-TODO: {
-    local $TODO = "would be nice if this didn't start with //";
-    like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
-}
-like($path, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
 ok(-e $path);
 
 # Another different way
 run_ok([$CAPSULE_VERSION_TOOL, 'libz.so.1'], '>', \$output);
+diag("→ $output");
 like($output, qr{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$});
 $output =~ m{^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$};
 $root = $1;
@@ -116,11 +120,7 @@ TODO: {
     local $TODO = 'returns 1 for some reason';
     like($version, qr{^1\.[0-9]+\.[0-9]+$});
 }
-TODO: {
-    local $TODO = "would be nice if this didn't start with //";
-    like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$3\E)$});
-}
-like($path, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$3\E)$});
+like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$3\E)$});
 ok(-e $path);
 
 done_testing;

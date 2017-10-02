@@ -75,7 +75,7 @@ struct _capsule_item
  *           specifying a DSO not to load, terminated by a %NULL entry
  * @exported: An array of DSO names considered to ba valid symbol sources
  *
- * Returns a #capsule handle.
+ * Returns: a #capsule handle.
  *
  * Does any initialisation necessary to use libcapsule's functions.
  * Currently just initialises the debug flags from the CAPSULE_DEBUG
@@ -230,7 +230,7 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
 
 /**
  * capsule_external_dlsym:
- * @capsule: A dl handle as returned by capsule_load()
+ * @cap: A dl handle as returned by capsule_load()
  * @handle: A dl handle, as passed to dlsym()
  * @symbol: A symbol name, as passed to dlsym()
  *

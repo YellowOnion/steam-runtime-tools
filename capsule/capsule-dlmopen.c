@@ -34,7 +34,7 @@
 #include <dlfcn.h>
 
 #include <capsule/capsule.h>
-#include "capsule-private.h"
+#include "capsule/capsule-private.h"
 
 #include "utils/utils.h"
 #include "utils/dump.h"

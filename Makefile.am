@@ -202,7 +202,8 @@ AM_TESTS_ENVIRONMENT                 = export CAPSULE_SYMBOLS_TOOL="$(abs_buildd
                                        export G_TEST_SRCDIR="$(abs_srcdir)";   \
                                        export G_TEST_BUILDDIR="$(abs_builddir)";\
                                        export G_DEBUG=gc-friendly;             \
-                                       export MALLOC_CHECK_=2;
+                                       export MALLOC_CHECK_=2;                 \
+                                       export PKG_CONFIG_PATH="$(abs_builddir)/data";
 test_extra_programs                  = tests/notgl-user                        \
                                        tests/notgl-helper-user
 tests_notgl_user_LDADD               = tests/lib/libnotgl.la

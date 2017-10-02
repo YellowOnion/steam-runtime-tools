@@ -34,7 +34,7 @@ print {$fh} <<'EOF';
 int
 main (void)
 {
-  capsule_init();
+  capsule cap = capsule_init( LM_ID_NEWLM, "/host", NULL, NULL );
   printf( "capsule_init() didn't crash\n" );
   return 0;
 }

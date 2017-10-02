@@ -212,7 +212,8 @@ tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =
-test_scripts                         = tests/notgl.pl                          \
+test_scripts                         = tests/init-project.pl                   \
+                                       tests/notgl.pl                          \
                                        tests/symbols.pl                        \
                                        tests/version.pl
 nobase_insttests_PROGRAMS            = $(test_programs)                        \

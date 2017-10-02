@@ -1,6 +1,7 @@
 libdir=@abs_top_builddir@/capsule
 includedir=@abs_top_srcdir@/capsule
 makeinc=@abs_top_srcdir@/data
+CAPSULE_INIT_PROJECT_TOOL=@abs_top_srcdir@/data/capsule-init-project
 CAPSULE_MKSTUBLIB_TOOL=@abs_top_srcdir@/data/capsule-mkstublib
 CAPSULE_SYMBOLS_TOOL=@abs_top_builddir@/capsule-symbols
 CAPSULE_VERSION_TOOL=@abs_top_builddir@/capsule-version

@@ -36,18 +36,14 @@ my $test_tempdir = File::Temp->newdir();
 diag "Working directory: $test_tempdir";
 chdir $test_tempdir;
 
-my $CAPSULE_INIT_PROJECT;
+my $CAPSULE_INIT_PROJECT_TOOL = $ENV{CAPSULE_INIT_PROJECT_TOOL};
 
-if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
-    $CAPSULE_INIT_PROJECT = "$ENV{G_TEST_SRCDIR}/data/capsule-init-project";
-}
-else {
-    my $libexecdir = `pkg-config --variable=libexecdir capsule`;
-    chomp $libexecdir;
-    $CAPSULE_INIT_PROJECT = "$libexecdir/capsule-init-project";
+if (! length $CAPSULE_INIT_PROJECT_TOOL) {
+    $CAPSULE_INIT_PROJECT_TOOL = `pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule`;
+    chomp $CAPSULE_INIT_PROJECT_TOOL;
 }
 
-run_ok([$CAPSULE_INIT_PROJECT, 'libz.so.1', '/']);
+run_ok([$CAPSULE_INIT_PROJECT_TOOL, 'libz.so.1', '/']);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; time ./configure "$@"',
         'sh', "$test_tempdir/libz-proxy",

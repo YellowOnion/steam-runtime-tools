@@ -16,8 +16,7 @@ In the chroot:
 
 Generate a proxy project for libGL:
 
-  ~$ capsuletools=$(pkg-config --variable=libexecdir capsule)
-  ~$ $capsuletools/capsule-init-project libGL.so.1 /host 
+  ~$ $(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule) libGL.so.1 /host
   ~$ cd libGL-proxy
   ~$ extralib=".so.1 -glx.so.0 -dri2.so.0 -dri3.so.0 -present.so.0 -sync.so.1"
   ~$ echo -n > shim/libGL.so.c.shared

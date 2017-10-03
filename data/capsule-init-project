@@ -127,28 +127,16 @@ touch shim/$base.so.c.{shared,excluded};
 
 echo Initialising configure.ac;
 
-cat - <<EOF > configure.ac
-AC_INIT($lcbase-proxy, $ver)
-AC_CONFIG_MACRO_DIR([m4])
-
-dnl basename of the main library we are proxying for:
-AC_SUBST([LIB],[$name])
-AC_SUBST([MAJ],[$maj])
-
-dnl don't kvetch about gnu makefile syntax
-dnl and don't require ChangeLog &co if they don't exist
-AM_INIT_AUTOMAKE([-Wno-portability foreign])
-AM_SILENT_RULES([yes])
-LT_INIT
-
-PKG_CHECK_MODULES([CAPSULE], [capsule])
-PKG_CHECK_VAR([CAPSULE_MKINC], [capsule], [makeinc])
-PKG_CHECK_VAR([CAPSULE_MKSTUBLIB_TOOL], [capsule], [CAPSULE_MKSTUBLIB_TOOL])
-PKG_CHECK_VAR([CAPSULE_SYMBOLS_TOOL], [capsule], [CAPSULE_SYMBOLS_TOOL])
-
-AC_CONFIG_FILES([capsule-shim.mk:\$CAPSULE_MKINC/capsule-shim.mk.in Makefile])
-AC_OUTPUT()
-EOF
+sed \
+    -e "1,/^\$/d" \
+    -e "s,@TARGET@,$escaped_target," \
+    -e "s,@LIB@,$escaped_lib," \
+    -e "s,@TREE@,$escaped_tree," \
+    -e "s,@LCBASE@,$lcbase," \
+    -e "s,@VER@,$ver," \
+    -e "s,@MAJ@,$maj," \
+    < "$CAPSULE_MKINC/shim-configure.ac.in" \
+    > configure.ac;
 
 echo Initialising Makefile.am;
 

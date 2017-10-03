@@ -1,0 +1,21 @@
+# Processed by capsule-init-project. Everything before the first blank
+# line is removed during processing.
+
+This is a libcapsule based proxy library.
+
+Its purpose is to allow a library (@TARGET@) to be loaded from a
+foreign filesystem tree (@TREE@) without exposing any other libraries
+from that tree to the program using it.
+
+You can export the symbols of more than one library via the proxy:
+To do so, add a line containing the SONAME (libFOO.so.X)
+of each extra library to shim/lib@LIB@.so.c.shared and rebuild.
+
+You can also prevent a library from the foreign tree from being loaded
+at all (at least as a result of being a dependency of @TARGET@).
+To achieve this, add a line containing the SONAME (libFOO.so.X)
+of the excluded library to shim/lib@LIB@.so.c.excluded and rebuild.
+
+The generated library will have the same name as the main proxy target
+(@TARGET@). You can control the exact version number (cf libfoo.x.y.z)
+by setting CAPSULE_VERSION in Makefile.am

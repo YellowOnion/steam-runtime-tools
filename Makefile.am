@@ -92,7 +92,8 @@ libcapsule_la_SOURCES  += utils/utils.h              \
 
 dist_pkgdata_DATA       = data/capsule-shim.h     \
                           data/capsule-shim.mk.in \
-                          data/disabled.mk
+                          data/disabled.mk        \
+                          data/shim-README.in
 
 BUILT_SOURCES           = $(top_srcdir)/.version
 

@@ -11,6 +11,9 @@ usage ()
 cat << EOF
 Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
     Options:
+        --capsule-pkgdatadir=PATH
+                                Use supporting files from PATH
+                                [default: libcapsule's \${pkgdatadir}]
         --capsule-symbols-tool=PATH
                                 Use replacement capsule-symbols(1)
                                 [default: ${CAPSULE_SYMBOLS_TOOL:-"$libexec/capsule-symbols"}]
@@ -27,7 +30,7 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols-tool,capsule-version-tool,help' \
+    -l 'capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -36,6 +39,12 @@ do
     case "$1" in
         (--help|-h)
             usage 0;
+            ;;
+
+        (--capsule-pkgdatadir)
+            CAPSULE_MKINC="$2"
+            shift 2;
+            continue;
             ;;
 
         (--capsule-symbols-tool)
@@ -78,6 +87,7 @@ dest=${3:-$base-proxy};
 ver=0;
 maj=0;
 
+: "${CAPSULE_MKINC:="$(pkg-config --variable=makeinc capsule)"}"
 : "${CAPSULE_SYMBOLS_TOOL:="$libexec/capsule-symbols"}"
 : "${CAPSULE_VERSION_TOOL:="$libexec/capsule-version"}"
 
@@ -95,26 +105,16 @@ mkdir -p shim;
 
 echo Working in $PWD;
 
-cat - <<EOF > README
-This is a libcapsule based proxy library.
-
-Its purpose is to allow a library ($target) to be loaded from a
-foreign filesystem tree ($tree) without exposing any other libraries
-from that tree to the program using it.
-
-You can export the symbols of more than one library via the proxy:
-To do so, add a line containing the bare (libFOO.so.X format) name 
-of each extra library to shim/lib@LIB@.so.c.shared and rebuild.
-
-You can also prevent a library from the foreign tree from being loaded
-at all (at least as a result of being a dependency of lib@LIB@): 
-To achieve this, add a line containing the bare (libFOO.so.X) name
-of the excluded library to shim/lib@LIB@.so.c.excluded and rebuild.
-
-The generated library will have the same name as the main proxy target
-($target). You can control the exact version number (cf libfoo.x.y.z)
-by setting CAPSULE_VERSION in Makefile.am
-EOF
+escaped_target="$(echo "$target" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+escaped_lib="$(echo "$name" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+escaped_tree="$(echo "$tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+sed \
+    -e "1,/^\$/d" \
+    -e "s,@TARGET@,$escaped_target," \
+    -e "s,@LIB@,$escaped_lib," \
+    -e "s,@TREE@,$escaped_tree," \
+    < "$CAPSULE_MKINC/shim-README.in" \
+    > README;
 
 echo Extracting dynamic symbols from $tree : $target;
 

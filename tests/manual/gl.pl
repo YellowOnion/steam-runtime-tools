@@ -814,10 +814,11 @@ else {
     diag "Using GL stack from $gl_provider_tree";
     capture_gl_provider_libs_if_newer($gl_provider_tree, undef,
         \@multiarch_tuples, $gl_provider_gl, [
-            qw(EGL GL GLESv1_CM GLESv2 GLX Xau Xdamage Xdmcp Xext Xfixes
-            Xxf86vm cuda drm glapi glx nvcuvid vdpau wayland-client
-            wayland-server xcb-dri2 xcb-dri3 xcb-present xcb-sync xcb-xfixes
-            xshmfence),
+            qw(EGL GL GLESv1_CM GLESv2 GLX GLdispatch
+            Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
+            cuda drm gbm glapi glx nvcuvid vdpau
+            wayland-client wayland-server
+            xcb-dri2 xcb-dri3 xcb-present xcb-sync xcb-xfixes xshmfence),
             qr{lib(EGL|GLESv1_CM|GLESv2|GLX|drm|vdpau)_.*\.so\.[0-9]+},
             # We allow any extension for these, not just a single integer
             qr{libnvidia-.*\.so\..*},
@@ -826,8 +827,8 @@ else {
     diag "Updating libraries from $gl_provider_tree if necessary";
     capture_gl_provider_libs_if_newer($gl_provider_tree, $container_tree,
         \@multiarch_tuples, $gl_provider_gl, [
-            qw(GLdispatch bsd edit elf expat ffi gbm gcc_s
-            glapi ncurses pciaccess sensors stdc++ tinfo z),
+            qw(bsd edit elf expat ffi gcc_s
+            ncurses pciaccess sensors stdc++ tinfo z),
             qr{libLLVM-.*\.so\.[0-9]+},
         ]);
 

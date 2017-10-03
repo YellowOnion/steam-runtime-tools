@@ -685,7 +685,7 @@ GetOptions(
     'multiarch=s' => sub {
         @multiarch_tuples = split /[\s,]+/, $_[1];
     },
-);
+) or die "Error parsing command-line options";
 
 if (defined $flatpak_app) {
     die "--flatpak-app and --app are mutually exclusive" if defined $app;

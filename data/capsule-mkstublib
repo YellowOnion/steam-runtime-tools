@@ -205,7 +205,7 @@ sharedir=$(pkg-config --variable=makeinc capsule)
 
 exec >$proxy_src.tmp;
 
-cat $sharedir/capsule-shim.h
+echo '#include "capsule/capsule-shim.h"'
 
 # generate the .symbols file if it doesn't exist, or if the proxy_extra
 # control file has been updated:

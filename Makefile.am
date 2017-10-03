@@ -33,6 +33,9 @@ pkgconfig_DATA          = data/capsule.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
+# Headers to be included by shim libraries
+nobase_include_HEADERS += capsule/capsule-shim.h
+
 # demo program - keep this hanging around as it's a useful PoC
 noinst_PROGRAMS         = elf-dump
 
@@ -90,8 +93,7 @@ libcapsule_la_SOURCES  += utils/utils.h              \
                           utils/ld-cache.h           \
                           utils/ld-libs.h
 
-dist_pkgdata_DATA       = data/capsule-shim.h     \
-                          data/capsule-shim.mk.in \
+dist_pkgdata_DATA       = data/capsule-shim.mk.in \
                           data/disabled.mk        \
                           data/shim-README.in
 
@@ -197,7 +199,9 @@ LOG_COMPILER                         =
 TEST_EXTENSIONS                      = .pl
 PL_LOG_DRIVER                        = $(LOG_DRIVER)
 PL_LOG_COMPILER                      = $(PERL)
-AM_TESTS_ENVIRONMENT                 = export CAPSULE_SYMBOLS_TOOL="$(abs_builddir)/capsule-symbols";\
+AM_TESTS_ENVIRONMENT                 = export CAPSULE_CFLAGS="-I$(abs_top_srcdir) -I$(abs_top_builddir)"; \
+                                       export CAPSULE_LIBS="$(abs_top_builddir)/libcapsule.la"; \
+                                       export CAPSULE_SYMBOLS_TOOL="$(abs_builddir)/capsule-symbols";\
                                        export CAPSULE_TESTS_UNINSTALLED=1;     \
                                        export CAPSULE_VERSION_TOOL="$(abs_builddir)/capsule-version";\
                                        export G_TEST_SRCDIR="$(abs_srcdir)";   \

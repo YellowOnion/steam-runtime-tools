@@ -34,7 +34,10 @@ nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
 # Headers to be included by shim libraries
-nobase_include_HEADERS += capsule/capsule-shim.h
+nobase_include_HEADERS += capsule/capsule-shim.h \
+                          capsule/_ext_dlopen.h \
+                          capsule/_ext_dlsym.h \
+                          capsule/_int_dlopen.h
 
 # demo program - keep this hanging around as it's a useful PoC
 noinst_PROGRAMS         = elf-dump
@@ -132,8 +135,6 @@ nobase_dist_insttests_DATA          += tests/notgl.h                           \
                                        tests/notgl-helper-green.c              \
                                        tests/notgl-helper-red.c                \
                                        tests/notgl-helper-ref.c                \
-                                       tests/shim/libnotgl.so.c.dlopen         \
-                                       tests/shim/libnotgl.so.c.dlsym          \
                                        tests/shim/libnotgl.so.c.excluded       \
                                        tests/shim/libnotgl.so.c.shared         \
                                        tests/shim/libnotgl.so.c.symbols
@@ -178,13 +179,13 @@ nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.c
 tests_shim_libnotgl_la_LIBADD        = libcapsule.la
 tests_shim_libnotgl_la_LDFLAGS       = -shared -version-number 0:0:0
 
-tests/shim/lib%.so.c: tests/shim/lib%.so.c.excluded tests/shim/lib%.so.c.dlopen tests/shim/lib%.so.c.dlsym tests/shim/lib%.so.c.shared tests/shim/lib%.so.c.symbols data/capsule-mkstublib Makefile
+tests/shim/lib%.so.c: tests/shim/lib%.so.c.excluded tests/shim/lib%.so.c.shared tests/shim/lib%.so.c.symbols data/capsule-mkstublib Makefile
 	$(AM_V_GEN)\
 	PKG_CONFIG_PATH=$(abs_builddir)/data \
 	V=$V \
 	$(top_srcdir)/data/capsule-mkstublib \
-		--dlopen-implementation=$(srcdir)/$@.dlopen \
-		--dlsym-implementation=$(srcdir)/$@.dlsym \
+		--ext-dlopen \
+		--ext-dlsym \
 		--symbols-from=$(srcdir)/$@.symbols \
 		--no-update-symbols \
 		--runtime-tree=/host \

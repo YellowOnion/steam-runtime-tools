@@ -32,14 +32,12 @@ Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
     Options:
         --capsule-symbols-tool=PATH
                                 Use replacement capsule-symbols(1)
-        --dlopen-implementation=PATH
-                                An implementation of _dlopen()
-                                [default: OUTPUT.dlopen]
-        --dlsym-implementation=PATH
-                                An implementation of _dlsym()
-                                [default: OUTPUT.dlsym, if it exists]
         --symbols-from=PATH     Use symbols from this file
                                 [default: \${OUTPUT%.c}.symbols]
+        --[no-]ext-dlopen       Do or don't override dlopen() for
+                                callers outside the capsule [default: don't]
+        --[no-]ext-dlsym        Do or don't override dlsym() for
+                                callers outside the capsule [default: don't]
         --[no-]update-symbols   Do or don't update symbols list if EXPORTS
                                 is newer than it [default: do]
         --search-tree=PATH      Find libraries to be proxied in this
@@ -70,10 +68,12 @@ EOF
     exit "${1:-0}"
 }
 
+ext_dlopen=
+ext_dlsym=
 update_symbols=
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols-tool:,search-tree:,runtime-tree:,dlopen-implementation:,dlsym-implementation:,symbols-from:,update-symbols,no-update-symbols,help' \
+    -l 'capsule-symbols-tool:,ext-dlsym,no-ext-dlsym,ext-dlopen,no-ext-dlopen,search-tree:,runtime-tree:,symbols-from:,update-symbols,no-update-symbols,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -86,15 +86,27 @@ do
             continue;
             ;;
 
-        (--dlopen-implementation)
-            dlopen_file="$2";
-            shift 2;
+        (--ext-dlopen)
+            ext_dlopen=yes;
+            shift;
             continue;
             ;;
 
-        (--dlsym-implementation)
-            dlsym_file="$2";
-            shift 2;
+        (--no-ext-dlopen)
+            ext_dlopen=;
+            shift;
+            continue;
+            ;;
+
+        (--ext-dlsym)
+            ext_dlsym=yes;
+            shift;
+            continue;
+            ;;
+
+        (--no-ext-dlsym)
+            ext_dlsym=;
+            shift;
             continue;
             ;;
 
@@ -190,17 +202,6 @@ then
     symbol_file=${proxy_src%.c}.symbols;
 fi
 
-if [ -z "${dlopen_file:-}" ];
-then
-    # This is mandatory, so no test -f here
-    dlopen_file=${proxy_src}.dlopen;
-fi
-
-if [ -z "${dlsym_file:-}" ] && [ -f "${proxy_src}.dlsym" ];
-then
-    dlsym_file="${proxy_src}.dlsym";
-fi
-
 sharedir=$(pkg-config --variable=makeinc capsule)
 
 exec >$proxy_src.tmp;
@@ -248,8 +249,35 @@ done < $symbol_file;
 
 cat - <<EOF
 static capsule cap;
-static void *_dlsym (void *handle, const char *symbol);
-static void *_ext_dlopen (const char *filename, int flag);
+
+// _int_dlopen() from libcapsule or a locally overridden version
+#include "capsule/_int_dlopen.h"
+
+EOF
+
+if [ -n "$ext_dlopen" ]
+then
+    echo '// _ext_dlopen() from libcapsule or a locally overridden version'
+    echo '#include "capsule/_ext_dlopen.h"'
+    echo '#define HAVE_EXT_DLOPEN'
+else
+    echo '// Disabled by capsule-mkstublib --no-ext-dlopen'
+    echo '//#include "capsule/_ext_dlopen.h"'
+    echo '//#define HAVE_EXT_DLOPEN'
+fi
+
+if [ -n "$ext_dlsym" ]
+then
+    echo '// _ext_dlsym() from libcapsule or a locally overridden version'
+    echo '#include "capsule/_ext_dlsym.h"'
+    echo '#define HAVE_EXT_DLSYM'
+else
+    echo '// Disabled by capsule-mkstublib --no-ext-dlsym'
+    echo '//#include "capsule/_ext_dlsym.h"'
+    echo '//#define HAVE_EXT_DLSYM'
+fi
+
+cat - <<EOF
 
 // should we exclude libpthread here?
 // in any case, these are DSOs we do _not_ want to isolate
@@ -279,14 +307,10 @@ do
 EOF
 done < $symbol_file;
 
-if [ -n "$dlsym_file" ];
-then
-    cat - <<EOF
-  { "dlsym", (capsule_addr) _dlsym },
-EOF
-fi;
-
 cat - <<EOF
+#ifdef HAVE_EXT_DLSYM
+  { "dlsym", (capsule_addr) _ext_dlsym },
+#endif
   { NULL }
 };
 
@@ -321,51 +345,15 @@ cat - <<EOF
 };
 EOF
 
-if [ -f ${dlopen_file} ];
-then
-    cat - <<EOF
-static capsule_item dl_relocs[] =
-{
-  { "dlopen", (capsule_addr) _ext_dlopen, (capsule_addr) _ext_dlopen },
-  { NULL }
-};
-EOF
-else
-    cat - <<EOF
-static capsule_item dl_relocs[] =
-{
-  { NULL }
-};
-EOF
-fi;
-
-if [ -n "${dlsym_file}" ];
-then
-    cat - <<EOF
-// -------------------------------------------------------------
-// start of ${proxy_src%.c} dlsym wrapper
-EOF
-    cat $dlsym_file;
-    cat - <<EOF
-// end of ${proxy_src%.c} dlsym wrapper
-// -------------------------------------------------------------
-EOF
-fi
-
-if [ -f ${dlopen_file} ];
-then
-    cat - <<EOF
-// -------------------------------------------------------------
-// start of ${proxy_src%.c} dlopen wrapper
-EOF
-    cat $dlopen_file;
-    cat - <<EOF
-// end of ${proxy_src%.c} dlopen wrapper
-// -------------------------------------------------------------
-EOF
-fi
-
 cat - <<EOF
+static capsule_item dl_relocs[] =
+{
+#ifdef HAVE_EXT_DLOPEN
+  { "dlopen", (capsule_addr) _ext_dlopen, (capsule_addr) _ext_dlopen },
+#endif
+  { NULL }
+};
+
 static void __attribute__ ((constructor)) _capsule_init (void)
 {
     int   capsule_errno = 0;

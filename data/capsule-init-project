@@ -123,52 +123,6 @@ echo Extracting dynamic symbols from $tree : $target;
 echo Preparing proxy source files
 touch shim/$base.so.c.{shared,excluded};
 
-cat - <<EOF > shim/$base.so.c.dlopen
-static void *_int_dlopen (const char *filename, int flag)
-{
-    if( flag & RTLD_GLOBAL )
-    {
-        fprintf( stderr, "Warning: libcapsule dlopen wrapper cannot pass "
-                         "RTLD_GLOBAL to underlying dlmopen(%s...) call\\n",
-                 filename );
-        flag = (flag & ~RTLD_GLOBAL) & 0xfffff;
-    }
-    return capsule_shim_dlopen( cap, filename, flag );
-}
-
-static void *_ext_dlopen (const char *filename, int flag)
-{
-    char *capsule_error = NULL;
-    void *handle = capsule_external_dlopen( cap, filename, flag );
-    capsule_relocate_except( cap, dl_relocs,
-                             &invalid_dl_reloc_targets[0],
-                             &capsule_error );
-    if( capsule_error )
-    {
-        fprintf( stderr, "post-dlopen hook secondary relocate failed: %s\n",
-                 capsule_error );
-        free( capsule_error );
-        capsule_error = NULL;
-    }
-    return handle;
-}
-EOF
-
-cat - <<EOF > shim/$base.so.c.dlsym
-// This allows symbols inside the capsule to be found by dlopen calls from
-// outside the capsule iff they are in one of the exported DSOs.
-//
-// This is useful in libGL shims as libGL has an ‘interesting’ history
-// of symbols appearing and disappearing so its users often do a
-// bizarre dlopen()/dlsym() dance instead of referring to a symbol
-// directly (and we may be missing those symbols from our static
-// export list even if the target libGL has them)
-static void *_dlsym (void *handle, const char *symbol)
-{
-    return capsule_external_dlsym( cap, handle, symbol );
-}
-EOF
-
 echo Initialising configure.ac;
 
 cat - <<EOF > configure.ac
@@ -201,6 +155,7 @@ CAPSULE_LIBRARY := $name
 CAPSULE_VERSION := $ver
 CAPSULE_TREE    := $tree
 CAPSULE_MAJOR   := $maj
+#AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
 
 include @CAPSULE_MKINC@/disabled.mk
 ##include capsule-shim.mk##

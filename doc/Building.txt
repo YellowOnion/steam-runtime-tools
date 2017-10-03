@@ -148,28 +148,31 @@ shim/libGL.so.c.shared
   libX11.so
 
 ----------------------------------------------------------------------------
-shim/libfoo.so.c.dlopen
+shim/capsule/_int_dlopen.h
 
-  If your library needs any special handling of dlopen() calls you will
-  need to implement functions with the following signature and names:
-
-  static void *_ext_dlopen (const char *filename, int flags)
-  {
-    ⋮
-  }
-
-  static void *_int_dlopen (const char *filename, int flags)
-  {
-    ⋮
-  }
-  
-  and put them in this file. Default wrappers which work for most
-  libraries are generated here by the capsule-init-project tool.
+  This file is not created by default.
 
   The _int_dlopen wrapper is installed inside the capsule and takes
   care of any /host path prefixing so that the encapsulated libraries
   get their native targets with dlmopen (and don't break encapsulation
   by calling dlopen).
+
+  A default implementation provided by libcapsule is normally used.
+  See libcapsule's <capsule/_int_dlopen.h> for that implementation.
+
+  To use a custom implementation, create the file and implement a
+  function with the same signature:
+
+  static void *_int_dlopen (const char *filename, int flags)
+  {
+    ⋮
+  }
+
+----------------------------------------------------------------------------
+shim/capsule/_ext_dlopen.h
+
+  This file is not created or used by default. It can be enabled by
+  adding --ext-dlopen to AM_CAPSULE_MKSTUBLIB_FLAGS in Makefile.am.
 
   The _ext_dlopen wrapper is installed in _most_ libraries outside the
   capsule (notably not in the shim itself, libcapsule.so, libc.so and
@@ -177,22 +180,44 @@ shim/libfoo.so.c.dlopen
   capsule's manual symbol relocation when a library outside the capsule
   is dlopen()ed.
 
+  If this is enabled by --ext-dlopen but the file is not present,
+  a default implementation provided by libcapsule is used.
+  See libcapsule's <capsule/_ext_dlopen.h> for that implementation.
+
+  To use a custom implementation, create the file and implement a
+  function with the same signature:
+
+  static void *_ext_dlopen (const char *filename, int flags)
+  {
+    ⋮
+  }
+
 ----------------------------------------------------------------------------
-shim/libfoo.so.c.dlsym
+shim/capsule/_ext_dlsym.h
+
+  This file is not created or used by default. It can be enabled by
+  adding --ext-dlsym to AM_CAPSULE_MKSTUBLIB_FLAGS in Makefile.am.
 
   When external DSOs call dlsym() they may expect to find symbols
   which haven't explicitly been exported by the capsule. The wrapper in
   this file should take care of exposing only the subset of symbols
-  you want to make available in this way:
+  you want to make available in this way.
 
-  static void *_dlsym (void *handle, const char *symbol)
-  {
-    return capsule_external_dlsym( cap, handle, symbol );
-  }
+  If this is enabled by --ext-dlsym but the file is not present,
+  a default implementation provided by libcapsule is used:
+  See libcapsule's <capsule/_ext_dlsym.h> for that implementation:
 
   The default implementation above takes care of exposing only those
   symbols located in the libraries explicitly listed in .shared (or
   the main target library).
+
+  To use a custom implementation, create the file and implement a
+  function with the same signature:
+
+  static void *_ext_dlsym (void *handle, const char *symbol)
+  {
+    ⋮
+  }
 
 ----------------------------------------------------------------------------
 That's it - you should be ready to:

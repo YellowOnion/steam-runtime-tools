@@ -12,7 +12,9 @@ understand the following debug flags:
   mprotect: subverting mprotect (for RELRO linking)
   wrappers: function wrappers installed in the capsule
   reloc   : patching capsule symbols into external DSOs
+  dlfunc  : dlsym/dlfunc wrapper info as they execute (overlaps wrappers)
   elf     : detailed ELF introspection logging
+  all     : all of the above
 
 At this point gdb does not yet know about dlmopen()ed DSOs and their
 symbols, so debugging a libcapsule proxy library with gdb isn't very

@@ -48,6 +48,43 @@ B<gl.pl> [I<OPTIONS>] [I<COMMAND> [I<ARGUMENTS...>]]
 Run C<I<COMMAND> I<ARGUMENTS...>> in the container, or if no command
 is given, run B<glxinfo>(1) and make some assertions about its output.
 
+=head1 EXAMPLES
+
+=over
+
+=item C<gl.pl>
+
+Run B<glxinfo>(1), non-interactively. The container is a Debian stretch
+Flatpak runtime; get it using the instructions from
+L<https://gitlab.collabora.com/smcv/flatdeb/blob/master/README>,
+and rsync ~/.cache/flatdeb/repo onto a separate test machine if necessary.
+
+The OpenGL implementation and graphics stack are provided by the host
+system. Core libraries (glibc, libcapsule, libX11) and
+supporting libraries for the graphics stack (libstdc++, libpciaccess,
+libXext) are provided by either the container or the host system,
+whichever has the newer version, preferring the host system if the
+versions appear to be the same.
+
+=item C<gl.pl --flatpak-runtime=com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta --flatpak-app=org.debian.packages.mesa_utils/x86_64/scout_beta>
+
+Run B<glxinfo>(1) in the Steam Runtime. The container is a Steam Runtime
+scout_beta Flatpak runtime; get it using the instructions from
+L<https://gitlab.collabora.com/smcv/flatdeb-steam/blob/master/README>,
+and rsync ~/.cache/flatdeb/repo onto a separate test machine if necessary.
+
+=item C<gl.pl glxgears>
+
+Run B<glxgears>(1) instead of B<glxinfo>(1). Press B<Escape> to exit.
+
+=item C<gl.pl --flatpak-app=org.debian.packages.openarena/x86_64/master -- openarena +set com_hunkmegs 512 +set timedemo 1 +demo demo088-test1>
+
+Run B<openarena>(6) instead of B<glxinfo>(1), and run a demo at the maximum
+possible frame rate. Type B<\quit> into the terminal, or
+B<Shift+Escape \quit> into the GUI window, when the demo has finished.
+
+=back
+
 =head1 OPTIONS
 
 =over

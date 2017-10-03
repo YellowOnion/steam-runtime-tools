@@ -1,6 +1,7 @@
 libcapsule provides a few tools to help initialise a proxy library project:
 
-The simplest route to a [hopefully] working project is as follows:
+Assuming a host tree containing libGL mounted at /host, the simplest route
+to a [hopefully] working project is as follows:
 
   ~$ $(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule) libGL.so.1 /host
 
@@ -41,7 +42,7 @@ to be found in a foreign filesystem tree mounted at /host.
 The target library (the real libGL.so.1) must be present in a well-formed
 tree mounted at /host at the point at which you run this command.
 
-If you ever make changes which require the proxy librayr source files
+If you ever make changes which require the proxy library source files
 to be regenerated (changing the foreign tree location from /host or
 altering the list of symbols to export) then the foreign tree must
 likewise be present.
@@ -51,30 +52,27 @@ once the project has been initialised.
 
 The layout of the project will be as follows:
 
-  ./
+
   ./shim/
   ./shim/libGL.so.c.shared
   ./shim/libGL.so.c.dlopen
   ./shim/libGL.so.symbols
   ./shim/libGL.so.c.excluded
+  ./shim/libGL.so.c.dlsym
   ./configure
   ./m4/…
-  ./autom4te.cache/…
   ./README
   ./install-sh
   ./depcomp
-  ./config.status
-  ./capsule-shim.mk
   ./config.guess
-  ./Makefile
+  ./dd.log
   ./preconfigure.log
   ./Makefile.am
   ./configure.ac
   ./config.sub
   ./aclocal.m4
   ./missing
-  ./config.log
-  ./libtool
+  ./arena.log
   ./ltmain.sh
   ./compile
   ./Makefile.in
@@ -95,7 +93,7 @@ Makefile.am
 
   CAPSULE_LIBRARY - The stub of the library name (‘GL’ in this case).
 
-  CAPSULE_VERSION - The version number of the poxy library we should build
+  CAPSULE_VERSION - The version number of the proxy library we should build
                     defaults to the same version as the library in /host
                     if that can be deduced from the /host tree.
 
@@ -107,6 +105,8 @@ Makefile.am
                     You may change this, but doing so requires the source
                     to be regenerated, which requires the new foreign tree
                     to be present.
+
+  CAPSULE_MAJOR   - Major version of the library we're encapsulating
 ----------------------------------------------------------------------------
 shim/libGL.so.c.excluded
 
@@ -146,19 +146,54 @@ shim/libGL.so.c.shared
   libxcb-present.so.0
   libxcb-sync.so.1
   libX11.so
+
 ----------------------------------------------------------------------------
 shim/libfoo.so.c.dlopen
 
-  If your library needs any special handling of dlopen() calls you will need to
-  implement a function with the following signature and name:
+  If your library needs any special handling of dlopen() calls you will
+  need to implement functions with the following signature and names:
 
-  static void *_dlopen (const char *filename, int flags)
+  static void *_ext_dlopen (const char *filename, int flags)
   {
     ⋮
   }
 
-and put it in this file. A default wrapper which should work for most
-libraries is generated here by the capsule-init-project tool.
+  static void *_int_dlopen (const char *filename, int flags)
+  {
+    ⋮
+  }
+  
+  and put them in this file. Default wrappers which work for most
+  libraries are generated here by the capsule-init-project tool.
+
+  The _int_dlopen wrapper is installed inside the capsule and takes
+  care of any /host path prefixing so that the encapsulated libraries
+  get their native targets with dlmopen (and don't break encapsulation
+  by calling dlopen).
+
+  The _ext_dlopen wrapper is installed in _most_ libraries outside the
+  capsule (notably not in the shim itself, libcapsule.so, libc.so and
+  a few other core libraries). It is responsible for triggering the
+  capsule's manual symbol relocation when a library outside the capsule
+  is dlopen()ed.
+
+----------------------------------------------------------------------------
+shim/libfoo.so.c.dlsym
+
+  When external DSOs call dlsym() they may expect to find symbols
+  which haven't explicitly been exported by the capsule. The wrapper in
+  this file should take care of exposing only the subset of symbols
+  you want to make available in this way:
+
+  static void *_dlsym (void *handle, const char *symbol)
+  {
+    return capsule_external_dlsym( cap, handle, symbol );
+  }
+
+  The default implementation above takes care of exposing only those
+  symbols located in the libraries explicitly listed in .shared (or
+  the main target library).
+
 ----------------------------------------------------------------------------
 That's it - you should be ready to:
 

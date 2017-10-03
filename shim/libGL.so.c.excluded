@@ -1,0 +1,12 @@
+libc.so.6
+libdl.so.2
+libm.so.6
+libpthread.so.0
+libX11-xcb.so.1
+libX11.so.6
+libxcb-dri2.so.0
+libxcb-dri3.so.0
+libxcb-glx.so.0
+libxcb-present.so.0
+libxcb-sync.so.1
+libxcb.so.1

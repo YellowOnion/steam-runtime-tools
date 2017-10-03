@@ -1,0 +1,20 @@
+AC_INIT(libgl-proxy, 1)
+AC_CONFIG_MACRO_DIR([m4])
+
+dnl basename of the main library we are proxying for:
+AC_SUBST([LIB],[GL])
+AC_SUBST([MAJ],[1])
+
+dnl don't kvetch about gnu makefile syntax
+dnl and don't require ChangeLog &co if they don't exist
+AM_INIT_AUTOMAKE([-Wno-portability foreign])
+AM_SILENT_RULES([yes])
+LT_INIT
+
+PKG_CHECK_MODULES([CAPSULE], [capsule])
+PKG_CHECK_VAR([CAPSULE_MKINC], [capsule], [makeinc])
+PKG_CHECK_VAR([CAPSULE_MKSTUBLIB_TOOL], [capsule], [CAPSULE_MKSTUBLIB_TOOL])
+PKG_CHECK_VAR([CAPSULE_SYMBOLS_TOOL], [capsule], [CAPSULE_SYMBOLS_TOOL])
+
+AC_CONFIG_FILES([capsule-shim.mk:$CAPSULE_MKINC/capsule-shim.mk.in Makefile])
+AC_OUTPUT()

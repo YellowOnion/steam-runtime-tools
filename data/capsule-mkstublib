@@ -224,7 +224,9 @@ then
             $CAPSULE_SYMBOLS_TOOL $pt $search_tree || exit 1;
         done) > $symbol_file.tmp;
     then
-        mv $symbol_file.tmp $symbol_file;
+        LC_ALL=C sort -u "$symbol_file.tmp" > "$symbol_file.tmp2";
+        rm -f "$symbol_file.tmp";
+        mv "$symbol_file.tmp2" "$symbol_file";
     else
         code=$?;
         rm $symbol_file.tmp

@@ -42,7 +42,9 @@ shim/lib%.so.symbols: shim/lib%.so.c.shared
 	$(AM_V_GEN)(ht=$(CAPSULE_TREE);             \
 	  (for dso in lib@LIB@.so.@MAJ@ $$(cat $<); \
 	   do $(CAPSULE_SYMBOLS_TOOL) $$dso $${ht:-/host}; done > $@.tmp) && \
-	  mv $@.tmp $@)
+	  LC_ALL=C sort -u $@.tmp > $@.tmp2 && \
+	  rm -f $@.tmp && \
+	  mv $@.tmp2 $@)
 
 # the settings that control out actual build:
 lib@LIB@_la_SOURCES = $(shim_srcs)

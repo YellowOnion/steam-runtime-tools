@@ -121,6 +121,7 @@ echo Extracting dynamic symbols from $tree : $target;
 "$CAPSULE_SYMBOLS_TOOL" "$target" "$tree" > "shim/$base.so.symbols.tmp";
 LC_ALL=C sort -u "shim/$base.so.symbols.tmp" > "shim/$base.so.symbols";
 rm -f "shim/$base.so.symbols.tmp";
+touch "shim/$base.so.symbols.updated-for";
 
 echo Preparing proxy source files
 touch shim/$base.so.c.{shared,excluded};

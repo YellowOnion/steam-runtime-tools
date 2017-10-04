@@ -28,6 +28,7 @@ GENSTUB    = $(GENSTUB_V$(V))
 shim/lib%.so.c: shim/lib%.so.c.excluded shim/lib%.so.c.shared shim/lib%.so.symbols
 	$(GENSTUB)V=$V \
 		$(CAPSULE_MKSTUBLIB_TOOL) \
+		--no-update-symbols \
 		$(AM_CAPSULE_MKSTUBLIB_FLAGS) \
 		$(CAPSULE_MKSTUBLIB_FLAGS) \
 		$$(basename $@ .c) \
@@ -37,14 +38,39 @@ shim/lib%.so.c: shim/lib%.so.c.excluded shim/lib%.so.c.shared shim/lib%.so.symbo
 		$(ltver) \
 		$(CAPSULE_TREE)
 
-# regenerate the exportable symbols list
-shim/lib%.so.symbols: shim/lib%.so.c.shared
-	$(AM_V_GEN)(ht=$(CAPSULE_TREE);             \
-	  (for dso in lib@LIB@.so.@MAJ@ $$(cat $<); \
-	   do $(CAPSULE_SYMBOLS_TOOL) $$dso $${ht:-/host}; done > $@.tmp) && \
-	  LC_ALL=C sort -u $@.tmp > $@.tmp2 && \
-	  rm -f $@.tmp && \
-	  mv $@.tmp2 $@)
+# error out when it's time to regenerate the exportable symbols list
+# (we do not do this automatically because it's part of our ABI)
+$(srcdir)/shim/lib%.so.symbols: $(srcdir)/shim/lib%.so.c.shared
+	@if cmp -s $< $@.updated-for; then \
+		touch $@; \
+	else \
+		echo "*** ERROR: List of shared libraries has changed" >&2; \
+		echo "*** Run: make maintainer-update-capsule-symbols CAPSULE_TREE=/some-sysroot" >&2; \
+		exit 1; \
+	fi
+
+maintainer-update-capsule-symbols: always
+	@true
+.PHONY: maintainer-update-capsule-symbols
+
+maintainer-update-capsule-symbols: _maintainer-update-capsule-symbols/lib@LIB@.so
+
+_maintainer-update-capsule-symbols/lib%.so: always
+	$(AM_V_GEN)set -e; \
+	ht=$(CAPSULE_TREE); \
+	shared=$(srcdir)/shim/lib$*.so.c.shared; \
+	out=$(srcdir)/shim/lib$*.so.symbols; \
+	rm -f $$out.updated-for; \
+	for dso in lib@LIB@.so.@MAJ@ $$(cat "$$shared"); \
+	do \
+		$(CAPSULE_SYMBOLS_TOOL) $$dso $${ht:-/host}; \
+	done > "$$out.tmp"; \
+	LC_ALL=C sort -u "$$out.tmp" > "$$out.tmp2"; \
+	rm -f "$$out.tmp"; \
+	mv "$$out.tmp2" "$$out"; \
+	cp $(srcdir)/shim/lib$*.so.c.shared $$out.updated-for
+
+.PHONY: always
 
 # the settings that control out actual build:
 lib@LIB@_la_SOURCES = $(shim_srcs)

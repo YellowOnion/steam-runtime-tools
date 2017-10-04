@@ -168,5 +168,19 @@ fi
 echo Running initial configuration;
 autoreconf -ivf
 
-echo $PWD is ready for ./configure, see README for details;
+cp "$CAPSULE_MKINC/shim-.gitignore" .gitignore
 
+cat - <<EOF
+$PWD is ready for ./configure, see README for details.
+
+You will probably want to add the following files to your version
+control system:
+
+Makefile.am
+README
+configure.ac
+shim/$base.so.c.excluded
+shim/$base.so.c.shared
+shim/$base.so.symbols
+shim/$base.so.symbols.updated-for
+EOF

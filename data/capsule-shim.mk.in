@@ -25,7 +25,7 @@ GENSTUB_V0 = @echo "  GENSTUB " $(subst $(word 1, $(basename $(filter shim/lib%,
 GENSTUB    = $(GENSTUB_V$(V))
 
 # regenerate if any dependencies get updated:
-shim/lib%.so.c: shim/lib%.so.c.excluded shim/lib%.so.symbols
+shim/lib%.so.c: shim/lib%.so.c.excluded shim/lib%.so.c.shared shim/lib%.so.symbols
 	$(GENSTUB)V=$V \
 		$(CAPSULE_MKSTUBLIB_TOOL) \
 		$(AM_CAPSULE_MKSTUBLIB_FLAGS) \

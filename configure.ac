@@ -1,4 +1,4 @@
-AC_INIT(libgl-proxy, 1)
+AC_INIT([libgl-proxy], [1])
 AC_CONFIG_MACRO_DIR([m4])
 
 dnl basename of the main library we are proxying for:
@@ -15,6 +15,26 @@ PKG_CHECK_MODULES([CAPSULE], [capsule])
 PKG_CHECK_VAR([CAPSULE_MKINC], [capsule], [makeinc])
 PKG_CHECK_VAR([CAPSULE_MKSTUBLIB_TOOL], [capsule], [CAPSULE_MKSTUBLIB_TOOL])
 PKG_CHECK_VAR([CAPSULE_SYMBOLS_TOOL], [capsule], [CAPSULE_SYMBOLS_TOOL])
+
+AC_ARG_WITH([runtime-tree],
+            [AS_HELP_STRING([--with-runtime-tree=PATH],
+                            [Where to find encapsulated libraries at runtime [/]])],
+            [], [with_runtime_tree=${CAPSULE_RUNTIME_TREE:-${CAPSULE_TREE:-/}}])
+AS_CASE([$with_runtime_tree],
+        [/*],
+            [],
+            [AC_MSG_ERROR([--with-runtime-tree requires an absolute path argument])])
+AC_SUBST([CAPSULE_RUNTIME_TREE], [$with_runtime_tree])
+
+AC_ARG_WITH([search-tree],
+            [AS_HELP_STRING([--with-search-tree=PATH],
+                            [Where to find encapsulated libraries when updating symbols list [/]])],
+            [], [with_search_tree=${CAPSULE_SEARCH_TREE:-${CAPSULE_TREE:-/}}])
+AS_CASE([$with_search_tree],
+        [/*],
+            [],
+            [AC_MSG_ERROR([--with-search-tree requires an absolute path argument])])
+AC_SUBST([CAPSULE_SEARCH_TREE], [$with_search_tree])
 
 AC_CONFIG_FILES([capsule-shim.mk:$CAPSULE_MKINC/capsule-shim.mk.in Makefile])
 AC_OUTPUT()

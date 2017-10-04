@@ -23,6 +23,7 @@ use autodie;
 use warnings;
 use strict;
 
+use Cwd qw(realpath);
 use File::Temp qw();
 use IPC::Run qw(run);
 use Test::More;
@@ -62,8 +63,8 @@ else {
 
 diag 'Without special measures:';
 run_ok(['env',
-        'LD_LIBRARY_PATH='.join(':', "$builddir/tests/lib$libs",
-            "$builddir/tests/helper$libs"),
+        'LD_LIBRARY_PATH='.join(':', realpath("$builddir/tests/lib$libs"),
+            realpath("$builddir/tests/helper$libs")),
         $notgl_user],
     '>', \$stdout);
 diag_multiline $stdout;
@@ -76,8 +77,8 @@ like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
 
 diag 'Without special measures (linked to libhelper):';
 run_ok(['env',
-        'LD_LIBRARY_PATH='.join(':', "$builddir/tests/lib$libs",
-            "$builddir/tests/helper$libs"),
+        'LD_LIBRARY_PATH='.join(':', realpath("$builddir/tests/lib$libs"),
+            realpath("$builddir/tests/helper$libs")),
         $notgl_helper_user],
     '>', \$stdout);
 diag_multiline $stdout;
@@ -122,17 +123,17 @@ run_ok([qw(bwrap
         --ro-bind / /
         --dev-bind /dev /dev
         --ro-bind /), $capsule_prefix,
-        '--tmpfs', "$builddir/tests/lib$libs",
-        '--tmpfs', "$capsule_prefix$builddir",
-        '--ro-bind', "$builddir/tests/red",
-            "$capsule_prefix$builddir/tests/helper",
-        '--ro-bind', "$builddir/tests/red",
-            "$capsule_prefix$builddir/tests/lib",
+        '--tmpfs', realpath("$builddir/tests/lib$libs"),
+        '--tmpfs', $capsule_prefix.realpath($builddir),
+        '--ro-bind', realpath("$builddir/tests/red"),
+            $capsule_prefix.realpath("$builddir/tests/helper"),
+        '--ro-bind', realpath("$builddir/tests/red"),
+            $capsule_prefix.realpath("$builddir/tests/lib"),
         '--setenv', 'CAPSULE_PREFIX', $capsule_prefix,
         '--setenv', 'LD_LIBRARY_PATH', join(':',
-            "$builddir/tests/shim$libs",
-            "$builddir/tests/helper$libs",
-            "$builddir/tests/lib$libs",
+            realpath("$builddir/tests/shim$libs"),
+            realpath("$builddir/tests/helper$libs"),
+            realpath("$builddir/tests/lib$libs"),
         ),
         $notgl_user],
     '>', \$stdout);
@@ -168,15 +169,15 @@ run_ok([qw(bwrap
         --ro-bind / /
         --dev-bind /dev /dev
         --ro-bind /), $capsule_prefix,
-        '--tmpfs', "$builddir/tests/lib$libs",
-        '--tmpfs', "$capsule_prefix$builddir",
-        '--ro-bind', "$builddir/tests/green",
-            "$capsule_prefix$builddir/tests/lib",
+        '--tmpfs', realpath("$builddir/tests/lib$libs"),
+        '--tmpfs', $capsule_prefix.realpath($builddir),
+        '--ro-bind', realpath("$builddir/tests/green"),
+            $capsule_prefix.realpath("$builddir/tests/lib"),
         '--setenv', 'CAPSULE_PREFIX', $capsule_prefix,
         '--setenv', 'LD_LIBRARY_PATH', join(':',
-            "$builddir/tests/shim$libs",
-            "$builddir/tests/helper$libs",
-            "$builddir/tests/lib$libs",
+            realpath("$builddir/tests/shim$libs"),
+            realpath("$builddir/tests/helper$libs"),
+            realpath("$builddir/tests/lib$libs"),
         ),
         $notgl_helper_user],
     '>', \$stdout);

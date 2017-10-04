@@ -30,8 +30,6 @@ use lib $FindBin::Bin;
 
 use CapsuleTest;
 
-skip_all_unless_bwrap;
-
 my $test_tempdir = File::Temp->newdir();
 diag "Working directory: $test_tempdir";
 chdir $test_tempdir;
@@ -52,10 +50,15 @@ if (! length $CAPSULE_SYMBOLS_TOOL) {
     chomp $CAPSULE_SYMBOLS_TOOL;
 }
 
-run_ok([$CAPSULE_INIT_PROJECT_TOOL, 'libz.so.1', '/']);
+run_ok([$CAPSULE_INIT_PROJECT_TOOL,
+        '--search-tree=/',
+        '--runtime-tree=/run/host',
+        'libz.so.1']);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; time ./configure "$@"',
         'sh', "$test_tempdir/libz-proxy",
+        '--with-search-tree=/',
+        '--with-runtime-tree=/host',
     ], '>&2');
 run_ok(['sh', '-euc', 'time "$@"', 'sh',
         'make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
@@ -63,6 +66,18 @@ ok(-e "$test_tempdir/libz-proxy/libz.la");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1.0.0");
+{
+    local $/ = undef;   # read entire file in one go
+    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.c");
+    my $source = <$fh>;
+    like($source, qr{prefix = "/host"},
+        'Configure-time runtime tree takes precedence');
+    unlike($source, qr{prefix = "/run/host"},
+        'Init-time runtime tree is not used');
+    unlike($source, qr{prefix = "/"},
+        'Search tree is not used at runtime');
+    close $fh;
+}
 
 run_ok([$CAPSULE_SYMBOLS_TOOL, 'libz.so.1'],
     '>', \$output);
@@ -81,7 +96,11 @@ sub uniq {
     return @unique;
 }
 
-run_ok([$CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
+# We can't load the library unless we let it load its real
+# implementation, and it's hardwired to get that from /host, which
+# probably doesn't exist... so cheat by overriding it.
+run_ok(['env', "CAPSULE_PREFIX=/",
+        $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
 my @symbols_produced = sort(split /\n/, $output);
 foreach my $sym (@symbols_produced) {
@@ -151,7 +170,8 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1',
 }
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 
-run_ok([$CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
+run_ok(['env', "CAPSULE_PREFIX=/",
+        $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
 my @symbols_produced = sort(split /\n/, $output);
 foreach my $sym (@symbols_produced) {

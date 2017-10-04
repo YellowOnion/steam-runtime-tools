@@ -20,19 +20,29 @@ Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
         --capsule-version-tool=PATH
                                 Use replacement capsule-version(1)
                                 [default: ${CAPSULE_VERSION_TOOL:-"$libexec/capsule-version"}]
+        --search-tree=PATH      Find libraries to be proxied in this
+                                chroot, sysroot or container now
+                                [default: TREE or /]
+        --runtime-tree=PATH     Generated code will find proxied
+                                libraries in this chroot, sysroot or
+                                container at runtime if CAPSULE_PREFIX
+                                is unset [default: TREE or /host]
     Positional parameters:
         TARGET                  SONAME of the library to be proxied
-        TREE                    Chroot or container to find libraries in,
-                                both now and at runtime [default: /host]
+        TREE                    Default for both --search-tree and
+                                --runtime-tree [default: /host]
         PROJECT-NAME            Project to create [default: libfoo-proxy]
 EOF
     exit "${1:-0}"
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,help' \
+    -l 'capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,runtime-tree:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
+
+runtime_tree=
+search_tree=
 
 while true;
 do
@@ -55,6 +65,18 @@ do
 
         (--capsule-version-tool)
             CAPSULE_VERSION_TOOL="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--runtime-tree)
+            runtime_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--search-tree)
+            search_tree="$2"
             shift 2;
             continue;
             ;;
@@ -90,12 +112,14 @@ maj=0;
 : "${CAPSULE_MKINC:="$(pkg-config --variable=makeinc capsule)"}"
 : "${CAPSULE_SYMBOLS_TOOL:="$libexec/capsule-symbols"}"
 : "${CAPSULE_VERSION_TOOL:="$libexec/capsule-version"}"
+: "${runtime_tree:="$tree"}"
+: "${search_tree:="$tree"}"
 
-read x x ver x < <("$CAPSULE_VERSION_TOOL" "$target" "$tree");
+read x x ver x < <("$CAPSULE_VERSION_TOOL" "$target" "$search_tree");
 
 maj=${ver%%.*};
 
-echo Generating project for $tree : $target $ver proxy;
+echo Generating project for $runtime_tree : $target $ver proxy;
 
 echo Creating project directory $dest;
 
@@ -107,18 +131,18 @@ echo Working in $PWD;
 
 escaped_target="$(echo "$target" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
 escaped_lib="$(echo "$name" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
-escaped_tree="$(echo "$tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+escaped_search_tree="$(echo "$search_tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+escaped_runtime_tree="$(echo "$runtime_tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
 sed \
     -e "1,/^\$/d" \
     -e "s,@TARGET@,$escaped_target," \
     -e "s,@LIB@,$escaped_lib," \
-    -e "s,@TREE@,$escaped_tree," \
     < "$CAPSULE_MKINC/shim-README.in" \
     > README;
 
-echo Extracting dynamic symbols from $tree : $target;
+echo Extracting dynamic symbols from $search_tree : $target;
 
-"$CAPSULE_SYMBOLS_TOOL" "$target" "$tree" > "shim/$base.so.symbols.tmp";
+"$CAPSULE_SYMBOLS_TOOL" "$target" "$search_tree" > "shim/$base.so.symbols.tmp";
 LC_ALL=C sort -u "shim/$base.so.symbols.tmp" > "shim/$base.so.symbols";
 rm -f "shim/$base.so.symbols.tmp";
 touch "shim/$base.so.symbols.updated-for";
@@ -132,7 +156,8 @@ sed \
     -e "1,/^\$/d" \
     -e "s,@TARGET@,$escaped_target," \
     -e "s,@LIB@,$escaped_lib," \
-    -e "s,@TREE@,$escaped_tree," \
+    -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
+    -e "s,@SEARCH_TREE@,$escaped_search_tree," \
     -e "s,@LCBASE@,$lcbase," \
     -e "s,@VER@,$ver," \
     -e "s,@MAJ@,$maj," \
@@ -144,7 +169,6 @@ echo Initialising Makefile.am;
 cat - <<EOF > Makefile.am
 CAPSULE_LIBRARY := $name
 CAPSULE_VERSION := $ver
-CAPSULE_TREE    := $tree
 CAPSULE_MAJOR   := $maj
 #AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
 
@@ -158,7 +182,7 @@ echo Bootstrapping autoconf templates for $target;
 # this stage generates the capsule-shim.mk from a template, which
 # we need to be in place before we generate the _real_ Makefile.in:
 if ! (autoreconf -if;
- ./configure;
+ ./configure --with-runtime-tree="$tree" --with-search-tree="$tree";
  sed -i -re 's@##(include .*)##@\1@' Makefile.am) > preconfigure.log 2>&1;
 then
     cat preconfigure.log

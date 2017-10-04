@@ -4,8 +4,9 @@
 This is a libcapsule based proxy library.
 
 Its purpose is to allow a library (@TARGET@) to be loaded from a
-foreign filesystem tree (@TREE@) without exposing any other libraries
-from that tree to the program using it.
+foreign filesystem tree (usually /host, but configurable at compile
+time) without exposing any other libraries from that tree to the
+program using it.
 
 You can export the symbols of more than one library via the proxy:
 To do so, add a line containing the SONAME (libFOO.so.X)

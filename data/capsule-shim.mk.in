@@ -3,6 +3,10 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS  = -I m4
 AM_CFLAGS        = --std=c99 -D_GNU_SOURCE -Wall -Werror
 
+CAPSULE_TREE ?= /host
+CAPSULE_RUNTIME_TREE ?= $(CAPSULE_TREE)
+CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
+
 # capsule proxy library specific values:
 symvermap 		 = -Wl,--version-script=shim/lib@LIB@.so.map
 ltver            = $(subst .,:,$(CAPSULE_VERSION))
@@ -36,7 +40,7 @@ shim/lib%.so.c: shim/lib%.so.c.excluded shim/lib%.so.c.shared shim/lib%.so.symbo
 		$@.shared \
 		$@ \
 		$(ltver) \
-		$(CAPSULE_TREE)
+		$(CAPSULE_RUNTIME_TREE)
 
 # error out when it's time to regenerate the exportable symbols list
 # (we do not do this automatically because it's part of our ABI)
@@ -45,7 +49,7 @@ $(srcdir)/shim/lib%.so.symbols: $(srcdir)/shim/lib%.so.c.shared
 		touch $@; \
 	else \
 		echo "*** ERROR: List of shared libraries has changed" >&2; \
-		echo "*** Run: make maintainer-update-capsule-symbols CAPSULE_TREE=/some-sysroot" >&2; \
+		echo "*** Run: make maintainer-update-capsule-symbols [CAPSULE_SEARCH_TREE=/some-sysroot]" >&2; \
 		exit 1; \
 	fi
 
@@ -57,13 +61,12 @@ maintainer-update-capsule-symbols: _maintainer-update-capsule-symbols/lib@LIB@.s
 
 _maintainer-update-capsule-symbols/lib%.so: always
 	$(AM_V_GEN)set -e; \
-	ht=$(CAPSULE_TREE); \
 	shared=$(srcdir)/shim/lib$*.so.c.shared; \
 	out=$(srcdir)/shim/lib$*.so.symbols; \
 	rm -f $$out.updated-for; \
 	for dso in lib@LIB@.so.@MAJ@ $$(cat "$$shared"); \
 	do \
-		$(CAPSULE_SYMBOLS_TOOL) $$dso $${ht:-/host}; \
+		$(CAPSULE_SYMBOLS_TOOL) $$dso $(CAPSULE_SEARCH_TREE); \
 	done > "$$out.tmp"; \
 	LC_ALL=C sort -u "$$out.tmp" > "$$out.tmp2"; \
 	rm -f "$$out.tmp"; \

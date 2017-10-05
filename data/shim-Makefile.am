@@ -1,0 +1,12 @@
+# vim:set ft=automake:
+# Processed by capsule-init-project. Everything before the first blank
+# line is removed during processing.
+
+CAPSULE_SONAME := @TARGET@
+CAPSULE_LIBRARY := @NAME@
+CAPSULE_VERSION := @VER@
+CAPSULE_MAJOR   := @MAJ@
+#AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
+
+include @CAPSULE_MKINC@/disabled.mk
+##include capsule-shim.mk##

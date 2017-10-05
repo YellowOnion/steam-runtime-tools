@@ -166,15 +166,18 @@ sed \
 
 echo Initialising Makefile.am;
 
-cat - <<EOF > Makefile.am
-CAPSULE_LIBRARY := $name
-CAPSULE_VERSION := $ver
-CAPSULE_MAJOR   := $maj
-#AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
-
-include @CAPSULE_MKINC@/disabled.mk
-##include capsule-shim.mk##
-EOF
+sed \
+    -e "1,/^\$/d" \
+    -e "s,@TARGET@,$escaped_target," \
+    -e "s,@LIB@,$escaped_lib," \
+    -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
+    -e "s,@SEARCH_TREE@,$escaped_search_tree," \
+    -e "s,@LCBASE@,$lcbase," \
+    -e "s,@VER@,$ver," \
+    -e "s,@MAJ@,$maj," \
+    -e "s,@NAME@,$name," \
+    < "$CAPSULE_MKINC/shim-Makefile.am" \
+    > Makefile.am;
 
 echo Bootstrapping autoconf templates for $target;
 

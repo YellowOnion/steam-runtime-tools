@@ -183,7 +183,7 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 run_ok(['env', "CAPSULE_PREFIX=/",
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
-my @symbols_produced = sort(split /\n/, $output);
+@symbols_produced = sort(split /\n/, $output);
 foreach my $sym (@symbols_produced) {
     diag "- $sym";
 }

@@ -50,6 +50,12 @@ if (! length $CAPSULE_SYMBOLS_TOOL) {
     chomp $CAPSULE_SYMBOLS_TOOL;
 }
 
+my @libcapsule_environment;
+if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
+    # Make sure the shim can load the just-built libcapsule
+    push @libcapsule_environment, "LD_LIBRARY_PATH=$ENV{G_TEST_BUILDDIR}/.libs";
+}
+
 run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--search-tree=/',
         '--runtime-tree=/run/host',
@@ -98,7 +104,7 @@ sub uniq {
 # We can't load the library unless we let it load its real
 # implementation, and it's hardwired to get that from /host, which
 # probably doesn't exist... so cheat by overriding it.
-run_ok(['env', "CAPSULE_PREFIX=/",
+run_ok(['env', "CAPSULE_PREFIX=/", @libcapsule_environment,
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
 my @symbols_produced = sort(split /\n/, $output);
@@ -180,7 +186,7 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1',
 }
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 
-run_ok(['env', "CAPSULE_PREFIX=/",
+run_ok(['env', "CAPSULE_PREFIX=/", @libcapsule_environment,
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
 @symbols_produced = sort(split /\n/, $output);

@@ -9,6 +9,7 @@
 /Makefile.in
 /aclocal.m4
 /autom4te.cache/
+/build-aux/
 /capsule-shim.mk
 /config.log
 /config.status

@@ -14,6 +14,7 @@ CAPSULE_VERSION := @VER@
 lib_LTLIBRARIES = lib@LIB@.la
 
 nodist_lib@LIB@_la_SOURCES = shim/@TARGET@.c
+lib@LIB@_la_LDFLAGS = $(shim_ldflags_@TARGET@)
 lib@LIB@_la_LIBADD = $(CAPSULE_LIBS)
 
 CLEANFILES      = $(nodist_lib@LIB@_la_SOURCES) \

@@ -1,6 +1,3 @@
-# capsule proxy library specific values:
-symvermap 		 = -Wl,--version-script=shim/@TARGET@.map
-ltver            = $(subst .,:,$(CAPSULE_VERSION))
-
-lib@LIB@_la_LDFLAGS = -version-number $(ltver) \
-    $(if $(wildcard shim/@TARGET@.map),$(symvermap))
+comma = ,
+shim_ldflags_@TARGET@ = -version-number $(subst .,:,$(CAPSULE_VERSION)) \
+    $(patsubst %,-Wl$(comma)--version-script=%,$(wildcard shim/@TARGET@.map))

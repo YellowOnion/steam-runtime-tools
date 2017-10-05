@@ -52,7 +52,9 @@ is given, run B<glxinfo>(1) and make some assertions about its output.
 
 =over
 
-=item C<gl.pl>
+=item Basic use
+
+    $ gl.pl
 
 Run B<glxinfo>(1), non-interactively. The container is a Debian stretch
 Flatpak runtime; get it using the instructions from
@@ -66,22 +68,48 @@ libXext) are provided by either the container or the host system,
 whichever has the newer version, preferring the host system if the
 versions appear to be the same.
 
-=item C<gl.pl --flatpak-runtime=com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta --flatpak-app=org.debian.packages.mesa_utils/x86_64/scout_beta>
+=item Using the Steam Runtime
+
+    $ gl.pl \
+    --flatpak-runtime=com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta \
+    --flatpak-app=org.debian.packages.mesa_utils/x86_64/scout_beta
 
 Run B<glxinfo>(1) in the Steam Runtime. The container is a Steam Runtime
 scout_beta Flatpak runtime; get it using the instructions from
 L<https://gitlab.collabora.com/smcv/flatdeb-steam/blob/master/README>,
 and rsync ~/.cache/flatdeb/repo onto a separate test machine if necessary.
 
-=item C<gl.pl glxgears>
+=item Running glxgears
+
+    $ gl.pl glxgears
 
 Run B<glxgears>(1) instead of B<glxinfo>(1). Press B<Escape> to exit.
 
-=item C<gl.pl --flatpak-app=org.debian.packages.openarena/x86_64/master -- openarena +set com_hunkmegs 512 +set timedemo 1 +demo demo088-test1>
+=item Running OpenArena
+
+    $ gl.pl \
+    --flatpak-app=org.debian.packages.openarena/x86_64/master \
+    -- \
+    openarena +set com_hunkmegs 512 +set timedemo 1 +demo demo088-test1
 
 Run B<openarena>(6) instead of B<glxinfo>(1), and run a demo at the maximum
 possible frame rate. Type B<\quit> into the terminal, or
 B<Shift+Escape \quit> into the GUI window, when the demo has finished.
+
+=item Using libcapsule
+
+    $ ( cd libGL-proxy && ./configure --with-runtime-tree=/gl-provider \
+        --with-search-tree=/ --prefix=$HOME/capsulized-libgl \
+        --libdir='${exec_prefix}/x86_64-linux-gnu' )
+    $ make -C libGL-proxy
+    $ make -C libGL-proxy install
+    $ gl.pl --gl-stack=$HOME/capsulized-libgl
+
+Actually use libcapsule. This currently works with a SteamOS brewmaster
+(Debian jessie-based) host, a Steam Runtime container, Mesa graphics,
+and glxinfo or glxgears as the app, but crashes when the graphics
+driver is NVIDIA, the container is Debian stretch or the app is
+OpenArena.
 
 =back
 

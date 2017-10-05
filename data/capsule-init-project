@@ -160,7 +160,6 @@ sed \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
     -e "s,@LCBASE@,$lcbase," \
     -e "s,@VER@,$ver," \
-    -e "s,@MAJ@,$maj," \
     < "$CAPSULE_MKINC/shim-configure.ac.in" \
     > configure.ac;
 
@@ -174,8 +173,6 @@ sed \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
     -e "s,@LCBASE@,$lcbase," \
     -e "s,@VER@,$ver," \
-    -e "s,@MAJ@,$maj," \
-    -e "s,@NAME@,$name," \
     < "$CAPSULE_MKINC/shim-Makefile.am" \
     > Makefile.am;
 

@@ -6,9 +6,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS  = -I m4
 
 CAPSULE_SONAME := @TARGET@
-CAPSULE_LIBRARY := @NAME@
 CAPSULE_VERSION := @VER@
-CAPSULE_MAJOR   := @MAJ@
 #AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
 
 CLEANFILES      = $(shim_srcs)

@@ -8,6 +8,15 @@ CAPSULE_TREE ?= /host
 CAPSULE_RUNTIME_TREE ?= $(CAPSULE_TREE)
 CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
 
+comma = ,
+
+define define_shim_ldflags =
+shim_ldflags_$(1) = -version-number $$(subst .,:,$$(CAPSULE_VERSION)) \
+    $$(patsubst %,-Wl$$(comma)--version-script=%,$$(wildcard shim/$$(CAPSULE_SONAME).map))
+endef
+
+$(eval $(call define_shim_ldflags,$(CAPSULE_SONAME)))
+
 # regenerate if any dependencies get updated:
 shim/%.c: $(srcdir)/shim/%.excluded $(srcdir)/shim/%.shared $(srcdir)/shim/%.symbols
 	$(GENSTUB)V=$V \

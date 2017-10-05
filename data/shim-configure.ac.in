@@ -40,5 +40,5 @@ AS_CASE([$with_search_tree],
             [AC_MSG_ERROR([--with-search-tree requires an absolute path argument])])
 AC_SUBST([CAPSULE_SEARCH_TREE], [$with_search_tree])
 
-AC_CONFIG_FILES([capsule-shim.mk:$CAPSULE_MKINC/capsule-shim.mk.in Makefile])
+AC_CONFIG_FILES([Makefile])
 AC_OUTPUT()

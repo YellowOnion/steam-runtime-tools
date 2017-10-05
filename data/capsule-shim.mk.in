@@ -1,3 +1,0 @@
-comma = ,
-shim_ldflags_@TARGET@ = -version-number $(subst .,:,$(CAPSULE_VERSION)) \
-    $(patsubst %,-Wl$(comma)--version-script=%,$(wildcard shim/@TARGET@.map))

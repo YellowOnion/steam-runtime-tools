@@ -97,7 +97,6 @@ libcapsule_la_SOURCES  += utils/utils.h              \
                           utils/ld-libs.h
 
 dist_pkgdata_DATA       = data/capsule-shim.mk    \
-                          data/capsule-shim.mk.in \
                           data/disabled.mk        \
                           data/shim-.gitignore    \
                           data/shim-Makefile.am   \

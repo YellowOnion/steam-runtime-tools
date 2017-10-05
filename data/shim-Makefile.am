@@ -22,5 +22,4 @@ CLEANFILES      = $(nodist_lib@LIB@_la_SOURCES) \
 BUILT_SOURCES   = $(nodist_lib@LIB@_la_SOURCES)
 
 include @CAPSULE_MKINC@/disabled.mk
-##include capsule-shim.mk##
 include @CAPSULE_MKINC@/capsule-shim.mk

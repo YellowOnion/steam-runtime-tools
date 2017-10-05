@@ -176,20 +176,6 @@ sed \
     < "$CAPSULE_MKINC/shim-Makefile.am" \
     > Makefile.am;
 
-echo Bootstrapping autoconf templates for $target;
-
-############################################################################
-# this stage generates the capsule-shim.mk from a template, which
-# we need to be in place before we generate the _real_ Makefile.in:
-if ! (autoreconf -if;
- ./configure --with-runtime-tree="$tree" --with-search-tree="$tree";
- sed -i -re 's@##(include .*)##@\1@' Makefile.am) > preconfigure.log 2>&1;
-then
-    cat preconfigure.log
-    exit 1
-fi
-############################################################################
-
 echo Running initial configuration;
 autoreconf -ivf
 

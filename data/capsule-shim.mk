@@ -10,12 +10,13 @@ CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
 
 comma = ,
 
-define define_shim_ldflags =
+define foreach_shim =
 shim_ldflags_$(1) = -version-number $$(subst .,:,$$(CAPSULE_VERSION_$(1))) \
-    $$(patsubst %,-Wl$$(comma)--version-script=%,$$(wildcard shim/$$(CAPSULE_SONAME).map))
+    $$(patsubst %,-Wl$$(comma)--version-script=%,$$(wildcard shim/$(1).map))
+maintainer-update-capsule-symbols: maintainer-update-capsule-symbols/$(1)
 endef
 
-$(eval $(call define_shim_ldflags,$(CAPSULE_SONAME)))
+$(foreach CAPSULE_SONAME,$(CAPSULE_SONAMES),$(eval $(call foreach_shim,$(CAPSULE_SONAME))))
 
 # regenerate if any dependencies get updated:
 shim/%.c: $(srcdir)/shim/%.excluded $(srcdir)/shim/%.shared $(srcdir)/shim/%.symbols
@@ -46,8 +47,6 @@ $(srcdir)/shim/%.symbols: $(srcdir)/shim/%.shared
 maintainer-update-capsule-symbols: always
 	@true
 .PHONY: maintainer-update-capsule-symbols
-
-maintainer-update-capsule-symbols: maintainer-update-capsule-symbols/$(CAPSULE_SONAME)
 
 maintainer-update-capsule-symbols/%: always
 	$(AM_V_GEN)set -e; \

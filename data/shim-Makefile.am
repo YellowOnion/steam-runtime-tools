@@ -11,6 +11,11 @@ CAPSULE_VERSION := @VER@
 CAPSULE_MAJOR   := @MAJ@
 #AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
 
+CLEANFILES      = $(shim_srcs)
+BUILT_SOURCES   = $(shim_srcs)
+
+lib_LTLIBRARIES = lib@LIB@.la
+
 include @CAPSULE_MKINC@/disabled.mk
 ##include capsule-shim.mk##
 include @CAPSULE_MKINC@/capsule-shim.mk

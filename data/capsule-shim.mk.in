@@ -11,14 +11,6 @@ ltver            = $(subst .,:,$(CAPSULE_VERSION))
 
 shim_srcs        = shim/@TARGET@.c
 
-# the main target
-lib_LTLIBRARIES = lib@LIB@.la
-
-# don't clean up the shim_once built files, we don't want to be tied to
-# them at build time, we only care at project init time:
-CLEANFILES      = $(shim_srcs)
-BUILT_SOURCES   = $(shim_srcs)
-
 # the settings that control out actual build:
 lib@LIB@_la_SOURCES = $(shim_srcs)
 lib@LIB@_la_LIBADD = $(CAPSULE_LIBS)

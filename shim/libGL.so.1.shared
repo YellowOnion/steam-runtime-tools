@@ -1,4 +1,4 @@
-libX11.so
+libX11.so.6
 libxcb-dri2.so.0
 libxcb-dri3.so.0
 libxcb-glx.so.0

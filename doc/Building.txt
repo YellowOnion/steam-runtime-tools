@@ -93,7 +93,8 @@ Makefile.am
 
   CAPSULE_LIBRARY - The stub of the library name (‘GL’ in this case).
 
-  CAPSULE_VERSION - The version number of the proxy library we should build
+  CAPSULE_VERSION_libfoo.so.0 -
+                    The version number of the proxy library for libfoo.so.0
                     defaults to the same version as the library in /host
                     if that can be deduced from the /host tree.
 

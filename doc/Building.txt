@@ -60,21 +60,15 @@ The layout of the project will be as follows:
   ./shim/libGL.so.1.excluded
   ./shim/libGL.so.1.dlsym
   ./configure
+  ./build-aux/…
   ./m4/…
   ./README
-  ./install-sh
-  ./depcomp
-  ./config.guess
   ./dd.log
   ./preconfigure.log
   ./Makefile.am
   ./configure.ac
-  ./config.sub
   ./aclocal.m4
-  ./missing
   ./arena.log
-  ./ltmain.sh
-  ./compile
   ./Makefile.in
 
 A few of these files are of immediate interest:

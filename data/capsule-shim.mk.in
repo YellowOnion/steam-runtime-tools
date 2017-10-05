@@ -78,6 +78,7 @@ maintainer-update-capsule-symbols/%: always
 
 # the settings that control out actual build:
 lib@LIB@_la_SOURCES = $(shim_srcs)
-lib@LIB@_la_LDFLAGS = $(CAPSULE_LIBS) -version-number $(ltver) \
+lib@LIB@_la_LIBADD = $(CAPSULE_LIBS)
+lib@LIB@_la_LDFLAGS = -version-number $(ltver) \
     $(if $(wildcard shim/@TARGET@.map),$(symvermap))
 lib@LIB@_la_CFLAGS  = $(AM_CFLAGS) $(CAPSULE_CFLAGS) 

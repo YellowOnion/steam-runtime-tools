@@ -2,6 +2,9 @@
 # Processed by capsule-init-project. Everything before the first blank
 # line is removed during processing.
 
+AUTOMAKE_OPTIONS = subdir-objects
+ACLOCAL_AMFLAGS  = -I m4
+
 CAPSULE_SONAME := @TARGET@
 CAPSULE_LIBRARY := @NAME@
 CAPSULE_VERSION := @VER@

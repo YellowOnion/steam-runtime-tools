@@ -12,8 +12,6 @@ symvermap 		 = -Wl,--version-script=shim/@TARGET@.map
 ltver            = $(subst .,:,$(CAPSULE_VERSION))
 
 shim_srcs        = shim/@TARGET@.c
-shim_base        = $(basename $(shim_srcs))
-shim_once        = $(foreach y,map symbols,$(foreach x,$(shim_base),$x.$y))
 
 # the main target
 lib_LTLIBRARIES = lib@LIB@.la

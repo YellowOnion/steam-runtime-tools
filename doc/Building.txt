@@ -54,11 +54,11 @@ The layout of the project will be as follows:
 
 
   ./shim/
-  ./shim/libGL.so.c.shared
-  ./shim/libGL.so.c.dlopen
-  ./shim/libGL.so.symbols
-  ./shim/libGL.so.c.excluded
-  ./shim/libGL.so.c.dlsym
+  ./shim/libGL.so.1.shared
+  ./shim/libGL.so.1.dlopen
+  ./shim/libGL.so.1.symbols.updated-for
+  ./shim/libGL.so.1.excluded
+  ./shim/libGL.so.1.dlsym
   ./configure
   ./m4/…
   ./README
@@ -108,7 +108,7 @@ Makefile.am
 
   CAPSULE_MAJOR   - Major version of the library we're encapsulating
 ----------------------------------------------------------------------------
-shim/libGL.so.c.excluded
+shim/libGL.so.1.excluded
 
   This file should contain a list of libraries which should _NOT_
   be picked up from the /host tree and isolated in the capsule,
@@ -132,7 +132,7 @@ shim/libGL.so.c.excluded
 
 
 ----------------------------------------------------------------------------
-shim/libGL.so.c.shared
+shim/libGL.so.1.shared
 
   This file should contain any extra libraries whose symbols should _also_ be
   exported from the capsule, along with those from the main library libGL.so.

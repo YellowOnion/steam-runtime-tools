@@ -7,6 +7,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 dnl basename of the main library we are proxying for:
 AC_SUBST([LIB],[@LIB@])
+AC_SUBST([TARGET],[@TARGET@])
 AC_SUBST([MAJ],[@MAJ@])
 
 dnl don't kvetch about gnu makefile syntax

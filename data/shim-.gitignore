@@ -23,4 +23,5 @@
 /m4/
 /missing
 /preconfigure.log
-/shim/*.so.c
+/shim/*.so.*.c
+/shim/*.so.*.map

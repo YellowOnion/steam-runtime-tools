@@ -8,10 +8,10 @@ CAPSULE_RUNTIME_TREE ?= $(CAPSULE_TREE)
 CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
 
 # capsule proxy library specific values:
-symvermap 		 = -Wl,--version-script=shim/lib@LIB@.so.map
+symvermap 		 = -Wl,--version-script=shim/@TARGET@.map
 ltver            = $(subst .,:,$(CAPSULE_VERSION))
 
-shim_srcs        = shim/lib@LIB@.so.c
+shim_srcs        = shim/@TARGET@.c
 shim_base        = $(basename $(shim_srcs))
 shim_once        = $(foreach y,map symbols,$(foreach x,$(shim_base),$x.$y))
 
@@ -25,27 +25,27 @@ BUILT_SOURCES   = $(shim_srcs)
 
 # allow stub file generation to be quiet or verbose per the value of V
 GENSTUB_V1 = 
-GENSTUB_V0 = @echo "  GENSTUB " $(subst $(word 1, $(basename $(filter shim/lib%,$^))),,$(filter shim/lib%,$^)) : $@;
+GENSTUB_V0 = @echo "  GENSTUB " $@;
 GENSTUB    = $(GENSTUB_V$(V))
 
 # regenerate if any dependencies get updated:
-shim/lib%.so.c: $(srcdir)/shim/lib%.so.c.excluded $(srcdir)/shim/lib%.so.c.shared $(srcdir)/shim/lib%.so.symbols
+shim/%.c: $(srcdir)/shim/%.excluded $(srcdir)/shim/%.shared $(srcdir)/shim/%.symbols
 	$(GENSTUB)V=$V \
 		$(CAPSULE_MKSTUBLIB_TOOL) \
 		--no-update-symbols \
-		--symbols-from=$(srcdir)/shim/lib$*.so.symbols \
+		--symbols-from=$(srcdir)/shim/$*.symbols \
 		$(AM_CAPSULE_MKSTUBLIB_FLAGS) \
 		$(CAPSULE_MKSTUBLIB_FLAGS) \
-		$$(basename $@ .c) \
-		$(srcdir)/shim/lib$*.so.c.excluded \
-		$(srcdir)/shim/lib$*.so.c.shared \
+		$* \
+		$(srcdir)/shim/$*.excluded \
+		$(srcdir)/shim/$*.shared \
 		$@ \
 		$(ltver) \
 		$(CAPSULE_RUNTIME_TREE)
 
 # error out when it's time to regenerate the exportable symbols list
 # (we do not do this automatically because it's part of our ABI)
-$(srcdir)/shim/lib%.so.symbols: $(srcdir)/shim/lib%.so.c.shared
+$(srcdir)/shim/%.symbols: $(srcdir)/shim/%.shared
 	@if cmp -s $< $@.updated-for; then \
 		touch $@; \
 	else \
@@ -58,26 +58,26 @@ maintainer-update-capsule-symbols: always
 	@true
 .PHONY: maintainer-update-capsule-symbols
 
-maintainer-update-capsule-symbols: _maintainer-update-capsule-symbols/lib@LIB@.so
+maintainer-update-capsule-symbols: maintainer-update-capsule-symbols/@TARGET@
 
-_maintainer-update-capsule-symbols/lib%.so: always
+maintainer-update-capsule-symbols/%: always
 	$(AM_V_GEN)set -e; \
-	shared=$(srcdir)/shim/lib$*.so.c.shared; \
-	out=$(srcdir)/shim/lib$*.so.symbols; \
+	shared=$(srcdir)/shim/$*.shared; \
+	out=$(srcdir)/shim/$*.symbols; \
 	rm -f $$out.updated-for; \
-	for dso in lib@LIB@.so.@MAJ@ $$(cat "$$shared"); \
+	for dso in $* $$(cat "$$shared"); \
 	do \
 		$(CAPSULE_SYMBOLS_TOOL) $$dso $(CAPSULE_SEARCH_TREE); \
 	done > "$$out.tmp"; \
 	LC_ALL=C sort -u "$$out.tmp" > "$$out.tmp2"; \
 	rm -f "$$out.tmp"; \
 	mv "$$out.tmp2" "$$out"; \
-	cp $(srcdir)/shim/lib$*.so.c.shared $$out.updated-for
+	cp $(srcdir)/shim/$*.shared $$out.updated-for
 
 .PHONY: always
 
 # the settings that control out actual build:
 lib@LIB@_la_SOURCES = $(shim_srcs)
 lib@LIB@_la_LDFLAGS = $(CAPSULE_LIBS) -version-number $(ltver) \
-    $(if $(wildcard shim/lib@LIB@.so.map),$(symvermap))
+    $(if $(wildcard shim/@TARGET@.map),$(symvermap))
 lib@LIB@_la_CFLAGS  = $(AM_CFLAGS) $(CAPSULE_CFLAGS) 

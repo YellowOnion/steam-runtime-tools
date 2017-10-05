@@ -142,13 +142,13 @@ sed \
 
 echo Extracting dynamic symbols from $search_tree : $target;
 
-"$CAPSULE_SYMBOLS_TOOL" "$target" "$search_tree" > "shim/$base.so.symbols.tmp";
-LC_ALL=C sort -u "shim/$base.so.symbols.tmp" > "shim/$base.so.symbols";
-rm -f "shim/$base.so.symbols.tmp";
-touch "shim/$base.so.symbols.updated-for";
+"$CAPSULE_SYMBOLS_TOOL" "$target" "$search_tree" > "shim/$target.symbols.tmp";
+LC_ALL=C sort -u "shim/$target.symbols.tmp" > "shim/$target.symbols";
+rm -f "shim/$target.symbols.tmp";
+touch "shim/$target.symbols.updated-for";
 
 echo Preparing proxy source files
-touch shim/$base.so.c.{shared,excluded};
+touch shim/$target.{shared,excluded};
 
 echo Initialising configure.ac;
 
@@ -204,8 +204,8 @@ control system:
 Makefile.am
 README
 configure.ac
-shim/$base.so.c.excluded
-shim/$base.so.c.shared
-shim/$base.so.symbols
-shim/$base.so.symbols.updated-for
+shim/$target.excluded
+shim/$target.shared
+shim/$target.symbols
+shim/$target.symbols.updated-for
 EOF

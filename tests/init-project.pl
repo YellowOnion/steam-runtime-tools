@@ -68,7 +68,7 @@ ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1.0.0");
 {
     local $/ = undef;   # read entire file in one go
-    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.c");
+    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.1.c");
     my $source = <$fh>;
     like($source, qr{prefix = "/host"},
         'Configure-time runtime tree takes precedence');
@@ -107,24 +107,29 @@ foreach my $sym (@symbols_produced) {
     diag "- $sym";
 }
 
-# TODO: For some reason each symbol in the proxy library shows up twice
+if ($symbols_produced[0] eq $symbols_produced[1]) {
+    TODO: {
+        local $TODO = 'Each symbol shows up twice on some OSs';
+        is_deeply \@symbols_wanted, \@symbols_produced;
+    }
+}
 is_deeply \@symbols_wanted, [uniq @symbols_produced];
 
 # Make sure the symbols list appears older than the shared list.
 # Exclude one symbol, effectively behaving as though we'd used an
 # older version of zlib that didn't have it.
-open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.symbols");
+open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
 foreach my $symbol (@symbols_wanted) {
     print $fh "$symbol\n" unless $symbol =~ m/^zlibCompileFlags/;
 }
 close($fh);
 run_ok(['touch', '-d', '1980-01-01 00:00',
-        "$test_tempdir/libz-proxy/shim/libz.so.symbols"], '>&2');
+        "$test_tempdir/libz-proxy/shim/libz.so.1.symbols"], '>&2');
 # This doesn't fail or regenerate the symbols list
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 {
     local $/ = undef;   # read entire file in one go
-    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.symbols");
+    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
     my $symbols = <$fh>;
     unlike($symbols, qr{^zlibCompileFlags}m);
     close $fh;
@@ -132,10 +137,10 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 
 # Make the shared list have actually differing contents
 run_ok(['touch', '-d', '1980-01-01 00:00',
-        "$test_tempdir/libz-proxy/shim/libz.so.symbols"], '>&2');
-rename("$test_tempdir/libz-proxy/shim/libz.so.c.shared",
-    "$test_tempdir/libz-proxy/shim/libz.so.c.shared.good");
-open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.c.shared");
+        "$test_tempdir/libz-proxy/shim/libz.so.1.symbols"], '>&2');
+rename("$test_tempdir/libz-proxy/shim/libz.so.1.shared",
+    "$test_tempdir/libz-proxy/shim/libz.so.1.shared.good");
+open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.shared");
 print $fh "libfoo.so.2\n";
 print $fh "libbar.so.3\n";
 close($fh);
@@ -152,18 +157,18 @@ like($error, qr{ERROR.*make maintainer-update-capsule-symbols}s);
 
 # Pretend we had listed the symbols of libfoo and libbar, and go back
 # to just zlib
-rename("$test_tempdir/libz-proxy/shim/libz.so.c.shared",
-    "$test_tempdir/libz-proxy/shim/libz.so.symbols.updated-for");
-rename("$test_tempdir/libz-proxy/shim/libz.so.c.shared.good",
-    "$test_tempdir/libz-proxy/shim/libz.so.c.shared");
-open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.symbols");
+rename("$test_tempdir/libz-proxy/shim/libz.so.1.shared",
+    "$test_tempdir/libz-proxy/shim/libz.so.1.symbols.updated-for");
+rename("$test_tempdir/libz-proxy/shim/libz.so.1.shared.good",
+    "$test_tempdir/libz-proxy/shim/libz.so.1.shared");
+open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
 close($fh);
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1',
         'maintainer-update-capsule-symbols'], '>&2');
 # The file has been updated with the full list of symbols
 {
     local $/ = undef;   # read entire file in one go
-    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.symbols");
+    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
     my $symbols = <$fh>;
     like($symbols, qr{^zlibCompileFlags}m);
     close $fh;
@@ -178,7 +183,12 @@ foreach my $sym (@symbols_produced) {
     diag "- $sym";
 }
 
-# TODO: For some reason each symbol in the proxy library shows up twice
+if ($symbols_produced[0] eq $symbols_produced[1]) {
+    TODO: {
+        local $TODO = 'Each symbol shows up twice on some OSs';
+        is_deeply \@symbols_wanted, \@symbols_produced;
+    }
+}
 is_deeply \@symbols_wanted, [uniq @symbols_produced];
 
 chdir '/';

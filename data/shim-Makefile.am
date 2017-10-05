@@ -10,3 +10,4 @@ CAPSULE_MAJOR   := @MAJ@
 
 include @CAPSULE_MKINC@/disabled.mk
 ##include capsule-shim.mk##
+include @CAPSULE_MKINC@/capsule-shim.mk

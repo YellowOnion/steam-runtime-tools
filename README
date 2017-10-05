@@ -16,7 +16,7 @@ of the excluded library to shim/libGL.so.c.excluded and rebuild.
 
 The generated library will have the same name as the main proxy target
 (libGL.so.1). You can control the exact version number (cf libfoo.x.y.z)
-by setting CAPSULE_VERSION in Makefile.am
+by setting CAPSULE_VERSION_libGL.so.1 in Makefile.am
 
 To make the generated library override dlopen() and/or dlsym() for
 callers outside the capsule, pass --ext-dlopen and/or --ext-dlsym to

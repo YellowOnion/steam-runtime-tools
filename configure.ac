@@ -1,14 +1,16 @@
-AC_INIT([libgl-proxy], [1])
-AC_CONFIG_MACRO_DIR([m4])
+AC_PREREQ([2.60])
 
-dnl basename of the main library we are proxying for:
-AC_SUBST([LIB],[GL])
-AC_SUBST([MAJ],[1])
+AC_INIT([libgl-proxy], [1])
+AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_MACRO_DIR([m4])
 
 dnl don't kvetch about gnu makefile syntax
 dnl and don't require ChangeLog &co if they don't exist
 AM_INIT_AUTOMAKE([-Wno-portability foreign])
 AM_SILENT_RULES([yes])
+AC_USE_SYSTEM_EXTENSIONS
+AC_SYS_LARGEFILE
+
 LT_INIT
 
 PKG_CHECK_MODULES([CAPSULE], [capsule])
@@ -36,5 +38,5 @@ AS_CASE([$with_search_tree],
             [AC_MSG_ERROR([--with-search-tree requires an absolute path argument])])
 AC_SUBST([CAPSULE_SEARCH_TREE], [$with_search_tree])
 
-AC_CONFIG_FILES([capsule-shim.mk:$CAPSULE_MKINC/capsule-shim.mk.in Makefile])
-AC_OUTPUT()
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT

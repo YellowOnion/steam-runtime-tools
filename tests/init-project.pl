@@ -55,13 +55,12 @@ run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--runtime-tree=/run/host',
         'libz.so.1']);
 run_ok([
-        'sh', '-euc', 'cd "$1"; shift; time ./configure "$@"',
+        'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
         'sh', "$test_tempdir/libz-proxy",
         '--with-search-tree=/',
         '--with-runtime-tree=/host',
     ], '>&2');
-run_ok(['sh', '-euc', 'time "$@"', 'sh',
-        'make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
+run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 ok(-e "$test_tempdir/libz-proxy/libz.la");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1");

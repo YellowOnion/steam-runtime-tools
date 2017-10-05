@@ -147,6 +147,18 @@ shim/libGL.so.1.shared
   libxcb-sync.so.1
   libX11.so
 
+  Every time this file is modified, you will need to run
+
+      make maintainer-update-capsule-symbols
+
+  to update the list of exported symbols in shim/libGL.so.1.symbols.
+  This will also update shim/libGL.so.1.symbols.updated-for to record
+  the fact that it does not need updating again. You can use
+
+      make maintainer-update-capsule-symbols CAPSULE_SEARCH_TREE=/sysroot
+
+  to specify a custom root directory to search for these libraries.
+
 ----------------------------------------------------------------------------
 shim/capsule/_int_dlopen.h
 

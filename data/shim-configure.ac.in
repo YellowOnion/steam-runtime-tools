@@ -1,6 +1,8 @@
-# vim:set ft=m4:
+# vim:set ft=config:
 # Processed by capsule-init-project. Everything before the first blank
 # line is removed during processing.
+
+AC_PREREQ([2.60])
 
 AC_INIT([@LCBASE@-proxy], [@VER@])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -10,6 +12,9 @@ dnl don't kvetch about gnu makefile syntax
 dnl and don't require ChangeLog &co if they don't exist
 AM_INIT_AUTOMAKE([-Wno-portability foreign])
 AM_SILENT_RULES([yes])
+AC_USE_SYSTEM_EXTENSIONS
+AC_SYS_LARGEFILE
+
 LT_INIT
 
 PKG_CHECK_MODULES([CAPSULE], [capsule])
@@ -38,4 +43,4 @@ AS_CASE([$with_search_tree],
 AC_SUBST([CAPSULE_SEARCH_TREE], [$with_search_tree])
 
 AC_CONFIG_FILES([Makefile])
-AC_OUTPUT()
+AC_OUTPUT

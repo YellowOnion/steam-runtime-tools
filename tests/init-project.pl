@@ -117,11 +117,13 @@ is_deeply \@symbols_wanted, [uniq @symbols_produced];
 # Make sure the symbols list appears older than the shared list.
 # Exclude one symbol, effectively behaving as though we'd used an
 # older version of zlib that didn't have it.
-open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
-foreach my $symbol (@symbols_wanted) {
-    print $fh "$symbol\n" unless $symbol =~ m/^zlibCompileFlags/;
+{
+    open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
+    foreach my $symbol (@symbols_wanted) {
+        print $fh "$symbol\n" unless $symbol =~ m/^zlibCompileFlags/;
+    }
+    close($fh);
 }
-close($fh);
 run_ok(['touch', '-d', '1980-01-01 00:00',
         "$test_tempdir/libz-proxy/shim/libz.so.1.symbols"], '>&2');
 # This doesn't fail or regenerate the symbols list
@@ -139,10 +141,12 @@ run_ok(['touch', '-d', '1980-01-01 00:00',
         "$test_tempdir/libz-proxy/shim/libz.so.1.symbols"], '>&2');
 rename("$test_tempdir/libz-proxy/shim/libz.so.1.shared",
     "$test_tempdir/libz-proxy/shim/libz.so.1.shared.good");
-open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.shared");
-print $fh "libfoo.so.2\n";
-print $fh "libbar.so.3\n";
-close($fh);
+{
+    open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.shared");
+    print $fh "libfoo.so.2\n";
+    print $fh "libbar.so.3\n";
+    close($fh);
+}
 # This does fail
 run(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'],
     '>', \$ignored, '2>', \$error);
@@ -160,8 +164,10 @@ rename("$test_tempdir/libz-proxy/shim/libz.so.1.shared",
     "$test_tempdir/libz-proxy/shim/libz.so.1.symbols.updated-for");
 rename("$test_tempdir/libz-proxy/shim/libz.so.1.shared.good",
     "$test_tempdir/libz-proxy/shim/libz.so.1.shared");
-open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
-close($fh);
+{
+    open(my $fh, '>', "$test_tempdir/libz-proxy/shim/libz.so.1.symbols");
+    close($fh);
+}
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1',
         'maintainer-update-capsule-symbols'], '>&2');
 # The file has been updated with the full list of symbols

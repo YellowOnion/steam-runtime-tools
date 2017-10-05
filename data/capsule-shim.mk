@@ -1,7 +1,12 @@
 # allow stub file generation to be quiet or verbose per the value of V
+V         ?= 0
 GENSTUB_V1 =
 GENSTUB_V0 = @echo "  GENSTUB " $@;
 GENSTUB    = $(GENSTUB_V$(V))
+
+CAPSULE_TREE ?= /host
+CAPSULE_RUNTIME_TREE ?= $(CAPSULE_TREE)
+CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
 
 # regenerate if any dependencies get updated:
 shim/%.c: $(srcdir)/shim/%.excluded $(srcdir)/shim/%.shared $(srcdir)/shim/%.symbols
@@ -15,7 +20,7 @@ shim/%.c: $(srcdir)/shim/%.excluded $(srcdir)/shim/%.shared $(srcdir)/shim/%.sym
 		$(srcdir)/shim/$*.excluded \
 		$(srcdir)/shim/$*.shared \
 		$@ \
-		$(ltver) \
+		$(subst .,:,$(CAPSULE_VERSION)) \
 		$(CAPSULE_RUNTIME_TREE)
 
 # error out when it's time to regenerate the exportable symbols list

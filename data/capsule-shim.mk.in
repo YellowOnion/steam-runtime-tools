@@ -1,19 +1,6 @@
-V               ?= 0
-AM_CFLAGS        = --std=c99 -D_GNU_SOURCE -Wall -Werror
-
-CAPSULE_TREE ?= /host
-CAPSULE_RUNTIME_TREE ?= $(CAPSULE_TREE)
-CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
-
 # capsule proxy library specific values:
 symvermap 		 = -Wl,--version-script=shim/@TARGET@.map
 ltver            = $(subst .,:,$(CAPSULE_VERSION))
 
-shim_srcs        = shim/@TARGET@.c
-
-# the settings that control out actual build:
-lib@LIB@_la_SOURCES = $(shim_srcs)
-lib@LIB@_la_LIBADD = $(CAPSULE_LIBS)
 lib@LIB@_la_LDFLAGS = -version-number $(ltver) \
     $(if $(wildcard shim/@TARGET@.map),$(symvermap))
-lib@LIB@_la_CFLAGS  = $(AM_CFLAGS) $(CAPSULE_CFLAGS) 

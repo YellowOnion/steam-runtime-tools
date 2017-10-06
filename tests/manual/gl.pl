@@ -99,11 +99,11 @@ B<Shift+Escape \quit> into the GUI window, when the demo has finished.
 =item Using libcapsule
 
     $ ( cd libGL-proxy && ./configure --with-runtime-tree=/gl-provider \
-        --with-search-tree=/ --prefix=$HOME/capsulized-libgl \
+        --with-search-tree=/ --prefix=/gl \
         --libdir='${exec_prefix}/x86_64-linux-gnu' )
     $ make -C libGL-proxy
-    $ make -C libGL-proxy install
-    $ gl.pl --gl-stack=$HOME/capsulized-libgl
+    $ make -C libGL-proxy install DESTDIR=$HOME/capsulized-libgl
+    $ gl.pl --gl-stack=$HOME/capsulized-libgl/gl
 
 Actually use libcapsule. This currently works with a SteamOS brewmaster
 (Debian jessie-based) host, a Steam Runtime container, Mesa graphics,

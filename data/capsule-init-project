@@ -23,6 +23,8 @@ Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
         --search-tree=PATH      Find libraries to be proxied in this
                                 chroot, sysroot or container now
                                 [default: TREE or /]
+        --symbols-from=PATH     Use symbols from this file instead of
+                                running capsule-symbols(1)
         --runtime-tree=PATH     Generated code will find proxied
                                 libraries in this chroot, sysroot or
                                 container at runtime if CAPSULE_PREFIX
@@ -37,12 +39,13 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,runtime-tree:,help' \
+    -l 'capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,symbols-from:,runtime-tree:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
 runtime_tree=
 search_tree=
+symbols_from=
 
 while true;
 do
@@ -77,6 +80,12 @@ do
 
         (--search-tree)
             search_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--symbols-from)
+            symbols_from="$2"
             shift 2;
             continue;
             ;;
@@ -140,11 +149,15 @@ sed \
     < "$CAPSULE_MKINC/shim-README.in" \
     > README;
 
-echo Extracting dynamic symbols from $search_tree : $target;
+if [ -z "$symbols_from" ]; then
+    echo Extracting dynamic symbols from $search_tree : $target;
 
-"$CAPSULE_SYMBOLS_TOOL" "$target" "$search_tree" > "shim/$target.symbols.tmp";
-LC_ALL=C sort -u "shim/$target.symbols.tmp" > "shim/$target.symbols";
-rm -f "shim/$target.symbols.tmp";
+    "$CAPSULE_SYMBOLS_TOOL" "$target" "$search_tree" > "shim/$target.symbols.tmp";
+    LC_ALL=C sort -u "shim/$target.symbols.tmp" > "shim/$target.symbols";
+    rm -f "shim/$target.symbols.tmp";
+else
+    LC_ALL=C sort -u "$symbols_from" > "shim/$target.symbols";
+fi
 touch "shim/$target.symbols.updated-for";
 
 echo Preparing proxy source files

@@ -39,10 +39,11 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,symbols-from:,runtime-tree:,help' \
+    -l 'autoreconf,no-autoreconf,capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,symbols-from:,runtime-tree:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
+autoreconf=yes
 runtime_tree=
 search_tree=
 symbols_from=
@@ -52,6 +53,14 @@ do
     case "$1" in
         (--help|-h)
             usage 0;
+            ;;
+
+        (--autoreconf)
+            autoreconf=yes;
+            ;;
+
+        (--no-autoreconf)
+            autoreconf=;
             ;;
 
         (--capsule-pkgdatadir)
@@ -189,10 +198,12 @@ sed \
     < "$CAPSULE_MKINC/shim-Makefile.am" \
     > Makefile.am;
 
-echo Running initial configuration;
-autoreconf -ivf
-
 cp "$CAPSULE_MKINC/shim-.gitignore" .gitignore
+
+if [ -n "$autoreconf" ]; then
+    echo Running initial configuration;
+    autoreconf -ivf
+fi
 
 cat - <<EOF
 $PWD is ready for ./configure, see README for details.

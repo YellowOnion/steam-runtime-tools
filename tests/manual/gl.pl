@@ -938,7 +938,9 @@ do {
     capture_gl_provider_libs_if_newer($gl_provider_tree, $container_tree,
         \@multiarch_tuples, $gl_provider_updates,
         [qw(X11 X11-xcb capsule elf xcb xcb-dri2 xcb-dri3 xcb-glx
-            xcb-present xcb-sync)]);
+            xcb-present xcb-sync xcb-xfixes
+            Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
+            )]);
 
     foreach my $tuple (@multiarch_tuples) {
         push @ld_path, "/updates/lib/$tuple";

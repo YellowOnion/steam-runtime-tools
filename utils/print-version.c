@@ -28,6 +28,7 @@ int main (int argc, char **argv)
 {
     const char *libname;
     const char *prefix = NULL;
+    char *message = NULL;
     ld_libs_t ldlibs = {};
     int error = 0;
     int e = 0;
@@ -41,8 +42,14 @@ int main (int argc, char **argv)
     if( argc > 2 )
         prefix = argv[2];
 
-    if( ld_libs_init( &ldlibs, NULL, prefix, 0, &error ) &&
-        ld_libs_set_target( &ldlibs, argv[1] )           )
+    if( !ld_libs_init( &ldlibs, NULL, prefix, 0, &error, &message ) )
+    {
+        fprintf( stderr, "%s: failed to initialize for prefix %s (%d: %s)\n",
+                 argv[0], argv[2], error, message );
+        exit( error ? error : ENOENT );
+    }
+
+    if( ld_libs_set_target( &ldlibs, argv[1] ) )
     {
         const char *path;
         const char *buf;

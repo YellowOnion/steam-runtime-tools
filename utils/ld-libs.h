@@ -79,7 +79,8 @@ int   ld_libs_init (ld_libs_t *ldlibs,
                     const char **exclude,
                     const char *prefix,
                     unsigned long dbg,
-                    int *error);
+                    int *error,
+                    char **message);
 
 int   ld_libs_set_target        (ld_libs_t *ldlibs, const char *target);
 int   ld_libs_find_dependencies (ld_libs_t *ldlibs);

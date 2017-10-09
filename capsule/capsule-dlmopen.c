@@ -233,9 +233,7 @@ capsule_load (const capsule cap,
     void *ret = NULL;
     ld_libs_t ldlibs = {};
 
-    ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags, errcode );
-
-    if( errcode && *errcode )
+    if( !ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags, errcode, error ) )
         return NULL;
 
     // ==================================================================

@@ -99,7 +99,13 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
     if( cap->prefix && strcmp(cap->prefix, "/") )
     {
-        ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags, &code );
+        if( !ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags,
+                           &code, &errors ) )
+        {
+            DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
+                   "ld_libs_init: error %d: %s", code, errors );
+            goto cleanup;
+        }
 
         if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache" ) )
         {
@@ -153,5 +159,6 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
 cleanup:
     ld_libs_finish( &ldlibs );
+    free( errors );
     return res;
 }

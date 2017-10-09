@@ -765,7 +765,8 @@ ld_libs_init (ld_libs_t *ldlibs,
               const char **exclude,
               const char *prefix,
               unsigned long dbg,
-              int *errcode)
+              int *errcode,
+              char **error)
 {
     memset( ldlibs, 0, sizeof(ld_libs_t) );
 
@@ -779,6 +780,9 @@ ld_libs_init (ld_libs_t *ldlibs,
     if( errcode )
         *errcode = 0;
 
+    if( error )
+        *error = NULL;
+
     // super important, 0 is valid but is usually stdin,
     // don't want to go stomping all over that by accident:
     for( int x = 0; x < DSO_LIMIT; x++ )
@@ -786,9 +790,10 @@ ld_libs_init (ld_libs_t *ldlibs,
 
     if( elf_version(EV_CURRENT) == EV_NONE )
     {
-        if( errcode )
-            *errcode = elf_errno();
-
+        // FIXME: elf_errno() isn't actually in the same domain as errno
+        _capsule_set_error( errcode, error, elf_errno(),
+                            "elf_version(EV_CURRENT): %s",
+                            elf_errmsg( elf_errno() ) );
         return 0;
     }
 
@@ -806,12 +811,8 @@ ld_libs_init (ld_libs_t *ldlibs,
         // going to work out:
         if( (space - strlen( "/usr/lib/libx.so.x" )) <= 0 )
         {
-            ldlibs->error =
-              xstrdup( "capsule_dlmopen: prefix is too large" );
-
-            if( errcode )
-                *errcode = ENAMETOOLONG;
-
+            _capsule_set_error_literal( errcode, error, ENAMETOOLONG,
+                                        "capsule_dlmopen: prefix is too large" );
             return 0;
         }
 

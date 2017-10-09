@@ -836,7 +836,7 @@ if (defined $app) {
 
     push @ld_path, '/app/lib';
     push @bwrap, '--ro-bind', $app, '/app';
-    push @bwrap, '--setenv', 'PATH', '/app/bin:/app/sbin:/usr/bin:/usr/sbin';
+    push @bwrap, '--setenv', 'PATH', '/app/bin:/app/sbin:/usr/bin:/bin:/usr/sbin:/sbin';
 }
 
 my $gl_provider_libc;

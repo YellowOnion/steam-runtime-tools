@@ -1059,7 +1059,7 @@ int main (int argc, char **argv)
     if( !handle )
     {
         int e = errno;
-        char *err = dlerror();
+        const char *err = dlerror();
         fprintf( stderr, "%s: dlopen failed (%s)\n", argv[0], err );
         return e ? e : ENOENT;
     }

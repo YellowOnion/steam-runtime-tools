@@ -39,6 +39,27 @@ typedef struct
     Elf  *dso;
 } dso_needed_t;
 
+/**
+ * ld_libs_t:
+ * @ldcache: the runtime linker cache, or all-zeroes
+ *  if ld_libs_load_cache() has not yet been called
+ * @last_idx: private, used internally by the ld-libs code
+ * @elf_class: the ELF class of the caller that initialized this
+ * @elf_machine: the ELF machine type of the caller that initialized this
+ * @prefix: the sysroot from which we will load encapsulated libraries
+ * @exclude: (array zero-terminated=1) (nullable): libraries to ignore
+ * @needed: private, used internally by the ld-libs code.
+ *  needed[0] is the library we are looking for, and needed[1...]
+ *  are the libraries in its recursive dependency tree.
+ * @not_found: (transfer full): private, used internally by the ld-libs
+ *  code. Each item is a copy of the name of a missing dependency.
+ * @error: (transfer full): An error message returned to the caller
+ * @last_not_found: private, used internally by the ld-libs code.
+ *  Number of items in @not_found used.
+ * @debug: The debug flags passed to ld_libs_init()
+ *
+ * Data structure representing the libraries used in a capsule.
+ */
 typedef struct
 {
     ldcache_t ldcache;

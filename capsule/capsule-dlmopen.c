@@ -164,7 +164,7 @@ static int install_wrappers ( void *dl_handle,
         const char *local_error = dlerror();
 
         if( error )
-            *error = strdup( local_error );
+            *error = xstrdup( local_error );
 
         if( errcode )
             *errcode = EINVAL;
@@ -251,7 +251,7 @@ capsule_load (const capsule cap,
         int rv = (errno == 0) ? EINVAL : errno;
 
         if( error )
-            *error = strdup( "capsule_dlmopen: failed to read ld.so.cache" );
+            *error = xstrdup( "capsule_dlmopen: failed to read ld.so.cache" );
 
         if( errcode )
             *errcode = rv;

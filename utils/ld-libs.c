@@ -333,7 +333,7 @@ ld_lib_open (ld_libs_t *ldlibs, const char *name, int i)
         if( !acceptable )
             clear_needed( &ldlibs->needed[i] );
         else
-            ldlibs->needed[i].name = strdup( name );
+            ldlibs->needed[i].name = xstrdup( name );
     }
 
     // the fd will only be valid if everything worked out:
@@ -686,15 +686,15 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx)
                 next++;
                 if( next >= DSO_LIMIT )
                 {
-                    ldlibs->error = strdup( "Too many dependencies: abort" );
+                    ldlibs->error = xstrdup( "Too many dependencies: abort" );
                     break;
                 }
 
                 if( !dso_find( next_dso, ldlibs, next ) )
                 {
                     ldlibs->not_found[ ldlibs->last_not_found++ ] =
-                      strdup( next_dso );
-                    ldlibs->error = strdup( "Missing dependencies:" );
+                      xstrdup( next_dso );
+                    ldlibs->error = xstrdup( "Missing dependencies:" );
                 }
                 else
                 {
@@ -729,7 +729,7 @@ _dso_iterator_format_error (ld_libs_t * ldlibs)
         size_t prev_space = strlen( ldlibs->error );
 
         ldlibs->error =
-          realloc( ldlibs->error, prev_space + extra_space + 2 );
+          xrealloc( ldlibs->error, prev_space + extra_space + 2 );
         append_here = ldlibs->error + prev_space;
         end = ldlibs->error + prev_space + extra_space + 1;
         memset( append_here, 0, extra_space + 2 );
@@ -807,7 +807,7 @@ ld_libs_init (ld_libs_t *ldlibs,
         if( (space - strlen( "/usr/lib/libx.so.x" )) <= 0 )
         {
             ldlibs->error =
-              strdup( "capsule_dlmopen: prefix is too large" );
+              xstrdup( "capsule_dlmopen: prefix is too large" );
 
             if( errcode )
                 *errcode = ENAMETOOLONG;
@@ -842,9 +842,9 @@ ld_libs_set_target (ld_libs_t *ldlibs, const char *target)
 
         // try for a libelf error message, fall back otherwise:
         if( (elf_rv = elf_errno()) )
-            ldlibs->error = strdup( elf_errmsg(elf_rv) );
+            ldlibs->error = xstrdup( elf_errmsg(elf_rv) );
         else
-            ldlibs->error = strdup( "ld_libs_set_target: could not open dso");
+            ldlibs->error = xstrdup( "ld_libs_set_target: could not open dso");
     }
 
     return rv;
@@ -903,7 +903,7 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error)
 
                 if( !ret )
                 {
-                    ldlibs->error = strdup( dlerror() );
+                    ldlibs->error = xstrdup( dlerror() );
 
                     if( error )
                         *error = EINVAL;

@@ -255,30 +255,12 @@ int soname_matches_path (const char *soname, const char *path)
 ptr_list *
 ptr_list_alloc(size_t size)
 {
-    ptr_list *list = calloc( 1, sizeof(ptr_list) );
+    ptr_list *list = xcalloc( 1, sizeof(ptr_list) );
 
-    if( list )
-    {
-        list->loc = calloc( size, sizeof(ptr_item) );
-
-        if( list->loc != NULL )
-        {
-            list->allocated = size;
-            list->next = 0;
-
-            return list;
-        }
-        fprintf( stderr, "failed to allocate %zd item ptr_list\n", size );
-        free( list );
-        abort();
-    }
-    else
-    {
-        fprintf( stderr, "failed to allocate ptr_list\n" );
-        abort();
-    }
-
-    return NULL;
+    list->loc = xcalloc( size, sizeof(ptr_item) );
+    list->allocated = size;
+    list->next = 0;
+    return list;
 }
 
 void
@@ -296,14 +278,8 @@ ptr_list_push (ptr_list *list, ElfW(Addr) addr)
 {
     if( list->next >= list->allocated )
     {
-        list->loc = realloc( list->loc,
+        list->loc = xrealloc( list->loc,
                              (list->allocated + 16) * sizeof(ptr_item) );
-        if( !list->loc )
-        {
-            fprintf( stderr, "failed to realloc ptr_list\n" );
-            abort();
-        }
-
         list->allocated += 16;
     }
 
@@ -320,4 +296,44 @@ ptr_list_contains (ptr_list *list, ElfW(Addr) addr)
         if( list->loc[ n ].addr == addr )
             return 1;
     return 0;
+}
+
+void
+oom( void )
+{
+    fprintf( stderr, "libcapsule: out of memory\n" );
+    abort();
+}
+
+char *
+xstrdup( const char *s )
+{
+    char *ret = strdup( s );
+
+    if (s != NULL && ret == NULL)
+        oom();
+
+    return ret;
+}
+
+void *
+xrealloc( void *ptr, size_t size )
+{
+    void *ret = realloc( ptr, size );
+
+    if( ptr != NULL && size != 0 && ret == NULL )
+        oom();
+
+    return ret;
+}
+
+void *
+xcalloc( size_t n, size_t size )
+{
+    void *ret = calloc( n, size );
+
+    if( n != 0 && size != 0 && ret == NULL )
+        oom();
+
+    return ret;
 }

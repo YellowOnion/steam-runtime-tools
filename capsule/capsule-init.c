@@ -10,7 +10,7 @@ capsule_init (Lmid_t namespace,
               const char **exclude,
               const char **exported)
 {
-    capsule handle = calloc( 1, sizeof(struct _capsule) );
+    capsule handle = xcalloc( 1, sizeof(struct _capsule) );
 
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 

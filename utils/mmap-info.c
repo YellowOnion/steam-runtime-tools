@@ -28,6 +28,7 @@
 #include <sys/mman.h>
 
 #include "mmap-info.h"
+#include "utils.h"
 
 typedef enum
 {
@@ -114,7 +115,7 @@ load_mmap_info (int *err, const char **errstr)
         ERROR("Warning: Unable to seek to start of " PROC_FILE);
 
     if( map_entries > 0 )
-        entries = calloc( map_entries + 1, sizeof(mmapinfo) );
+        entries = xcalloc( map_entries + 1, sizeof(mmapinfo) );
     else
         ERROR("Warning: no mmap entries found in " PROC_FILE);
 

@@ -74,3 +74,8 @@ const ElfW(Sym) * find_symbol (int idx,
                                const ElfW(Sym) *stab,
                                const char *str,
                                char **name);
+
+void oom( void ) __attribute__((noreturn));
+char *xstrdup( const char *s );
+void *xrealloc( void *ptr, size_t size ) __attribute__((alloc_size(2)));
+void *xcalloc( size_t n, size_t size ) __attribute__((alloc_size(1, 2), malloc));

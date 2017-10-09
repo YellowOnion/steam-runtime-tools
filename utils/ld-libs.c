@@ -903,7 +903,7 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error)
 
                 if( !ret )
                 {
-                    ldlibs->error = dlerror();
+                    ldlibs->error = strdup( dlerror() );
 
                     if( error )
                         *error = EINVAL;

@@ -390,6 +390,11 @@ sub make_container_libc_overridable {
 
     diag 'Making container libc overridable';
 
+    if (-d "$old_tree/libc/lib") {
+        diag "Nothing to do, already overridable";
+        return $old_tree;
+    }
+
     if (!run(['cp', '-a', $old_tree, $new_tree], '>&2')) {
         BAIL_OUT "Unable to copy $old_tree";
     }

@@ -17,7 +17,11 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdlib.h>
+
 #include <link.h> // for __ELF_NATIVE_CLASS
+
 #include "debug.h"
 
 // these macros are secretly the same for elf32 & elf64:
@@ -79,3 +83,53 @@ void oom( void ) __attribute__((noreturn));
 char *xstrdup( const char *s );
 void *xrealloc( void *ptr, size_t size ) __attribute__((alloc_size(2)));
 void *xcalloc( size_t n, size_t size ) __attribute__((alloc_size(1, 2), malloc));
+
+/*
+ * _capsule_steal_pointer:
+ * @pp: A non-%NULL pointer to any pointer type (void ** or Something **)
+ *
+ * Transfer the contents of @pp to the caller, setting @pp to %NULL.
+ * This is essentially the same thing as g_steal_pointer().
+ */
+static inline void *
+_capsule_steal_pointer( void *pp )
+{
+    typedef void *__attribute__((may_alias)) voidp_alias;
+    voidp_alias *pointer_to_pointer = pp;
+    void *ret = *pointer_to_pointer;
+    *pointer_to_pointer = NULL;
+    return ret;
+}
+
+/*
+ * _capsule_propagate_error:
+ * @code_dest: (out) (optional): where to put the error code (errno), or %NULL
+ * @message_dest: (out) (transfer full) (optional) (nullable): where to
+ *  put the message, or %NULL
+ * @code_src: the error code (errno)
+ * @message_src: (nullable) (transfer full): the error message
+ *
+ * This is essentially the same thing as g_propagate_error(), and leaves
+ * message_src undefined. It should typically be used as:
+ *
+ *     _capsule_propagate_error( &code, &message, local_code,
+ *                               _capsule_steal_pointer( &local_message ) );
+ */
+static inline void
+_capsule_propagate_error( int *code_dest, char **message_dest, int code_src, char *message_src )
+{
+    if( code_dest != NULL )
+        *code_dest = code_src;
+
+    if( message_dest != NULL )
+        *message_dest = message_src;
+    else
+        free( message_src );
+}
+
+void _capsule_set_error_literal( int *code_dest, char **message_dest,
+                                 int code, const char *message );
+
+void _capsule_set_error( int *code_dest, char **message_dest,
+                         int code, const char *format, ... )
+    __attribute__((format(printf, 4, 5)));

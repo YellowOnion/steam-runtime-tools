@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "debug.h"
@@ -336,4 +337,56 @@ xcalloc( size_t n, size_t size )
         oom();
 
     return ret;
+}
+
+/*
+ * _capsule_set_error_literal:
+ * @code_dest: (out) (optional): used to return an errno value
+ * @message_dest: (out) (optional) (transfer full): used to return an
+ *  error message
+ * @code: an errno value
+ * @message: an error message
+ *
+ * Set an error code, like g_set_error_literal().
+ */
+void
+_capsule_set_error_literal( int *code_dest, char **message_dest,
+                            int code, const char *message )
+{
+    if( code_dest != NULL )
+        *code_dest = code;
+
+    if( message_dest != NULL )
+        *message_dest = xstrdup( message );
+}
+
+/*
+ * _capsule_set_error:
+ * @code_dest: (out) (optional): used to return an errno value
+ * @message_dest: (out) (optional) (transfer full): used to return an
+ *  error message
+ * @code: an errno value
+ * @message: an error message
+ *
+ * Set an error code, like g_set_error().
+ */
+void
+_capsule_set_error( int *code_dest, char **message_dest,
+                    int code, const char *format,
+                    ... )
+{
+    va_list ap;
+
+    if( code_dest != NULL )
+        *code_dest = code;
+
+    if( message_dest != NULL )
+    {
+        va_start( ap, format );
+
+        if( vasprintf( message_dest, format, ap ) < 0 )
+            oom();
+
+        va_end( ap );
+    }
 }

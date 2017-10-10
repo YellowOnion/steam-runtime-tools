@@ -96,6 +96,24 @@ Run B<openarena>(6) instead of B<glxinfo>(1), and run a demo at the maximum
 possible frame rate. Type B<\quit> into the terminal, or
 B<Shift+Escape \quit> into the GUI window, when the demo has finished.
 
+=item Using a sysroot instead of a Flatpak runtime
+
+    $ sudo debootstrap --include=(many packages) stretch \
+    ~/stretch-sysroot http://deb.debian.org/debian
+    $ gl.pl --container ~/stretch-sysroot
+
+The container can be a complete sysroot (with a F</usr>) instead of just
+a Flatpak runtime or a merged F</usr>.
+
+=item Using a non-host GL stack
+
+    $ sudo debootstrap --include=(many packages) sid \
+    ~/sid-sysroot http://deb.debian.org/debian
+    $ gl.pl --gl-provider ~/sid-sysroot --container ~/stretch-sysroot
+
+The GL provider can be a complete sysroot (with a F</usr>), or a
+merged F</usr>, instead of the host system.
+
 =item Using libcapsule
 
     $ ( cd libGL-proxy && ./configure --with-runtime-tree=/gl-provider \

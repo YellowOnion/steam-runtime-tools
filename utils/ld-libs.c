@@ -416,7 +416,11 @@ search_ldcache (const char *name, ld_libs_t *ldlibs, int i)
             cachepath[ PATH_MAX - 1 ] = '\0';
         }
 
-        ld_cache_open( &ldlibs->ldcache, &cachepath[0] );
+        if( !ld_cache_open( &ldlibs->ldcache, &cachepath[0], NULL, NULL ) )
+        {
+            // TODO: report error?
+            return 0;
+        }
     }
 
     ld_cache_foreach( &ldlibs->ldcache,
@@ -1030,7 +1034,7 @@ stat_caller (void)
 //
 // this function respects any path prefix specified in ldlibs
 int
-ld_libs_load_cache (ld_libs_t *libs, const char *path)
+ld_libs_load_cache (ld_libs_t *libs, const char *path, int *code, char **message)
 {
     int rv;
 
@@ -1045,7 +1049,7 @@ ld_libs_load_cache (ld_libs_t *libs, const char *path)
         libs->ldcache.fd = open( libs->prefix.path, O_RDONLY );
     }
 
-    rv = ld_cache_open( &libs->ldcache, libs->prefix.path );
+    rv = ld_cache_open( &libs->ldcache, libs->prefix.path, code, message );
 
     return rv;
 }

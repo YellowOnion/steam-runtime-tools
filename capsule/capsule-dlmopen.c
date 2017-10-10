@@ -239,21 +239,13 @@ capsule_load (const capsule cap,
     // ==================================================================
     // read in the ldo.so.cache - this will contain all architectures
     // currently installed (x86_64, i386, x32) in no particular order
-    if( ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache" ) )
+    if( ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache", errcode, error ) )
     {
         if( debug_flags & DEBUG_LDCACHE )
             dump_ld_cache( &ldlibs );
     }
     else
     {
-        int rv = (errno == 0) ? EINVAL : errno;
-
-        if( error )
-            *error = xstrdup( "capsule_dlmopen: failed to read ld.so.cache" );
-
-        if( errcode )
-            *errcode = rv;
-
         return NULL;
     }
 

@@ -107,12 +107,11 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
             goto cleanup;
         }
 
-        if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache" ) )
+        if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache", &code, &errors ) )
         {
-            int rv = (errno == 0) ? EINVAL : errno;
-
             DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
-                   "Loading ld.so.cache from %s (error: %d)", cap->prefix, rv );
+                   "Loading ld.so.cache from %s: error %d: %s", cap->prefix,
+                   code, errors );
             goto cleanup;
         }
 

@@ -92,7 +92,8 @@ typedef intptr_t (*ld_cache_entry_cb) (const char *name,
                                        const char *path,
                                        void *data);
 
-int      ld_cache_open    (ldcache_t *cache, const char *path);
+int      ld_cache_open    (ldcache_t *cache, const char *path, int *code,
+                           char **message);
 void     ld_cache_close   (ldcache_t *cache);
 intptr_t ld_cache_foreach (ldcache_t *cache, ld_cache_entry_cb cb, void *data);
 

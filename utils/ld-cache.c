@@ -105,7 +105,7 @@ ld_cache_close (ldcache_t *cache)
 }
 
 int
-ld_cache_open (ldcache_t *cache, const char *path)
+ld_cache_open (ldcache_t *cache, const char *path, int *code, char **message)
 {
     struct stat ldcache = {};
 
@@ -114,7 +114,13 @@ ld_cache_open (ldcache_t *cache, const char *path)
     cache->fd = open( path, O_RDONLY );
 
     if( cache->fd < 0 )
+    {
+        int saved_errno = errno;
+
+        _capsule_set_error( code, message, saved_errno, "open \"%s\": %s",
+                            path, strerror( saved_errno ) );
         goto cleanup;
+    }
 
     // now we have a real file descriptor tag the
     // cache as successfully opened:
@@ -124,13 +130,25 @@ ld_cache_open (ldcache_t *cache, const char *path)
 
     // cache file must be at least this big or it's invalid:
     if( ldcache.st_size < (off_t) sizeof( struct cache_file ) )
+    {
+        _capsule_set_error( code, message, ENODATA,
+                            "\"%s\" too small (%jd < %zu bytes)",
+                            path, (intmax_t) ldcache.st_size,
+                            sizeof( struct cache_file ) );
         goto cleanup;
+    }
 
     cache->mmap =
       mmap( NULL, ldcache.st_size, PROT_READ, MAP_PRIVATE, cache->fd, 0 );
 
     if( cache->mmap == MAP_FAILED )
+    {
+        int saved_errno = errno;
+
+        _capsule_set_error( code, message, saved_errno, "mmap \"%s\": %s",
+                            path, strerror( saved_errno ) );
         goto cleanup;
+    }
 
     cache->map_size = ldcache.st_size;
 
@@ -146,8 +164,9 @@ ld_cache_open (ldcache_t *cache, const char *path)
             memcmp( cache->file.new->version,
                     CACHE_VERSION, sizeof(CACHE_VERSION) - 1 ) )
         {
-            fprintf( stderr, "invalid cache, expected %s: %s\n",
-                     CACHEMAGIC_NEW, CACHE_VERSION );
+            _capsule_set_error( code, message, EINVAL,
+                                "invalid cache, expected %s: %s",
+                                CACHEMAGIC_NEW, CACHE_VERSION );
             goto cleanup;
         }
 

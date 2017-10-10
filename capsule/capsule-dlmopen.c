@@ -258,21 +258,8 @@ capsule_load (const capsule cap,
     // once we have the starting point recursively find all its DT_NEEDED
     // entries, except for the linker itself and libc, which must not
     // be different between the capsule and the "real" DSO environment:
-    ld_libs_find_dependencies( &ldlibs );
-
-    if( ldlibs.error )
-    {
-        if( error )
-        {
-            *error = ldlibs.error;
-            ldlibs.error = NULL;
-        }
-
-        if( errcode )
-            *errcode = EINVAL;
-
+    if( !ld_libs_find_dependencies( &ldlibs, errcode, error ) )
         goto cleanup;
-    }
 
     // ==================================================================
     // load the stack of DSOs we need:

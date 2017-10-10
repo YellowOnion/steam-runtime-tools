@@ -767,15 +767,20 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx)
 }
 
 static void
-_dso_iterator_format_error (ld_libs_t * ldlibs)
+_dso_iterator_format_error (ld_libs_t * ldlibs, int *code, char **message)
 {
     size_t extra_space = 0;
 
-    if( ! ldlibs->error )
-        return;
+    assert( ldlibs->error );
 
     if( ! ldlibs->not_found[0] )
+    {
+        // We happen to know that the only other reason this can fail
+        // is that we ran out of space to track dependencies
+        _capsule_propagate_error( code, message, ELIBMAX,
+                                  _capsule_steal_pointer( &ldlibs->error ) );
         return;
+    }
 
     for( int i = 0; (i < DSO_LIMIT) && ldlibs->not_found[i]; i++ )
         extra_space += strlen( ldlibs->not_found[i] ) + 1;
@@ -801,18 +806,24 @@ _dso_iterator_format_error (ld_libs_t * ldlibs)
             ldlibs->not_found[i] = NULL;
         }
     }
+
+    _capsule_propagate_error( code, message, ELIBACC,
+                              _capsule_steal_pointer( &ldlibs->error ) );
 }
 
 // wrapper to format any accumulated errors and similar after
 // invoking the actual dso iterator: returns true if we gathered
 // all the needed info witout error, false otherwise:
 static int
-dso_iterate_sections (ld_libs_t *ldlibs, int idx)
+dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **message)
 {
     _dso_iterate_sections( ldlibs, idx );
-    _dso_iterator_format_error( ldlibs );
 
-    return ldlibs->error == NULL;
+    if( ldlibs->error == NULL )
+        return 1;
+
+    _dso_iterator_format_error( ldlibs, code, message );
+    return 0;
 }
 
 
@@ -896,9 +907,9 @@ ld_libs_set_target (ld_libs_t *ldlibs, const char *target, int *code, char **mes
 }
 
 int
-ld_libs_find_dependencies (ld_libs_t *ldlibs)
+ld_libs_find_dependencies (ld_libs_t *ldlibs, int *code, char **message)
 {
-    return dso_iterate_sections( ldlibs, 0 );
+    return dso_iterate_sections( ldlibs, 0, code, message );
 }
 
 // And now we actually open everything we have found, in reverse

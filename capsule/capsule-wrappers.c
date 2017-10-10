@@ -125,12 +125,10 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         }
 
         // harvest all the requested DSO's dependencies:
-        ld_libs_find_dependencies( &ldlibs );
-
-        if( ldlibs.error )
+        if( !ld_libs_find_dependencies( &ldlibs, &code, &errors ) )
         {
             DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
-                   "capsule dlopen error: %s", ldlibs.error );
+                   "capsule dlopen error %d: %s", code, errors );
             goto cleanup;
         }
 

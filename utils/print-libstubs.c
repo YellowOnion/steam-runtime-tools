@@ -317,15 +317,15 @@ int main (int argc, char **argv)
         exit( error ? error : ENOENT );
     }
 
-    if( !ld_libs_set_target( &ldlibs, argv[1], &error, &message ) )
+    if( !ld_libs_set_target( &ldlibs, argv[1], &error, &message ) ||
+        !ld_libs_find_dependencies( &ldlibs, &error, &message ) )
     {
         fprintf( stderr, "%s: failed to open [%s]%s (%d: %s)\n",
                  argv[0], argv[2], argv[1], error, message );
         exit( error ? error : ENOENT );
     }
 
-    if( ld_libs_find_dependencies( &ldlibs )             &&
-        (handle = ld_libs_load( &ldlibs, &ns, 0, &error)) )
+    if( (handle = ld_libs_load( &ldlibs, &ns, 0, &error)) )
     {
         if( (libname = strrchr( argv[1], '/' )) )
             libname = libname + 1;

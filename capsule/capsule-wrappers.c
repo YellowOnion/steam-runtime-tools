@@ -116,13 +116,11 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         }
 
         // find the initial DSO (ie what the caller actually asked for):
-        if( !ld_libs_set_target( &ldlibs, file ) )
+        if( !ld_libs_set_target( &ldlibs, file, &code, &errors ) )
         {
-            int rv = (errno == 0) ? EINVAL : errno;
-
             DEBUG( DEBUG_SEARCH|DEBUG_WRAPPERS|DEBUG_DLFUNC,
-                           "Not found: %s under %s (error: %d)",
-                           file, cap->prefix, rv );
+                           "Not found: %s under %s: error %d: %s",
+                           file, cap->prefix, code, errors );
             goto cleanup;
         }
 

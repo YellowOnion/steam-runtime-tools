@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <assert.h>
 #include <string.h>
 #include <dlfcn.h>
 #include <link.h>
@@ -202,25 +203,43 @@ set_elf_constraints (ld_libs_t *ldlibs)
 // matches the class & architecture of the DSO we started with:
 // return true on a match, false otherwise
 static int
-check_elf_constraints (ld_libs_t *ldlibs, int idx)
+check_elf_constraints (ld_libs_t *ldlibs, int idx, int *code, char **message)
 {
     GElf_Ehdr ehdr = {};
     int eclass;
 
     // bogus ELF DSO - no ehdr available?
     if( !gelf_getehdr( ldlibs->needed[ idx ].dso, &ehdr ) )
+    {
+        // FIXME: elf_errno() isn't actually in the same domain as errno
+        _capsule_set_error( code, message, elf_errno(), "gelf_getehdr(%s): %s",
+                            ldlibs->needed[ idx ].path,
+                            elf_errmsg( elf_errno() ) );
         return 0;
+    }
 
     eclass = gelf_getclass( ldlibs->needed[ idx ].dso );
 
     // check class (32 vs 64 bit)
     if( ldlibs->elf_class != eclass )
+    {
+        _capsule_set_error( code, message, ENOEXEC,
+                            "gelf_getclass(%s): expected %d, found %d",
+                            ldlibs->needed[ idx ].path, ldlibs->elf_class,
+                            eclass );
         return 0;
+    }
 
     // check target architecture (i386, x86-64)
     // x32 ABI is class 32 but machine x86-64
     if( ldlibs->elf_machine != ehdr.e_machine )
+    {
+        _capsule_set_error( code, message, ENOEXEC,
+                            "ehdr.e_machine of %s: expected %d, found %d",
+                            ldlibs->needed[ idx ].path, ldlibs->elf_machine,
+                            ehdr.e_machine );
         return 0;
+    }
 
     DEBUG( DEBUG_ELF, "constraints: class %d; machine: %d;",
            ldlibs->elf_class, ldlibs->elf_machine );
@@ -293,7 +312,7 @@ static void clear_needed (dso_needed_t *needed)
 // this is to allow both prefixed and unprefixed DSOs to be handled
 // here:
 static int
-ld_lib_open (ld_libs_t *ldlibs, const char *name, int i)
+ld_lib_open (ld_libs_t *ldlibs, const char *name, int i, int *code, char **message)
 {
 
     LDLIB_DEBUG( ldlibs, DEBUG_SEARCH,
@@ -315,7 +334,7 @@ ld_lib_open (ld_libs_t *ldlibs, const char *name, int i)
         ldlibs->needed[i].dso  =
           elf_begin( ldlibs->needed[i].fd, ELF_C_READ_MMAP, NULL );
 
-        acceptable = check_elf_constraints( ldlibs, i );
+        acceptable = check_elf_constraints( ldlibs, i, code, message );
 
         LDLIB_DEBUG( ldlibs, DEBUG_SEARCH,
                      "[%03d] %s on fd #%d; elf: %p; acceptable: %d",
@@ -325,19 +344,29 @@ ld_lib_open (ld_libs_t *ldlibs, const char *name, int i)
                      ldlibs->needed[i].dso ,
                      acceptable );
 
-        if( acceptable )
-            acceptable = !target_is_ourself( ldlibs, i );
+        if( !acceptable )
+            return 0;
+
+        acceptable = !target_is_ourself( ldlibs, i );
 
         // either clean up the current entry so we can find a better DSO
         // or (for a valid candidate) copy the original requested name in:
         if( !acceptable )
+        {
+            _capsule_set_error( code, message, EINVAL,
+                                "\"%s\" appears to be the libcapsule shim",
+                                ldlibs->needed[i].path );
             clear_needed( &ldlibs->needed[i] );
-        else
-            ldlibs->needed[i].name = xstrdup( name );
-    }
+            return 0;
+        }
 
-    // the fd will only be valid if everything worked out:
-    return ldlibs->needed[i].fd >= 0;
+        ldlibs->needed[i].name = xstrdup( name );
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 // search callback for search_ldcache. see search_ldcache and ld_cache_foreach:
@@ -375,8 +404,9 @@ search_ldcache_cb (const char *name, // name of the DSO in the ldcache
 
         // try to open the DSO. This will finish setting up the
         // needed[idx] slot if successful, and reset it ready for
-        // another attempt if it fails:
-        return ld_lib_open( target->ldlibs, name, idx );
+        // another attempt if it fails.
+        // TODO: Can we propagate error information?
+        return ld_lib_open( target->ldlibs, name, idx, NULL, NULL );
     }
 
     return 0;
@@ -479,8 +509,9 @@ search_ldpath (const char *name, const char *ldpath, ld_libs_t *ldlibs, int i)
             // DSO at that location, we're good to go (ldlib_open will
             // finish setting up or clearing the needed[] entry for us):
             // FIXME: this is broken if the target is an absolute symlink
+            // TODO: Propagate error information from ld_lib_open()?
             if( realpath( prefix, ldlibs->needed[i].path ) &&
-                ld_lib_open( ldlibs, name, i ) )
+                ld_lib_open( ldlibs, name, i, NULL, NULL ) )
                 return 1;
         }
 
@@ -506,7 +537,7 @@ search_ldpath (const char *name, const char *ldpath, ld_libs_t *ldlibs, int i)
 // and will contain a valid fd for the DSO. (and search_ldcache will
 // return true). Otherwise the entry will be empty and we will return false:
 static int
-dso_find (const char *name, ld_libs_t *ldlibs, int i)
+dso_find (const char *name, ld_libs_t *ldlibs, int i, int *code, char **message)
 {
     int found = 0;
     const char *ldpath = NULL;
@@ -555,12 +586,25 @@ dso_find (const char *name, ld_libs_t *ldlibs, int i)
         // this will fail for a non-absolute path, but that's OK
         // if realpath lookup succeeds needed[i].path will be set correctly:
         if( realpath( target, ldlibs->needed[i].path ) )
-            return ld_lib_open( ldlibs, name, i );
-    }
+        {
+            return ld_lib_open( ldlibs, name, i, code, message );
+        }
+        else if( absolute )
+        {
+            int saved_errno = errno;
 
-    // path was absolute and we couldn't resolve it. give up:
-    if( absolute )
-        return 0;
+            // path was absolute and we couldn't resolve it. give up:
+            _capsule_set_error( code, message, saved_errno,
+                                "realpath(\"%s\"): %s",
+                                ldlibs->needed[i].path,
+                                strerror( saved_errno ) );
+            return 0;
+        }
+    }
+    else
+    {
+        assert( !absolute );
+    }
 
     LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "target DSO is %s", name );
     // now search LD_LIBRARY_PATH, the ld.so.cache, and the default locations
@@ -575,6 +619,15 @@ dso_find (const char *name, ld_libs_t *ldlibs, int i)
 
     if( (found = search_ldpath( name, "/lib:/usr/lib", ldlibs, i )) )
         return found;
+
+    if (ldpath)
+        _capsule_set_error( code, message, ENOENT,
+                            "Could not find \"%s\" in LD_LIBRARY_PATH \"%s\", "
+                            "ld.so.cache, /lib or /usr/lib", ldpath, name );
+    else
+        _capsule_set_error( code, message, ENOENT,
+                            "Could not find \"%s\" in LD_LIBRARY_PATH (unset), "
+                            "ld.so.cache, /lib or /usr/lib", name );
 
     return 0;
 }
@@ -694,7 +747,8 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx)
                     break;
                 }
 
-                if( !dso_find( next_dso, ldlibs, next ) )
+                // TODO: Propagate errors?
+                if( !dso_find( next_dso, ldlibs, next, NULL, NULL ) )
                 {
                     ldlibs->not_found[ ldlibs->last_not_found++ ] =
                       xstrdup( next_dso );
@@ -836,23 +890,9 @@ ld_libs_init (ld_libs_t *ldlibs,
 // (ie the DSO we actually want):
 // returns false on error:
 int
-ld_libs_set_target (ld_libs_t *ldlibs, const char *target)
+ld_libs_set_target (ld_libs_t *ldlibs, const char *target, int *code, char **message)
 {
-    int rv = dso_find( target, ldlibs, 0 );
-
-    // failed but we don't have an error message:
-    if( !rv && !ldlibs->error )
-    {
-        int elf_rv;
-
-        // try for a libelf error message, fall back otherwise:
-        if( (elf_rv = elf_errno()) )
-            ldlibs->error = xstrdup( elf_errmsg(elf_rv) );
-        else
-            ldlibs->error = xstrdup( "ld_libs_set_target: could not open dso");
-    }
-
-    return rv;
+    return dso_find( target, ldlibs, 0, code, message );
 }
 
 int

@@ -251,23 +251,8 @@ capsule_load (const capsule cap,
 
     // ==================================================================
     // find the starting point of our capsule
-    if( !ld_libs_set_target( &ldlibs, dso ) )
-    {
-        if( error )
-        {
-            *error = ldlibs.error;
-            ldlibs.error = NULL;
-        }
-        else
-        {
-            free( ldlibs.error );
-        }
-
-        if( errcode )
-            *errcode = ENOENT;
-
+    if( !ld_libs_set_target( &ldlibs, dso, errcode, error ) )
         goto cleanup;
-    }
 
     // ==================================================================
     // once we have the starting point recursively find all its DT_NEEDED

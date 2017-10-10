@@ -49,7 +49,7 @@ int main (int argc, char **argv)
         exit( error ? error : ENOENT );
     }
 
-    if( ld_libs_set_target( &ldlibs, argv[1] ) )
+    if( ld_libs_set_target( &ldlibs, argv[1], &error, &message ) )
     {
         const char *path;
         const char *buf;
@@ -81,13 +81,9 @@ int main (int argc, char **argv)
     }
     else
     {
-        e = (error == 0) ? errno : error;
         fprintf( stderr, "%s: failed to open [%s]%s (%d: %s)\n",
-                 argv[0], argv[2], argv[1],
-                 e ? e : ENOENT,
-                 ldlibs.error ? ldlibs.error : "unspecified error" );
-        if( !e )
-            e = ENOENT;
+                 argv[0], argv[2], argv[1], error, message );
+        exit( error ? error : ENOENT );
     }
 
     ld_libs_finish( &ldlibs );

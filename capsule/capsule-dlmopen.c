@@ -263,7 +263,7 @@ capsule_load (const capsule cap,
 
     // ==================================================================
     // load the stack of DSOs we need:
-    ret = ld_libs_load( &ldlibs, namespace, 0, errcode );
+    ret = ld_libs_load( &ldlibs, namespace, 0, errcode, error );
     cap->namespace = *namespace;
 
     if( debug_flags & DEBUG_CAPSULE )

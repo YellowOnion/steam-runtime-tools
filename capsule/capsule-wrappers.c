@@ -133,7 +133,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         }
 
         // load them up in reverse dependency order:
-        res = ld_libs_load( &ldlibs, &cap->namespace, flag, &code );
+        res = ld_libs_load( &ldlibs, &cap->namespace, flag, &code, &errors );
 
         if( !res )
             DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,

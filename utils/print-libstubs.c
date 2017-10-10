@@ -325,7 +325,7 @@ int main (int argc, char **argv)
         exit( error ? error : ENOENT );
     }
 
-    if( (handle = ld_libs_load( &ldlibs, &ns, 0, &error)) )
+    if( ( handle = ld_libs_load( &ldlibs, &ns, 0, &error, &message ) ) )
     {
         if( (libname = strrchr( argv[1], '/' )) )
             libname = libname + 1;
@@ -337,12 +337,9 @@ int main (int argc, char **argv)
     }
     else
     {
-        int e = (error == 0) ? errno : error;
         fprintf( stderr, "%s: failed to open [%s]%s (%d: %s)\n",
-                 argv[0], argv[2], argv[1],
-                 e ? e : ENOENT,
-                 ldlibs.error ? ldlibs.error : "unspecified error" );
-        exit(e ? e : ENOENT);
+                 argv[0], argv[2], argv[1], error, message );
+        exit(error ? error : ENOENT);
     }
 
     exit(0);

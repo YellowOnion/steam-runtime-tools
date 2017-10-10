@@ -917,7 +917,8 @@ ld_libs_find_dependencies (ld_libs_t *ldlibs, int *code, char **message)
 // DT_NEEDED values from outside the capsule), which it will do
 // if we don't work backwards:
 void *
-ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error)
+ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
+              char **message)
 {
     int go;
     Lmid_t lm = (*namespace > 0) ? *namespace : LM_ID_NEWLM;
@@ -959,10 +960,15 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error)
 
                 if( !ret )
                 {
-                    ldlibs->error = xstrdup( dlerror() );
-
-                    if( error )
-                        *error = EINVAL;
+                    if (lm == LM_ID_NEWLM)
+                        _capsule_set_error( error, message, EINVAL,
+                                            "dlmopen(LM_ID_NEWLM, \"%s\", %s): %s",
+                                            path, _rtldstr( flag ), dlerror() );
+                    else
+                        _capsule_set_error( error, message, EINVAL,
+                                            "dlmopen(%p, \"%s\", %s): %s",
+                                            (void *) lm, path,
+                                            _rtldstr( flag ), dlerror() );
 
                     return NULL;
                 }
@@ -987,6 +993,13 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error)
             }
         }
     } while (go);
+
+    if( !ret )
+    {
+        _capsule_set_error( error, message, EINVAL,
+                            "How do we get here? go = 0" );
+        return NULL;
+    }
 
     return ret;
 }

@@ -625,7 +625,7 @@ dump_rel (const char *indent,
     {
         int sym;
         int chr;
-        char *name;
+        const char *name = NULL;
 
         const ElfW(Sym) *symbol;
 
@@ -677,7 +677,7 @@ dump_rela (const char *indent,
     {
         int sym;
         int chr;
-        char *name = NULL;
+        const char *name = NULL;
 
         const ElfW(Sym) *symbol;
 

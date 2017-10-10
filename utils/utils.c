@@ -94,11 +94,21 @@ find_strtab (ElfW(Addr) base, void *start, int *siz)
     return rval;
 }
 
+/*
+ * find_symbol:
+ * @idx: The symbol index
+ * @stab: (array element-type=ElfW(Sym)): The symbol table
+ * @str: The string table
+ * @name: (out) (optional): Used to return the name, a pointer into @str
+ *
+ * If @idx is in-bounds for @stab, return a pointer to the @idx'th
+ * entry in @stab. Otherwise return %NULL.
+ */
 const ElfW(Sym) *
-find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
+find_symbol (int idx, const ElfW(Sym) *stab, const char *str, const char **name)
 {
-    ElfW(Sym) *entry;
-    ElfW(Sym) *target = (ElfW(Sym) *)stab + idx;
+    const ElfW(Sym) *entry;
+    const ElfW(Sym) *target = stab + idx;
 
     if( idx < 0 )
         return NULL;
@@ -106,7 +116,7 @@ find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
     // we could just accept the index as legitimate but then we'd
     // run the risk of popping off into an unknown hyperspace coordinate
     // this way we stop if the target is past the known end of the table:
-    for( entry = (ElfW(Sym) *)stab;
+    for( entry = stab;
          ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
            (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
          entry++ )
@@ -114,7 +124,7 @@ find_symbol (int idx, const ElfW(Sym) *stab, const char *str, char **name)
         if( entry == target )
         {
             if( name )
-                *name = (char *)str + entry->st_name;
+                *name = str + entry->st_name;
             return target;
         }
     }

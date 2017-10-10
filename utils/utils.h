@@ -77,7 +77,7 @@ const char *      find_strtab (ElfW(Addr) base, void *start, int *siz);
 const ElfW(Sym) * find_symbol (int idx,
                                const ElfW(Sym) *stab,
                                const char *str,
-                               char **name);
+                               const char **name);
 
 void oom( void ) __attribute__((noreturn));
 char *xstrdup( const char *s );

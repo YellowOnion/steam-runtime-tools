@@ -244,7 +244,7 @@ process_dt_rela (const void *start,
     {
         int sym;
         int chr;
-        char *name = NULL;
+        const char *name = NULL;
         const ElfW(Sym) *symbol;
 
 #if __ELF_NATIVE_CLASS == 32
@@ -417,7 +417,7 @@ process_dt_rel (const void *start,
     {
         int sym;
         int chr;
-        char *name;
+        const char *name = NULL;
 
         const ElfW(Sym) *symbol;
 

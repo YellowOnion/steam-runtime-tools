@@ -5,7 +5,7 @@ AM_CFLAGS       += $(CAPSULE_CFLAGS)
 
 CAPSULE_SONAMES := libGL.so.1
 CAPSULE_VERSION_libGL.so.1 := 1
-#AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
+AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
 
 lib_LTLIBRARIES = libGL.la
 

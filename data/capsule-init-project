@@ -134,7 +134,6 @@ name=${base#lib};
 lcbase=${base,,};
 
 dest=${3:-$base-proxy};
-maj=0;
 
 : "${CAPSULE_MKINC:="$(pkg-config --variable=makeinc capsule)"}"
 : "${CAPSULE_SYMBOLS_TOOL:="$libexec/capsule-symbols"}"

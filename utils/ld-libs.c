@@ -665,9 +665,10 @@ already_needed (dso_needed_t *needed, int requesting_idx, const char *name)
 // NOTE: you must use dso_find to seed the 0th entry in the needed array
 // or the elf handle in needed[0].dso will not be set up and hilarity*
 // will ensue.
-static void
-_dso_iterate_sections (ld_libs_t *ldlibs, int idx)
+static int
+_dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **error)
 {
+    int had_error = 0;
     Elf_Scn *scn = NULL;
 
     //debug(" ldlibs: %p; idx: %d (%s)", ldlibs, idx, ldlibs->needed[idx].name);
@@ -696,7 +697,7 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx)
             edata = elf_getdata( scn, edata );
 
             // process eaach DT_* entry in the SHT_DYNAMIC section:
-            while( !ldlibs->error                  &&
+            while( !had_error                      &&
                    gelf_getdyn( edata, i++, &dyn ) &&
                    (dyn.d_tag != DT_NULL)          )
             {
@@ -704,6 +705,7 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx)
                 int next = ldlibs->last_idx;
                 dso_needed_t *needed = ldlibs->needed;
                 char *next_dso; // name of the dependency we're going to need
+                char *local_error = NULL;
 
                 // we're only gathering DT_NEEDED (dependency) entries here:
                 if( dyn.d_tag != DT_NEEDED )
@@ -743,44 +745,46 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx)
                 next++;
                 if( next >= DSO_LIMIT )
                 {
-                    ldlibs->error = xstrdup( "Too many dependencies: abort" );
+                    had_error = 1;
+                    _capsule_set_error_literal( code, error, ELIBMAX,
+                                                "Too many dependencies" );
                     break;
                 }
 
-                // TODO: Propagate errors?
-                if( !dso_find( next_dso, ldlibs, next, NULL, NULL ) )
+                if( !dso_find( next_dso, ldlibs, next, code, &local_error ) )
                 {
+                    had_error = 1;
                     ldlibs->not_found[ ldlibs->last_not_found++ ] =
-                      xstrdup( next_dso );
-                    ldlibs->error = xstrdup( "Missing dependencies:" );
+                      _capsule_steal_pointer( &local_error );
+                    // Avoid "piling up" errors which would be a memory
+                    // leak
+                    if( error != NULL && *error == NULL )
+                        *error = xstrdup( "Missing dependencies:" );
                 }
                 else
                 {
                     // record which DSO requested the new library we found:
                     needed[next].requestors[idx] = 1;
                     // now find the dependencies of our newest dependency:
-                    _dso_iterate_sections( ldlibs, next );
+                    _dso_iterate_sections( ldlibs, next, code, error );
                 }
             }
         }
     }
+
+    return !had_error;
 }
 
 static void
-_dso_iterator_format_error (ld_libs_t * ldlibs, int *code, char **message)
+_dso_iterator_format_error (ld_libs_t * ldlibs, char **message)
 {
     size_t extra_space = 0;
 
-    assert( ldlibs->error );
+    assert( message );
+    assert( *message );
 
     if( ! ldlibs->not_found[0] )
-    {
-        // We happen to know that the only other reason this can fail
-        // is that we ran out of space to track dependencies
-        _capsule_propagate_error( code, message, ELIBMAX,
-                                  _capsule_steal_pointer( &ldlibs->error ) );
         return;
-    }
 
     for( int i = 0; (i < DSO_LIMIT) && ldlibs->not_found[i]; i++ )
         extra_space += strlen( ldlibs->not_found[i] ) + 1;
@@ -789,12 +793,11 @@ _dso_iterator_format_error (ld_libs_t * ldlibs, int *code, char **message)
     {
         char *append_here;
         char *end;
-        size_t prev_space = strlen( ldlibs->error );
+        size_t prev_space = strlen( *message );
 
-        ldlibs->error =
-          xrealloc( ldlibs->error, prev_space + extra_space + 2 );
-        append_here = ldlibs->error + prev_space;
-        end = ldlibs->error + prev_space + extra_space + 1;
+        *message = xrealloc( *message, prev_space + extra_space + 2 );
+        append_here = *message + prev_space;
+        end = *message + prev_space + extra_space + 1;
         memset( append_here, 0, extra_space + 2 );
 
         for( int i = 0; (i < DSO_LIMIT) && ldlibs->not_found[i]; i++ )
@@ -806,9 +809,6 @@ _dso_iterator_format_error (ld_libs_t * ldlibs, int *code, char **message)
             ldlibs->not_found[i] = NULL;
         }
     }
-
-    _capsule_propagate_error( code, message, ELIBACC,
-                              _capsule_steal_pointer( &ldlibs->error ) );
 }
 
 // wrapper to format any accumulated errors and similar after
@@ -817,12 +817,12 @@ _dso_iterator_format_error (ld_libs_t * ldlibs, int *code, char **message)
 static int
 dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **message)
 {
-    _dso_iterate_sections( ldlibs, idx );
-
-    if( ldlibs->error == NULL )
+    if( _dso_iterate_sections( ldlibs, idx, code, message ) )
         return 1;
 
-    _dso_iterator_format_error( ldlibs, code, message );
+    if( message )
+        _dso_iterator_format_error( ldlibs, message );
+
     return 0;
 }
 
@@ -1026,11 +1026,6 @@ ld_libs_finish (ld_libs_t *ldlibs)
 
     ldlibs->prefix.len = 0;
     ldlibs->prefix.path[0] = '\0';
-
-    if( ldlibs->error )
-        free( ldlibs->error );
-
-    ldlibs->error = NULL;
 }
 
 // this walks backwards along (up? down?) the stack until it finds

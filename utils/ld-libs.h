@@ -53,7 +53,6 @@ typedef struct
  *  are the libraries in its recursive dependency tree.
  * @not_found: (transfer full): private, used internally by the ld-libs
  *  code. Each item is a copy of the name of a missing dependency.
- * @error: (transfer full): An error message returned to the caller
  * @last_not_found: private, used internally by the ld-libs code.
  *  Number of items in @not_found used.
  * @debug: The debug flags passed to ld_libs_init()
@@ -70,7 +69,6 @@ typedef struct
     const char **exclude;
     dso_needed_t needed[DSO_LIMIT];
     char *not_found[DSO_LIMIT];
-    char *error;
     int last_not_found;
     unsigned long debug;
 } ld_libs_t;

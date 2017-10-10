@@ -130,7 +130,11 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/shim/libnotgl.la
 nobase_dist_insttests_DATA           = tests/CapsuleTest.pm
 # Install the source code so we can rebuild it inside a container if we want to
-nobase_dist_insttests_DATA          += tests/notgl.h                           \
+nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
+                                       examples/shim/libGL.so.1.shared         \
+                                       examples/shim/libGL.so.1.symbols        \
+                                       examples/shim/libGL.so.1.symbols.updated-for \
+                                       tests/notgl.h                           \
                                        tests/notgl-green.c                     \
                                        tests/notgl-red.c                       \
                                        tests/notgl-ref.c                       \
@@ -221,7 +225,8 @@ tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =
-test_scripts                         = tests/init-project.pl                   \
+test_scripts                         = tests/gl-shim.pl                        \
+                                       tests/init-project.pl                   \
                                        tests/notgl.pl                          \
                                        tests/symbols.pl                        \
                                        tests/version.pl

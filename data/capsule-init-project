@@ -23,6 +23,9 @@ Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
         --search-tree=PATH      Find libraries to be proxied in this
                                 chroot, sysroot or container now
                                 [default: TREE or /]
+        --set-version=VERSION   Use this as the library's version number
+                                (major, major.minor or major.minor.micro)
+                                instead of running capsule-version
         --symbols-from=PATH     Use symbols from this file instead of
                                 running capsule-symbols(1)
         --runtime-tree=PATH     Generated code will find proxied
@@ -39,7 +42,7 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'autoreconf,no-autoreconf,capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,symbols-from:,runtime-tree:,help' \
+    -l 'autoreconf,no-autoreconf,capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,search-tree:,set-version:,symbols-from:,runtime-tree:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -47,6 +50,7 @@ autoreconf=yes
 runtime_tree=
 search_tree=
 symbols_from=
+ver=
 
 while true;
 do
@@ -93,6 +97,12 @@ do
             continue;
             ;;
 
+        (--set-version)
+            ver="$2"
+            shift 2;
+            continue;
+            ;;
+
         (--symbols-from)
             symbols_from="$2"
             shift 2;
@@ -124,7 +134,6 @@ name=${base#lib};
 lcbase=${base,,};
 
 dest=${3:-$base-proxy};
-ver=0;
 maj=0;
 
 : "${CAPSULE_MKINC:="$(pkg-config --variable=makeinc capsule)"}"
@@ -133,9 +142,9 @@ maj=0;
 : "${runtime_tree:="$tree"}"
 : "${search_tree:="$tree"}"
 
-read x x ver x < <("$CAPSULE_VERSION_TOOL" "$target" "$search_tree");
-
-maj=${ver%%.*};
+if [ -z "$ver" ]; then
+    read x x ver x < <("$CAPSULE_VERSION_TOOL" "$target" "$search_tree");
+fi
 
 echo Generating project for $runtime_tree : $target $ver proxy;
 

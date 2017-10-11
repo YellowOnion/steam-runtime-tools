@@ -131,10 +131,9 @@ B<__GLX_VENDOR_LIBRARY_NAME> must be set to the correct vendor name
     $ gl.pl --gl-stack=$HOME/capsulized-libgl/gl
 
 Actually use libcapsule. This currently works with a SteamOS brewmaster
-(Debian jessie-based) host, a Steam Runtime container, Mesa graphics,
-and glxinfo or glxgears as the app, but crashes when the graphics
-driver is NVIDIA, the container is Debian stretch or the app is
-OpenArena.
+(Debian jessie-based) host, a Steam Runtime or Debian stretch container,
+Mesa graphics, and glxinfo, glxgears or OpenArena as the app, but crashes
+when the graphics driver is NVIDIA.
 
 =back
 

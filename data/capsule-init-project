@@ -16,10 +16,10 @@ Usage: $me [OPTIONS] TARGET [TREE [PROJECT-NAME]]
                                 [default: libcapsule's \${pkgdatadir}]
         --capsule-symbols-tool=PATH
                                 Use replacement capsule-symbols(1)
-                                [default: ${CAPSULE_SYMBOLS_TOOL:-"$libexec/capsule-symbols"}]
+                                [default: ${CAPSULE_SYMBOLS_TOOL:-ask pkg-config}]
         --capsule-version-tool=PATH
                                 Use replacement capsule-version(1)
-                                [default: ${CAPSULE_VERSION_TOOL:-"$libexec/capsule-version"}]
+                                [default: ${CAPSULE_VERSION_TOOL:-ask pkg-config}]
         --search-tree=PATH      Find libraries to be proxied in this
                                 chroot, sysroot or container now
                                 [default: TREE or /]
@@ -135,9 +135,10 @@ lcbase=${base,,};
 
 dest=${3:-$base-proxy};
 
-: "${CAPSULE_MKINC:="$(pkg-config --variable=makeinc capsule)"}"
-: "${CAPSULE_SYMBOLS_TOOL:="$libexec/capsule-symbols"}"
-: "${CAPSULE_VERSION_TOOL:="$libexec/capsule-version"}"
+: "${PKG_CONFIG:=pkg-config}"
+: "${CAPSULE_MKINC:="$($PKG_CONFIG --variable=makeinc capsule)"}"
+: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule)"}"
+: "${CAPSULE_VERSION_TOOL:="$($PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule)"}"
 : "${runtime_tree:="$tree"}"
 : "${search_tree:="$tree"}"
 

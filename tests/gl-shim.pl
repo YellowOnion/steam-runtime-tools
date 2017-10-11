@@ -36,17 +36,20 @@ chdir $test_tempdir;
 
 my ($output, $ignored, $error);
 
+my $PKG_CONFIG = $ENV{PKG_CONFIG};
+$PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
+
 my $CAPSULE_INIT_PROJECT_TOOL = $ENV{CAPSULE_INIT_PROJECT_TOOL};
 
 if (! length $CAPSULE_INIT_PROJECT_TOOL) {
-    $CAPSULE_INIT_PROJECT_TOOL = `pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule`;
+    $CAPSULE_INIT_PROJECT_TOOL = `$PKG_CONFIG --variable=CAPSULE_INIT_PROJECT_TOOL capsule`;
     chomp $CAPSULE_INIT_PROJECT_TOOL;
 }
 
 my $CAPSULE_SYMBOLS_TOOL = $ENV{CAPSULE_SYMBOLS_TOOL};
 
 if (! length $CAPSULE_SYMBOLS_TOOL) {
-    $CAPSULE_SYMBOLS_TOOL = `pkg-config --variable=CAPSULE_SYMBOLS_TOOL capsule`;
+    $CAPSULE_SYMBOLS_TOOL = `$PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule`;
     chomp $CAPSULE_SYMBOLS_TOOL;
 }
 

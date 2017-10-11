@@ -40,7 +40,7 @@ Description:
 
 Package: libcapsule-dev-bin
 Architecture: amd64 i386
-Multi-Arch: foreign
+Multi-Arch: same
 Section: libdevel
 Priority: optional
 Depends:

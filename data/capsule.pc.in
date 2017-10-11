@@ -8,8 +8,8 @@ datadir=@datarootdir@
 makeinc=@datadir@/libcapsule
 CAPSULE_INIT_PROJECT_TOOL=@libexecdir@/capsule-init-project
 CAPSULE_MKSTUBLIB_TOOL=@libexecdir@/capsule-mkstublib
-CAPSULE_SYMBOLS_TOOL=@libexecdir@/capsule-symbols
-CAPSULE_VERSION_TOOL=@libexecdir@/capsule-version
+CAPSULE_SYMBOLS_TOOL=@libexecdir@/@host@-capsule-symbols
+CAPSULE_VERSION_TOOL=@libexecdir@/@host@-capsule-version
 
 Name: capsule
 Description: segregated dynamic linking library

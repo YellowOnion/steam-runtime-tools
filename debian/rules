@@ -13,6 +13,10 @@ override_dh_auto_configure:
 override_dh_install:
 	rm -f debian/tmp/usr/lib/*/*.la
 	find debian/tmp/usr/lib/libcapsule/installed-tests -name '*.la' -print -delete
+	# Only keep the architecture-qualified version, delete the unprefixed
+	# version, so we can be Multi-Arch: same
+	rm -f debian/tmp/usr/lib/libcapsule/capsule-symbols
+	rm -f debian/tmp/usr/lib/libcapsule/capsule-version
 	dh_install --fail-missing
 
 override_dh_autoreconf:

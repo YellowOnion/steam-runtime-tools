@@ -34,6 +34,8 @@ AM_INIT_AUTOMAKE([-Wno-portability foreign])
 AM_SILENT_RULES([yes])
 AC_USE_SYSTEM_EXTENSIONS
 AC_SYS_LARGEFILE
+# So we can install x86_64-linux-gnu-capsule-symbols etc.
+AC_CANONICAL_HOST
 
 LT_INIT
 

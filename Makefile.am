@@ -33,6 +33,14 @@ pkgconfig_DATA          = data/capsule.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
+install-exec-hook:
+	cd $(DESTDIR)$(libexecdir) && ln -f capsule-symbols $(host)-capsule-symbols
+	cd $(DESTDIR)$(libexecdir) && ln -f capsule-version $(host)-capsule-version
+
+uninstall-hook:
+	cd $(DESTDIR)$(libexecdir) && rm -f $(host)-capsule-symbols
+	cd $(DESTDIR)$(libexecdir) && rm -f $(host)-capsule-version
+
 # Headers to be included by shim libraries
 nobase_include_HEADERS += capsule/capsule-shim.h \
                           capsule/_ext_dlopen.h \

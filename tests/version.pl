@@ -37,11 +37,15 @@ diag "Working directory: $test_tempdir";
 my $host = "${test_tempdir}/host";
 mkdir($host);
 
+my $PKG_CONFIG = $ENV{PKG_CONFIG};
+$PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
+
 my $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
 
 unless (defined $CAPSULE_VERSION_TOOL) {
-    $CAPSULE_VERSION_TOOL = `pkg-config --variable=CAPSULE_VERSION_TOOL capsule`;
+    $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule`;
     chomp $CAPSULE_VERSION_TOOL;
+    like($CAPSULE_VERSION_TOOL, qr{/(?:[^-/]+-){1,2}linux-gnu[^-/]*-capsule-version$});
 }
 
 my $output;

@@ -37,11 +37,15 @@ diag "Working directory: $test_tempdir";
 my $host = "${test_tempdir}/host";
 mkdir($host);
 
+my $PKG_CONFIG = $ENV{PKG_CONFIG};
+$PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
+
 my $CAPSULE_SYMBOLS_TOOL = $ENV{CAPSULE_SYMBOLS_TOOL};
 
 unless (defined $CAPSULE_SYMBOLS_TOOL) {
-    $CAPSULE_SYMBOLS_TOOL = `pkg-config --variable=CAPSULE_SYMBOLS_TOOL capsule`;
+    $CAPSULE_SYMBOLS_TOOL = `$PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule`;
     chomp $CAPSULE_SYMBOLS_TOOL;
+    like($CAPSULE_SYMBOLS_TOOL, qr{/(?:[^-/]+-){1,2}linux-gnu[^-/]*-capsule-symbols$});
 }
 
 if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {

@@ -793,8 +793,11 @@ if (defined $flatpak_runtime) {
     $container_tree = "$data_home/flatpak/runtime/$flatpak_runtime/active/files";
 }
 
+my $PKG_CONFIG = $ENV{PKG_CONFIG};
+$PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
+
 unless (defined $CAPSULE_VERSION_TOOL) {
-    $CAPSULE_VERSION_TOOL = `pkg-config --variable=CAPSULE_VERSION_TOOL capsule`;
+    $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule`;
     chomp $CAPSULE_VERSION_TOOL;
 }
 

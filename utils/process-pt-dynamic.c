@@ -733,6 +733,12 @@ process_pt_dynamic (void *start,
                 break;
             }
 
+          case DT_REL:
+            // TODO: Does this only appear in a DT_JMPREL dynamic section
+            // in practice?
+            DEBUG( DEBUG_ELF, "Ignoring DT_REL dynamic section entry tag (bug?)" );
+            break;
+
           default:
             DEBUG( DEBUG_ELF, "Ignoring unknown dynamic section entry tag %d (0x%x)",
                    (int) entry->d_tag, (unsigned) entry->d_tag );

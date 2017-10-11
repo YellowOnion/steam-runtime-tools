@@ -617,10 +617,11 @@ process_pt_dynamic (void *start,
     DEBUG( DEBUG_ELF,
            "strtab is at %p: %s", strtab, strtab ? "…" : "");
 
+    // Do a first pass to find the bits we'll need later
     for( entry = start + base;
          (entry->d_tag != DT_NULL) &&
            ((size == 0) || ((void *)entry < (start + base + size)));
-         entry++ )
+         entry++ ) {
         switch( entry->d_tag )
         {
           case DT_PLTRELSZ:
@@ -631,6 +632,40 @@ process_pt_dynamic (void *start,
           case DT_SYMTAB:
             symtab = (const void *) fix_addr( base, entry->d_un.d_ptr );
             DEBUG( DEBUG_ELF, "symtab is %p", symtab );
+            break;
+
+          case DT_RELASZ:
+            relasz = entry->d_un.d_val;
+            DEBUG( DEBUG_ELF, "relasz is %d", relasz );
+            break;
+
+          case DT_PLTREL:
+            jmpreltype = entry->d_un.d_val;
+            DEBUG( DEBUG_ELF, "jmpreltype is %d : %s", jmpreltype,
+                   jmpreltype == DT_REL  ? "DT_REL"  :
+                   jmpreltype == DT_RELA ? "DT_RELA" : "???" );
+            break;
+
+          case DT_RELA:
+          case DT_REL:
+          case DT_JMPREL:
+          default:
+            // We'll deal with this later
+            break;
+        }
+    }
+
+    for( entry = start + base;
+         (entry->d_tag != DT_NULL) &&
+           ((size == 0) || ((void *)entry < (start + base + size)));
+         entry++ ) {
+        switch( entry->d_tag )
+        {
+          case DT_PLTRELSZ:
+          case DT_SYMTAB:
+          case DT_RELASZ:
+          case DT_PLTREL:
+            // We dealt with this earlier
             break;
 
           case DT_RELA:
@@ -647,18 +682,6 @@ process_pt_dynamic (void *start,
                 DEBUG( DEBUG_ELF,
                        "skipping DT_RELA section: no handler" );
             }
-            break;
-
-          case DT_RELASZ:
-            relasz = entry->d_un.d_val;
-            DEBUG( DEBUG_ELF, "relasz is %d", relasz );
-            break;
-
-          case DT_PLTREL:
-            jmpreltype = entry->d_un.d_val;
-            DEBUG( DEBUG_ELF, "jmpreltype is %d : %s", jmpreltype,
-                   jmpreltype == DT_REL  ? "DT_REL"  :
-                   jmpreltype == DT_RELA ? "DT_RELA" : "???" );
             break;
 
           case DT_JMPREL:
@@ -714,6 +737,7 @@ process_pt_dynamic (void *start,
             // Not relevant to us?
             break;
         }
+    }
 
     return ret;
 }

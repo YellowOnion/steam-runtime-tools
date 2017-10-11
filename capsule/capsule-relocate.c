@@ -43,6 +43,15 @@
 
 
 // =========================================================================
+
+/*
+ * process_phdr:
+ * @info: struct dl_phdr_info describing the shared object
+ * @size: sizeof(info)
+ * @rdata: the closure that we passed to dl_iterate_phdr()
+ *
+ * Callback called for each shared object loaded into the program.
+ */
 static int
 process_phdr (struct dl_phdr_info *info,
               size_t size,

@@ -573,6 +573,23 @@ process_dt_rel (const void *start,
     return 0;
 }
 
+/*
+ * process_pt_dynamic:
+ * @start: offset of dynamic section (an array of ElfW(Dyn) structures)
+ *  relative to @base
+ * @size: size of dynamic section in bytes (not structs!), or 0
+ *  if the dynamic section is terminated by an entry with d_tag == DT_NULL
+ * @base: Starting address of the program header (the shared object)
+ *  in memory. @start is relative to this. Addresses are normally
+ *  relative to this, except for when they are absolute (see fix_addr()).
+ * @process_rela: called when we find the DT_RELA section
+ * @process_rel: called when we find the DT_REL section
+ * @data: arbitrary user data to be passed to both @process_rela
+ *  and @process_rel
+ *
+ * Iterate over the PT_DYNAMIC entry in a shared library and perform
+ * relocations using the given callbacks.
+ */
 int
 process_pt_dynamic (void *start,
                     size_t size,

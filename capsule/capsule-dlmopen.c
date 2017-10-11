@@ -53,6 +53,15 @@ dump_ld_cache (ld_libs_t *ldlibs)
     ld_cache_foreach( &ldlibs->ldcache, ld_entry_dump, stderr );
 }
 
+/*
+ * wrap:
+ * @name:
+ * @base: Starting address of the program header in memory.
+ *  Addresses are normally relative to this, except for when they are
+ *  absolute (see fix_addr()).
+ * @dyn: An array of ElfW(Dyn) structures, somewhere after @base
+ * @wrappers: Relocations to apply
+ */
 static void
 wrap (const char *name,
       ElfW(Addr) base,

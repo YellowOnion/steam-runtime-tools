@@ -40,6 +40,17 @@ typedef struct
     ptr_list *seen;
 } relocation_data_t;
 
+/*
+ * relocate_cb_t:
+ * @start: beginning of an array of relocation entries
+ * @relasz: number of bytes (not number of structs!) following @start
+ * @strtab: string table, a series of 0-terminated strings concatenated
+ * @symtab: symbol table, an array of ElfW(Sym) structs
+ * @base: base address ???
+ * @data: the same data that was passed to process_pt_dynamic()
+ *
+ * Callback used to iterate over relocations.
+ */
 typedef int (*relocate_cb_t)(const void *start,
                              const int relasz,
                              const char *strtab,

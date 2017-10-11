@@ -734,7 +734,8 @@ process_pt_dynamic (void *start,
             }
 
           default:
-            // Not relevant to us?
+            DEBUG( DEBUG_ELF, "Ignoring unknown dynamic section entry tag %d (0x%x)",
+                   (int) entry->d_tag, (unsigned) entry->d_tag );
             break;
         }
     }

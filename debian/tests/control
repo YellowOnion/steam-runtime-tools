@@ -1,26 +1,17 @@
-Tests: smoke
+Tests: gnome-desktop-testing smoke
 Restrictions: allow-stderr
 Depends:
+ autoconf,
+ automake,
  bubblewrap,
  build-essential,
- libcapsule-dev,
- libcapsule-dev-bin,
- libipc-run-perl,
- libjpeg62 (>= 6b1) | libjpeg62-turbo,
- perl,
- pkg-config,
- zlib1g,
-
-Tests: gnome-desktop-testing
-Restrictions: allow-stderr
-Depends:
- bubblewrap,
  gnome-desktop-testing,
  libcapsule-dev,
  libcapsule-dev-bin,
  libcapsule-tests,
  libipc-run-perl,
  libjpeg62 (>= 6b1) | libjpeg62-turbo,
+ libtool,
  perl,
  pkg-config,
  zlib1g,

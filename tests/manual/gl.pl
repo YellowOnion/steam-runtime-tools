@@ -289,24 +289,25 @@ sub run_in_container {
     return run([@bwrap, @$argv], @run_params);
 }
 
-my $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
+=item get_lib_implementation(I<TUPLE>, I<SONAME>, I<TREE>)
 
-=item get_lib_implementation(I<SONAME>, I<TREE>)
-
-Return the absolute path of the library I<SONAME> in the tree I<TREE>,
+Return the absolute path of the I<TUPLE> library I<SONAME> in the tree I<TREE>,
 which may either be a complete sysroot or just the contents of a merged
 F</usr> (see C<bind_usr>). The absolute path is relative to the sysroot,
 or the root that contains the merged F</usr> as its F</usr>.
 
 =cut
 
+my %CAPSULE_VERSION_TOOLS;
+
 sub get_lib_implementation {
-    my ($soname, $tree) = @_;
+    my ($tuple, $soname, $tree) = @_;
     my $output;
     my $sysroot = $tree;
 
     if (-d "$tree/usr") {
-        run([$CAPSULE_VERSION_TOOL, $soname, $sysroot], '>', \$output);
+        run([$CAPSULE_VERSION_TOOLS{$tuple}, $soname, $sysroot],
+            '>', \$output);
     }
     else {
         $sysroot = '/tmp/sysroot';
@@ -316,7 +317,8 @@ sub get_lib_implementation {
             --symlink usr/etc /tmp/sysroot/etc
             --symlink usr/var /tmp/sysroot/var
             --bind), $tree, '/tmp/sysroot/usr',
-            $CAPSULE_VERSION_TOOL, $soname, '/tmp/sysroot'], '>', \$output);
+            $CAPSULE_VERSION_TOOLS{$tuple}, $soname, '/tmp/sysroot'],
+            '>', \$output);
     }
 
     chomp $output;
@@ -456,7 +458,7 @@ sub make_container_libc_overridable {
                     # TODO: This doesn't work for foreign architectures:
                     # we would have to run a version of capsule-version
                     # that is appropriate for the foreign architecture.
-                    my $real = get_lib_implementation($soname, $new_tree);
+                    my $real = get_lib_implementation($tuple, $soname, $new_tree);
                     die "Cannot resolve $search/$soname in $new_tree" unless defined $real;
 
                     if ($real !~ m{^/libc}) {
@@ -570,10 +572,7 @@ sub capture_gl_provider_libc {
 
                     # Get the right implementation respecting hwcaps,
                     # and make it absolute.
-                    # TODO: This doesn't work for foreign architectures:
-                    # we would have to run a version of capsule-version
-                    # that is appropriate for the foreign architecture.
-                    my $real = get_lib_implementation($soname, $tree);
+                    my $real = get_lib_implementation($tuple, $soname, $tree);
                     die "Cannot resolve $search/$soname in $tree" unless defined $real;
 
                     { no autodie; unlink("$libc/lib/$tuple/$soname"); }
@@ -674,17 +673,14 @@ sub capture_gl_provider_libs_if_newer {
                     # libnvidia-tls.so, it matters - loading the
                     # non-TLS version somehow corrupts the TLS used
                     # by libc itself.
-                    # TODO: This doesn't work for foreign architectures:
-                    # we would have to run a version of capsule-version
-                    # that is appropriate for the foreign architecture.
-                    my $gl_provider_impl = get_lib_implementation($soname,
-                        $gl_provider_tree);
+                    my $gl_provider_impl = get_lib_implementation($tuple,
+                        $soname, $gl_provider_tree);
 
                     if (! defined $gl_provider_impl) {
                         # capsule-version might not be able to find the
                         # library if it's just a symlink to some library
                         # with a different SONAME, like libGLX_indirect.so.0
-                        $gl_provider_impl = get_lib_implementation(
+                        $gl_provider_impl = get_lib_implementation($tuple,
                             "$search/$soname", $gl_provider_tree);
                     }
 
@@ -694,8 +690,8 @@ sub capture_gl_provider_libs_if_newer {
                     }
 
                     if (defined $container_tree) {
-                        my $container_impl = get_lib_implementation($soname,
-                            $container_tree);
+                        my $container_impl = get_lib_implementation($tuple,
+                            $soname, $container_tree);
 
                         my $gl_provider_version = $gl_provider_impl;
                         $gl_provider_version =~ s/.*\.so\.//;
@@ -771,7 +767,6 @@ my $arch = 'x86_64';
 
 GetOptions(
     'app=s' => \$app,
-    'capsule-version-tool=s' => \$CAPSULE_VERSION_TOOL,
     'container=s' => \$container_tree,
     'flatpak-app=s' => \$flatpak_app,
     'flatpak-runtime=s' => \$flatpak_runtime,
@@ -793,12 +788,13 @@ if (defined $flatpak_runtime) {
     $container_tree = "$data_home/flatpak/runtime/$flatpak_runtime/active/files";
 }
 
-my $PKG_CONFIG = $ENV{PKG_CONFIG};
-$PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
-
-unless (defined $CAPSULE_VERSION_TOOL) {
-    $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule`;
-    chomp $CAPSULE_VERSION_TOOL;
+foreach my $tuple (@multiarch_tuples) {
+    run_verbose([
+        'env', "PKG_CONFIG_PATH=/usr/lib/$tuple/pkgconfig",
+        'pkg-config', '--variable=CAPSULE_VERSION_TOOL', 'capsule',
+    ], '>', \$stdout);
+    chomp $stdout;
+    $CAPSULE_VERSION_TOOLS{$tuple} = $stdout;
 }
 
 $app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/master/active/files"
@@ -817,9 +813,9 @@ if ($stdout !~ /direct rendering: Yes/) {
     plan skip_all => 'glxinfo reports no direct rendering available';
 }
 
-my $gl_provider_libc_so = get_lib_implementation(
+my $gl_provider_libc_so = get_lib_implementation($multiarch_tuples[0],
     'libc.so.6', $gl_provider_tree);
-my $container_libc_so = get_lib_implementation(
+my $container_libc_so = get_lib_implementation($multiarch_tuples[0],
     'libc.so.6', $container_tree);
 
 my $tmpdir = File::Temp->newdir(

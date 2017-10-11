@@ -114,6 +114,13 @@ a Flatpak runtime or a merged F</usr>.
 The GL provider can be a complete sysroot (with a F</usr>), or a
 merged F</usr>, instead of the host system.
 
+If the GL provider uses B<GLVND> and the host system's X11 display does
+not have the B<GLX_EXT_libglvnd> extension, then either the GL provider
+must have a symbolic link B<libGLX_indirect.so.0> to the correct
+vendor GLX library, or B<__GLX_FORCE_VENDOR_LIBRARY_0> or
+B<__GLX_VENDOR_LIBRARY_NAME> must be set to the correct vendor name
+(typically B<mesa> or B<nvidia>).
+
 =item Using libcapsule
 
     $ ( cd libGL-proxy && ./configure --with-runtime-tree=/gl-provider \

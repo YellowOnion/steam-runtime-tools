@@ -2,6 +2,7 @@
 /.version
 /INSTALL
 /build-aux/*
+/data/*-linux-gnu*-capsule-mkstublib
 /m4/*
 /test-suite.log
 /tests/*.log

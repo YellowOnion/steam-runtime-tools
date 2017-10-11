@@ -26,12 +26,25 @@ static_docs             = Building Debugging Limitations Quick-Start
 
 # installable items:
 libexec_PROGRAMS        = capsule-symbols capsule-version
-dist_libexec_SCRIPTS    = data/capsule-mkstublib data/capsule-init-project
+dist_libexec_SCRIPTS    = data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
 pkgconfig_DATA          = data/capsule.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
+
+libexec_SCRIPTS         = data/$(host)-capsule-mkstublib
+
+# Write out a version of capsule-mkstublib with different defaults
+# for each architecture
+data/$(host)-capsule-mkstublib: data/capsule-mkstublib Makefile
+	$(AM_V_GEN)set -e; \
+	( \
+		sed -e 1q $<; \
+		echo '# Inserted by Makefile to make this architecture-specific'; \
+		echo ': "$${CAPSULE_SYMBOLS_TOOL:="$(libexecdir)/$(host)-capsule-symbols"}"';\
+		sed -e 1d $<; \
+	) > $@.tmp; chmod +x $@.tmp; mv $@.tmp $@
 
 install-exec-hook:
 	cd $(DESTDIR)$(libexecdir) && ln -f capsule-symbols $(host)-capsule-symbols
@@ -287,10 +300,13 @@ $(DOC_MAIN_SGML_FILE): sgml-build.stamp
 # These need to come after we include gtk-doc.make, which unconditionally
 # defines these variables
 CLEANFILES             += $(testmeta_DATA)
+CLEANFILES             += data/$(host)-capsule-mkstublib
 CLEANFILES             += tests/shim/libnotgl.so.c
+
 EXTRA_DIST             += $(top_srcdir)/.version
 EXTRA_DIST             += autogen.sh
 EXTRA_DIST             += build-aux/git-version-gen
+EXTRA_DIST             += data/capsule-mkstublib
 EXTRA_DIST             += doc/Strategy.txt
 EXTRA_DIST             += doc/capsule-init-project.xml
 EXTRA_DIST             += doc/capsule-mkstublib.xml

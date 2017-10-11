@@ -1,6 +1,6 @@
+usr/lib/libcapsule/*-capsule-mkstublib
 usr/lib/libcapsule/*-capsule-symbols
 usr/lib/libcapsule/*-capsule-version
 usr/lib/libcapsule/capsule-init-project
-usr/lib/libcapsule/capsule-mkstublib
 usr/share/libcapsule/*
 usr/share/man/man1/*

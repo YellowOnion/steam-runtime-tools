@@ -33,10 +33,19 @@ unsigned long debug_flags;
 // linker, or we may beed to adjust it by the value of base ourselves:
 // this is effectively private linker information and there's no
 // hard and fast rule:
-ElfW(Addr)
-fix_addr (ElfW(Addr) base, ElfW(Addr) addr)
+const void *
+fix_addr (const void *base, ElfW(Addr) offset_or_addr)
 {
-    return ( addr < base ) ? base + addr : addr;
+    if (offset_or_addr < (ElfW(Addr)) base)
+    {
+        // Assume it's an offset, so an address relative to addr
+        return base + offset_or_addr;
+    }
+    else
+    {
+        // Assume it's an absolute address
+        return (const void *) offset_or_addr;
+    }
 }
 
 const ElfW(Dyn) *

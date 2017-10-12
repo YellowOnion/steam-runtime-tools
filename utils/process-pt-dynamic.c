@@ -629,7 +629,7 @@ process_pt_dynamic (void *start,
             break;
 
           case DT_SYMTAB:
-            symtab = (const void *) fix_addr( base, entry->d_un.d_ptr );
+            symtab = fix_addr( (const void *) base, entry->d_un.d_ptr );
             DEBUG( DEBUG_ELF, "symtab is %p", symtab );
             break;
 
@@ -673,7 +673,7 @@ process_pt_dynamic (void *start,
                 DEBUG( DEBUG_ELF, "processing DT_RELA section" );
                 if( relasz == -1 )
                     relasz = find_value( base, start, DT_RELASZ );
-                relstart = (void *) fix_addr( base, entry->d_un.d_ptr );
+                relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
                 process_rela( relstart, relasz, strtab, symtab, base, data );
             }
             else
@@ -696,7 +696,7 @@ process_pt_dynamic (void *start,
                 {
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_REL section" );
-                    relstart = (void *) fix_addr( base, entry->d_un.d_ptr );
+                    relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
                     DEBUG( DEBUG_ELF, "  -> REL entry #0 at %p", relstart );
                     ret = process_rel( relstart, jmprelsz, strtab,
                                        symtab, base, data );
@@ -713,7 +713,7 @@ process_pt_dynamic (void *start,
                 {
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_RELA section" );
-                    relstart = (void *) fix_addr( base, entry->d_un.d_ptr );
+                    relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
                     ret = process_rela( relstart, jmprelsz, strtab,
                                         symtab, base, data );
                 }

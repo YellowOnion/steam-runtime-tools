@@ -955,7 +955,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
             if( verneednum == -1 )
                 verneednum = find_value( base, start, DT_VERNEEDNUM );
             dump_verneed( indent,
-                          (const void *) fix_addr( base, entry->d_un.d_ptr ),
+                          fix_addr( (const void *) base, entry->d_un.d_ptr ),
                           verneednum,
                           strtab, base );
             break;
@@ -967,7 +967,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
           case DT_VERDEF:
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, DT_VERDEFNUM );
-            verdef = (const void *) fix_addr( base, entry->d_un.d_ptr );
+            verdef = fix_addr( (const void *) base, entry->d_un.d_ptr );
             dump_verdef( indent, verdef, verdefnum, strtab, base );
             break;
 

@@ -829,16 +829,33 @@ my @bwrap = qw(
 );
 push @bwrap, '--dir', $ENV{HOME};
 
-if (-d "$container_tree/etc") {
-    push @bwrap, '--ro-bind', "$container_tree/etc", '/etc';
-}
-
-if (-d "$container_tree/var") {
-    push @bwrap, '--ro-bind', "$container_tree/var", '/var';
-}
-
 push @bwrap, '--tmpfs', '/tmp';
 push @bwrap, '--tmpfs', '/var/tmp';
+
+foreach my $mutable (qw(/etc /var)) {
+    if (-d "$container_tree$mutable") {
+        opendir(my $dir, "$container_tree$mutable");
+
+        while (defined(my $member = readdir $dir)) {
+            next if $member eq '.' || $member eq '..';
+            next if "$mutable/$member" eq '/etc/machine-id';
+            next if "$mutable/$member" eq '/etc/passwd';
+
+            no autodie 'readlink';
+            my $target = readlink "$container_tree$mutable/$member";
+
+            if (defined $target) {
+                push @bwrap, '--symlink', "$target", "$mutable/$member";
+            }
+            else {
+                push @bwrap, '--ro-bind', "$container_tree$mutable/$member", "$mutable/$member";
+            }
+        }
+
+        closedir($dir);
+    }
+}
+
 push @bwrap, '--ro-bind', '/etc/machine-id', '/etc/machine-id';
 push @bwrap, '--ro-bind', '/etc/passwd', '/etc/passwd';
 push @bwrap, '--bind', '/tmp/.X11-unix', '/tmp/.X11-unix';

@@ -672,7 +672,10 @@ process_pt_dynamic (void *start,
             {
                 DEBUG( DEBUG_ELF, "processing DT_RELA section" );
                 if( relasz == -1 )
-                    relasz = find_value( base, start, DT_RELASZ );
+                {
+                    fprintf( stderr, "libcapsule: DT_RELA section not accompanied by DT_RELASZ, ignoring" );
+                    break;
+                }
                 relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
                 process_rela( relstart, relasz, strtab, symtab, base, data );
             }
@@ -685,9 +688,16 @@ process_pt_dynamic (void *start,
 
           case DT_JMPREL:
             if( jmprelsz == -1 )
-                jmprelsz = find_value( base, start, DT_PLTRELSZ );
+            {
+                fprintf( stderr, "libcapsule: DT_JMPREL section not accompanied by DT_PLTRELSZ, ignoring" );
+                break;
+            }
+
             if( jmpreltype == DT_NULL )
-                jmpreltype = find_value( base, start, DT_PLTREL );
+            {
+                fprintf( stderr, "libcapsule: DT_JMPREL section not accompanied by DT_PLTREL, ignoring" );
+                break;
+            }
 
             switch( jmpreltype )
             {

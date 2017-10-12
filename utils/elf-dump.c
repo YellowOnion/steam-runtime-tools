@@ -824,6 +824,17 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     int tag_type = TTYPE_VAL;
 
     fprintf( stderr, "%s{\n", indent );
+
+    if( strtab )
+    {
+        fprintf( stderr, "%s    string table at %p, %d bytes\n",
+                 indent, strtab, strsiz );
+    }
+    else
+    {
+        fprintf( stderr, "%s    no string table?!\n", indent );
+    }
+
     for( entry = start + base;
          (entry->d_tag != DT_NULL) && ((void *)entry < (start + base + size));
          entry++ )

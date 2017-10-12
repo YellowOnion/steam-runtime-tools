@@ -230,18 +230,16 @@ reloc_type_name (int type)
 }
 
 int
-process_dt_rela (const void *start,
+process_dt_rela (const ElfW(Rela) *start,
                  int relasz,
                  const char *strtab,
-                 const void *symtab,
+                 const ElfW(Sym) *symtab,
                  void *base,
                  void *data)
 {
-    ElfW(Rela) *entry;
+    const ElfW(Rela) *entry;
 
-    for( entry = (ElfW(Rela) *)start;
-         entry < (ElfW(Rela) *)(start + relasz);
-         entry++ )
+    for( entry = start; entry < start + (relasz / sizeof(*entry)); entry++ )
     {
         int sym;
         int chr;
@@ -403,18 +401,16 @@ process_dt_rela (const void *start,
 }
 
 int
-process_dt_rel (const void *start,
+process_dt_rel (const ElfW(Rel) *start,
                 int relasz,
                 const char *strtab,
-                const void *symtab,
+                const ElfW(Sym) *symtab,
                 void *base,
                 void *data)
 {
-    ElfW(Rel) *entry;
+    const ElfW(Rel) *entry;
 
-    for( entry = (ElfW(Rel) *)start;
-         entry < (ElfW(Rel) *)(start + relasz);
-         entry++ )
+    for( entry = start; entry < start + (relasz / sizeof(*entry)); entry++ )
     {
         int sym;
         int chr;
@@ -595,8 +591,8 @@ int
 process_pt_dynamic (ElfW(Addr) start,
                     size_t size,
                     void *base,
-                    relocate_cb_t process_rela,
-                    relocate_cb_t process_rel,
+                    relocate_rela_cb_t process_rela,
+                    relocate_rel_cb_t process_rel,
                     void *data)
 {
     int ret = 0;
@@ -605,8 +601,7 @@ process_pt_dynamic (ElfW(Addr) start,
     int relasz     = -1;
     int jmprelsz   = -1;
     int jmpreltype = DT_NULL;
-    const void *relstart;
-    const void *symtab = NULL;
+    const ElfW(Sym) *symtab = NULL;
     const char *strtab = dynamic_section_find_strtab( base + start, base, NULL );
 
     DEBUG( DEBUG_ELF,
@@ -672,6 +667,8 @@ process_pt_dynamic (ElfW(Addr) start,
           case DT_RELA:
             if( process_rela != NULL )
             {
+                const ElfW(Rela) *relstart;
+
                 DEBUG( DEBUG_ELF, "processing DT_RELA section" );
                 if( relasz == -1 )
                 {
@@ -706,6 +703,8 @@ process_pt_dynamic (ElfW(Addr) start,
               case DT_REL:
                 if( process_rel != NULL )
                 {
+                    const ElfW(Rel) *relstart;
+
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_REL section" );
                     relstart = fix_addr( base, entry->d_un.d_ptr );
@@ -723,6 +722,8 @@ process_pt_dynamic (ElfW(Addr) start,
               case DT_RELA:
                 if( process_rela != NULL )
                 {
+                    const ElfW(Rela) *relstart;
+
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_RELA section" );
                     relstart = fix_addr( base, entry->d_un.d_ptr );

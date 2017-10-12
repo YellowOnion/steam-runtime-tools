@@ -85,8 +85,9 @@ find_ptr (ElfW(Addr) base, void *start, int what)
  *
  * Find the string table for the given dynamic section.
  *
- * Returns: The string table, a series of concatenated 0-terminated
- *  strings whose total size is written through @siz if non-%NULL
+ * Returns: (nullable): The string table, a series of concatenated
+ *  0-terminated strings whose total size is written through @siz if
+ *  non-%NULL, or %NULL if not found
  */
 const char *
 find_strtab (ElfW(Addr) base, void *start, int *siz)
@@ -108,6 +109,9 @@ find_strtab (ElfW(Addr) base, void *start, int *siz)
                 *siz = entry->d_un.d_val;
         }
     }
+
+    if (stab == 0)
+        return NULL;
 
     rval = (const char *) ( (stab < base) ? base + stab : stab );
 

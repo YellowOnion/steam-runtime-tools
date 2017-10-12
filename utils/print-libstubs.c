@@ -197,7 +197,7 @@ parse_dynamic (ElfW(Addr) base, ElfW(Dyn) *dyn)
     ElfW(Dyn) *entry   = NULL;
 
     start  = (void *) ((ElfW(Addr)) dyn - base);
-    strtab = find_strtab( base, (void *) start, NULL );
+    strtab = dynamic_section_find_strtab( dyn, (const void *) base, NULL );
 
     for( entry = dyn; entry->d_tag != DT_NULL; entry++ )
     {

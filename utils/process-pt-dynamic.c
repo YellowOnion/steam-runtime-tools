@@ -606,7 +606,7 @@ process_pt_dynamic (void *start,
     int jmpreltype = DT_NULL;
     void *relstart;
     const void *symtab = NULL;
-    const char *strtab = find_strtab( base, start, NULL );
+    const char *strtab = dynamic_section_find_strtab( base + start, (const void *) base, NULL );
 
     DEBUG( DEBUG_ELF,
            "start: %p; size: %"FMT_SIZE"; base: %p; handlers: %p %p; …",

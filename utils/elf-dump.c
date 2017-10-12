@@ -820,7 +820,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const void *symtab = NULL;
     const void *versym = NULL;
     const void *verdef = NULL;
-    const char *strtab = find_strtab( base, start, &strsiz );
+    const char *strtab = dynamic_section_find_strtab( start + base, (const void *) base, &strsiz );
     int tag_type = TTYPE_VAL;
 
     fprintf( stderr, "%s{\n", indent );

@@ -76,10 +76,9 @@ find_ptr (ElfW(Addr) base, void *start, int what)
 }
 
 /*
- * find_strtab:
+ * dynamic_section_find_strtab:
+ * @start: Array of dynamic section entries
  * @base: Starting address of the shared object in memory
- * @start: Offset of dynamic section (an array of ElfW(Dyn) structures)
- *  relative to @base
  * @siz: (out) (optional): Used to return the length of the string
  *  table
  *
@@ -90,14 +89,12 @@ find_ptr (ElfW(Addr) base, void *start, int what)
  *  non-%NULL, or %NULL if not found
  */
 const char *
-find_strtab (ElfW(Addr) base, void *start, int *siz)
+dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, int *siz)
 {
-    ElfW(Dyn) *entry;
-    const char *rval;
-
+    const ElfW(Dyn) *entry;
     ElfW(Addr) stab = 0;
 
-    for( entry = start + base; entry->d_tag != DT_NULL; entry++ )
+    for( entry = entries; entry->d_tag != DT_NULL; entry++ )
     {
         if( entry->d_tag == DT_STRTAB )
         {
@@ -111,11 +108,17 @@ find_strtab (ElfW(Addr) base, void *start, int *siz)
     }
 
     if (stab == 0)
+    {
         return NULL;
-
-    rval = (const char *) ( (stab < base) ? base + stab : stab );
-
-    return rval;
+    }
+    else if (stab < (ElfW(Addr)) base)
+    {
+        return base + stab;
+    }
+    else
+    {
+        return (const char *) stab;
+    }
 }
 
 /*

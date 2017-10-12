@@ -454,9 +454,6 @@ sub make_container_libc_overridable {
 
                     # Get the right implementation respecting hwcaps,
                     # and make it absolute.
-                    # TODO: This doesn't work for foreign architectures:
-                    # we would have to run a version of capsule-version
-                    # that is appropriate for the foreign architecture.
                     my $real = get_lib_implementation($tuple, $soname, $new_tree);
                     die "Cannot resolve $search/$soname in $new_tree" unless defined $real;
 

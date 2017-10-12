@@ -29,6 +29,23 @@
 // an issue (shouldn't affect the api or abi):
 #define DSO_LIMIT 256
 
+/*
+ * dso_needed_t:
+ * @fd: @path opened for reading (only valid after ld_lib_open())
+ * @name: The name we are looking for, either a bare SONAME or an
+ *  absolute path (only valid after ld_lib_open())
+ * @path: Absolute path to the library we need to load, including the
+ *  %CAPSULE_PREFIX if required (must be set before ld_lib_open())
+ * @requestors: `needed[i].requestors[j]` is 1 if `needed[j]`
+ *  depends on `needed[i]`
+ * @depcount: the number of libraries that this one depends on,
+ *  such that `needed[j].depcount` is the number of nonzero
+ *  `needed[i].requestors[j]` for each value of *i* where `needed[i]`
+ *  has not yet been loaded
+ * @dso: @fd opened for ELF inspection (only valid after ld_lib_open())
+ *
+ * A library that we need to load.
+ */
 typedef struct
 {
     int   fd;

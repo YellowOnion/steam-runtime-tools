@@ -188,7 +188,6 @@ static void
 parse_dynamic (ElfW(Addr) base, ElfW(Dyn) *dyn)
 {
 
-    int strsiz     = -1;
     int verdefnum  = -1;
     void *start    = NULL;
     const void *symtab = NULL;
@@ -198,7 +197,7 @@ parse_dynamic (ElfW(Addr) base, ElfW(Dyn) *dyn)
     ElfW(Dyn) *entry   = NULL;
 
     start  = (void *) ((ElfW(Addr)) dyn - base);
-    strtab = find_strtab( base, (void *) start, &strsiz );
+    strtab = find_strtab( base, (void *) start, NULL );
 
     for( entry = dyn; entry->d_tag != DT_NULL; entry++ )
     {

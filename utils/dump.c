@@ -815,7 +815,6 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const char *tag;
     ElfW(Dyn) *entry;
 
-    int strsiz     = -1;
     int relasz     = -1;
     int jmprelsz   = -1;
     int verneednum = -1;
@@ -825,7 +824,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const void *symtab = NULL;
     const void *versym = NULL;
     const void *verdef = NULL;
-    const char *strtab = find_strtab( base, start, &strsiz );
+    const char *strtab = find_strtab( base, start, NULL );
     int tag_type = TTYPE_VAL;
 
     fprintf( stderr, "%s{\n", indent );

@@ -601,13 +601,12 @@ process_pt_dynamic (void *start,
     int ret = 0;
     ElfW(Dyn) *entry;
 
-    int strsiz     = -1;
     int relasz     = -1;
     int jmprelsz   = -1;
     int jmpreltype = DT_NULL;
     void *relstart;
     const void *symtab = NULL;
-    const char *strtab = find_strtab( base, start, &strsiz );
+    const char *strtab = find_strtab( base, start, NULL );
 
     DEBUG( DEBUG_ELF,
            "start: %p; size: %"FMT_SIZE"; base: %p; handlers: %p %p; …",

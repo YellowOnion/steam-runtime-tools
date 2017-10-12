@@ -647,6 +647,8 @@ already_needed (dso_needed_t *needed, int requesting_idx, const char *name)
     {
         if( needed[i].name && strcmp( needed[i].name, name ) == 0)
         {
+            DEBUG( DEBUG_CAPSULE, "needed[%d] (%s) also needs needed[%d] (%s)",
+                   requesting_idx, needed[requesting_idx].name, i, name );
             needed[i].requestors[requesting_idx] = 1;
             return i;
         }
@@ -763,6 +765,9 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **error)
                 }
                 else
                 {
+                    LDLIB_DEBUG( ldlibs, DEBUG_CAPSULE,
+                                 "needed[%d] (%s) is the first to need needed[%d] (%s)",
+                                 idx, needed[idx].name, next, next_dso );
                     // record which DSO requested the new library we found:
                     needed[next].requestors[idx] = 1;
                     // now find the dependencies of our newest dependency:
@@ -947,8 +952,8 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
                 go++;
 
                 LDLIB_DEBUG( ldlibs, DEBUG_CAPSULE,
-                             "DLMOPEN %p %s %s",
-                             (void *)lm, _rtldstr(flag), path );
+                             "DLMOPEN needed[%d]: %p %s %s",
+                             j, (void *)lm, _rtldstr(flag), path );
 
                 // The actual dlmopen. If this was the first one, it may
                 // have created a new link map id, wich we record later on:
@@ -986,9 +991,21 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
                 // go through the map of DSOs and reduce the dependency
                 // count for any DSOs which had the current DSO as a dep:
                 for( int k = 0; k < DSO_LIMIT; k++ )
+                {
                     if( ldlibs->needed[j].requestors[k] )
+                    {
                         ldlibs->needed[k].depcount--;
+                        LDLIB_DEBUG( ldlibs, DEBUG_CAPSULE,
+                                     "needed[%d] (%s) dependency on \"%s\" "
+                                     "satisfied, %d more libraries needed",
+                                     k, ldlibs->needed[k].name, path,
+                                     ldlibs->needed[k].depcount );
+                    }
+                }
 
+                LDLIB_DEBUG( ldlibs, DEBUG_CAPSULE,
+                             "Forgetting about needed[%d] (%s)",
+                             j, ldlibs->needed[j].name );
                 clear_needed( &ldlibs->needed[j] );
             }
         }

@@ -48,6 +48,28 @@ B<gl.pl> [I<OPTIONS>] [I<COMMAND> [I<ARGUMENTS...>]]
 Run C<I<COMMAND> I<ARGUMENTS...>> in the container, or if no command
 is given, run B<glxinfo>(1) and make some assertions about its output.
 
+The GL stack is made available in the container as F</gl/lib/*>.
+This can either be the host system's GL stack (provided as symbolic
+links into F</gl-provider/{usr/,}lib*>), a different sysroot's GL stack (again
+provided as symbolic links into F</gl-provider/{usr/,}lib*>), a
+standalone GL stack (for example proprietary binaries), or a libcapsule
+shim that will load the real GL stack from F</gl-provider>.
+
+F</usr>, F</bin>, F</sbin>, F</lib*>, F</etc/alternatives> and
+F</etc/ld.so.cache> from the host system or a sysroot are always mounted
+at F</gl-provider>.
+
+Core libraries (glibc, libcapsule, libX11) are chosen to come from
+either the GL provider or the container, whichever has the newer
+version. If the GL provider's version is newer, F</updates/lib/*> is
+populated with symbolic links into F</gl-provider/lib*>.
+
+An application "payload" is mounted on F</app>, as if for Flatpak.
+
+The B<LD_LIBRARY_PATH> for the child process is made to include
+library directories from F</app>, F</gl> and F</updates>, but not
+F</gl-provider>.
+
 =head1 EXAMPLES
 
 =over
@@ -394,160 +416,40 @@ sub multiarch_tuple_to_ldso {
     }
 }
 
-=item make_container_libc_overridable(I<TMPDIR>, I<TREE>, I<TUPLES>)
+=item use_gl_provider_libc(I<GL_PROVIDER>, I<CONTAINER>, I<TUPLES>, I<DEST>)
 
-Create a copy of I<TREE> in I<TMPDIR> and modify it so that all
-libraries built by B<glibc>, including the dynamic linker B<ld.so>(8),
-are installed to F</libc/lib/I<TUPLE>/>. This allows the Standard C
-library to be overridden by mounting a different libc on F</libc>.
-
-I<TUPLES> is a reference to an array of the Debian multiarch tuples
-available in I<TREE>.
-
-Return the copy.
-
-=cut
-
-sub make_container_libc_overridable {
-    my $tmpdir = shift;
-    my $old_tree = shift;
-    my @multiarch_tuples = @{ shift() };
-    my $new_tree = "$tmpdir/tree";
-
-    diag 'Making container libc overridable';
-
-    if (-d "$old_tree/libc/lib") {
-        diag "Nothing to do, already overridable";
-        return $old_tree;
-    }
-
-    if (!run(['cp', '-a', $old_tree, $new_tree], '>&2')) {
-        BAIL_OUT "Unable to copy $old_tree";
-    }
-
-    make_path("$new_tree/libc/lib", verbose => 1);
-    make_path("$new_tree/etc", verbose => 1);
-    make_path("$new_tree/var/tmp", verbose => 1);
-    run(['touch', "$new_tree/libc/CONTAINER"]);
-    run(['touch', "$new_tree/etc/machine-id"]);
-    run(['touch', "$new_tree/etc/passwd"]);
-
-    foreach my $tuple (@multiarch_tuples) {
-        make_path("$new_tree/libc/lib/$tuple", verbose => 1);
-
-        my $ldso = multiarch_tuple_to_ldso($tuple);
-        my $libdir;
-
-        if (defined $ldso) {
-            (undef, $libdir, undef) = File::Spec->splitpath($ldso);
-        }
-
-        foreach my $lib (qw(BrokenLocale SegFault anl c cidn crypt dl m
-            memusage mvec nsl pcprofile pthread resolv rt thread_db util)) {
-            SEARCH: foreach my $search ("/lib/$tuple", $libdir) {
-                next SEARCH unless defined $search;
-                next SEARCH unless -d "$new_tree$search";
-
-                opendir(my $dir, "$new_tree$search");
-                SONAME: while (defined(my $soname = readdir $dir)) {
-                    next SONAME unless $soname =~ m/^lib\Q$lib\E\.so\.[0-9.]+$/;
-
-                    # Get the right implementation respecting hwcaps,
-                    # and make it absolute.
-                    my $real = get_lib_implementation($tuple, $soname, $new_tree);
-                    die "Cannot resolve $search/$soname in $new_tree" unless defined $real;
-
-                    if ($real !~ m{^/libc}) {
-                        if (! -d "$new_tree/usr") {
-                            $real =~ s{^/usr/}{/};
-                        }
-                        diag("Renaming $new_tree$real → $new_tree/libc/lib/$tuple/$soname");
-                        rename("$new_tree$real",
-                            "$new_tree/libc/lib/$tuple/$soname");
-                    }
-                    { no autodie; unlink("$new_tree$search/$soname"); }
-                    diag "Creating symbolic link $new_tree$search/$soname → /libc/lib/$tuple/$soname";
-                    symlink("/libc/lib/$tuple/$soname", "$new_tree$search/$soname");
-                }
-                closedir($dir);
-            }
-        }
-
-        if (defined $ldso) {
-            SEARCH: foreach my $search ("/lib/$tuple", $libdir) {
-                next SEARCH unless defined $search;
-                next SEARCH unless -d "$new_tree$search";
-
-                opendir(my $dir, "$new_tree$search");
-                MEMBER: while (defined(my $member = readdir $dir)) {
-                    next MEMBER unless $member =~ m/^ld-.*\.so\./;
-
-                    my $value = readlink "$new_tree$search/$member";
-                    next MEMBER if ($value =~ m{^/libc/});
-
-                    my $real;
-                    run_in_container($new_tree,
-                        ['readlink', '-f', "$search/$member"],
-                        '>', \$real)
-                        or die "Cannot resolve $search/$member in $new_tree";
-                    chomp $real;
-
-                    if ($real !~ m{^/libc/}) {
-                        if (! -d "$new_tree/usr") {
-                            $real =~ s{^/usr/}{/};
-                        }
-                        diag("Renaming $new_tree$real → $new_tree/libc/lib/$tuple/$member");
-                        rename("$new_tree$real",
-                            "$new_tree/libc/lib/$tuple/$member");
-                    }
-                    { no autodie; unlink("$new_tree$search/$member"); }
-                    { no autodie; unlink("$new_tree$ldso"); }
-                    diag "Creating symbolic link $new_tree$search/$member → /libc/lib/$tuple/$member";
-                    symlink("/libc/lib/$tuple/$member", "$new_tree$search/$member");
-                    diag "Creating symbolic link $new_tree$ldso → /libc/lib/$tuple/$member";
-                    symlink("/libc/lib/$tuple/$member", "$new_tree$ldso");
-                }
-                closedir($dir);
-            }
-        }
-    }
-
-    return $new_tree;
-}
-
-=item capture_gl_provider_libc(I<TREE>, I<TUPLES>)
-
-Populate a new temporary directory with symbolic links to the B<glibc>
+Populate I<DEST> with symbolic links to the B<glibc>
 in I<TREE>, assuming that I<TREE> will be mounted on F</gl-provider>,
-such that I<TREE> can be mounted over F</libc> in a container that
-has been modified by C<make_container_libc_overridable>.
+such that I<DEST> can be mounted at F</updates>.
 
 For example, on x86_64 systems, the returned directory will contain
 symbolic links F<lib/x86_64-linux-gnu/ld-linux-x86-64.so> →
 F</gl-provider/lib/x86_64-linux-gnu/ld-linux-x86-64.so>
 and
 F<lib/x86_64-linux-gnu/libc.so.6> →
-F</gl-provider/lib/x86_64-linux-gnu/libc.so.6>.
+F</gl-provider/lib/x86_64-linux-gnu/libc.so.6>, among others.
 
 I<TUPLES> is a reference to an array of Debian multiarch tuples.
 
-Return the newly created directory.
+Return the necessary B<bwrap>(1) arguments to override the container's
+B<ld.so>(1) with the one from the GL provider.
 
 =cut
 
-sub capture_gl_provider_libc {
-    my $tree = shift;
+sub use_gl_provider_libc {
+    my $gl_provider_tree = shift;
+    my $container_tree = shift;
     my @multiarch_tuples = @{ shift() };
-    my $libc = File::Temp->newdir(
-        TMPDIR => 1, TEMPLATE => 'capsule-test-libc-XXXXXXXX');
+    my $dest = shift;
+    my @bwrap;
 
-    diag 'Capturing GL provider libc';
+    diag "Capturing GL provider libc into $dest";
 
-    make_path("$libc/lib", verbose => 1);
-    run(['touch', "$libc/GL-PROVIDER"]);
+    make_path("$dest/lib", verbose => 1);
+    run(['touch', "$dest/GL-PROVIDER"]);
 
     foreach my $tuple (@multiarch_tuples) {
-        make_path("$libc/lib/$tuple", verbose => 1);
+        make_path("$dest/lib/$tuple", verbose => 1);
 
         my $ldso = multiarch_tuple_to_ldso($tuple);
         my $libdir;
@@ -560,51 +462,63 @@ sub capture_gl_provider_libc {
             memusage mvec nsl pcprofile pthread resolv rt thread_db util)) {
             SEARCH: foreach my $search ("/lib/$tuple", $libdir) {
                 next SEARCH unless defined $search;
-                next SEARCH unless -d "$tree$search";
+                next SEARCH unless -d "$gl_provider_tree$search";
 
-                opendir(my $dir, "$tree$search");
+                opendir(my $dir, "$gl_provider_tree$search");
                 SONAME: while (defined(my $soname = readdir $dir)) {
                     next SONAME unless $soname =~ m/^lib\Q$lib\E\.so\.[0-9.]+$/;
 
                     # Get the right implementation respecting hwcaps,
                     # and make it absolute.
-                    my $real = get_lib_implementation($tuple, $soname, $tree);
-                    die "Cannot resolve $search/$soname in $tree" unless defined $real;
+                    my $real = get_lib_implementation($tuple, $soname, $gl_provider_tree);
+                    die "Cannot resolve $search/$soname in $gl_provider_tree" unless defined $real;
 
-                    { no autodie; unlink("$libc/lib/$tuple/$soname"); }
-                    diag "Creating symbolic link $libc/lib/$tuple/$soname → /gl-provider$real";
-                    symlink("/gl-provider$real", "$libc/lib/$tuple/$soname");
+                    { no autodie; unlink("$dest/lib/$tuple/$soname"); }
+                    diag "Creating symbolic link $dest/lib/$tuple/$soname → /gl-provider$real";
+                    symlink("/gl-provider$real", "$dest/lib/$tuple/$soname");
                 }
                 closedir($dir);
             }
         }
 
         if (defined $ldso) {
+            my $has_usr = (-d "$container_tree/usr");
+            my %realpaths;
+
             SEARCH: foreach my $search ("/lib/$tuple", $libdir) {
                 next SEARCH unless defined $search;
-                next SEARCH unless -d "$tree$search";
+                next SEARCH unless -d "$container_tree$search";
 
-                opendir(my $dir, "$tree$search");
+                opendir(my $dir, "$container_tree$search");
                 MEMBER: while (defined(my $member = readdir $dir)) {
                     next MEMBER unless $member =~ m/^ld-.*\.so\./;
 
                     my $real;
-                    run_in_container($tree,
+                    run_in_container($container_tree,
                         ['readlink', '-f', "$search/$member"],
                         '>', \$real)
-                        or die "Cannot resolve $search/$member in $tree";
+                        or die "Cannot resolve $search/$member in $container_tree";
                     chomp $real;
 
-                    { no autodie; unlink("$libc/lib/$tuple/$member"); }
-                    diag "Creating symbolic link $libc/lib/$tuple/$member → /gl-provider/lib/$tuple/$member";
-                    symlink("/gl-provider/lib/$tuple/$member", "$libc/lib/$tuple/$member");
+                    $realpaths{$real} = 1;
                 }
                 closedir($dir);
+            }
+
+            foreach my $real (keys %realpaths) {
+                if ($has_usr) {
+                    diag "Adding bind-mount of $ldso over /usr$real because /lib{,64} will be symlinks";
+                    push @bwrap, '--ro-bind', $ldso, "/usr$real";
+                }
+                else {
+                    diag "Adding bind-mount of $ldso over $real";
+                    push @bwrap, '--ro-bind', $ldso, $real;
+                }
             }
         }
     }
 
-    return $libc;
+    return @bwrap;
 }
 
 =item capture_gl_provider_libs_if_newer(I<GL_PROVIDER>, I<CONTAINER>|B<undef>, I<TUPLES>, I<DEST>, I<LIBS>)
@@ -816,7 +730,6 @@ my $container_libc_so = get_lib_implementation($multiarch_tuples[0],
 
 my $tmpdir = File::Temp->newdir(
         TMPDIR => 1, TEMPLATE => 'capsule-test-temp-XXXXXXXX');
-$container_tree = make_container_libc_overridable($tmpdir, $container_tree, \@multiarch_tuples);
 
 my @bwrap = qw(
     bwrap
@@ -885,18 +798,19 @@ my (undef, undef, $gl_provider_libc_version) =
 my (undef, undef, $container_libc_version) =
     File::Spec->splitpath($container_libc_so);
 
+my $gl_provider_updates = "$tmpdir/updates";
+
 if (versioncmp($container_libc_version, $gl_provider_libc_version) <= 0) {
     # We need to parachute in the GL provider's libc instead of the
     # container's, because the GL provider's libX11, libGL etc. would
     # be within their rights to use newer libc features; we also need
     # the GL provider's ld.so, because old ld.so can't necessarily load
     # new libc successfully
-    diag "${ansi_bright}${ansi_green}Using GL provider's libc ".
-        "$gl_provider_libc_version because container's ".
+    diag "${ansi_bright}${ansi_green}Adding GL provider's libc ".
+        "$gl_provider_libc_version via /updates because container's ".
         "$container_libc_version appears older or equal${ansi_reset}";
-    $gl_provider_libc = capture_gl_provider_libc($gl_provider_tree,
-        \@multiarch_tuples);
-    push @bwrap, '--ro-bind', $gl_provider_libc, '/libc';
+    push @bwrap, use_gl_provider_libc($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $gl_provider_updates);
 }
 else {
     diag "${ansi_bright}${ansi_cyan}Using container's libc ".
@@ -967,29 +881,23 @@ else {
     push @bwrap, '--ro-bind', $gl_provider_gl, '/gl';
 }
 
-# Parachute in the GL provider's X libraries, because they go with the
-# graphics stack, and libX11/libxcb assume there is only one instance.
-# Do the same for libelf which is needed by libcapsule, and for
-# libcapsule itself.
-my $gl_provider_updates = "$tmpdir/updates";
+# These are libraries that can't have more than one instance in use.
+# They also need to appear in libGL.so.1.excluded, so that the capsule
+# won't load the GL-provider copy if the container copy is newer.
+diag 'Adding singleton libraries from GL provider, if newer...';
 
-# TODO: Is there any circumstance under which we'd skip this block?
-do {
-    diag 'Adding singleton libraries from GL provider, if newer...';
+capture_gl_provider_libs_if_newer($gl_provider_tree, $container_tree,
+    \@multiarch_tuples, $gl_provider_updates,
+    [qw(X11 X11-xcb capsule elf xcb xcb-dri2 xcb-dri3 xcb-glx
+        xcb-present xcb-sync xcb-xfixes
+        Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
+        )]);
 
-    capture_gl_provider_libs_if_newer($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $gl_provider_updates,
-        [qw(X11 X11-xcb capsule elf xcb xcb-dri2 xcb-dri3 xcb-glx
-            xcb-present xcb-sync xcb-xfixes
-            Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
-            )]);
+foreach my $tuple (@multiarch_tuples) {
+    push @ld_path, "/updates/lib/$tuple";
+}
 
-    foreach my $tuple (@multiarch_tuples) {
-        push @ld_path, "/updates/lib/$tuple";
-    }
-
-    push @bwrap, '--ro-bind', $gl_provider_updates, '/updates';
-};
+push @bwrap, '--ro-bind', $gl_provider_updates, '/updates';
 
 if (@ld_path) {
     push @bwrap, '--setenv', 'LD_LIBRARY_PATH', join(':', @ld_path);

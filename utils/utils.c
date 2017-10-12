@@ -89,7 +89,7 @@ find_ptr (ElfW(Addr) base, void *start, int what)
  *  non-%NULL, or %NULL if not found
  */
 const char *
-dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, int *siz)
+dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, size_t *siz)
 {
     const ElfW(Dyn) *entry;
     ElfW(Addr) stab = 0;

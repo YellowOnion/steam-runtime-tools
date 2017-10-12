@@ -73,7 +73,7 @@ ElfW(Addr)        fix_addr (ElfW(Addr) base, ElfW(Addr) addr);
 const ElfW(Dyn) * find_dyn (ElfW(Addr) base, void *start, int what);
 int               find_value (ElfW(Addr) base, void *start, int what);
 ElfW(Addr)        find_ptr (ElfW(Addr) base, void *start, int what);
-const char *      dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, int *siz);
+const char *      dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, size_t *siz);
 const ElfW(Sym) * find_symbol (int idx,
                                const ElfW(Sym) *stab,
                                const char *str,

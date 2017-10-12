@@ -809,7 +809,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const char *tag;
     ElfW(Dyn) *entry;
 
-    int strsiz     = -1;
+    size_t strsiz  = -1;
     int relasz     = -1;
     int relsz      = -1;
     int jmprelsz   = -1;
@@ -827,7 +827,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
     if( strtab )
     {
-        fprintf( stderr, "%s    string table at %p, %d bytes\n",
+        fprintf( stderr, "%s    string table at %p, %zu bytes\n",
                  indent, strtab, strsiz );
     }
     else

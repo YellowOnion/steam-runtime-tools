@@ -113,9 +113,9 @@ wrap (const char *name,
         debug_flags = debug_flags | DEBUG_RELOCS;
 
     // install any required wrappers inside the capsule:
-    process_pt_dynamic( (void *)start, // offset from phdr to dyn section
+    process_pt_dynamic( start,  // offset from phdr to dyn section
                         0,      //  fake size value
-                        base,   //  address of phdr in memory
+                        (void *) base,   //  address of phdr in memory
                         process_dt_rela,
                         process_dt_rel,
                         &rdata );

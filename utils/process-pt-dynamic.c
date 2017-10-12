@@ -16,6 +16,7 @@
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <dlfcn.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -32,14 +33,14 @@
 
 static void *
 #if __ELF_NATIVE_CLASS == 32
-addr (ElfW(Addr) base, ElfW(Addr) ptr, ElfW(Sword) addend)
+addr (void *base, ElfW(Addr) offset, ElfW(Sword) addend)
 #elif __ELF_NATIVE_CLASS == 64
-addr (ElfW(Addr) base, ElfW(Addr) ptr, ElfW(Sxword) addend)
+addr (void *base, ElfW(Addr) offset, ElfW(Sxword) addend)
 #else
 #error "Unsupported __ELF_NATIVE_CLASS size (not 32 or 64)"
 #endif
 {
-    return (void *)(base + ptr + addend);
+    return base + offset + addend;
 }
 
 
@@ -233,7 +234,7 @@ process_dt_rela (const void *start,
                  int relasz,
                  const char *strtab,
                  const void *symtab,
-                 ElfW(Addr)  base,
+                 void *base,
                  void *data)
 {
     ElfW(Rela) *entry;
@@ -406,7 +407,7 @@ process_dt_rel (const void *start,
                 int relasz,
                 const char *strtab,
                 const void *symtab,
-                ElfW(Addr)  base,
+                void *base,
                 void *data)
 {
     ElfW(Rel) *entry;
@@ -591,33 +592,34 @@ process_dt_rel (const void *start,
  * relocations using the given callbacks.
  */
 int
-process_pt_dynamic (void *start,
+process_pt_dynamic (ElfW(Addr) start,
                     size_t size,
-                    ElfW(Addr) base,
+                    void *base,
                     relocate_cb_t process_rela,
                     relocate_cb_t process_rel,
                     void *data)
 {
     int ret = 0;
-    ElfW(Dyn) *entry;
-
+    const ElfW(Dyn) *entries;
+    const ElfW(Dyn) *entry;
     int relasz     = -1;
     int jmprelsz   = -1;
     int jmpreltype = DT_NULL;
-    void *relstart;
+    const void *relstart;
     const void *symtab = NULL;
-    const char *strtab = dynamic_section_find_strtab( base + start, (const void *) base, NULL );
+    const char *strtab = dynamic_section_find_strtab( base + start, base, NULL );
 
     DEBUG( DEBUG_ELF,
-           "start: %p; size: %"FMT_SIZE"; base: %p; handlers: %p %p; …",
-           start, size, (void *)base, process_rela, process_rel );
-    DEBUG( DEBUG_ELF, "dyn entry: %p", start + base );
+           "start: %#" PRIxPTR "; size: %" FMT_SIZE "; base: %p; handlers: %p %p; …",
+           start, size, base, process_rela, process_rel );
+    entries = base + start;
+    DEBUG( DEBUG_ELF, "dyn entry: %p", entries );
 
     DEBUG( DEBUG_ELF,
            "strtab is at %p: %s", strtab, strtab ? "…" : "");
 
     // Do a first pass to find the bits we'll need later
-    for( entry = start + base;
+    for( entry = entries;
          (entry->d_tag != DT_NULL) &&
            ((size == 0) || ((void *)entry < (start + base + size)));
          entry++ ) {
@@ -629,7 +631,7 @@ process_pt_dynamic (void *start,
             break;
 
           case DT_SYMTAB:
-            symtab = fix_addr( (const void *) base, entry->d_un.d_ptr );
+            symtab = fix_addr( base, entry->d_un.d_ptr );
             DEBUG( DEBUG_ELF, "symtab is %p", symtab );
             break;
 
@@ -654,7 +656,7 @@ process_pt_dynamic (void *start,
         }
     }
 
-    for( entry = start + base;
+    for( entry = entries;
          (entry->d_tag != DT_NULL) &&
            ((size == 0) || ((void *)entry < (start + base + size)));
          entry++ ) {
@@ -676,7 +678,7 @@ process_pt_dynamic (void *start,
                     fprintf( stderr, "libcapsule: DT_RELA section not accompanied by DT_RELASZ, ignoring" );
                     break;
                 }
-                relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
+                relstart = fix_addr( base, entry->d_un.d_ptr );
                 process_rela( relstart, relasz, strtab, symtab, base, data );
             }
             else
@@ -706,7 +708,7 @@ process_pt_dynamic (void *start,
                 {
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_REL section" );
-                    relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
+                    relstart = fix_addr( base, entry->d_un.d_ptr );
                     DEBUG( DEBUG_ELF, "  -> REL entry #0 at %p", relstart );
                     ret = process_rel( relstart, jmprelsz, strtab,
                                        symtab, base, data );
@@ -723,7 +725,7 @@ process_pt_dynamic (void *start,
                 {
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_RELA section" );
-                    relstart = (void *) fix_addr( (const void *) base, entry->d_un.d_ptr );
+                    relstart = fix_addr( base, entry->d_un.d_ptr );
                     ret = process_rela( relstart, jmprelsz, strtab,
                                         symtab, base, data );
                 }

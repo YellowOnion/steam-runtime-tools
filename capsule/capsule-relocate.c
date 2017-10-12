@@ -61,9 +61,9 @@ process_phdr (struct dl_phdr_info *info,
 
     for( int j = 0; !ret && (j < info->dlpi_phnum); j++ )
         if( info->dlpi_phdr[j].p_type == PT_DYNAMIC )
-            ret = process_pt_dynamic( (void *) info->dlpi_phdr[j].p_vaddr,
+            ret = process_pt_dynamic( info->dlpi_phdr[j].p_vaddr,
                                       info->dlpi_phdr[j].p_memsz,
-                                      info->dlpi_addr,
+                                      (void *) info->dlpi_addr,
                                       process_dt_rela,
                                       process_dt_rel,
                                       rdata );

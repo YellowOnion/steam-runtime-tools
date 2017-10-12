@@ -46,7 +46,7 @@ typedef struct
  * @relasz: number of bytes (not number of structs!) following @start
  * @strtab: string table, a series of 0-terminated strings concatenated
  * @symtab: symbol table, an array of ElfW(Sym) structs
- * @base: base address ???
+ * @base: base address of the shared object
  * @data: the same data that was passed to process_pt_dynamic()
  *
  * Callback used to iterate over relocations.
@@ -55,26 +55,26 @@ typedef int (*relocate_cb_t)(const void *start,
                              const int relasz,
                              const char *strtab,
                              const void *symtab,
-                             ElfW(Addr)  base,
+                             void *base,
                              void *data);
 
 int process_dt_rela (const void *start,
                      const int relasz,
                      const char *strtab,
                      const void *symtab,
-                     ElfW(Addr)  base,
+                     void *base,
                      void *data);
 
 int process_dt_rel  (const void *start,
                      const int relasz,
                      const char *strtab,
                      const void *symtab,
-                     ElfW(Addr)  base,
+                     void *base,
                      void *data);
 
-int process_pt_dynamic (void *start,
+int process_pt_dynamic (ElfW(Addr) start,
                         size_t size,
-                        ElfW(Addr) base,
+                        void *base,
                         relocate_cb_t process_rela,
                         relocate_cb_t process_rel,
                         void *data);

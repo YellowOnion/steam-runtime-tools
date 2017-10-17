@@ -740,7 +740,7 @@ my @bwrap = qw(
     --proc /proc
     --ro-bind /sys /sys
 );
-push @bwrap, '--dir', $ENV{HOME};
+push @bwrap, '--bind', $ENV{HOME}, $ENV{HOME};
 
 push @bwrap, '--tmpfs', '/tmp';
 push @bwrap, '--tmpfs', '/var/tmp';

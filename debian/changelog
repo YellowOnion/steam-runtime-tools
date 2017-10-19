@@ -1,6 +1,6 @@
-libcapsule (0.0-1) UNRELEASED; urgency=medium
+libcapsule (0.20171019.0-0co1) upstream; urgency=medium
 
+  [ Vivek Das Mohapatra ]
   * Initial release
 
- -- Vivek Das Mohapatra <vivek@collabora.com>  Fri, 07 Jul 2017 16:11:37 +0100
-
+ -- Simon McVittie <smcv@collabora.com>  Thu, 19 Oct 2017 16:18:55 +0100

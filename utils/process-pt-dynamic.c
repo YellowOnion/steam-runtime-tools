@@ -62,9 +62,11 @@ try_relocation (ElfW(Addr) *reloc_addr, const char *name, void *data)
                "relocation for %s (%p->{ %p }, %p, %p)",
                name, reloc_addr, NULL, (void *)map->shim, (void *)map->real );
 
-        // couldn't look up the address of the shim function. buh?
-        if( !map->shim )
-            return 1;
+        // we used to check for the shim address here but it's possible
+        // that we can't look it up if the proxy library was dlopen()ed
+        // in which case map->shim will be null.
+        // this turns out not to be a problem as we only need it when
+        // working around RELRO linking, which doesn't apply to dlopen()
 
         // sought after symbols is not available in the private namespace
         if( !map->real )

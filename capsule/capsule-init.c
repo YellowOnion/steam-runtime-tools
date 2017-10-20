@@ -3,6 +3,16 @@
 #include "utils/utils.h"
 #include <stdlib.h>
 #include <dlfcn.h>
+dlsymfunc capsule_dl_symbol = NULL;
+dlopnfunc capsule_dl_open   = NULL;
+
+static void __attribute__ ((constructor)) _init_capsule (void)
+{
+    capsule_dl_symbol = dlsym( RTLD_DEFAULT, "dlsym"  );
+    capsule_dl_open   = dlsym( RTLD_DEFAULT, "dlopen" );
+
+}
+
 
 capsule
 capsule_init (Lmid_t namespace,
@@ -18,8 +28,6 @@ capsule_init (Lmid_t namespace,
     handle->prefix     = prefix;
     handle->exclude    = exclude;
     handle->exported   = exported;
-    handle->get_symbol = dlsym( RTLD_DEFAULT, "dlsym"  );
-    handle->load_dso   = dlsym( RTLD_DEFAULT, "dlopen" );
 
     // in principle we should be able to make both reloc calls
     // efficient in the same do-not-redo-your-work way, but for

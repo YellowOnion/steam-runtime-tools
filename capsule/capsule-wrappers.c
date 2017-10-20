@@ -23,7 +23,7 @@ void *
 capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
 {
     DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
-    void *addr = cap->get_symbol( cap->dl_handle, symbol );
+    void *addr = NULL;
 
     if( addr )
     {
@@ -39,9 +39,8 @@ capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
     if( addr == NULL )
     {
         DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
-               "symbol %s not found or not exportable, fall back to default",
-               symbol );
-        addr = cap->get_symbol( handle, symbol );
+               "symbol %s not found: fall back to default", symbol );
+        addr = capsule_dl_symbol ( handle, symbol );
     }
 
     return addr;
@@ -53,10 +52,9 @@ capsule_external_dlopen(const capsule cap, const char *file, int flag)
     void *handle = NULL;
     char *error  = NULL;
 
-    if( cap->load_dso )
+    if( capsule_dl_open )
     {
-        fprintf( stderr, "dlopen<%p>( %s, %d )\n", cap->load_dso, file, flag );
-        handle = cap->load_dso( file, flag );
+        handle = capsule_dl_open ( file, flag | RTLD_NODELETE );
     }
     else
     {

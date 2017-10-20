@@ -204,15 +204,15 @@ static int relocate (const capsule cap,
 
     // no source dl handle means we must have a pre-populated
     // map of shim-to-real function pointers in `relocations',
-    // otherwise populate the map using dlsym():
+    // otherwise populate the map using [the real] dlsym():
     if( cap->dl_handle )
         for( map = cap->relocations; map->name; map++ )
         {
             if( !map->shim )
-                map->shim = (ElfW(Addr)) dlsym( RTLD_DEFAULT, map->name );
+                map->shim = (ElfW(Addr)) capsule_dl_symbol( RTLD_DEFAULT, map->name );
 
             if( !map->real )
-                map->real = (ElfW(Addr)) dlsym( cap->dl_handle, map->name );
+                map->real = (ElfW(Addr)) capsule_dl_symbol( cap->dl_handle, map->name );
         }
 
     // time to enter some sort of ... dangerous... zone:

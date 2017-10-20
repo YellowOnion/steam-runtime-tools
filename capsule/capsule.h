@@ -334,3 +334,4 @@ _CAPSULE_PUBLIC
 char *capsule_get_prefix(const char *dflt, const char *soname);
 
 _CAPSULE_PUBLIC
+capsule_item capsule_external_dl_relocs[];

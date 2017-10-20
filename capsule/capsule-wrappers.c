@@ -9,6 +9,14 @@
 #include <string.h>
 #include <errno.h>
 
+capsule_item capsule_external_dl_relocs[] =
+{
+  { "dlopen",
+    (capsule_addr) capsule_external_dlopen ,
+    (capsule_addr) capsule_external_dlopen },
+  { NULL }
+};
+
 static int
 dso_is_exported (const char *dsopath, char **exported)
 {

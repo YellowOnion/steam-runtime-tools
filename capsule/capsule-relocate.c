@@ -249,7 +249,7 @@ static int relocate (const capsule cap,
 int
 capsule_relocate (const capsule cap, capsule_item *relocations, char **error)
 {
-    DEBUG( DEBUG_RELOCS, "\nRELOC ALL" );
+    DEBUG( DEBUG_RELOCS, "beginning global symbol relocation:" );
     return relocate( cap, relocations, NULL, cap->seen.all, 1, error );
 }
 
@@ -264,8 +264,7 @@ capsule_relocate_except (const capsule cap,
     if( debug_flags & DEBUG_DLFUNC )
         debug_flags |= DEBUG_RELOCS;
 
-    DEBUG( DEBUG_RELOCS, "\nRELOC SOME" );
-
+    DEBUG( DEBUG_RELOCS, "beginning restricted symbol relocation:" );
     int rv = relocate( cap, relocations, except, cap->seen.some, 0, error );
 
     debug_flags = df;

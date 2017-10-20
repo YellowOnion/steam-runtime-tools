@@ -83,6 +83,7 @@ capsule_external_dlopen(const char *file, int flag)
     {
         fprintf( stderr,
                  "capsule_external_dlopen() has no dlopen() implementation\n" );
+        abort();
     }
 
     if( handle != NULL )
@@ -90,7 +91,7 @@ capsule_external_dlopen(const char *file, int flag)
         unsigned long df = debug_flags;
 
         if( debug_flags & DEBUG_DLFUNC )
-            debug_flags = DEBUG_RELOCS|DEBUG_SEARCH;
+            debug_flags |= DEBUG_RELOCS;
         // This may not even be necessary, so it should not be fatal.
         // We do want to log it though as it might be an important clue:
         for( size_t n = 0; n < capsule_manifest->next; n++ )

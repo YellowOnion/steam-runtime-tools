@@ -10,9 +10,9 @@
 #include <errno.h>
 
 static int
-dso_is_exported (const char *dsopath, const char **exported)
+dso_is_exported (const char *dsopath, char **exported)
 {
-    for( const char **ex = exported; ex && *ex; ex++ )
+    for( char **ex = exported; ex && *ex; ex++ )
         if( soname_matches_path( *ex, dsopath ) )
             return 1;
 
@@ -20,20 +20,35 @@ dso_is_exported (const char *dsopath, const char **exported)
 }
 
 void *
-capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
+capsule_external_dlsym (void *handle, const char *symbol)
 {
     DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
     void *addr = NULL;
 
-    if( addr )
+    for( size_t n = 0; n < capsule_manifest->next; n++ )
     {
-        Dl_info dso = { 0 };
+        capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+        addr = capsule_dl_symbol ( m->handle->dl_handle, symbol );
 
-        // only keep addr from the capsule if it's from an exported DSO:
-        // or if we are unable to determine where it came from (what?)
-        if( dladdr( addr, &dso ) )
-            if( !dso_is_exported( dso.dli_fname, cap->exported ) )
-                addr = NULL;
+        if( addr )
+        {
+            Dl_info dso = { 0 };
+
+            // only keep addr from the capsule if it's from an exported DSO:
+            // or if we are unable to determine where it came from (what?)
+            if( dladdr( addr, &dso ) )
+            {
+                if( !dso_is_exported( dso.dli_fname, m->combined_export ) )
+                    addr = NULL;
+
+                DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+                       "symbol %s is from soname %s - %s",
+                       symbol, dso.dli_fname, addr ? "OK" : "Ignored" );
+
+                if( addr )
+                    break;
+            }
+        }
     }
 
     if( addr == NULL )
@@ -47,7 +62,7 @@ capsule_external_dlsym (capsule cap, void *handle, const char *symbol)
 }
 
 void *
-capsule_external_dlopen(const capsule cap, const char *file, int flag)
+capsule_external_dlopen(const char *file, int flag)
 {
     void *handle = NULL;
     char *error  = NULL;
@@ -70,11 +85,30 @@ capsule_external_dlopen(const capsule cap, const char *file, int flag)
             debug_flags = DEBUG_RELOCS|DEBUG_SEARCH;
         // This may not even be necessary, so it should not be fatal.
         // We do want to log it though as it might be an important clue:
-        if( capsule_relocate( cap, NULL, &error ) != 0 )
+        for( size_t n = 0; n < capsule_manifest->next; n++ )
         {
-            fprintf( stderr, "relocation after dlopen(%s, …) failed: %s\n",
-                     file, error );
-            free( error );
+            capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+            const capsule c = m->handle;
+
+            if( capsule_relocate( c, NULL, &error ) != 0 )
+            {
+                fprintf( stderr,
+                         "relocation from %s after dlopen(%s, …) failed: %s\n",
+                         m->soname, file, error );
+                free( error );
+            }
+
+            if( capsule_relocate_except( c,
+                                         m->dl_wrappers,
+                                         (const char **)m->combined_nowrap,
+                                         &error ) != 0 )
+            {
+                fprintf( stderr,
+                         "dl-wrapper relocation from %s after "
+                         "dlopen(%s, …) failed: %s\n",
+                         m->soname, file, error );
+                free( error );
+            }
         }
 
         debug_flags = df;
@@ -93,17 +127,12 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
     DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
            "dlopen(%s, %x) wrapper: LMID: %ld; prefix: %s;",
-           file, flag, cap->namespace, cap->prefix );
+           file, flag, cap->meta->namespace, cap->meta->active_prefix );
 
     if( cap->prefix && strcmp(cap->prefix, "/") )
     {
-        if( !ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags,
-                           &code, &errors ) )
-        {
-            DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
-                   "ld_libs_init: error %d: %s", code, errors );
-            goto cleanup;
-        }
+        ld_libs_init( &ldlibs, (const char **)cap->meta->combined_exclude,
+                      cap->prefix, debug_flags, &code, &errors );
 
         if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache", &code, &errors ) )
         {
@@ -131,7 +160,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         }
 
         // load them up in reverse dependency order:
-        res = ld_libs_load( &ldlibs, &cap->namespace, flag, &code, &errors );
+        res = ld_libs_load( &ldlibs, &cap->meta->namespace, flag, &code, &errors );
 
         if( !res )
             DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
@@ -141,7 +170,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
     }
     else // no prefix: straightforward dlmopen into our capsule namespace:
     {
-        res = dlmopen( cap->namespace, file, flag );
+        res = dlmopen( cap->meta->namespace, file, flag );
 
         if( !res )
             DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,

@@ -68,29 +68,57 @@ struct _capsule_item
 };
 
 /**
- * capsule_init:
- * @namespace: An #Lmid_t value. (usually %LM_ID_NEWLM)
- * @prefix: The mount point of the foreign tree in wich to find DSOs
+ * capsule_metadata:
+ * @namespace: #Lmid_t value for the namespace used for this capsule
+ * @soname: The soname of the encapsulated library
+ * @default_prefix: The default root location of the filesystem from which the
+ *                  encapsulated library should be loaded
  * @exclude: (array zero-terminated=1): an array of char *, each
  *           specifying a DSO not to load, terminated by a %NULL entry
- * @exported: An array of DSO names considered to ba valid symbol sources
+ * @export: (array zero-terminated=1): an array of char *, each
+ *          specifying a DSO whose symbols should be exported from this
+ *          capsule
+ * @nowrap: (array zero-terminated=1): an array of char *, each specifying
+ *          a DSO whose dlopen() implementation should _not_ be wrapped
+ *          should typically contain the libc cluster and the capsule proxy
+ *          library itself
+ *
+ * This struct allows libcapsule proxy libraries to statically declare
+ * metadata about themselves that libcapsule needs at link time in order
+ * to function properly.
+ */
+typedef struct _capsule_metadata capsule_metadata;
+
+struct _capsule_metadata
+{
+    /*< public >*/
+    Lmid_t namespace;
+    const char   *soname;
+    const char   *default_prefix;
+    const char  **exclude;
+    const char  **export;
+    const char  **nowrap;
+    capsule_item *dl_wrappers;
+    /*< private >*/
+    char   *active_prefix;
+    char  **combined_exclude;
+    char  **combined_export;
+    char  **combined_nowrap;
+    capsule handle;
+};
+
+/**
+ * capsule_init:
+ * @soname: the soname of the target library
  *
  * Returns: a #capsule handle.
  *
  * Does any initialisation necessary to use libcapsule's functions.
  * Currently just initialises the debug flags from the CAPSULE_DEBUG
  * environment variable.
- *
- * The #Lmid_t value @namespace should normally be %LM_ID_NEWLM
- * to create a new namespace.
- *
- * An empty ("") or void (%NULL) @prefix is equivalent to "/".
  */
 _CAPSULE_PUBLIC
-capsule capsule_init (Lmid_t namespace,
-                      const char *prefix,
-                      const char **exclude,
-                      const char **exported);
+capsule capsule_init (const char *soname);
 
 /**
  * capsule_relocate:
@@ -230,7 +258,6 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
 
 /**
  * capsule_external_dlsym:
- * @cap: A dl handle as returned by capsule_load()
  * @handle: A dl handle, as passed to dlsym()
  * @symbol: A symbol name, as passed to dlsym()
  *
@@ -246,17 +273,64 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
  *
  * Instead we must intercept dlsym() calls made outside the capsule
  * and attempt to look for the required symbol in the namespace defined
- * by @capsule first - If the required symbol is found there AND is
- * from one of the DSO names present in @exported then that symbol is
- * returned. If either of those conditions is not met then a normal
- * dlsym call with the passed handle is made.
+ * by the active capsules first - If the required symbol is found there
+ * AND is from one of the DSO names present in the exported list then that
+ * symbol is returned. If either of those conditions is not met then
+ * a normal dlsym call with the passed handle is made.
  *
  * This function provides the functionality described above, and is
- * intended for use in a suitable wrapper implemented in the the shim
- * library.
+ * normally used automaticaly by libcapsule. It is exposed as API in
+ * case a libcapsule proxy library needs to do its own specialised
+ * symbol lookups.
  */
 _CAPSULE_PUBLIC
-void *capsule_external_dlsym (capsule cap, void *handle, const char *symbol);
+void *capsule_external_dlsym (void *handle, const char *symbol);
+
+/**
+ * capsule_external_dlopen:
+ * @file: A soname, filename or path as passed to dlopen()
+ * @flag: The dl flags, as per dlopen()
+ *
+ * Returns: a void * handle, as per dlopen()
+ *
+ * This wrapper is meant to be replace normal calls to dlopen() made by the
+ * main program or a non-capsule library - it is necessary because en ELF
+ * object loaded by dlopen() may need us to trigger the capsule_relocate()
+ * operation in order to make sure its GOT entries are correctly updated.
+ *
+ * This wrapper carries out a normal dlopen() and then re-triggers the
+ * initial capsule_relocate() call immediately, before returning
+ * the same value that dlopen() would have, given the same @file and @flag
+ * arguments.
+ */
+_CAPSULE_PUBLIC
+void *capsule_external_dlopen(const char *file, int flag);
+
+/**
+ * capsule_get_prefix:
+ * @dflt: A default capsule prefix path
+ * @soname: The soname of the library we are encapsulating
+ *
+ * Returns: A newly allocated char * pointing to the prefix path
+ *
+ * libcapsule provides a proxy to a library, potentially from a foreign
+ * filesystem tree (found at, for example, ‘/host’).
+ *
+ * Since it is useful for this location to be overrideable at startup
+ * on a per-target-library basis this function standardises the prefix
+ * selection algorithm as follows:
+ *
+ * - An environment variable based on @soname:
+ *   libGL.so.1 would map to CAPSULE_LIBGL_SO_1_PREFIX
+ * - If that is unset, the CAPSULE_PREFIX environment variable
+ * - Next: The default to the value passed in @dflt
+ * - And if all that failed, NULL (which is internally equivalent to "/")
+ *
+ * Although the value is newly allocated it will typically be cached
+ * in a structure that needs to survive the entire lifespan of the
+ * running program, so freeing it is unlikely to be a concern.
+ **/
+_CAPSULE_PUBLIC
+char *capsule_get_prefix(const char *dflt, const char *soname);
 
 _CAPSULE_PUBLIC
-void *capsule_external_dlopen(const capsule cap, const char *file, int flag);

@@ -241,8 +241,62 @@ capsule_load (const capsule cap,
 {
     void *ret = NULL;
     ld_libs_t ldlibs = {};
+    capsule_metadata *cm = NULL;
 
-    if( !ld_libs_init( &ldlibs, cap->exclude, cap->prefix, debug_flags, errcode, error ) )
+    // if we were passed a default new-namespace flag see
+    // if we've already established a namespace for this
+    // filesystem prefix in the global cache and use that:
+    DEBUG( DEBUG_CAPSULE, "requested namespace %ld for %s (newlm: %d)",
+           *namespace, dso, LM_ID_NEWLM );
+    if( *namespace == LM_ID_NEWLM )
+    {
+        // first fetch the subcapsule metadata for this specific
+        // target DSO if it exists:
+        for( size_t n = 0; n < capsule_manifest->next; n++ )
+        {
+            capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+            DEBUG( DEBUG_CAPSULE, "checking metadata %d for %p, %s",
+                   n, m, m ? m->soname : "---" );
+
+            if( !m || strcmp( dso, m->soname ) )
+                continue;
+
+            cm = m;
+            break;
+        }
+
+        DEBUG( DEBUG_CAPSULE, "metadata %p found for %s (LM: %ld)",
+               cm, cm->soname, cm->namespace );
+
+        // next, if we have subcapsule metadata, see if there's
+        // a Lmid_t value alrady allocated for it:
+        if( cm && cm->namespace == LM_ID_NEWLM )
+            for( size_t n = 0; n < capsule_manifest->next; n++ )
+            {
+                capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+
+                // this subcapsule is for a different prefix. skip it:
+                //DEBUG( DEBUG_CAPSULE, "checking prefix match: %p vs %p",
+                //       cap->prefix, m->active_prefix );
+                if( strcmp( cap->prefix, m->active_prefix ) )
+                    continue;
+
+                // we found a pre-allocated Lmid_t. Use it:
+                if( m->namespace != LM_ID_NEWLM )
+                {
+                    DEBUG( DEBUG_CAPSULE, "re-using LM: %ld from %s",
+                           m->namespace, m->soname );
+                    *namespace = cm->namespace = m->namespace;
+                    break;
+                }
+            }
+    }
+
+    ld_libs_init( &ldlibs,
+                  (const char **) cap->meta->combined_exclude,
+                  cap->meta->active_prefix, debug_flags, errcode, error );
+
+    if( errcode && *errcode )
         return NULL;
 
     // ==================================================================
@@ -273,7 +327,11 @@ capsule_load (const capsule cap,
     // ==================================================================
     // load the stack of DSOs we need:
     ret = ld_libs_load( &ldlibs, namespace, 0, errcode, error );
-    cap->namespace = *namespace;
+
+    cap->meta->namespace = *namespace;
+
+    if( cm )
+        cm->namespace = *namespace;
 
     if( debug_flags & DEBUG_CAPSULE )
     {
@@ -287,7 +345,9 @@ capsule_load (const capsule cap,
     // TODO: failure in the dlopen fixup phase should probably be fatal:
     if( ret      != NULL && // no errors so far
         wrappers != NULL )  // have a dlopen fixup function
-        install_wrappers( ret, wrappers, cap->exclude, errcode, error );
+        install_wrappers( ret, wrappers,
+                          (const char **)cap->meta->combined_exclude,
+                          errcode, error );
 
     cap->dl_handle = ret;
 

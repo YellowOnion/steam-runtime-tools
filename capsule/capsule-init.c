@@ -2,40 +2,408 @@
 #include "capsule/capsule-private.h"
 #include "utils/utils.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <dlfcn.h>
+#include <string.h>
+#include <ctype.h>
+#include <sys/param.h>
+
+#define CAP_ENV_PREFIX "CAPSULE_"
+
+#define DUMP_STRV(what, css) \
+    ({ int _i = 0; for( char **_c = css; _c && *_c; _c++, _i++ ) \
+            DEBUG( DEBUG_CAPSULE, "  ->%s[ %02d ]: %s", #what, _i, *_c ); })
+
+#define DUMP_METADATA(x,m) ({  \
+        DEBUG( DEBUG_CAPSULE, "\nMETADATA #%d\n", x );     \
+        DEBUG( DEBUG_CAPSULE, "                        \n" \
+              "struct _capsule_metadata %p"          "\n"  \
+              "{"                                    "\n"  \
+              "  Lmid_t namespace;              %ld" "\n"  \
+              "  const char  *soname;           %s"  "\n"  \
+              "  const char  *default_prefix;   %s"  "\n"  \
+              "  char        *active_prefix;    %s"  "\n"  \
+              "  const char **exclude;          %p"  "\n"  \
+              "  const char **export;           %p"  "\n"  \
+              "  const char **nowrap;           %p"  "\n"  \
+              "  char **combined_exclude;       %p"  "\n"  \
+              "  char **combined_export;        %p"  "\n"  \
+              "  char **combined_nowrap;        %p"  "\n"  \
+              "};"                                   "\n", \
+              m,                                           \
+              m->namespace        ,                        \
+              m->soname           ,                        \
+              m->default_prefix   ,                        \
+              m->active_prefix    ,                        \
+              m->exclude          ,                        \
+              m->export           ,                        \
+              m->nowrap           ,                        \
+              m->combined_exclude ,                        \
+              m->combined_export  ,                        \
+              m->combined_nowrap  ); })
+
+typedef struct _tree_data
+{
+    const char *prefix;
+    ptr_list *list;
+} tree_data;
+
+static ptr_list *tree_exclusions = NULL;
+static ptr_list *tree_exports    = NULL;
+static ptr_list *tree_nowrap     = NULL;
+
+ptr_list *capsule_manifest  = NULL;
 dlsymfunc capsule_dl_symbol = NULL;
 dlopnfunc capsule_dl_open   = NULL;
 
-static void __attribute__ ((constructor)) _init_capsule (void)
+static int ptr_equal (const void *a, const void *b)
 {
-    capsule_dl_symbol = dlsym( RTLD_DEFAULT, "dlsym"  );
-    capsule_dl_open   = dlsym( RTLD_DEFAULT, "dlopen" );
-
+    return (a == b) ? 1 : 0;
 }
 
-
-capsule
-capsule_init (Lmid_t namespace,
-              const char *prefix,
-              const char **exclude,
-              const char **exported)
+static int str_equal (const void *a, const void *b)
 {
-    capsule handle = xcalloc( 1, sizeof(struct _capsule) );
+    if( a == b )
+        return 1;
+
+    if( !a || !b )
+        return 0;
+
+    return strcmp( (char *)a, (char *)b ) == 0;
+}
+
+static tree_data *
+get_prefix_data (const char *prefix, ptr_list **cache)
+{
+    tree_data *td;
+
+    if( *cache == NULL )
+        *cache = ptr_list_alloc( 4 );
+
+    for( size_t x = 0; x < (*cache)->next; x++ )
+    {
+        td = ptr_list_nth_ptr( *cache, x );
+
+        if( !td || strcmp( prefix, td->prefix ) )
+            continue;
+
+        return td;
+    }
+
+    td = calloc( 1, sizeof(tree_data) );
+
+    td->prefix      = prefix;
+    td->list        = ptr_list_alloc( 4 );
+
+    ptr_list_push_ptr( *cache, td );
+
+    return td;
+}
+
+static tree_data *
+get_excludes (const char *prefix)
+{
+    return get_prefix_data( prefix, &tree_exclusions );
+}
+
+static tree_data *
+get_exports (const char *prefix)
+{
+    return get_prefix_data( prefix, &tree_exports );
+}
+
+static tree_data *
+get_nowrap (const char *prefix)
+{
+    return get_prefix_data( prefix, &tree_nowrap );
+}
+
+static void
+get_capsule_metadata (struct link_map *map, ptr_list *info, const char *only)
+{
+    ElfW(Addr) base = map->l_addr;
+    ElfW(Dyn) *dyn  = map->l_ld;
+    ElfW(Dyn) *entry;
+    ElfW(Sym) *symbol;
+
+    const void *strtab = NULL;
+    const void *symtab = NULL;
+
+    if( map->l_name == NULL || *map->l_name == '\0' )
+        return;
+
+    for( entry = dyn; entry->d_tag != DT_NULL; entry++ )
+    {
+        switch( entry->d_tag )
+        {
+          case DT_SYMTAB:
+            symtab = (const void *) fix_addr( (void *)base, entry->d_un.d_ptr );
+            break;
+
+          case DT_STRTAB:
+            strtab = (const void *) fix_addr( (void *)base, entry->d_un.d_ptr );
+            break;
+
+          default:
+            break;
+        }
+    }
+
+    if( !strtab || !symtab )
+        return;
+
+    for( symbol = (ElfW(Sym) *)symtab;
+         ( (ELFW_ST_TYPE(symbol->st_info) < STT_NUM) &&
+           (ELFW_ST_BIND(symbol->st_info) < STB_NUM) );
+         symbol++ )
+    {
+        capsule_metadata *meta = NULL;
+        char *name = (char *)strtab + symbol->st_name;
+
+        if( !name || strcmp( "capsule_meta", name ) )
+            continue;
+
+        meta = (capsule_metadata *)fix_addr( (void *)base, symbol->st_value );
+
+        // if we were asked for a specific soname's meta data then ignore
+        // everything else:
+        if( only && strcmp( only, meta->soname ) )
+            continue;
+
+        meta->namespace = LM_ID_NEWLM;
+
+        if( meta->active_prefix )
+            free( meta->active_prefix );
+
+        meta->active_prefix =
+          capsule_get_prefix( meta->default_prefix, meta->soname );
+
+        ptr_list_add_ptr( info, meta, ptr_equal );
+        DEBUG( DEBUG_CAPSULE, "found metatdata for %s … %s at %p",
+               meta->active_prefix, meta->soname, meta );
+        break;
+    }
+}
+
+static char **
+cook_list (tree_data *tx)
+{
+    char **cooked = calloc( tx->list->next + 1, sizeof(char *) );
+
+    for( size_t j = 0; j < tx->list->next; j++ )
+        *(cooked + j) = (char *)ptr_list_nth_ptr( tx->list, j );
+
+    *(cooked + tx->list->next) = NULL;
+
+    return cooked;
+}
+
+static void
+add_new_strings_to_ptrlist (ptr_list *list, const char **strings)
+{
+    for( char **c = (char **)strings; c && *c; c++ )
+        ptr_list_add_ptr( list, *c, str_equal );
+}
+
+static void
+free_strv (char **strv)
+{
+    if( !strv )
+        return;
+
+    free( strv );
+}
+
+static void
+update_metadata (const char *match)
+{
+    struct link_map *map;
+    void *handle;
+
+    handle = dlmopen( LM_ID_BASE, NULL, RTLD_LAZY|RTLD_NOLOAD );
+    dlinfo( handle, RTLD_DI_LINKMAP, &map );
+
+    // we're not guaranteed to be at the start of the link map chain:
+    while( map->l_prev )
+        map = map->l_prev;
+
+    // pick up any capsule metadata we can see:
+    // if the soname (match) is NULL, this means _all_ metadata,
+    // otherwise just the metadata that is string-equal:
+    if (map->l_next)
+        for( struct link_map *m = map; m; m = m->l_next )
+            get_capsule_metadata( m, capsule_manifest, match );
+
+    // merge the string lists for each active prefix:
+    // ie all excludes for /host should be in one exclude list,
+    // all nowrap entries for /host should bein another list, all
+    // excludes for /badgerbadger should be in another, etc etc:
+    for( size_t i = 0; i < capsule_manifest->next; i++ )
+    {
+        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+        tree_data *tx = get_excludes( cm->active_prefix );
+        tree_data *te = get_exports ( cm->active_prefix );
+        tree_data *tn = get_nowrap  ( cm->active_prefix );
+
+        add_new_strings_to_ptrlist( tx->list, cm->exclude );
+        add_new_strings_to_ptrlist( te->list, cm->export  );
+        add_new_strings_to_ptrlist( tn->list, cm->nowrap  );
+    }
+
+    // now squash the meta data ptr_lists into char** that
+    // the underlying infrastructure actually uses:
+    for( size_t i = 0; i < capsule_manifest->next; i++ )
+    {
+        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+        tree_data *tx = get_excludes( cm->active_prefix );
+        tree_data *te = get_exports ( cm->active_prefix );
+        tree_data *tn = get_nowrap  ( cm->active_prefix );
+
+        free_strv( cm->combined_exclude );
+        free_strv( cm->combined_export  );
+        free_strv( cm->combined_nowrap  );
+
+        cm->combined_exclude = cook_list( tx );
+        cm->combined_export  = cook_list( te );
+        cm->combined_nowrap  = cook_list( tn );
+    }
+}
+
+static void __attribute__ ((constructor)) _init_capsule (void)
+{
+    capsule_manifest = ptr_list_alloc( 16 );
 
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 
-    handle->namespace  = namespace;
-    handle->prefix     = prefix;
-    handle->exclude    = exclude;
-    handle->exported   = exported;
+    update_metadata( NULL );
 
+    capsule_dl_symbol = dlsym( RTLD_DEFAULT, "dlsym"  );
+    capsule_dl_open   = dlsym( RTLD_DEFAULT, "dlopen" );
+
+    if( !(debug_flags & DEBUG_CAPSULE) )
+        return;
+
+    for( unsigned int x = 0; x < capsule_manifest->next; x++ )
+    {
+        capsule_metadata *cm = capsule_manifest->loc[ x ].ptr;
+        const char **soname = cm->exclude;
+
+        DEBUG( DEBUG_CAPSULE, "[%02d] %s metadata:\n", x, cm->soname );
+
+        while( soname && *soname )
+            fprintf( stderr, "    %s\n", *(soname++) );
+    }
+}
+
+char *
+capsule_get_prefix (const char *dflt, const char *soname)
+{
+    char env_var[PATH_MAX] = CAP_ENV_PREFIX;
+    const size_t offs = strlen( CAP_ENV_PREFIX );
+    size_t x = 0;
+    char *prefix = NULL;
+
+    for( ; (x < strlen(soname)) && (x + offs < PATH_MAX); x++ )
+    {
+        char c = *(soname + x);
+
+        env_var[ x + offs ] = isalnum( c ) ? toupper( c ) : '_';
+    }
+
+    safe_strncpy( &env_var[ x + offs ], "_PREFIX", PATH_MAX - (x + offs + 1) );
+    env_var[ PATH_MAX - 1 ] = '\0';
+
+    fprintf(stderr, "checking %s\n", &env_var[0] );
+    if( (prefix = secure_getenv( &env_var[0] )) )
+    {
+        DEBUG( DEBUG_SEARCH, "Capsule prefix is %s: %s", &env_var[0], prefix );
+        return strdup( prefix );
+    }
+
+    fprintf(stderr, "checking %s\n", CAP_ENV_PREFIX "PREFIX" );
+    if( (prefix = secure_getenv( CAP_ENV_PREFIX "PREFIX" )) )
+    {
+        DEBUG( DEBUG_SEARCH, "Capsule prefix is "CAP_ENV_PREFIX"PREFIX: %s",
+               prefix );
+        return strdup( prefix );
+    }
+
+    if( dflt )
+    {
+        DEBUG( DEBUG_SEARCH, "Capsule prefix is built-in: %s", dflt );
+        return strdup( dflt );
+    }
+
+    DEBUG( DEBUG_SEARCH, "Capsule prefix is missing" );
+    return NULL;
+}
+
+static capsule_metadata *
+get_cached_metadata (const char *soname)
+{
+    size_t i = 0;
+    capsule_metadata *meta = NULL;
+
+    for( size_t n = 0; n < capsule_manifest->next; n++ )
+    {
+        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, n );
+
+        if( !cm || strcmp( cm->soname, soname ) )
+            continue;
+
+        i = n;
+        meta = cm;
+        break;
+    }
+
+    if(meta)
+        DUMP_METADATA(i, meta);
+
+    return meta;
+}
+
+capsule
+capsule_init (const char *soname)
+{
+    capsule handle = xcalloc( 1, sizeof(struct _capsule) );
+    capsule_metadata *meta = NULL;
+
+    meta = get_cached_metadata( soname );
+
+    if( !meta )
+    {
+        DEBUG( DEBUG_CAPSULE, "no metadata for %s registered: "
+               "may be a dlopened capsule", soname );
+        DEBUG( DEBUG_CAPSULE, "updating capsule metadata" );
+        update_metadata( soname );
+        meta = get_cached_metadata( soname );
+    }
+
+    if( meta )
+    {
+        handle->prefix  = meta->active_prefix;
+
+        for( size_t i = 0; i < capsule_manifest->next; i++ )
+        {
+            capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+            DEBUG( DEBUG_CAPSULE, " ");
+            DUMP_METADATA( i, cm );
+            DUMP_STRV( excluded, cm->combined_exclude );
+            DUMP_STRV( exported, cm->combined_export  );
+            DUMP_STRV( nowrap,   cm->combined_nowrap  );
+        }
+    }
     // in principle we should be able to make both reloc calls
     // efficient in the same do-not-redo-your-work way, but for
     // some reason the unrestricted relocation breaks if we turn
     // this one on. setting the tracker to NULL disables for now.
-    handle->seen.all  = NULL;
+    handle->seen.all  = ptr_list_alloc( 32 );
     handle->seen.some = ptr_list_alloc( 32 );
+
+    // poke the initialised metadata back into the handle
+    // and vice versa:
+    handle->meta = meta;
+    meta->handle = handle;
 
     return handle;
 }
-

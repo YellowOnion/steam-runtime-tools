@@ -60,10 +60,15 @@ typedef struct ptr_list
     ptr_item *loc;
 } ptr_list;
 
+typedef int (*ptrcmp) (const void *a, const void *b);
+
 ptr_list *ptr_list_alloc (size_t size);
+void *ptr_list_nth_ptr (ptr_list *list, size_t nth);
 void ptr_list_free (ptr_list *list);
-void ptr_list_push (ptr_list *list, ElfW(Addr) addr);
-int ptr_list_contains (ptr_list *list, ElfW(Addr) addr);
+void ptr_list_push_ptr  (ptr_list *list, void *ptr);
+void ptr_list_push_addr (ptr_list *list, ElfW(Addr) addr);
+int  ptr_list_contains  (ptr_list *list, ElfW(Addr) addr);
+int  ptr_list_add_ptr   (ptr_list *list, void *ptr, ptrcmp equals);
 
 char *safe_strncpy (char *dest, const char *src, size_t n);
 int   resolve_link (const char *prefix, char *path, char *dir);

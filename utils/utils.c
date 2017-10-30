@@ -321,7 +321,7 @@ ptr_list_free (ptr_list *list)
 }
 
 void
-ptr_list_push (ptr_list *list, ElfW(Addr) addr)
+ptr_list_push_addr (ptr_list *list, ElfW(Addr) addr)
 {
     if( list->next >= list->allocated )
     {
@@ -331,6 +331,38 @@ ptr_list_push (ptr_list *list, ElfW(Addr) addr)
     }
 
     list->loc[ list->next++ ].addr = addr;
+}
+
+
+void
+ptr_list_push_ptr (ptr_list *list, void *ptr)
+{
+    if( list->next >= list->allocated )
+    {
+        list->loc = realloc( list->loc,
+                             (list->allocated + 16) * sizeof(ptr_item) );
+        if( !list->loc )
+        {
+            fprintf( stderr, "failed to realloc ptr_list\n" );
+            abort();
+        }
+
+        list->allocated += 16;
+    }
+
+    list->loc[ list->next++ ].ptr = ptr;
+}
+
+int
+ptr_list_add_ptr (ptr_list *list, void *ptr, ptrcmp equals)
+{
+    for( size_t n = 0; n < list->next; n++ )
+        if( equals( list->loc[ n ].ptr, ptr ) )
+            return 0;
+
+    ptr_list_push_ptr( list, ptr );
+
+    return 1;
 }
 
 int
@@ -343,6 +375,15 @@ ptr_list_contains (ptr_list *list, ElfW(Addr) addr)
         if( list->loc[ n ].addr == addr )
             return 1;
     return 0;
+}
+
+void *
+ptr_list_nth_ptr (ptr_list *list, size_t nth)
+{
+    if( nth < list->next )
+        return list->loc[ nth ].ptr;
+
+    return NULL;
 }
 
 void

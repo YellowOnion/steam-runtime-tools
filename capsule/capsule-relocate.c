@@ -69,7 +69,7 @@ process_phdr (struct dl_phdr_info *info,
                                       rdata );
 
     if( ret == 0 && rdata->seen != NULL )
-        ptr_list_push( rdata->seen, info->dlpi_addr );
+        ptr_list_push_addr( rdata->seen, info->dlpi_addr );
 
     return ret;
 }

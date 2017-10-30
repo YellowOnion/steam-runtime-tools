@@ -132,6 +132,7 @@ base=${target%%.so.*};
 base=${base%.so};
 name=${base#lib};
 lcbase=${base,,};
+amname=${name//-/_};
 
 dest=${3:-$base-proxy};
 

@@ -21,13 +21,14 @@ The generated library will have the same name as the main proxy target
 (@TARGET@). You can control the exact version number (cf libfoo.x.y.z)
 by setting CAPSULE_VERSION_@TARGET@ in Makefile.am
 
-To make the generated library override dlopen() and/or dlsym() for
-callers outside the capsule, pass --ext-dlopen and/or --ext-dlsym to
-capsule-mkstublib by setting the AM_CAPSULE_MKSTUBLIB_FLAGS variable in
-Makefile.am. If libcapsule's standard implementations of those functions
-are not suitable, copy capsule/_ext_dlopen.h, capsule/_ext_dlsym.h
-from libcapsule's development files into shim/capsule/, modify them
-as necessary, and add them to EXTRA_DIST in Makefile.am.
+To make the generated library override dlopen() for callers outside the
+capsule, pass --ext-dlopen to capsule-mkstublib by setting the
+AM_CAPSULE_MKSTUBLIB_FLAGS variable in Makefile.am.
+
+If libcapsule's standard implementations of that function
+is not suitable, copy capsule/_ext_dlopen.h from libcapsule's
+development files into shim/capsule/, modify it as necessary,
+and add it to EXTRA_DIST in Makefile.am.
 
 Similarly, if libcapsule's standard implementation of dlopen() for
 callers inside the capsule is not suitable, copy and modify

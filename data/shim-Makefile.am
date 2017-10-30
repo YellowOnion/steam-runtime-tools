@@ -9,7 +9,7 @@ AM_CFLAGS       += $(CAPSULE_CFLAGS)
 
 CAPSULE_SONAMES := @TARGET@
 CAPSULE_VERSION_@TARGET@ := @VER@
-#AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen --ext-dlsym
+#AM_CAPSULE_MKSTUBLIB_FLAGS := --ext-dlopen
 
 lib_LTLIBRARIES = lib@LIB@.la
 

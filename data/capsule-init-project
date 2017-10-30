@@ -135,6 +135,7 @@ lcbase=${base,,};
 amname=${name//-/_};
 
 dest=${3:-$base-proxy};
+maj=0;
 
 : "${PKG_CONFIG:=pkg-config}"
 : "${CAPSULE_MKINC:="$($PKG_CONFIG --variable=makeinc capsule)"}"
@@ -146,6 +147,8 @@ dest=${3:-$base-proxy};
 if [ -z "$ver" ]; then
     read x x ver x < <("$CAPSULE_VERSION_TOOL" "$target" "$search_tree");
 fi
+
+maj=${ver%%.*};
 
 echo Generating project for $runtime_tree : $target $ver proxy;
 

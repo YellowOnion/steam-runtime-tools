@@ -200,33 +200,6 @@ shim/capsule/_ext_dlopen.h
   }
 
 ----------------------------------------------------------------------------
-shim/capsule/_ext_dlsym.h
-
-  This file is not created or used by default. It can be enabled by
-  adding --ext-dlsym to AM_CAPSULE_MKSTUBLIB_FLAGS in Makefile.am.
-
-  When external DSOs call dlsym() they may expect to find symbols
-  which haven't explicitly been exported by the capsule. The wrapper in
-  this file should take care of exposing only the subset of symbols
-  you want to make available in this way.
-
-  If this is enabled by --ext-dlsym but the file is not present,
-  a default implementation provided by libcapsule is used:
-  See libcapsule's <capsule/_ext_dlsym.h> for that implementation:
-
-  The default implementation above takes care of exposing only those
-  symbols located in the libraries explicitly listed in .shared (or
-  the main target library).
-
-  To use a custom implementation, create the file and implement a
-  function with the same signature:
-
-  static void *_ext_dlsym (void *handle, const char *symbol)
-  {
-    ⋮
-  }
-
-----------------------------------------------------------------------------
 That's it - you should be ready to:
 
   ./configure

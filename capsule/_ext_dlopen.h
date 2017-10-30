@@ -21,5 +21,5 @@
 // your shim library and modify as needed.
 static void *_ext_dlopen (const char *filename, int flag)
 {
-    return capsule_external_dlopen( cap, filename, flag );
+    return capsule_external_dlopen( filename, flag );
 }

@@ -601,6 +601,7 @@ process_pt_dynamic (ElfW(Addr) start,
     const ElfW(Dyn) *entries;
     const ElfW(Dyn) *entry;
     int relasz     = -1;
+    int relsz      = -1;
     int jmprelsz   = -1;
     int jmpreltype = DT_NULL;
     const ElfW(Sym) *symtab = NULL;
@@ -635,6 +636,11 @@ process_pt_dynamic (ElfW(Addr) start,
           case DT_RELASZ:
             relasz = entry->d_un.d_val;
             DEBUG( DEBUG_ELF, "relasz is %d", relasz );
+            break;
+
+          case DT_RELSZ:
+            relsz = entry->d_un.d_val;
+            DEBUG( DEBUG_ELF, "relsz is %d", relsz );
             break;
 
           case DT_PLTREL:
@@ -684,6 +690,26 @@ process_pt_dynamic (ElfW(Addr) start,
             {
                 DEBUG( DEBUG_ELF,
                        "skipping DT_RELA section: no handler" );
+            }
+            break;
+
+          case DT_REL:
+            if( process_rel != NULL )
+            {
+                const ElfW(Rel) *relstart;
+
+                DEBUG( DEBUG_ELF, "processing DT_REL section" );
+                if( relsz == -1 )
+                {
+                    fprintf( stderr, "libcapsule: DT_REL section not accompanied by DT_RELSZ, ignoring" );
+                    break;
+                }
+                relstart = fix_addr( base, entry->d_un.d_ptr );
+                process_rel( relstart, relsz, strtab, symtab, base, data );
+            }
+            else
+            {
+                DEBUG( DEBUG_ELF, "skipping DT_REL section: no handler" );
             }
             break;
 
@@ -746,12 +772,6 @@ process_pt_dynamic (ElfW(Addr) start,
                 ret = 1;
                 break;
             }
-
-          case DT_REL:
-            // TODO: Does this only appear in a DT_JMPREL dynamic section
-            // in practice?
-            DEBUG( DEBUG_ELF, "Ignoring DT_REL dynamic section entry tag (bug?)" );
-            break;
 
           default:
             DEBUG( DEBUG_ELF, "Ignoring unknown dynamic section entry tag %d (0x%x)",

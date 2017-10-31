@@ -110,7 +110,7 @@ sub uniq {
 run_ok(['env', "CAPSULE_PREFIX=/", @libcapsule_environment,
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
-my @symbols_produced = sort(split /\n/, $output);
+my @symbols_produced = grep { !/capsule_meta\b/ } sort(split /\n/, $output);
 foreach my $sym (@symbols_produced) {
     diag "- $sym";
 }
@@ -121,6 +121,7 @@ if ($symbols_produced[0] eq $symbols_produced[1]) {
         is_deeply \@symbols_wanted, \@symbols_produced;
     }
 }
+
 is_deeply \@symbols_wanted, [uniq @symbols_produced];
 
 # Make sure the symbols list appears older than the shared list.
@@ -192,7 +193,7 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 run_ok(['env', "CAPSULE_PREFIX=/", @libcapsule_environment,
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
-@symbols_produced = sort(split /\n/, $output);
+@symbols_produced = grep { !/^capsule_meta\b/ } sort(split /\n/, $output);
 foreach my $sym (@symbols_produced) {
     diag "- $sym";
 }

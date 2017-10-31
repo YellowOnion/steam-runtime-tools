@@ -926,7 +926,7 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
               char **message)
 {
     int go;
-    Lmid_t lm = (*namespace > 0) ? *namespace : LM_ID_NEWLM;
+    Lmid_t lm = (*namespace >= 0) ? *namespace : LM_ID_NEWLM;
     void *ret = NULL;
 
     if( !flag )

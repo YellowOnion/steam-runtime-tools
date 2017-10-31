@@ -295,7 +295,7 @@ int main (int argc, char **argv)
     char *message = NULL;
     ld_libs_t ldlibs = {};
     int error = 0;
-    Lmid_t ns = LM_ID_NEWLM;
+    Lmid_t ns = LM_ID_BASE;
     void *handle;
 
     if( argc < 2 )

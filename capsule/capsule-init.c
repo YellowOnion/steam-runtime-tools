@@ -171,6 +171,7 @@ get_capsule_metadata (struct link_map *map, ptr_list *info, const char *only)
             continue;
 
         meta->namespace = LM_ID_NEWLM;
+        meta->closed    = 0;
 
         if( meta->active_prefix )
             free( meta->active_prefix );
@@ -241,6 +242,10 @@ update_metadata (const char *match)
     for( size_t i = 0; i < capsule_manifest->next; i++ )
     {
         capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+
+        if( cm->closed )
+            continue;
+
         tree_data *tx = get_excludes( cm->active_prefix );
         tree_data *te = get_exports ( cm->active_prefix );
         tree_data *tn = get_nowrap  ( cm->active_prefix );
@@ -255,6 +260,10 @@ update_metadata (const char *match)
     for( size_t i = 0; i < capsule_manifest->next; i++ )
     {
         capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+
+        if( cm->closed )
+            continue;
+
         tree_data *tx = get_excludes( cm->active_prefix );
         tree_data *te = get_exports ( cm->active_prefix );
         tree_data *tn = get_nowrap  ( cm->active_prefix );
@@ -313,14 +322,14 @@ capsule_get_prefix (const char *dflt, const char *soname)
     safe_strncpy( &env_var[ x + offs ], "_PREFIX", PATH_MAX - (x + offs + 1) );
     env_var[ PATH_MAX - 1 ] = '\0';
 
-    fprintf(stderr, "checking %s\n", &env_var[0] );
+    DEBUG( DEBUG_CAPSULE, "checking %s\n", &env_var[0] );
     if( (prefix = secure_getenv( &env_var[0] )) )
     {
         DEBUG( DEBUG_SEARCH, "Capsule prefix is %s: %s", &env_var[0], prefix );
         return strdup( prefix );
     }
 
-    fprintf(stderr, "checking %s\n", CAP_ENV_PREFIX "PREFIX" );
+    DEBUG( DEBUG_CAPSULE, "checking %s\n", CAP_ENV_PREFIX "PREFIX" );
     if( (prefix = secure_getenv( CAP_ENV_PREFIX "PREFIX" )) )
     {
         DEBUG( DEBUG_SEARCH, "Capsule prefix is "CAP_ENV_PREFIX"PREFIX: %s",
@@ -348,7 +357,7 @@ get_cached_metadata (const char *soname)
     {
         capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, n );
 
-        if( !cm || strcmp( cm->soname, soname ) )
+        if( !cm || strcmp( cm->soname, soname ) || cm->closed )
             continue;
 
         i = n;
@@ -386,6 +395,10 @@ capsule_init (const char *soname)
         for( size_t i = 0; i < capsule_manifest->next; i++ )
         {
             capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+
+            if( cm->closed )
+                continue;
+
             DEBUG( DEBUG_CAPSULE, " ");
             DUMP_METADATA( i, cm );
             DUMP_STRV( excluded, cm->combined_exclude );
@@ -405,5 +418,26 @@ capsule_init (const char *soname)
     handle->meta = meta;
     meta->handle = handle;
 
+    meta->closed = 0;
+
     return handle;
+}
+
+#define CLEAR(f,x) ({ f( x ); x = NULL; })
+
+void
+capsule_close (capsule cap)
+{
+    capsule_metadata *meta = cap->meta;
+
+    CLEAR( free_strv, meta->combined_exclude );
+    CLEAR( free_strv, meta->combined_export  );
+    CLEAR( free_strv, meta->combined_nowrap  );
+    CLEAR( free     , meta->active_prefix    );
+
+    CLEAR( ptr_list_free, cap->seen.all  );
+    CLEAR( ptr_list_free, cap->seen.some );
+    CLEAR( free         , meta->handle   );
+
+    meta->closed = 1;
 }

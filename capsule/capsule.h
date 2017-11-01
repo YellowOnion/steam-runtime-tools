@@ -100,6 +100,7 @@ struct _capsule_metadata
     const char  **nowrap;
     capsule_item *dl_wrappers;
     /*< private >*/
+    int     closed;
     char   *active_prefix;
     char  **combined_exclude;
     char  **combined_export;
@@ -305,6 +306,9 @@ void *capsule_external_dlsym (void *handle, const char *symbol);
  */
 _CAPSULE_PUBLIC
 void *capsule_external_dlopen(const char *file, int flag);
+
+_CAPSULE_PUBLIC
+void capsule_close (capsule cap);
 
 /**
  * capsule_get_prefix:

@@ -425,6 +425,12 @@ static void __attribute__ ((constructor)) _capsule_init (void)
         exit( 1 );
     }
 }
+
+static void __attribute__ ((destructor)) _capsule_exit (void)
+{
+    capsule_close( cap );
+    cap = NULL;
+}
 EOF
 
 echo -n > $map_file;

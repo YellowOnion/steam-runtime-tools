@@ -77,7 +77,7 @@ capsule_external_dlopen(const char *file, int flag)
 
     if( capsule_dl_open )
     {
-        handle = capsule_dl_open ( file, flag | RTLD_NODELETE );
+        handle = capsule_dl_open ( file, flag );
     }
     else
     {

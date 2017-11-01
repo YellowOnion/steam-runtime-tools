@@ -161,7 +161,9 @@ mkdir -p shim;
 echo Working in $PWD;
 
 escaped_target="$(echo "$target" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+automake_target="${escaped_target//-/_}"
 escaped_lib="$(echo "$name" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+automake_lib="$(echo "$amname" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
 escaped_search_tree="$(echo "$search_tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
 escaped_runtime_tree="$(echo "$runtime_tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
 sed \
@@ -190,6 +192,7 @@ echo Initialising configure.ac;
 sed \
     -e "1,/^\$/d" \
     -e "s,@TARGET@,$escaped_target," \
+    -e "s,@AMTARGET@,$automake_target," \
     -e "s,@LIB@,$escaped_lib," \
     -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
@@ -203,7 +206,9 @@ echo Initialising Makefile.am;
 sed \
     -e "1,/^\$/d" \
     -e "s,@TARGET@,$escaped_target," \
+    -e "s,@AMTARGET@,$automake_target," \
     -e "s,@LIB@,$escaped_lib," \
+    -e "s,@AMLIB@,$automake_lib," \
     -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
     -e "s,@LCBASE@,$lcbase," \

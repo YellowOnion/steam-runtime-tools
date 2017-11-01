@@ -19,7 +19,7 @@ of the excluded library to shim/lib@LIB@.so.c.excluded and rebuild.
 
 The generated library will have the same name as the main proxy target
 (@TARGET@). You can control the exact version number (cf libfoo.x.y.z)
-by setting CAPSULE_VERSION_@TARGET@ in Makefile.am
+by setting CAPSULE_VERSION_@AMTARGET@ in Makefile.am
 
 To make the generated library override dlopen() for callers outside the
 capsule, pass --ext-dlopen to capsule-mkstublib by setting the

@@ -11,7 +11,7 @@ CAPSULE_SEARCH_TREE ?= $(CAPSULE_TREE)
 comma = ,
 
 define foreach_shim =
-shim_ldflags_$(1) = -version-number $$(subst .,:,$$(CAPSULE_VERSION_$(1))) \
+shim_ldflags_$(subst -,_,$(1)) = -version-number $$(subst .,:,$$(CAPSULE_VERSION_$(subst -,_,$(1)))) \
     $$(patsubst %,-Wl$$(comma)--version-script=%,$$(wildcard shim/$(1).map))
 maintainer-update-capsule-symbols: maintainer-update-capsule-symbols/$(1)
 endef
@@ -30,7 +30,7 @@ shim/%.c: $(srcdir)/shim/%.excluded $(srcdir)/shim/%.shared $(srcdir)/shim/%.sym
 		$(srcdir)/shim/$*.excluded \
 		$(srcdir)/shim/$*.shared \
 		$@ \
-		$(subst .,:,$(CAPSULE_VERSION_$*)) \
+		$(subst .,:,$(CAPSULE_VERSION_$(subst -,_,$*))) \
 		$(CAPSULE_RUNTIME_TREE)
 
 # error out when it's time to regenerate the exportable symbols list

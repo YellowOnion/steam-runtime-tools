@@ -15,7 +15,7 @@
             DEBUG( DEBUG_CAPSULE, "  ->%s[ %02d ]: %s", #what, _i, *_c ); })
 
 #define DUMP_METADATA(x,m) ({  \
-        DEBUG( DEBUG_CAPSULE, "\nMETADATA #%d\n", x );     \
+        DEBUG( DEBUG_CAPSULE, "\nMETADATA #%d\n", (int) x ); \
         DEBUG( DEBUG_CAPSULE, "                        \n" \
               "struct _capsule_metadata %p"          "\n"  \
               "{"                                    "\n"  \

@@ -256,7 +256,7 @@ capsule_load (const capsule cap,
         {
             capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
             DEBUG( DEBUG_CAPSULE, "checking metadata %d for %p, %s",
-                   n, m, m ? m->soname : "---" );
+                   (int) n, m, m ? m->soname : "---" );
 
             if( !m || strcmp( dso, m->soname ) )
                 continue;

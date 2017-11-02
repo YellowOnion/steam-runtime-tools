@@ -40,8 +40,8 @@ typedef struct _capsule *capsule;
 /**
  * capsule_item:
  * @name: The name of the symbol to be relocated
- * @shim: address of the ‘fake’ symbol in the proxy library
  * @real: address of the ‘real’ symbol in the target library
+ * @shim: address of the ‘fake’ symbol in the proxy library
  *
  * @shim may typically be left empty in calls to capsule_load()
  * and capsule_relocate().
@@ -79,9 +79,9 @@ struct _capsule_item
  *          specifying a DSO whose symbols should be exported from this
  *          capsule
  * @nowrap: (array zero-terminated=1): an array of char *, each specifying
- *          a DSO whose dlopen() implementation should _not_ be wrapped
- *          should typically contain the libc cluster and the capsule proxy
- *          library itself
+ *          a DSO outside the capsule whose dlopen() implementation should
+ *          _not_ be wrapped should typically contain the libc cluster and
+ *          the capsule proxy library (libcapsule.so) itself
  *
  * This struct allows libcapsule proxy libraries to statically declare
  * metadata about themselves that libcapsule needs at link time in order
@@ -115,8 +115,11 @@ struct _capsule_metadata
  * Returns: a #capsule handle.
  *
  * Does any initialisation necessary to use libcapsule's functions.
- * Currently just initialises the debug flags from the CAPSULE_DEBUG
- * environment variable.
+ *
+ * Initialises internal accounting structures within the capsule
+ * and triggers the metadata setup if this caspsule has been
+ * acquired via dlopen(), and finishes registering the capsule
+ * proxy with libcapsule itself.
  */
 _CAPSULE_PUBLIC
 capsule capsule_init (const char *soname);
@@ -132,9 +135,6 @@ capsule capsule_init (const char *soname);
  *         Free with free().
  *
  * Returns: 0 on success, non-zero on failure.
- *
- * @source is typically the value returned by a successful capsule_load()
- * call (although a handle returned by dlmopen() would also be reasonable).
  *
  * The #capsule_item entries in @relocations need only specify the symbol
  * name: The shim and real fields will be populated automatically if they
@@ -153,7 +153,6 @@ int capsule_relocate (const capsule capsule,
                       capsule_item *relocations,
                       char **error);
 
-
 /**
  * capsule_relocate_except:
  * @capsule: a #capsule handle as returned by capsule_init()
@@ -168,9 +167,6 @@ int capsule_relocate (const capsule capsule,
  *
  * Returns: 0 on success, non-zero on failure.
  *
- * @source is typically the value returned by a successful capsule_load()
- * call (although a handle returned by dlmopen() would also be reasonable).
- *
  * The #capsule_item entries in @relocations need only specify the symbol
  * name: The shim and real fields will be populated automatically if they
  * are not pre-filled (this is the normal use case, as it would be unusual
@@ -179,7 +175,7 @@ int capsule_relocate (const capsule capsule,
  * This function updates the GOT entries in all DSOs outside the capsule
  * _except_ those listed in @except: When they call any function
  * listed in @relocations they invoke the copy of that function inside
- * the capsule. These sonames should be of the form "libfoo.so.X"
+ * the capsule. The sonames should be of the form "libfoo.so.X"
  * or "libfoo.so". You may specify further minor version numbers in the
  * usual "libfoo.so.X.Y" format if you wish.
  *
@@ -203,7 +199,7 @@ int capsule_relocate_except (const capsule capsule,
  *         an error message on failure, or %NULL to ignore.
  *         Free with free().
  *
- * Returns: A (void *) DSO handle, as per dlopen(3), or %NULL on error
+ * Returns: A (void *) DSO handle, as per dlopen(), or %NULL on error
  *
  * Opens @dso (a library) from a filesystem mounted at @prefix into a
  * symbol namespace specified by @namespace, using dlmopen().
@@ -211,11 +207,14 @@ int capsule_relocate_except (const capsule capsule,
  * Any symbols specified in @wrappers will be replaced with the
  * corresponding address from @wrappers (allowing you to replace
  * function definitions inside the namespace with your own).
- * This is normally used to replace calls from inside the namespace to
- * dlopen() (which would cause a segfault) with calls to dlmopen().
+ *
+ * This is normally used to replace calls inside the namespace to
+ * certain functions (such as dlopen()) which need to be overridden
+ * to operate correctly inside a private namespace associated with
+ * a nonstandard filsystem tree.
  *
  * The #Lmid_t value stored in @namespace gives the symbol namespace
- * into which the target DSO was loaded.
+ * into which the target DSO was loaded. It should normally be #LM_ID_NEWLM.
  *
  * In addition to a bare libFOO.so.X style name, @dso may be an
  * absolute path (or even a relative one) and in those cases should
@@ -280,9 +279,9 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
  * a normal dlsym call with the passed handle is made.
  *
  * This function provides the functionality described above, and is
- * normally used automaticaly by libcapsule. It is exposed as API in
- * case a libcapsule proxy library needs to do its own specialised
- * symbol lookups.
+ * normally used automatically by libcapsule. It is exposed as API in
+ * case a libcapsule proxy library needs to provide its own specialised
+ * symbol lookup mechanism.
  */
 _CAPSULE_PUBLIC
 void *capsule_external_dlsym (void *handle, const char *symbol);
@@ -307,6 +306,15 @@ void *capsule_external_dlsym (void *handle, const char *symbol);
 _CAPSULE_PUBLIC
 void *capsule_external_dlopen(const char *file, int flag);
 
+/**
+ * capsule_close:
+ * @cap: a #capsule handle as returned by capsule_init()
+ *
+ * This function should be called from a capsule proxy library's destructor:
+ * Its job is to clean up capsule-specific allocated memory and metadata when
+ * a capsule proxy is discarded via dlclose(), and ensure that libproxy itself
+ * won't try to access any related invalidated memory afterwards.
+ */
 _CAPSULE_PUBLIC
 void capsule_close (capsule cap);
 
@@ -337,5 +345,11 @@ void capsule_close (capsule cap);
 _CAPSULE_PUBLIC
 char *capsule_get_prefix(const char *dflt, const char *soname);
 
+/**
+ * capsule_external_dl_relocs:
+ *
+ * An array of #capsule_item entries, %NULL terminated, which provides the
+ * default list of functions outside the capsule which need to be wrapped.
+ */
 _CAPSULE_PUBLIC
 capsule_item capsule_external_dl_relocs[];

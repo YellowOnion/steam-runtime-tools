@@ -14,27 +14,29 @@ mounted at /host.
 
 In the chroot:
 
-Generate a proxy project for libGL:
+Generate a proxy project for libGL and related libraries:
 
-  ~$ $(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule) libGL.so.1 /host
-  ~$ cd libGL-proxy
-  ~$ extralib=".so.1 -glx.so.0 -dri2.so.0 -dri3.so.0 -present.so.0 -sync.so.1"
-  ~$ echo -n > shim/libGL.so.c.shared
-  ~$ for x in $extralib; do echo libxcb$x >> shim/libGL.so.c.shared; done
-  ~$ echo libX11.so >> shim/libGL.so.c.shared;
-  ~$ ./configure
-  ~$ make
+  ~$ mkdir proxies
+  ~$ cd proxies
+  ~$ CAPTOOL=$(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule)
+  ~$ LIBS="xcb.so.1 xcb-glx.so.0 xcb-dri2.so.0 xcb-dri3.so.0 xcb-present.so.0"
+  ~$ LIBS="$LIBS xcb-sync.so.1 X11.so.6 GL.so.1 Xext.so.6"
+  ~$ for x in $LIBS; do $CAPTOOL lib$x /host; done
+  ~$ for x in *-proxy; do (cd $x && ./configure --prefix=/shim) || break; done
+  ~$ for x in *-proxy; do (cd $x && make) || break; done
+  ~$ for x in *-proxy; do (cd $x && sudo make install) || break; done
 
-Copy the generated libGL.so into an appropriate directory.
-
+Now make said proxy libraries available. You should also:
 Ensure that ldd $(which glxgears) points to the libGL.so capsule
-
 Make sure a full filesystem from the host OS is mounted at /host
+
+  ~$ export LD_LIBRARY_PATH=/shim/lib
+  ~$ export DISPLAY=:0 # if you need this
 
 Make sure your chroot is set up so that trivial XOrg programs can run
 (xterm, xev, xeyes or whatever).
 
-Run glxgears.
+Run glxgears (or openarena, or whatever).
 
 If it fails:
 

@@ -357,7 +357,7 @@ get_cached_metadata (const char *soname)
     {
         capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, n );
 
-        if( !cm || strcmp( cm->soname, soname ) || cm->closed )
+        if( !cm || cm->closed || strcmp( cm->soname, soname ) )
             continue;
 
         i = n;

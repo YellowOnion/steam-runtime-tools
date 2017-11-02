@@ -243,7 +243,7 @@ update_metadata (const char *match)
     {
         capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
 
-        if( cm->closed )
+        if( !cm || cm->closed )
             continue;
 
         tree_data *tx = get_excludes( cm->active_prefix );
@@ -261,7 +261,7 @@ update_metadata (const char *match)
     {
         capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
 
-        if( cm->closed )
+        if( !cm || cm->closed )
             continue;
 
         tree_data *tx = get_excludes( cm->active_prefix );
@@ -295,6 +295,10 @@ static void __attribute__ ((constructor)) _init_capsule (void)
     for( unsigned int x = 0; x < capsule_manifest->next; x++ )
     {
         capsule_metadata *cm = capsule_manifest->loc[ x ].ptr;
+
+        if( !cm || cm->closed )
+            continue;
+
         const char **soname = cm->exclude;
 
         DEBUG( DEBUG_CAPSULE, "[%02d] %s metadata:\n", x, cm->soname );
@@ -396,7 +400,7 @@ capsule_init (const char *soname)
         {
             capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
 
-            if( cm->closed )
+            if( !cm || cm->closed )
                 continue;
 
             DEBUG( DEBUG_CAPSULE, " ");
@@ -440,4 +444,14 @@ capsule_close (capsule cap)
     CLEAR( free         , meta->handle   );
 
     meta->closed = 1;
+
+    // scrub all entries in the manifest pointing to this metadata
+    for( size_t n = 0; n < capsule_manifest->next; n++ )
+    {
+        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, n );
+
+        if( cm == meta )
+            capsule_manifest->loc[ n ].ptr = NULL;
+    }
+
 }

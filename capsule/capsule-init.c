@@ -434,6 +434,7 @@ capsule_close (capsule cap)
 {
     capsule_metadata *meta = cap->meta;
 
+    // free+null all the non-static memory in the metadata struct
     CLEAR( free_strv, meta->combined_exclude );
     CLEAR( free_strv, meta->combined_export  );
     CLEAR( free_strv, meta->combined_nowrap  );
@@ -443,6 +444,7 @@ capsule_close (capsule cap)
     CLEAR( ptr_list_free, cap->seen.some );
     CLEAR( free         , meta->handle   );
 
+    // flag it as closed just in case something tries to peek at it
     meta->closed = 1;
 
     // scrub all entries in the manifest pointing to this metadata

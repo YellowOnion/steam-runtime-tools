@@ -28,6 +28,11 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <firstname>Vivek</firstname>
         <surname>Das Mohapatra</surname>
       </author>
+      <author>
+        <contrib>Developer</contrib>
+        <firstname>Simon</firstname>
+        <surname>McVittie</surname>
+      </author>
     </authorgroup>
   </refentryinfo>
 
@@ -50,12 +55,12 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
   <refsynopsisdiv>
     <cmdsynopsis>
       <command>capsule-mkstublib</command>
+      <arg choice="opt">OPTIONS</arg>
       <arg choice="plain">TARGET</arg>
       <arg choice="plain">EXCLUDES</arg>
       <arg choice="plain">EXPORTS</arg>
       <arg choice="plain">OUTPUT</arg>
-      <arg choice="plain">DSO-VERSION</arg>
-      <arg choice="plain">TREE</arg>
+      <arg choice="opt">DSO-VERSION<arg choice="opt">TREE</arg></arg>
     </cmdsynopsis>
   </refsynopsisdiv>
 
@@ -130,7 +135,11 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
           </para>
           <para>
             The format is the same format as consumed by libtool.
-            Only MAJOR must be present. 
+            Only MAJOR must be present if this argument is supplied.
+          </para>
+          <para>
+            The default value is determined by parsing the soname of the
+            library.
           </para>
         </listitem>
       </varlistentry>
@@ -142,11 +151,90 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
             The mount point of the foreign filesystem tree from which TARGET
             and its dependencies will be acquired.
           </para>
+          <para>
+            This value can be overridden by --runtime-tree and --search-tree.
+          </para>
+          <para>
+            The default is the soname-specific environment variable (eg
+            CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1), or the CAPSULE_PREFIX
+            environment variable, or /host.
+          </para>
         </listitem>
       </varlistentry>
 
     </variablelist>
     
+  </refsect1>
+
+  <refsect1>
+    <title>Options</title>
+    <variablelist>
+
+      <varlistentry>
+        <term><option>--capsule-symbols-tool=PATH</option></term>
+        <listitem>
+          <para>Use replacement capsule-symbols(1)</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--symbols-from=PATH</option></term>
+        <listitem>
+          <para>
+            Use this symbols file instead of the output of capsule-symbols(1)
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--[no-]ext-dlopen</option></term>
+        <listitem>
+          <para>
+            Do or don't provide an explicit override for dlopen(3)
+            calls made outside the capsule in the generated
+            source.
+          </para>
+          <para>
+            [There is always an implicit override - this just
+            exposes the implementation for easy modification]
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--[no]-update-symbols</option></term>
+        <listitem>
+          <para>
+            Do or don't update the exported symbol list if EXPORTS is
+            updated [default: do]
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--search-tree=PATH</option></term>
+        <listitem>
+          <para>
+            Find libraries to be proxied in this chroot,
+            sysroot or container at compile-time.
+          </para>
+          <para>default: TREE or / if unset</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--runtime-tree=PATH</option></term>
+        <listitem>
+          <para>
+            Find libraries to be proxied in this chroot, sysroot or
+            container at runtime if CAPSULE_PREFIX or the
+            library-specific env var (eg CAPSULE_LIBGL_SO_1_PREFIX for
+            libGL.so.1) is unset.
+          </para>
+        </listitem>
+      </varlistentry>
+
+    </variablelist>
   </refsect1>
 
   <refsect1>

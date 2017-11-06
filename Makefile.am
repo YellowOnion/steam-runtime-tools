@@ -22,7 +22,7 @@ AM_CFLAGS               = -fvisibility=hidden \
                           $(WARN_CFLAGS) \
                           $(LIBELF_CFLAGS)
 AM_LDFLAGS              = $(WARN_LDFLAGS)
-static_docs             = Building Debugging Limitations Quick-Start
+static_docs             = Building Debugging Limitations Quick-Start Capsules
 
 # installable items:
 libexec_PROGRAMS        = capsule-symbols capsule-version

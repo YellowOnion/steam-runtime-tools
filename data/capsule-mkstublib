@@ -375,7 +375,6 @@ static void __attribute__ ((constructor)) _capsule_init (void)
 {
     int   capsule_errno = 0;
     char *capsule_error = NULL;
-    const char *prefix;
     Lmid_t symbol_ns;
     void * dso;
 
@@ -392,9 +391,6 @@ static void __attribute__ ((constructor)) _capsule_init (void)
       };
 
     symbol_ns = LM_ID_NEWLM;
-    prefix = secure_getenv( "CAPSULE_PREFIX" );
-    if( !prefix )
-        prefix = "$runtime_tree";
 
     // Don't use capsule_meta.soname here - use a static value.
     // Trust me when I say you don't want to know why.

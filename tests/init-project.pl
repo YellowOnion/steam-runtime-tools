@@ -78,11 +78,11 @@ ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1.0.0");
     local $/ = undef;   # read entire file in one go
     open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.1.c");
     my $source = <$fh>;
-    like($source, qr{prefix = "/host"},
+    like($source, qr{\.default_prefix\s*=\s*"/host"},
         'Configure-time runtime tree takes precedence');
-    unlike($source, qr{prefix = "/run/host"},
+    unlike($source, qr{\.default_prefix\s*=\s*"/run/host"},
         'Init-time runtime tree is not used');
-    unlike($source, qr{prefix = "/"},
+    unlike($source, qr{\.default_prefix\s*=\s*"/"},
         'Search tree is not used at runtime');
     close $fh;
 }

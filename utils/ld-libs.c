@@ -623,7 +623,7 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
     if (ldpath)
         _capsule_set_error( code, message, ENOENT,
                             "Could not find \"%s\" in LD_LIBRARY_PATH \"%s\", "
-                            "ld.so.cache, /lib or /usr/lib", ldpath, name );
+                            "ld.so.cache, /lib or /usr/lib", name, ldpath );
     else
         _capsule_set_error( code, message, ENOENT,
                             "Could not find \"%s\" in LD_LIBRARY_PATH (unset), "

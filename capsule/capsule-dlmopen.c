@@ -292,11 +292,9 @@ capsule_load (const capsule cap,
             }
     }
 
-    ld_libs_init( &ldlibs,
-                  (const char **) cap->meta->combined_exclude,
-                  cap->meta->active_prefix, debug_flags, errcode, error );
-
-    if( errcode && *errcode )
+    if( !ld_libs_init( &ldlibs,
+                       (const char **) cap->meta->combined_exclude,
+                       cap->meta->active_prefix, debug_flags, errcode, error ) )
         return NULL;
 
     // ==================================================================

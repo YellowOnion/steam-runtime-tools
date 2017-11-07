@@ -140,8 +140,14 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
     if( cap->prefix && strcmp(cap->prefix, "/") )
     {
-        ld_libs_init( &ldlibs, (const char **)cap->meta->combined_exclude,
-                      cap->prefix, debug_flags, &code, &errors );
+        if( !ld_libs_init( &ldlibs, (const char **)cap->meta->combined_exclude,
+                           cap->prefix, debug_flags, &code, &errors ) )
+        {
+            DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
+                   "Initialising ld_libs data failed: error %d: %s",
+                   code, errors);
+              goto cleanup;
+        }
 
         if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache", &code, &errors ) )
         {

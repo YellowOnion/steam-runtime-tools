@@ -78,7 +78,7 @@ typedef struct
  */
 typedef struct
 {
-    ldcache_t ldcache;
+    ld_cache ldcache;
     int last_idx;
     int elf_class;
     Elf64_Half elf_machine;

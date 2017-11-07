@@ -77,7 +77,7 @@ static const char *const abi_tag_os[] =
 // end of stolen header structures
 ////////////////////////////////////////////////////////////////////////////
 static void
-ld_cache_reset (ldcache_t *cache)
+ld_cache_reset (ld_cache *cache)
 {
     cache->fd       = -1;
     cache->map_size = 0;
@@ -89,7 +89,7 @@ ld_cache_reset (ldcache_t *cache)
 }
 
 void
-ld_cache_close (ldcache_t *cache)
+ld_cache_close (ld_cache *cache)
 {
     // 0 is a valid fd, but is also the default value of the unset
     // struct member, so we have to check if it's _really_ open:
@@ -106,7 +106,7 @@ ld_cache_close (ldcache_t *cache)
 }
 
 int
-ld_cache_open (ldcache_t *cache, const char *path, int *code, char **message)
+ld_cache_open (ld_cache *cache, const char *path, int *code, char **message)
 {
     struct stat ldcache = {};
 
@@ -229,7 +229,7 @@ cleanup:
 // if the callback terminates iteration by returning true, return that value,
 // otherwise return false:
 intptr_t
-ld_cache_foreach (ldcache_t *cache, ld_cache_entry_cb cb, void *data)
+ld_cache_foreach (ld_cache *cache, ld_cache_entry_cb cb, void *data)
 {
     int rval = 0;
     const char *base = cache->data;

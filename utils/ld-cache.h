@@ -81,7 +81,7 @@ typedef struct
     union { struct cache_file *old; struct cache_file_new *new; } file;
     cache_type type;
     int is_open;
-} ldcache_t;
+} ld_cache;
 
 // ==========================================================================
 
@@ -92,10 +92,10 @@ typedef intptr_t (*ld_cache_entry_cb) (const char *name,
                                        const char *path,
                                        void *data);
 
-int      ld_cache_open    (ldcache_t *cache, const char *path, int *code,
+int      ld_cache_open    (ld_cache *cache, const char *path, int *code,
                            char **message);
-void     ld_cache_close   (ldcache_t *cache);
-intptr_t ld_cache_foreach (ldcache_t *cache, ld_cache_entry_cb cb, void *data);
+void     ld_cache_close   (ld_cache *cache);
+intptr_t ld_cache_foreach (ld_cache *cache, ld_cache_entry_cb cb, void *data);
 
 intptr_t ld_entry_dump (const char *name, int flag, unsigned int osv,
                         uint64_t hwcap, const char *path, void *data);

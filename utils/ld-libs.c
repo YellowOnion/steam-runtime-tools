@@ -37,13 +37,13 @@ struct dso_cache_search
 {
     int idx;
     const char *name;
-    ld_libs_t *ldlibs;
+    ld_libs *ldlibs;
 };
 
 static const struct stat *stat_caller (void);
 
 // make sure the prefix buffer is properly NUL terminated
-static inline void sanitise_ldlibs(ld_libs_t *ldlibs)
+static inline void sanitise_ldlibs(ld_libs *ldlibs)
 {
     ldlibs->prefix.path[ ldlibs->prefix.len ] = '\0';
 }
@@ -75,7 +75,7 @@ _rtldstr(int flag)
 // we need to compensate for this when resolving symlinks.
 // this will keep following the path at entry i in ldlibs until
 // it finds something that is not a symlink.
-static void resolve_symlink_prefixed (ld_libs_t *ldlibs, int i)
+static void resolve_symlink_prefixed (ld_libs *ldlibs, int i)
 {
     int count = 0;
     char resolved[PATH_MAX];
@@ -119,7 +119,7 @@ static void resolve_symlink_prefixed (ld_libs_t *ldlibs, int i)
 // passed to us if possible: if we found values for these, return 1,
 // otherwise return 0:
 static int
-find_elf_constraints(ld_libs_t *ldlibs, struct link_map *m)
+find_elf_constraints(ld_libs *ldlibs, struct link_map *m)
 {
     int fd = -1;
     Elf *dso = NULL;
@@ -162,7 +162,7 @@ find_elf_constraints(ld_libs_t *ldlibs, struct link_map *m)
 // i386 or x32 DSO to statisfy a DT_NEEDED from an x86-64 one.
 // return true if we found a valid DSO, false (can't happen?) otherwise
 static int
-set_elf_constraints (ld_libs_t *ldlibs)
+set_elf_constraints (ld_libs *ldlibs)
 {
     void *handle;
     struct link_map *map;
@@ -203,7 +203,7 @@ set_elf_constraints (ld_libs_t *ldlibs)
 // matches the class & architecture of the DSO we started with:
 // return true on a match, false otherwise
 static int
-check_elf_constraints (ld_libs_t *ldlibs, int idx, int *code, char **message)
+check_elf_constraints (ld_libs *ldlibs, int idx, int *code, char **message)
 {
     GElf_Ehdr ehdr = {};
     int eclass;
@@ -258,7 +258,7 @@ check_elf_constraints (ld_libs_t *ldlibs, int idx, int *code, char **message)
 // library could result in the capsule library finding itself and
 // inifinitely looping, so we try to avoid that with this test:
 static int
-target_is_ourself  (ld_libs_t *ldlibs, int idx)
+target_is_ourself  (ld_libs *ldlibs, int idx)
 {
     const struct stat *cdso = stat_caller();
     struct stat xdso = { 0 };
@@ -312,7 +312,7 @@ static void clear_needed (dso_needed_t *needed)
 // this is to allow both prefixed and unprefixed DSOs to be handled
 // here:
 static int
-ld_lib_open (ld_libs_t *ldlibs, const char *name, int i, int *code, char **message)
+ld_lib_open (ld_libs *ldlibs, const char *name, int i, int *code, char **message)
 {
 
     LDLIB_DEBUG( ldlibs, DEBUG_SEARCH,
@@ -422,7 +422,7 @@ search_ldcache_cb (const char *name, // name of the DSO in the ldcache
 //
 // this function will respect any path prefix specified in ldlibs
 static int
-search_ldcache (const char *name, ld_libs_t *ldlibs, int i)
+search_ldcache (const char *name, ld_libs *ldlibs, int i)
 {
     struct dso_cache_search target;
     char cachepath[PATH_MAX];
@@ -468,7 +468,7 @@ search_ldcache (const char *name, ld_libs_t *ldlibs, int i)
 //
 // this function will respect any path prefix specified in ldlibs
 static int
-search_ldpath (const char *name, const char *ldpath, ld_libs_t *ldlibs, int i)
+search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
 {
     char  *sp     = (char *)ldpath;
     char  *prefix = ldlibs->prefix.path;
@@ -537,7 +537,7 @@ search_ldpath (const char *name, const char *ldpath, ld_libs_t *ldlibs, int i)
 // and will contain a valid fd for the DSO. (and search_ldcache will
 // return true). Otherwise the entry will be empty and we will return false:
 static int
-dso_find (const char *name, ld_libs_t *ldlibs, int i, int *code, char **message)
+dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
 {
     int found = 0;
     const char *ldpath = NULL;
@@ -668,7 +668,7 @@ already_needed (dso_needed_t *needed, int requesting_idx, const char *name)
 // or the elf handle in needed[0].dso will not be set up and hilarity*
 // will ensue.
 static int
-_dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **error)
+_dso_iterate_sections (ld_libs *ldlibs, int idx, int *code, char **error)
 {
     int had_error = 0;
     Elf_Scn *scn = NULL;
@@ -781,7 +781,7 @@ _dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **error)
 }
 
 static void
-_dso_iterator_format_error (ld_libs_t * ldlibs, char **message)
+_dso_iterator_format_error (ld_libs * ldlibs, char **message)
 {
     size_t extra_space = 0;
 
@@ -820,7 +820,7 @@ _dso_iterator_format_error (ld_libs_t * ldlibs, char **message)
 // invoking the actual dso iterator: returns true if we gathered
 // all the needed info witout error, false otherwise:
 static int
-dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **message)
+dso_iterate_sections (ld_libs *ldlibs, int idx, int *code, char **message)
 {
     if( _dso_iterate_sections( ldlibs, idx, code, message ) )
         return 1;
@@ -835,14 +835,14 @@ dso_iterate_sections (ld_libs_t *ldlibs, int idx, int *code, char **message)
 ////////////////////////////////////////////////////////////////////////////
 // public API:
 int
-ld_libs_init (ld_libs_t *ldlibs,
+ld_libs_init (ld_libs *ldlibs,
               const char **exclude,
               const char *prefix,
               unsigned long dbg,
               int *errcode,
               char **error)
 {
-    memset( ldlibs, 0, sizeof(ld_libs_t) );
+    memset( ldlibs, 0, sizeof(ld_libs) );
 
     ld_cache_close( &ldlibs->ldcache );
 
@@ -906,13 +906,13 @@ ld_libs_init (ld_libs_t *ldlibs,
 // (ie the DSO we actually want):
 // returns false on error:
 int
-ld_libs_set_target (ld_libs_t *ldlibs, const char *target, int *code, char **message)
+ld_libs_set_target (ld_libs *ldlibs, const char *target, int *code, char **message)
 {
     return dso_find( target, ldlibs, 0, code, message );
 }
 
 int
-ld_libs_find_dependencies (ld_libs_t *ldlibs, int *code, char **message)
+ld_libs_find_dependencies (ld_libs *ldlibs, int *code, char **message)
 {
     return dso_iterate_sections( ldlibs, 0, code, message );
 }
@@ -922,7 +922,7 @@ ld_libs_find_dependencies (ld_libs_t *ldlibs, int *code, char **message)
 // DT_NEEDED values from outside the capsule), which it will do
 // if we don't work backwards:
 void *
-ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
+ld_libs_load (ld_libs *ldlibs, Lmid_t *namespace, int flag, int *error,
               char **message)
 {
     int go;
@@ -1022,7 +1022,7 @@ ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
 }
 
 void
-ld_libs_finish (ld_libs_t *ldlibs)
+ld_libs_finish (ld_libs *ldlibs)
 {
     for( int i = 0; i < DSO_LIMIT; i++ )
         clear_needed( &ldlibs->needed[i] );
@@ -1110,7 +1110,7 @@ stat_caller (void)
 //
 // this function respects any path prefix specified in ldlibs
 int
-ld_libs_load_cache (ld_libs_t *libs, const char *path, int *code, char **message)
+ld_libs_load_cache (ld_libs *libs, const char *path, int *code, char **message)
 {
     int rv;
 

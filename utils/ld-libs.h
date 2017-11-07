@@ -57,7 +57,7 @@ typedef struct
 } dso_needed_t;
 
 /**
- * ld_libs_t:
+ * ld_libs:
  * @ldcache: the runtime linker cache, or all-zeroes
  *  if ld_libs_load_cache() has not yet been called
  * @last_idx: private, used internally by the ld-libs code
@@ -88,22 +88,22 @@ typedef struct
     char *not_found[DSO_LIMIT];
     int last_not_found;
     unsigned long debug;
-} ld_libs_t;
+} ld_libs;
 
-int   ld_libs_init (ld_libs_t *ldlibs,
+int   ld_libs_init (ld_libs *ldlibs,
                     const char **exclude,
                     const char *prefix,
                     unsigned long dbg,
                     int *error,
                     char **message);
 
-int   ld_libs_set_target        (ld_libs_t *ldlibs, const char *target,
+int   ld_libs_set_target        (ld_libs *ldlibs, const char *target,
                                  int *code, char **message);
-int   ld_libs_find_dependencies (ld_libs_t *ldlibs, int *code, char **message);
-void  ld_libs_finish            (ld_libs_t *ldlibs);
-int   ld_libs_load_cache        (ld_libs_t *libs, const char *path, int *code,
+int   ld_libs_find_dependencies (ld_libs *ldlibs, int *code, char **message);
+void  ld_libs_finish            (ld_libs *ldlibs);
+int   ld_libs_load_cache        (ld_libs *libs, const char *path, int *code,
                                  char **message);
 
-void *ld_libs_load (ld_libs_t *ldlibs, Lmid_t *namespace, int flag, int *error,
+void *ld_libs_load (ld_libs *ldlibs, Lmid_t *namespace, int flag, int *error,
                     char **message);
 

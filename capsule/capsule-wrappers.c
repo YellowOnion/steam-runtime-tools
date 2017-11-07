@@ -132,7 +132,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
     void *res = NULL;
     int code = 0;
     char *errors = NULL;
-    ld_libs_t ldlibs = {};
+    ld_libs ldlibs = {};
 
     DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
            "dlopen(%s, %x) wrapper: LMID: %ld; prefix: %s;",

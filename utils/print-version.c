@@ -29,7 +29,7 @@ int main (int argc, char **argv)
     const char *libname;
     const char *prefix = NULL;
     char *message = NULL;
-    ld_libs_t ldlibs = {};
+    ld_libs ldlibs = {};
     int error = 0;
     int e = 0;
 

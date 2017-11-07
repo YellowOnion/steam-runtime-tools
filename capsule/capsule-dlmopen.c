@@ -48,7 +48,7 @@
 
 // dump out the contents of the ld cache to stderr:
 static void
-dump_ld_cache (ld_libs_t *ldlibs)
+dump_ld_cache (ld_libs *ldlibs)
 {
     ld_cache_foreach( &ldlibs->ldcache, ld_entry_dump, stderr );
 }
@@ -240,7 +240,7 @@ capsule_load (const capsule cap,
               char **error)
 {
     void *ret = NULL;
-    ld_libs_t ldlibs = {};
+    ld_libs ldlibs = {};
     capsule_metadata *cm = NULL;
 
     // if we were passed a default new-namespace flag see

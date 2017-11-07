@@ -145,9 +145,13 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/green/libhelper.la                \
                                        tests/helper/libhelper.la               \
                                        tests/red/libnotgl.la                   \
+                                       tests/red/libnotgles.la                 \
                                        tests/green/libnotgl.la                 \
+                                       tests/green/libnotgles.la               \
                                        tests/lib/libnotgl.la                   \
-                                       tests/shim/libnotgl.la
+                                       tests/lib/libnotgles.la                 \
+                                       tests/shim/libnotgl.la                  \
+                                       tests/shim/libnotgles.la
 nobase_dist_insttests_DATA           = tests/CapsuleTest.pm
 # Install the source code so we can rebuild it inside a container if we want to
 nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
@@ -162,15 +166,28 @@ nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
                                        tests/notgl-helper-green.c              \
                                        tests/notgl-helper-red.c                \
                                        tests/notgl-helper-ref.c                \
+                                       tests/notgles.h                         \
+                                       tests/notgles-green.c                   \
+                                       tests/notgles-red.c                     \
+                                       tests/notgles-ref.c                     \
                                        tests/shim/libnotgl.so.0.excluded       \
                                        tests/shim/libnotgl.so.0.shared         \
-                                       tests/shim/libnotgl.so.0.symbols
+                                       tests/shim/libnotgl.so.0.symbols        \
+                                       tests/shim/libnotgles.so.1.excluded     \
+                                       tests/shim/libnotgles.so.1.shared       \
+                                       tests/shim/libnotgles.so.1.symbols
 
 tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
 tests_lib_libnotgl_la_LDFLAGS        = -shared -version-number 0:42:23
 tests_lib_libnotgl_la_LIBADD         = tests/helper/libhelper.la
+
+tests_lib_libnotgles_la_SOURCES      = tests/notgles-ref.c                     \
+                                       tests/notgles.h                         \
+                                       tests/notgl-helper.h
+tests_lib_libnotgles_la_LDFLAGS      = -shared -version-number 1:42:23
+tests_lib_libnotgles_la_LIBADD       = tests/helper/libhelper.la
 
 tests_red_libnotgl_la_SOURCES        = tests/notgl-red.c                       \
                                        tests/notgl.h                           \
@@ -182,6 +199,12 @@ tests_red_libnotgl_la_LDFLAGS        = -shared -version-number 0:123:456
 # same path on host and container
 tests_red_libnotgl_la_LIBADD         = tests/helper/libhelper.la
 
+tests_red_libnotgles_la_SOURCES      = tests/notgles-red.c                     \
+                                       tests/notgles.h                         \
+                                       tests/notgl-helper.h
+tests_red_libnotgles_la_LDFLAGS      = -shared -version-number 1:123:456
+tests_red_libnotgles_la_LIBADD       = tests/helper/libhelper.la
+
 tests_green_libnotgl_la_SOURCES      = tests/notgl-green.c                     \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
@@ -189,6 +212,12 @@ tests_green_libnotgl_la_SOURCES      = tests/notgl-green.c                     \
 tests_green_libnotgl_la_LDFLAGS      = -shared -version-number 0:23:42
 # Again, we want the RUNPATH or RPATH to point to tests/helper here
 tests_green_libnotgl_la_LIBADD       = tests/helper/libhelper.la
+
+tests_green_libnotgles_la_SOURCES    = tests/notgles-green.c                   \
+                                       tests/notgles.h                         \
+                                       tests/notgl-helper.h
+tests_green_libnotgles_la_LDFLAGS    = -shared -version-number 1:23:42
+tests_green_libnotgles_la_LIBADD     = tests/helper/libhelper.la
 
 tests_helper_libhelper_la_SOURCES    = tests/notgl-helper-ref.c                \
                                        tests/notgl-helper.h
@@ -205,6 +234,10 @@ tests_green_libhelper_la_LDFLAGS     = -shared -version-number 0:23:42
 nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.0.c
 tests_shim_libnotgl_la_LIBADD        = libcapsule.la
 tests_shim_libnotgl_la_LDFLAGS       = -shared -version-number 0:0:0
+
+nodist_tests_shim_libnotgles_la_SOURCES = tests/shim/libnotgles.so.1.c
+tests_shim_libnotgles_la_LIBADD        = libcapsule.la
+tests_shim_libnotgles_la_LDFLAGS       = -shared -version-number 1:0:0
 
 tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols data/capsule-mkstublib Makefile
 	$(AM_V_GEN)\
@@ -240,6 +273,7 @@ test_extra_programs                  = tests/notgl-user                        \
                                        tests/notgl-helper-user
 tests_notgl_user_LDADD               = tests/lib/libnotgl.la
 tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
+                                       tests/lib/libnotgles.la                 \
                                        tests/helper/libhelper.la
 test_extra_scripts                   = tests/manual/gl.pl
 
@@ -300,6 +334,7 @@ $(DOC_MAIN_SGML_FILE): sgml-build.stamp
 CLEANFILES             += $(testmeta_DATA)
 CLEANFILES             += data/$(host)-capsule-mkstublib
 CLEANFILES             += $(nodist_tests_shim_libnotgl_la_SOURCES)
+CLEANFILES             += $(nodist_tests_shim_libnotgles_la_SOURCES)
 
 EXTRA_DIST             += $(top_srcdir)/.version
 EXTRA_DIST             += autogen.sh

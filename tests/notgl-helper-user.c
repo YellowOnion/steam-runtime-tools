@@ -20,6 +20,7 @@
 #include <stdlib.h>
 
 #include "notgl.h"
+#include "notgles.h"
 #include "notgl-helper.h"
 
 static notgl_extension_function
@@ -57,6 +58,30 @@ main ( int argc,
         printf( "notgl_extension_green: %s\n", f() );
     else
         printf( "notgl_extension_green: (not found)\n" );
+
+    printf( "NotGLES implementation: %s\n", notgles_get_implementation() );
+    printf( "NotGLES helper implementation: %s\n", notgles_use_helper() );
+
+    f = get_extension( "notgles_extension_both" );
+
+    if( f )
+        printf( "notgles_extension_both: %s\n", f() );
+    else
+        printf( "notgles_extension_both: (not found)\n" );
+
+    f = get_extension( "notgles_extension_red" );
+
+    if( f )
+        printf( "notgles_extension_red: %s\n", f() );
+    else
+        printf( "notgles_extension_red: (not found)\n" );
+
+    f = get_extension( "notgles_extension_green" );
+
+    if( f )
+        printf( "notgles_extension_green: %s\n", f() );
+    else
+        printf( "notgles_extension_green: (not found)\n" );
 
     printf( "NotGL helper implementation as seen by executable: %s\n", helper_get_implementation () );
 

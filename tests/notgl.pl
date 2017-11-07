@@ -90,6 +90,14 @@ like($stdout, qr/^notgl_extension_red: \(not found\)$/m);
 like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
 like($stdout,
     qr/^NotGL helper implementation as seen by executable: container \(reference\)$/m);
+like($stdout, qr/^NotGLES implementation: reference$/m);
+like($stdout, qr/^NotGLES helper implementation: container \(reference\)$/m);
+like($stdout,
+    qr/^notgles_extension_both: reference implementation of common extension$/m);
+like($stdout, qr/^notgles_extension_red: \(not found\)$/m);
+like($stdout, qr/^notgles_extension_green: \(not found\)$/m);
+like($stdout,
+    qr/^NotGL helper implementation as seen by executable: container \(reference\)$/m);
 
 diag 'With libcapsule loading red implementation:';
 # We mount the "host system" on $capsule_prefix.
@@ -188,6 +196,12 @@ like($stdout,
     qr/^notgl_extension_both: green implementation of common extension$/m);
 like($stdout, qr/^notgl_extension_red: \(not found\)$/m);
 like($stdout, qr/^notgl_extension_green: green-only extension$/m);
+like($stdout, qr/^NotGLES implementation: green$/m);
+like($stdout, qr/^NotGLES helper implementation: host \(green\)$/m);
+like($stdout,
+    qr/^notgles_extension_both: green implementation of common extension$/m);
+like($stdout, qr/^notgles_extension_red: \(not found\)$/m);
+like($stdout, qr/^notgles_extension_green: green-only extension$/m);
 
 # Also, this program is linked directly to libhelper, mirroring a program
 # that is linked directly to libstdc++ in the libGL case. It sees the

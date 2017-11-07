@@ -34,8 +34,8 @@ print {$fh} <<'EOF';
 int
 main (void)
 {
-  capsule cap = capsule_init( LM_ID_NEWLM, "/host", NULL, NULL );
-  printf( "capsule_init() didn't crash\n" );
+  char *prefix = capsule_get_prefix( "/host", "libfoo.so.0" );
+  printf( "%s\n", prefix );
   return 0;
 }
 EOF
@@ -47,8 +47,9 @@ ok(! system('gcc -o trivial trivial.o $(pkg-config --libs capsule)'),
     'linked');
 ok(-x 'trivial', 'executable');
 my $output;
+$ENV{CAPSULE_LIBFOO_SO_0_PREFIX} = '/foo';
 ok(run(['./trivial'], '>', \$output), 'executed successfully');
-is($output, "capsule_init() didn't crash\n", 'printed desired output');
+is($output, "/foo\n", 'printed desired output');
 
 chdir('/');
 done_testing;

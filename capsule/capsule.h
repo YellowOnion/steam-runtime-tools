@@ -99,6 +99,7 @@ struct _capsule_metadata
     const char  **export;
     const char  **nowrap;
     capsule_item *dl_wrappers;
+    const int     capsule_abi;
     /*< private >*/
     int     closed;
     char   *active_prefix;

@@ -170,6 +170,10 @@ get_capsule_metadata (struct link_map *map, ptr_list *info, const char *only)
         if( only && strcmp( only, meta->soname ) )
             continue;
 
+        // not a version of the ABI we understand? skip it.
+        if( meta->capsule_abi != 0 )
+            continue;
+
         meta->namespace = LM_ID_NEWLM;
         meta->closed    = 0;
 

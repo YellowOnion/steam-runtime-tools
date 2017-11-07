@@ -334,6 +334,7 @@ capsule_metadata capsule_meta =
     .export           = valid_dlsym_sources,
     .nowrap           = invalid_dl_reloc_targets,
     .dl_wrappers      = EXT_DLOPEN_WRAPPERS,
+    .capsule_abi      = 0,
 };
 
 // -------------------------------------------------------------

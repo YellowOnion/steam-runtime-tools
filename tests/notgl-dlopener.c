@@ -84,6 +84,9 @@ main ( int argc,
     void *gles;
     notgl_extension_function f;
 
+    // Select line-buffering for output, in case we crash
+    setvbuf( stdout, NULL, _IOLBF, 0 );
+
     gl = xdlopen( "libnotgl.so.0", RTLD_LAZY|RTLD_GLOBAL );
     gles = xdlopen( "libnotgles.so.1", RTLD_NOW|RTLD_LOCAL );
 

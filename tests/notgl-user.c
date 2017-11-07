@@ -33,6 +33,9 @@ main ( int argc,
 {
     notgl_extension_function f;
 
+    // Select line-buffering for output, in case we crash
+    setvbuf( stdout, NULL, _IOLBF, 0 );
+
     printf( "NotGL implementation: %s\n", notgl_get_implementation() );
     printf( "NotGL helper implementation: %s\n", notgl_use_helper() );
 

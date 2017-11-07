@@ -38,7 +38,7 @@ typedef struct
     mmapinfo *mmap_info;
     const char **blacklist;
     ptr_list *seen;
-} relocation_data_t;
+} relocation_data;
 
 /*
  * relocate_rela_cb_t:

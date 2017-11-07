@@ -81,7 +81,7 @@ wrap (const char *name,
     //
     // the utility functions expect an upper bound though so set that to
     // something suitably large:
-    relocation_data_t rdata = { 0 };
+    relocation_data rdata = { 0 };
 
     rdata.debug     = debug_flags;
     rdata.error     = NULL;

@@ -55,7 +55,7 @@
 static int
 process_phdr (struct dl_phdr_info *info,
               size_t size,
-              relocation_data_t *rdata)
+              relocation_data *rdata)
 {
     int ret = 0;
 
@@ -113,7 +113,7 @@ dso_has_been_relocated (ptr_list *seen, ElfW(Addr) base)
 static int
 relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 {
-    relocation_data_t *rdata = data;
+    relocation_data *rdata = data;
     const char *dso_path = *info->dlpi_name ? info->dlpi_name : "-elf-";
 
     if( dso_is_blacklisted( dso_path, rdata->blacklist ) )
@@ -143,7 +143,7 @@ static int relocate (const capsule cap,
                      int keep_relocs,
                      char **error)
 {
-    relocation_data_t rdata = { 0 };
+    relocation_data rdata = { 0 };
     capsule_item *map;
     int mmap_errno = 0;
     const char *mmap_error = NULL;

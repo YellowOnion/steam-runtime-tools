@@ -48,7 +48,7 @@ static int
 try_relocation (ElfW(Addr) *reloc_addr, const char *name, void *data)
 {
     capsule_item *map;
-    relocation_data_t *rdata = data;
+    relocation_data *rdata = data;
 
     if( !name || !*name || !reloc_addr )
         return 0;

@@ -106,7 +106,7 @@ libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           utils/mmap-info.c          \
                           utils/ld-cache.c           \
                           utils/ld-libs.c
-libcapsule_la_LDFLAGS   = -version-number 0:1
+libcapsule_la_LDFLAGS   = -version-number 0:1 -Wl,-z,nodelete
 libcapsule_la_LIBADD    = $(LIBELF_LIBS)
 libcapsule_la_SOURCES  += utils/utils.h              \
                           utils/debug.h              \

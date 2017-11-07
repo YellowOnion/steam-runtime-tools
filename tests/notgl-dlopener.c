@@ -145,5 +145,30 @@ main ( int argc,
     xdlclose( gl );
     xdlclose( gles );
 
+    // Check that we can dlopen and dlclose repeatedly without crashing
+
+    for( int i = 1; i < 10; i++ )
+    {
+        printf( "dlopening and dlclosing %d times...\n", i );
+        // dlopen'd handles are refcounted; take i references
+        for( int j = 0; j < i; j++ )
+        {
+            // Arbitrary flags that happen to be oppositely paired
+            // compared with how we opened the libraries above
+            gl = xdlopen( "libnotgl.so.0", RTLD_LAZY|RTLD_LOCAL );
+            gles = xdlopen( "libnotgles.so.1", RTLD_NOW|RTLD_GLOBAL );
+            xdlsym( gl, "notgl_extension_both" );
+            xdlsym( gles, "notgles_extension_both" );
+            xdlsym( RTLD_DEFAULT, "notgles_extension_both" );
+        }
+
+        // Release all i references
+        for( int j = 0; j < i; j++ )
+        {
+            xdlclose( gl );
+            xdlclose( gles );
+        }
+    }
+
     return 0;
 }

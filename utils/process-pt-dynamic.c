@@ -593,8 +593,8 @@ int
 process_pt_dynamic (ElfW(Addr) start,
                     size_t size,
                     void *base,
-                    relocate_rela_cb_t process_rela,
-                    relocate_rel_cb_t process_rel,
+                    relocate_rela_cb process_rela,
+                    relocate_rel_cb process_rel,
                     void *data)
 {
     int ret = 0;

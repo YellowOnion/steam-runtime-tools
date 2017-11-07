@@ -41,7 +41,7 @@ typedef struct
 } relocation_data;
 
 /*
- * relocate_rela_cb_t:
+ * relocate_rela_cb:
  * @start: array of relocation entries
  * @relasz: number of bytes (not number of structs!) following @start
  * @strtab: string table, a series of 0-terminated strings concatenated
@@ -51,7 +51,7 @@ typedef struct
  *
  * Callback used to iterate over relocations.
  */
-typedef int (*relocate_rela_cb_t)(const ElfW(Rela) *start,
+typedef int (*relocate_rela_cb)(const ElfW(Rela) *start,
                                   const int relasz,
                                   const char *strtab,
                                   const ElfW(Sym) *symtab,
@@ -59,7 +59,7 @@ typedef int (*relocate_rela_cb_t)(const ElfW(Rela) *start,
                                   void *data);
 
 /*
- * relocate_rel_cb_t:
+ * relocate_rel_cb:
  * @start: beginning of an array of relocation entries
  * @relasz: number of bytes (not number of structs!) following @start
  * @strtab: string table, a series of 0-terminated strings concatenated
@@ -69,7 +69,7 @@ typedef int (*relocate_rela_cb_t)(const ElfW(Rela) *start,
  *
  * Callback used to iterate over relocations.
  */
-typedef int (*relocate_rel_cb_t)(const ElfW(Rel) *start,
+typedef int (*relocate_rel_cb)(const ElfW(Rel) *start,
                                  const int relasz,
                                  const char *strtab,
                                  const ElfW(Sym) *symtab,
@@ -93,6 +93,6 @@ int process_dt_rel  (const ElfW(Rel) *start,
 int process_pt_dynamic (ElfW(Addr) start,
                         size_t size,
                         void *base,
-                        relocate_rela_cb_t process_rela,
-                        relocate_rel_cb_t process_rel,
+                        relocate_rela_cb process_rela,
+                        relocate_rel_cb process_rel,
                         void *data);

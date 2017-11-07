@@ -162,9 +162,9 @@ nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
                                        tests/notgl-helper-green.c              \
                                        tests/notgl-helper-red.c                \
                                        tests/notgl-helper-ref.c                \
-                                       tests/shim/libnotgl.so.c.excluded       \
-                                       tests/shim/libnotgl.so.c.shared         \
-                                       tests/shim/libnotgl.so.c.symbols
+                                       tests/shim/libnotgl.so.0.excluded       \
+                                       tests/shim/libnotgl.so.0.shared         \
+                                       tests/shim/libnotgl.so.0.symbols
 
 tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
@@ -202,22 +202,22 @@ tests_green_libhelper_la_SOURCES     = tests/notgl-helper-green.c              \
                                        tests/notgl-helper.h
 tests_green_libhelper_la_LDFLAGS     = -shared -version-number 0:23:42
 
-nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.c
+nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.0.c
 tests_shim_libnotgl_la_LIBADD        = libcapsule.la
 tests_shim_libnotgl_la_LDFLAGS       = -shared -version-number 0:0:0
 
-tests/shim/lib%.so.c: tests/shim/lib%.so.c.excluded tests/shim/lib%.so.c.shared tests/shim/lib%.so.c.symbols data/capsule-mkstublib Makefile
+tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols data/capsule-mkstublib Makefile
 	$(AM_V_GEN)\
 	PKG_CONFIG_PATH=$(abs_builddir)/data \
 	V=$V \
 	$(top_srcdir)/data/capsule-mkstublib \
 		--ext-dlopen \
-		--symbols-from=$(srcdir)/$@.symbols \
+		--symbols-from=$(srcdir)/tests/shim/$*.symbols \
 		--no-update-symbols \
 		--runtime-tree=/host \
-		$$(basename $@ .c).0 \
-		$(srcdir)/$@.excluded \
-		$(srcdir)/$@.shared \
+		$* \
+		$(srcdir)/tests/shim/$*.excluded \
+		$(srcdir)/tests/shim/$*.shared \
 		$@
 
 LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
@@ -299,7 +299,7 @@ $(DOC_MAIN_SGML_FILE): sgml-build.stamp
 # defines these variables
 CLEANFILES             += $(testmeta_DATA)
 CLEANFILES             += data/$(host)-capsule-mkstublib
-CLEANFILES             += tests/shim/libnotgl.so.c
+CLEANFILES             += $(nodist_tests_shim_libnotgl_la_SOURCES)
 
 EXTRA_DIST             += $(top_srcdir)/.version
 EXTRA_DIST             += autogen.sh

@@ -39,6 +39,7 @@ my $capsule_prefix = File::Temp->newdir();
 my $libs = '';
 my $notgl_user = "$builddir/tests/notgl-user";
 my $notgl_helper_user = "$builddir/tests/notgl-helper-user";
+my $notgl_dlopener = "$builddir/tests/notgl-dlopener";
 my $stdout;
 
 if (exists $ENV{CAPSULE_TESTS_UNINSTALLED}) {
@@ -56,6 +57,11 @@ if (exists $ENV{CAPSULE_TESTS_UNINSTALLED}) {
         "$builddir/tests/notgl-helper-user"
     ], '>', \$notgl_helper_user) or BAIL_OUT 'Cannot find notgl-helper-user: $?';
     chomp $notgl_helper_user;
+    run_ok([
+        "$builddir/libtool", qw(--mode=execute ls -1),
+        "$builddir/tests/notgl-dlopener"
+    ], '>', \$notgl_dlopener) or BAIL_OUT 'Cannot find notgl-dlopener: $?';
+    chomp $notgl_dlopener;
 }
 else {
     diag 'Running uninstalled: no';
@@ -98,6 +104,26 @@ like($stdout, qr/^notgles_extension_red: \(not found\)$/m);
 like($stdout, qr/^notgles_extension_green: \(not found\)$/m);
 like($stdout,
     qr/^NotGL helper implementation as seen by executable: container \(reference\)$/m);
+
+diag 'Without special measures (using dlopen):';
+run_ok(['env',
+        'LD_LIBRARY_PATH='.join(':', realpath("$builddir/tests/lib$libs"),
+            realpath("$builddir/tests/helper$libs")),
+        $notgl_dlopener],
+    '>', \$stdout);
+diag_multiline $stdout;
+like($stdout, qr/^NotGL implementation: reference$/m);
+like($stdout, qr/^NotGL helper implementation: container \(reference\)$/m);
+like($stdout,
+    qr/^notgl_extension_both: reference implementation of common extension$/m);
+like($stdout, qr/^notgl_extension_red: \(not found\)$/m);
+like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
+like($stdout, qr/^NotGLES implementation: reference$/m);
+like($stdout, qr/^NotGLES helper implementation: container \(reference\)$/m);
+like($stdout,
+    qr/^notgles_extension_both: reference implementation of common extension$/m);
+like($stdout, qr/^notgles_extension_red: \(not found\)$/m);
+like($stdout, qr/^notgles_extension_green: \(not found\)$/m);
 
 diag 'With libcapsule loading red implementation:';
 # We mount the "host system" on $capsule_prefix.
@@ -210,6 +236,38 @@ like($stdout, qr/^notgles_extension_green: green-only extension$/m);
 # of libcapsule.)
 like($stdout,
     qr/^NotGL helper implementation as seen by executable: container \(reference\)$/m);
+
+# Using dlopen also works.
+diag 'With libcapsule loading red implementation, via dlopen:';
+run_ok([qw(bwrap
+        --ro-bind / /
+        --dev-bind /dev /dev
+        --ro-bind /), $capsule_prefix,
+        '--tmpfs', realpath("$builddir/tests/lib$libs"),
+        '--tmpfs', $capsule_prefix.realpath($builddir),
+        '--ro-bind', realpath("$builddir/tests/red"),
+            $capsule_prefix.realpath("$builddir/tests/lib"),
+        '--setenv', 'CAPSULE_PREFIX', $capsule_prefix,
+        '--setenv', 'LD_LIBRARY_PATH', join(':',
+            realpath("$builddir/tests/shim$libs"),
+            realpath("$builddir/tests/helper$libs"),
+            realpath("$builddir/tests/lib$libs"),
+        ),
+        $notgl_dlopener],
+    '>', \$stdout);
+diag_multiline $stdout;
+like($stdout, qr/^NotGL implementation: red$/m);
+like($stdout, qr/^NotGL helper implementation: host \(red\)$/m);
+like($stdout,
+    qr/^notgl_extension_both: red implementation of common extension$/m);
+like($stdout, qr/^notgl_extension_red: red-only extension$/m);
+like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
+like($stdout, qr/^NotGLES implementation: red$/m);
+like($stdout, qr/^NotGLES helper implementation: host \(red\)$/m);
+like($stdout,
+    qr/^notgles_extension_both: red implementation of common extension$/m);
+like($stdout, qr/^notgles_extension_red: red-only extension$/m);
+like($stdout, qr/^notgles_extension_green: \(not found\)$/m);
 
 done_testing;
 

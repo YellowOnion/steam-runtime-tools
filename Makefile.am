@@ -270,11 +270,13 @@ AM_TESTS_ENVIRONMENT                 = export CAPSULE_CFLAGS="-I$(abs_top_srcdir
                                        export MALLOC_CHECK_=2;                 \
                                        export PKG_CONFIG_PATH="$(abs_builddir)/data";
 test_extra_programs                  = tests/notgl-user                        \
-                                       tests/notgl-helper-user
+                                       tests/notgl-helper-user                 \
+                                       tests/notgl-dlopener
 tests_notgl_user_LDADD               = tests/lib/libnotgl.la
 tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
                                        tests/lib/libnotgles.la                 \
                                        tests/helper/libhelper.la
+tests_notgl_dlopener_LDADD           = -ldl
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =

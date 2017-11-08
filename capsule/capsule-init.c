@@ -400,23 +400,29 @@ capsule_init (const char *soname)
         meta = get_cached_metadata( soname );
     }
 
-    if( meta )
+    if( !meta )
     {
-        handle->prefix  = meta->active_prefix;
+        fprintf( stderr,
+                 "libcapsule: %s: Fatal error: cannot initialize shim "
+                 "library (capsule_meta not found)\n",
+                 soname );
+        abort();
+    }
 
-        for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
-        {
-            capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
+    handle->prefix  = meta->active_prefix;
 
-            if( !cm || cm->closed )
-                continue;
+    for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
+    {
+        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
 
-            DEBUG( DEBUG_CAPSULE, " ");
-            DUMP_METADATA( i, cm );
-            DUMP_STRV( excluded, cm->combined_exclude );
-            DUMP_STRV( exported, cm->combined_export  );
-            DUMP_STRV( nowrap,   cm->combined_nowrap  );
-        }
+        if( !cm || cm->closed )
+            continue;
+
+        DEBUG( DEBUG_CAPSULE, " ");
+        DUMP_METADATA( i, cm );
+        DUMP_STRV( excluded, cm->combined_exclude );
+        DUMP_STRV( exported, cm->combined_export  );
+        DUMP_STRV( nowrap,   cm->combined_nowrap  );
     }
 
     handle->seen.all  = ptr_list_alloc( 32 );

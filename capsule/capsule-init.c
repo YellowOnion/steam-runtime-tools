@@ -141,6 +141,7 @@ get_capsule_metadata (struct link_map *map, const char *only)
          symbol++ )
     {
         capsule_metadata *meta = NULL;
+        capsule cap = NULL;
         char *name = (char *)strtab + symbol->st_name;
 
         if( !name || strcmp( "capsule_meta", name ) )
@@ -166,9 +167,25 @@ get_capsule_metadata (struct link_map *map, const char *only)
         meta->active_prefix =
           capsule_get_prefix( meta->default_prefix, meta->soname );
 
+        cap = meta->handle;
+
+        if( cap == NULL )
+        {
+            cap = xcalloc( 1, sizeof(struct _capsule) );
+            DEBUG( DEBUG_CAPSULE,
+                   "Creating new capsule %p for metadata %p (%s … %s)",
+                   cap, meta, meta->active_prefix, meta->soname );
+            cap->meta = meta;
+            cap->prefix = meta->active_prefix;
+            cap->seen.all  = ptr_list_alloc( 32 );
+            cap->seen.some = ptr_list_alloc( 32 );
+            meta->handle = cap;
+        }
+
         ptr_list_add_ptr( _capsule_metadata_list, meta, ptr_equal );
-        DEBUG( DEBUG_CAPSULE, "found metatdata for %s … %s at %p",
-               meta->active_prefix, meta->soname, meta );
+        DEBUG( DEBUG_CAPSULE,
+               "found metadata for %s … %s at %p (capsule: %p)",
+               meta->active_prefix, meta->soname, meta, cap );
         break;
     }
 }
@@ -386,7 +403,6 @@ get_cached_metadata (const char *soname)
 capsule
 capsule_init (const char *soname)
 {
-    capsule handle = xcalloc( 1, sizeof(struct _capsule) );
     capsule_metadata *meta = NULL;
 
     meta = get_cached_metadata( soname );
@@ -409,8 +425,6 @@ capsule_init (const char *soname)
         abort();
     }
 
-    handle->prefix  = meta->active_prefix;
-
     for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
     {
         capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
@@ -425,17 +439,7 @@ capsule_init (const char *soname)
         DUMP_STRV( nowrap,   cm->combined_nowrap  );
     }
 
-    handle->seen.all  = ptr_list_alloc( 32 );
-    handle->seen.some = ptr_list_alloc( 32 );
-
-    // poke the initialised metadata back into the handle
-    // and vice versa:
-    handle->meta = meta;
-    meta->handle = handle;
-
-    meta->closed = 0;
-
-    return handle;
+    return meta->handle;
 }
 
 #define CLEAR(f,x) ({ f( x ); x = NULL; })

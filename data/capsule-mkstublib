@@ -173,12 +173,6 @@ then
     symbol_file=${proxy_src%.c}.symbols;
 fi
 
-if [ -z "${dlopen_file:-}" ];
-then
-    # This is mandatory, so no test -f here
-    dlopen_file=${proxy_src}.dlopen;
-fi
-
 sharedir=$($PKG_CONFIG --variable=makeinc capsule)
 
 exec >$proxy_src.tmp;
@@ -302,22 +296,6 @@ capsule_metadata capsule_meta =
     .items            = relocs,
 };
 
-EOF
-
-if [ -f ${dlopen_file} ];
-then
-    cat - <<EOF
-// -------------------------------------------------------------
-// start of ${proxy_src%.c} dlopen wrapper
-EOF
-    cat $dlopen_file;
-    cat - <<EOF
-// end of ${proxy_src%.c} dlopen wrapper
-// -------------------------------------------------------------
-EOF
-fi
-
-cat - <<EOF
 static void __attribute__ ((constructor)) _capsule_init (void)
 {
     int   capsule_errno = 0;

@@ -215,7 +215,7 @@ static int relocate (const capsule cap,
 }
 
 int
-capsule_relocate (const capsule cap, char **error)
+_capsule_relocate (const capsule cap, char **error)
 {
     DEBUG( DEBUG_RELOCS, "beginning global symbol relocation:" );
     return relocate( cap, cap->meta->items, RELOCATION_FLAGS_NONE, cap->seen.all, error );
@@ -230,8 +230,8 @@ static capsule_item capsule_external_dl_relocs[] =
 };
 
 int
-capsule_relocate_dlopen (const capsule cap,
-                         char **error)
+_capsule_relocate_dlopen (const capsule cap,
+                          char **error)
 {
     unsigned long df = debug_flags;
 

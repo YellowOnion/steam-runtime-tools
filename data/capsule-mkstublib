@@ -294,26 +294,11 @@ capsule_metadata capsule_meta =
     .exclude          = exclude,
     .export           = valid_dlsym_sources,
     .items            = relocs,
+    .int_dlopen       = _int_dlopen,
 };
 
 static void __attribute__ ((constructor)) _capsule_init (void)
 {
-    int   capsule_errno = 0;
-    char *capsule_error = NULL;
-    void * dso;
-
-    // and this is an aray of functions we must override in the DSOs
-    // inside the capsule (mostly to take account of the fact that
-    // they're pulled in from a tree with a filesystem prefix like /host)
-    // NOTE: the shim address here isn't used, but we give it the same
-    // value as the real function address so it's never accidentally
-    // a value the capsule code will care about:
-    capsule_item wrappers[] =
-      {
-        { "dlopen", (capsule_addr) _int_dlopen, (capsule_addr) _int_dlopen },
-        { NULL }
-      };
-
     // Don't use capsule_meta.soname here, because if we did, it would be
     // a relocatable, interposable reference to capsule_meta (assuming the
     // shim library wasn't linked with -Bsymbolic). At runtime, we'd get
@@ -322,27 +307,6 @@ static void __attribute__ ((constructor)) _capsule_init (void)
     // and in particular not necessarily our own, with predictably bad
     // results.
     cap = capsule_init( soname );
-    dso = capsule_load( cap, wrappers, &capsule_errno, &capsule_error );
-
-    if( dso )
-    {
-        int rloc = capsule_relocate( cap, &capsule_error );
-
-        if( rloc != 0 ) // relocation failed. we're dead.
-            abort();
-
-        rloc = capsule_relocate_dlopen( cap, &capsule_error );
-        if( rloc != 0 ) // we may survive this depending on how dlopen is used
-           fprintf( stderr,
-                    "Warning: %s:%s could not install dlopen() wrappers: "
-                    "  This error may or may not be fatal later.\n",
-                    __FILE__, __PRETTY_FUNCTION__ );
-    }
-    else
-    {
-        fprintf( stderr, "capsule_dlmopen() failed: %s\\n", capsule_error );
-        exit( 1 );
-    }
 }
 
 static void __attribute__ ((destructor)) _capsule_exit (void)

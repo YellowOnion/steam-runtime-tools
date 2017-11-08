@@ -165,6 +165,19 @@ get_capsule_metadata (struct link_map *map, const char *only)
 
         if( cap == NULL )
         {
+            // Functions we must override in the DSOs
+            // inside the capsule (mostly to take account of the fact that
+            // they're pulled in from a tree with a filesystem prefix like /host)
+            // NOTE: the shim address here isn't used, but we give it the same
+            // value as the real function address so it's never accidentally
+            // a value the capsule code will care about:
+            static const capsule_item no_wrapper = { NULL };
+            const capsule_item int_dlopen_wrapper =
+            {
+                "dlopen", (capsule_addr) meta->int_dlopen,
+                (capsule_addr) meta->int_dlopen,
+            };
+
             cap = xcalloc( 1, sizeof(struct _capsule) );
             cap->ns = get_namespace( meta->default_prefix, meta->soname );
             DEBUG( DEBUG_CAPSULE,
@@ -173,6 +186,8 @@ get_capsule_metadata (struct link_map *map, const char *only)
             cap->meta = meta;
             cap->seen.all  = ptr_list_alloc( 32 );
             cap->seen.some = ptr_list_alloc( 32 );
+            cap->int_dlopen_wrappers[0] = int_dlopen_wrapper;
+            cap->int_dlopen_wrappers[1] = no_wrapper;
             meta->handle = cap;
             ptr_list_push_ptr( _capsule_list, cap );
         }
@@ -430,6 +445,9 @@ capsule
 capsule_init (const char *soname)
 {
     capsule cap;
+    void *dso;
+    int   capsule_errno = 0;
+    char *capsule_error = NULL;
 
     DEBUG( DEBUG_CAPSULE, "Initializing shim library %s", soname );
 
@@ -465,6 +483,35 @@ capsule_init (const char *soname)
         DUMP_STRV( excluded, other->ns->combined_exclude );
         DUMP_STRV( exported, other->ns->combined_export  );
     }
+
+    dso = _capsule_load( cap, cap->int_dlopen_wrappers,
+                         &capsule_errno, &capsule_error );
+
+    if( !dso )
+    {
+        fprintf( stderr, "libcapsule: fatal error: %s: %s\n",
+                 soname, capsule_error );
+        abort();
+    }
+
+    int rloc = _capsule_relocate( cap, &capsule_error );
+
+    if( rloc != 0 ) // relocation failed. we're dead.
+    {
+        fprintf( stderr,
+                 "libcapsule: fatal error: %s could not install "
+                 "relocations\n",
+                 soname );
+        abort();
+    }
+
+    rloc = _capsule_relocate_dlopen( cap, &capsule_error );
+    if( rloc != 0 ) // we may survive this depending on how dlopen is used
+       fprintf( stderr,
+                "libcapsule: warning: %s could not install dlopen() "
+                "dlopen wrappers. This error may or may not be "
+                "fatal later.\n",
+                soname );
 
     return cap;
 }

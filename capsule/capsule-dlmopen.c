@@ -232,10 +232,10 @@ dump_link_map( void *dl_handle )
 
 // ==========================================================================
 void *
-capsule_load (const capsule cap,
-              capsule_item *wrappers,
-              int *errcode,
-              char **error)
+_capsule_load (const capsule cap,
+               capsule_item *wrappers,
+               int *errcode,
+               char **error)
 {
     void *ret = NULL;
     ld_libs ldlibs = {};

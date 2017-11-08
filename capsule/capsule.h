@@ -43,10 +43,7 @@ typedef struct _capsule *capsule;
  * @real: address of the ‘real’ symbol in the target library
  * @shim: address of the ‘fake’ symbol in the proxy library
  *
- * @shim may typically be left empty in calls to capsule_load()
- * and capsule_relocate().
- *
- * @real may also be left empty in calls to capsule_relocate()
+ * @real and @shim may typically be left empty by the shim library.
  *
  * Both slots will typically hold the correct values after a successful
  * capsule… call. While this is sometimes important internally it is
@@ -81,6 +78,7 @@ struct _capsule_item
  * @items: (array zero-terminated=1): Array of capsule_item
  *          specifying which symbols to export, terminated by a
  *          #capsule_item whose @name is %NULL
+ * @int_dlopen: Implementation of the same API as `dlopen`
  *
  * This struct allows libcapsule proxy libraries to statically declare
  * metadata about themselves that libcapsule needs at link time in order
@@ -102,6 +100,7 @@ struct _capsule_metadata
     const char  **exclude;
     const char  **export;
     capsule_item *items;
+    void *(*int_dlopen) (const char *filename, int flag);
     /*< private >*/
     capsule handle;
 };
@@ -123,86 +122,6 @@ _CAPSULE_PUBLIC
 capsule capsule_init (const char *soname);
 
 /**
- * capsule_relocate:
- * @capsule: a #capsule handle as returned by capsule_init()
- * @error: (out) (transfer full) (optional): location in which to store
- *         an error message on failure, or %NULL to ignore.
- *         Free with free().
- *
- * Returns: 0 on success, non-zero on failure.
- *
- * This function updates the GOT entries in all DSOs outside the capsule
- * so that when they call any function listed in the @items of the
- * #capsule_metadata, they invoke the copy of that function inside the capsule.
- *
- * In the unlikely event that an error message is returned in @error it is the
- * caller's responsibility to free() it.
- */
-_CAPSULE_PUBLIC
-int capsule_relocate (const capsule capsule,
-                      char **error);
-
-/**
- * capsule_relocate_dlopen:
- * @capsule: a #capsule handle as returned by capsule_init()
- * @error: (out) (transfer full) (optional): location in which to store
- *         an error message on failure, or %NULL to ignore.
- *         Free with free().
- *
- * Returns: 0 on success, non-zero on failure.
- *
- * This function updates the GOT entries in all DSOs outside the capsule
- * _except_ those listed in @except: When they call dlopen(), instead
- * they invoke the copy of that function provided by libcapsule.
- *
- * In the unlikely event that an error message is returned in @error it is the
- * caller's responsibility to free() it.
- */
-_CAPSULE_PUBLIC
-int capsule_relocate_dlopen (const capsule capsule,
-                             char **error);
-
-/**
- * capsule_load:
- * @capsule: a #capsule handle as returned by capsule_init()
- * @dso: The name of the DSO to open (cf dlopen()) - eg libGL.so.1
- * @namespace: (out) Address of an #Lmid_t value.
- * @wrappers: Array of #capsule_item used to replace symbols in the namespace
- * @errcode: (out): location in which to store the error code (errno) on failure
- * @error: (out) (transfer full) (optional): location in which to store
- *         an error message on failure, or %NULL to ignore.
- *         Free with free().
- *
- * Returns: A (void *) DSO handle, as per dlopen(), or %NULL on error
- *
- * Opens @dso (a library) from a filesystem mounted at @prefix into a
- * symbol namespace specified by @namespace, using dlmopen().
- *
- * Any symbols specified in @wrappers will be replaced with the
- * corresponding address from @wrappers (allowing you to replace
- * function definitions inside the namespace with your own).
- *
- * This is normally used to replace calls inside the namespace to
- * certain functions (such as dlopen()) which need to be overridden
- * to operate correctly inside a private namespace associated with
- * a nonstandard filsystem tree.
- *
- * The #Lmid_t value stored in @namespace gives the symbol namespace
- * into which the target DSO was loaded. It should normally be #LM_ID_NEWLM.
- *
- * In addition to a bare libFOO.so.X style name, @dso may be an
- * absolute path (or even a relative one) and in those cases should
- * have the same effect as passing those values to dlopen(). This is
- * not a normal use case and has not been heavily tested.
- *
- */
-_CAPSULE_PUBLIC
-void *capsule_load (const capsule capsule,
-                    capsule_item *wrappers,
-                    int *errcode,
-                    char **error);
-
-/**
  * capsule_shim_dlopen:
  * @capsule: a #capsule handle as returned by capsule_init()
  * @file: base name of the target DSO (eg libz.so.1)
@@ -212,15 +131,13 @@ void *capsule_load (const capsule capsule,
  *
  * This helper function exists because dlopen() cannot safely be called
  * by a DSO opened into a private namespace. It takes @file and @flag
- * arguments (cf dlopen()) and a @capsule handle (cf capsule_load())
- * and performs a safe dlmopen() call instead, respecting the same
- * restrictions as capsule_load().
+ * arguments (cf dlopen()) and a @capsule handle,
+ * and performs a safe dlmopen() call instead.
  *
  * Typically this function is used to implement a safe wrapper for dlopen()
- * which is passed via the wrappers argument to capsule_load(). This
- * replaces calls to dlopen() by all DSOs in the capsule produced by
- * capsule_load(), allowing libraries which use dlopen() to work inside
- * the capsule.
+ * which is assigned to the @int_dlopen member of the #capsule_metadata.
+ * This * replaces calls to dlopen() by all DSOs in the capsule,
+ * allowing libraries which use dlopen() to work inside the capsule.
  *
  * Limitations: RTLD_GLOBAL is not supported in @flag. This is a glibc
  * limitation in the dlmopen() implementation.
@@ -267,11 +184,11 @@ void *capsule_external_dlsym (void *handle, const char *symbol);
  *
  * This wrapper is meant to be replace normal calls to dlopen() made by the
  * main program or a non-capsule library - it is necessary because en ELF
- * object loaded by dlopen() may need us to trigger the capsule_relocate()
+ * object loaded by dlopen() may need us to trigger the _capsule_relocate()
  * operation in order to make sure its GOT entries are correctly updated.
  *
  * This wrapper carries out a normal dlopen() and then re-triggers the
- * initial capsule_relocate() call immediately, before returning
+ * initial _capsule_relocate() call immediately, before returning
  * the same value that dlopen() would have, given the same @file and @flag
  * arguments.
  */

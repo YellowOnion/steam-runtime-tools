@@ -40,14 +40,6 @@ f) In its constructor:
 
    assign the return of capsule_init to ‘cap’
 
-   call capsule_load to acquire the symbols it needs to export
-
-   call capsule_relocate to replace all current references to the capsules'
-   symbols with the real symbols acquired by capsule_load
-
-   call capsule_relocate_dlopen to install a wrapper for dlopen outside the
-   capsule
-
 g) In its destructor:
 
    call capsule_close
@@ -109,19 +101,17 @@ The constructor for libcapsule runs, and does the following:
       all the .export entries from all capsules that share that namespace
       (as determined by their prefix) 
 
-The constructor for each loaded capsule runs, and does the following:
+The constructor for each loaded capsule runs and calls
+capsule_init( static-copy-of-soname ) which does the following:
 
-  - calls capsule_init( static-copy-of-soname ) and assigns the
-    returned handle to static global storage
+  - calls _capsule_load to load the real target library
 
-  - calls capsule_load to load the real target library
-
-  - calls capsule_relocate to update the global offset tables (GOTs)
+  - calls _capsule_relocate to update the global offset tables (GOTs)
     of all DSOs outside the capsule to use the real symbols from the
     target instead of the dummy entries in the capsule
 
-  - calls capsule_relocate_dlopen to install wrappers for any special-case
-    functions (typically just dlopen - dlsym is handled by capsule_relocate)
+  - calls _capsule_relocate_dlopen to install wrappers for any special-case
+    functions (typically just dlopen - dlsym is handled by _capsule_relocate)
     that require careful handling.
 
 dlopen() of a capsule (from outside the capsule):
@@ -131,12 +121,12 @@ This is similar to normal linking, except:
   - The libcapsule constructor does not run
   - the capsule's constructor's call to capsule_init triggers a re-harvesting
     of available metadata, and a re-calculation of the aggregated lists
-  - the capsule_relocate and capsule_relocate_dlopen sequences for _all_
+  - the _capsule_relocate and _capsule_relocate_dlopen sequences for _all_
     capsules are triggered
 
 dlopen() of a normal library (from outside the capsule):
 
-  - the capsule_relocate and capsule_relocate_dlopen sequences for _all_
+  - the _capsule_relocate and _capsule_relocate_dlopen sequences for _all_
     capsules are triggered
 
 dlopen() of a normal library inside the capsule:

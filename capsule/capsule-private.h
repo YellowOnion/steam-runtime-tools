@@ -8,6 +8,7 @@ typedef void * (*dlopnfunc) (const char *file, int flags);
 
 typedef struct _capsule_namespace
 {
+    Lmid_t ns;
     const char *prefix;
     ptr_list *exclusions;
     ptr_list *exports;

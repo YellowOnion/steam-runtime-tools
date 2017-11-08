@@ -78,7 +78,7 @@ static const char *invalid_dl_reloc_targets[] =
 __attribute__ ((visibility("default")))
 capsule_metadata capsule_meta =
 {
-    .namespace        = LM_ID_NEWLM,
+    .capsule_abi      = 0,
     .soname           = "libGL.so.1",
     .default_prefix   = "/host",
     .exclude          = exclude, 

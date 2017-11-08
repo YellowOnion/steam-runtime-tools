@@ -92,16 +92,14 @@ typedef struct _capsule_metadata capsule_metadata;
 struct _capsule_metadata
 {
     /*< public >*/
-    Lmid_t namespace;
+    const int     capsule_abi;
     const char   *soname;
     const char   *default_prefix;
     const char  **exclude;
     const char  **export;
     const char  **nowrap;
     capsule_item *dl_wrappers;
-    const int     capsule_abi;
     /*< private >*/
-    int     closed;
     char  **combined_exclude;
     char  **combined_export;
     char  **combined_nowrap;
@@ -224,8 +222,6 @@ int capsule_relocate_except (const capsule capsule,
  */
 _CAPSULE_PUBLIC
 void *capsule_load (const capsule capsule,
-                    const char *dso,
-                    Lmid_t *namespace,
                     capsule_item *wrappers,
                     int *errcode,
                     char **error);

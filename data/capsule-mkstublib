@@ -327,14 +327,13 @@ static capsule_item _external_dl_relocs[] =
 __attribute__ ((visibility("default")))
 capsule_metadata capsule_meta =
 {
-    .namespace        = LM_ID_NEWLM,
+    .capsule_abi      = 0,
     .soname           = "$proxied_dso",
     .default_prefix   = "/host",
     .exclude          = exclude,
     .export           = valid_dlsym_sources,
     .nowrap           = invalid_dl_reloc_targets,
     .dl_wrappers      = EXT_DLOPEN_WRAPPERS,
-    .capsule_abi      = 0,
 };
 
 // -------------------------------------------------------------
@@ -376,7 +375,6 @@ static void __attribute__ ((constructor)) _capsule_init (void)
 {
     int   capsule_errno = 0;
     char *capsule_error = NULL;
-    Lmid_t symbol_ns;
     void * dso;
 
     // and this is an aray of functions we must override in the DSOs
@@ -391,14 +389,10 @@ static void __attribute__ ((constructor)) _capsule_init (void)
         { NULL }
       };
 
-    symbol_ns = LM_ID_NEWLM;
-
     // Don't use capsule_meta.soname here - use a static value.
     // Trust me when I say you don't want to know why.
     cap = capsule_init( "$proxied_dso" );
-
-    dso = capsule_load( cap, "$proxied_dso", &symbol_ns, wrappers,
-                        &capsule_errno, &capsule_error );
+    dso = capsule_load( cap, wrappers, &capsule_errno, &capsule_error );
 
     if( dso )
     {

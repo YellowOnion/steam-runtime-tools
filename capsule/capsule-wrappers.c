@@ -182,7 +182,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
     DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
            "dlopen(%s, %x) wrapper: LMID: %ld; prefix: %s;",
-           file, flag, cap->meta->namespace, cap->ns->prefix );
+           file, flag, cap->ns->ns, cap->ns->prefix );
 
     if( cap->ns->prefix && strcmp(cap->ns->prefix, "/") )
     {
@@ -221,7 +221,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         }
 
         // load them up in reverse dependency order:
-        res = ld_libs_load( &ldlibs, &cap->meta->namespace, flag, &code, &errors );
+        res = ld_libs_load( &ldlibs, &cap->ns->ns, flag, &code, &errors );
 
         if( !res )
             DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
@@ -231,7 +231,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
     }
     else // no prefix: straightforward dlmopen into our capsule namespace:
     {
-        res = dlmopen( cap->meta->namespace, file, flag );
+        res = dlmopen( cap->ns->ns, file, flag );
 
         if( !res )
             DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,

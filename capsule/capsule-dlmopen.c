@@ -233,62 +233,12 @@ dump_link_map( void *dl_handle )
 // ==========================================================================
 void *
 capsule_load (const capsule cap,
-              const char *dso,
-              Lmid_t *namespace,
               capsule_item *wrappers,
               int *errcode,
               char **error)
 {
     void *ret = NULL;
     ld_libs ldlibs = {};
-    capsule_metadata *cm = NULL;
-
-    // if we were passed a default new-namespace flag see
-    // if we've already established a namespace for this
-    // filesystem prefix in the global cache and use that:
-    DEBUG( DEBUG_CAPSULE, "requested namespace %ld for %s (newlm: %d)",
-           *namespace, dso, LM_ID_NEWLM );
-    if( *namespace == LM_ID_NEWLM )
-    {
-        // first fetch the subcapsule metadata for this specific
-        // target DSO if it exists:
-        for( size_t n = 0; n < _capsule_list->next; n++ )
-        {
-            capsule other = ptr_list_nth_ptr( _capsule_list, n );
-            DEBUG( DEBUG_CAPSULE, "checking metadata %d for %p, %s",
-                   (int) n, other, other ? other->meta->soname : "---" );
-
-            if( !other || strcmp( dso, other->meta->soname ) )
-                continue;
-
-            cm = other->meta;
-            break;
-        }
-
-        DEBUG( DEBUG_CAPSULE, "metadata %p found for %s (LM: %ld)",
-               cm, cm->soname, cm->namespace );
-
-        // next, if we have subcapsule metadata, see if there's
-        // a Lmid_t value alrady allocated for it:
-        if( cm && cm->namespace == LM_ID_NEWLM )
-            for( size_t n = 0; n < _capsule_list->next; n++ )
-            {
-                capsule other = ptr_list_nth_ptr( _capsule_list, n );
-
-                // this subcapsule is for a different prefix. skip it:
-                if( cap->ns != other->ns )
-                    continue;
-
-                // we found a pre-allocated Lmid_t. Use it:
-                if( other->meta->namespace != LM_ID_NEWLM )
-                {
-                    DEBUG( DEBUG_CAPSULE, "re-using LM: %ld from %s",
-                           other->meta->namespace, other->meta->soname );
-                    *namespace = cm->namespace = other->meta->namespace;
-                    break;
-                }
-            }
-    }
 
     if( !ld_libs_init( &ldlibs,
                        (const char **) cap->meta->combined_exclude,
@@ -310,7 +260,7 @@ capsule_load (const capsule cap,
 
     // ==================================================================
     // find the starting point of our capsule
-    if( !ld_libs_set_target( &ldlibs, dso, errcode, error ) )
+    if( !ld_libs_set_target( &ldlibs, cap->meta->soname, errcode, error ) )
         goto cleanup;
 
     // ==================================================================
@@ -322,12 +272,7 @@ capsule_load (const capsule cap,
 
     // ==================================================================
     // load the stack of DSOs we need:
-    ret = ld_libs_load( &ldlibs, namespace, 0, errcode, error );
-
-    cap->meta->namespace = *namespace;
-
-    if( cm )
-        cm->namespace = *namespace;
+    ret = ld_libs_load( &ldlibs, &cap->ns->ns, 0, errcode, error );
 
     if( debug_flags & DEBUG_CAPSULE )
     {

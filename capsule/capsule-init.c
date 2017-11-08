@@ -24,7 +24,6 @@
               "  void        *dl_handle;          %p"  "\n"  \
               "  capsule_metadata *meta;          %p"  "\n"  \
               "  {"                                    "\n"  \
-              "    Lmid_t namespace;              %ld" "\n"  \
               "    const char  *soname;           %s"  "\n"  \
               "    const char  *default_prefix;   %s"  "\n"  \
               "    const char **exclude;          %p"  "\n"  \
@@ -36,13 +35,13 @@
               "  };"                                   "\n"  \
               "  capsule_namespace *ns;           %p"  "\n"  \
               "  {"                                    "\n"  \
+              "    Lmid_t      ns;               %ld"  "\n"  \
               "    char        *prefix;           %s"  "\n"  \
               "  };"                                   "\n"  \
               "};"                                     "\n", \
               cap                         ,                  \
               cap->dl_handle              ,                  \
               cap->meta                   ,                  \
-              cap->meta->namespace        ,                  \
               cap->meta->soname           ,                  \
               cap->meta->default_prefix   ,                  \
               cap->meta->exclude          ,                  \
@@ -52,6 +51,7 @@
               cap->meta->combined_export  ,                  \
               cap->meta->combined_nowrap  ,                  \
               cap->ns                     ,                  \
+              cap->ns->ns                 ,                  \
               cap->ns->prefix             ); })
 
 static ptr_list *namespaces = NULL;
@@ -98,6 +98,7 @@ get_namespace (const char *default_prefix, const char *soname)
     }
 
     ns = calloc( 1, sizeof(capsule_namespace) );
+    ns->ns          = LM_ID_NEWLM;
     ns->prefix      = strdup( prefix );
     ns->exclusions  = ptr_list_alloc( 4 );
     ns->exports     = ptr_list_alloc( 4 );
@@ -164,9 +165,6 @@ get_capsule_metadata (struct link_map *map, const char *only)
         // not a version of the ABI we understand? skip it.
         if( meta->capsule_abi != 0 )
             continue;
-
-        meta->namespace = LM_ID_NEWLM;
-        meta->closed    = 0;
 
         cap = meta->handle;
 

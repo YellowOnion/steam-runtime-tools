@@ -28,5 +28,5 @@ struct _capsule
 };
 
 extern ptr_list *_capsule_list;
-extern dlsymfunc capsule_dl_symbol;
-extern dlopnfunc capsule_dl_open;
+extern dlsymfunc _capsule_original_dlsym;
+extern dlopnfunc _capsule_original_dlopen;

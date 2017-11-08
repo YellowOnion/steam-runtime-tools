@@ -209,10 +209,10 @@ static int relocate (const capsule cap,
         for( map = cap->relocations; map->name; map++ )
         {
             if( !map->shim )
-                map->shim = (ElfW(Addr)) capsule_dl_symbol( RTLD_DEFAULT, map->name );
+                map->shim = (ElfW(Addr)) _capsule_original_dlsym( RTLD_DEFAULT, map->name );
 
             if( !map->real )
-                map->real = (ElfW(Addr)) capsule_dl_symbol( cap->dl_handle, map->name );
+                map->real = (ElfW(Addr)) _capsule_original_dlsym( cap->dl_handle, map->name );
         }
 
     // time to enter some sort of ... dangerous... zone:

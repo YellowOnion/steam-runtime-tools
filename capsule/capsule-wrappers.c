@@ -56,7 +56,7 @@ capsule_external_dlsym (void *handle, const char *symbol)
         capsule cap = ptr_list_nth_ptr( _capsule_list, n );
         // TODO: If handle != cap->dl_handle, should we skip it?
         // TODO: RTLD_NEXT isn't implemented (is it implementable?)
-        addr = capsule_dl_symbol ( cap->dl_handle, symbol );
+        addr = _capsule_original_dlsym ( cap->dl_handle, symbol );
 
         if( addr )
         {
@@ -83,7 +83,7 @@ capsule_external_dlsym (void *handle, const char *symbol)
     {
         DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
                "symbol %s not found: fall back to default", symbol );
-        addr = capsule_dl_symbol ( handle, symbol );
+        addr = _capsule_original_dlsym ( handle, symbol );
     }
 
     return addr;
@@ -108,9 +108,9 @@ capsule_external_dlopen(const char *file, int flag)
     void *handle = NULL;
     char *error  = NULL;
 
-    if( capsule_dl_open )
+    if( _capsule_original_dlopen )
     {
-        handle = capsule_dl_open ( file, flag );
+        handle = _capsule_original_dlopen ( file, flag );
     }
     else
     {

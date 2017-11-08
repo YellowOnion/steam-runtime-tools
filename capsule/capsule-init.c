@@ -57,8 +57,8 @@
 static ptr_list *namespaces = NULL;
 
 ptr_list *_capsule_list  = NULL;
-dlsymfunc capsule_dl_symbol = NULL;
-dlopnfunc capsule_dl_open   = NULL;
+dlsymfunc _capsule_original_dlsym = NULL;
+dlopnfunc _capsule_original_dlopen = NULL;
 
 static int str_equal (const void *a, const void *b)
 {
@@ -342,8 +342,8 @@ static void __attribute__ ((constructor)) _init_capsule (void)
 
     update_metadata( NULL );
 
-    capsule_dl_symbol = dlsym( RTLD_DEFAULT, "dlsym"  );
-    capsule_dl_open   = dlsym( RTLD_DEFAULT, "dlopen" );
+    _capsule_original_dlsym = dlsym( RTLD_DEFAULT, "dlsym"  );
+    _capsule_original_dlopen = dlsym( RTLD_DEFAULT, "dlopen" );
 
     if( !(debug_flags & DEBUG_CAPSULE) )
         return;

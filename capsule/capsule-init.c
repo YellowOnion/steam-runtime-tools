@@ -1,6 +1,8 @@
 #include <capsule/capsule.h>
 #include "capsule/capsule-private.h"
 #include "utils/utils.h"
+
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <dlfcn.h>
@@ -52,14 +54,9 @@ typedef struct _capsule_namespace
 
 static ptr_list *namespaces = NULL;
 
-ptr_list *_capsule_metadata_list  = NULL;
+ptr_list *_capsule_list  = NULL;
 dlsymfunc capsule_dl_symbol = NULL;
 dlopnfunc capsule_dl_open   = NULL;
-
-static int ptr_equal (const void *a, const void *b)
-{
-    return (a == b) ? 1 : 0;
-}
 
 static int str_equal (const void *a, const void *b)
 {
@@ -180,9 +177,9 @@ get_capsule_metadata (struct link_map *map, const char *only)
             cap->seen.all  = ptr_list_alloc( 32 );
             cap->seen.some = ptr_list_alloc( 32 );
             meta->handle = cap;
+            ptr_list_push_ptr( _capsule_list, cap );
         }
 
-        ptr_list_add_ptr( _capsule_metadata_list, meta, ptr_equal );
         DEBUG( DEBUG_CAPSULE,
                "found metadata for %s … %s at %p (capsule: %p)",
                meta->active_prefix, meta->soname, meta, cap );
@@ -268,44 +265,44 @@ update_metadata (const char *match)
     // ie all excludes for /host should be in one exclude list,
     // all nowrap entries for /host should bein another list, all
     // excludes for /badgerbadger should be in another, etc etc:
-    for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
+    for( size_t i = 0; i < _capsule_list->next; i++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
+        capsule cap = ptr_list_nth_ptr( _capsule_list, i );
 
-        if( !cm || cm->closed )
+        if( !cap )
             continue;
 
-        capsule_namespace *ns = get_namespace( cm->active_prefix );
+        capsule_namespace *ns = get_namespace( cap->prefix );
 
-        add_new_strings_to_ptrlist( ns->exclusions, cm->exclude );
-        add_new_strings_to_ptrlist( ns->exports,    cm->export  );
-        add_new_strings_to_ptrlist( ns->nowrap,     cm->nowrap  );
+        add_new_strings_to_ptrlist( ns->exclusions, cap->meta->exclude );
+        add_new_strings_to_ptrlist( ns->exports,    cap->meta->export  );
+        add_new_strings_to_ptrlist( ns->nowrap,     cap->meta->nowrap  );
     }
 
     // now squash the meta data ptr_lists into char** that
     // the underlying infrastructure actually uses:
-    for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
+    for( size_t i = 0; i < _capsule_list->next; i++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
+        capsule cap = ptr_list_nth_ptr( _capsule_list, i );
 
-        if( !cm || cm->closed )
+        if( !cap )
             continue;
 
-        capsule_namespace *ns = get_namespace( cm->active_prefix );
+        capsule_namespace *ns = get_namespace( cap->prefix );
 
-        free_strv( cm->combined_exclude );
-        free_strv( cm->combined_export  );
-        free_strv( cm->combined_nowrap  );
+        free_strv( cap->meta->combined_exclude );
+        free_strv( cap->meta->combined_export  );
+        free_strv( cap->meta->combined_nowrap  );
 
-        cm->combined_exclude = cook_list( ns->exclusions );
-        cm->combined_export  = cook_list( ns->exports );
-        cm->combined_nowrap  = cook_list( ns->nowrap );
+        cap->meta->combined_exclude = cook_list( ns->exclusions );
+        cap->meta->combined_export  = cook_list( ns->exports );
+        cap->meta->combined_nowrap  = cook_list( ns->nowrap );
     }
 }
 
 static void __attribute__ ((constructor)) _init_capsule (void)
 {
-    _capsule_metadata_list = ptr_list_alloc( 16 );
+    _capsule_list = ptr_list_alloc( 16 );
 
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 
@@ -317,16 +314,16 @@ static void __attribute__ ((constructor)) _init_capsule (void)
     if( !(debug_flags & DEBUG_CAPSULE) )
         return;
 
-    for( unsigned int x = 0; x < _capsule_metadata_list->next; x++ )
+    for( unsigned int x = 0; x < _capsule_list->next; x++ )
     {
-        capsule_metadata *cm = _capsule_metadata_list->loc[ x ].ptr;
+        capsule cap = _capsule_list->loc[ x ].ptr;
 
-        if( !cm || cm->closed )
+        if( !cap )
             continue;
 
-        const char **soname = cm->exclude;
+        const char **soname = cap->meta->exclude;
 
-        DEBUG( DEBUG_CAPSULE, "[%02d] %s metadata:\n", x, cm->soname );
+        DEBUG( DEBUG_CAPSULE, "[%02d] %s metadata:\n", x, cap->meta->soname );
 
         while( soname && *soname )
             fprintf( stderr, "    %s\n", *(soname++) );
@@ -376,47 +373,42 @@ capsule_get_prefix (const char *dflt, const char *soname)
     return NULL;
 }
 
-static capsule_metadata *
-get_cached_metadata (const char *soname)
+static capsule
+get_capsule_by_soname (const char *soname)
 {
-    size_t i = 0;
-    capsule_metadata *meta = NULL;
-
-    for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
+    for( size_t n = 0; n < _capsule_list->next; n++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, n );
+        capsule cap = ptr_list_nth_ptr( _capsule_list, n );
 
-        if( !cm || cm->closed || strcmp( cm->soname, soname ) )
+        if( !cap || strcmp( cap->meta->soname, soname ) )
             continue;
 
-        i = n;
-        meta = cm;
-        break;
+        DUMP_METADATA(n, cap->meta);
+        return cap;
     }
 
-    if(meta)
-        DUMP_METADATA(i, meta);
-
-    return meta;
+    return NULL;
 }
 
 capsule
 capsule_init (const char *soname)
 {
-    capsule_metadata *meta = NULL;
+    capsule cap;
 
-    meta = get_cached_metadata( soname );
+    DEBUG( DEBUG_CAPSULE, "Initializing shim library %s", soname );
 
-    if( !meta )
+    cap = get_capsule_by_soname( soname );
+
+    if( !cap )
     {
         DEBUG( DEBUG_CAPSULE, "no metadata for %s registered: "
                "may be a dlopened capsule", soname );
         DEBUG( DEBUG_CAPSULE, "updating capsule metadata" );
         update_metadata( soname );
-        meta = get_cached_metadata( soname );
+        cap = get_capsule_by_soname( soname );
     }
 
-    if( !meta )
+    if( !cap )
     {
         fprintf( stderr,
                  "libcapsule: %s: Fatal error: cannot initialize shim "
@@ -425,21 +417,21 @@ capsule_init (const char *soname)
         abort();
     }
 
-    for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
+    for( size_t i = 0; i < _capsule_list->next; i++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
+        capsule other = ptr_list_nth_ptr( _capsule_list, i );
 
-        if( !cm || cm->closed )
+        if( !other )
             continue;
 
         DEBUG( DEBUG_CAPSULE, " ");
-        DUMP_METADATA( i, cm );
-        DUMP_STRV( excluded, cm->combined_exclude );
-        DUMP_STRV( exported, cm->combined_export  );
-        DUMP_STRV( nowrap,   cm->combined_nowrap  );
+        DUMP_METADATA( i, other->meta );
+        DUMP_STRV( excluded, other->meta->combined_exclude );
+        DUMP_STRV( exported, other->meta->combined_export  );
+        DUMP_STRV( nowrap,   other->meta->combined_nowrap  );
     }
 
-    return meta->handle;
+    return cap;
 }
 
 #define CLEAR(f,x) ({ f( x ); x = NULL; })
@@ -449,26 +441,35 @@ capsule_close (capsule cap)
 {
     capsule_metadata *meta = cap->meta;
 
+    DEBUG( DEBUG_CAPSULE, "Uninitializing shim library %s", meta->soname );
+
+    // scrub all entries in the manifest pointing to this metadata
+    for( size_t n = 0; n < _capsule_list->next; n++ )
+    {
+        capsule other = ptr_list_nth_ptr( _capsule_list, n );
+
+        if( other == cap )
+        {
+            _capsule_list->loc[ n ].ptr = NULL;
+        }
+        else if( other != NULL )
+        {
+            // There should only be one capsule per capsule_metadata
+            assert( other->meta != meta );
+        }
+    }
+
     // free+null all the non-static memory in the metadata struct
     CLEAR( free_strv, meta->combined_exclude );
     CLEAR( free_strv, meta->combined_export  );
     CLEAR( free_strv, meta->combined_nowrap  );
     CLEAR( free     , meta->active_prefix    );
+    meta->handle = NULL;
 
     CLEAR( ptr_list_free, cap->seen.all  );
     CLEAR( ptr_list_free, cap->seen.some );
-    CLEAR( free         , meta->handle   );
 
-    // flag it as closed just in case something tries to peek at it
-    meta->closed = 1;
-
-    // scrub all entries in the manifest pointing to this metadata
-    for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
-    {
-        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, n );
-
-        if( cm == meta )
-            _capsule_metadata_list->loc[ n ].ptr = NULL;
-    }
-
+    // poison the capsule struct and free it
+    memset( cap, 'X', sizeof(struct _capsule) );
+    free( cap );
 }

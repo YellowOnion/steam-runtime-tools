@@ -252,16 +252,16 @@ capsule_load (const capsule cap,
     {
         // first fetch the subcapsule metadata for this specific
         // target DSO if it exists:
-        for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
+        for( size_t n = 0; n < _capsule_list->next; n++ )
         {
-            capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
+            capsule other = ptr_list_nth_ptr( _capsule_list, n );
             DEBUG( DEBUG_CAPSULE, "checking metadata %d for %p, %s",
-                   (int) n, m, m ? m->soname : "---" );
+                   (int) n, other, other ? other->meta->soname : "---" );
 
-            if( !m || strcmp( dso, m->soname ) )
+            if( !other || strcmp( dso, other->meta->soname ) )
                 continue;
 
-            cm = m;
+            cm = other->meta;
             break;
         }
 
@@ -271,22 +271,22 @@ capsule_load (const capsule cap,
         // next, if we have subcapsule metadata, see if there's
         // a Lmid_t value alrady allocated for it:
         if( cm && cm->namespace == LM_ID_NEWLM )
-            for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
+            for( size_t n = 0; n < _capsule_list->next; n++ )
             {
-                capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
+                capsule other = ptr_list_nth_ptr( _capsule_list, n );
 
                 // this subcapsule is for a different prefix. skip it:
                 //DEBUG( DEBUG_CAPSULE, "checking prefix match: %p vs %p",
-                //       cap->prefix, m->active_prefix );
-                if( strcmp( cap->prefix, m->active_prefix ) )
+                //       cap->prefix, other->meta->active_prefix );
+                if( strcmp( cap->prefix, other->prefix ) )
                     continue;
 
                 // we found a pre-allocated Lmid_t. Use it:
-                if( m->namespace != LM_ID_NEWLM )
+                if( other->meta->namespace != LM_ID_NEWLM )
                 {
                     DEBUG( DEBUG_CAPSULE, "re-using LM: %ld from %s",
-                           m->namespace, m->soname );
-                    *namespace = cm->namespace = m->namespace;
+                           other->meta->namespace, other->meta->soname );
+                    *namespace = cm->namespace = other->meta->namespace;
                     break;
                 }
             }

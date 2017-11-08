@@ -15,6 +15,6 @@ struct _capsule
     capsule_metadata *meta;
 };
 
-extern ptr_list *_capsule_metadata_list;
+extern ptr_list *_capsule_list;
 extern dlsymfunc capsule_dl_symbol;
 extern dlopnfunc capsule_dl_open;

@@ -51,12 +51,12 @@ capsule_external_dlsym (void *handle, const char *symbol)
     DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
     void *addr = NULL;
 
-    for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
+    for( size_t n = 0; n < _capsule_list->next; n++ )
     {
-        capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
-        // TODO: If handle != m->handle->dl_handle, should we skip it?
+        capsule cap = ptr_list_nth_ptr( _capsule_list, n );
+        // TODO: If handle != cap->dl_handle, should we skip it?
         // TODO: RTLD_NEXT isn't implemented (is it implementable?)
-        addr = capsule_dl_symbol ( m->handle->dl_handle, symbol );
+        addr = capsule_dl_symbol ( cap->dl_handle, symbol );
 
         if( addr )
         {
@@ -66,7 +66,7 @@ capsule_external_dlsym (void *handle, const char *symbol)
             // or if we are unable to determine where it came from (what?)
             if( dladdr( addr, &dso ) )
             {
-                if( !dso_is_exported( dso.dli_fname, m->combined_export ) )
+                if( !dso_is_exported( dso.dli_fname, cap->meta->combined_export ) )
                     addr = NULL;
 
                 DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
@@ -127,28 +127,27 @@ capsule_external_dlopen(const char *file, int flag)
             debug_flags |= DEBUG_RELOCS;
         // This may not even be necessary, so it should not be fatal.
         // We do want to log it though as it might be an important clue:
-        for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
+        for( size_t n = 0; n < _capsule_list->next; n++ )
         {
-            capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
-            const capsule c = m->handle;
+            const capsule c = ptr_list_nth_ptr( _capsule_list, n );
 
             if( capsule_relocate( c, NULL, &error ) != 0 )
             {
                 fprintf( stderr,
                          "relocation from %s after dlopen(%s, …) failed: %s\n",
-                         m->soname, file, error );
+                         c->meta->soname, file, error );
                 free( error );
             }
 
             if( capsule_relocate_except( c,
-                                         m->dl_wrappers,
-                                         (const char **)m->combined_nowrap,
+                                         c->meta->dl_wrappers,
+                                         (const char **)c->meta->combined_nowrap,
                                          &error ) != 0 )
             {
                 fprintf( stderr,
                          "dl-wrapper relocation from %s after "
                          "dlopen(%s, …) failed: %s\n",
-                         m->soname, file, error );
+                         c->meta->soname, file, error );
                 free( error );
             }
         }

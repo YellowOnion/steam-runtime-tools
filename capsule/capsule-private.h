@@ -12,10 +12,8 @@ typedef struct _capsule_namespace
     const char *prefix;
     ptr_list *exclusions;
     ptr_list *exports;
-    ptr_list *nowrap;
     char  **combined_exclude;
     char  **combined_export;
-    char  **combined_nowrap;
 } capsule_namespace;
 
 struct _capsule

@@ -9,14 +9,6 @@
 #include <string.h>
 #include <errno.h>
 
-capsule_item capsule_external_dl_relocs[] =
-{
-  { "dlopen",
-    (capsule_addr) capsule_external_dlopen ,
-    (capsule_addr) capsule_external_dlopen },
-  { NULL }
-};
-
 static int
 dso_is_exported (const char *dsopath, char **exported)
 {
@@ -139,10 +131,7 @@ capsule_external_dlopen(const char *file, int flag)
                 free( error );
             }
 
-            if( capsule_relocate_except( c,
-                                         c->meta->dl_wrappers,
-                                         (const char **)c->ns->combined_nowrap,
-                                         &error ) != 0 )
+            if( capsule_relocate_dlopen( c, &error ) != 0 )
             {
                 fprintf( stderr,
                          "dl-wrapper relocation from %s after "

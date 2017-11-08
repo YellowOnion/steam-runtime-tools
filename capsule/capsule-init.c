@@ -28,7 +28,6 @@
               "    const char  *default_prefix;   %s"  "\n"  \
               "    const char **exclude;          %p"  "\n"  \
               "    const char **export;           %p"  "\n"  \
-              "    const char **nowrap;           %p"  "\n"  \
               "  };"                                   "\n"  \
               "  capsule_namespace *ns;           %p"  "\n"  \
               "  {"                                    "\n"  \
@@ -36,7 +35,6 @@
               "    char        *prefix;           %s"  "\n"  \
               "    char **combined_exclude;       %p"  "\n"  \
               "    char **combined_export;        %p"  "\n"  \
-              "    char **combined_nowrap;        %p"  "\n"  \
               "  };"                                   "\n"  \
               "};"                                     "\n", \
               cap                         ,                  \
@@ -46,13 +44,11 @@
               cap->meta->default_prefix   ,                  \
               cap->meta->exclude          ,                  \
               cap->meta->export           ,                  \
-              cap->meta->nowrap           ,                  \
               cap->ns                     ,                  \
               cap->ns->ns                 ,                  \
               cap->ns->prefix             ,                  \
               cap->ns->combined_exclude   ,                  \
-              cap->ns->combined_export    ,                  \
-              cap->ns->combined_nowrap);})
+              cap->ns->combined_export);})
 
 static ptr_list *namespaces = NULL;
 
@@ -102,7 +98,6 @@ get_namespace (const char *default_prefix, const char *soname)
     ns->prefix      = strdup( prefix );
     ns->exclusions  = ptr_list_alloc( 4 );
     ns->exports     = ptr_list_alloc( 4 );
-    ns->nowrap      = ptr_list_alloc( 4 );
 
     ptr_list_push_ptr( namespaces, ns );
 
@@ -291,12 +286,11 @@ update_namespaces (void)
         // just truncate the list to 0 entries
         ns->exclusions->next = 0;
         ns->exports->next = 0;
-        ns->nowrap->next = 0;
     }
 
     // merge the string lists for each active prefix:
     // ie all excludes for /host should be in one exclude list,
-    // all nowrap entries for /host should bein another list, all
+    // all export entries for /host should bein another list, all
     // excludes for /badgerbadger should be in another, etc etc:
     for( size_t i = 0; i < _capsule_list->next; i++ )
     {
@@ -312,7 +306,6 @@ update_namespaces (void)
 
         add_new_strings_to_ptrlist( cap->ns->exclusions, cap->meta->exclude );
         add_new_strings_to_ptrlist( cap->ns->exports,    cap->meta->export  );
-        add_new_strings_to_ptrlist( cap->ns->nowrap,     cap->meta->nowrap  );
     }
 
     // now squash the meta data ptr_lists into char** that
@@ -326,11 +319,9 @@ update_namespaces (void)
 
         free_strv( ns->combined_exclude );
         free_strv( ns->combined_export  );
-        free_strv( ns->combined_nowrap  );
 
         ns->combined_exclude = cook_list( ns->exclusions );
         ns->combined_export  = cook_list( ns->exports );
-        ns->combined_nowrap  = cook_list( ns->nowrap );
     }
 }
 
@@ -473,7 +464,6 @@ capsule_init (const char *soname)
         DUMP_CAPSULE( i, other );
         DUMP_STRV( excluded, other->ns->combined_exclude );
         DUMP_STRV( exported, other->ns->combined_export  );
-        DUMP_STRV( nowrap,   other->ns->combined_nowrap  );
     }
 
     return cap;

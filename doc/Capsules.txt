@@ -45,7 +45,7 @@ f) In its constructor:
    call capsule_relocate to replace all current references to the capsules'
    symbols with the real symbols acquired by capsule_load
 
-   call capsule_relocate_except to install a wrapper for dlopen outside the
+   call capsule_relocate_dlopen to install a wrapper for dlopen outside the
    capsule
 
 g) In its destructor:
@@ -62,17 +62,6 @@ static const char *exclude[] =
   NULL
 };
 
-// do not intercept dlopen (or any other call) in these DSOs:
-static const char *invalid_dl_reloc_targets[] =
-{
-  "libGL.so.1", // this is the capsule itself, ie this library
-  "libc.so",
-  "libdl.so",
-  "libpthread.so",
-  "libcapsule.so",
-  NULL
-};
-
 // make sure this symbol has global visibility so
 // that the libcapsule initialisation can find it
 __attribute__ ((visibility("default")))
@@ -83,9 +72,7 @@ capsule_metadata capsule_meta =
     .default_prefix   = "/host",
     .exclude          = exclude, 
     .export           = valid_dlsym_sources,
-    .nowrap           = invalid_dl_reloc_targets,
-    .dl_wrappers      = capsule_external_dl_relocs, // this is predeclared
-};                      // you can replace it with your own list of needed
+};
 
 ============================================================================
 Sequences of events:
@@ -116,7 +103,7 @@ The constructor for libcapsule runs, and does the following:
       - the CAPSULE_PREFIX env var
       - the static prefix in the capsule's metadata 
       - NOTE: env vars don't apply here to setuid/setgid processes
-  - aggregates the exclude, export and nowrap metadata lists, grouping
+  - aggregates the exclude and export metadata lists, grouping
     them by prefix (and deduplicating the resulting lists)
     - eg the ‘export’ list from a namespace will be all the sonames from
       all the .export entries from all capsules that share that namespace
@@ -133,7 +120,7 @@ The constructor for each loaded capsule runs, and does the following:
     of all DSOs outside the capsule to use the real symbols from the
     target instead of the dummy entries in the capsule
 
-  - calls capsule_relocate_except to install wrappers for any special-case
+  - calls capsule_relocate_dlopen to install wrappers for any special-case
     functions (typically just dlopen - dlsym is handled by capsule_relocate)
     that require careful handling.
 
@@ -144,12 +131,12 @@ This is similar to normal linking, except:
   - The libcapsule constructor does not run
   - the capsule's constructor's call to capsule_init triggers a re-harvesting
     of available metadata, and a re-calculation of the aggregated lists
-  - the capsule_relocate and capsule_relocate_except sequences for _all_
+  - the capsule_relocate and capsule_relocate_dlopen sequences for _all_
     capsules are triggered
 
 dlopen() of a normal library (from outside the capsule):
 
-  - the capsule_relocate and capsule_relocate_except sequences for _all_
+  - the capsule_relocate and capsule_relocate_dlopen sequences for _all_
     capsules are triggered
 
 dlopen() of a normal library inside the capsule:

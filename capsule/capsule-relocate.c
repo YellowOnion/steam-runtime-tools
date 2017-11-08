@@ -75,20 +75,25 @@ process_phdr (struct dl_phdr_info *info,
 }
 
 static int
-dso_is_blacklisted (const char *path, const char * const *blacklist)
+dso_is_blacklisted (const char *path, relocation_flags flags)
 {
     const char * const *soname;
+    const char * const libc[] =
+    {
+        "libc.so",
+        "libdl.so",
+        "libpthread.so",
+        NULL
+    };
     static const char *never = "libcapsule.so";
 
     if( soname_matches_path( never, path ) )
         return 1;
 
-    if( blacklist == NULL )
-        return 0;
-
-    for( soname = (const char * const *) blacklist; soname && *soname; soname++ )
-        if( soname_matches_path( *soname, path ) )
-            return 1;
+    if( flags & RELOCATION_FLAGS_AVOID_LIBC )
+        for( soname = libc; soname && *soname; soname++ )
+            if( soname_matches_path( *soname, path ) )
+                return 1;
 
     return 0;
 }
@@ -116,7 +121,7 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
     relocation_data *rdata = data;
     const char *dso_path = *info->dlpi_name ? info->dlpi_name : "-elf-";
 
-    if( dso_is_blacklisted( dso_path, rdata->blacklist ) )
+    if( dso_is_blacklisted( dso_path, rdata->flags ) )
     {
         DEBUG( DEBUG_RELOCS, "skipping %s %p (blacklisted)",
                dso_path, (void *) info->dlpi_addr );
@@ -138,7 +143,7 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 
 static int relocate (const capsule cap,
                      capsule_item *relocations,
-                     const char * const *dso_blacklist,
+                     relocation_flags flags,
                      ptr_list *seen,
                      char **error)
 {
@@ -151,7 +156,7 @@ static int relocate (const capsule cap,
     // load the relevant metadata into the callback argument:
     rdata.debug     = debug_flags;
     rdata.error     = NULL;
-    rdata.blacklist = dso_blacklist;
+    rdata.flags     = flags;
     rdata.mmap_info = load_mmap_info( &mmap_errno, &mmap_error );
     rdata.relocs    = relocations;
     rdata.seen      = seen;
@@ -213,13 +218,19 @@ int
 capsule_relocate (const capsule cap, char **error)
 {
     DEBUG( DEBUG_RELOCS, "beginning global symbol relocation:" );
-    return relocate( cap, cap->meta->items, NULL, cap->seen.all, error );
+    return relocate( cap, cap->meta->items, RELOCATION_FLAGS_NONE, cap->seen.all, error );
 }
 
+static capsule_item capsule_external_dl_relocs[] =
+{
+  { "dlopen",
+    (capsule_addr) capsule_external_dlopen ,
+    (capsule_addr) capsule_external_dlopen },
+  { NULL }
+};
+
 int
-capsule_relocate_except (const capsule cap,
-                         capsule_item *relocations,
-                         const char * const *except,
+capsule_relocate_dlopen (const capsule cap,
                          char **error)
 {
     unsigned long df = debug_flags;
@@ -228,7 +239,8 @@ capsule_relocate_except (const capsule cap,
         debug_flags |= DEBUG_RELOCS;
 
     DEBUG( DEBUG_RELOCS, "beginning restricted symbol relocation:" );
-    int rv = relocate( cap, relocations, except, cap->seen.some, error );
+    int rv = relocate( cap, capsule_external_dl_relocs,
+                       RELOCATION_FLAGS_AVOID_LIBC, cap->seen.some, error );
 
     debug_flags = df;
 

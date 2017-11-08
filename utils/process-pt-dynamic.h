@@ -29,6 +29,12 @@
 #define ELFW_ST_BIND(a)       ELF32_ST_BIND(a)
 #define ELFW_ST_VISIBILITY(a) ELF32_ST_VISIBILITY(a)
 
+typedef enum
+{
+    RELOCATION_FLAGS_NONE = 0,
+    RELOCATION_FLAGS_AVOID_LIBC = (1 << 0),
+} relocation_flags;
+
 typedef struct
 {
     capsule_item *relocs;
@@ -36,7 +42,7 @@ typedef struct
     int debug;
     char *error;
     mmapinfo *mmap_info;
-    const char * const *blacklist;
+    relocation_flags flags;
     ptr_list *seen;
 } relocation_data;
 

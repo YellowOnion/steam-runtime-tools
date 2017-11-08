@@ -270,15 +270,6 @@ cat - <<EOF
   NULL
 };
 
-static const char * const invalid_dl_reloc_targets[] =
-{
-  "libc.so",
-  "libdl.so",
-  "libpthread.so",
-  "libcapsule.so",
-  NULL
-};
-
 // -------------------------------------------------------------
 // this is an array of the functions we want to act as a shim for:
 static capsule_item relocs[] =
@@ -308,8 +299,6 @@ capsule_metadata capsule_meta =
     .default_prefix   = "/host",
     .exclude          = exclude,
     .export           = valid_dlsym_sources,
-    .nowrap           = invalid_dl_reloc_targets,
-    .dl_wrappers      = capsule_external_dl_relocs,
     .items            = relocs,
 };
 
@@ -364,9 +353,7 @@ static void __attribute__ ((constructor)) _capsule_init (void)
         if( rloc != 0 ) // relocation failed. we're dead.
             abort();
 
-        rloc = capsule_relocate_except( cap, capsule_external_dl_relocs,
-                                        &invalid_dl_reloc_targets[0],
-                                        &capsule_error );
+        rloc = capsule_relocate_dlopen( cap, &capsule_error );
         if( rloc != 0 ) // we may survive this depending on how dlopen is used
            fprintf( stderr,
                     "Warning: %s:%s could not install dlopen() wrappers: "

@@ -243,6 +243,8 @@ free_strv (char **strv)
     free( strv );
 }
 
+static void update_namespaces (void);
+
 static void
 update_metadata (const char *match)
 {
@@ -263,6 +265,35 @@ update_metadata (const char *match)
         for( struct link_map *m = map; m; m = m->l_next )
             get_capsule_metadata( m, match );
 
+    update_namespaces();
+}
+
+static void
+update_namespaces (void)
+{
+    if( !namespaces )
+        return;
+
+    // wipe out the namespaces' merged lists of exclusions etc. -
+    // they contain strings that point into capsule metadata that might
+    // no longer be valid, if we dlclosed a shim library
+    for( size_t i = 0; i < namespaces->next; i++ )
+    {
+        capsule_namespace *ns = ptr_list_nth_ptr( namespaces, i );
+
+        if( !ns )
+            continue;
+
+        DEBUG( DEBUG_CAPSULE, "Resetting namespace #%zu %p \"%s\"",
+               i, ns, ns->prefix );
+
+        // We don't free the actual strings because we don't own them;
+        // just truncate the list to 0 entries
+        ns->exclusions->next = 0;
+        ns->exports->next = 0;
+        ns->nowrap->next = 0;
+    }
+
     // merge the string lists for each active prefix:
     // ie all excludes for /host should be in one exclude list,
     // all nowrap entries for /host should bein another list, all
@@ -273,6 +304,11 @@ update_metadata (const char *match)
 
         if( !cap )
             continue;
+
+        DEBUG( DEBUG_CAPSULE,
+               "Collecting strings from capsule #%zu %p \"%s\" into namespace "
+               "%p \"%s\"",
+               i, cap, cap->meta->soname, cap->ns, cap->ns->prefix );
 
         add_new_strings_to_ptrlist( cap->ns->exclusions, cap->meta->exclude );
         add_new_strings_to_ptrlist( cap->ns->exports,    cap->meta->export  );
@@ -467,6 +503,9 @@ capsule_close (capsule cap)
             assert( other->meta != meta );
         }
     }
+
+    // Remove any pointers from the namespaces into this capsule
+    update_namespaces();
 
     // free+null all the non-static memory in the metadata struct
     CLEAR( free_strv, meta->combined_exclude );

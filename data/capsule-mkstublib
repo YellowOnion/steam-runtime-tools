@@ -390,8 +390,13 @@ static void __attribute__ ((constructor)) _capsule_init (void)
         { NULL }
       };
 
-    // Don't use capsule_meta.soname here - use a static value.
-    // Trust me when I say you don't want to know why.
+    // Don't use capsule_meta.soname here, because if we did, it would be
+    // a relocatable, interposable reference to capsule_meta (assuming the
+    // shim library wasn't linked with -Bsymbolic). At runtime, we'd get
+    // an arbitrarily chosen one of the capsule_meta symbols defined by
+    // the other shim libraries sharing our global symbol namespace,
+    // and in particular not necessarily our own, with predictably bad
+    // results.
     cap = capsule_init( soname );
     dso = capsule_load( cap, wrappers, &capsule_errno, &capsule_error );
 

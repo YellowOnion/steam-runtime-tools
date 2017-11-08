@@ -27,6 +27,24 @@ dso_is_exported (const char *dsopath, char **exported)
     return 0;
 }
 
+// TODO: Implement dlvsym()?
+
+/**
+ * capsule_external_dlsym:
+ * @handle: A handle returned by `dlopen`, or %RTLD_DEFAULT or %RTLD_NEXT
+ * @symbol: A symbol to be looked up
+ *
+ * An implementation of `dlsym`, used when it is called by the executable
+ * or by a library outside the capsule.
+ *
+ * If @symbol is exported by a library that is part of the exported ABI
+ * of a capsule, return that implementation.
+ *
+ * If not, return the implementation from the `LM_ID_BASE` namespace if
+ * there is one, or %NULL.
+ *
+ * Returns: The address associated with @symbol, or %NULL
+ */
 void *
 capsule_external_dlsym (void *handle, const char *symbol)
 {
@@ -36,6 +54,8 @@ capsule_external_dlsym (void *handle, const char *symbol)
     for( size_t n = 0; n < capsule_manifest->next; n++ )
     {
         capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+        // TODO: If handle != m->handle->dl_handle, should we skip it?
+        // TODO: RTLD_NEXT isn't implemented (is it implementable?)
         addr = capsule_dl_symbol ( m->handle->dl_handle, symbol );
 
         if( addr )
@@ -69,6 +89,19 @@ capsule_external_dlsym (void *handle, const char *symbol)
     return addr;
 }
 
+/**
+ * capsule_external_dlopen:
+ * @file: A SONAME or filename to be opened
+ * @flag: Flags affecting how we open the library
+ *
+ * An implementation of `dlopen`, used when it is called by the executable
+ * or by a library outside the capsule.
+ *
+ * Load @file with the ordinary `dlopen`. If successful, adjust
+ * relocations before returning the resulting handle.
+ *
+ * Returns: The handle returned by `dlopen`
+ */
 void *
 capsule_external_dlopen(const char *file, int flag)
 {
@@ -126,6 +159,20 @@ capsule_external_dlopen(const char *file, int flag)
     return handle;
 }
 
+/**
+ * capsule_shim_dlopen:
+ * @cap: The capsule from which `dlopen` was called
+ * @file: SONAME or filename to be opened
+ * @flag: Flags affecting how @file is opened
+ *
+ * An implementation of `dlopen` suitable to be called from inside a
+ * namespace. Load @file into @cap's namespace.
+ *
+ * If @cap has a non-trivial prefix, load @file and its recursive
+ * dependencies from @cap's prefix instead of from the root filesystem.
+ *
+ * Returns: A handle as if for `dlopen`
+ */
 void *
 capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 {

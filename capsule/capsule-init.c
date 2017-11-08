@@ -16,33 +16,41 @@
     ({ int _i = 0; for( char **_c = css; _c && *_c; _c++, _i++ ) \
             DEBUG( DEBUG_CAPSULE, "  ->%s[ %02d ]: %s", #what, _i, *_c ); })
 
-#define DUMP_METADATA(x,m) ({  \
-        DEBUG( DEBUG_CAPSULE, "\nMETADATA #%d\n", (int) x ); \
+#define DUMP_CAPSULE(x, cap) ({  \
+        DEBUG( DEBUG_CAPSULE, "\nCAPSULE #%d\n", (int) x ); \
         DEBUG( DEBUG_CAPSULE, "                        \n" \
-              "struct _capsule_metadata %p"          "\n"  \
-              "{"                                    "\n"  \
-              "  Lmid_t namespace;              %ld" "\n"  \
-              "  const char  *soname;           %s"  "\n"  \
-              "  const char  *default_prefix;   %s"  "\n"  \
-              "  char        *active_prefix;    %s"  "\n"  \
-              "  const char **exclude;          %p"  "\n"  \
-              "  const char **export;           %p"  "\n"  \
-              "  const char **nowrap;           %p"  "\n"  \
-              "  char **combined_exclude;       %p"  "\n"  \
-              "  char **combined_export;        %p"  "\n"  \
-              "  char **combined_nowrap;        %p"  "\n"  \
-              "};"                                   "\n", \
-              m,                                           \
-              m->namespace        ,                        \
-              m->soname           ,                        \
-              m->default_prefix   ,                        \
-              m->active_prefix    ,                        \
-              m->exclude          ,                        \
-              m->export           ,                        \
-              m->nowrap           ,                        \
-              m->combined_exclude ,                        \
-              m->combined_export  ,                        \
-              m->combined_nowrap  ); })
+              "struct _capsule %p"                     "\n"  \
+              "{"                                      "\n"  \
+              "  void        *dl_handle;          %p"  "\n"  \
+              "  char        *prefix;             %s"  "\n"  \
+              "  capsule_metadata *meta;          %p"  "\n"  \
+              "  {"                                    "\n"  \
+              "    Lmid_t namespace;              %ld" "\n"  \
+              "    const char  *soname;           %s"  "\n"  \
+              "    const char  *default_prefix;   %s"  "\n"  \
+              "    char        *active_prefix;    %s"  "\n"  \
+              "    const char **exclude;          %p"  "\n"  \
+              "    const char **export;           %p"  "\n"  \
+              "    const char **nowrap;           %p"  "\n"  \
+              "    char **combined_exclude;       %p"  "\n"  \
+              "    char **combined_export;        %p"  "\n"  \
+              "    char **combined_nowrap;        %p"  "\n"  \
+              "  };"                                   "\n"  \
+              "};"                                     "\n", \
+              cap                         ,                  \
+              cap->dl_handle              ,                  \
+              cap->prefix                 ,                  \
+              cap->meta                   ,                  \
+              cap->meta->namespace        ,                  \
+              cap->meta->soname           ,                  \
+              cap->meta->default_prefix   ,                  \
+              cap->meta->active_prefix    ,                  \
+              cap->meta->exclude          ,                  \
+              cap->meta->export           ,                  \
+              cap->meta->nowrap           ,                  \
+              cap->meta->combined_exclude ,                  \
+              cap->meta->combined_export  ,                  \
+              cap->meta->combined_nowrap  ); })
 
 typedef struct _capsule_namespace
 {
@@ -383,7 +391,7 @@ get_capsule_by_soname (const char *soname)
         if( !cap || strcmp( cap->meta->soname, soname ) )
             continue;
 
-        DUMP_METADATA(n, cap->meta);
+        DUMP_CAPSULE(n, cap);
         return cap;
     }
 
@@ -425,7 +433,7 @@ capsule_init (const char *soname)
             continue;
 
         DEBUG( DEBUG_CAPSULE, " ");
-        DUMP_METADATA( i, other->meta );
+        DUMP_CAPSULE( i, other );
         DUMP_STRV( excluded, other->meta->combined_exclude );
         DUMP_STRV( exported, other->meta->combined_export  );
         DUMP_STRV( nowrap,   other->meta->combined_nowrap  );

@@ -42,15 +42,15 @@
               m->combined_export  ,                        \
               m->combined_nowrap  ); })
 
-typedef struct _tree_data
+typedef struct _capsule_namespace
 {
     const char *prefix;
-    ptr_list *list;
-} tree_data;
+    ptr_list *exclusions;
+    ptr_list *exports;
+    ptr_list *nowrap;
+} capsule_namespace;
 
-static ptr_list *tree_exclusions = NULL;
-static ptr_list *tree_exports    = NULL;
-static ptr_list *tree_nowrap     = NULL;
+static ptr_list *namespaces = NULL;
 
 ptr_list *capsule_manifest  = NULL;
 dlsymfunc capsule_dl_symbol = NULL;
@@ -72,50 +72,33 @@ static int str_equal (const void *a, const void *b)
     return strcmp( (char *)a, (char *)b ) == 0;
 }
 
-static tree_data *
-get_prefix_data (const char *prefix, ptr_list **cache)
+static capsule_namespace *
+get_namespace (const char *prefix)
 {
-    tree_data *td;
+    capsule_namespace *ns;
 
-    if( *cache == NULL )
-        *cache = ptr_list_alloc( 4 );
+    if( namespaces == NULL )
+        namespaces = ptr_list_alloc( 4 );
 
-    for( size_t x = 0; x < (*cache)->next; x++ )
+    for( size_t x = 0; x < namespaces->next; x++ )
     {
-        td = ptr_list_nth_ptr( *cache, x );
+        ns = ptr_list_nth_ptr( namespaces, x );
 
-        if( !td || strcmp( prefix, td->prefix ) )
+        if( !ns || strcmp( prefix, ns->prefix ) )
             continue;
 
-        return td;
+        return ns;
     }
 
-    td = calloc( 1, sizeof(tree_data) );
+    ns = calloc( 1, sizeof(capsule_namespace) );
+    ns->prefix      = prefix;
+    ns->exclusions  = ptr_list_alloc( 4 );
+    ns->exports     = ptr_list_alloc( 4 );
+    ns->nowrap      = ptr_list_alloc( 4 );
 
-    td->prefix      = prefix;
-    td->list        = ptr_list_alloc( 4 );
+    ptr_list_push_ptr( namespaces, ns );
 
-    ptr_list_push_ptr( *cache, td );
-
-    return td;
-}
-
-static tree_data *
-get_excludes (const char *prefix)
-{
-    return get_prefix_data( prefix, &tree_exclusions );
-}
-
-static tree_data *
-get_exports (const char *prefix)
-{
-    return get_prefix_data( prefix, &tree_exports );
-}
-
-static tree_data *
-get_nowrap (const char *prefix)
-{
-    return get_prefix_data( prefix, &tree_nowrap );
+    return ns;
 }
 
 static void
@@ -190,19 +173,38 @@ get_capsule_metadata (struct link_map *map, ptr_list *info, const char *only)
     }
 }
 
+/**
+ * cook_list:
+ * @list: a ptr_list containing statically-allocated strings
+ *
+ * Return @list as an array of strings. The strings are not copied, so
+ * the result is only valid as long as the strings are.
+ *
+ * Returns: (transfer container) (array zero-terminated=1) (element-type utf8):
+ *  a shallow copy of @list
+ */
 static char **
-cook_list (tree_data *tx)
+cook_list (ptr_list *list)
 {
-    char **cooked = calloc( tx->list->next + 1, sizeof(char *) );
+    char **cooked = calloc( list->next + 1, sizeof(char *) );
 
-    for( size_t j = 0; j < tx->list->next; j++ )
-        *(cooked + j) = (char *)ptr_list_nth_ptr( tx->list, j );
+    for( size_t j = 0; j < list->next; j++ )
+        *(cooked + j) = (char *)ptr_list_nth_ptr( list, j );
 
-    *(cooked + tx->list->next) = NULL;
+    *(cooked + list->next) = NULL;
 
     return cooked;
 }
 
+/**
+ * add_new_strings_to_ptrlist:
+ * @list: a ptr_list
+ * @strings: (transfer none) (array zero-terminated=1) (nullable):
+ *
+ * Add each string in @strings to @list, unless a string with the same
+ * content is already present. The strings must continue to exist as long
+ * as @list does.
+ */
 static void
 add_new_strings_to_ptrlist (ptr_list *list, const char **strings)
 {
@@ -210,6 +212,12 @@ add_new_strings_to_ptrlist (ptr_list *list, const char **strings)
         ptr_list_add_ptr( list, *c, str_equal );
 }
 
+/**
+ * free_strv:
+ * @strv: (transfer container) (array zero-terminated=1) (element-type utf8):
+ *
+ * Free @strv, but not its contents.
+ */
 static void
 free_strv (char **strv)
 {
@@ -250,13 +258,11 @@ update_metadata (const char *match)
         if( !cm || cm->closed )
             continue;
 
-        tree_data *tx = get_excludes( cm->active_prefix );
-        tree_data *te = get_exports ( cm->active_prefix );
-        tree_data *tn = get_nowrap  ( cm->active_prefix );
+        capsule_namespace *ns = get_namespace( cm->active_prefix );
 
-        add_new_strings_to_ptrlist( tx->list, cm->exclude );
-        add_new_strings_to_ptrlist( te->list, cm->export  );
-        add_new_strings_to_ptrlist( tn->list, cm->nowrap  );
+        add_new_strings_to_ptrlist( ns->exclusions, cm->exclude );
+        add_new_strings_to_ptrlist( ns->exports,    cm->export  );
+        add_new_strings_to_ptrlist( ns->nowrap,     cm->nowrap  );
     }
 
     // now squash the meta data ptr_lists into char** that
@@ -268,17 +274,15 @@ update_metadata (const char *match)
         if( !cm || cm->closed )
             continue;
 
-        tree_data *tx = get_excludes( cm->active_prefix );
-        tree_data *te = get_exports ( cm->active_prefix );
-        tree_data *tn = get_nowrap  ( cm->active_prefix );
+        capsule_namespace *ns = get_namespace( cm->active_prefix );
 
         free_strv( cm->combined_exclude );
         free_strv( cm->combined_export  );
         free_strv( cm->combined_nowrap  );
 
-        cm->combined_exclude = cook_list( tx );
-        cm->combined_export  = cook_list( te );
-        cm->combined_nowrap  = cook_list( tn );
+        cm->combined_exclude = cook_list( ns->exclusions );
+        cm->combined_export  = cook_list( ns->exports );
+        cm->combined_nowrap  = cook_list( ns->nowrap );
     }
 }
 

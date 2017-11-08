@@ -243,6 +243,7 @@ done < $symbol_file;
 
 cat - <<EOF
 static capsule cap;
+static const char soname[] = "$proxied_dso";
 
 // _int_dlopen() from libcapsule or a locally overridden version
 #include "capsule/_int_dlopen.h"
@@ -282,7 +283,7 @@ cat - <<EOF
 // DSOs to restrict dlsym lookups to:
 static const char *valid_dlsym_sources[] =
 {
-  "$proxied_dso",
+  soname,
 EOF
 
 if [ -f "${proxy_extra}" ];
@@ -301,7 +302,7 @@ cat - <<EOF
 
 static const char *invalid_dl_reloc_targets[] =
 {
-  "$proxied_dso",
+  soname,
   "libc.so",
   "libdl.so",
   "libpthread.so",
@@ -328,7 +329,7 @@ __attribute__ ((visibility("default")))
 capsule_metadata capsule_meta =
 {
     .capsule_abi      = 0,
-    .soname           = "$proxied_dso",
+    .soname           = soname,
     .default_prefix   = "/host",
     .exclude          = exclude,
     .export           = valid_dlsym_sources,
@@ -391,7 +392,7 @@ static void __attribute__ ((constructor)) _capsule_init (void)
 
     // Don't use capsule_meta.soname here - use a static value.
     // Trust me when I say you don't want to know why.
-    cap = capsule_init( "$proxied_dso" );
+    cap = capsule_init( soname );
     dso = capsule_load( cap, wrappers, &capsule_errno, &capsule_error );
 
     if( dso )

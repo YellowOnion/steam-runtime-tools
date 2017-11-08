@@ -280,20 +280,6 @@ static const char *invalid_dl_reloc_targets[] =
   NULL
 };
 
-// make sure this symbol has global visibility so
-// that the libcapsule initialisation can find it
-__attribute__ ((visibility("default")))
-capsule_metadata capsule_meta =
-{
-    .capsule_abi      = 0,
-    .soname           = soname,
-    .default_prefix   = "/host",
-    .exclude          = exclude,
-    .export           = valid_dlsym_sources,
-    .nowrap           = invalid_dl_reloc_targets,
-    .dl_wrappers      = capsule_external_dl_relocs,
-};
-
 // -------------------------------------------------------------
 // this is an array of the functions we want to act as a shim for:
 static capsule_item relocs[] =
@@ -311,6 +297,21 @@ cat - <<EOF
   { "dlsym", (capsule_addr) capsule_external_dlsym,
              (capsule_addr) capsule_external_dlsym, },
   { NULL }
+};
+
+// make sure this symbol has global visibility so
+// that the libcapsule initialisation can find it
+__attribute__ ((visibility("default")))
+capsule_metadata capsule_meta =
+{
+    .capsule_abi      = 0,
+    .soname           = soname,
+    .default_prefix   = "/host",
+    .exclude          = exclude,
+    .export           = valid_dlsym_sources,
+    .nowrap           = invalid_dl_reloc_targets,
+    .dl_wrappers      = capsule_external_dl_relocs,
+    .items            = relocs,
 };
 
 EOF
@@ -359,7 +360,7 @@ static void __attribute__ ((constructor)) _capsule_init (void)
 
     if( dso )
     {
-        int rloc = capsule_relocate( cap, relocs, &capsule_error );
+        int rloc = capsule_relocate( cap, &capsule_error );
 
         if( rloc != 0 ) // relocation failed. we're dead.
             abort();

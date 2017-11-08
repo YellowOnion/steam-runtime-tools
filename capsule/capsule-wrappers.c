@@ -131,7 +131,7 @@ capsule_external_dlopen(const char *file, int flag)
         {
             const capsule c = ptr_list_nth_ptr( _capsule_list, n );
 
-            if( capsule_relocate( c, NULL, &error ) != 0 )
+            if( capsule_relocate( c, &error ) != 0 )
             {
                 fprintf( stderr,
                          "relocation from %s after dlopen(%s, …) failed: %s\n",

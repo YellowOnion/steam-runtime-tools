@@ -21,7 +21,6 @@ typedef struct _capsule_namespace
 struct _capsule
 {
     void  *dl_handle;
-    capsule_item *relocations;
     struct { ptr_list *all; ptr_list *some; } seen;
     capsule_metadata *meta;
     capsule_namespace *ns;

@@ -140,7 +140,6 @@ static int relocate (const capsule cap,
                      capsule_item *relocations,
                      const char **dso_blacklist,
                      ptr_list *seen,
-                     int keep_relocs,
                      char **error)
 {
     relocation_data rdata = { 0 };
@@ -149,48 +148,12 @@ static int relocate (const capsule cap,
     const char *mmap_error = NULL;
     int rval = 0;
 
-    if( keep_relocs )
-    {
-        if( cap->relocations == NULL )
-        {
-            DEBUG( DEBUG_RELOCS,
-                   "caching relocation list: %p", relocations );
-            cap->relocations = relocations;
-        }
-        else if( cap->relocations != NULL &&
-                 relocations      != NULL &&
-                 cap->relocations != relocations )
-        {
-            DEBUG( DEBUG_RELOCS,
-                   "overwriting cached relocation list (bug?): %p ← %p",
-                   cap->relocations, relocations );
-            cap->relocations = relocations;
-        }
-
-        if( relocations != NULL &&
-            relocations != cap->relocations )
-        {
-            DEBUG( DEBUG_RELOCS,
-                   "using one-shot relocation list %p", relocations );
-            rdata.relocs = relocations;
-        }
-        else
-        {
-            DEBUG( DEBUG_RELOCS,
-                   "using cached relocation list %p", cap->relocations );
-            rdata.relocs = cap->relocations;
-        }
-    }
-    else
-    {
-        rdata.relocs = relocations;
-    }
-
     // load the relevant metadata into the callback argument:
     rdata.debug     = debug_flags;
     rdata.error     = NULL;
     rdata.blacklist = dso_blacklist;
     rdata.mmap_info = load_mmap_info( &mmap_errno, &mmap_error );
+    rdata.relocs    = relocations;
     rdata.seen      = seen;
 
     if( mmap_errno || mmap_error )
@@ -206,7 +169,7 @@ static int relocate (const capsule cap,
     // map of shim-to-real function pointers in `relocations',
     // otherwise populate the map using [the real] dlsym():
     if( cap->dl_handle )
-        for( map = cap->relocations; map->name; map++ )
+        for( map = cap->meta->items; map->name; map++ )
         {
             if( !map->shim )
                 map->shim = (ElfW(Addr)) _capsule_original_dlsym( RTLD_DEFAULT, map->name );
@@ -247,10 +210,10 @@ static int relocate (const capsule cap,
 }
 
 int
-capsule_relocate (const capsule cap, capsule_item *relocations, char **error)
+capsule_relocate (const capsule cap, char **error)
 {
     DEBUG( DEBUG_RELOCS, "beginning global symbol relocation:" );
-    return relocate( cap, relocations, NULL, cap->seen.all, 1, error );
+    return relocate( cap, cap->meta->items, NULL, cap->seen.all, error );
 }
 
 int
@@ -265,7 +228,7 @@ capsule_relocate_except (const capsule cap,
         debug_flags |= DEBUG_RELOCS;
 
     DEBUG( DEBUG_RELOCS, "beginning restricted symbol relocation:" );
-    int rv = relocate( cap, relocations, except, cap->seen.some, 0, error );
+    int rv = relocate( cap, relocations, except, cap->seen.some, error );
 
     debug_flags = df;
 

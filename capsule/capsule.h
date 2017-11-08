@@ -82,10 +82,18 @@ struct _capsule_item
  *          a DSO outside the capsule whose dlopen() implementation should
  *          _not_ be wrapped should typically contain the libc cluster and
  *          the capsule proxy library (libcapsule.so) itself
+ * @items: (array zero-terminated=1): Array of capsule_item
+ *          specifying which symbols to export, terminated by a
+ *          #capsule_item whose @name is %NULL
  *
  * This struct allows libcapsule proxy libraries to statically declare
  * metadata about themselves that libcapsule needs at link time in order
  * to function properly.
+ *
+ * The #capsule_item entries in @items need only specify the symbol
+ * name: The shim and real fields will be populated automatically if they
+ * are not pre-filled (this is the normal use case, as it would be unusual
+ * to know these value in advance).
  */
 typedef struct _capsule_metadata capsule_metadata;
 
@@ -99,6 +107,7 @@ struct _capsule_metadata
     const char  **export;
     const char  **nowrap;
     capsule_item *dl_wrappers;
+    capsule_item *items;
     /*< private >*/
     capsule handle;
 };
@@ -122,30 +131,21 @@ capsule capsule_init (const char *soname);
 /**
  * capsule_relocate:
  * @capsule: a #capsule handle as returned by capsule_init()
- * @relocations: (array zero-terminated=1): Array of capsule_item
- *               specifying which symbols to export, terminated by a
- *               #capsule_item whose @name is %NULL
  * @error: (out) (transfer full) (optional): location in which to store
  *         an error message on failure, or %NULL to ignore.
  *         Free with free().
  *
  * Returns: 0 on success, non-zero on failure.
  *
- * The #capsule_item entries in @relocations need only specify the symbol
- * name: The shim and real fields will be populated automatically if they
- * are not pre-filled (this is the normal use case, as it would be unusual
- * to know these value in advance).
- *
  * This function updates the GOT entries in all DSOs outside the capsule
- * so that when they call any function listed in @relocations they invoke
- * the copy of that function inside the capsule.
+ * so that when they call any function listed in the @items of the
+ * #capsule_metadata, they invoke the copy of that function inside the capsule.
  *
  * In the unlikely event that an error message is returned in @error it is the
  * caller's responsibility to free() it.
  */
 _CAPSULE_PUBLIC
 int capsule_relocate (const capsule capsule,
-                      capsule_item *relocations,
                       char **error);
 
 /**

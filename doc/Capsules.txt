@@ -132,8 +132,6 @@ The constructor for each loaded capsule runs, and does the following:
   - calls capsule_relocate to update the global offset tables (GOTs)
     of all DSOs outside the capsule to use the real symbols from the
     target instead of the dummy entries in the capsule
-    - capsule_relocate caches the initial relocation list in the metadata
-      for the calling capsule so it can be repeated later
 
   - calls capsule_relocate_except to install wrappers for any special-case
     functions (typically just dlopen - dlsym is handled by capsule_relocate)
@@ -147,12 +145,12 @@ This is similar to normal linking, except:
   - the capsule's constructor's call to capsule_init triggers a re-harvesting
     of available metadata, and a re-calculation of the aggregated lists
   - the capsule_relocate and capsule_relocate_except sequences for _all_
-    capsules are triggered (libcapsule uses the metadata cache to do this)
+    capsules are triggered
 
 dlopen() of a normal library (from outside the capsule):
 
   - the capsule_relocate and capsule_relocate_except sequences for _all_
-    capsules are triggered (libcapsule uses the metadata cache to do this)
+    capsules are triggered
 
 dlopen() of a normal library inside the capsule:
 

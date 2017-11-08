@@ -75,9 +75,9 @@ process_phdr (struct dl_phdr_info *info,
 }
 
 static int
-dso_is_blacklisted (const char *path, const char **blacklist)
+dso_is_blacklisted (const char *path, const char * const *blacklist)
 {
-    char **soname;
+    const char * const *soname;
     static const char *never = "libcapsule.so";
 
     if( soname_matches_path( never, path ) )
@@ -86,7 +86,7 @@ dso_is_blacklisted (const char *path, const char **blacklist)
     if( blacklist == NULL )
         return 0;
 
-    for( soname = (char **) blacklist; soname && *soname; soname++ )
+    for( soname = (const char * const *) blacklist; soname && *soname; soname++ )
         if( soname_matches_path( *soname, path ) )
             return 1;
 
@@ -138,7 +138,7 @@ relocate_cb (struct dl_phdr_info *info, size_t size, void *data)
 
 static int relocate (const capsule cap,
                      capsule_item *relocations,
-                     const char **dso_blacklist,
+                     const char * const *dso_blacklist,
                      ptr_list *seen,
                      char **error)
 {
@@ -219,7 +219,7 @@ capsule_relocate (const capsule cap, char **error)
 int
 capsule_relocate_except (const capsule cap,
                          capsule_item *relocations,
-                         const char **except,
+                         const char * const *except,
                          char **error)
 {
     unsigned long df = debug_flags;

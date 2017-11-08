@@ -105,7 +105,7 @@ struct _capsule_metadata
     const char   *default_prefix;
     const char  **exclude;
     const char  **export;
-    const char  **nowrap;
+    const char * const *nowrap;
     capsule_item *dl_wrappers;
     capsule_item *items;
     /*< private >*/
@@ -180,7 +180,7 @@ int capsule_relocate (const capsule capsule,
 _CAPSULE_PUBLIC
 int capsule_relocate_except (const capsule capsule,
                              capsule_item *relocations,
-                             const char **except,
+                             const char * const *except,
                              char **error);
 
 /**

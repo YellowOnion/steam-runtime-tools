@@ -222,10 +222,10 @@ cook_list (ptr_list *list)
  * as @list does.
  */
 static void
-add_new_strings_to_ptrlist (ptr_list *list, const char **strings)
+add_new_strings_to_ptrlist (ptr_list *list, const char * const *strings)
 {
-    for( char **c = (char **)strings; c && *c; c++ )
-        ptr_list_add_ptr( list, *c, str_equal );
+    for( const char * const *c = strings; c && *c; c++ )
+        ptr_list_add_ptr( list, (char *) *c, str_equal );
 }
 
 /**

@@ -270,7 +270,7 @@ cat - <<EOF
   NULL
 };
 
-static const char *invalid_dl_reloc_targets[] =
+static const char * const invalid_dl_reloc_targets[] =
 {
   soname,
   "libc.so",

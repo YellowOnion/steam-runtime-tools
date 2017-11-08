@@ -66,7 +66,7 @@ capsule_external_dlsym (void *handle, const char *symbol)
             // or if we are unable to determine where it came from (what?)
             if( dladdr( addr, &dso ) )
             {
-                if( !dso_is_exported( dso.dli_fname, cap->meta->combined_export ) )
+                if( !dso_is_exported( dso.dli_fname, cap->ns->combined_export ) )
                     addr = NULL;
 
                 DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
@@ -141,7 +141,7 @@ capsule_external_dlopen(const char *file, int flag)
 
             if( capsule_relocate_except( c,
                                          c->meta->dl_wrappers,
-                                         (const char **)c->meta->combined_nowrap,
+                                         (const char **)c->ns->combined_nowrap,
                                          &error ) != 0 )
             {
                 fprintf( stderr,
@@ -186,7 +186,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
     if( cap->ns->prefix && strcmp(cap->ns->prefix, "/") )
     {
-        if( !ld_libs_init( &ldlibs, (const char **)cap->meta->combined_exclude,
+        if( !ld_libs_init( &ldlibs, (const char **)cap->ns->combined_exclude,
                            cap->ns->prefix, debug_flags, &code, &errors ) )
         {
             DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,

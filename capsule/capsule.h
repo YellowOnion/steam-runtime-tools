@@ -100,9 +100,6 @@ struct _capsule_metadata
     const char  **nowrap;
     capsule_item *dl_wrappers;
     /*< private >*/
-    char  **combined_exclude;
-    char  **combined_export;
-    char  **combined_nowrap;
     capsule handle;
 };
 

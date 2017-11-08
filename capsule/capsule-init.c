@@ -29,14 +29,14 @@
               "    const char **exclude;          %p"  "\n"  \
               "    const char **export;           %p"  "\n"  \
               "    const char **nowrap;           %p"  "\n"  \
-              "    char **combined_exclude;       %p"  "\n"  \
-              "    char **combined_export;        %p"  "\n"  \
-              "    char **combined_nowrap;        %p"  "\n"  \
               "  };"                                   "\n"  \
               "  capsule_namespace *ns;           %p"  "\n"  \
               "  {"                                    "\n"  \
               "    Lmid_t      ns;               %ld"  "\n"  \
               "    char        *prefix;           %s"  "\n"  \
+              "    char **combined_exclude;       %p"  "\n"  \
+              "    char **combined_export;        %p"  "\n"  \
+              "    char **combined_nowrap;        %p"  "\n"  \
               "  };"                                   "\n"  \
               "};"                                     "\n", \
               cap                         ,                  \
@@ -47,12 +47,12 @@
               cap->meta->exclude          ,                  \
               cap->meta->export           ,                  \
               cap->meta->nowrap           ,                  \
-              cap->meta->combined_exclude ,                  \
-              cap->meta->combined_export  ,                  \
-              cap->meta->combined_nowrap  ,                  \
               cap->ns                     ,                  \
               cap->ns->ns                 ,                  \
-              cap->ns->prefix             ); })
+              cap->ns->prefix             ,                  \
+              cap->ns->combined_exclude   ,                  \
+              cap->ns->combined_export    ,                  \
+              cap->ns->combined_nowrap);})
 
 static ptr_list *namespaces = NULL;
 
@@ -317,20 +317,20 @@ update_namespaces (void)
 
     // now squash the meta data ptr_lists into char** that
     // the underlying infrastructure actually uses:
-    for( size_t i = 0; i < _capsule_list->next; i++ )
+    for( size_t i = 0; i < namespaces->next; i++ )
     {
-        capsule cap = ptr_list_nth_ptr( _capsule_list, i );
+        capsule_namespace *ns = ptr_list_nth_ptr( namespaces, i );
 
-        if( !cap )
+        if( !ns )
             continue;
 
-        free_strv( cap->meta->combined_exclude );
-        free_strv( cap->meta->combined_export  );
-        free_strv( cap->meta->combined_nowrap  );
+        free_strv( ns->combined_exclude );
+        free_strv( ns->combined_export  );
+        free_strv( ns->combined_nowrap  );
 
-        cap->meta->combined_exclude = cook_list( cap->ns->exclusions );
-        cap->meta->combined_export  = cook_list( cap->ns->exports );
-        cap->meta->combined_nowrap  = cook_list( cap->ns->nowrap );
+        ns->combined_exclude = cook_list( ns->exclusions );
+        ns->combined_export  = cook_list( ns->exports );
+        ns->combined_nowrap  = cook_list( ns->nowrap );
     }
 }
 
@@ -471,9 +471,9 @@ capsule_init (const char *soname)
 
         DEBUG( DEBUG_CAPSULE, " ");
         DUMP_CAPSULE( i, other );
-        DUMP_STRV( excluded, other->meta->combined_exclude );
-        DUMP_STRV( exported, other->meta->combined_export  );
-        DUMP_STRV( nowrap,   other->meta->combined_nowrap  );
+        DUMP_STRV( excluded, other->ns->combined_exclude );
+        DUMP_STRV( exported, other->ns->combined_export  );
+        DUMP_STRV( nowrap,   other->ns->combined_nowrap  );
     }
 
     return cap;
@@ -507,10 +507,6 @@ capsule_close (capsule cap)
     // Remove any pointers from the namespaces into this capsule
     update_namespaces();
 
-    // free+null all the non-static memory in the metadata struct
-    CLEAR( free_strv, meta->combined_exclude );
-    CLEAR( free_strv, meta->combined_export  );
-    CLEAR( free_strv, meta->combined_nowrap  );
     meta->handle = NULL;
 
     CLEAR( ptr_list_free, cap->seen.all  );

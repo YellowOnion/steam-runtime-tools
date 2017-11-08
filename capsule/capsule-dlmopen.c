@@ -241,7 +241,7 @@ capsule_load (const capsule cap,
     ld_libs ldlibs = {};
 
     if( !ld_libs_init( &ldlibs,
-                       (const char **) cap->meta->combined_exclude,
+                       (const char **) cap->ns->combined_exclude,
                        cap->ns->prefix, debug_flags, errcode, error ) )
         return NULL;
 
@@ -287,7 +287,7 @@ capsule_load (const capsule cap,
     if( ret      != NULL && // no errors so far
         wrappers != NULL )  // have a dlopen fixup function
         install_wrappers( ret, wrappers,
-                          (const char **)cap->meta->combined_exclude,
+                          (const char **)cap->ns->combined_exclude,
                           errcode, error );
 
     cap->dl_handle = ret;

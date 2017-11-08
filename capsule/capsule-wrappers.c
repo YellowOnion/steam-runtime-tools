@@ -51,9 +51,9 @@ capsule_external_dlsym (void *handle, const char *symbol)
     DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
     void *addr = NULL;
 
-    for( size_t n = 0; n < capsule_manifest->next; n++ )
+    for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
     {
-        capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+        capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
         // TODO: If handle != m->handle->dl_handle, should we skip it?
         // TODO: RTLD_NEXT isn't implemented (is it implementable?)
         addr = capsule_dl_symbol ( m->handle->dl_handle, symbol );
@@ -127,9 +127,9 @@ capsule_external_dlopen(const char *file, int flag)
             debug_flags |= DEBUG_RELOCS;
         // This may not even be necessary, so it should not be fatal.
         // We do want to log it though as it might be an important clue:
-        for( size_t n = 0; n < capsule_manifest->next; n++ )
+        for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
         {
-            capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+            capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
             const capsule c = m->handle;
 
             if( capsule_relocate( c, NULL, &error ) != 0 )

@@ -52,7 +52,7 @@ typedef struct _capsule_namespace
 
 static ptr_list *namespaces = NULL;
 
-ptr_list *capsule_manifest  = NULL;
+ptr_list *_capsule_metadata_list  = NULL;
 dlsymfunc capsule_dl_symbol = NULL;
 dlopnfunc capsule_dl_open   = NULL;
 
@@ -166,7 +166,7 @@ get_capsule_metadata (struct link_map *map, const char *only)
         meta->active_prefix =
           capsule_get_prefix( meta->default_prefix, meta->soname );
 
-        ptr_list_add_ptr( capsule_manifest, meta, ptr_equal );
+        ptr_list_add_ptr( _capsule_metadata_list, meta, ptr_equal );
         DEBUG( DEBUG_CAPSULE, "found metatdata for %s … %s at %p",
                meta->active_prefix, meta->soname, meta );
         break;
@@ -251,9 +251,9 @@ update_metadata (const char *match)
     // ie all excludes for /host should be in one exclude list,
     // all nowrap entries for /host should bein another list, all
     // excludes for /badgerbadger should be in another, etc etc:
-    for( size_t i = 0; i < capsule_manifest->next; i++ )
+    for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
 
         if( !cm || cm->closed )
             continue;
@@ -267,9 +267,9 @@ update_metadata (const char *match)
 
     // now squash the meta data ptr_lists into char** that
     // the underlying infrastructure actually uses:
-    for( size_t i = 0; i < capsule_manifest->next; i++ )
+    for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
 
         if( !cm || cm->closed )
             continue;
@@ -288,7 +288,7 @@ update_metadata (const char *match)
 
 static void __attribute__ ((constructor)) _init_capsule (void)
 {
-    capsule_manifest = ptr_list_alloc( 16 );
+    _capsule_metadata_list = ptr_list_alloc( 16 );
 
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 
@@ -300,9 +300,9 @@ static void __attribute__ ((constructor)) _init_capsule (void)
     if( !(debug_flags & DEBUG_CAPSULE) )
         return;
 
-    for( unsigned int x = 0; x < capsule_manifest->next; x++ )
+    for( unsigned int x = 0; x < _capsule_metadata_list->next; x++ )
     {
-        capsule_metadata *cm = capsule_manifest->loc[ x ].ptr;
+        capsule_metadata *cm = _capsule_metadata_list->loc[ x ].ptr;
 
         if( !cm || cm->closed )
             continue;
@@ -365,9 +365,9 @@ get_cached_metadata (const char *soname)
     size_t i = 0;
     capsule_metadata *meta = NULL;
 
-    for( size_t n = 0; n < capsule_manifest->next; n++ )
+    for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, n );
+        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, n );
 
         if( !cm || cm->closed || strcmp( cm->soname, soname ) )
             continue;
@@ -404,9 +404,9 @@ capsule_init (const char *soname)
     {
         handle->prefix  = meta->active_prefix;
 
-        for( size_t i = 0; i < capsule_manifest->next; i++ )
+        for( size_t i = 0; i < _capsule_metadata_list->next; i++ )
         {
-            capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, i );
+            capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, i );
 
             if( !cm || cm->closed )
                 continue;
@@ -456,12 +456,12 @@ capsule_close (capsule cap)
     meta->closed = 1;
 
     // scrub all entries in the manifest pointing to this metadata
-    for( size_t n = 0; n < capsule_manifest->next; n++ )
+    for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
     {
-        capsule_metadata *cm = ptr_list_nth_ptr( capsule_manifest, n );
+        capsule_metadata *cm = ptr_list_nth_ptr( _capsule_metadata_list, n );
 
         if( cm == meta )
-            capsule_manifest->loc[ n ].ptr = NULL;
+            _capsule_metadata_list->loc[ n ].ptr = NULL;
     }
 
 }

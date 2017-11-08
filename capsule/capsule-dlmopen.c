@@ -252,9 +252,9 @@ capsule_load (const capsule cap,
     {
         // first fetch the subcapsule metadata for this specific
         // target DSO if it exists:
-        for( size_t n = 0; n < capsule_manifest->next; n++ )
+        for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
         {
-            capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+            capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
             DEBUG( DEBUG_CAPSULE, "checking metadata %d for %p, %s",
                    (int) n, m, m ? m->soname : "---" );
 
@@ -271,9 +271,9 @@ capsule_load (const capsule cap,
         // next, if we have subcapsule metadata, see if there's
         // a Lmid_t value alrady allocated for it:
         if( cm && cm->namespace == LM_ID_NEWLM )
-            for( size_t n = 0; n < capsule_manifest->next; n++ )
+            for( size_t n = 0; n < _capsule_metadata_list->next; n++ )
             {
-                capsule_metadata *m = ptr_list_nth_ptr( capsule_manifest, n );
+                capsule_metadata *m = ptr_list_nth_ptr( _capsule_metadata_list, n );
 
                 // this subcapsule is for a different prefix. skip it:
                 //DEBUG( DEBUG_CAPSULE, "checking prefix match: %p vs %p",

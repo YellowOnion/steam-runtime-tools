@@ -22,13 +22,11 @@
               "struct _capsule %p"                     "\n"  \
               "{"                                      "\n"  \
               "  void        *dl_handle;          %p"  "\n"  \
-              "  char        *prefix;             %s"  "\n"  \
               "  capsule_metadata *meta;          %p"  "\n"  \
               "  {"                                    "\n"  \
               "    Lmid_t namespace;              %ld" "\n"  \
               "    const char  *soname;           %s"  "\n"  \
               "    const char  *default_prefix;   %s"  "\n"  \
-              "    char        *active_prefix;    %s"  "\n"  \
               "    const char **exclude;          %p"  "\n"  \
               "    const char **export;           %p"  "\n"  \
               "    const char **nowrap;           %p"  "\n"  \
@@ -36,29 +34,25 @@
               "    char **combined_export;        %p"  "\n"  \
               "    char **combined_nowrap;        %p"  "\n"  \
               "  };"                                   "\n"  \
+              "  capsule_namespace *ns;           %p"  "\n"  \
+              "  {"                                    "\n"  \
+              "    char        *prefix;           %s"  "\n"  \
+              "  };"                                   "\n"  \
               "};"                                     "\n", \
               cap                         ,                  \
               cap->dl_handle              ,                  \
-              cap->prefix                 ,                  \
               cap->meta                   ,                  \
               cap->meta->namespace        ,                  \
               cap->meta->soname           ,                  \
               cap->meta->default_prefix   ,                  \
-              cap->meta->active_prefix    ,                  \
               cap->meta->exclude          ,                  \
               cap->meta->export           ,                  \
               cap->meta->nowrap           ,                  \
               cap->meta->combined_exclude ,                  \
               cap->meta->combined_export  ,                  \
-              cap->meta->combined_nowrap  ); })
-
-typedef struct _capsule_namespace
-{
-    const char *prefix;
-    ptr_list *exclusions;
-    ptr_list *exports;
-    ptr_list *nowrap;
-} capsule_namespace;
+              cap->meta->combined_nowrap  ,                  \
+              cap->ns                     ,                  \
+              cap->ns->prefix             ); })
 
 static ptr_list *namespaces = NULL;
 
@@ -77,10 +71,18 @@ static int str_equal (const void *a, const void *b)
     return strcmp( (char *)a, (char *)b ) == 0;
 }
 
+static const char *get_prefix_nocopy (const char *dflt, const char *soname);
+
 static capsule_namespace *
-get_namespace (const char *prefix)
+get_namespace (const char *default_prefix, const char *soname)
 {
+    const char *prefix = get_prefix_nocopy( default_prefix, soname );
     capsule_namespace *ns;
+
+    // Normalize so that libraries with prefix NULL, "" or "/" are all
+    // treated as equivalent
+    if( prefix == NULL || prefix[0] == '\0' )
+        prefix = "/";
 
     if( namespaces == NULL )
         namespaces = ptr_list_alloc( 4 );
@@ -96,7 +98,7 @@ get_namespace (const char *prefix)
     }
 
     ns = calloc( 1, sizeof(capsule_namespace) );
-    ns->prefix      = prefix;
+    ns->prefix      = strdup( prefix );
     ns->exclusions  = ptr_list_alloc( 4 );
     ns->exports     = ptr_list_alloc( 4 );
     ns->nowrap      = ptr_list_alloc( 4 );
@@ -166,22 +168,16 @@ get_capsule_metadata (struct link_map *map, const char *only)
         meta->namespace = LM_ID_NEWLM;
         meta->closed    = 0;
 
-        if( meta->active_prefix )
-            free( meta->active_prefix );
-
-        meta->active_prefix =
-          capsule_get_prefix( meta->default_prefix, meta->soname );
-
         cap = meta->handle;
 
         if( cap == NULL )
         {
             cap = xcalloc( 1, sizeof(struct _capsule) );
+            cap->ns = get_namespace( meta->default_prefix, meta->soname );
             DEBUG( DEBUG_CAPSULE,
                    "Creating new capsule %p for metadata %p (%s … %s)",
-                   cap, meta, meta->active_prefix, meta->soname );
+                   cap, meta, cap->ns->prefix, meta->soname );
             cap->meta = meta;
-            cap->prefix = meta->active_prefix;
             cap->seen.all  = ptr_list_alloc( 32 );
             cap->seen.some = ptr_list_alloc( 32 );
             meta->handle = cap;
@@ -190,7 +186,7 @@ get_capsule_metadata (struct link_map *map, const char *only)
 
         DEBUG( DEBUG_CAPSULE,
                "found metadata for %s … %s at %p (capsule: %p)",
-               meta->active_prefix, meta->soname, meta, cap );
+               cap->ns->prefix, meta->soname, meta, cap );
         break;
     }
 }
@@ -280,11 +276,9 @@ update_metadata (const char *match)
         if( !cap )
             continue;
 
-        capsule_namespace *ns = get_namespace( cap->prefix );
-
-        add_new_strings_to_ptrlist( ns->exclusions, cap->meta->exclude );
-        add_new_strings_to_ptrlist( ns->exports,    cap->meta->export  );
-        add_new_strings_to_ptrlist( ns->nowrap,     cap->meta->nowrap  );
+        add_new_strings_to_ptrlist( cap->ns->exclusions, cap->meta->exclude );
+        add_new_strings_to_ptrlist( cap->ns->exports,    cap->meta->export  );
+        add_new_strings_to_ptrlist( cap->ns->nowrap,     cap->meta->nowrap  );
     }
 
     // now squash the meta data ptr_lists into char** that
@@ -296,15 +290,13 @@ update_metadata (const char *match)
         if( !cap )
             continue;
 
-        capsule_namespace *ns = get_namespace( cap->prefix );
-
         free_strv( cap->meta->combined_exclude );
         free_strv( cap->meta->combined_export  );
         free_strv( cap->meta->combined_nowrap  );
 
-        cap->meta->combined_exclude = cook_list( ns->exclusions );
-        cap->meta->combined_export  = cook_list( ns->exports );
-        cap->meta->combined_nowrap  = cook_list( ns->nowrap );
+        cap->meta->combined_exclude = cook_list( cap->ns->exclusions );
+        cap->meta->combined_export  = cook_list( cap->ns->exports );
+        cap->meta->combined_nowrap  = cook_list( cap->ns->nowrap );
     }
 }
 
@@ -341,10 +333,21 @@ static void __attribute__ ((constructor)) _init_capsule (void)
 char *
 capsule_get_prefix (const char *dflt, const char *soname)
 {
+    const char *prefix = get_prefix_nocopy( dflt, soname );
+
+    if (prefix != NULL)
+        return xstrdup( prefix );
+
+    return NULL;
+}
+
+static const char *
+get_prefix_nocopy (const char *dflt, const char *soname)
+{
     char env_var[PATH_MAX] = CAP_ENV_PREFIX;
     const size_t offs = strlen( CAP_ENV_PREFIX );
     size_t x = 0;
-    char *prefix = NULL;
+    const char *prefix = NULL;
 
     for( ; (x < strlen(soname)) && (x + offs < PATH_MAX); x++ )
     {
@@ -360,7 +363,7 @@ capsule_get_prefix (const char *dflt, const char *soname)
     if( (prefix = secure_getenv( &env_var[0] )) )
     {
         DEBUG( DEBUG_SEARCH, "Capsule prefix is %s: %s", &env_var[0], prefix );
-        return strdup( prefix );
+        return prefix;
     }
 
     DEBUG( DEBUG_CAPSULE, "checking %s\n", CAP_ENV_PREFIX "PREFIX" );
@@ -368,13 +371,13 @@ capsule_get_prefix (const char *dflt, const char *soname)
     {
         DEBUG( DEBUG_SEARCH, "Capsule prefix is "CAP_ENV_PREFIX"PREFIX: %s",
                prefix );
-        return strdup( prefix );
+        return prefix;
     }
 
     if( dflt )
     {
         DEBUG( DEBUG_SEARCH, "Capsule prefix is built-in: %s", dflt );
-        return strdup( dflt );
+        return dflt;
     }
 
     DEBUG( DEBUG_SEARCH, "Capsule prefix is missing" );
@@ -471,7 +474,6 @@ capsule_close (capsule cap)
     CLEAR( free_strv, meta->combined_exclude );
     CLEAR( free_strv, meta->combined_export  );
     CLEAR( free_strv, meta->combined_nowrap  );
-    CLEAR( free     , meta->active_prefix    );
     meta->handle = NULL;
 
     CLEAR( ptr_list_free, cap->seen.all  );

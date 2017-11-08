@@ -102,7 +102,6 @@ struct _capsule_metadata
     const int     capsule_abi;
     /*< private >*/
     int     closed;
-    char   *active_prefix;
     char  **combined_exclude;
     char  **combined_export;
     char  **combined_nowrap;

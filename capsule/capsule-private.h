@@ -6,13 +6,21 @@
 typedef void * (*dlsymfunc) (void *handle, const char *symbol);
 typedef void * (*dlopnfunc) (const char *file, int flags);
 
+typedef struct _capsule_namespace
+{
+    const char *prefix;
+    ptr_list *exclusions;
+    ptr_list *exports;
+    ptr_list *nowrap;
+} capsule_namespace;
+
 struct _capsule
 {
     void  *dl_handle;
-    const char *prefix;
     capsule_item *relocations;
     struct { ptr_list *all; ptr_list *some; } seen;
     capsule_metadata *meta;
+    capsule_namespace *ns;
 };
 
 extern ptr_list *_capsule_list;

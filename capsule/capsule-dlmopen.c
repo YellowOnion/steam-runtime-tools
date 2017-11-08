@@ -276,9 +276,7 @@ capsule_load (const capsule cap,
                 capsule other = ptr_list_nth_ptr( _capsule_list, n );
 
                 // this subcapsule is for a different prefix. skip it:
-                //DEBUG( DEBUG_CAPSULE, "checking prefix match: %p vs %p",
-                //       cap->prefix, other->meta->active_prefix );
-                if( strcmp( cap->prefix, other->prefix ) )
+                if( cap->ns != other->ns )
                     continue;
 
                 // we found a pre-allocated Lmid_t. Use it:
@@ -294,7 +292,7 @@ capsule_load (const capsule cap,
 
     if( !ld_libs_init( &ldlibs,
                        (const char **) cap->meta->combined_exclude,
-                       cap->meta->active_prefix, debug_flags, errcode, error ) )
+                       cap->ns->prefix, debug_flags, errcode, error ) )
         return NULL;
 
     // ==================================================================

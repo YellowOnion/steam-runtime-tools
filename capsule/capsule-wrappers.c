@@ -182,12 +182,12 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
 
     DEBUG( DEBUG_WRAPPERS|DEBUG_DLFUNC,
            "dlopen(%s, %x) wrapper: LMID: %ld; prefix: %s;",
-           file, flag, cap->meta->namespace, cap->meta->active_prefix );
+           file, flag, cap->meta->namespace, cap->ns->prefix );
 
-    if( cap->prefix && strcmp(cap->prefix, "/") )
+    if( cap->ns->prefix && strcmp(cap->ns->prefix, "/") )
     {
         if( !ld_libs_init( &ldlibs, (const char **)cap->meta->combined_exclude,
-                           cap->prefix, debug_flags, &code, &errors ) )
+                           cap->ns->prefix, debug_flags, &code, &errors ) )
         {
             DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
                    "Initialising ld_libs data failed: error %d: %s",
@@ -198,7 +198,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache", &code, &errors ) )
         {
             DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
-                   "Loading ld.so.cache from %s: error %d: %s", cap->prefix,
+                   "Loading ld.so.cache from %s: error %d: %s", cap->ns->prefix,
                    code, errors );
             goto cleanup;
         }
@@ -208,7 +208,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
         {
             DEBUG( DEBUG_SEARCH|DEBUG_WRAPPERS|DEBUG_DLFUNC,
                            "Not found: %s under %s: error %d: %s",
-                           file, cap->prefix, code, errors );
+                           file, cap->ns->prefix, code, errors );
             goto cleanup;
         }
 

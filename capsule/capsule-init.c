@@ -102,7 +102,7 @@ get_namespace (const char *prefix)
 }
 
 static void
-get_capsule_metadata (struct link_map *map, ptr_list *info, const char *only)
+get_capsule_metadata (struct link_map *map, const char *only)
 {
     ElfW(Addr) base = map->l_addr;
     ElfW(Dyn) *dyn  = map->l_ld;
@@ -166,7 +166,7 @@ get_capsule_metadata (struct link_map *map, ptr_list *info, const char *only)
         meta->active_prefix =
           capsule_get_prefix( meta->default_prefix, meta->soname );
 
-        ptr_list_add_ptr( info, meta, ptr_equal );
+        ptr_list_add_ptr( capsule_manifest, meta, ptr_equal );
         DEBUG( DEBUG_CAPSULE, "found metatdata for %s … %s at %p",
                meta->active_prefix, meta->soname, meta );
         break;
@@ -245,7 +245,7 @@ update_metadata (const char *match)
     // otherwise just the metadata that is string-equal:
     if (map->l_next)
         for( struct link_map *m = map; m; m = m->l_next )
-            get_capsule_metadata( m, capsule_manifest, match );
+            get_capsule_metadata( m, match );
 
     // merge the string lists for each active prefix:
     // ie all excludes for /host should be in one exclude list,

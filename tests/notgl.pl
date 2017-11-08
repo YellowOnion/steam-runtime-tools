@@ -35,7 +35,10 @@ use CapsuleTest;
 
 skip_all_unless_bwrap;
 
-my $capsule_prefix = File::Temp->newdir();
+my $temp = File::Temp->newdir();
+my $capsule_prefix = "$temp/prefix";
+mkdir $capsule_prefix;
+
 my $libs = '';
 my $notgl_user = "$builddir/tests/notgl-user";
 my $notgl_helper_user = "$builddir/tests/notgl-helper-user";
@@ -268,6 +271,50 @@ like($stdout,
     qr/^notgles_extension_both: red implementation of common extension$/m);
 like($stdout, qr/^notgles_extension_red: red-only extension$/m);
 like($stdout, qr/^notgles_extension_green: \(not found\)$/m);
+
+# We can use separate prefixes for different encapsulated libraries.
+my $red_capsule_prefix = "$temp/red";
+mkdir $red_capsule_prefix;
+my $green_capsule_prefix = "$temp/green";
+mkdir $green_capsule_prefix;
+
+diag 'With libcapsule loading disparate implementations, via dlopen:';
+run_ok([qw(bwrap
+        --ro-bind / /
+        --dev-bind /dev /dev
+        --ro-bind /), $red_capsule_prefix,
+        qw(--ro-bind /), $green_capsule_prefix,
+        '--tmpfs', realpath("$builddir/tests/lib$libs"),
+        '--tmpfs', $red_capsule_prefix.realpath($builddir),
+        '--tmpfs', $green_capsule_prefix.realpath($builddir),
+        '--ro-bind', realpath("$builddir/tests/red"),
+            $red_capsule_prefix.realpath("$builddir/tests/lib"),
+        '--ro-bind', realpath("$builddir/tests/green"),
+            $green_capsule_prefix.realpath("$builddir/tests/lib"),
+        '--setenv', 'CAPSULE_LIBNOTGL_SO_0_PREFIX', $red_capsule_prefix,
+        # We don't specify CAPSULE_LIBNOTGLES_SO_1_PREFIX, so the
+        # generic version gets used.
+        '--setenv', 'CAPSULE_PREFIX', $green_capsule_prefix,
+        '--setenv', 'LD_LIBRARY_PATH', join(':',
+            realpath("$builddir/tests/shim$libs"),
+            realpath("$builddir/tests/helper$libs"),
+            realpath("$builddir/tests/lib$libs"),
+        ),
+        $notgl_dlopener],
+    '>', \$stdout);
+diag_multiline $stdout;
+like($stdout, qr/^NotGL implementation: red$/m);
+like($stdout, qr/^NotGL helper implementation: host \(red\)$/m);
+like($stdout,
+    qr/^notgl_extension_both: red implementation of common extension$/m);
+like($stdout, qr/^notgl_extension_red: red-only extension$/m);
+like($stdout, qr/^notgl_extension_green: \(not found\)$/m);
+like($stdout, qr/^NotGLES implementation: green$/m);
+like($stdout, qr/^NotGLES helper implementation: host \(green\)$/m);
+like($stdout,
+    qr/^notgles_extension_both: green implementation of common extension$/m);
+like($stdout, qr/^notgles_extension_red: \(not found\)$/m);
+like($stdout, qr/^notgles_extension_green: green-only extension$/m);
 
 done_testing;
 

@@ -418,10 +418,7 @@ capsule_init (const char *soname)
             DUMP_STRV( nowrap,   cm->combined_nowrap  );
         }
     }
-    // in principle we should be able to make both reloc calls
-    // efficient in the same do-not-redo-your-work way, but for
-    // some reason the unrestricted relocation breaks if we turn
-    // this one on. setting the tracker to NULL disables for now.
+
     handle->seen.all  = ptr_list_alloc( 32 );
     handle->seen.some = ptr_list_alloc( 32 );
 

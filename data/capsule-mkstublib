@@ -34,8 +34,6 @@ Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
                                 Use replacement capsule-symbols(1)
         --symbols-from=PATH     Use symbols from this file
                                 [default: \${OUTPUT%.c}.symbols]
-        --[no-]ext-dlopen       Do or don't override dlopen() for
-                                callers outside the capsule [default: don't]
         --[no-]update-symbols   Do or don't update symbols list if EXPORTS
                                 is newer than it [default: do]
         --search-tree=PATH      Find libraries to be proxied in this
@@ -66,11 +64,10 @@ EOF
     exit "${1:-0}"
 }
 
-ext_dlopen=
 update_symbols=
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'capsule-symbols-tool:,ext-dlopen,no-ext-dlopen,search-tree:,runtime-tree:,symbols-from:,update-symbols,no-update-symbols,help' \
+    -l 'capsule-symbols-tool:,search-tree:,runtime-tree:,symbols-from:,update-symbols,no-update-symbols,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 
@@ -80,18 +77,6 @@ do
         (--capsule-symbols-tool)
             CAPSULE_SYMBOLS_TOOL="$2"
             shift 2;
-            continue;
-            ;;
-
-        (--ext-dlopen)
-            ext_dlopen=yes;
-            shift;
-            continue;
-            ;;
-
-        (--no-ext-dlopen)
-            ext_dlopen=;
-            shift;
             continue;
             ;;
 
@@ -248,21 +233,6 @@ static const char soname[] = "$proxied_dso";
 // _int_dlopen() from libcapsule or a locally overridden version
 #include "capsule/_int_dlopen.h"
 
-EOF
-
-if [ -n "$ext_dlopen" ]
-then
-    echo '// _ext_dlopen() from libcapsule or a locally overridden version'
-    echo '#include "capsule/_ext_dlopen.h"'
-    echo '#define HAVE_EXT_DLOPEN'
-else
-    echo '// Disabled by capsule-mkstublib --no-ext-dlopen'
-    echo '//#include "capsule/_ext_dlopen.h"'
-    echo '//#define HAVE_EXT_DLOPEN'
-fi
-
-cat - <<EOF
-
 // should we exclude libpthread here?
 // in any case, these are DSOs we do _not_ want to isolate
 static const char *exclude[] =
@@ -310,19 +280,6 @@ static const char *invalid_dl_reloc_targets[] =
   NULL
 };
 
-#ifdef HAVE_EXT_DLOPEN
-static capsule_item _external_dl_relocs[] =
-{
-  { "dlopen",
-    (capsule_addr) _ext_dlopen ,
-    (capsule_addr) _ext_dlopen },
-  { NULL }
-};
-#define EXT_DLOPEN_WRAPPERS _external_dl_relocs
-#else
-#define EXT_DLOPEN_WRAPPERS capsule_external_dl_relocs
-#endif
-
 // make sure this symbol has global visibility so
 // that the libcapsule initialisation can find it
 __attribute__ ((visibility("default")))
@@ -334,7 +291,7 @@ capsule_metadata capsule_meta =
     .exclude          = exclude,
     .export           = valid_dlsym_sources,
     .nowrap           = invalid_dl_reloc_targets,
-    .dl_wrappers      = EXT_DLOPEN_WRAPPERS,
+    .dl_wrappers      = capsule_external_dl_relocs,
 };
 
 // -------------------------------------------------------------
@@ -407,7 +364,7 @@ static void __attribute__ ((constructor)) _capsule_init (void)
         if( rloc != 0 ) // relocation failed. we're dead.
             abort();
 
-        rloc = capsule_relocate_except( cap, EXT_DLOPEN_WRAPPERS,
+        rloc = capsule_relocate_except( cap, capsule_external_dl_relocs,
                                         &invalid_dl_reloc_targets[0],
                                         &capsule_error );
         if( rloc != 0 ) // we may survive this depending on how dlopen is used

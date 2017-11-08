@@ -176,30 +176,6 @@ shim/capsule/_int_dlopen.h
   }
 
 ----------------------------------------------------------------------------
-shim/capsule/_ext_dlopen.h
-
-  This file is not created or used by default. It can be enabled by
-  adding --ext-dlopen to AM_CAPSULE_MKSTUBLIB_FLAGS in Makefile.am.
-
-  The _ext_dlopen wrapper is installed in _most_ libraries outside the
-  capsule (notably not in the shim itself, libcapsule.so, libc.so and
-  a few other core libraries). It is responsible for triggering the
-  capsule's manual symbol relocation when a library outside the capsule
-  is dlopen()ed.
-
-  If this is enabled by --ext-dlopen but the file is not present,
-  a default implementation provided by libcapsule is used.
-  See libcapsule's <capsule/_ext_dlopen.h> for that implementation.
-
-  To use a custom implementation, create the file and implement a
-  function with the same signature:
-
-  static void *_ext_dlopen (const char *filename, int flags)
-  {
-    ⋮
-  }
-
-----------------------------------------------------------------------------
 That's it - you should be ready to:
 
   ./configure

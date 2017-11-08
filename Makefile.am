@@ -56,7 +56,6 @@ uninstall-hook:
 
 # Headers to be included by shim libraries
 nobase_include_HEADERS += capsule/capsule-shim.h \
-                          capsule/_ext_dlopen.h \
                           capsule/_int_dlopen.h
 
 # demo program - keep this hanging around as it's a useful PoC
@@ -244,7 +243,6 @@ tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols d
 	PKG_CONFIG_PATH=$(abs_builddir)/data \
 	V=$V \
 	$(top_srcdir)/data/capsule-mkstublib \
-		--ext-dlopen \
 		--symbols-from=$(srcdir)/tests/shim/$*.symbols \
 		--no-update-symbols \
 		--runtime-tree=/host \

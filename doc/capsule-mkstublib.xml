@@ -187,21 +187,6 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
       </varlistentry>
 
       <varlistentry>
-        <term><option>--[no-]ext-dlopen</option></term>
-        <listitem>
-          <para>
-            Do or don't provide an explicit override for dlopen(3)
-            calls made outside the capsule in the generated
-            source.
-          </para>
-          <para>
-            [There is always an implicit override - this just
-            exposes the implementation for easy modification]
-          </para>
-        </listitem>
-      </varlistentry>
-
-      <varlistentry>
         <term><option>--[no]-update-symbols</option></term>
         <listitem>
           <para>

@@ -272,7 +272,6 @@ cat - <<EOF
 
 static const char * const invalid_dl_reloc_targets[] =
 {
-  soname,
   "libc.so",
   "libdl.so",
   "libpthread.so",

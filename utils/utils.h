@@ -138,3 +138,11 @@ void _capsule_set_error_literal( int *code_dest, char **message_dest,
 void _capsule_set_error( int *code_dest, char **message_dest,
                          int code, const char *format, ... )
     __attribute__((format(printf, 4, 5)));
+
+/*
+ * N_ELEMENTS:
+ * @array: A fixed-size array (not a pointer!)
+ *
+ * Same as `G_N_ELEMENTS`, `_DBUS_N_ELEMENTS`, systemd `ELEMENTSOF`, etc.
+ */
+#define N_ELEMENTS(array) ( sizeof(array) / sizeof(array[0]) )

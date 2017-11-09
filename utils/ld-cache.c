@@ -67,7 +67,7 @@ static const char *const abi_tag_os[] =
     [5] = "Syllable",
     [6] = "Unknown OS"
 };
-#define MAXTAG (sizeof abi_tag_os / sizeof abi_tag_os[0] - 1)
+#define MAXTAG (N_ELEMENTS( abi_tag_os ) - 1)
 
 /* Used to align cache_file_new.  */
 #define ALIGN_CACHE(addr)                               \

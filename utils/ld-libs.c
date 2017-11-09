@@ -1066,7 +1066,7 @@ stat_caller (void)
         void *origin    = self.dli_fbase;
         int traced;
 
-        traced = backtrace( trace, sizeof(trace)/sizeof(void *) );
+        traced = backtrace( trace, N_ELEMENTS( trace ) );
 
         for( int x = 0; x < traced && caller[0] == '\0'; x++ )
             if( dladdr( trace[x], &dso ) )

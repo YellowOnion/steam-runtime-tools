@@ -51,11 +51,7 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
     <cmdsynopsis>
       <command>capsule-init-project</command>
       <arg choice="opt">OPTIONS</arg>
-      <arg choice="plain">TARGET</arg>
-      <arg choice="opt">
-        FOREIGN-TREE
-      <arg choice="opt">PROJECT-DIR</arg>
-      </arg>
+      <arg choice="req" rep="repeat">TARGET</arg>
     </cmdsynopsis>
   </refsynopsisdiv>
 
@@ -76,32 +72,10 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <term><option>TARGET</option></term>
         <listitem>
           <para>
-            The base name of the target, of the form libFOO.so.X (eg libz.so.1)
+            The base name of the target, of the form libFOO.so.X (eg libz.so.1).
+            It can optionally be combined with a version number in the
+            form libFOO.so.X/VERSION (e.g. libz.so.1/1.2.3).
           </para>
-        </listitem>
-      </varlistentry>
-
-      <varlistentry>
-        <term><option>FOREIGN-TREE</option></term>
-        <listitem>
-          <para>
-            Mount point of the filesystem tree which contains the target.
-          </para>
-          <para>
-            For example a container could mount a different root filesystem 
-            at /host in order to make its libraries available.
-          </para>
-          <para>
-            FOREIGN-TREE defaults to /host if unset or empty.
-          </para>
-        </listitem>
-      </varlistentry>
-
-      <varlistentry>
-        <term><option>PROJECT-DIR</option></term>
-        <listitem>
-          <para>The directory in which the new project will be created.</para>
-          <para>Defaults to ./libFOO-proxy (if TARGET is libFOO.so.X)</para>
         </listitem>
       </varlistentry>
 
@@ -140,7 +114,7 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
             Find libraries to be proxied in this chroot,
             sysroot or container at compile-time.
           </para>
-          <para>default: TREE or / if unset</para>
+          <para>default: TREE or /host if unset</para>
         </listitem>
       </varlistentry>
 
@@ -148,18 +122,20 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <term><option>--set-version=VERSION</option></term>
         <listitem>
           <para>
-            Use this as the library version
+            Use this as the package version
             (major, major.minor or major.minor.micro)
-            instead of using capsule-version(1)
+            instead of using capsule-version(1) on the first
+            <option>TARGET</option>
           </para>
         </listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><option>--symbols-from=PATH</option></term>
+        <term><option>--symbols-from-dir=PATH</option></term>
         <listitem>
           <para>
-            Use this symbols file instead of the output of capsule-symbols(1)
+            Use symbols files in this directory instead of the
+            output of capsule-symbols(1)
           </para>
         </listitem>
       </varlistentry>
@@ -172,6 +148,27 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
             container at runtime if the library-specific env var (eg
             CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1) or CAPSULE_PREFIX
             or is unset.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--package-name=PACKAGE</option></term>
+        <listitem>
+          <para>
+            Use this name for the generated Autotools package,
+            instead of libFOO-proxy
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--destination=PATH</option></term>
+        <listitem>
+          <para>
+            Use this name for the generated directory,
+            instead of libFOO-proxy or the argument of
+            <option>--package-name</option>
           </para>
         </listitem>
       </varlistentry>

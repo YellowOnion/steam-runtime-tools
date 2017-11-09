@@ -64,14 +64,16 @@ my $examples = "$srcdir/examples";
 run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--runtime-tree=/run/host',
         '--set-version=1.0.0',
-        "--symbols-from=$examples/shim/libGL.so.1.symbols",
-        'libGL.so.1']);
-run_ok(['cp',
-         "$examples/shim/libGL.so.1.excluded",
-         "$examples/shim/libGL.so.1.shared",
-         "$examples/shim/libGL.so.1.symbols",
-         "$examples/shim/libGL.so.1.symbols.updated-for",
-         "$test_tempdir/libGL-proxy/shim/"]);
+        "--symbols-from=$examples/shim",
+        'libGL.so.1',
+        'libX11.so.6',
+        'libXext.so.6',
+        'libxcb-dri2.so.0',
+        'libxcb-glx.so.0',
+        'libxcb-present.so.0',
+        'libxcb-sync.so.1',
+        'libxcb.so.1',
+    ]);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
         'sh', "$test_tempdir/libGL-proxy",

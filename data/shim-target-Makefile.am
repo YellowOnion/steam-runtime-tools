@@ -7,7 +7,7 @@
 # -------- @TARGET@ --------
 
 CAPSULE_SONAMES += @TARGET@
-CAPSULE_VERSION_@AMTARGET@ := @VER@
+CAPSULE_VERSION_@AMTARGET@ := @TARGET_VER@
 lib_LTLIBRARIES += lib@LIB@.la
 
 nodist_lib@AMLIB@_la_SOURCES = shim/@TARGET@.c

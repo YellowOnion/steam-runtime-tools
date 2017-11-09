@@ -123,11 +123,15 @@ capsule capsule_init (const char *soname);
 
 /**
  * capsule_shim_dlopen:
- * @capsule: a #capsule handle as returned by capsule_init()
- * @file: base name of the target DSO (eg libz.so.1)
+ * @cap: The capsule from which `dlopen` was called
+ * @file: SONAME or filename to be opened
  * @flag: dlopen() flags to pass to the real dlmopen() call
  *
- * Returns: a void * dl handle (cf dlopen())
+ * An implementation of `dlopen` suitable to be called from inside a
+ * namespace. Load @file into @cap's namespace.
+ *
+ * If @cap has a non-trivial prefix, load @file and its recursive
+ * dependencies from @cap's prefix instead of from the root filesystem.
  *
  * This helper function exists because dlopen() cannot safely be called
  * by a DSO opened into a private namespace. It takes @file and @flag
@@ -141,6 +145,8 @@ capsule capsule_init (const char *soname);
  *
  * Limitations: RTLD_GLOBAL is not supported in @flag. This is a glibc
  * limitation in the dlmopen() implementation.
+ *
+ * Returns: A handle as if for `dlopen`
  */
 _CAPSULE_PUBLIC
 void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
@@ -150,7 +156,8 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
  * @handle: A dl handle, as passed to dlsym()
  * @symbol: A symbol name, as passed to dlsym()
  *
- * Returns: a void * symbol address (cf dlsym())
+ * An implementation of `dlsym`, used when it is called by the executable
+ * or by a library outside the capsule.
  *
  * Some libraries have a use pattern in which their caller/user
  * uses dlsym() to obtain symbols rather than using those symbols
@@ -171,6 +178,8 @@ void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
  * normally used automatically by libcapsule. It is exposed as API in
  * case a libcapsule proxy library needs to provide its own specialised
  * symbol lookup mechanism.
+ *
+ * Returns: The address associated with @symbol (as if for `dlsym`), or %NULL
  */
 _CAPSULE_PUBLIC
 void *capsule_external_dlsym (void *handle, const char *symbol);
@@ -180,7 +189,8 @@ void *capsule_external_dlsym (void *handle, const char *symbol);
  * @file: A soname, filename or path as passed to dlopen()
  * @flag: The dl flags, as per dlopen()
  *
- * Returns: a void * handle, as per dlopen()
+ * An implementation of `dlopen`, used when it is called by the executable
+ * or by a library outside the capsule.
  *
  * This wrapper is meant to be replace normal calls to dlopen() made by the
  * main program or a non-capsule library - it is necessary because en ELF
@@ -191,6 +201,8 @@ void *capsule_external_dlsym (void *handle, const char *symbol);
  * initial _capsule_relocate() call immediately, before returning
  * the same value that dlopen() would have, given the same @file and @flag
  * arguments.
+ *
+ * Returns: The handle returned by `dlopen`
  */
 _CAPSULE_PUBLIC
 void *capsule_external_dlopen(const char *file, int flag);

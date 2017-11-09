@@ -227,12 +227,11 @@ static const char soname[] = "$proxied_dso";
 // _int_dlopen() from libcapsule or a locally overridden version
 #include "capsule/_int_dlopen.h"
 
-// should we exclude libpthread here?
-// in any case, these are DSOs we do _not_ want to isolate
+// Array of SONAMEs that will not have a private copy inside a capsule.
+// Only one copy of each of these will be loaded, and they will
+// be loaded without respecting the #capsule_namespace's @prefix.
 static const char *exclude[] =
-{ // MUST NOT be pulled from the capsule
-  // prefixed filesystem tree:
-  "libdl.so.2",
+{
 EOF
 
 while read excluded x;

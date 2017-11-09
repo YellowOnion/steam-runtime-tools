@@ -50,6 +50,34 @@
               cap->ns->combined_exclude   ,                  \
               cap->ns->combined_export);})
 
+/*
+ * never_encapsulated:
+ *
+ * Array of SONAMEs that never have a private copy inside a capsule.
+ * Only one copy of each of these will be loaded, and they will always
+ * be loaded without respecting the #capsule_namespace's @prefix, even
+ * if loaded from inside a capsule.
+ *
+ * This currently contains the libraries built by the glibc source package.
+ */
+static const char * const never_encapsulated[] =
+{
+    "libBrokenLocale.so.1",
+    "libanl.so.1",
+    "libc.so.6",
+    "libcidn.so.1",
+    "libcrypt.so.1",
+    "libdl.so.2",
+    "libm.so.6",
+    "libmvec.so.1",
+    "libnsl.so.1",
+    "libpthread.so.0",
+    "libresolv.so.2",
+    "librt.so.1",
+    "libthread_db.so.1",
+    "libutil.so.1",
+};
+
 static ptr_list *namespaces = NULL;
 
 ptr_list *_capsule_list  = NULL;
@@ -202,22 +230,29 @@ get_capsule_metadata (struct link_map *map, const char *only)
 /**
  * cook_list:
  * @list: a ptr_list containing statically-allocated strings
+ * @extras: (array length=n_extras): extra entries to be added
+ * @n_extras: number of extra entries
  *
- * Return @list as an array of strings. The strings are not copied, so
- * the result is only valid as long as the strings are.
+ * Return @list + @extras as an array of strings. The strings are not
+ * copied, so the result is only valid as long as the strings are.
  *
  * Returns: (transfer container) (array zero-terminated=1) (element-type utf8):
- *  a shallow copy of @list
+ *  a shallow copy of everything in either @list or @extras
  */
 static char **
-cook_list (ptr_list *list)
+cook_list (ptr_list *list,
+           const char * const *extras,
+           size_t n_extras)
 {
-    char **cooked = calloc( list->next + 1, sizeof(char *) );
+    char **cooked = calloc( list->next + n_extras + 1, sizeof(char *) );
 
     for( size_t j = 0; j < list->next; j++ )
-        *(cooked + j) = (char *)ptr_list_nth_ptr( list, j );
+        cooked[j] = (char *)ptr_list_nth_ptr( list, j );
 
-    *(cooked + list->next) = NULL;
+    for( size_t j = 0; j < n_extras; j++ )
+        cooked[j + list->next] = (char *)extras[j];
+
+    *(cooked + list->next + n_extras) = NULL;
 
     return cooked;
 }
@@ -335,8 +370,10 @@ update_namespaces (void)
         free_strv( ns->combined_exclude );
         free_strv( ns->combined_export  );
 
-        ns->combined_exclude = cook_list( ns->exclusions );
-        ns->combined_export  = cook_list( ns->exports );
+        ns->combined_exclude = cook_list( ns->exclusions,
+                                          never_encapsulated,
+                                          N_ELEMENTS( never_encapsulated ) );
+        ns->combined_export  = cook_list( ns->exports, NULL, 0 );
     }
 }
 

@@ -4,7 +4,7 @@
 
 AC_PREREQ([2.60])
 
-AC_INIT([@LCBASE@-proxy], [@VER@])
+AC_INIT([@PACKAGE@], [@VER@])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 

@@ -196,7 +196,7 @@ sed \
     -e "s,@LIB@,$escaped_lib," \
     -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
-    -e "s,@LCBASE@,$lcbase," \
+    -e "s,@PACKAGE@,${lcbase}-proxy," \
     -e "s,@VER@,$ver," \
     < "$CAPSULE_MKINC/shim-configure.ac.in" \
     > configure.ac;
@@ -211,7 +211,7 @@ sed \
     -e "s,@AMLIB@,$automake_lib," \
     -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
-    -e "s,@LCBASE@,$lcbase," \
+    -e "s,@PACKAGE@,${lcbase}-proxy," \
     -e "s,@VER@,$ver," \
     < "$CAPSULE_MKINC/shim-Makefile.am" \
     > Makefile.am;

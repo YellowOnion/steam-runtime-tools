@@ -191,9 +191,6 @@ echo Initialising configure.ac;
 
 sed \
     -e "1,/^\$/d" \
-    -e "s,@TARGET@,$escaped_target," \
-    -e "s,@AMTARGET@,$automake_target," \
-    -e "s,@LIB@,$escaped_lib," \
     -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
     -e "s,@PACKAGE@,${lcbase}-proxy," \
@@ -205,6 +202,15 @@ echo Initialising Makefile.am;
 
 sed \
     -e "1,/^\$/d" \
+    -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
+    -e "s,@SEARCH_TREE@,$escaped_search_tree," \
+    -e "s,@PACKAGE@,${lcbase}-proxy," \
+    -e "s,@VER@,$ver," \
+    < "$CAPSULE_MKINC/shim-Makefile.am" \
+    > Makefile.am;
+
+sed \
+    -e "1,/^\$/d" \
     -e "s,@TARGET@,$escaped_target," \
     -e "s,@AMTARGET@,$automake_target," \
     -e "s,@LIB@,$escaped_lib," \
@@ -213,8 +219,8 @@ sed \
     -e "s,@SEARCH_TREE@,$escaped_search_tree," \
     -e "s,@PACKAGE@,${lcbase}-proxy," \
     -e "s,@VER@,$ver," \
-    < "$CAPSULE_MKINC/shim-Makefile.am" \
-    > Makefile.am;
+    < "$CAPSULE_MKINC/shim-target-Makefile.am" \
+    >> Makefile.am;
 
 cp "$CAPSULE_MKINC/shim-.gitignore" .gitignore
 

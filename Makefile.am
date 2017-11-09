@@ -120,7 +120,8 @@ dist_pkgdata_DATA       = data/capsule-shim.mk    \
                           data/shim-.gitignore    \
                           data/shim-Makefile.am   \
                           data/shim-README.in     \
-                          data/shim-configure.ac.in
+                          data/shim-configure.ac.in \
+                          data/shim-target-Makefile.am
 
 BUILT_SOURCES           = $(top_srcdir)/.version
 

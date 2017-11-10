@@ -104,13 +104,18 @@ sub uniq {
     return @unique;
 }
 
+my @symbols_produced =
+    get_symbols_with_nm("$test_tempdir/libz-proxy/.libs/libz.so.1");
+is_deeply \@symbols_wanted, [grep {! m/^capsule_meta $/} @symbols_produced];
+
+# Do the same thing with capsule-symbols.
 # We can't load the library unless we let it load its real
 # implementation, and it's hardwired to get that from /host, which
 # probably doesn't exist... so cheat by overriding it.
 run_ok(['env', "CAPSULE_PREFIX=/", @libcapsule_environment,
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],
     '>', \$output);
-my @symbols_produced = grep { !/capsule_meta\b/ } sort(split /\n/, $output);
+@symbols_produced = grep { !/capsule_meta\b/ } sort(split /\n/, $output);
 foreach my $sym (@symbols_produced) {
     diag "- $sym";
 }
@@ -189,6 +194,10 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1',
     close $fh;
 }
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
+
+@symbols_produced =
+    get_symbols_with_nm("$test_tempdir/libz-proxy/.libs/libz.so.1");
+is_deeply \@symbols_wanted, [grep {! m/^capsule_meta $/} @symbols_produced];
 
 run_ok(['env', "CAPSULE_PREFIX=/", @libcapsule_environment,
         $CAPSULE_SYMBOLS_TOOL, "$test_tempdir/libz-proxy/.libs/libz.so.1"],

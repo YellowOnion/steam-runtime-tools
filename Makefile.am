@@ -152,7 +152,8 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/lib/libnotgles.la                 \
                                        tests/shim/libnotgl.la                  \
                                        tests/shim/libnotgles.la
-nobase_dist_insttests_DATA           = tests/CapsuleTest.pm
+nobase_dist_insttests_DATA           = tests/CapsuleTest.pm                    \
+                                       tests/CapsuleTestDpkg.pm
 # Install the source code so we can rebuild it inside a container if we want to
 nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
                                        examples/shim/libGL.so.1.shared         \
@@ -295,6 +296,7 @@ AM_TESTS_ENVIRONMENT                 = export CAPSULE_CFLAGS="-I$(abs_top_srcdir
                                        export G_TEST_BUILDDIR="$(abs_builddir)";\
                                        export G_DEBUG=gc-friendly;             \
                                        export MALLOC_CHECK_=2;                 \
+                                       export NM="$(NM)";                      \
                                        export PKG_CONFIG_PATH="$(abs_builddir)/data";
 test_extra_programs                  = tests/notgl-user                        \
                                        tests/notgl-helper-user                 \

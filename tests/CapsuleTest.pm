@@ -14,6 +14,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Note that get_symbols_with_nm() uses some GPL-2+ code taken from dpkg.
 
 package CapsuleTest;
 
@@ -28,12 +30,14 @@ use Test::More;
 
 our @EXPORT = qw(
     diag_multiline
+    get_symbols_with_nm
     run_ok
     run_verbose
     skip_all_unless_bwrap
     $CAPSULE_INIT_PROJECT_TOOL
     $CAPSULE_SYMBOLS_TOOL
     $CAPSULE_VERSION_TOOL
+    $NM
     $PKG_CONFIG
     $builddir
     $srcdir
@@ -97,6 +101,18 @@ our $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
 unless (defined $CAPSULE_VERSION_TOOL) {
     $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule`;
     chomp $CAPSULE_VERSION_TOOL;
+}
+
+=item $NM
+
+The B<nm>(1) symbol-name-listing utility, configured for BSD output format.
+
+=cut
+
+our $NM = $ENV{NM};
+
+if (! length $NM) {
+    $NM = 'nm -B';
 }
 
 =item $srcdir
@@ -192,6 +208,43 @@ sub skip_all_unless_bwrap {
     }
 }
 
+=item get_symbols_with_nm(I<LIBRARY>)
+
+Return a list of symbols found in I<LIBRARY>, in the same format
+that capsule-symbols would use.
+
+=cut
+
+sub get_symbols_with_nm {
+    my $library = shift;
+    my $output;
+
+    run_ok([split(' ', $NM), '--dynamic', '--extern-only', '--defined-only',
+            '--with-symbol-versions', $library], '>', \$output);
+    my @symbols_produced;
+    foreach my $line (split /\n/, $output) {
+        if ($line =~ m/^[[:xdigit:]]+\s+[ABCDGIRSTW]+\s+([^@]+)(\@\@?.*)?/) {
+            my $symbol = $1;
+            my $version = $2;
+            require CapsuleTestDpkg;
+            next if CapsuleTestDpkg::symbol_is_blacklisted($symbol);
+            next if "\@\@$symbol" eq $version;
+
+            # Put them in the same format that capsule-symbols uses
+            if (length $version && $version ne '@@Base') {
+                push @symbols_produced, "$symbol $version";
+            }
+            else {
+                push @symbols_produced, "$symbol ";
+            }
+        }
+    }
+    foreach my $sym (@symbols_produced) {
+        diag "- $sym";
+    }
+    return sort @symbols_produced;
+}
+
 =back
 
 =head1 ENVIRONMENT
@@ -220,6 +273,10 @@ if (length $ENV{CAPSULE_TESTS_KEEP_TEMP}) {
 =item CAPSULE_VERSION_TOOL
 
 B<capsule-version>(1)
+
+=item NM
+
+The B<nm>(1) symbol-name-listing utility, if not C<nm -B>.
 
 =item PKG_CONFIG
 

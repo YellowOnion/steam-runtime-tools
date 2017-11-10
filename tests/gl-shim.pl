@@ -44,31 +44,41 @@ if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
 
 my $examples = "$srcdir/examples";
 
+my @sonames = qw(libGL.so.1 libX11.so.6 libXext.so.6 libxcb-dri2.so.0
+    libxcb-glx.so.0 libxcb-present.so.0 libxcb-sync.so.1 libxcb.so.1);
+
 run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--runtime-tree=/run/host',
         '--set-version=1.0.0',
         "--symbols-from=$examples/shim",
-        'libGL.so.1',
-        'libX11.so.6',
-        'libXext.so.6',
-        'libxcb-dri2.so.0',
-        'libxcb-glx.so.0',
-        'libxcb-present.so.0',
-        'libxcb-sync.so.1',
-        'libxcb.so.1',
+        @sonames,
     ]);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
         'sh', "$test_tempdir/libGL-proxy",
     ], '>&2');
 run_ok(['make', '-C', "$test_tempdir/libGL-proxy", 'V=1'], '>&2');
-ok(-e "$test_tempdir/libGL-proxy/libGL.la");
-ok(-e "$test_tempdir/libGL-proxy/.libs/libGL.so");
-ok(-e "$test_tempdir/libGL-proxy/.libs/libGL.so.1");
-ok(-e "$test_tempdir/libGL-proxy/.libs/libGL.so.1.0.0");
 
-# TODO: I can't run capsule-symbols on the generated proxy on Debian
-# unstable, possibly caused by glvnd libGL?
+foreach my $soname (@sonames) {
+    my $basename = $soname;
+    $basename =~ s/\.so\..*$//;
+
+    ok(-e "$test_tempdir/libGL-proxy/$basename.la");
+    ok(-e "$test_tempdir/libGL-proxy/.libs/$basename.so");
+    ok(-e "$test_tempdir/libGL-proxy/.libs/$soname");
+    ok(-e "$test_tempdir/libGL-proxy/.libs/$soname.0.0");
+
+    my @symbols_wanted;
+    open my $fh, "$examples/shim/$soname.symbols";
+    while (defined(my $line = <$fh>)) {
+        chomp $line;
+        push @symbols_wanted, $line;
+    }
+
+    my @symbols_produced =
+        get_symbols_with_nm("$test_tempdir/libGL-proxy/.libs/$soname");
+    is_deeply \@symbols_wanted, [grep {! m/^capsule_meta $/} @symbols_produced];
+}
 
 chdir '/';
 done_testing;

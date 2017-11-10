@@ -3,6 +3,8 @@
 /*.substvars
 /autoreconf*
 /files
+/libGL-proxy/
+/libGL-proxy-build/
 /libcapsule-dev
 /libcapsule-dev-bin
 /libcapsule-tests

@@ -30,6 +30,9 @@ usage ()
 cat << EOF
 Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
     Options:
+        --capsule-pkgdatadir=PATH
+                                Use supporting files from PATH
+                                [default: libcapsule's \${pkgdatadir}]
         --capsule-symbols-tool=PATH
                                 Use replacement capsule-symbols(1)
         --symbols-from=PATH     Use symbols from this file
@@ -172,8 +175,6 @@ if [ -z "${symbol_file:-}" ];
 then
     symbol_file=${proxy_src%.c}.symbols;
 fi
-
-sharedir=$($PKG_CONFIG --variable=makeinc capsule)
 
 exec >$proxy_src.tmp;
 

@@ -10,8 +10,50 @@ confflags = --libexecdir=\$${exec_prefix}/lib/libcapsule --enable-gtk-doc
 override_dh_auto_configure:
 	dh_auto_configure -- $(confflags)
 
+proxy_vars = \
+	CAPSULE_CFLAGS="-I$(CURDIR)" \
+	CAPSULE_LIBS="-L$(CURDIR)/.libs -lcapsule" \
+	CAPSULE_MKINC="$(CURDIR)/data" \
+	CAPSULE_MKSTUBLIB_TOOL="$(CURDIR)/data/capsule-mkstublib" \
+	CAPSULE_SYMBOLS_TOOL="$(CURDIR)/capsule-symbols" \
+	CAPSULE_VERSION_TOOL="$(CURDIR)/capsule-version" \
+	$(NULL)
+
+override_dh_auto_build:
+	dh_auto_build
+	$(proxy_vars) ./data/capsule-init-project \
+		--capsule-pkgdatadir="$(CURDIR)/data" \
+		--destination="$(CURDIR)/debian/libGL-proxy" \
+		--no-autoreconf \
+		--package-name=libGL-proxy \
+		--search-tree=/nonexistent \
+		--symbols-from-dir="$(CURDIR)/examples/shim" \
+		libGL.so.1/1 \
+		libX11.so.6/6 \
+		libXext.so.6/6 \
+		libxcb-dri2.so.0/0 \
+		libxcb-glx.so.0/0 \
+		libxcb-present.so.0/0 \
+		libxcb-sync.so.1/1 \
+		libxcb.so.1/1 \
+		$(NULL)
+	# Copy it, so we can install the original source as an example
+	cp -a debian/libGL-proxy debian/libGL-proxy-build
+	cd debian/libGL-proxy-build && autoreconf -fi
+	cd debian/libGL-proxy-build && ./configure --prefix=/usr $(proxy_vars)
+	$(MAKE) -C debian/libGL-proxy-build V=1 $(proxy_vars)
+
+override_dh_auto_install:
+	dh_auto_install
+	$(MAKE) -C debian/libGL-proxy-build install V=1 $(proxy_vars) \
+		DESTDIR=$(CURDIR)/debian/libGL-proxy-build/shims
+	install -d debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcapsule/shims
+	mv debian/libGL-proxy-build/shims/usr/lib/* \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcapsule/shims
+
 override_dh_install:
 	rm -f debian/tmp/usr/lib/*/*.la
+	rm -f debian/tmp/usr/lib/*/libcapsule/shims/*.la
 	find debian/tmp/usr/lib/libcapsule/installed-tests -name '*.la' -print -delete
 	# Only keep the architecture-qualified version, delete the unprefixed
 	# version, so we can be Multi-Arch: same

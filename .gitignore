@@ -8,9 +8,11 @@
 /tests/*.log
 /tests/*.test
 /tests/*.trs
+/tests/notgl-dlopener
 /tests/notgl-helper-user
 /tests/notgl-user
-/tests/shim/libnotgl.so.c
+/tests/shim/libnotgl.so.0.c
+/tests/shim/libnotgles.so.1.c
 Makefile.in
 aclocal.m4
 autom4te.cache

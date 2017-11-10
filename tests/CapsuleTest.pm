@@ -34,6 +34,7 @@ our @EXPORT = qw(
     run_ok
     run_verbose
     skip_all_unless_bwrap
+    skip_all_unless_nm
     $CAPSULE_INIT_PROJECT_TOOL
     $CAPSULE_SYMBOLS_TOOL
     $CAPSULE_VERSION_TOOL
@@ -205,6 +206,23 @@ sub skip_all_unless_bwrap {
                 --unshare-pid --unshare-user --unshare-uts true
             )], '>&2')) {
         plan(skip_all => 'Cannot run bwrap');
+    }
+}
+
+=item skip_all_unless_nm()
+
+If we cannot run B<nm>(1) to implement B<get_symbols_with_nm>, log a
+TAP report that all tests have been skipped (as if via
+C<plan skip_all =E<gt> ...>), and exit.
+
+=cut
+
+sub skip_all_unless_nm {
+    if (! run([split(' ', $NM),
+                qw(--dynamic --extern-only --defined-only
+                --with-symbol-versions /bin/true)], '>/dev/null')) {
+        plan(skip_all =>
+            'Cannot run nm (no support for --with-symbol-versions?)');
     }
 }
 

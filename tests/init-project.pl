@@ -30,6 +30,8 @@ use lib $FindBin::Bin;
 
 use CapsuleTest;
 
+skip_all_unless_nm;
+
 my $test_tempdir = File::Temp->newdir();
 diag "Working directory: $test_tempdir";
 chdir $test_tempdir;

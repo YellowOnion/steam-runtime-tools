@@ -65,10 +65,14 @@ do
 
         (--autoreconf)
             autoreconf=yes;
+            shift;
+            continue;
             ;;
 
         (--no-autoreconf)
             autoreconf=;
+            shift;
+            continue;
             ;;
 
         (--capsule-pkgdatadir)

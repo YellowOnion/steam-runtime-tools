@@ -44,7 +44,7 @@ EOF
 }
 
 getopt_temp="$(getopt -o 'h' \
-    -l 'autoreconf,no-autoreconf,capsule-pkgdatadir,capsule-symbols-tool,capsule-version-tool,destination:,package-name:,search-tree:,set-version:,symbols-from-dir:,runtime-tree:,help' \
+    -l 'autoreconf,no-autoreconf,capsule-pkgdatadir:,capsule-symbols-tool:,capsule-version-tool:,destination:,package-name:,search-tree:,set-version:,symbols-from-dir:,runtime-tree:,help' \
     -n "$me" -- "$@")"
 eval set -- "$getopt_temp"
 

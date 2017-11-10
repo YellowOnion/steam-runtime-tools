@@ -62,7 +62,8 @@ if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
 run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--search-tree=/',
         '--runtime-tree=/run/host',
-        'libz.so.1']);
+        'libz.so.1/1.2.3',
+        'libjpeg.so.62']);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
         'sh', "$test_tempdir/libz-proxy",
@@ -73,10 +74,26 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 ok(-e "$test_tempdir/libz-proxy/libz.la");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so");
 ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1");
-ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1.0.0");
+ok(-e "$test_tempdir/libz-proxy/.libs/libz.so.1.2.3");
+ok(-e "$test_tempdir/libz-proxy/libjpeg.la");
+ok(-e "$test_tempdir/libz-proxy/.libs/libjpeg.so");
+ok(-e "$test_tempdir/libz-proxy/.libs/libjpeg.so.62");
+ok(-e "$test_tempdir/libz-proxy/.libs/libjpeg.so.62.0.0");
 {
     local $/ = undef;   # read entire file in one go
     open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libz.so.1.c");
+    my $source = <$fh>;
+    like($source, qr{\.default_prefix\s*=\s*"/host"},
+        'Configure-time runtime tree takes precedence');
+    unlike($source, qr{\.default_prefix\s*=\s*"/run/host"},
+        'Init-time runtime tree is not used');
+    unlike($source, qr{\.default_prefix\s*=\s*"/"},
+        'Search tree is not used at runtime');
+    close $fh;
+}
+{
+    local $/ = undef;   # read entire file in one go
+    open(my $fh, '<', "$test_tempdir/libz-proxy/shim/libjpeg.so.62.c");
     my $source = <$fh>;
     like($source, qr{\.default_prefix\s*=\s*"/host"},
         'Configure-time runtime tree takes precedence');

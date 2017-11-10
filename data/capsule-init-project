@@ -155,6 +155,13 @@ then
     dest="$package_name";
 fi;
 
+: "${PKG_CONFIG:=pkg-config}"
+: "${CAPSULE_MKINC:="$($PKG_CONFIG --variable=makeinc capsule)"}"
+: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule)"}"
+: "${CAPSULE_VERSION_TOOL:="$($PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule)"}"
+: "${runtime_tree:="/host"}"
+: "${search_tree:="/"}"
+
 if [ -z "$ver" ];
 then
     if [ "x$first_target" != "x$first_target_maybe_ver" ];
@@ -164,13 +171,6 @@ then
         read x x ver x < <("$CAPSULE_VERSION_TOOL" "$first_target" "$search_tree");
     fi;
 fi;
-
-: "${PKG_CONFIG:=pkg-config}"
-: "${CAPSULE_MKINC:="$($PKG_CONFIG --variable=makeinc capsule)"}"
-: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule)"}"
-: "${CAPSULE_VERSION_TOOL:="$($PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule)"}"
-: "${runtime_tree:="/host"}"
-: "${search_tree:="/"}"
 
 echo "Generating project for $package_name, shims for $runtime_tree libraries: $*";
 

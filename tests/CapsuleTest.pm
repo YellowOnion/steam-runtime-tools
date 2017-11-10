@@ -31,6 +31,10 @@ our @EXPORT = qw(
     run_ok
     run_verbose
     skip_all_unless_bwrap
+    $CAPSULE_INIT_PROJECT_TOOL
+    $CAPSULE_SYMBOLS_TOOL
+    $CAPSULE_VERSION_TOOL
+    $PKG_CONFIG
     $builddir
     $srcdir
 );
@@ -46,6 +50,54 @@ CapsuleTest - utilities for libcapsule automated and manual tests
 =over
 
 =cut
+
+=item $PKG_CONFIG
+
+The B<pkg-config>(1) utility.
+
+=cut
+
+our $PKG_CONFIG = $ENV{PKG_CONFIG};
+$PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
+
+=item $CAPSULE_INIT_PROJECT_TOOL
+
+The B<capsule-init-project>(1) development tool.
+
+=cut
+
+our $CAPSULE_INIT_PROJECT_TOOL = $ENV{CAPSULE_INIT_PROJECT_TOOL};
+
+if (! length $CAPSULE_INIT_PROJECT_TOOL) {
+    $CAPSULE_INIT_PROJECT_TOOL = `$PKG_CONFIG --variable=CAPSULE_INIT_PROJECT_TOOL capsule`;
+    chomp $CAPSULE_INIT_PROJECT_TOOL;
+}
+
+=item $CAPSULE_SYMBOLS_TOOL
+
+The B<capsule-symbols>(1) development tool.
+
+=cut
+
+our $CAPSULE_SYMBOLS_TOOL = $ENV{CAPSULE_SYMBOLS_TOOL};
+
+if (! length $CAPSULE_SYMBOLS_TOOL) {
+    $CAPSULE_SYMBOLS_TOOL = `$PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule`;
+    chomp $CAPSULE_SYMBOLS_TOOL;
+}
+
+=item $CAPSULE_VERSION_TOOL
+
+The B<capsule-version>(1) development tool.
+
+=cut
+
+our $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
+
+unless (defined $CAPSULE_VERSION_TOOL) {
+    $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule`;
+    chomp $CAPSULE_VERSION_TOOL;
+}
 
 =item $srcdir
 
@@ -146,6 +198,14 @@ sub skip_all_unless_bwrap {
 
 =over
 
+=item CAPSULE_INIT_PROJECT_TOOL
+
+B<capsule-init-project>(1)
+
+=item CAPSULE_SYMBOLS_TOOL
+
+B<capsule-symbols>(1)
+
 =item CAPSULE_TESTS_KEEP_TEMP
 
 If set to a non-empty value, temporary directories created by this test
@@ -156,6 +216,14 @@ will not be cleaned up.
 if (length $ENV{CAPSULE_TESTS_KEEP_TEMP}) {
     $File::Temp::KEEP_ALL = 1;
 }
+
+=item CAPSULE_VERSION_TOOL
+
+B<capsule-version>(1)
+
+=item PKG_CONFIG
+
+B<pkg-config>(1)
 
 =back
 

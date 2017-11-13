@@ -49,11 +49,22 @@ my $examples = "$srcdir/examples";
 my @sonames = qw(libGL.so.1 libX11.so.6 libXext.so.6 libxcb-dri2.so.0
     libxcb-glx.so.0 libxcb-present.so.0 libxcb-sync.so.1 libxcb.so.1);
 
+# Don't require running capsule-version - just use the major versions
+sub use_major_version {
+    my $soname = shift;
+    if ($soname =~ m/.*\.([0-9]+)$/) {
+        return "$soname/$1";
+    }
+    else {
+        die "$soname doesn't end with a major version";
+    }
+}
+
 run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--runtime-tree=/run/host',
         '--set-version=1.0.0',
         "--symbols-from=$examples/shim",
-        @sonames,
+        map { use_major_version($_) } @sonames,
     ]);
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',

@@ -25,7 +25,6 @@ Package: libcapsule-dev
 Architecture: amd64 i386
 Multi-Arch: same
 Section: libdevel
-Priority: optional
 Depends:
  libc6-dev,
  libcapsule0 (= ${binary:Version}),
@@ -42,7 +41,6 @@ Package: libcapsule-dev-bin
 Architecture: amd64 i386
 Multi-Arch: same
 Section: libdevel
-Priority: optional
 Depends:
  libcapsule-dev (= ${binary:Version}),
  ${shlibs:Depends},
@@ -57,7 +55,6 @@ Description:
 Package: libcapsule-tests
 Architecture: amd64 i386
 Section: misc
-Priority: optional
 Depends:
  bubblewrap,
  libipc-run-perl,
@@ -75,7 +72,6 @@ Package: libcapsule0
 Architecture: amd64 i386
 Multi-Arch: same
 Section: libs
-Priority: optional
 Depends:
  ${shlibs:Depends},
 Description: Segregated run-time linker library

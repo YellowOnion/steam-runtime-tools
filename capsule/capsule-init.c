@@ -71,9 +71,9 @@ static const char * const never_encapsulated[] =
     "libm.so.6",
     "libmvec.so.1",
     "libnsl.so.1",
-//  "libpthread.so.0",   // deadlocks in openarena if shared
+    "libpthread.so.0",
     "libresolv.so.2",
-//  "librt.so.1",        // segfault on openarena shutdown
+    "librt.so.1",
     "libthread_db.so.1",
     "libutil.so.1",
 };

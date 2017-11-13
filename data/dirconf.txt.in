@@ -9,7 +9,7 @@ htmldir       : @htmldir@
 includedir    : @includedir@
 infodir       : @infodir@
 libdir        : @libdir@
-libexecdir    : @libexecdir@
+bindir        : @bindir@
 localedir     : @localedir@
 localstatedir : @localstatedir@
 mandir        : @mandir@

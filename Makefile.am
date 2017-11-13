@@ -25,7 +25,7 @@ AM_LDFLAGS              = $(WARN_LDFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start Capsules
 
 # installable items:
-libexec_PROGRAMS        = capsule-symbols capsule-version
+bin_PROGRAMS            = capsule-symbols capsule-version
 dist_bin_SCRIPTS        = data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
@@ -33,7 +33,7 @@ pkgconfig_DATA          = data/capsule.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
-libexec_SCRIPTS         = data/$(host)-capsule-mkstublib
+bin_SCRIPTS             = data/$(host)-capsule-mkstublib
 
 # Write out a version of capsule-mkstublib with different defaults
 # for each architecture
@@ -42,17 +42,17 @@ data/$(host)-capsule-mkstublib: data/capsule-mkstublib Makefile
 	( \
 		sed -e 1q $<; \
 		echo '# Inserted by Makefile to make this architecture-specific'; \
-		echo ': "$${CAPSULE_SYMBOLS_TOOL:="$(libexecdir)/$(host)-capsule-symbols"}"';\
+		echo ': "$${CAPSULE_SYMBOLS_TOOL:="$(bindir)/$(host)-capsule-symbols"}"';\
 		sed -e 1d $<; \
 	) > $@.tmp; chmod +x $@.tmp; mv $@.tmp $@
 
 install-exec-hook:
-	cd $(DESTDIR)$(libexecdir) && ln -f capsule-symbols $(host)-capsule-symbols
-	cd $(DESTDIR)$(libexecdir) && ln -f capsule-version $(host)-capsule-version
+	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(host)-capsule-symbols
+	cd $(DESTDIR)$(bindir) && ln -f capsule-version $(host)-capsule-version
 
 uninstall-hook:
-	cd $(DESTDIR)$(libexecdir) && rm -f $(host)-capsule-symbols
-	cd $(DESTDIR)$(libexecdir) && rm -f $(host)-capsule-version
+	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-symbols
+	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-version
 
 # Headers to be included by shim libraries
 nobase_include_HEADERS += capsule/capsule-shim.h \

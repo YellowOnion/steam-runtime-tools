@@ -3,7 +3,6 @@
 set -e;
 set -u;
 
-libexec=$(dirname $0);
 me=$(basename $0);
 
 usage ()

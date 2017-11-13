@@ -47,13 +47,13 @@ override_dh_auto_install:
 	dh_auto_install
 	$(MAKE) -C debian/libGL-proxy-build install V=1 $(proxy_vars) \
 		DESTDIR=$(CURDIR)/debian/libGL-proxy-build/shims
-	install -d debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcapsule/shims
+	install -d debian/tmp/usr/lib/libcapsule/shims/lib/$(DEB_HOST_MULTIARCH)
 	mv debian/libGL-proxy-build/shims/usr/lib/* \
-		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libcapsule/shims
+		debian/tmp/usr/lib/libcapsule/shims/lib/$(DEB_HOST_MULTIARCH)
 
 override_dh_install:
 	rm -f debian/tmp/usr/lib/*/*.la
-	rm -f debian/tmp/usr/lib/*/libcapsule/shims/*.la
+	rm -f debian/tmp/usr/lib/libcapsule/shims/lib/*/*.la
 	find debian/tmp/usr/lib/libcapsule/installed-tests -name '*.la' -print -delete
 	# Only keep the architecture-qualified version, delete the unprefixed
 	# version, so we can be Multi-Arch: same

@@ -52,11 +52,24 @@ Description:
  .
  This package contains the files needed to generate libcapsule proxy libraries.
 
+Package: libcapsule-libgl1-shims
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libs
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains automated tests.
+
 Package: libcapsule-tests
 Architecture: amd64 i386
 Section: misc
 Depends:
  bubblewrap,
+ libcapsule-libgl1-shims (= ${binary:Version}),
  libipc-run-perl,
  perl,
  ${shlibs:Depends},

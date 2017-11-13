@@ -1,3 +1,24 @@
+libcapsule (0.20171113.0-0co1) upstream; urgency=medium
+
+  [ Vivek Das Mohapatra ]
+  * Allow multiple encapsulated libraries, sharing one namespace per prefix
+  * Generate working Autotools projects for libraries with hyphen/minus in
+    their names
+  * Handle DT_REL entries
+  * Cope with shim libraries being dlclose()d
+
+  [ Simon McVittie ]
+  * Change capsule-init-project invocation so it can generate multiple
+    shim libraries per Autotools project
+  * Mark libcapsule as non-deletable so its exported functions can never
+    disappear from library users' relocations
+  * Always use the same dlopen() implementation outside the capsule
+  * Automatically exclude glibc from encapsulation
+  * Install libGL shims in a new libcapsule-libgl1-shims binary package
+  * Install development tools into $(bindir)
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 13 Nov 2017 18:57:50 +0000
+
 libcapsule (0.20171019.0-0co1) upstream; urgency=medium
 
   [ Vivek Das Mohapatra ]

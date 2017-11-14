@@ -19,12 +19,9 @@ dso_is_exported (const char *dsopath, char **exported)
     return 0;
 }
 
-// TODO: Implement dlvsym()?
-
-void *
-capsule_external_dlsym (void *handle, const char *symbol)
+static void *
+_dlsym_from_capsules (const char *symbol)
 {
-    DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
     void *addr = NULL;
 
     for( size_t n = 0; n < _capsule_list->next; n++ )
@@ -59,13 +56,86 @@ capsule_external_dlsym (void *handle, const char *symbol)
         }
     }
 
-    if( addr == NULL )
+    return addr;
+}
+
+static int
+_dlsymbol_is_encapsulated (const void *addr)
+{
+    Dl_info dso = { 0 };
+
+    // no info, symbol may not even be valid:
+    if( !dladdr( addr, &dso ) )
+        return 0;
+
+    // no file name, can't be a shim:
+    if( !dso.dli_fname || *dso.dli_fname == '\0' )
+        return 0;
+
+    // check to see if addr came from a registered capsule:
+    for( size_t n = 0; n < _capsule_list->next; n++ )
     {
-        DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
-               "symbol %s not found: fall back to default", symbol );
-        addr = _capsule_original_dlsym ( handle, symbol );
+        capsule cap = ptr_list_nth_ptr( _capsule_list, n );
+
+        if( cap && soname_matches_path( cap->meta->soname, dso.dli_fname) )
+            return 1;
     }
 
+    return 0;
+}
+
+// TODO: Implement dlvsym()?
+// TODO: RTLD_NEXT needs special handling
+
+// revised algorithm here:
+//
+// use the vanilla dlsym
+// if nothing is found, peek into the whole capsule; return the result
+//
+// if a symbol is found, check to see if it came from a shim
+// if it did (ie it is a dummy), peek into the capsule as above
+// if it did not, return what was found
+//
+// The main weakness here is that if the caller expects to find a
+// symbol XYZ via ‘handle’ which does _not_ come from the capsule
+// but the capsule also has a symbol XYZ which is from an explicitly
+// exported-from soname then the caller will get the capsule's
+// XYZ symbol.
+//
+// We can't just check for RTLD_DEFAULT as the handle since
+// dlopen( NULL, … ) and/or the RTLD_GLOBAL flag can be used to
+// promote symbols that would otherwise not be visible from a given
+// handle (libGL does this).
+void *
+capsule_external_dlsym (void *handle, const char *symbol)
+{
+    DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS, "dlsym(%s)", symbol );
+    void *addr = _capsule_original_dlsym ( handle, symbol );
+
+    // nothing found, must be from a capsule or nowhere at all:
+    if( !addr )
+    {
+        DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+               "%s not found, searching capsule", symbol );
+        addr = _dlsym_from_capsules( symbol );
+        DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+               "capsule %s has address %p", symbol, addr );
+        return addr;
+    }
+
+    // found something. is it a dummy symbol from a shim?
+    if( _dlsymbol_is_encapsulated( addr ) )
+    {
+        DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+               "dummy %s found, searching capsule", symbol );
+        addr = _dlsym_from_capsules( symbol );
+        DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+               "capsule %s has address %p", symbol, addr );
+        return addr;
+    }
+
+    DEBUG( DEBUG_DLFUNC|DEBUG_WRAPPERS,
+           "vanilla %s found at %p", symbol, addr );
     return addr;
 }
 

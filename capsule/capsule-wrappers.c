@@ -30,6 +30,10 @@ capsule_external_dlsym (void *handle, const char *symbol)
     for( size_t n = 0; n < _capsule_list->next; n++ )
     {
         capsule cap = ptr_list_nth_ptr( _capsule_list, n );
+
+        if( !cap )
+            continue;
+
         // TODO: If handle != cap->dl_handle, should we skip it?
         // TODO: RTLD_NEXT isn't implemented (is it implementable?)
         addr = _capsule_original_dlsym ( cap->dl_handle, symbol );
@@ -93,6 +97,9 @@ capsule_external_dlopen(const char *file, int flag)
         for( size_t n = 0; n < _capsule_list->next; n++ )
         {
             const capsule c = ptr_list_nth_ptr( _capsule_list, n );
+
+            if( !c )
+                continue;
 
             if( _capsule_relocate( c, &error ) != 0 )
             {

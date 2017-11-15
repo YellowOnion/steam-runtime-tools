@@ -239,6 +239,19 @@ A shortcut for B<--gl-stack=/usr/lib/libcapsule/shims> and
 B<--libcapsule-provider=/>.
 This uses the libcapsule libGL, etc. shims from the host system.
 
+=item --proposed-mesa
+
+Use behaviour proposed as potentially appropriate for the Mesa graphics
+stack: B<--gl-provider=/> B<--libcapsule> B<--libc-provider=auto>
+B<--x11-provider=auto>.
+
+=item --proposed-nvidia
+
+Use behaviour proposed as potentially appropriate for the NVIDIA graphics
+stack, or other binary blobs with conservative dependencies:
+B<--gl-provider=/> B<--gl-stack=none> B<--libc-provider=container>
+B<--x11-provider=container>.
+
 =back
 
 =cut
@@ -736,6 +749,20 @@ GetOptions(
     'multiarch=s' => sub {
         @multiarch_tuples = split /[\s,]+/, $_[1];
     },
+    'proposed-mesa' => sub {
+        $gl_provider_tree = '/';
+        $gl_stack = '/usr/lib/libcapsule/shims';
+        $libcapsule_tree = '/';
+        $libc_provider_tree = 'auto';
+        $x11_provider_tree = 'auto';
+    },
+    'proposed-nvidia' => sub {
+        $gl_provider_tree = '/';
+        $gl_stack = 'nvidia';
+        $libcapsule_tree = 'container';
+        $libc_provider_tree = 'container';
+        $x11_provider_tree = 'container';
+    },
     help => sub {
         print <<EOF;
 Usage: $0 [OPTIONS] [-- COMMAND]
@@ -774,6 +801,19 @@ Options:
     --multiarch=TUPLE[,TUPLE…]          Enable architecture(s) by Debian
                                         multiarch tuple
                                         [x86_64-linux-gnu]
+    --proposed-mesa                     Use proposed handling for Mesa:
+                                        --gl-provider=/
+                                        --libcapsule
+                                        --libc-provider=auto
+                                        --x11-provider=auto
+                                        --libcapsule-provider=auto
+    --proposed-nvidia                   Use proposed handling for binary
+                                        blob drivers like NVIDIA:
+                                        --gl-provider=/
+                                        --gl-stack=nvidia
+                                        --x11-provider=container
+                                        --libc-provider=container
+                                        --libcapsule-provider=container
 EOF
         exit 0;
     },

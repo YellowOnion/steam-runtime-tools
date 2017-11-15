@@ -260,6 +260,9 @@ void set_debug_flags (const char *control)
     if( strstr( control, "dlfunc"   ) ) debug_flags |= DEBUG_DLFUNC;
     if( strstr( control, "all"      ) ) debug_flags |= DEBUG_ALL;
 
+    if( !debug_flags )
+        return;
+
     fprintf(stderr, "capsule debug flags: \n"
             "  path    : %c # path manipulation and translation"           "\n"
             "  search  : %c # searching for DSOs"                          "\n"

@@ -69,10 +69,9 @@ Similarly, libcapsule and libelf are taken from either the GL provider
 or the container, or can be taken from a third tree which will be
 mounted at F</libcapsule-provider>.
 
-Other core graphics libraries (libX11, libxcb) are chosen to come from
-either the GL provider or the container, whichever has the newer
-version. If the GL provider's version is newer, F</updates/lib/*> is
-populated with symbolic links into F</gl-provider/lib*>.
+Other core graphics libraries (libX11, libxcb, etc.) are taken from either
+the GL provider, the container, or a third tree that will be mounted
+at F</x11-provider>.
 
 An application "payload" is mounted on F</app>, as if for Flatpak.
 
@@ -172,16 +171,12 @@ when the graphics driver is NVIDIA.
 
 =item --app=I<APP>
 
-Mount I<APP> on F</app>
-
-=item --capsule-version-tool=I<EXECUTABLE>
-
-Run I<EXECUTABLE> as B<capsule-version>(1)
+Mount I<APP> on F</app>. See B<--flatpak-app> for the default.
 
 =item --container=I<TREE>
 
 A complete sysroot or a merged F</usr> for the container. Most libraries
-will come from here.
+will come from here. See B<--flatpak-runtime> for the default.
 
 =item --flatpak-app=I<ID>/I<ARCH>/I<BRANCH>
 
@@ -193,15 +188,19 @@ The default is F<org.debian.packages.mesa_utils/x86_64/scout_beta>.
 
 Assume that I<ID>/I<ARCH>/I<BRANCH> has been installed per-user with
 C<flatpak --user install ...>, and use it as the B<--container>.
-The default is F<com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta>.
-Another good value is F<net.debian.flatpak.Games.Platform/x86_64/stretch>.
+The default is F<net.debian.flatpak.Games.Platform/x86_64/stretch>.
+Another interesting value is
+F<com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta>.
 
 =item --gl-provider=I<TREE>
 
 A complete sysroot or a merged F</usr> for the OpenGL provider.
-The OpenGL implementation will come from here, along with whatever
-supporting libraries are required. It will be mounted at
-F</gl-provider>.
+The OpenGL implementation will come from here unless overridden
+by B<--gl-stack>, and whatever supporting libraries are required will
+come from here unless overridden by B<--libc-provider>,
+B<--libcapsule-provider>, B<--x11-provider>. It will be mounted at
+F</gl-provider>. The default is F</>, meaning we use the host system
+as the OpenGL provider.
 
 =item --gl-stack=I<TREE>
 
@@ -213,6 +212,32 @@ at F</gl> and added to the B<LD_LIBRARY_PATH>.
 
 A list of Debian multiarch tuples to enable. The default is
 C<x86_64-linux-gnu>.
+
+=item --libc-provider=B<auto>|B<container>|B<gl-provider>|I<USR>|I<SYSROOT>
+
+Get glibc (libc, libm, libpthread etc.) from here. B<container> uses the
+B<--container> (or B<--flatpak-runtime>). B<gl-provider> uses the
+B<--gl-provider>. B<auto> uses whichever of those appears to have newer
+libraries, mixing versions from both if necessary. Alternatively,
+a complete sysroot or a merged F</usr> can be given.
+The default is B<auto>.
+
+=item --x11-provider=B<auto>|B<container>|B<gl-provider>|I<USR>|I<SYSROOT>
+
+The same as for B<--libc-provider>, but for libX11 and related libraries.
+The default is B<auto>.
+
+=item --libcapsule-provider=B<auto>|B<container>|B<gl-provider>|I<USR>|I<SYSROOT>
+
+The same as for B<--libc-provider>, but for libcapsule and libelf.
+The default is B<container>, but B<--libcapsule> overrides this to
+B</>.
+
+=item --libcapsule
+
+A shortcut for B<--gl-stack=/usr/lib/libcapsule/shims> and
+B<--libcapsule-provider=/>.
+This uses the libcapsule libGL, etc. shims from the host system.
 
 =back
 
@@ -690,8 +715,9 @@ my @multiarch_tuples = qw(x86_64-linux-gnu);
 my $app;
 my $gl_stack;
 my $arch = 'x86_64';
-my $libc_provider_tree;
-my $libcapsule_tree;
+my $libc_provider_tree = 'auto';
+my $libcapsule_tree = 'container';
+my $x11_provider_tree = 'auto';
 
 GetOptions(
     'app=s' => \$app,
@@ -702,11 +728,49 @@ GetOptions(
     'gl-stack=s' => \$gl_stack,
     'libcapsule-provider=s' => \$libcapsule_tree,
     'libcapsule' => sub {
-        $gl_stack = '/usr/lib/libcapsule/shims',
+        $gl_stack = '/usr/lib/libcapsule/shims';
+        $libcapsule_tree = '/';
     },
     'libc-provider=s' => \$libc_provider_tree,
+    'x11-provider=s' => \$x11_provider_tree,
     'multiarch=s' => sub {
         @multiarch_tuples = split /[\s,]+/, $_[1];
+    },
+    help => sub {
+        print <<EOF;
+Usage: $0 [OPTIONS] [-- COMMAND]
+Options:
+    --app=DIRECTORY                     Mount DIRECTORY at /app
+    --flatpak-app=NAME/ARCH/BRANCH      Use a `flatpak --user` app for --app
+                                        [….mesa_utils/$arch/master]
+    --container=USR|SYSROOT             Populate /usr from USR or SYSROOT
+    --flatpak-runtime=NAME/ARCH/BRANCH  Use a `flatpak --user` runtime
+                                        for --container
+                                        [….Games.Platform/$arch/stretch]
+    --gl-provider=USR|SYSROOT           Get libGL etc. from USR or SYSROOT
+                                        [/]
+    --gl-stack=none|STACK               Get libGL etc. from STACK/lib/MULTIARCH
+                                        instead of --gl-provider, but
+                                        still use --gl-provider libc, libX11,
+                                        libcapsule if appropriate
+                                        [none]
+    --x11-provider=auto|container|gl-provider|USR|SYSROOT
+                                        Use libX11 etc. from here
+                                        [auto]
+    --libc-provider=auto|container|gl-provider|USR|SYSROOT
+                                        Use glibc from here
+                                        [auto]
+    --libcapsule-provider=auto|container|gl-provider|USR|SYSROOT
+                                        Use libcapsule, libelf from here
+                                        [container]
+    --libcapsule                        Shortcut for:
+                                        --gl-stack=/usr/lib/libcapsule/shims
+                                        --libcapsule-provider=/
+    --multiarch=TUPLE[,TUPLE…]          Enable architecture(s) by Debian
+                                        multiarch tuple
+                                        [x86_64-linux-gnu]
+EOF
+        exit 0;
     },
 ) or die "Error parsing command-line options";
 
@@ -823,34 +887,46 @@ my (undef, undef, $container_libc_version) =
 
 my $updates_tree = "$tmpdir/updates";
 
-if (defined $libc_provider_tree) {
+if ($libc_provider_tree eq 'auto') {
+    if (versioncmp($container_libc_version, $gl_provider_libc_version) <= 0) {
+        # We need to parachute in the GL provider's libc instead of the
+        # container's, because the GL provider's libX11, libGL etc. would
+        # be within their rights to use newer libc features; we also need
+        # the GL provider's ld.so, because old ld.so can't necessarily load
+        # new libc successfully
+        diag "${ansi_bright}${ansi_green}Adding GL provider's libc ".
+            "$gl_provider_libc_version via /updates because container's ".
+            "$container_libc_version appears older or equal${ansi_reset}";
+        push @bwrap, use_libc($gl_provider_tree, $container_tree,
+            \@multiarch_tuples, $updates_tree, '/gl-provider');
+    }
+    else {
+        diag "${ansi_bright}${ansi_cyan}Using container's libc ".
+            "$container_libc_version because GL provider's ".
+            "$gl_provider_libc_version appears older${ansi_reset}";
+    }
+}
+elsif ($libc_provider_tree =~ m/^(?:gl-provider|host)$/) {
+    diag "${ansi_bright}${ansi_cyan}Adding GL provider's libc via /updates ".
+        "as requested${ansi_reset}";
+    push @bwrap, use_libc($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree, '/gl-provider');
+}
+elsif ($libc_provider_tree eq 'container') {
+    diag "${ansi_bright}${ansi_cyan}Using container's libc as ".
+        "requested${ansi_reset}";
+}
+else {
     diag "${ansi_bright}${ansi_magenta}Adding ${libc_provider_tree} libc ".
         "via /updates as requested${ansi_reset}";
     push @bwrap, use_libc($libc_provider_tree, $container_tree,
         \@multiarch_tuples, $updates_tree, '/libc-provider');
     push @bwrap, bind_usr($libc_provider_tree, '/libc-provider');
 }
-elsif (versioncmp($container_libc_version, $gl_provider_libc_version) <= 0) {
-    # We need to parachute in the GL provider's libc instead of the
-    # container's, because the GL provider's libX11, libGL etc. would
-    # be within their rights to use newer libc features; we also need
-    # the GL provider's ld.so, because old ld.so can't necessarily load
-    # new libc successfully
-    diag "${ansi_bright}${ansi_green}Adding GL provider's libc ".
-        "$gl_provider_libc_version via /updates because container's ".
-        "$container_libc_version appears older or equal${ansi_reset}";
-    push @bwrap, use_libc($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, '/gl-provider');
-}
-else {
-    diag "${ansi_bright}${ansi_cyan}Using container's libc ".
-        "$container_libc_version because GL provider's ".
-        "$gl_provider_libc_version appears older${ansi_reset}";
-}
 
 my @dri_path;
 
-if (defined $gl_stack) {
+if (defined $gl_stack && $gl_stack ne 'none') {
     diag "Using standalone GL stack $gl_stack";
 
     push @bwrap, '--ro-bind', $gl_stack, '/gl';
@@ -914,18 +990,27 @@ else {
 # These are libraries that can't have more than one instance in use.
 # TODO: We don't currently exclude libelf from being encapsulated.
 # Should we? Does it have global state?
-if (length $libcapsule_tree) {
+if ($libcapsule_tree eq 'auto') {
+    diag "Using libcapsule from $gl_provider_tree if newer";
+    capture_libs_if_newer($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
+        '/gl-provider', $ansi_green);
+}
+elsif ($libcapsule_tree eq 'container') {
+    diag "${ansi_cyan}Using libcapsule from container as requested${ansi_reset}";
+}
+elsif ($libcapsule_tree =~ m/^(?:gl-provider|host)$/) {
+    diag "${ansi_green}Using libcapsule from GL provider as requested${ansi_reset}";
+    capture_libs_if_newer($gl_provider_tree, undef,
+        \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
+        '/gl-provider', $ansi_green);
+}
+else {
     diag "Using libcapsule from $libcapsule_tree";
     capture_libs_if_newer($libcapsule_tree, undef,
         \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
         '/libcapsule-provider', $ansi_magenta);
     push @bwrap, bind_usr($libcapsule_tree, '/libcapsule-provider');
-}
-else {
-    diag "Using libcapsule from $gl_provider_tree if newer";
-    capture_libs_if_newer($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
-        '/gl-provider', $ansi_green);
 }
 
 # These are more libraries that can't have more than one instance in use.
@@ -936,12 +1021,33 @@ diag 'Adding singleton libraries from GL provider, if newer...';
 # TODO: We don't currently exclude libX11-xcb, libxcb-dri3,
 # libxcb-xfixes, libXau, libXdamage, libXdmcp, libXfixes, libXxf86vm
 # from being encapsulated. We should be consistent one way or the other
-capture_libs_if_newer($gl_provider_tree, $container_tree,
-    \@multiarch_tuples, $updates_tree,
-    [qw(X11 X11-xcb xcb xcb-dri2 xcb-dri3 xcb-glx
+my @XLIBS = qw(X11 X11-xcb xcb xcb-dri2 xcb-dri3 xcb-glx
         xcb-present xcb-sync xcb-xfixes
         Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
-        )], '/gl-provider', $ansi_green);
+        );
+
+if ($x11_provider_tree eq 'auto') {
+    diag "Using X libraries from $gl_provider_tree if newer";
+    capture_libs_if_newer($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree, \@XLIBS,
+        '/gl-provider', $ansi_green);
+}
+elsif ($x11_provider_tree eq 'container') {
+    diag "${ansi_cyan}Using X libraries from container as requested${ansi_reset}";
+}
+elsif ($x11_provider_tree =~ m/^(?:gl-provider|host)$/) {
+    diag "${ansi_green}Using X libraries from GL provider as requested${ansi_reset}";
+    capture_libs_if_newer($gl_provider_tree, undef,
+        \@multiarch_tuples, $updates_tree, \@XLIBS,
+        '/gl-provider', $ansi_green);
+}
+else {
+    diag "${ansi_magenta}Using X libraries from $x11_provider_tree as requested${ansi_reset}";
+    capture_libs_if_newer($x11_provider_tree, undef,
+        \@multiarch_tuples, $updates_tree, \@XLIBS,
+        '/x11-provider', $ansi_magenta);
+    push @bwrap, bind_usr($libcapsule_tree, '/x11-provider');
+}
 
 foreach my $tuple (@multiarch_tuples) {
     push @ld_path, "/updates/lib/$tuple";

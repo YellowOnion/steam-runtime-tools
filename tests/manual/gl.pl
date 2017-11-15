@@ -833,7 +833,7 @@ if (defined $flatpak_runtime) {
 foreach my $tuple (@multiarch_tuples) {
     run_verbose([
         'env', "PKG_CONFIG_PATH=/usr/lib/$tuple/pkgconfig",
-        'pkg-config', '--variable=CAPSULE_VERSION_TOOL', 'capsule',
+        'pkg-config', '--variable=CAPSULE_VERSION_TOOL', 'libcapsule-tools',
     ], '>', \$stdout);
     chomp $stdout;
     $CAPSULE_VERSION_TOOLS{$tuple} = $stdout;

@@ -129,7 +129,7 @@ do
 done
 
 : "${PKG_CONFIG:=pkg-config}"
-: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule)"}"
+: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL libcapsule-tools)"}"
 
 if [ "$#" -lt 4 ] || [ "$#" -gt 6 ];
 then

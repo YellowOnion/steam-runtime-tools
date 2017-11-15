@@ -29,7 +29,7 @@ bin_PROGRAMS            = capsule-symbols capsule-version
 dist_bin_SCRIPTS        = data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
-pkgconfig_DATA          = data/capsule.pc
+pkgconfig_DATA          = data/libcapsule.pc data/libcapsule-tools.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 

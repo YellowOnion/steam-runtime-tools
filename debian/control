@@ -37,13 +37,16 @@ Description:
  .
  This package contains the files needed to build libcapsule proxy libraries.
 
-Package: libcapsule-dev-bin
+Package: libcapsule-tools
 Architecture: amd64 i386
 Multi-Arch: same
 Section: libdevel
 Depends:
- libcapsule-dev (= ${binary:Version}),
  ${shlibs:Depends},
+Recommends:
+ libcapsule-dev (= ${binary:Version}),
+Breaks: libcapsule-dev-bin (<< ${binary:Version}),
+Replaces: libcapsule-dev-bin (<< ${binary:Version}),
 Description:
  libcapsule is a helper library used to implement segregated run-time
  dynamic linking proxy libraries - used (for example) to load a library

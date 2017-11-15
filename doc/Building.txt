@@ -3,7 +3,7 @@ libcapsule provides a few tools to help initialise a proxy library project:
 Assuming a host tree containing libGL mounted at /host, the simplest route
 to a [hopefully] working project is as follows:
 
-  ~$ $(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule) libGL.so.1 /host
+  ~$ $(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL libcapsule-tools) libGL.so.1 /host
 
   Generating project for /host : libGL.so.1 1.2.0 proxy
   Creating project directory libGL-proxy

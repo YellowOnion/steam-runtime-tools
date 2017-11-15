@@ -1,8 +1,7 @@
 usr/include/*
 usr/lib/*/libcapsule.a
 usr/lib/*/libcapsule.so
-usr/lib/*/pkgconfig/
-usr/lib/*/pkgconfig/capsule.pc
+usr/lib/*/pkgconfig/libcapsule.pc
 usr/share/doc/libcapsule/* usr/share/doc/libcapsule-dev
 usr/share/gtk-doc/html/libcapsule/*
 usr/share/man/man3/*

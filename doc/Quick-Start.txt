@@ -18,7 +18,7 @@ Generate a proxy project for libGL and related libraries:
 
   ~$ mkdir proxies
   ~$ cd proxies
-  ~$ CAPTOOL=$(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL capsule)
+  ~$ CAPTOOL=$(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL libcapsule-tools)
   ~$ LIBS="xcb.so.1 xcb-glx.so.0 xcb-dri2.so.0 xcb-dri3.so.0 xcb-present.so.0"
   ~$ LIBS="$LIBS xcb-sync.so.1 X11.so.6 GL.so.1 Xext.so.6"
   ~$ for x in $LIBS; do $CAPTOOL lib$x /host; done

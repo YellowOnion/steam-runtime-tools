@@ -17,10 +17,10 @@ AC_SYS_LARGEFILE
 
 LT_INIT([disable-static])
 
-PKG_CHECK_MODULES([CAPSULE], [capsule])
-PKG_CHECK_VAR([CAPSULE_MKINC], [capsule], [makeinc])
-PKG_CHECK_VAR([CAPSULE_MKSTUBLIB_TOOL], [capsule], [CAPSULE_MKSTUBLIB_TOOL])
-PKG_CHECK_VAR([CAPSULE_SYMBOLS_TOOL], [capsule], [CAPSULE_SYMBOLS_TOOL])
+PKG_CHECK_MODULES([CAPSULE], [libcapsule])
+PKG_CHECK_VAR([CAPSULE_MKINC], [libcapsule-tools], [makeinc])
+PKG_CHECK_VAR([CAPSULE_MKSTUBLIB_TOOL], [libcapsule-tools], [CAPSULE_MKSTUBLIB_TOOL])
+PKG_CHECK_VAR([CAPSULE_SYMBOLS_TOOL], [libcapsule-tools], [CAPSULE_SYMBOLS_TOOL])
 
 AC_ARG_WITH([runtime-tree],
             [AS_HELP_STRING([--with-runtime-tree=PATH],

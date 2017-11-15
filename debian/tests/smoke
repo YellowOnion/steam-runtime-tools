@@ -41,9 +41,9 @@ main (void)
 EOF
 close($fh);
 
-ok(! system('gcc -c -o trivial.o trivial.c $(pkg-config --cflags capsule)'),
+ok(! system('gcc -c -o trivial.o trivial.c $(pkg-config --cflags libcapsule)'),
     'compiled');
-ok(! system('gcc -o trivial trivial.o $(pkg-config --libs capsule)'),
+ok(! system('gcc -o trivial trivial.o $(pkg-config --libs libcapsule)'),
     'linked');
 ok(-x 'trivial', 'executable');
 my $output;

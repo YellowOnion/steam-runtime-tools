@@ -2,5 +2,6 @@ usr/bin/*-capsule-mkstublib
 usr/bin/*-capsule-symbols
 usr/bin/*-capsule-version
 usr/bin/capsule-init-project
+usr/lib/*/pkgconfig/libcapsule-tools.pc
 usr/share/libcapsule/*
 usr/share/man/man1/*

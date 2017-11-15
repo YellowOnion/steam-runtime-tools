@@ -74,7 +74,7 @@ The B<capsule-init-project>(1) development tool.
 our $CAPSULE_INIT_PROJECT_TOOL = $ENV{CAPSULE_INIT_PROJECT_TOOL};
 
 if (! length $CAPSULE_INIT_PROJECT_TOOL) {
-    $CAPSULE_INIT_PROJECT_TOOL = `$PKG_CONFIG --variable=CAPSULE_INIT_PROJECT_TOOL capsule`;
+    $CAPSULE_INIT_PROJECT_TOOL = `$PKG_CONFIG --variable=CAPSULE_INIT_PROJECT_TOOL libcapsule-tools`;
     chomp $CAPSULE_INIT_PROJECT_TOOL;
 }
 
@@ -87,7 +87,7 @@ The B<capsule-symbols>(1) development tool.
 our $CAPSULE_SYMBOLS_TOOL = $ENV{CAPSULE_SYMBOLS_TOOL};
 
 if (! length $CAPSULE_SYMBOLS_TOOL) {
-    $CAPSULE_SYMBOLS_TOOL = `$PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL capsule`;
+    $CAPSULE_SYMBOLS_TOOL = `$PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL libcapsule-tools`;
     chomp $CAPSULE_SYMBOLS_TOOL;
 }
 
@@ -100,7 +100,7 @@ The B<capsule-version>(1) development tool.
 our $CAPSULE_VERSION_TOOL = $ENV{CAPSULE_VERSION_TOOL};
 
 unless (defined $CAPSULE_VERSION_TOOL) {
-    $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL capsule`;
+    $CAPSULE_VERSION_TOOL = `$PKG_CONFIG --variable=CAPSULE_VERSION_TOOL libcapsule-tools`;
     chomp $CAPSULE_VERSION_TOOL;
 }
 

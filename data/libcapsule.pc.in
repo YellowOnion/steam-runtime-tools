@@ -5,13 +5,8 @@ includedir=@includedir@
 libexecdir=@libexecdir@
 datarootdir=@datarootdir@
 datadir=@datarootdir@
-makeinc=@datadir@/libcapsule
-CAPSULE_INIT_PROJECT_TOOL=@bindir@/capsule-init-project
-CAPSULE_MKSTUBLIB_TOOL=@bindir@/@host@-capsule-mkstublib
-CAPSULE_SYMBOLS_TOOL=@bindir@/@host@-capsule-symbols
-CAPSULE_VERSION_TOOL=@bindir@/@host@-capsule-version
 
-Name: capsule
+Name: libcapsule
 Description: segregated dynamic linking library
 Version: @VERSION@
 

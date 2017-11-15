@@ -713,7 +713,7 @@ my $flatpak_app;
 my $flatpak_runtime;
 my @multiarch_tuples = qw(x86_64-linux-gnu);
 my $app;
-my $gl_stack;
+my $gl_stack = 'greedy';
 my $arch = 'x86_64';
 my $libc_provider_tree = 'auto';
 my $libcapsule_tree = 'container';
@@ -749,11 +749,16 @@ Options:
                                         [….Games.Platform/$arch/stretch]
     --gl-provider=USR|SYSROOT           Get libGL etc. from USR or SYSROOT
                                         [/]
-    --gl-stack=none|STACK               Get libGL etc. from STACK/lib/MULTIARCH
+    --gl-stack=greedy|mesa|nvidia|STACK If STACK is specified, get libGL
+                                        etc. from STACK/lib/MULTIARCH
                                         instead of --gl-provider, but
                                         still use --gl-provider libc, libX11,
-                                        libcapsule if appropriate
-                                        [none]
+                                        libcapsule if appropriate.
+                                        Otherwise get appropriate libraries
+                                        for Mesa, NVIDIA, or everything
+                                        we might possibly need from
+                                        --gl-provider
+                                        [greedy]
     --x11-provider=auto|container|gl-provider|USR|SYSROOT
                                         Use libX11 etc. from here
                                         [auto]
@@ -886,6 +891,7 @@ my (undef, undef, $container_libc_version) =
     File::Spec->splitpath($container_libc_so);
 
 my $updates_tree = "$tmpdir/updates";
+make_path("$tmpdir/updates", verbose => 1);
 
 if ($libc_provider_tree eq 'auto') {
     if (versioncmp($container_libc_version, $gl_provider_libc_version) <= 0) {
@@ -926,7 +932,7 @@ else {
 
 my @dri_path;
 
-if (defined $gl_stack && $gl_stack ne 'none') {
+if (defined $gl_stack && $gl_stack !~ m/^(?:greedy|mesa|nvidia)$/) {
     diag "Using standalone GL stack $gl_stack";
 
     push @bwrap, '--ro-bind', $gl_stack, '/gl';
@@ -938,26 +944,37 @@ if (defined $gl_stack && $gl_stack ne 'none') {
 else {
     my $gl_provider_gl = "$tmpdir/gl";
 
+    my @libs = (
+        qw(EGL GL GLESv1_CM GLESv2 GLX GLdispatch glx),
+        qr{lib(EGL|GLESv1_CM|GLESv2|GLX|drm|vdpau)_.*\.so\.[0-9]+},
+    );
+
+    push @libs, qw(
+        Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
+        drm gbm glapi wayland-client wayland-server
+        xcb-dri2 xcb-dri3 xcb-present xcb-sync xcb-xfixes xshmfence
+    ) if $gl_stack =~ m/^(?:greedy|mesa)$/;
+
+    push @libs, (
+        qw(cuda nvcuvid vdpau),
+        # We allow any extension for these, not just a single integer
+        qr{libnvidia-.*\.so\..*},
+    ) if $gl_stack =~ m/^(?:greedy|nvidia)$/;
+
     diag "Using GL stack from $gl_provider_tree";
     capture_libs_if_newer($gl_provider_tree, undef,
-        \@multiarch_tuples, $gl_provider_gl, [
-            qw(EGL GL GLESv1_CM GLESv2 GLX GLdispatch
-            Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
-            cuda drm gbm glapi glx nvcuvid vdpau
-            wayland-client wayland-server
-            xcb-dri2 xcb-dri3 xcb-present xcb-sync xcb-xfixes xshmfence),
-            qr{lib(EGL|GLESv1_CM|GLESv2|GLX|drm|vdpau)_.*\.so\.[0-9]+},
-            # We allow any extension for these, not just a single integer
-            qr{libnvidia-.*\.so\..*},
-        ], '/gl-provider', $ansi_green);
+        \@multiarch_tuples, $gl_provider_gl, \@libs,
+        '/gl-provider', $ansi_green);
 
-    diag "Updating libraries from $gl_provider_tree if necessary";
-    capture_libs_if_newer($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $gl_provider_gl, [
-            qw(bsd edit elf expat ffi gcc_s
-            ncurses pciaccess sensors stdc++ tinfo z),
-            qr{libLLVM-.*\.so\.[0-9]+},
-        ], '/gl-provider', $ansi_green);
+    if ($gl_stack =~ m/^(?:greedy|mesa)$/) {
+        diag "Updating libraries from $gl_provider_tree if necessary";
+        capture_libs_if_newer($gl_provider_tree, $container_tree,
+            \@multiarch_tuples, $gl_provider_gl, [
+                qw(bsd edit elf expat ffi gcc_s
+                ncurses pciaccess sensors stdc++ tinfo z),
+                qr{libLLVM-.*\.so\.[0-9]+},
+            ], '/gl-provider', $ansi_green);
+    }
 
     foreach my $tuple (@multiarch_tuples) {
         my $ldso = multiarch_tuple_to_ldso($tuple);

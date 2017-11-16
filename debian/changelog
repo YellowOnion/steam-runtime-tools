@@ -1,3 +1,20 @@
+libcapsule (0.20171116.0-0co1) upstream; urgency=medium
+
+  [ Vivek Das Mohapatra ]
+  * Fix NULL dereferences after dlclose()
+  * Improve dlsym() emulation
+
+  [ Simon McVittie ]
+  * tests/manual/gl.pl: Provide finer-grained control over libraries
+  * tests/manual/gl.pl: Provide shortcuts for plausible approaches to
+    Mesa and Nvidia graphics stacks
+  * Adjust packaging so libcapsule-tools can be installed without
+    libcapsule-dev, for better ability to test multiarch containers
+    - capsule.pc has been replaced by libcapsule.pc (library)
+      and libcapsule-tools.pc (tools)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 16 Nov 2017 13:42:22 +0000
+
 libcapsule (0.20171113.0-0co1) upstream; urgency=medium
 
   [ Vivek Das Mohapatra ]

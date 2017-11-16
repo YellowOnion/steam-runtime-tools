@@ -869,13 +869,15 @@ my @bwrap = qw(
     --unshare-pid
     --unshare-uts --hostname bwrap
     --dev-bind /dev /dev
+    --bind /dev/shm /dev/shm
     --proc /proc
     --ro-bind /sys /sys
+    --tmpfs /run
+    --tmpfs /tmp
+    --tmpfs /var/tmp
+    --symlink ../run /var/run
 );
 push @bwrap, '--bind', $ENV{HOME}, $ENV{HOME};
-
-push @bwrap, '--tmpfs', '/tmp';
-push @bwrap, '--tmpfs', '/var/tmp';
 
 foreach my $mutable (qw(/etc /var)) {
     if (-d "$container_tree$mutable") {
@@ -901,9 +903,16 @@ foreach my $mutable (qw(/etc /var)) {
     }
 }
 
-push @bwrap, '--ro-bind', '/etc/machine-id', '/etc/machine-id';
+if (-e '/etc/machine-id') {
+    push @bwrap, '--ro-bind', '/etc/machine-id', '/etc/machine-id';
+    push @bwrap, '--symlink', '/etc/machine-id', '/var/lib/dbus/machine-id';
+}
+elsif (-e '/var/lib/dbus/machine-id') {
+    push @bwrap, '--ro-bind', '/var/lib/dbus/machine-id', '/etc/machine-id';
+    push @bwrap, '--symlink', '/etc/machine-id', '/var/lib/dbus/machine-id';
+}
+
 push @bwrap, '--ro-bind', '/etc/passwd', '/etc/passwd';
-push @bwrap, '--bind', '/tmp/.X11-unix', '/tmp/.X11-unix';
 
 push @bwrap, bind_usr($container_tree);
 push @bwrap, bind_usr($gl_provider_tree, '/gl-provider');
@@ -1120,10 +1129,71 @@ if (@dri_path) {
     push @bwrap, '--setenv', 'LIBGL_DRIVERS_PATH', join(':', @dri_path);
 }
 
+push @bwrap, '--setenv', 'XDG_RUNTIME_DIR', "/run/user/$<";
+
+# Simplified version of flatpak run --socket=X11
+push @bwrap, '--bind', '/tmp/.X11-unix', '/tmp/.X11-unix';
 push @bwrap, '--setenv', 'DISPLAY', $ENV{DISPLAY};
 
-push @bwrap, '--ro-bind', "$ENV{HOME}/.Xauthority",
-    "$ENV{HOME}/.Xauthority" if -e "$ENV{HOME}/.Xauthority";
+foreach my $xauth ($ENV{XAUTHORITY}, "$ENV{HOME}/.Xauthority") {
+    if (defined $xauth && -e $xauth) {
+        push @bwrap, '--ro-bind', $xauth, "/run/user/$</Xauthority";
+        push @bwrap, '--setenv', 'XAUTHORITY', "/run/user/$</Xauthority";
+        last;
+    }
+}
+
+# Simplified version of flatpak run --socket=wayland
+my $wayland_display = $ENV{WAYLAND_DISPLAY};
+$wayland_display = 'wayland-0' unless defined $wayland_display;
+if (exists $ENV{XDG_RUNTIME_DIR} &&
+    -S "$ENV{XDG_RUNTIME_DIR}/$wayland_display") {
+    push @bwrap, '--bind', "$ENV{XDG_RUNTIME_DIR}/$wayland_display",
+        "/run/user/$</$wayland_display";
+}
+
+# Simplified version of flatpak run --socket=pulseaudio, modified to
+# support the SteamOS system-wide PulseAudio instance
+if (exists $ENV{XDG_RUNTIME_DIR} &&
+    -S "$ENV{XDG_RUNTIME_DIR}/pulse/native") {
+    push @bwrap, '--bind', "$ENV{XDG_RUNTIME_DIR}/pulse/native",
+        "/run/user/$</pulse/native";
+    push @bwrap, '--setenv', 'PULSE_SERVER', "unix:/run/user/$</pulse/native";
+}
+elsif (-S "/var/run/pulse/native") {
+    push @bwrap, '--bind', "/var/run/pulse/native",
+        "/run/user/$</pulse/native";
+    push @bwrap, '--setenv', 'PULSE_SERVER', "unix:/run/user/$</pulse/native";
+}
+
+# Simplified version of flatpak run --socket=system-bus
+if (exists $ENV{DBUS_SYSTEM_BUS_ADDRESS} &&
+    $ENV{DBUS_SYSTEM_BUS_ADDRESS} =~ m/^unix:path=([^,;]*)/ &&
+    -S $1) {
+    push @bwrap, '--bind', $1, '/var/run/dbus/system_bus_socket';
+    push @bwrap, '--unsetenv', 'DBUS_SYSTEM_BUS_ADDRESS';
+}
+elsif (-S '/var/run/dbus/system_bus_socket') {
+    push @bwrap, '--bind', '/var/run/dbus/system_bus_socket',
+        '/run/dbus/system_bus_socket';
+}
+
+# Simplified version of flatpak run --socket=session-bus
+if (exists $ENV{DBUS_SESSION_BUS_ADDRESS} &&
+    $ENV{DBUS_SESSION_BUS_ADDRESS} =~ m/^unix:path=([^,;]*)/ &&
+    -S $1) {
+    push @bwrap, '--bind', $1, "/run/user/$</bus";
+    push @bwrap, '--setenv', 'DBUS_SESSION_BUS_ADDRESS',
+        "unix:path=/run/user/$</bus";
+}
+elsif (exists $ENV{XDG_RUNTIME_DIR} &&
+    -S "$ENV{XDG_RUNTIME_DIR}/bus") {
+    push @bwrap, '--bind', "$ENV{XDG_RUNTIME_DIR}/bus", "/run/user/$</bus";
+    push @bwrap, '--setenv', 'DBUS_SESSION_BUS_ADDRESS',
+        "unix:path=/run/user/$</bus";
+}
+# ... else hope it's unix:abstract=... which will work because we don't
+# unshare networking
 
 if (@ARGV) {
     run_ok([@bwrap, @ARGV]);

@@ -167,6 +167,10 @@ nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
                                        examples/shim/libXext.so.6.shared       \
                                        examples/shim/libXext.so.6.symbols      \
                                        examples/shim/libXext.so.6.symbols.updated-for \
+                                       examples/shim/libXi.so.6.excluded       \
+                                       examples/shim/libXi.so.6.shared         \
+                                       examples/shim/libXi.so.6.symbols        \
+                                       examples/shim/libXi.so.6.symbols.updated-for \
                                        examples/shim/libxcb-dri2.so.0.excluded \
                                        examples/shim/libxcb-dri2.so.0.shared   \
                                        examples/shim/libxcb-dri2.so.0.symbols  \

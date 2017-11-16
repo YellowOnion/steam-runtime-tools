@@ -46,8 +46,9 @@ if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
 
 my $examples = "$srcdir/examples";
 
-my @sonames = qw(libGL.so.1 libX11.so.6 libXext.so.6 libxcb-dri2.so.0
-    libxcb-glx.so.0 libxcb-present.so.0 libxcb-sync.so.1 libxcb.so.1);
+my @sonames = qw(libGL.so.1 libX11.so.6 libXext.so.6 libXi.so.6
+    libxcb-dri2.so.0 libxcb-glx.so.0 libxcb-present.so.0 libxcb-sync.so.1
+    libxcb.so.1);
 
 # Don't require running capsule-version - just use the major versions
 sub use_major_version {

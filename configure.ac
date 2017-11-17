@@ -66,6 +66,19 @@ PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
     LIBELF_LIBS=-lelf
 ])
 
+AC_ARG_ENABLE([host-prefix],
+  [AS_HELP_STRING([--enable-host-prefix=PREFIX/yes/no],
+    [install link to tools with a prefix [default=$host-]])],
+  [],
+  [enable_host_prefix=yes])
+
+AM_CONDITIONAL([ENABLE_HOST_PREFIX], [test "x$enable_host_prefix" != xno])
+AS_IF([test "x$enable_host_prefix" = xyes],
+  [enable_host_prefix="$host-"])
+AS_IF([test "x$enable_host_prefix" = xno],
+  [enable_host_prefix=""])
+AC_SUBST([HOST_PREFIX], [$enable_host_prefix])
+
 AC_SEARCH_LIBS([dlmopen], [dl])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 GTK_DOC_CHECK

@@ -5,7 +5,11 @@
 %:
 	dh $@ --with autoreconf
 
-confflags = --libexecdir=\$${exec_prefix}/lib/libcapsule --enable-gtk-doc
+confflags = \
+	--enable-gtk-doc \
+	--enable-host-prefix=$(DEB_HOST_GNU_TYPE)- \
+	--libexecdir=\$${exec_prefix}/lib/libcapsule \
+	$(NULL)
 
 override_dh_auto_configure:
 	dh_auto_configure -- $(confflags)

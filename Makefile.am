@@ -33,28 +33,32 @@ pkgconfig_DATA          = data/libcapsule.pc data/libcapsule-tools.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
-bin_SCRIPTS             = data/$(host)-capsule-mkstublib
+if ENABLE_HOST_PREFIX
+bin_SCRIPTS             = data/$(HOST_PREFIX)capsule-mkstublib
 
 # Write out a version of capsule-mkstublib with different defaults
 # for each architecture
-data/$(host)-capsule-mkstublib: data/capsule-mkstublib Makefile
+data/$(HOST_PREFIX)capsule-mkstublib: data/capsule-mkstublib Makefile
 	$(AM_V_GEN)set -e; \
 	( \
 		sed -e 1q $<; \
 		echo '# Inserted by Makefile to make this architecture-specific'; \
-		echo ': "$${CAPSULE_SYMBOLS_TOOL:="$(bindir)/$(host)-capsule-symbols"}"';\
+		echo ': "$${CAPSULE_SYMBOLS_TOOL:="$(bindir)/$(HOST_PREFIX)capsule-symbols"}"';\
 		sed -e 1d $<; \
 	) > $@.tmp; chmod +x $@.tmp; mv $@.tmp $@
 
 install-exec-hook:
-	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(host)-capsule-symbols
-	cd $(DESTDIR)$(bindir) && ln -f capsule-version $(host)-capsule-version
-	cd $(DESTDIR)$(bindir) && ln -f capsule-elf-dump $(host)-capsule-elf-dump
+	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(HOST_PREFIX)capsule-symbols
+	cd $(DESTDIR)$(bindir) && ln -f capsule-version $(HOST_PREFIX)capsule-version
+	cd $(DESTDIR)$(bindir) && ln -f capsule-elf-dump $(HOST_PREFIX)capsule-elf-dump
 
 uninstall-hook:
-	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-elf-dump
-	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-symbols
-	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-version
+	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-elf-dump
+	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-symbols
+	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-version
+else
+dist_bin_SCRIPTS            += data/capsule-mkstublib
+endif
 
 # Headers to be included by shim libraries
 nobase_include_HEADERS += capsule/capsule-shim.h \
@@ -369,7 +373,9 @@ $(DOC_MAIN_SGML_FILE): sgml-build.stamp
 # These need to come after we include gtk-doc.make, which unconditionally
 # defines these variables
 CLEANFILES             += $(testmeta_DATA)
-CLEANFILES             += data/$(host)-capsule-mkstublib
+if ENABLE_HOST_PREFIX
+CLEANFILES             += data/$(HOST_PREFIX)capsule-mkstublib
+endif
 CLEANFILES             += $(nodist_tests_shim_libnotgl_la_SOURCES)
 CLEANFILES             += $(nodist_tests_shim_libnotgles_la_SOURCES)
 

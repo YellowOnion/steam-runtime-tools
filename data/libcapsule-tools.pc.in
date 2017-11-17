@@ -7,9 +7,9 @@ datarootdir=@datarootdir@
 datadir=@datarootdir@
 makeinc=@datadir@/libcapsule
 CAPSULE_INIT_PROJECT_TOOL=@bindir@/capsule-init-project
-CAPSULE_MKSTUBLIB_TOOL=@bindir@/@host@-capsule-mkstublib
-CAPSULE_SYMBOLS_TOOL=@bindir@/@host@-capsule-symbols
-CAPSULE_VERSION_TOOL=@bindir@/@host@-capsule-version
+CAPSULE_MKSTUBLIB_TOOL=@bindir@/@HOST_PREFIX@capsule-mkstublib
+CAPSULE_SYMBOLS_TOOL=@bindir@/@HOST_PREFIX@capsule-symbols
+CAPSULE_VERSION_TOOL=@bindir@/@HOST_PREFIX@capsule-version
 
 Name: libcapsule-tools
 Description: segregated dynamic linking library - development tools

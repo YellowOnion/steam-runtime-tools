@@ -67,7 +67,7 @@ nobase_include_HEADERS += capsule/capsule-shim.h \
 # Mostly just a demo program, but keep this hanging around as it's a useful PoC
 bin_PROGRAMS           += capsule-elf-dump
 
-capsule_elf_dump_SOURCES        = utils/elf-dump.c utils/utils.c
+capsule_elf_dump_SOURCES        = utils/elf-dump.c utils/dump.c utils/utils.c
 capsule_elf_dump_LDADD          = -ldl
 capsule_elf_dump_SOURCES       += utils/utils.h
 capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)

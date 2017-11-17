@@ -491,13 +491,14 @@ dump_symtab (const char *indent,
         symbol_version( entry, x, strtab, versym, verdef, verdefnum,
                         &defversym, &version, &vs );
 
-        fprintf(stderr, "%s    // %02d [%-8s %-8s] size:%"FMT_SWORD" %s%s%s%s %04x %p\n",
+        fprintf(stderr, "%s    // %02d [%-8s %-8s] size:%2" FMT_WORD " (%d)%s%s%s%s %04x %p\n",
                 indent,
                 x,
                 st_type( ELFW_ST_TYPE(entry->st_info) ),
                 st_bind( ELFW_ST_BIND(entry->st_info) ),
                 // ELFW_ST_VISIBILITY(entry->st_other),
                 entry->st_size  ,
+                entry->st_shndx ,
                 strtab + entry->st_name ,
                 version   ? "@"     : "",
                 defversym ? "@"     : "",
@@ -517,7 +518,7 @@ dump_interp (const char *indent, void *start, size_t size, ElfW(Addr) base)
     strncpy( &interpreter[0], start + base, PATH_MAX );
 
     fprintf( stderr, "%s// %p %"FMT_SIZE" %p %s", indent, start, size, (void *)base,
-             &interpreter[0] );
+             interpreter );
     return;
 }
 
@@ -751,10 +752,11 @@ dump_verneed(const char *indent,
     {
         ElfW(Verneed) *entry = (ElfW(Verneed) *) vn;
 
-        fprintf( stderr, "%s    // %02d %-15s : %d entries %d aux\n",
+        fprintf( stderr, "%s    // %02d %-15s : %d entries (aux %d)\n",
                  indent, x,
                  strtab + entry->vn_file,
-                 entry->vn_cnt,
+                 entries,
+                 // entry->vn_cnt,
                  entry->vn_aux );
 
         const char *au = vn + entry->vn_aux;
@@ -786,8 +788,8 @@ dump_verdef(const char *indent,
     {
         ElfW(Verdef) *entry = (ElfW(Verdef) *) vd;
 
-        fprintf( stderr, "%s    // %02d [%d]; ndx: %0x; flags: %0x\n",
-                 indent, x,
+        fprintf( stderr, "%s    // %02d/%02d [%d]; ndx: %0x; flags: %0x\n",
+                 indent, x, entries,
                  entry->vd_cnt  ,
                  entry->vd_ndx  ,
                  entry->vd_flags);
@@ -815,7 +817,9 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const char *tag;
     ElfW(Dyn) *entry;
 
+    size_t strsiz  = -1;
     int relasz     = -1;
+    int relsz      = -1;
     int jmprelsz   = -1;
     int verneednum = -1;
     int verdefnum  = -1;
@@ -824,10 +828,21 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     const void *symtab = NULL;
     const void *versym = NULL;
     const void *verdef = NULL;
-    const char *strtab = dynamic_section_find_strtab( start + base, (const void *) base, NULL );
+    const char *strtab = dynamic_section_find_strtab( start + base, (const void *) base, &strsiz );
     int tag_type = TTYPE_VAL;
 
     fprintf( stderr, "%s{\n", indent );
+
+    if( strtab )
+    {
+        fprintf( stderr, "%s    string table at %p, %zu bytes\n",
+                 indent, strtab, strsiz );
+    }
+    else
+    {
+        fprintf( stderr, "%s    no string table?!\n", indent );
+    }
+
     for( entry = start + base;
          (entry->d_tag != DT_NULL) && ((void *)entry < (start + base + size));
          entry++ )
@@ -897,6 +912,17 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
             relasz = entry->d_un.d_val;
             break;
 
+          case DT_RELSZ:
+            relsz = entry->d_un.d_val;
+            break;
+
+          case DT_REL:
+            if( relsz == -1 )
+                relsz = find_value( base, start, DT_RELSZ );
+            dump_rel( indent, (const void *) entry->d_un.d_ptr, relsz,
+                      strtab, symtab );
+            break;
+
           case DT_PLTREL:
             jmpreltype = entry->d_un.d_val;
             break;
@@ -936,7 +962,9 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
           case DT_VERNEED:
             if( verneednum == -1 )
                 verneednum = find_value( base, start, DT_VERNEEDNUM );
-            dump_verneed( indent, (const void *) entry->d_un.d_ptr, verneednum,
+            dump_verneed( indent,
+                          fix_addr( (const void *) base, entry->d_un.d_ptr ),
+                          verneednum,
                           strtab, base );
             break;
 
@@ -947,7 +975,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
           case DT_VERDEF:
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, DT_VERDEFNUM );
-            verdef = (const void *) entry->d_un.d_ptr;
+            verdef = fix_addr( (const void *) base, entry->d_un.d_ptr );
             dump_verdef( indent, verdef, verdefnum, strtab, base );
             break;
 
@@ -969,6 +997,9 @@ phdr_cb (struct dl_phdr_info *info, size_t size, void *data)
 {
     int j;
 
+    if( data != NULL && strstr( info->dlpi_name, (const char *)data ) == NULL )
+        return 0;
+
     fprintf(stderr, "\n\
 ===============================================================================\n\
 struct dl_phdr_info                  \n\
@@ -989,8 +1020,8 @@ struct dl_phdr_info                  \n\
         ElfW(Off)   p_offset;  %"FMT_OFF"\n\
         ElfW(Addr)  p_vaddr;   %p      \n\
         ElfW(Addr)  p_paddr;   %p      \n\
-        ElfW(Word)  p_filesz;  0x%"FMT_XADDR" \n\
-        ElfW(Word)  p_memsz;   0x%"FMT_XADDR" \n\
+        ElfW(Word)  p_filesz;  %"FMT_WORD" \n\
+        ElfW(Word)  p_memsz;   %"FMT_WORD" \n\
         ElfW(Word)  p_flags;   0x%x %s \n\
         ElfW(Word)  p_align;   %"FMT_WORD" \n",
                 j,
@@ -1030,9 +1061,10 @@ struct dl_phdr_info                  \n\
     return 0;
 }
 
-void dump_elf_data (void)
+void
+dump_elf_data (const char *basename)
 {
-    dl_iterate_phdr( phdr_cb, NULL );
+    dl_iterate_phdr( phdr_cb, (void *) basename );
 }
 
 static int

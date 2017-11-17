@@ -140,8 +140,7 @@ try_relocation (ElfW(Addr) *reloc_addr, const char *name, void *data)
     return 0;
 }
 
-#define DUMP_SLOTINFO(n,x) \
-    DEBUG(DEBUG_ELF, "%s has slot type %s (%d)", n, #x, x)
+#if defined(__x86_64__)
 
 static const char *
 reloc_type_name (int type)
@@ -212,6 +211,80 @@ reloc_type_name (int type)
     }
 }
 
+#elif defined(__i386__)
+
+static const char *
+reloc_type_name (int type)
+{
+    switch (type)
+    {
+      // Please keep these in numerical order.
+
+#define CASE(x) \
+      case x: \
+        return #x;
+
+      CASE( R_386_NONE )
+      CASE( R_386_32 )
+      CASE( R_386_PC32 )
+      CASE( R_386_GOT32 )
+      CASE( R_386_PLT32 )
+      CASE( R_386_COPY )
+      CASE( R_386_GLOB_DAT )
+      CASE( R_386_JMP_SLOT )
+      CASE( R_386_RELATIVE )
+      CASE( R_386_GOTOFF )
+      CASE( R_386_GOTPC )
+      CASE( R_386_32PLT )
+      CASE( R_386_TLS_TPOFF )
+      CASE( R_386_TLS_IE )
+      CASE( R_386_TLS_GOTIE )
+      CASE( R_386_TLS_LE )
+      CASE( R_386_TLS_GD )
+      CASE( R_386_TLS_LDM )
+      CASE( R_386_16 )
+      CASE( R_386_PC16 )
+      CASE( R_386_8 )
+      CASE( R_386_PC8 )
+      CASE( R_386_TLS_GD_32 )
+      CASE( R_386_TLS_GD_PUSH )
+      CASE( R_386_TLS_GD_CALL )
+      CASE( R_386_TLS_GD_POP )
+      CASE( R_386_TLS_LDM_32 )
+      CASE( R_386_TLS_LDM_PUSH )
+      CASE( R_386_TLS_LDM_CALL )
+      CASE( R_386_TLS_LDM_POP )
+      CASE( R_386_TLS_LDO_32 )
+      CASE( R_386_TLS_IE_32 )
+      CASE( R_386_TLS_LE_32 )
+      CASE( R_386_TLS_DTPMOD32 )
+      CASE( R_386_TLS_DTPOFF32 )
+      CASE( R_386_TLS_TPOFF32 )
+      CASE( R_386_SIZE32 )
+      CASE( R_386_TLS_GOTDESC )
+      CASE( R_386_TLS_DESC_CALL )
+      CASE( R_386_TLS_DESC )
+      CASE( R_386_IRELATIVE )
+
+      // Entries below this point are new since glibc 2.19
+
+#ifdef R_386_GOT32X
+      CASE( R_386_GOT32X )
+#endif
+
+#undef CASE
+
+      default:
+        return "UNKNOWN";
+    }
+}
+
+#else
+
+#error Unsupported CPU architecture
+
+#endif
+
 int
 process_dt_rela (const ElfW(Rela) *start,
                  int relasz,
@@ -250,16 +323,22 @@ process_dt_rela (const ElfW(Rela) *start,
         if( !symbol || !name || !*name )
             continue;
 
+#if defined(__i386__) || defined(__x86_64__)
         switch( chr )
         {
             void *slot;
        // details at: https://github.com/hjl-tools/x86-psABI/wiki/X86-psABI
-       // case R_386_32:       // These are the same as their 64 counterparts
-       // case R_386_GLOB_DAT: // see /glibc-x.y/elf/elf.h
-       // case R_386_JMP_SLOT:
+#if defined(__i386__)
+          case R_386_32:
+          case R_386_GLOB_DAT:
+          case R_386_JMP_SLOT:
+#elif defined(__x86_64__)
           case R_X86_64_64:
           case R_X86_64_GLOB_DAT:
           case R_X86_64_JUMP_SLOT:
+#else
+#error Unsupported CPU architecture
+#endif
             slot = addr( base, entry->r_offset, entry->r_addend );
             DEBUG( DEBUG_ELF,
                    " %30s %30s: %p ← { offset: %"FMT_ADDR"; add: %"FMT_SIZE" }",
@@ -267,117 +346,16 @@ process_dt_rela (const ElfW(Rela) *start,
                    slot, entry->r_offset, entry->r_addend );
             try_relocation( slot, name, data );
             break;
-          case R_X86_64_NONE:
-            DUMP_SLOTINFO(name, R_X86_64_NONE);
-            break;
-          case R_X86_64_PC32:
-            DUMP_SLOTINFO(name, R_X86_64_PC32);
-            break;
-          case R_X86_64_GOT32:
-            DUMP_SLOTINFO(name, R_X86_64_GOT32);
-            break;
-          case R_X86_64_PLT32:
-            DUMP_SLOTINFO(name, R_X86_64_PLT32);
-            break;
-          case R_X86_64_COPY:
-            DUMP_SLOTINFO(name, R_X86_64_COPY);
-            break;
-          case R_X86_64_RELATIVE:
-            DUMP_SLOTINFO(name, R_X86_64_RELATIVE);
-            break;
-          case R_X86_64_GOTPCREL:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPCREL);
-            break;
-          case R_X86_64_32:
-            DUMP_SLOTINFO(name, R_X86_64_32);
-            break;
-          case R_X86_64_32S:
-            DUMP_SLOTINFO(name, R_X86_64_32S);
-            break;
-          case R_X86_64_16:
-            DUMP_SLOTINFO(name, R_X86_64_16);
-            break;
-          case R_X86_64_PC16:
-            DUMP_SLOTINFO(name, R_X86_64_PC16);
-            break;
-          case R_X86_64_8:
-            DUMP_SLOTINFO(name, R_X86_64_8);
-            break;
-          case R_X86_64_PC8:
-            DUMP_SLOTINFO(name, R_X86_64_PC8);
-            break;
-          case R_X86_64_DTPMOD64:
-            DUMP_SLOTINFO(name, R_X86_64_DTPMOD64);
-            break;
-          case R_X86_64_DTPOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_DTPOFF64);
-            break;
-          case R_X86_64_TPOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_TPOFF64);
-            break;
-          case R_X86_64_TLSGD:
-            DUMP_SLOTINFO(name, R_X86_64_TLSGD);
-            break;
-          case R_X86_64_TLSLD:
-            DUMP_SLOTINFO(name, R_X86_64_TLSLD);
-            break;
-          case R_X86_64_DTPOFF32:
-            DUMP_SLOTINFO(name, R_X86_64_DTPOFF32);
-            break;
-          case R_X86_64_GOTTPOFF:
-            DUMP_SLOTINFO(name, R_X86_64_GOTTPOFF);
-            break;
-          case R_X86_64_TPOFF32:
-            DUMP_SLOTINFO(name, R_X86_64_TPOFF32);
-            break;
-          case R_X86_64_PC64:
-            DUMP_SLOTINFO(name, R_X86_64_PC64);
-            break;
-          case R_X86_64_GOTOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTOFF64);
-            break;
-          case R_X86_64_GOTPC32:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPC32);
-            break;
-          case R_X86_64_GOT64:
-            DUMP_SLOTINFO(name, R_X86_64_GOT64);
-            break;
-          case R_X86_64_GOTPCREL64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPCREL64);
-            break;
-          case R_X86_64_GOTPC64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPC64);
-            break;
-          case R_X86_64_GOTPLT64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPLT64);
-            break;
-          case R_X86_64_PLTOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_PLTOFF64);
-            break;
-          case R_X86_64_SIZE32:
-            DUMP_SLOTINFO(name, R_X86_64_SIZE32);
-            break;
-          case R_X86_64_SIZE64:
-            DUMP_SLOTINFO(name, R_X86_64_SIZE64);
-            break;
-          case R_X86_64_GOTPC32_TLSDESC:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPC32_TLSDESC);
-            break;
-          case R_X86_64_TLSDESC_CALL:
-            DUMP_SLOTINFO(name, R_X86_64_TLSDESC_CALL);
-            break;
-          case R_X86_64_TLSDESC:
-            DUMP_SLOTINFO(name, R_X86_64_TLSDESC);
-            break;
-          case R_X86_64_IRELATIVE:
-            DUMP_SLOTINFO(name, R_X86_64_IRELATIVE);
-            break;
-          case R_X86_64_RELATIVE64:
-            DUMP_SLOTINFO(name, R_X86_64_RELATIVE64);
-            break;
+
           default:
-            DUMP_SLOTINFO(name, chr);
+            DEBUG( DEBUG_ELF,
+                   "%s has slot type %s (%d), not doing anything special",
+                   name, reloc_type_name( chr ), chr );
+            break;
         }
+#else
+#error Unsupported CPU architecture
+#endif
     }
 
     return 0;
@@ -408,8 +386,7 @@ process_dt_rel (const ElfW(Rel) *start,
         sym = ELF64_R_SYM (entry->r_info);
         chr = ELF64_R_TYPE(entry->r_info);
 #else
-        fprintf( stderr, "__ELF_NATIVE_CLASS is neither 32 nor 64" );
-        exit( 22 );
+#error Unsupported CPU architecture
 #endif
 
         symbol = find_symbol( sym, symtab, strtab, &name );
@@ -417,16 +394,22 @@ process_dt_rel (const ElfW(Rel) *start,
         if( !symbol || !name || !*name )
             continue;
 
+#if defined(__i386__) || defined(__x86_64__)
         switch( chr )
         {
             void *slot;
        // details at: https://github.com/hjl-tools/x86-psABI/wiki/X86-psABI
-       // case R_386_32:       // These are the same as their 64 counterparts
-       // case R_386_GLOB_DAT: // see /glibc-x.y/elf/elf.h
-       // case R_386_JMP_SLOT:
+#if defined(__i386__)
+          case R_386_32:
+          case R_386_GLOB_DAT:
+          case R_386_JMP_SLOT:
+#elif defined(__x86_64__)
           case R_X86_64_64:
           case R_X86_64_GLOB_DAT:
           case R_X86_64_JUMP_SLOT:
+#else
+#error Unsupported CPU architecture
+#endif
             slot = addr( base, entry->r_offset, 0 );
             DEBUG( DEBUG_ELF,
                    " %30s %30s: %p ← { offset: %"FMT_ADDR"; addend: n/a }",
@@ -436,118 +419,15 @@ process_dt_rel (const ElfW(Rel) *start,
             try_relocation( slot, name, data );
             break;
 
-          case R_X86_64_NONE:
-            DUMP_SLOTINFO(name, R_X86_64_NONE);
-            break;
-          case R_X86_64_PC32:
-            DUMP_SLOTINFO(name, R_X86_64_PC32);
-            break;
-          case R_X86_64_GOT32:
-            DUMP_SLOTINFO(name, R_X86_64_GOT32);
-            break;
-          case R_X86_64_PLT32:
-            DUMP_SLOTINFO(name, R_X86_64_PLT32);
-            break;
-          case R_X86_64_COPY:
-            DUMP_SLOTINFO(name, R_X86_64_COPY);
-            break;
-          case R_X86_64_RELATIVE:
-            DUMP_SLOTINFO(name, R_X86_64_RELATIVE);
-            break;
-          case R_X86_64_GOTPCREL:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPCREL);
-            break;
-          case R_X86_64_32:
-            DUMP_SLOTINFO(name, R_X86_64_32);
-            break;
-          case R_X86_64_32S:
-            DUMP_SLOTINFO(name, R_X86_64_32S);
-            break;
-          case R_X86_64_16:
-            DUMP_SLOTINFO(name, R_X86_64_16);
-            break;
-          case R_X86_64_PC16:
-            DUMP_SLOTINFO(name, R_X86_64_PC16);
-            break;
-          case R_X86_64_8:
-            DUMP_SLOTINFO(name, R_X86_64_8);
-            break;
-          case R_X86_64_PC8:
-            DUMP_SLOTINFO(name, R_X86_64_PC8);
-            break;
-          case R_X86_64_DTPMOD64:
-            DUMP_SLOTINFO(name, R_X86_64_DTPMOD64);
-            break;
-          case R_X86_64_DTPOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_DTPOFF64);
-            break;
-          case R_X86_64_TPOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_TPOFF64);
-            break;
-          case R_X86_64_TLSGD:
-            DUMP_SLOTINFO(name, R_X86_64_TLSGD);
-            break;
-          case R_X86_64_TLSLD:
-            DUMP_SLOTINFO(name, R_X86_64_TLSLD);
-            break;
-          case R_X86_64_DTPOFF32:
-            DUMP_SLOTINFO(name, R_X86_64_DTPOFF32);
-            break;
-          case R_X86_64_GOTTPOFF:
-            DUMP_SLOTINFO(name, R_X86_64_GOTTPOFF);
-            break;
-          case R_X86_64_TPOFF32:
-            DUMP_SLOTINFO(name, R_X86_64_TPOFF32);
-            break;
-          case R_X86_64_PC64:
-            DUMP_SLOTINFO(name, R_X86_64_PC64);
-            break;
-          case R_X86_64_GOTOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTOFF64);
-            break;
-          case R_X86_64_GOTPC32:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPC32);
-            break;
-          case R_X86_64_GOT64:
-            DUMP_SLOTINFO(name, R_X86_64_GOT64);
-            break;
-          case R_X86_64_GOTPCREL64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPCREL64);
-            break;
-          case R_X86_64_GOTPC64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPC64);
-            break;
-          case R_X86_64_GOTPLT64:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPLT64);
-            break;
-          case R_X86_64_PLTOFF64:
-            DUMP_SLOTINFO(name, R_X86_64_PLTOFF64);
-            break;
-          case R_X86_64_SIZE32:
-            DUMP_SLOTINFO(name, R_X86_64_SIZE32);
-            break;
-          case R_X86_64_SIZE64:
-            DUMP_SLOTINFO(name, R_X86_64_SIZE64);
-            break;
-          case R_X86_64_GOTPC32_TLSDESC:
-            DUMP_SLOTINFO(name, R_X86_64_GOTPC32_TLSDESC);
-            break;
-          case R_X86_64_TLSDESC_CALL:
-            DUMP_SLOTINFO(name, R_X86_64_TLSDESC_CALL);
-            break;
-          case R_X86_64_TLSDESC:
-            DUMP_SLOTINFO(name, R_X86_64_TLSDESC);
-            break;
-          case R_X86_64_IRELATIVE:
-            DUMP_SLOTINFO(name, R_X86_64_IRELATIVE);
-            break;
-          case R_X86_64_RELATIVE64:
-            DUMP_SLOTINFO(name, R_X86_64_RELATIVE64);
-            break;
           default:
-            DUMP_SLOTINFO(name, chr);
+            DEBUG( DEBUG_ELF,
+                   "%s has slot type %s (%d), not doing anything special",
+                   name, reloc_type_name( chr ), chr );
             break;
         }
+#else
+#error Unsupported CPU architecture
+#endif
     }
 
     return 0;

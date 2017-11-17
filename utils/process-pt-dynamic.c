@@ -148,84 +148,65 @@ reloc_type_name (int type)
 {
     switch (type)
     {
-      case R_X86_64_JUMP_SLOT:
-        return "R_X86_64_JUMP_SLOT";
-      case R_X86_64_NONE:
-        return "R_X86_64_NONE";
-      case R_X86_64_64:
-        return "R_X86_64_64";
-      case R_X86_64_PC32:
-        return "R_X86_64_PC32";
-      case R_X86_64_GOT32:
-        return "R_X86_64_GOT32";
-      case R_X86_64_PLT32:
-        return "R_X86_64_PLT32";
-      case R_X86_64_COPY:
-        return "R_X86_64_COPY";
-      case R_X86_64_GLOB_DAT:
-        return "R_X86_64_GLOB_DAT";
-      case R_X86_64_RELATIVE:
-        return "R_X86_64_RELATIVE";
-      case R_X86_64_GOTPCREL:
-        return "R_X86_64_GOTPCREL";
-      case R_X86_64_32:
-        return "R_X86_64_32";
-      case R_X86_64_32S:
-        return "R_X86_64_32S";
-      case R_X86_64_16:
-        return "R_X86_64_16";
-      case R_X86_64_PC16:
-        return "R_X86_64_PC16";
-      case R_X86_64_8:
-        return "R_X86_64_8";
-      case R_X86_64_PC8:
-        return "R_X86_64_PC8";
-      case R_X86_64_DTPMOD64:
-        return "R_X86_64_DTPMOD64";
-      case R_X86_64_DTPOFF64:
-        return "R_X86_64_DTPOFF64";
-      case R_X86_64_TPOFF64:
-        return "R_X86_64_TPOFF64";
-      case R_X86_64_TLSGD:
-        return "R_X86_64_TLSGD";
-      case R_X86_64_TLSLD:
-        return "R_X86_64_TLSLD";
-      case R_X86_64_DTPOFF32:
-        return "R_X86_64_DTPOFF32";
-      case R_X86_64_GOTTPOFF:
-        return "R_X86_64_GOTTPOFF";
-      case R_X86_64_TPOFF32:
-        return "R_X86_64_TPOFF32";
-      case R_X86_64_PC64:
-        return "R_X86_64_PC64";
-      case R_X86_64_GOTOFF64:
-        return "R_X86_64_GOTOFF64";
-      case R_X86_64_GOTPC32:
-        return "R_X86_64_GOTPC32";
-      case R_X86_64_GOT64:
-        return "R_X86_64_GOT64";
-      case R_X86_64_GOTPCREL64:
-        return "R_X86_64_GOTPCREL64";
-      case R_X86_64_GOTPC64:
-        return "R_X86_64_GOTPC64";
-      case R_X86_64_GOTPLT64:
-        return "R_X86_64_GOTPLT64";
-      case R_X86_64_PLTOFF64:
-        return "R_X86_64_PLTOFF64";
-      case R_X86_64_SIZE32:
-        return "R_X86_64_SIZE32";
-      case R_X86_64_SIZE64:
-        return "R_X86_64_SIZE64";
-      case R_X86_64_GOTPC32_TLSDESC:
-        return "R_X86_64_GOTPC32_TLSDESC";
-      case R_X86_64_TLSDESC_CALL:
-        return "R_X86_64_TLSDESC_CALL";
-      case R_X86_64_TLSDESC:
-        return "R_X86_64_TLSDESC";
-      case R_X86_64_IRELATIVE:
-        return "R_X86_64_IRELATIVE";
-      case R_X86_64_RELATIVE64:
-        return "R_X86_64_RELATIVE64";
+      // Please keep these in numerical order.
+
+#define CASE(x) \
+      case x: \
+        return #x;
+
+      CASE( R_X86_64_NONE )
+      CASE( R_X86_64_64 )
+      CASE( R_X86_64_PC32 )
+      CASE( R_X86_64_GOT32 )
+      CASE( R_X86_64_PLT32 )
+      CASE( R_X86_64_COPY )
+      CASE( R_X86_64_GLOB_DAT )
+      CASE( R_X86_64_JUMP_SLOT )
+      CASE( R_X86_64_RELATIVE )
+      CASE( R_X86_64_GOTPCREL )
+      CASE( R_X86_64_32 )
+      CASE( R_X86_64_32S )
+      CASE( R_X86_64_16 )
+      CASE( R_X86_64_PC16 )
+      CASE( R_X86_64_8 )
+      CASE( R_X86_64_PC8 )
+      CASE( R_X86_64_DTPMOD64 )
+      CASE( R_X86_64_DTPOFF64 )
+      CASE( R_X86_64_TPOFF64 )
+      CASE( R_X86_64_TLSGD )
+      CASE( R_X86_64_TLSLD )
+      CASE( R_X86_64_DTPOFF32 )
+      CASE( R_X86_64_GOTTPOFF )
+      CASE( R_X86_64_TPOFF32 )
+      CASE( R_X86_64_PC64 )
+      CASE( R_X86_64_GOTOFF64 )
+      CASE( R_X86_64_GOTPC32 )
+      CASE( R_X86_64_GOT64 )
+      CASE( R_X86_64_GOTPCREL64 )
+      CASE( R_X86_64_GOTPC64 )
+      CASE( R_X86_64_GOTPLT64 )
+      CASE( R_X86_64_PLTOFF64 )
+      CASE( R_X86_64_SIZE32 )
+      CASE( R_X86_64_SIZE64 )
+      CASE( R_X86_64_GOTPC32_TLSDESC )
+      CASE( R_X86_64_TLSDESC_CALL )
+      CASE( R_X86_64_TLSDESC )
+      CASE( R_X86_64_IRELATIVE )
+
+      // Entries below this point are new since glibc 2.19
+
+#ifdef R_X86_64_RELATIVE64
+      CASE( R_X86_64_RELATIVE64 )
+#endif
+#ifdef R_X64_64_GOTPCRELX
+      CASE( R_X86_64_GOTPCRELX )
+#endif
+#ifdef R_X64_64_REX_GOTPCRELX
+      CASE( R_X86_64_REX_GOTPCRELX )
+#endif
+
+#undef CASE
+
       default:
         return "UNKNOWN";
     }

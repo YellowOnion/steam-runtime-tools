@@ -30,7 +30,7 @@ Makefile
 shim/*.so.c
 shim/*.so.symbols
 shim/*.so.map
-elf-dump
+/capsule-elf-dump
 print-libstubs
 capsule-symbols
 capsule-version

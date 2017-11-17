@@ -49,8 +49,10 @@ data/$(host)-capsule-mkstublib: data/capsule-mkstublib Makefile
 install-exec-hook:
 	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(host)-capsule-symbols
 	cd $(DESTDIR)$(bindir) && ln -f capsule-version $(host)-capsule-version
+	cd $(DESTDIR)$(bindir) && ln -f capsule-elf-dump $(host)-capsule-elf-dump
 
 uninstall-hook:
+	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-elf-dump
 	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-symbols
 	cd $(DESTDIR)$(bindir) && rm -f $(host)-capsule-version
 
@@ -58,13 +60,13 @@ uninstall-hook:
 nobase_include_HEADERS += capsule/capsule-shim.h \
                           capsule/_int_dlopen.h
 
-# demo program - keep this hanging around as it's a useful PoC
-noinst_PROGRAMS         = elf-dump
+# Mostly just a demo program, but keep this hanging around as it's a useful PoC
+bin_PROGRAMS           += capsule-elf-dump
 
-elf_dump_SOURCES        = utils/elf-dump.c utils/utils.c
-elf_dump_LDADD          = -ldl
-elf_dump_SOURCES       += utils/utils.h
-elf_dump_CFLAGS         = $(AM_CFLAGS)
+capsule_elf_dump_SOURCES        = utils/elf-dump.c utils/utils.c
+capsule_elf_dump_LDADD          = -ldl
+capsule_elf_dump_SOURCES       += utils/utils.h
+capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)
 
 # now the rules for building our installables:
 capsule_symbols_SOURCES = utils/print-libstubs.c \

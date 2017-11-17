@@ -58,6 +58,7 @@ override_dh_install:
 	find debian/tmp/usr/lib/libcapsule/installed-tests -name '*.la' -print -delete
 	# Only keep the architecture-qualified version, delete the unprefixed
 	# version, so we can be Multi-Arch: same
+	rm -f debian/tmp/usr/bin/capsule-elf-dump
 	rm -f debian/tmp/usr/bin/capsule-symbols
 	rm -f debian/tmp/usr/bin/capsule-version
 	dh_install --fail-missing

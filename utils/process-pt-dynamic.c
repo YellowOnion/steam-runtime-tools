@@ -650,9 +650,6 @@ process_pt_dynamic (ElfW(Addr) start,
                    jmpreltype == DT_RELA ? "DT_RELA" : "???" );
             break;
 
-          case DT_RELA:
-          case DT_REL:
-          case DT_JMPREL:
           default:
             // We'll deal with this later
             break;
@@ -665,12 +662,28 @@ process_pt_dynamic (ElfW(Addr) start,
          entry++ ) {
         switch( entry->d_tag )
         {
-          case DT_PLTRELSZ:
-          case DT_SYMTAB:
-          case DT_RELASZ:
-          case DT_PLTREL:
-            // We dealt with this earlier
+          // Please keep the contents of this switch in numerical order.
+
+          // IGNORE(x): Ignore a known d_tag that we believe we don't need
+          // to know about
+#define IGNORE(x) \
+          case x: \
+            DEBUG( DEBUG_ELF, "ignoring %s (0x%zx): 0x%zx", \
+                   #x, (size_t) x, (size_t) entry->d_un.d_val); \
             break;
+
+          // ALREADY_DID(x): Silently ignore a case we dealt with in
+          // the previous loop
+#define ALREADY_DID(x) \
+          case x: \
+            break;
+
+          IGNORE( DT_NEEDED )
+          ALREADY_DID( DT_PLTRELSZ )
+          IGNORE( DT_PLTGOT )
+          IGNORE( DT_HASH )
+          IGNORE( DT_STRTAB )
+          ALREADY_DID( DT_SYMTAB )
 
           case DT_RELA:
             if( process_rela != NULL )
@@ -693,6 +706,16 @@ process_pt_dynamic (ElfW(Addr) start,
             }
             break;
 
+          ALREADY_DID( DT_RELASZ )
+          IGNORE( DT_RELAENT )
+          IGNORE( DT_STRSZ )
+          IGNORE( DT_SYMENT )
+          IGNORE( DT_INIT )
+          IGNORE( DT_FINI )
+          IGNORE( DT_SONAME )
+          IGNORE( DT_RPATH )
+          IGNORE( DT_SYMBOLIC )
+
           case DT_REL:
             if( process_rel != NULL )
             {
@@ -712,6 +735,12 @@ process_pt_dynamic (ElfW(Addr) start,
                 DEBUG( DEBUG_ELF, "skipping DT_REL section: no handler" );
             }
             break;
+
+          ALREADY_DID( DT_RELSZ )
+          IGNORE( DT_RELENT )
+          ALREADY_DID( DT_PLTREL )
+          IGNORE( DT_DEBUG )
+          IGNORE( DT_TEXTREL )
 
           case DT_JMPREL:
             if( jmprelsz == -1 )
@@ -773,9 +802,73 @@ process_pt_dynamic (ElfW(Addr) start,
                 break;
             }
 
+          IGNORE( DT_BIND_NOW )
+          IGNORE( DT_INIT_ARRAY )
+          IGNORE( DT_FINI_ARRAY )
+          IGNORE( DT_INIT_ARRAYSZ )
+          IGNORE( DT_FINI_ARRAYSZ )
+          IGNORE( DT_RUNPATH )
+          IGNORE( DT_FLAGS )
+          // DT_ENCODING is numerically equal to DT_PREINIT_ARRAY
+          // so we can't separate them
+          case DT_ENCODING:
+            DEBUG( DEBUG_ELF,
+                   "ignoring DT_ENCODING or DT_PREINIT_ARRAY (0x%zx): 0x%zx",
+                   (size_t) DT_ENCODING, (size_t) entry->d_un.d_val); \
+            break;
+          IGNORE( DT_PREINIT_ARRAYSZ )
+          IGNORE( DT_NUM )
+
+          // OS-specifics, in range DT_LOOS to DT_HIOS
+
+          // Uses Dyn.d_un.d_val
+          IGNORE( DT_GNU_PRELINKED )
+          IGNORE( DT_GNU_CONFLICTSZ )
+          IGNORE( DT_GNU_LIBLISTSZ )
+          IGNORE( DT_CHECKSUM )
+          IGNORE( DT_PLTPADSZ )
+          IGNORE( DT_MOVEENT )
+          IGNORE( DT_MOVESZ )
+          IGNORE( DT_FEATURE_1 )
+          IGNORE( DT_POSFLAG_1 )
+          IGNORE( DT_SYMINSZ )
+          IGNORE( DT_SYMINENT )
+
+          // Uses Dyn.d_un.d_ptr
+          IGNORE( DT_GNU_HASH )
+          IGNORE( DT_TLSDESC_PLT )
+          IGNORE( DT_TLSDESC_GOT )
+          IGNORE( DT_GNU_CONFLICT )
+          IGNORE( DT_GNU_LIBLIST )
+          IGNORE( DT_CONFIG )
+          IGNORE( DT_DEPAUDIT )
+          IGNORE( DT_AUDIT )
+          IGNORE( DT_PLTPAD )
+          IGNORE( DT_MOVETAB )
+          IGNORE( DT_SYMINFO )
+
+          IGNORE( DT_VERSYM )
+
+          IGNORE( DT_RELACOUNT )
+          IGNORE( DT_RELCOUNT )
+
+          // Sun-compatible
+          IGNORE( DT_FLAGS_1 )
+          IGNORE( DT_VERDEF )
+          IGNORE( DT_VERDEFNUM )
+          IGNORE( DT_VERNEED )
+          IGNORE( DT_VERNEEDNUM )
+
+          // Sun-compatible
+          IGNORE( DT_AUXILIARY )
+          IGNORE( DT_FILTER )
+
+#undef IGNORE
+#undef ALREADY_DID
+
           default:
-            DEBUG( DEBUG_ELF, "Ignoring unknown dynamic section entry tag %d (0x%x)",
-                   (int) entry->d_tag, (unsigned) entry->d_tag );
+            DEBUG( DEBUG_ELF, "Ignoring unknown dynamic section entry tag 0x%zx",
+                   (size_t) entry->d_tag );
             break;
         }
     }

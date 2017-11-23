@@ -69,6 +69,19 @@ fi
 
 if [ -z "$BWRAP" ]; then
     echo "$me: cannot find bwrap, falling back to executing '$*' directly" >&2
+
+    if [ -n "$caller_ld_preload" ]; then
+        export LD_PRELOAD="$caller_ld_preload"
+    fi
+    if [ -n "$caller_path" ]; then
+        export PATH="$caller_path"
+    fi
+    if [ -n "$caller_ld_library_path" ]; then
+        export LD_LIBRARY_PATH="$caller_ld_library_path"
+    else
+        unset LD_LIBRARY_PATH
+    fi
+
     exec "$@"
 fi
 

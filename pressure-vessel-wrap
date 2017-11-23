@@ -235,7 +235,7 @@ done
 
 # steamclient.so relies on this for communication with Steam
 if [ -e "$HOME/.steam/steam.pid" ]; then
-    set -- --bind "$HOME/.steam/steam.pid" "$HOME/.steam/steam.pid" "$@"
+    set -- --ro-bind "$HOME/.steam/steam.pid" "$HOME/.steam/steam.pid" "$@"
 fi
 
 # Make sure Steam IPC is available (TODO: do we need this? do we need more?)

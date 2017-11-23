@@ -67,8 +67,8 @@ if [ -z "${BWRAP:-}" ]; then
     fi
 fi
 
-if [ -z "$BWRAP" ]; then
-    echo "$me: cannot find bwrap, falling back to executing '$*' directly" >&2
+if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
+    echo "$me: cannot find bwrap or it doesn't work, falling back to executing '$*' directly" >&2
 
     if [ -n "$caller_ld_preload" ]; then
         export LD_PRELOAD="$caller_ld_preload"

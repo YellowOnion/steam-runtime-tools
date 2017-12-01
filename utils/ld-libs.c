@@ -365,6 +365,11 @@ ld_lib_open (ld_libs *ldlibs, const char *name, int i, int *code, char **message
     }
     else
     {
+        int errsv = errno;
+
+        _capsule_set_error( code, message, errsv,
+                            "Cannot open \"%s\": %s",
+                            ldlibs->needed[i].path, strerror( errsv ) );
         return 0;
     }
 }

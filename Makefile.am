@@ -64,62 +64,44 @@ endif
 nobase_include_HEADERS += capsule/capsule-shim.h \
                           capsule/_int_dlopen.h
 
+noinst_LTLIBRARIES = utils/libutils.la \
+                     utils/libld.la
+
+utils_libutils_la_SOURCES  = utils/utils.c utils/utils.h
+utils_libld_la_SOURCES     = utils/ld-cache.c utils/ld-cache.h
+utils_libld_la_SOURCES    += utils/ld-libs.c utils/ld-libs.h
+utils_libld_la_LIBADD      = utils/libutils.la -ldl $(LIBELF_LIBS)
+
 # Mostly just a demo program, but keep this hanging around as it's a useful PoC
 bin_PROGRAMS           += capsule-elf-dump
 
-capsule_elf_dump_SOURCES        = utils/elf-dump.c utils/dump.c utils/utils.c
-capsule_elf_dump_LDADD          = -ldl
-capsule_elf_dump_SOURCES       += utils/utils.h
+capsule_elf_dump_SOURCES        = utils/elf-dump.c utils/dump.c
+capsule_elf_dump_LDADD          = utils/libutils.la -ldl
+# This looks redundant, but it forces Automake to build separate
+# instantiations of dump.o for elf-dump and libcapsule
 capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)
 
 # now the rules for building our installables:
-capsule_symbols_SOURCES = utils/print-libstubs.c \
-                          utils/utils.c          \
-                          utils/ld-cache.c       \
-                          utils/ld-libs.c
-capsule_symbols_SOURCES += \
-                          utils/utils.h          \
-                          utils/ld-cache.h       \
-                          utils/ld-libs.h
-capsule_symbols_LDADD   = -ldl $(LIBELF_LIBS)
-# this looks like a no-op but it gives capsule_symbols its own target
-# so that libtool doesn't get bent out of shape about using an object
-# (ld-cache.o, ld-libs.o) as both part of a library and a standalone
-# executable:
-capsule_symbols_CFLAGS  = $(AM_CFLAGS)
+capsule_symbols_SOURCES = utils/print-libstubs.c
+capsule_symbols_LDADD   = utils/libld.la
 
-capsule_version_SOURCES = utils/print-version.c  \
-                          utils/utils.c          \
-                          utils/ld-cache.c       \
-                          utils/ld-libs.c
-capsule_version_SOURCES += \
-                          utils/utils.h          \
-                          utils/ld-cache.h       \
-                          utils/ld-libs.h
-capsule_version_LDADD   = -ldl $(LIBELF_LIBS)
-capsule_version_CFLAGS  = $(AM_CFLAGS)
-
+capsule_version_SOURCES = utils/print-version.c
+capsule_version_LDADD   = utils/libld.la
 
 libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           capsule/capsule-relocate.c \
                           capsule/capsule-init.c     \
                           capsule/capsule-private.h  \
                           capsule/capsule-wrappers.c \
-                          utils/utils.c              \
                           utils/dump.c               \
                           utils/process-pt-dynamic.c \
-                          utils/mmap-info.c          \
-                          utils/ld-cache.c           \
-                          utils/ld-libs.c
+                          utils/mmap-info.c
 libcapsule_la_LDFLAGS   = -version-number 0:1 -Wl,-z,nodelete
-libcapsule_la_LIBADD    = $(LIBELF_LIBS)
-libcapsule_la_SOURCES  += utils/utils.h              \
-                          utils/debug.h              \
+libcapsule_la_LIBADD    = utils/libld.la
+libcapsule_la_SOURCES  += utils/debug.h              \
                           utils/dump.h               \
                           utils/process-pt-dynamic.h \
-                          utils/mmap-info.h          \
-                          utils/ld-cache.h           \
-                          utils/ld-libs.h
+                          utils/mmap-info.h
 
 dist_pkgdata_DATA       = data/capsule-shim.mk    \
                           data/disabled.mk        \

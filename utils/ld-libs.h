@@ -18,6 +18,8 @@
 #pragma once
 
 #include <limits.h>
+#include <link.h>
+
 #include <libelf.h>
 #include <gelf.h>
 

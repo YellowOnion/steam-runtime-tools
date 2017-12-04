@@ -88,6 +88,7 @@ void oom( void ) __attribute__((noreturn));
 char *xstrdup( const char *s );
 void *xrealloc( void *ptr, size_t size ) __attribute__((alloc_size(2)));
 void *xcalloc( size_t n, size_t size ) __attribute__((alloc_size(1, 2), malloc));
+int xasprintf( char **s, const char *format, ...) __attribute__((format(printf, 2, 3)));
 
 /*
  * _capsule_steal_pointer:

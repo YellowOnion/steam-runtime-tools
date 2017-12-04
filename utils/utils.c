@@ -429,6 +429,22 @@ xcalloc( size_t n, size_t size )
     return ret;
 }
 
+int
+xasprintf( char **dest, const char *format, ...)
+{
+    int ret;
+    va_list ap;
+
+    va_start( ap, format );
+    ret = vasprintf( dest, format, ap );
+    va_end( ap );
+
+    if( ret < 0 )
+        oom();
+
+    return ret;
+}
+
 /*
  * _capsule_set_error_literal:
  * @code_dest: (out) (optional): used to return an errno value

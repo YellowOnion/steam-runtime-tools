@@ -214,6 +214,13 @@ int resolve_link(const char *prefix, char *path, char *dir)
 
     rv = readlinkat( dfd, path, rl, sizeof(rl) );
 
+    if( rv == sizeof(rl) )
+    {
+        // Either rl was truncated, or there is no longer space for '\0'
+        rv = -1;
+        goto out;
+    }
+
     if( rv >= 0 )
     {
         rl[ rv ] = '\0';
@@ -222,6 +229,12 @@ int resolve_link(const char *prefix, char *path, char *dir)
         {
             const int pl = strlen( prefix );
 
+            if( pl + rv > PATH_MAX )
+            {
+                rv = -1;
+                goto out;
+            }
+
             safe_strncpy( path, prefix, PATH_MAX );
             safe_strncpy( path + pl, rl, PATH_MAX - pl );
         }
@@ -229,12 +242,19 @@ int resolve_link(const char *prefix, char *path, char *dir)
         {
             const int pl = strlen( dir );
 
+            if( pl + rv + 1 > PATH_MAX )
+            {
+                rv = -1;
+                goto out;
+            }
+
             safe_strncpy( path, dir, PATH_MAX );
             path[ pl ] = '/';
             safe_strncpy( path + pl + 1, rl, PATH_MAX - pl - 1 );
         }
     }
 
+out:
     close( dfd );
 
     return rv != -1;

@@ -475,7 +475,7 @@ search_ldcache (const char *name, ld_libs *ldlibs, int i)
 static int
 search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
 {
-    char  *sp     = (char *)ldpath;
+    const char *sp = ldpath;
     char  *prefix = ldlibs->prefix.path;
     size_t plen   = ldlibs->prefix.len;
 
@@ -490,7 +490,7 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
     while( sp && *sp )
     {
         size_t len;
-        char *end;
+        const char *end;
 
         end = strchr( sp, ':' );
         if( end )

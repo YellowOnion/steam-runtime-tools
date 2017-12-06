@@ -874,10 +874,17 @@ ld_libs_init (ld_libs *ldlibs,
     // ==================================================================
     // set up the path prefix at which we expect to find the encapsulated
     // library and its ld.so.cache and dependencies and so forth:
-    if( prefix )
+    if( prefix && prefix[0] != '\0' )
     {
         size_t prefix_len = strlen( prefix );
         ssize_t space = PATH_MAX - prefix_len;
+
+        if( prefix[0] != '/' )
+        {
+            _capsule_set_error( errcode, error, EINVAL,
+                                "An absolute path is required, not \"%s\"",
+                                prefix );
+        }
 
         // if we don't have at least this much space it's not
         // going to work out:

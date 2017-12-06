@@ -1120,13 +1120,12 @@ ld_libs_load_cache (ld_libs *libs, const char *path, int *code, char **message)
 
     if( libs->prefix.len == 0 )
     {
-        libs->ldcache.fd = open( path, O_RDONLY );
+        safe_strncpy( libs->prefix.path, path, sizeof(libs->prefix.path) );
     }
     else
     {
         safe_strncpy( libs->prefix.path + libs->prefix.len,
                       path, PATH_MAX - libs->prefix.len );
-        libs->ldcache.fd = open( libs->prefix.path, O_RDONLY );
     }
 
     rv = ld_cache_open( &libs->ldcache, libs->prefix.path, code, message );

@@ -42,12 +42,6 @@ struct dso_cache_search
 
 static const struct stat *stat_caller (void);
 
-// make sure the prefix buffer is properly NUL terminated
-static inline void sanitise_ldlibs(ld_libs *ldlibs)
-{
-    ldlibs->prefix.path[ ldlibs->prefix.len ] = '\0';
-}
-
 // Note that this is not re-entrant. In this context we don't care.
 static const char *
 _rtldstr(int flag)
@@ -80,7 +74,7 @@ static void resolve_symlink_prefixed (ld_libs *ldlibs, int i)
     int count = 0;
     char resolved[PATH_MAX];
 
-    sanitise_ldlibs(ldlibs);
+    assert( ldlibs->prefix.path[ ldlibs->prefix.len ] == '\0' );
     // prefix is unset or is /, nothing to do here (we can rely on
     // libc's built-in symlink following if there's no prefix):
     if( ldlibs->prefix.len == 0 ||
@@ -479,7 +473,6 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
     size_t plen   = ldlibs->prefix.len;
     char prefixed[PATH_MAX] = { '\0' };
 
-    sanitise_ldlibs(ldlibs);
     assert( prefix[plen] == '\0' );
 
     LDLIB_DEBUG( ldlibs, DEBUG_SEARCH,
@@ -559,7 +552,7 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
         // we have a path prefix, so yes, we need to do some path manipulation:
         if( ldlibs->prefix.len )
         {
-            sanitise_ldlibs(ldlibs);
+            assert( ldlibs->prefix.path[ ldlibs->prefix.len ] == '\0' );
             safe_strncpy( prefixed, ldlibs->prefix.path, PATH_MAX );
 
             if( absolute )

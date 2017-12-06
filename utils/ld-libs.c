@@ -79,7 +79,6 @@ static void resolve_symlink_prefixed (ld_libs *ldlibs, int i)
 {
     int count = 0;
     char resolved[PATH_MAX];
-    char link_dir[PATH_MAX];
 
     sanitise_ldlibs(ldlibs);
     // prefix is unset or is /, nothing to do here (we can rely on
@@ -96,7 +95,7 @@ static void resolve_symlink_prefixed (ld_libs *ldlibs, int i)
 
     // now keep poking resolve_link (resolved will be updated each time)
     // until it returns false:
-    while( resolve_link(ldlibs->prefix.path, resolved, link_dir) )
+    while( resolve_link(ldlibs->prefix.path, resolved) )
     {
         LDLIB_DEBUG( ldlibs, DEBUG_PATH, "  resolved to: %s", resolved );
 

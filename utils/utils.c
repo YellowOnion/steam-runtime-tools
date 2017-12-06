@@ -182,18 +182,18 @@ char *safe_strncpy (char *dest, const char *src, size_t n)
 
 // prefix is the root of the external tree we're patching in
 // with libcapsule, path is what we're trying to resolve if
-// it is a symlink. dir is a scratch space we're going to use.
-// all three must have at least PATH_MAX chars allocated.
+// it is a symlink. path must have at least PATH_MAX chars allocated.
 //
 // Designed to be called repeatedly, starting with an ABSOLUTE
 // path the first time. Will write the resolved link back into
 // path each time and return true, until fed a path which is
 // not a symlink, at which point it will leave path alone and
 // return false:
-int resolve_link(const char *prefix, char *path, char *dir)
+int resolve_link(const char *prefix, char *path)
 {
     int dfd;
     char rl[PATH_MAX];
+    char dir[PATH_MAX];
     char *end = NULL;
     int rv = 0;
 

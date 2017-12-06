@@ -71,7 +71,7 @@ int  ptr_list_contains  (ptr_list *list, ElfW(Addr) addr);
 int  ptr_list_add_ptr   (ptr_list *list, void *ptr, ptrcmp equals);
 
 char *safe_strncpy (char *dest, const char *src, size_t n);
-int   resolve_link (const char *prefix, char *path, char *dir);
+int   resolve_link (const char *prefix, char *path);
 int soname_matches_path (const char *soname, const char *path);
 
 const void *      fix_addr (const void *base, ElfW(Addr) offset_or_addr);

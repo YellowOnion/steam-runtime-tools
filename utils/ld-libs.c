@@ -395,8 +395,8 @@ search_ldcache_cb (const char *name, // name of the DSO in the ldcache
 
     if( strcmp( name, target->name ) == 0 )
     {
+        const char *prefix = target->ldlibs->prefix.path;
         int    idx    = target->idx;
-        char  *prefix = target->ldlibs->prefix.path;
         size_t plen   = target->ldlibs->prefix.len;
         char  *lpath  = target->ldlibs->needed[ idx ].path;
 

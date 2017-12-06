@@ -369,14 +369,16 @@ ld_lib_open (ld_libs *ldlibs, const char *name, int i, int *code, char **message
 
 // search callback for search_ldcache. see search_ldcache and ld_cache_foreach:
 // returning a true value means we found (and set up) the DSO we wanted:
-static int
+static intptr_t
 search_ldcache_cb (const char *name, // name of the DSO in the ldcache
                    int flag,         // 1 for an ELF DSO
                    unsigned int osv, // OS version. we don't use this
                    uint64_t hwcap,   // HW caps. Ibid.
                    const char *path, // absolute path to DSO (may be a symlink)
-                   struct dso_cache_search *target)
+                   void *data)
 {
+    struct dso_cache_search *target = data;
+
     // passed an empty query, just abort the whole search
     if( !target->name || !(*target->name) )
         return 1;
@@ -448,7 +450,7 @@ search_ldcache (const char *name, ld_libs *ldlibs, int i)
     }
 
     ld_cache_foreach( &ldlibs->ldcache,
-                      (ld_cache_entry_cb)search_ldcache_cb, &target );
+                      search_ldcache_cb, &target );
 
     return ldlibs->needed[i].fd >= 0;
 }

@@ -479,9 +479,8 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
     char  *prefix = ldlibs->prefix.path;
     size_t plen   = ldlibs->prefix.len;
 
-    prefix[plen] = '\0';
-
     sanitise_ldlibs(ldlibs);
+    assert( prefix[plen] == '\0' );
 
     LDLIB_DEBUG( ldlibs, DEBUG_SEARCH,
                  "searching for %s in %s (prefix: %s)",

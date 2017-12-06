@@ -1115,19 +1115,21 @@ stat_caller (void)
 int
 ld_libs_load_cache (ld_libs *libs, const char *path, int *code, char **message)
 {
+    char prefixed[PATH_MAX] = { '\0' };
     int rv;
 
     if( libs->prefix.len == 0 )
     {
-        safe_strncpy( libs->prefix.path, path, sizeof(libs->prefix.path) );
+        safe_strncpy( prefixed, path, sizeof(prefixed) );
     }
     else
     {
-        safe_strncpy( libs->prefix.path + libs->prefix.len,
+        safe_strncpy( prefixed, libs->prefix.path, sizeof(prefixed) );
+        safe_strncpy( prefixed + libs->prefix.len,
                       path, PATH_MAX - libs->prefix.len );
     }
 
-    rv = ld_cache_open( &libs->ldcache, libs->prefix.path, code, message );
+    rv = ld_cache_open( &libs->ldcache, prefixed, code, message );
 
     return rv;
 }

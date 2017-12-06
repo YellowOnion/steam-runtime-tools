@@ -475,8 +475,9 @@ static int
 search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
 {
     const char *sp = ldpath;
-    char  *prefix = ldlibs->prefix.path;
+    const char *prefix = ldlibs->prefix.path;
     size_t plen   = ldlibs->prefix.len;
+    char prefixed[PATH_MAX] = { '\0' };
 
     sanitise_ldlibs(ldlibs);
     assert( prefix[plen] == '\0' );
@@ -496,24 +497,25 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
         else
             len = MIN(strlen( sp ), PATH_MAX - plen - 1);
 
-        safe_strncpy( prefix + plen, sp, len + 1);
-        prefix[plen + len + 1] = '\0';
+        safe_strncpy( prefixed, prefix, sizeof(prefixed) );
+        safe_strncpy( prefixed + plen, sp, len + 1);
+        prefixed[plen + len + 1] = '\0';
 
-        LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "  searchpath element: %s", prefix );
+        LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "  searchpath element: %s", prefixed );
         // append the target name, without overflowing, then resolve
         if( (plen + len + strlen( name ) + 1 < PATH_MAX) )
         {
-            prefix[plen + len] = '/';
-            safe_strncpy( prefix + plen + len + 1, name,
+            prefixed[plen + len] = '/';
+            safe_strncpy( prefixed + plen + len + 1, name,
                           PATH_MAX - plen - len - 1 );
 
-            LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "examining %s", prefix );
+            LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "examining %s", prefixed );
             // if path resolution succeeds _and_ we can open an acceptable
             // DSO at that location, we're good to go (ldlib_open will
             // finish setting up or clearing the needed[] entry for us):
             // FIXME: this is broken if the target is an absolute symlink
             // TODO: Propagate error information from ld_lib_open()?
-            if( realpath( prefix, ldlibs->needed[i].path ) &&
+            if( realpath( prefixed, ldlibs->needed[i].path ) &&
                 ld_lib_open( ldlibs, name, i, NULL, NULL ) )
                 return 1;
         }

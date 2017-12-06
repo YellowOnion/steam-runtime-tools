@@ -897,7 +897,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
                 verdef = (const void *) find_ptr( base, start, DT_VERDEF );
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, DT_VERDEFNUM );
-            symtab = (const void *) entry->d_un.d_ptr;
+            symtab = fix_addr( (void *) base, entry->d_un.d_ptr );
             dump_symtab( indent, symtab, strtab, versym, verdef, verdefnum );
             break;
 

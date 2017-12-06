@@ -66,6 +66,9 @@ PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
     LIBELF_LIBS=-lelf
 ])
 
+PKG_CHECK_MODULES([GLIB], [glib-2.0], [have_glib=yes], [have_glib=no])
+AM_CONDITIONAL([HAVE_GLIB], [test "x$have_glib" = xyes])
+
 AC_ARG_ENABLE([host-prefix],
   [AS_HELP_STRING([--enable-host-prefix=PREFIX/yes/no],
     [install link to tools with a prefix [default=$host-]])],

@@ -20,7 +20,8 @@ ACLOCAL_AMFLAGS         = -I m4
 AM_CFLAGS               = -fvisibility=hidden \
                           --std=c99 \
                           $(WARN_CFLAGS) \
-                          $(LIBELF_CFLAGS)
+                          $(LIBELF_CFLAGS) \
+                          $(GLIB_CFLAGS)
 AM_LDFLAGS              = $(WARN_LDFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start Capsules
 
@@ -276,9 +277,11 @@ tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols d
 LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
                                        $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 LOG_COMPILER                         =
-TEST_EXTENSIONS                      = .pl
+TEST_EXTENSIONS                      = .pl .t
 PL_LOG_DRIVER                        = $(LOG_DRIVER)
 PL_LOG_COMPILER                      = $(PERL)
+T_LOG_DRIVER                         = $(LOG_DRIVER)
+T_LOG_COMPILER                       = $(SHELL) $(top_srcdir)/tests/glib-tap.sh
 AM_TESTS_ENVIRONMENT                 = export CAPSULE_CFLAGS="-I$(abs_top_srcdir) -I$(abs_top_builddir)"; \
                                        export CAPSULE_LIBS="$(abs_top_builddir)/libcapsule.la"; \
                                        export CAPSULE_SYMBOLS_TOOL="$(abs_builddir)/capsule-symbols";\
@@ -301,6 +304,13 @@ tests_notgl_dlopener_LDADD           = -ldl
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =
+if HAVE_GLIB
+test_programs                       += tests/utils.t
+endif
+
+tests_utils_t_SOURCES                = tests/utils.c
+tests_utils_t_LDADD                  = utils/libutils.la $(GLIB_LIBS)
+
 test_scripts                         = tests/gl-shim.pl                        \
                                        tests/init-project.pl                   \
                                        tests/notgl.pl                          \
@@ -317,11 +327,17 @@ testmeta_DATA                        = $(patsubst %,%.test,$(test_programs) $(te
 $(testmeta_DATA): tests/%.test: tests/% Makefile
 	@$(MKDIR_P) $(dir $@)
 	$(AM_V_GEN)set -e; \
+	maybe_tap=; \
+	case "$*" in \
+		(*.t) \
+			maybe_tap=" --tap"; \
+			;; \
+	esac; \
 	(\
 		echo "[Test]"; \
 		echo "Type=session"; \
 		echo "Output=TAP"; \
-		echo "Exec=$(insttestsdir)/tests/$*"; \
+		echo "Exec=$(insttestsdir)/tests/$*$$maybe_tap"; \
 	) > $@.tmp && mv $@.tmp $@
 
 # ============================================================================
@@ -369,3 +385,4 @@ EXTRA_DIST             += doc/Strategy.txt
 EXTRA_DIST             += doc/capsule-init-project.xml
 EXTRA_DIST             += doc/capsule-mkstublib.xml
 EXTRA_DIST             += doc/devhelp2man.xslt
+EXTRA_DIST             += tests/glib-tap.sh

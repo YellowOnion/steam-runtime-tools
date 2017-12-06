@@ -13,6 +13,7 @@ Build-Depends:
  gtk-doc-tools,
  libelf-dev,
  libipc-run-perl,
+ libglib2.0-dev,
  libjpeg62-turbo <!nocheck> | libjpeg62 (>= 6b1) <!nocheck>,
  perl,
  xsltproc,

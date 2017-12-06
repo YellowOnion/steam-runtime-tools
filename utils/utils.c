@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <assert.h>
 #include <sys/param.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -320,6 +321,151 @@ int soname_matches_path (const char *soname, const char *path)
     const char *end = pattern + slen;
 
     return ( *end == '\0' || *end == '.' );
+}
+
+/*
+ * build_filename_va:
+ * @buf: a buffer
+ * @len: length of buffer
+ * @first_path: an absolute or relative path
+ * @ap: further path segments
+ *
+ * Fill @buf with a copy of @first_path, with subsequent path segments
+ * appended to it.
+ *
+ * Returns: The number of bytes that would have been used in buf, not
+ *  including the '\0', if there was enough space. If this is >= len,
+ *  then truncation has occurred.
+ */
+size_t
+build_filename_va (char *buf, size_t len, const char *first_path, va_list ap)
+{
+    const char *path;
+    size_t used = 0;
+    int first = 1;
+    int need_separator = 0;
+
+
+    if( len > 0 )
+        *buf = '\0';
+
+    for( path = first_path, first = 1;
+         path != NULL;
+         path = va_arg( ap, const char * ), first = 0)
+    {
+        size_t path_len;
+
+        // Collapse any leading '//' to '/'
+        while( path[0] == '/' && path[1] == '/' )
+            path++;
+
+        // If this is not the first path segment, strip any leading '/'
+        if( path[0] == '/' && !first )
+            path++;
+
+        path_len = strlen( path );
+
+        // Collapse any trailing '/' to nothing, unless this is the
+        // first path segment, in which case collapse them to just '/'
+        while( path_len > (first ? 1 : 0) && path[path_len - 1] == '/' )
+        {
+            path_len--;
+        }
+
+        // Ensure there is a '/' before we append path if necessary
+        if( need_separator )
+        {
+            used++;
+            if( used < len )
+            {
+                buf[used - 1] = '/';
+                buf[used] = '\0';
+            }
+        }
+
+        // If there's still any space left, try to append the path
+        if( used < len )
+        {
+            strncpy( buf + used, path, MIN( len - used, path_len + 1 ) );
+            buf[len - 1] = '\0';
+        }
+
+        used += path_len;
+
+        // Next time, we need to append a separator, unless this was
+        // the first path segment and it was '/'
+        need_separator = (path_len == 0 || path[path_len - 1] != '/');
+    }
+
+    va_end( ap );
+    return used;
+}
+
+/*
+ * build_filename:
+ * @buf: a buffer
+ * @len: length of buffer
+ * @first_path: an absolute or relative path
+ * @...: further path segments
+ *
+ * Fill @buf with a copy of @first_path, with subsequent path segments
+ * appended to it.
+ *
+ * Returns: The number of bytes that would have been used in buf, not
+ *  including the '\0', if there was enough space. If this is >= len,
+ *  then truncation has occurred.
+ */
+size_t
+build_filename (char *buf, size_t len, const char *first_path, ...)
+{
+    size_t used;
+    va_list ap;
+
+    va_start( ap, first_path );
+    used = build_filename_va( buf, len, first_path, ap );
+    va_end( ap );
+
+    return used;
+}
+
+/*
+ * build_filename_alloc:
+ * @first_path: an absolute or relative path
+ * @...: further path segments
+ *
+ * Allocate and return a string built from @first_path and subsequent
+ * segments. Abort if there is not enough memory.
+ *
+ * Returns: A string that can be freed with free()
+ */
+char *
+build_filename_alloc (const char *first_path, ...)
+{
+    char *buf;
+    size_t allocate;
+    size_t len;
+    va_list ap;
+
+    // Do a first pass to count how much space we're going to need
+    va_start( ap, first_path );
+    // We need an extra byte for the "\0" which isn't included in the
+    // result, consistent with strlcpy()
+    allocate = build_filename_va( NULL, 0, first_path, ap ) + 1;
+    va_end( ap );
+
+    buf = xrealloc( NULL, allocate );
+
+    // Iterate over the arguments again to fill buf
+    va_start( ap, first_path );
+    len = build_filename_va( buf, allocate, first_path, ap );
+    va_end( ap );
+
+    // build_filename_va() returns the same thing every time. In
+    // particular this means truncation did not occur, because that
+    // would be indicated by len >= allocate.
+    assert( len + 1 == allocate );
+
+    return buf;
 }
 
 ptr_list *

@@ -6,6 +6,7 @@
 /m4/*
 /test-suite.log
 /tests/*.log
+/tests/*.t
 /tests/*.test
 /tests/*.trs
 /tests/notgl-dlopener

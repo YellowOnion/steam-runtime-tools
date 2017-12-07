@@ -71,11 +71,7 @@ TODO: {
     local $TODO = 'returns 1 for some reason';
     like($version, qr{^1\.[0-9]+\.[0-9]+$});
 }
-TODO: {
-    local $TODO = "would be nice if this didn't start with //";
-    like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
-}
-like($4, qr{^(//?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
 ok(-e $1);
 
 # A different way

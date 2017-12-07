@@ -390,15 +390,16 @@ search_ldcache_cb (const char *name, // name of the DSO in the ldcache
     {
         const char *prefix = target->ldlibs->prefix.path;
         int    idx    = target->idx;
-        size_t plen   = target->ldlibs->prefix.len;
         char  *lpath  = target->ldlibs->needed[ idx ].path;
 
         LDLIB_DEBUG( target->ldlibs, DEBUG_SEARCH|DEBUG_LDCACHE,
                      "checking %s vs %s [%s]",
                      target->name, name, path );
         // copy in the prefix and append the DSO path to it
-        safe_strncpy( lpath, prefix, PATH_MAX );
-        safe_strncpy( lpath + plen, path, PATH_MAX - plen );
+        if( build_filename( lpath, PATH_MAX, prefix, path, NULL ) >= PATH_MAX )
+        {
+            return 0;
+        }
 
         // try to open the DSO. This will finish setting up the
         // needed[idx] slot if successful, and reset it ready for
@@ -431,17 +432,12 @@ search_ldcache (const char *name, ld_libs *ldlibs, int i)
 
     if( !ldlibs->ldcache.is_open )
     {
-        if( ldlibs->prefix.len == 0 ||
-            strcmp(ldlibs->prefix.path, "/") == 0)
+        if( build_filename( cachepath, sizeof(cachepath),
+                            ldlibs->prefix.path, "/etc/ld.so.cache",
+                            NULL ) >= sizeof(cachepath) )
         {
-            safe_strncpy( &cachepath[0], "/etc/ld.so.cache", PATH_MAX );
-        }
-        else
-        {
-            safe_strncpy( &cachepath[0], ldlibs->prefix.path, PATH_MAX );
-            safe_strncpy( &cachepath[ldlibs->prefix.len], "/etc/ld.so.cache",
-                          PATH_MAX - ldlibs->prefix.len );
-            cachepath[ PATH_MAX - 1 ] = '\0';
+            // TODO: report ENAMETOOLONG?
+            return 0;
         }
 
         if( !ld_cache_open( &ldlibs->ldcache, &cachepath[0], NULL, NULL ) )
@@ -471,6 +467,7 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
     const char *sp = ldpath;
     const char *prefix = ldlibs->prefix.path;
     size_t plen   = ldlibs->prefix.len;
+    char search[PATH_MAX];
     char prefixed[PATH_MAX] = { '\0' };
 
     assert( prefix[plen] == '\0' );
@@ -486,22 +483,23 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
 
         end = strchr( sp, ':' );
         if( end )
-            len = MIN((size_t) (end - sp), PATH_MAX - plen - 1);
+            len = MIN((size_t) (end - sp), sizeof(search) - 1);
         else
-            len = MIN(strlen( sp ), PATH_MAX - plen - 1);
+            len = MIN(strlen( sp ), sizeof(search) - 1);
 
-        safe_strncpy( prefixed, prefix, sizeof(prefixed) );
-        safe_strncpy( prefixed + plen, sp, len + 1);
-        prefixed[plen + len + 1] = '\0';
+        // If this gets truncated, then there will be no space left in
+        // prefixed either, so we'll skip it anyway
+        safe_strncpy( search, sp, len + 1 );
 
-        LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "  searchpath element: %s", prefixed );
-        // append the target name, without overflowing, then resolve
-        if( (plen + len + strlen( name ) + 1 < PATH_MAX) )
+        LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "  searchpath element: %s", search );
+
+        if( build_filename( prefixed, sizeof(prefixed), prefix, search,
+                            name, NULL ) >= sizeof(prefixed) )
         {
-            prefixed[plen + len] = '/';
-            safe_strncpy( prefixed + plen + len + 1, name,
-                          PATH_MAX - plen - len - 1 );
-
+            LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "    (too long)" );
+        }
+        else
+        {
             LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "examining %s", prefixed );
             // if path resolution succeeds _and_ we can open an acceptable
             // DSO at that location, we're good to go (ldlib_open will
@@ -545,7 +543,6 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
     // we may to need to do some path manipulation
     if( strchr( name, '/' ) )
     {
-        size_t plen = ldlibs->prefix.len;
         char prefixed[PATH_MAX];
         const char *target;
 
@@ -553,11 +550,18 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
         if( ldlibs->prefix.len )
         {
             assert( ldlibs->prefix.path[ ldlibs->prefix.len ] == '\0' );
-            safe_strncpy( prefixed, ldlibs->prefix.path, PATH_MAX );
 
-            if( absolute )
+            if( build_filename( prefixed, sizeof(prefixed),
+                                ldlibs->prefix.path, name,
+                                NULL ) >= sizeof(prefixed) )
             {
-                safe_strncpy( prefixed + plen, name, PATH_MAX - plen );
+                _capsule_set_error( code, message, ENAMETOOLONG,
+                                    "path to DSO is too long: \"%s...\"",
+                                    prefixed );
+                return 0;
+            }
+            else if( absolute )
+            {
                 LDLIB_DEBUG( ldlibs, DEBUG_SEARCH|DEBUG_PATH,
                              "absolute path to DSO %s", prefixed );
             }
@@ -565,9 +569,9 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
             {   // name is relative... this is probably wrong?
                 // I don't think this can ever really happen but
                 // worst case is we'll simply not open a DSO whose
-                // path we couldn't resolve, and then move on:
-                safe_strncpy( prefixed + plen, "/", PATH_MAX - plen );
-                safe_strncpy( prefixed + plen + 1, name, PATH_MAX - plen - 1);
+                // path we couldn't resolve, and then move on
+                // (if name is something like ./mylib.so then we'll
+                // have treated it as though it was $prefix/./mylib.so)
                 LDLIB_DEBUG( ldlibs, DEBUG_SEARCH|DEBUG_PATH,
                              "relative path to DSO %s", prefixed );
             }
@@ -895,6 +899,7 @@ ld_libs_init (ld_libs *ldlibs,
             return 0;
         }
 
+        // This now can't get truncated
         safe_strncpy( ldlibs->prefix.path, prefix, PATH_MAX );
         ldlibs->prefix.len = prefix_len;
     }
@@ -1120,15 +1125,13 @@ ld_libs_load_cache (ld_libs *libs, const char *path, int *code, char **message)
     char prefixed[PATH_MAX] = { '\0' };
     int rv;
 
-    if( libs->prefix.len == 0 )
+    if( build_filename( prefixed, sizeof(prefixed), libs->prefix.path,
+                        path, NULL ) >= sizeof(prefixed) )
     {
-        safe_strncpy( prefixed, path, sizeof(prefixed) );
-    }
-    else
-    {
-        safe_strncpy( prefixed, libs->prefix.path, sizeof(prefixed) );
-        safe_strncpy( prefixed + libs->prefix.len,
-                      path, PATH_MAX - libs->prefix.len );
+        _capsule_set_error( code, message, ENAMETOOLONG,
+                            "Cannot append \"%s\" to prefix \"%s\": too long",
+                            path, libs->prefix.path );
+        return 0;
     }
 
     rv = ld_cache_open( &libs->ldcache, prefixed, code, message );

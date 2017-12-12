@@ -35,6 +35,7 @@ our @EXPORT = qw(
     run_verbose
     skip_all_unless_bwrap
     skip_all_unless_nm
+    $CAPSULE_CAPTURE_LIBS_TOOL
     $CAPSULE_INIT_PROJECT_TOOL
     $CAPSULE_SYMBOLS_TOOL
     $CAPSULE_VERSION_TOOL
@@ -64,6 +65,19 @@ The B<pkg-config>(1) utility.
 
 our $PKG_CONFIG = $ENV{PKG_CONFIG};
 $PKG_CONFIG = 'pkg-config' unless length $PKG_CONFIG;
+
+=item $CAPSULE_CAPTURE_LIBS_TOOL
+
+The B<capsule-capture-libs>(1) development tool.
+
+=cut
+
+our $CAPSULE_CAPTURE_LIBS_TOOL = $ENV{CAPSULE_CAPTURE_LIBS_TOOL};
+
+if (! length $CAPSULE_CAPTURE_LIBS_TOOL) {
+    $CAPSULE_CAPTURE_LIBS_TOOL = `$PKG_CONFIG --variable=CAPSULE_CAPTURE_LIBS_TOOL libcapsule-tools`;
+    chomp $CAPSULE_CAPTURE_LIBS_TOOL;
+}
 
 =item $CAPSULE_INIT_PROJECT_TOOL
 

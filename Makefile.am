@@ -26,7 +26,7 @@ AM_LDFLAGS              = $(WARN_LDFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start Capsules
 
 # installable items:
-bin_PROGRAMS            = capsule-symbols capsule-version
+bin_PROGRAMS            = capsule-capture-libs capsule-symbols capsule-version
 dist_bin_SCRIPTS        = data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
@@ -52,8 +52,10 @@ install-exec-hook:
 	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(HOST_PREFIX)capsule-symbols
 	cd $(DESTDIR)$(bindir) && ln -f capsule-version $(HOST_PREFIX)capsule-version
 	cd $(DESTDIR)$(bindir) && ln -f capsule-elf-dump $(HOST_PREFIX)capsule-elf-dump
+	cd $(DESTDIR)$(bindir) && ln -f capsule-capture-libs $(HOST_PREFIX)capsule-capture-libs
 
 uninstall-hook:
+	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-capture-libs
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-elf-dump
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-symbols
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-version
@@ -81,6 +83,9 @@ capsule_elf_dump_LDADD          = utils/libutils.la -ldl
 # This looks redundant, but it forces Automake to build separate
 # instantiations of dump.o for elf-dump and libcapsule
 capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)
+
+capsule_capture_libs_SOURCES = utils/capture-libs.c
+capsule_capture_libs_LDADD   = utils/libld.la
 
 # now the rules for building our installables:
 capsule_symbols_SOURCES = utils/print-libstubs.c
@@ -282,7 +287,8 @@ PL_LOG_DRIVER                        = $(LOG_DRIVER)
 PL_LOG_COMPILER                      = $(PERL)
 T_LOG_DRIVER                         = $(LOG_DRIVER)
 T_LOG_COMPILER                       = $(SHELL) $(top_srcdir)/tests/glib-tap.sh
-AM_TESTS_ENVIRONMENT                 = export CAPSULE_CFLAGS="-I$(abs_top_srcdir) -I$(abs_top_builddir)"; \
+AM_TESTS_ENVIRONMENT                 = export CAPSULE_CAPTURE_LIBS_TOOL="$(abs_builddir)/capsule-capture-libs"; \
+                                       export CAPSULE_CFLAGS="-I$(abs_top_srcdir) -I$(abs_top_builddir)"; \
                                        export CAPSULE_LIBS="$(abs_top_builddir)/libcapsule.la"; \
                                        export CAPSULE_SYMBOLS_TOOL="$(abs_builddir)/capsule-symbols";\
                                        export CAPSULE_TESTS_UNINSTALLED=1;     \
@@ -311,7 +317,8 @@ endif
 tests_utils_t_SOURCES                = tests/utils.c
 tests_utils_t_LDADD                  = utils/libutils.la $(GLIB_LIBS)
 
-test_scripts                         = tests/gl-shim.pl                        \
+test_scripts                         = tests/capture-libs.pl                   \
+                                       tests/gl-shim.pl                        \
                                        tests/init-project.pl                   \
                                        tests/notgl.pl                          \
                                        tests/symbols.pl                        \

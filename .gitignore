@@ -31,6 +31,7 @@ Makefile
 shim/*.so.c
 shim/*.so.symbols
 shim/*.so.map
+/capsule-capture-libs
 /capsule-elf-dump
 print-libstubs
 capsule-symbols

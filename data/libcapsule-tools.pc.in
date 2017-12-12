@@ -6,6 +6,7 @@ libexecdir=@libexecdir@
 datarootdir=@datarootdir@
 datadir=@datarootdir@
 makeinc=@datadir@/libcapsule
+CAPSULE_CAPTURE_LIBS_TOOL=@bindir@/@HOST_PREFIX@capsule-capture-libs
 CAPSULE_INIT_PROJECT_TOOL=@bindir@/capsule-init-project
 CAPSULE_MKSTUBLIB_TOOL=@bindir@/@HOST_PREFIX@capsule-mkstublib
 CAPSULE_SYMBOLS_TOOL=@bindir@/@HOST_PREFIX@capsule-symbols

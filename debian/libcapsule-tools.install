@@ -1,3 +1,4 @@
+usr/bin/*-capsule-capture-libs
 usr/bin/*-capsule-elf-dump
 usr/bin/*-capsule-mkstublib
 usr/bin/*-capsule-symbols

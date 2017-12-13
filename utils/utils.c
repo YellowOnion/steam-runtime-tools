@@ -228,30 +228,17 @@ int resolve_link(const char *prefix, char *path)
 
         if( rl[0] == '/' )
         {
-            const int pl = strlen( prefix );
-
-            if( pl + rv > PATH_MAX )
+            if( build_filename( path, PATH_MAX, prefix, rl, NULL ) >= PATH_MAX )
             {
-                rv = -1;
                 goto out;
             }
-
-            safe_strncpy( path, prefix, PATH_MAX );
-            safe_strncpy( path + pl, rl, PATH_MAX - pl );
         }
         else
         {
-            const int pl = strlen( dir );
-
-            if( pl + rv + 1 > PATH_MAX )
+            if( build_filename( path, PATH_MAX, dir, rl, NULL ) >= PATH_MAX )
             {
-                rv = -1;
                 goto out;
             }
-
-            safe_strncpy( path, dir, PATH_MAX );
-            path[ pl ] = '/';
-            safe_strncpy( path + pl + 1, rl, PATH_MAX - pl - 1 );
         }
     }
 

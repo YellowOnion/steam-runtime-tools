@@ -77,7 +77,7 @@ An application "payload" is mounted on F</app>, as if for Flatpak.
 
 The B<LD_LIBRARY_PATH> for the child process is made to include
 library directories from F</app>, F</gl> and F</updates>, but not
-F</gl-provider>.
+F</gl-provider>, F</libc-provider> or F</libcapsule-provider>.
 
 =head1 EXAMPLES
 
@@ -249,7 +249,7 @@ B<--x11-provider=auto>.
 
 Use behaviour proposed as potentially appropriate for the NVIDIA graphics
 stack, or other binary blobs with conservative dependencies:
-B<--gl-provider=/> B<--gl-stack=none> B<--libc-provider=container>
+B<--gl-provider=/> B<--libc-provider=container>
 B<--x11-provider=container>.
 
 =back
@@ -271,6 +271,9 @@ if (-t STDOUT) {
     $ansi_magenta = "\e[35m";
     $ansi_reset = "\e[0m";
 }
+
+my %CAPSULE_VERSION_TOOLS;
+my %CAPSULE_CAPTURE_LIBS_TOOLS;
 
 =head1 FUNCTIONS
 
@@ -358,56 +361,6 @@ sub run_in_container {
     return run([@bwrap, @$argv], @run_params);
 }
 
-=item get_lib_implementation(I<TUPLE>, I<SONAME>, I<TREE>)
-
-Return the absolute path of the I<TUPLE> library I<SONAME> in the tree I<TREE>,
-which may either be a complete sysroot or just the contents of a merged
-F</usr> (see C<bind_usr>). The absolute path is relative to the sysroot,
-or the root that contains the merged F</usr> as its F</usr>.
-
-=cut
-
-my %CAPSULE_VERSION_TOOLS;
-
-sub get_lib_implementation {
-    my ($tuple, $soname, $tree) = @_;
-    my $output;
-    my $sysroot = $tree;
-
-    if (-d "$tree/usr") {
-        run([$CAPSULE_VERSION_TOOLS{$tuple}, $soname, $sysroot],
-            '>', \$output);
-    }
-    else {
-        $sysroot = '/tmp/sysroot';
-        run([qw(bwrap --bind / / --dev-bind /dev /dev --tmpfs /tmp
-            --symlink usr/lib /tmp/sysroot/lib
-            --symlink usr/lib64 /tmp/sysroot/lib64
-            --symlink usr/etc /tmp/sysroot/etc
-            --symlink usr/var /tmp/sysroot/var
-            --bind), $tree, '/tmp/sysroot/usr',
-            $CAPSULE_VERSION_TOOLS{$tuple}, $soname, '/tmp/sysroot'],
-            '>', \$output);
-    }
-
-    chomp $output;
-
-    if ($output !~ m/^\S+\s+\S+\s+\S+\s+(\S+)$/) {
-        return undef;
-    }
-
-    $output = $1;
-    $output =~ s{^\Q$sysroot\E}{};
-    $output =~ s{/*}{/};
-
-    if (!run_in_container($tree, ['readlink', '-f', $output], '>', \$output)) {
-        return undef;
-    }
-
-    chomp $output;
-    return $output;
-}
-
 =item multiarch_tuple_to_ldso(I<TUPLE>)
 
 Return the B<ld.so>(8) implementation for a Debian multiarch tuple.
@@ -417,296 +370,131 @@ F</lib64/ld-linux-x86-64.so.2>.
 
 =cut
 
+my %multiarch_tuple_to_ldso;
+
 sub multiarch_tuple_to_ldso {
     my $tuple = shift;
+    my $stdout;
 
-    # We only really care about x86 here, but might as well be a bit more
-    # complete. See https://sourceware.org/glibc/wiki/ABIList
-    if ($tuple =~ m/^(i386|alpha|sh\d+|sparc)-linux-gnu$/) {
-        return '/lib/ld-linux.so.2';
+    if (defined $multiarch_tuple_to_ldso{$tuple}) {
+        return $multiarch_tuple_to_ldso{$tuple};
     }
-    elsif ($tuple =~ m/^(x86_64)-linux-gnu$/) {
-        my $machine = $1;
-        $machine =~ tr/_/-/;
-        return "/lib64/ld-linux-$machine.so.2";
-    }
-    elsif ($tuple =~ m/^(aarch64)-linux-gnu$/) {
-        return "/lib/ld-linux-$1.so.1";
-    }
-    elsif ($tuple eq 'arm-linux-gnueabihf') {
-        return '/lib/ld-linux-armhf.so.3';
-    }
-    elsif ($tuple eq 'arm-linux-gnueabi') {
-        return '/lib/ld-linux.so.3';
-    }
-    elsif ($tuple eq 'sparc64-linux-gnu') {
-        return '/lib64/ld-linux.so.2';
-    }
-    elsif ($tuple =~ m/^(hppa|m68k|powerpc|s390)-linux-gnu$/) {
-        return '/lib64/ld.so.1';
-    }
-    elsif ($tuple =~ m/^(s390x|powerpc64)-linux-gnu$/) {
-        return '/lib/ld64.so.1';
-    }
-    elsif ($tuple eq 'powerpc64le-linux-gnu') {
-        return '/lib/ld64.so.2';
-    }
-    elsif ($tuple eq 'x86_64-linux-gnux32') {
-        return '/libx32/ld-linux-x32.so.2';
-    }
-    elsif ($tuple =~ /^mips/) {
-        # Could be /lib{,32,64}/ld{,-linux-mipsn8}.so.1
-        #              ^ o32,n32,n64     ^ classic NaN, NaN2008
-        die "Is $tuple o32 or n32 mips?";
-    }
-    else {
-        return undef;
-    }
+
+    run_verbose([
+        $CAPSULE_CAPTURE_LIBS_TOOLS{$tuple}, '--print-ld.so'
+    ], '>', \$stdout);
+    chomp $stdout;
+    $multiarch_tuple_to_ldso{$tuple} = $stdout;
+    return $stdout;
 }
 
-=item use_libc(I<LIBC_PROVIDER>, I<CONTAINER>, I<TUPLES>, I<DEST>, I<MOUNT>)
+=item real_path_of_ldso(I<TREE>, I<TUPLE>, I<WORKSPACE>)
 
-Populate I<DEST> with symbolic links to the B<glibc>
-in I<TREE>, assuming that I<TREE> will be mounted on I<MOUNT>,
-such that I<DEST> can be mounted at F</updates>.
+Return the path to the B<ld.so>(8) implementation for a Debian multiarch
+tuple in I<TREE>, relative to I<TREE> itself. For example,
+C<real_path_of_ldso('/', 'x86_64-linux-gnu', $workspace)> might
+return F</lib/x86_64-linux-gnu/ld-2.25.so>, while
+C<real_path_of_ldso('/chroots/stretch', 'i386-linux-gnu', $workspace)>
+might return F</lib/i386-linux-gnu/ld-2.24.so>.
 
-For example, on x86_64 systems, the returned directory will contain
-symbolic links F<lib/x86_64-linux-gnu/ld-linux-x86-64.so> →
-I<MOUNT>F</lib/x86_64-linux-gnu/ld-linux-x86-64.so>
-and
-F<lib/x86_64-linux-gnu/libc.so.6> →
-I<MOUNT>F</lib/x86_64-linux-gnu/libc.so.6>, among others.
-
-I<TUPLES> is a reference to an array of Debian multiarch tuples.
-
-Return the necessary B<bwrap>(1) arguments to override the container's
-B<ld.so>(1) with the one from the GL provider.
+I<WORKSPACE> is a temporary directory used internally.
 
 =cut
 
-sub use_libc {
+sub real_path_of_ldso {
+    my $tree = shift;
+    my $tuple = shift;
+    my $workspace = shift;
+    my $stdout;
+    $tree = '/' unless defined $tree;
+
+    run_verbose([
+        'bwrap',
+        '--ro-bind', '/', '/',
+        '--tmpfs', $workspace,
+        bind_usr($tree, $workspace),
+        $CAPSULE_CAPTURE_LIBS_TOOLS{$tuple},
+        "--resolve-ld.so=$workspace",
+    ], '>', \$stdout);
+    chomp $stdout;
+    diag "-> $stdout";
+    return $stdout;
+}
+
+=item use_ldso(I<LIBC_PROVIDER>, I<CONTAINER>, I<TUPLES>, I<WORKSPACE>)
+
+Return the necessary B<bwrap>(1) arguments to override the container's
+B<ld.so>(1) with the one from the libc provider.
+
+=cut
+
+sub use_ldso {
     my $libc_provider_tree = shift;
     my $container_tree = shift;
     my @multiarch_tuples = @{ shift() };
-    my $dest = shift;
-    my $mount = shift;
+    my $workspace = shift;
     my @bwrap;
 
-    diag "Capturing GL provider libc into $dest";
-
-    make_path("$dest/lib", verbose => 1);
-    run(['ln', '-fns', $mount, "$dest/LIBC-PROVIDER"]);
-
     foreach my $tuple (@multiarch_tuples) {
-        make_path("$dest/lib/$tuple", verbose => 1);
+        my $resolved = real_path_of_ldso($libc_provider_tree, $tuple,
+            $workspace);
+        my $ldso = real_path_of_ldso($container_tree, $tuple, $workspace);
 
-        my $ldso = multiarch_tuple_to_ldso($tuple);
-        my $libdir;
-
-        if (defined $ldso) {
-            (undef, $libdir, undef) = File::Spec->splitpath($ldso);
+        if (-d "$container_tree/usr" || $ldso =~ m{^/usr/}) {
+            diag "Adding bind-mount of $libc_provider_tree$resolved over $ldso";
+            push @bwrap, '--ro-bind', "$libc_provider_tree$resolved", $ldso;
         }
-
-        foreach my $lib (qw(BrokenLocale SegFault anl c cidn crypt dl m
-            memusage mvec nsl pcprofile pthread resolv rt thread_db util)) {
-            SEARCH: foreach my $search ("/lib/$tuple", $libdir) {
-                next SEARCH unless defined $search;
-                next SEARCH unless -d "$libc_provider_tree$search";
-
-                opendir(my $dir, "$libc_provider_tree$search");
-                SONAME: while (defined(my $soname = readdir $dir)) {
-                    next SONAME unless $soname =~ m/^lib\Q$lib\E\.so\.[0-9.]+$/;
-
-                    # Get the right implementation respecting hwcaps,
-                    # and make it absolute.
-                    my $real = get_lib_implementation($tuple, $soname, $libc_provider_tree);
-                    die "Cannot resolve $search/$soname in $libc_provider_tree" unless defined $real;
-
-                    { no autodie; unlink("$dest/lib/$tuple/$soname"); }
-                    diag "Creating symbolic link $dest/lib/$tuple/$soname → $mount$real";
-                    symlink("$mount$real", "$dest/lib/$tuple/$soname");
-                }
-                closedir($dir);
-            }
-        }
-
-        if (defined $ldso) {
-            my $has_usr = (-d "$container_tree/usr");
-            my %realpaths;
-
-            SEARCH: foreach my $search ("/lib/$tuple", $libdir) {
-                next SEARCH unless defined $search;
-                next SEARCH unless -d "$container_tree$search";
-
-                opendir(my $dir, "$container_tree$search");
-                MEMBER: while (defined(my $member = readdir $dir)) {
-                    next MEMBER unless $member =~ m/^ld-.*\.so\./;
-
-                    my $real;
-                    run_in_container($container_tree,
-                        ['readlink', '-f', "$search/$member"],
-                        '>', \$real)
-                        or die "Cannot resolve $search/$member in $container_tree";
-                    chomp $real;
-
-                    $realpaths{$real} = 1;
-                }
-                closedir($dir);
-            }
-
-            foreach my $real (keys %realpaths) {
-                if ($has_usr) {
-                    diag "Adding bind-mount of $ldso over /usr$real because /lib{,64} will be symlinks";
-                    push @bwrap, '--ro-bind', $ldso, "/usr$real";
-                }
-                else {
-                    diag "Adding bind-mount of $ldso over $real";
-                    push @bwrap, '--ro-bind', $ldso, $real;
-                }
-            }
+        else {
+            diag "Adding bind-mount of $libc_provider_tree$resolved over /usr$ldso because /lib{,64} will be symlinks";
+            push @bwrap, '--ro-bind', "$libc_provider_tree$resolved", "/usr$ldso";
         }
     }
 
     return @bwrap;
 }
 
-=item capture_libs_if_newer(I<PROVIDER>, I<CONTAINER>|B<undef>, I<TUPLES>, I<DEST>, I<LIBS>, I<MOUNT>, I<COLOUR>)
+=item capture_libs(I<PROVIDER>, I<CONTAINER>, I<TUPLES>, I<DEST>, I<LIBS>, I<WORKSPACE>, I<MOUNT>)
 
 Populate I<DEST>F</lib/>I<TUPLE> with symbolic links to the libraries
 in I<PROVIDER>, assuming that I<PROVIDER> will be mounted on
 I<MOUNT>, such that I<DEST>F</lib/>I<TUPLE> can be added
-to the B<LD_LIBRARY_PATH>.
+to the B<LD_LIBRARY_PATH>. Use I<WORKSPACE> as a temporary work area.
 
-If I<CONTAINER> is B<undef>, this is done for all libraries listed.
-If I<CONTAINER> is defined, libraries that appear to be strictly newer
-in I<CONTAINER> are skipped.
+Libraries that appear to be strictly newer in I<CONTAINER> are skipped.
 
 I<TUPLES> is a reference to an array of Debian multiarch tuples.
 
-I<LIBS> is a list of stem names of libraries (C<GL1>, C<stdc++>, C<z>),
-or references to regular expressions matching an entire library basename
-(C<libnvidia-.*\.so\..*>).
-
-I<COLOUR> is an ANSI escape used to colour-code output from I<PROVIDER>,
-or empty.
+I<LIBS> is a list of library patterns as for B<capsule-capture-libs>(1).
 
 =cut
 
-sub capture_libs_if_newer {
+sub capture_libs {
     my $provider_tree = shift;
     my $container_tree = shift;
     my @multiarch_tuples = @{ shift() };
     my $dest = shift;
     my @libs = @{ shift() };
+    my $workspace = shift;
     my $mount = shift;
-    my $provider_colour = shift;
+    my @maybe_container;
+
 
     foreach my $tuple (@multiarch_tuples) {
         make_path("$dest/lib/$tuple", verbose => 1);
 
-        my $ldso = multiarch_tuple_to_ldso($tuple);
-        my $libdir;
-
-        my @search_path = ("/lib/$tuple", "/usr/lib/$tuple");
-
-        if (defined $ldso) {
-            (undef, $libdir, undef) = File::Spec->splitpath($ldso);
-            push @search_path, $libdir, "/usr$libdir";
-        }
-
-        foreach my $lib (@libs) {
-            SEARCH: foreach my $search (@search_path) {
-                next SEARCH unless -d "$provider_tree$search";
-
-                opendir(my $dir, "$provider_tree$search");
-                SONAME: while (defined(my $soname = readdir $dir)) {
-                    if (ref $lib eq 'Regexp') {
-                        # If it's qr{some regexp} it matches the whole thing
-                        next SONAME unless $soname =~ m/^$lib$/;
-                    }
-                    else {
-                        # Otherwise it's just a basename, and we take any
-                        # SONAME, assuming a single integer version
-                        next SONAME unless $soname =~ m/^lib\Q$lib\E\.so\.[0-9]+$/;
-                    }
-
-                    # We need to get the correct implementation rather
-                    # than just symlinking to the SONAME we found,
-                    # because there might be a "better" version in
-                    # a hwcap subdirectory, and at least for
-                    # libnvidia-tls.so, it matters - loading the
-                    # non-TLS version somehow corrupts the TLS used
-                    # by libc itself.
-                    my $provider_impl = get_lib_implementation($tuple,
-                        $soname, $provider_tree);
-
-                    if (! defined $provider_impl) {
-                        # capsule-version might not be able to find the
-                        # library if it's just a symlink to some library
-                        # with a different SONAME, like libGLX_indirect.so.0
-                        $provider_impl = get_lib_implementation($tuple,
-                            "$search/$soname", $provider_tree);
-                    }
-
-                    if (! defined $provider_impl) {
-                        die "Unable to resolve $search/$soname in ".
-                            $provider_tree;
-                    }
-
-                    if (defined $container_tree) {
-                        my $container_impl = get_lib_implementation($tuple,
-                            $soname, $container_tree);
-
-                        my $provider_version = $provider_impl;
-                        $provider_version =~ s/.*\.so\.//;
-
-                        my $container_version = $container_impl;
-                        $container_version =~ s/.*\.so\.//
-                            if defined $container_version;
-
-                        if (! defined $container_impl) {
-                            diag "${provider_colour}Using $provider_tree ".
-                                "$tuple $soname '$provider_impl' because ".
-                                "container does not have that ".
-                                "library${ansi_reset}";
-                        }
-                        elsif ($container_version eq $provider_version) {
-                            # The libraries for which we call this function
-                            # are fairly closely tied to the GL provider,
-                            # so if in doubt we prefer the GL provider
-                            diag "${provider_colour}Using $provider_tree ".
-                                "$tuple $soname '$provider_impl'".
-                                "${ansi_reset} because container's version ".
-                                "appears to be the same";
-                        }
-                        elsif (versioncmp($container_version,
-                                $provider_version) > 0) {
-                            diag "${ansi_cyan}Using container's ".
-                                "$tuple $soname '$container_impl' because ".
-                                "$provider_tree $provider_impl appears ".
-                                "older${ansi_reset}";
-                            next SONAME;
-                        }
-                        else {
-                            diag "${provider_colour}Using $provider_tree ".
-                                "$tuple $soname '$provider_impl' because ".
-                                "container's $container_impl appears ".
-                                "older${ansi_reset}";
-                        }
-                    }
-                    else {
-                        diag "${provider_colour}Using $provider_tree ".
-                            "$tuple $soname unconditionally${ansi_reset}";
-                    }
-
-                    { no autodie; unlink("$dest/lib/$tuple/$soname"); }
-                    diag "Creating symbolic link $dest/lib/$tuple/$soname → ".
-                        "$mount$provider_impl";
-                    symlink("$mount$provider_impl", "$dest/lib/$tuple/$soname");
-                }
-                closedir($dir);
-            }
-        }
+        run_verbose([
+            'bwrap',
+            '--ro-bind', '/', '/',
+            '--bind', $dest, $dest,
+            '--tmpfs', $workspace,
+            bind_usr($container_tree, $workspace),
+            $CAPSULE_CAPTURE_LIBS_TOOLS{$tuple},
+            "--container=$workspace",
+            "--link-target=$mount",
+            "--dest=$dest/lib/$tuple",
+            "--provider=$provider_tree",
+            @libs,
+        ], '>&2');
     }
 }
 
@@ -726,7 +514,7 @@ my $flatpak_app;
 my $flatpak_runtime;
 my @multiarch_tuples = qw(x86_64-linux-gnu);
 my $app;
-my $gl_stack = 'greedy';
+my $gl_stack = undef;
 my $arch = 'x86_64';
 my $libc_provider_tree = 'auto';
 my $libcapsule_tree = 'container';
@@ -758,7 +546,7 @@ GetOptions(
     },
     'proposed-nvidia' => sub {
         $gl_provider_tree = '/';
-        $gl_stack = 'nvidia';
+        undef $gl_stack;
         $libcapsule_tree = 'container';
         $libc_provider_tree = 'container';
         $x11_provider_tree = 'container';
@@ -776,16 +564,11 @@ Options:
                                         [….Games.Platform/$arch/stretch]
     --gl-provider=USR|SYSROOT           Get libGL etc. from USR or SYSROOT
                                         [/]
-    --gl-stack=greedy|mesa|nvidia|STACK If STACK is specified, get libGL
-                                        etc. from STACK/lib/MULTIARCH
+    --gl-stack=STACK                    Get libGL etc. from STACK/lib/MULTIARCH
                                         instead of --gl-provider, but
                                         still use --gl-provider libc, libX11,
                                         libcapsule if appropriate.
-                                        Otherwise get appropriate libraries
-                                        for Mesa, NVIDIA, or everything
-                                        we might possibly need from
-                                        --gl-provider
-                                        [greedy]
+                                        [Same as --gl-provider]
     --x11-provider=auto|container|gl-provider|USR|SYSROOT
                                         Use libX11 etc. from here
                                         [auto]
@@ -810,7 +593,6 @@ Options:
     --proposed-nvidia                   Use proposed handling for binary
                                         blob drivers like NVIDIA:
                                         --gl-provider=/
-                                        --gl-stack=nvidia
                                         --x11-provider=container
                                         --libc-provider=container
                                         --libcapsule-provider=container
@@ -837,6 +619,13 @@ foreach my $tuple (@multiarch_tuples) {
     ], '>', \$stdout);
     chomp $stdout;
     $CAPSULE_VERSION_TOOLS{$tuple} = $stdout;
+    run_verbose([
+        'env', "PKG_CONFIG_PATH=/usr/lib/$tuple/pkgconfig",
+        'pkg-config', '--variable=CAPSULE_CAPTURE_LIBS_TOOL',
+        'libcapsule-tools',
+    ], '>', \$stdout);
+    chomp $stdout;
+    $CAPSULE_CAPTURE_LIBS_TOOLS{$tuple} = $stdout;
 }
 
 $app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/master/active/files"
@@ -854,11 +643,6 @@ if ($stdout =~ /Error: couldn't find RGB GLX visual/) {
 if ($stdout !~ /direct rendering: Yes/) {
     plan skip_all => 'glxinfo reports no direct rendering available';
 }
-
-my $gl_provider_libc_so = get_lib_implementation($multiarch_tuples[0],
-    'libc.so.6', $gl_provider_tree);
-my $container_libc_so = get_lib_implementation($multiarch_tuples[0],
-    'libc.so.6', $container_tree);
 
 my $tmpdir = File::Temp->newdir(
         TMPDIR => 1, TEMPLATE => 'capsule-test-temp-XXXXXXXX');
@@ -879,7 +663,7 @@ my @bwrap = qw(
 );
 push @bwrap, '--bind', $ENV{HOME}, $ENV{HOME};
 
-foreach my $mutable (qw(/etc /var)) {
+foreach my $mutable (qw(/etc /var /var/lib)) {
     if (-d "$container_tree$mutable") {
         opendir(my $dir, "$container_tree$mutable");
 
@@ -892,6 +676,8 @@ foreach my $mutable (qw(/etc /var)) {
             next if "$mutable/$member" eq '/etc/machine-id';
             next if "$mutable/$member" eq '/etc/passwd';
             next if "$mutable/$member" eq '/etc/resolv.conf';
+            next if "$mutable/$member" eq '/var/lib';
+            next if "$mutable/$member" eq '/var/run';
 
             no autodie 'readlink';
             my $target = readlink "$container_tree$mutable/$member";
@@ -951,42 +737,45 @@ if (defined $app) {
     push @bwrap, '--setenv', 'PATH', '/app/bin:/app/sbin:/usr/bin:/bin:/usr/sbin:/sbin';
 }
 
-my $gl_provider_libc;
-
-# We can't look for .so.VERSION here because libc's real name ends with
-# VERSION.so. Take the basname instead.
-my (undef, undef, $gl_provider_libc_version) =
-    File::Spec->splitpath($gl_provider_libc_so);
-my (undef, undef, $container_libc_version) =
-    File::Spec->splitpath($container_libc_so);
-
 my $updates_tree = "$tmpdir/updates";
+make_path("$tmpdir/scratch", verbose => 1);
 make_path("$tmpdir/updates", verbose => 1);
 
 if ($libc_provider_tree eq 'auto') {
-    if (versioncmp($container_libc_version, $gl_provider_libc_version) <= 0) {
-        # We need to parachute in the GL provider's libc instead of the
-        # container's, because the GL provider's libX11, libGL etc. would
-        # be within their rights to use newer libc features; we also need
-        # the GL provider's ld.so, because old ld.so can't necessarily load
-        # new libc successfully
-        diag "${ansi_bright}${ansi_green}Adding GL provider's libc ".
-            "$gl_provider_libc_version via /updates because container's ".
-            "$container_libc_version appears older or equal${ansi_reset}";
-        push @bwrap, use_libc($gl_provider_tree, $container_tree,
-            \@multiarch_tuples, $updates_tree, '/gl-provider');
+    diag "Choosing GL provider's libc or container's libc automatically";
+    capture_libs($gl_provider_tree, $container_tree, \@multiarch_tuples,
+        $updates_tree, ['libc.so.6'], "$tmpdir/scratch", '/gl-provider');
+
+    # See what we've got
+    foreach my $tuple (@multiarch_tuples) {
+        foreach my $dir ('updates', 'gl') {
+            next unless -d "$tmpdir/$dir/lib/$tuple";
+            run_verbose([
+                'ls', '-l', "$tmpdir/$dir/lib/$tuple",
+            ], '>', \$stdout);
+            diag_multiline $stdout;
+        }
+    }
+
+    if (-l "$updates_tree/lib/$multiarch_tuples[0]/libc.so.6") {
+        diag "${ansi_bright}${ansi_green}GL provider's libc appears ".
+            "newer${ansi_reset}";
+        push @bwrap, use_ldso($gl_provider_tree, $container_tree,
+            \@multiarch_tuples, "$tmpdir/scratch");
     }
     else {
-        diag "${ansi_bright}${ansi_cyan}Using container's libc ".
-            "$container_libc_version because GL provider's ".
-            "$gl_provider_libc_version appears older${ansi_reset}";
+        diag "${ansi_bright}${ansi_cyan}Container's libc appears ".
+            "newer${ansi_reset}";
     }
 }
 elsif ($libc_provider_tree =~ m/^(?:gl-provider|host)$/) {
-    diag "${ansi_bright}${ansi_cyan}Adding GL provider's libc via /updates ".
+    capture_libs($gl_provider_tree, $container_tree, \@multiarch_tuples,
+        $updates_tree, ['even-if-older:libc.so.6'],
+        "$tmpdir/scratch", '/gl-provider');
+    diag "${ansi_bright}${ansi_green}Adding GL provider's libc via /updates ".
         "as requested${ansi_reset}";
-    push @bwrap, use_libc($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, '/gl-provider');
+    push @bwrap, use_ldso($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, "$tmpdir/scratch");
 }
 elsif ($libc_provider_tree eq 'container') {
     diag "${ansi_bright}${ansi_cyan}Using container's libc as ".
@@ -995,14 +784,17 @@ elsif ($libc_provider_tree eq 'container') {
 else {
     diag "${ansi_bright}${ansi_magenta}Adding ${libc_provider_tree} libc ".
         "via /updates as requested${ansi_reset}";
-    push @bwrap, use_libc($libc_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, '/libc-provider');
+    capture_libs($libc_provider_tree, $container_tree, \@multiarch_tuples,
+        $updates_tree, ['even-if-older:libc.so.6'],
+        "$tmpdir/scratch", '/libc-provider');
+    push @bwrap, use_ldso($libc_provider_tree, $container_tree,
+        \@multiarch_tuples, "$tmpdir/scratch");
     push @bwrap, bind_usr($libc_provider_tree, '/libc-provider');
 }
 
 my @dri_path;
 
-if (defined $gl_stack && $gl_stack !~ m/^(?:greedy|mesa|nvidia)$/) {
+if (defined $gl_stack) {
     diag "Using standalone GL stack $gl_stack";
 
     push @bwrap, '--ro-bind', $gl_stack, '/gl';
@@ -1014,37 +806,10 @@ if (defined $gl_stack && $gl_stack !~ m/^(?:greedy|mesa|nvidia)$/) {
 else {
     my $gl_provider_gl = "$tmpdir/gl";
 
-    my @libs = (
-        qw(EGL GL GLESv1_CM GLESv2 GLX GLdispatch glx),
-        qr{lib(EGL|GLESv1_CM|GLESv2|GLX|drm|vdpau)_.*\.so\.[0-9]+},
-    );
-
-    push @libs, qw(
-        Xau Xdamage Xdmcp Xext Xfixes Xxf86vm
-        drm gbm glapi wayland-client wayland-server
-        xcb-dri2 xcb-dri3 xcb-present xcb-sync xcb-xfixes xshmfence
-    ) if $gl_stack =~ m/^(?:greedy|mesa)$/;
-
-    push @libs, (
-        qw(cuda nvcuvid vdpau),
-        # We allow any extension for these, not just a single integer
-        qr{libnvidia-.*\.so\..*},
-    ) if $gl_stack =~ m/^(?:greedy|nvidia)$/;
-
     diag "Using GL stack from $gl_provider_tree";
-    capture_libs_if_newer($gl_provider_tree, undef,
-        \@multiarch_tuples, $gl_provider_gl, \@libs,
-        '/gl-provider', $ansi_green);
-
-    if ($gl_stack =~ m/^(?:greedy|mesa)$/) {
-        diag "Updating libraries from $gl_provider_tree if necessary";
-        capture_libs_if_newer($gl_provider_tree, $container_tree,
-            \@multiarch_tuples, $gl_provider_gl, [
-                qw(bsd edit elf expat ffi gcc_s
-                ncurses pciaccess sensors stdc++ tinfo z),
-                qr{libLLVM-.*\.so\.[0-9]+},
-            ], '/gl-provider', $ansi_green);
-    }
+    capture_libs($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $gl_provider_gl, ['GL'],
+        "$tmpdir/scratch", '/gl-provider');
 
     foreach my $tuple (@multiarch_tuples) {
         my $ldso = multiarch_tuple_to_ldso($tuple);
@@ -1079,24 +844,24 @@ else {
 # Should we? Does it have global state?
 if ($libcapsule_tree eq 'auto') {
     diag "Using libcapsule from $gl_provider_tree if newer";
-    capture_libs_if_newer($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
-        '/gl-provider', $ansi_green);
+    capture_libs($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree, ['libcapsule.so.0'],
+        "$tmpdir/scratch", '/gl-provider');
 }
 elsif ($libcapsule_tree eq 'container') {
     diag "${ansi_cyan}Using libcapsule from container as requested${ansi_reset}";
 }
 elsif ($libcapsule_tree =~ m/^(?:gl-provider|host)$/) {
     diag "${ansi_green}Using libcapsule from GL provider as requested${ansi_reset}";
-    capture_libs_if_newer($gl_provider_tree, undef,
-        \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
-        '/gl-provider', $ansi_green);
+    capture_libs($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree, ['even-if-older:libcapsule.so.0'],
+        "$tmpdir/scratch", '/gl-provider');
 }
 else {
-    diag "Using libcapsule from $libcapsule_tree";
-    capture_libs_if_newer($libcapsule_tree, undef,
-        \@multiarch_tuples, $updates_tree, [qw(capsule elf)],
-        '/libcapsule-provider', $ansi_magenta);
+    diag "${ansi_magenta}Using libcapsule from $libcapsule_tree${ansi_reset}";
+    capture_libs($libcapsule_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree, ['even-if-older:libcapsule.so.0'],
+        "$tmpdir/scratch", '/libcapsule-provider');
     push @bwrap, bind_usr($libcapsule_tree, '/libcapsule-provider');
 }
 
@@ -1115,24 +880,27 @@ my @XLIBS = qw(X11 X11-xcb xcb xcb-dri2 xcb-dri3 xcb-glx
 
 if ($x11_provider_tree eq 'auto') {
     diag "Using X libraries from $gl_provider_tree if newer";
-    capture_libs_if_newer($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, \@XLIBS,
-        '/gl-provider', $ansi_green);
+    capture_libs($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree,
+        [map { "lib$_.so.*" } @XLIBS],
+        "$tmpdir/scratch", '/gl-provider');
 }
 elsif ($x11_provider_tree eq 'container') {
     diag "${ansi_cyan}Using X libraries from container as requested${ansi_reset}";
 }
 elsif ($x11_provider_tree =~ m/^(?:gl-provider|host)$/) {
     diag "${ansi_green}Using X libraries from GL provider as requested${ansi_reset}";
-    capture_libs_if_newer($gl_provider_tree, undef,
-        \@multiarch_tuples, $updates_tree, \@XLIBS,
-        '/gl-provider', $ansi_green);
+    capture_libs($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree,
+        [map { "even-if-older:lib$_.so.*" } @XLIBS],
+        "$tmpdir/scratch", '/gl-provider');
 }
 else {
     diag "${ansi_magenta}Using X libraries from $x11_provider_tree as requested${ansi_reset}";
-    capture_libs_if_newer($x11_provider_tree, undef,
-        \@multiarch_tuples, $updates_tree, \@XLIBS,
-        '/x11-provider', $ansi_magenta);
+    capture_libs($x11_provider_tree, $container_tree,
+        \@multiarch_tuples, $updates_tree,
+        [map { "even-if-older:lib$_.so.*" } @XLIBS],
+        "$tmpdir/scratch", '/x11-provider', $ansi_magenta);
     push @bwrap, bind_usr($libcapsule_tree, '/x11-provider');
 }
 
@@ -1215,6 +983,17 @@ elsif (exists $ENV{XDG_RUNTIME_DIR} &&
 }
 # ... else hope it's unix:abstract=... which will work because we don't
 # unshare networking
+
+# See what we've got
+foreach my $tuple (@multiarch_tuples) {
+    foreach my $dir ('updates', 'gl') {
+        next unless -d "$tmpdir/$dir/lib/$tuple";
+        run_verbose([
+            'ls', '-l', "$tmpdir/$dir/lib/$tuple",
+        ], '>', \$stdout);
+        diag_multiline $stdout;
+    }
+}
 
 if (@ARGV) {
     run_ok([@bwrap, @ARGV]);

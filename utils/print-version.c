@@ -21,6 +21,7 @@
 #include <string.h>
 #include <errno.h>
 
+#include "debug.h"
 #include "ld-cache.h"
 #include "ld-libs.h"
 
@@ -32,6 +33,8 @@ int main (int argc, char **argv)
     ld_libs ldlibs = {};
     int error = 0;
     int e = 0;
+
+    set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 
     if( argc < 2 )
     {

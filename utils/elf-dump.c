@@ -21,12 +21,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "debug.h"
 #include "dump.h"
 
 int main (int argc, char **argv)
 {
     void *handle;
     const char *libname;
+
+    set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 
     if( argc < 2 )
     {

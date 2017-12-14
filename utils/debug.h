@@ -29,6 +29,7 @@ enum
     DEBUG_RELOCS     = 0x1 << 6,
     DEBUG_ELF        = 0x1 << 7,
     DEBUG_DLFUNC     = 0x1 << 8,
+    DEBUG_TOOL       = 0x1 << 9,
     DEBUG_ALL        = 0xffff,
 };
 

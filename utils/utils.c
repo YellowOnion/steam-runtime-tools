@@ -266,6 +266,7 @@ void set_debug_flags (const char *control)
     if( strstr( control, "reloc"    ) ) debug_flags |= DEBUG_RELOCS;
     if( strstr( control, "elf"      ) ) debug_flags |= DEBUG_ELF;
     if( strstr( control, "dlfunc"   ) ) debug_flags |= DEBUG_DLFUNC;
+    if( strstr( control, "tool"     ) ) debug_flags |= DEBUG_TOOL;
     if( strstr( control, "all"      ) ) debug_flags |= DEBUG_ALL;
 
     if( !debug_flags )
@@ -280,7 +281,8 @@ void set_debug_flags (const char *control)
             "  wrappers: %c # function wrappers installed in the capsule"  "\n"
             "  reloc   : %c # patching capsule symbols into external DSOs" "\n"
             "  dlfunc  : %c # special handling of dlopen/dlsym calls"      "\n"
-            "  elf     : %c # detailed ELF introspection logging"          "\n",
+            "  elf     : %c # detailed ELF introspection logging"          "\n"
+            "  tool    : %c # command-line tools"                          "\n",
             (debug_flags & DEBUG_PATH    ) ? 'Y' : 'n' ,
             (debug_flags & DEBUG_SEARCH  ) ? 'Y' : 'n' ,
             (debug_flags & DEBUG_LDCACHE ) ? 'Y' : 'n' ,
@@ -289,7 +291,8 @@ void set_debug_flags (const char *control)
             (debug_flags & DEBUG_WRAPPERS) ? 'Y' : 'n' ,
             (debug_flags & DEBUG_RELOCS  ) ? 'Y' : 'n' ,
             (debug_flags & DEBUG_DLFUNC  ) ? 'Y' : 'n' ,
-            (debug_flags & DEBUG_ELF     ) ? 'Y' : 'n' );
+            (debug_flags & DEBUG_ELF     ) ? 'Y' : 'n' ,
+            (debug_flags & DEBUG_TOOL    ) ? 'Y' : 'n' );
 }
 
 // soname: bare libfoo.so.X style name

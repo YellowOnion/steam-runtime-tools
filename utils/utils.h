@@ -151,3 +151,33 @@ void _capsule_set_error( int *code_dest, char **message_dest,
  * Same as `G_N_ELEMENTS`, `_DBUS_N_ELEMENTS`, systemd `ELEMENTSOF`, etc.
  */
 #define N_ELEMENTS(array) ( sizeof(array) / sizeof(array[0]) )
+
+/*
+ * _capsule_clear:
+ * @pp: A pointer to a pointer that can be freed by Standard C `free()`,
+ *  i.e. type `void **`, `char **` or more rarely `something **`
+ *
+ * Free whatever object is pointed to by `*pp`, and set `*pp` to NULL.
+ */
+static inline void
+_capsule_clear( void *pp )
+{
+    free( _capsule_steal_pointer( pp ) );
+}
+
+/*
+ * _capsule_cleanup:
+ * @clear:
+ *
+ * An attribute marking a variable to be cleared by `clear(&variable)`
+ * on exit from its scope.
+ */
+#define _capsule_cleanup(clear) __attribute__((cleanup(clear)))
+
+/*
+ * _capsule_autofree:
+ *
+ * An attribute marking a variable to be freed by `free(variable)`
+ * on exit from its scope.
+ */
+#define _capsule_autofree _capsule_cleanup(_capsule_clear)

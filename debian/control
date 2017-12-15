@@ -75,7 +75,10 @@ Depends:
  bubblewrap,
  libcapsule-libgl1-shims (= ${binary:Version}),
  libipc-run-perl,
+ libsort-versions-perl,
+ mesa-utils,
  perl,
+ pkg-config,
  ${shlibs:Depends},
 Description:
  libcapsule is a helper library used to implement segregated run-time

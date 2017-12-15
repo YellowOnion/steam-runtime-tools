@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -72,7 +73,7 @@ int  ptr_list_contains  (ptr_list *list, ElfW(Addr) addr);
 int  ptr_list_add_ptr   (ptr_list *list, void *ptr, ptrcmp equals);
 
 char *safe_strncpy (char *dest, const char *src, size_t n);
-int   resolve_link (const char *prefix, char *path);
+int   resolve_link (const char *prefix, char path[PATH_MAX]);
 int soname_matches_path (const char *soname, const char *path);
 size_t build_filename_va (char *buf, size_t len, const char *first_path, va_list ap);
 size_t build_filename (char *buf, size_t len, const char *first_path, ...) __attribute__((sentinel));

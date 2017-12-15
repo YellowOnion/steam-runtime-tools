@@ -190,7 +190,7 @@ char *safe_strncpy (char *dest, const char *src, size_t n)
 // path each time and return true, until fed a path which is
 // not a symlink, at which point it will leave path alone and
 // return false:
-int resolve_link(const char *prefix, char *path)
+int resolve_link(const char *prefix, char path[PATH_MAX])
 {
     int dfd;
     char rl[PATH_MAX];

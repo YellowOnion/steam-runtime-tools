@@ -60,13 +60,17 @@ process_phdr (struct dl_phdr_info *info,
     int ret = 0;
 
     for( int j = 0; !ret && (j < info->dlpi_phnum); j++ )
+    {
         if( info->dlpi_phdr[j].p_type == PT_DYNAMIC )
+        {
             ret = process_pt_dynamic( info->dlpi_phdr[j].p_vaddr,
                                       info->dlpi_phdr[j].p_memsz,
                                       (void *) info->dlpi_addr,
                                       process_dt_rela,
                                       process_dt_rel,
                                       rdata );
+        }
+    }
 
     if( ret == 0 && rdata->seen != NULL )
         ptr_list_push_addr( rdata->seen, info->dlpi_addr );

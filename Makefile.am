@@ -144,42 +144,19 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
 nobase_dist_insttests_DATA           = tests/CapsuleTest.pm                    \
                                        tests/CapsuleTestDpkg.pm
 # Install the source code so we can rebuild it inside a container if we want to
-nobase_dist_insttests_DATA          += examples/shim/libGL.so.1.excluded       \
-                                       examples/shim/libGL.so.1.shared         \
-                                       examples/shim/libGL.so.1.symbols        \
-                                       examples/shim/libGL.so.1.symbols.updated-for \
-                                       examples/shim/libX11.so.6.excluded      \
-                                       examples/shim/libX11.so.6.shared        \
-                                       examples/shim/libX11.so.6.symbols       \
-                                       examples/shim/libX11.so.6.symbols.updated-for \
-                                       examples/shim/libXext.so.6.excluded     \
-                                       examples/shim/libXext.so.6.shared       \
-                                       examples/shim/libXext.so.6.symbols      \
-                                       examples/shim/libXext.so.6.symbols.updated-for \
-                                       examples/shim/libXi.so.6.excluded       \
-                                       examples/shim/libXi.so.6.shared         \
-                                       examples/shim/libXi.so.6.symbols        \
-                                       examples/shim/libXi.so.6.symbols.updated-for \
-                                       examples/shim/libxcb-dri2.so.0.excluded \
-                                       examples/shim/libxcb-dri2.so.0.shared   \
-                                       examples/shim/libxcb-dri2.so.0.symbols  \
-                                       examples/shim/libxcb-dri2.so.0.symbols.updated-for \
-                                       examples/shim/libxcb-glx.so.0.excluded  \
-                                       examples/shim/libxcb-glx.so.0.shared    \
-                                       examples/shim/libxcb-glx.so.0.symbols   \
-                                       examples/shim/libxcb-glx.so.0.symbols.updated-for \
-                                       examples/shim/libxcb-present.so.0.excluded \
-                                       examples/shim/libxcb-present.so.0.shared  \
-                                       examples/shim/libxcb-present.so.0.symbols \
-                                       examples/shim/libxcb-present.so.0.symbols.updated-for \
-                                       examples/shim/libxcb-sync.so.1.excluded \
-                                       examples/shim/libxcb-sync.so.1.shared   \
-                                       examples/shim/libxcb-sync.so.1.symbols  \
-                                       examples/shim/libxcb-sync.so.1.symbols.updated-for \
-                                       examples/shim/libxcb.so.1.excluded      \
-                                       examples/shim/libxcb.so.1.shared        \
-                                       examples/shim/libxcb.so.1.symbols       \
-                                       examples/shim/libxcb.so.1.symbols.updated-for \
+gl_shims =                             libGL.so.1                              \
+                                       libX11.so.6                             \
+                                       libXext.so.6                            \
+                                       libXi.so.6                              \
+                                       libxcb-dri2.so.0                        \
+                                       libxcb-glx.so.0                         \
+                                       libxcb-present.so.0                     \
+                                       libxcb-sync.so.1                        \
+                                       libxcb.so.1
+nobase_dist_insttests_DATA          += $(patsubst %,examples/shim/%.excluded,$(gl_shims)) \
+                                       $(patsubst %,examples/shim/%.shared,$(gl_shims)) \
+                                       $(patsubst %,examples/shim/%.symbols,$(gl_shims)) \
+                                       $(patsubst %,examples/shim/%.symbols.updated-for,$(gl_shims)) \
                                        tests/notgl.h                           \
                                        tests/notgl-green.c                     \
                                        tests/notgl-red.c                       \

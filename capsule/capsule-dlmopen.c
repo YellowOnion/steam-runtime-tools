@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -82,6 +83,10 @@ wrap (const char *name,
     // the utility functions expect an upper bound though so set that to
     // something suitably large:
     relocation_data rdata = { 0 };
+
+    DEBUG( DEBUG_WRAPPERS,
+           "\"%s\": base address %" PRIxPTR ", dynamic section at %p",
+           name, base, dyn );
 
     rdata.debug     = debug_flags;
     rdata.error     = NULL;
@@ -193,9 +198,20 @@ static int install_wrappers ( void *dl_handle,
         map = map->l_prev;
 
     if (map->l_next)
+    {
         for( struct link_map *m = map; m; m = m->l_next )
-            if( !excluded_from_wrap(m->l_name, (char **)exclude) )
+        {
+            if( excluded_from_wrap(m->l_name, (char **)exclude) )
+            {
+                DEBUG( DEBUG_WRAPPERS, "%s excluded from wrapping",
+                       m->l_name );
+            }
+            else
+            {
                 wrap( m->l_name, m->l_addr, m->l_ld, wrappers );
+            }
+        }
+    }
 
     return replacements;
 }
@@ -225,8 +241,8 @@ dump_link_map( void *dl_handle )
 
     fprintf( stderr, "(dl-handle %s", dl_handle ? "CAPSULE" : "DEFAULT" );
     for( struct link_map *m = map; m; m = m->l_next )
-        fprintf( stderr, "\n  [%p] %s [%p]",
-                 m->l_prev, m->l_name, m->l_next );
+        fprintf( stderr, "\n  [prev: %p] %p: \"%s\" [next: %p]",
+                 m->l_prev, m, m->l_name, m->l_next );
     fprintf( stderr, ")\n" );
 }
 

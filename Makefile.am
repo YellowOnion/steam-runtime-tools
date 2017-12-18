@@ -148,6 +148,7 @@ gl_shims =                             libGL.so.1                              \
                                        libX11.so.6                             \
                                        libXext.so.6                            \
                                        libXi.so.6                              \
+                                       libgbm.so.1                             \
                                        libxcb-dri2.so.0                        \
                                        libxcb-glx.so.0                         \
                                        libxcb-present.so.0                     \

@@ -146,6 +146,7 @@ nobase_dist_insttests_DATA           = tests/CapsuleTest.pm                    \
 # Install the source code so we can rebuild it inside a container if we want to
 gl_shims =                             libEGL.so.1                             \
                                        libGL.so.1                              \
+                                       libGLESv2.so.2                          \
                                        libGLX.so.0                             \
                                        libOpenGL.so.0                          \
                                        libX11.so.6                             \

@@ -5,9 +5,10 @@
 /files
 /libGL-proxy/
 /libGL-proxy-build/
-/libcapsule-dev
-/libcapsule-tools
+/libcapsule-dev/
+/libcapsule-gl-shims/
+/libcapsule-tools/
 /libcapsule-libgl1-shims/
-/libcapsule-tests
-/libcapsule0
-/tmp
+/libcapsule-tests/
+/libcapsule0/
+/tmp/

@@ -414,6 +414,9 @@ process_dt_rel (const ElfW(Rel) *start,
 
         symbol = find_symbol( sym, symtab, strtab, &name );
 
+        DEBUG( DEBUG_ELF,
+               "symbol %p; name: %p:%s", symbol, name, name ? name : "-" );
+
         if( !symbol || !name || !*name )
             continue;
 

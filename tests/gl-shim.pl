@@ -46,7 +46,8 @@ if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
 
 my $examples = "$srcdir/examples";
 
-my @sonames = qw(libGL.so.1 libX11.so.6 libXext.so.6 libXi.so.6
+my @sonames = qw(libEGL.so.1 libGL.so.1 libGLESv2.so.2 libGLX.so.0
+    libOpenGL.so.0 libX11.so.6 libXext.so.6 libXi.so.6 libgbm.so.1
     libxcb-dri2.so.0 libxcb-glx.so.0 libxcb-present.so.0 libxcb-sync.so.1
     libxcb.so.1);
 
@@ -67,20 +68,22 @@ run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         "--symbols-from=$examples/shim",
         map { use_major_version($_) } @sonames,
     ]);
+# The default name for the output is taken from the first library,
+# which in this case happens to be libEGL-proxy
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
-        'sh', "$test_tempdir/libGL-proxy",
+        'sh', "$test_tempdir/libEGL-proxy",
     ], '>&2');
-run_ok(['make', '-C', "$test_tempdir/libGL-proxy", 'V=1'], '>&2');
+run_ok(['make', '-C', "$test_tempdir/libEGL-proxy", 'V=1'], '>&2');
 
 foreach my $soname (@sonames) {
     my $basename = $soname;
     $basename =~ s/\.so\..*$//;
 
-    ok(-e "$test_tempdir/libGL-proxy/$basename.la");
-    ok(-e "$test_tempdir/libGL-proxy/.libs/$basename.so");
-    ok(-e "$test_tempdir/libGL-proxy/.libs/$soname");
-    ok(-e "$test_tempdir/libGL-proxy/.libs/$soname.0.0");
+    ok(-e "$test_tempdir/libEGL-proxy/$basename.la");
+    ok(-e "$test_tempdir/libEGL-proxy/.libs/$basename.so");
+    ok(-e "$test_tempdir/libEGL-proxy/.libs/$soname");
+    ok(-e "$test_tempdir/libEGL-proxy/.libs/$soname.0.0");
 
     my @symbols_wanted;
     open my $fh, "$examples/shim/$soname.symbols";
@@ -90,7 +93,7 @@ foreach my $soname (@sonames) {
     }
 
     my @symbols_produced =
-        get_symbols_with_nm("$test_tempdir/libGL-proxy/.libs/$soname");
+        get_symbols_with_nm("$test_tempdir/libEGL-proxy/.libs/$soname");
     is_deeply \@symbols_wanted, [grep {! m/^capsule_meta $/} @symbols_produced];
 }
 

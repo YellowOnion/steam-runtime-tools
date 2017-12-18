@@ -144,7 +144,10 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
 nobase_dist_insttests_DATA           = tests/CapsuleTest.pm                    \
                                        tests/CapsuleTestDpkg.pm
 # Install the source code so we can rebuild it inside a container if we want to
-gl_shims =                             libGL.so.1                              \
+gl_shims =                             libEGL.so.1                             \
+                                       libGL.so.1                              \
+                                       libGLX.so.0                             \
+                                       libOpenGL.so.0                          \
                                        libX11.so.6                             \
                                        libXext.so.6                            \
                                        libXi.so.6                              \

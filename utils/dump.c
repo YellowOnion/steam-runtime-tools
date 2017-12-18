@@ -413,7 +413,7 @@ st_type(int type)
 }
 
 static void
-symbol_version ( ElfW(Sym) *symbol,
+symbol_version ( const ElfW(Sym) *symbol,
                  int i,
                  const char *strtab,
                  const ElfW(Versym) *versym,
@@ -471,16 +471,16 @@ symbol_version ( ElfW(Sym) *symbol,
 
 static void
 dump_symtab (const char *indent,
-             const void *start,
+             const ElfW(Sym) *start,
              const char *strtab,
              const ElfW(Versym) *versym,
              const void *verdef,
              const int verdefnum)
 {
     int x = 0;
-    ElfW(Sym) *entry;
+    const ElfW(Sym) *entry;
 
-    for( entry = (ElfW(Sym) *)start;
+    for( entry = start;
          ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
            (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
          entry++ )

@@ -176,6 +176,24 @@ nobase_dist_insttests_DATA          += $(patsubst %,examples/shim/%.excluded,$(g
                                        tests/shim/libnotgles.so.1.shared       \
                                        tests/shim/libnotgles.so.1.symbols
 
+maintainer-update-gl-shims:
+	@if test -z "${GL_SHIMS_SOURCE_MACHINE}"; then \
+		echo "usage: make -C $(CURDIR) maintainer-update-gl-shims GL_SHIMS_SOURCE_MACHINE=some-machine">&2; \
+		exit 2; \
+	fi
+	set -e; for lib in ${gl_shims}; do \
+		ssh "${GL_SHIMS_SOURCE_MACHINE}" \
+		x86_64-linux-gnu-capsule-symbols "$$lib" \
+		> $(abs_top_srcdir)/examples/shim/"$$lib.symbols.tmp"; \
+		LC_ALL=C sort -u \
+		< $(abs_top_srcdir)/examples/shim/"$$lib.symbols.tmp" \
+		> $(abs_top_srcdir)/examples/shim/"$$lib.symbols"; \
+		rm -f $(abs_top_srcdir)/examples/shim/"$$lib.symbols.tmp"; \
+		: > $(abs_top_srcdir)/examples/shim/"$$lib.excluded"; \
+		: > $(abs_top_srcdir)/examples/shim/"$$lib.shared"; \
+		: > $(abs_top_srcdir)/examples/shim/"$$lib.symbols.updated-for"; \
+	done
+
 tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h

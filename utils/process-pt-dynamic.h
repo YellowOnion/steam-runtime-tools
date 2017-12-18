@@ -51,16 +51,20 @@ typedef struct
  * @start: array of relocation entries
  * @relasz: number of bytes (not number of structs!) following @start
  * @strtab: string table, a series of 0-terminated strings concatenated
+ * @strsz: length of string table in bytes
  * @symtab: symbol table, an array of ElfW(Sym) structs
+ * @symsz: length of symbol table in bytes
  * @base: base address of the shared object
  * @data: the same data that was passed to process_pt_dynamic()
  *
  * Callback used to iterate over relocations.
  */
 typedef int (*relocate_rela_cb)(const ElfW(Rela) *start,
-                                  const int relasz,
+                                  const size_t relasz,
                                   const char *strtab,
+                                  const size_t strsz,
                                   const ElfW(Sym) *symtab,
+                                  const size_t symsz,
                                   void *base,
                                   void *data);
 
@@ -69,30 +73,38 @@ typedef int (*relocate_rela_cb)(const ElfW(Rela) *start,
  * @start: beginning of an array of relocation entries
  * @relasz: number of bytes (not number of structs!) following @start
  * @strtab: string table, a series of 0-terminated strings concatenated
+ * @strsz: length of string table in bytes
  * @symtab: symbol table, an array of ElfW(Sym) structs
+ * @symsz: length of symbol table in bytes
  * @base: base address of the shared object
  * @data: the same data that was passed to process_pt_dynamic()
  *
  * Callback used to iterate over relocations.
  */
 typedef int (*relocate_rel_cb)(const ElfW(Rel) *start,
-                                 const int relasz,
+                                 const size_t relasz,
                                  const char *strtab,
+                                 const size_t strsz,
                                  const ElfW(Sym) *symtab,
+                                 const size_t symsz,
                                  void *base,
                                  void *data);
 
 int process_dt_rela (const ElfW(Rela) *start,
-                     const int relasz,
+                     const size_t relasz,
                      const char *strtab,
+                     const size_t strsz,
                      const ElfW(Sym) *symtab,
+                     const size_t symsz,
                      void *base,
                      void *data);
 
 int process_dt_rel  (const ElfW(Rel) *start,
-                     const int relasz,
+                     const size_t relasz,
                      const char *strtab,
+                     const size_t strsz,
                      const ElfW(Sym) *symtab,
+                     const size_t symsz,
                      void *base,
                      void *data);
 

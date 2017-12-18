@@ -61,12 +61,11 @@ find_dyn (ElfW(Addr) base, void *start, int what)
     return NULL;
 }
 
-int
+size_t
 find_value (ElfW(Addr) base, void *start, int what)
 {
     const ElfW(Dyn) *entry = find_dyn( base, start, what );
-    // TODO: what if it doesn't fit in an int?
-    return entry ? (int) entry->d_un.d_val : -1;
+    return entry ? entry->d_un.d_val : (size_t) -1;
 }
 
 ElfW(Addr)

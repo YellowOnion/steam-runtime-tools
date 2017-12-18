@@ -81,7 +81,7 @@ char *build_filename_alloc (const char *first_path, ...) __attribute__((sentinel
 
 const void *      fix_addr (const void *base, ElfW(Addr) offset_or_addr);
 const ElfW(Dyn) * find_dyn (ElfW(Addr) base, void *start, int what);
-int               find_value (ElfW(Addr) base, void *start, int what);
+size_t            find_value (ElfW(Addr) base, void *start, int what);
 ElfW(Addr)        find_ptr (ElfW(Addr) base, void *start, int what);
 const char *      dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, size_t *siz);
 const ElfW(Sym) * find_symbol (int idx,

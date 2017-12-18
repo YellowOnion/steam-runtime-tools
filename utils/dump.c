@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <assert.h>
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -620,9 +621,11 @@ reloc_type (int rtype)
 static void
 dump_rel (const char *indent,
           const void *start,
-          int relsz,
+          size_t relsz,
           const char *strtab,
-          const void *symtab)
+          size_t strsz,
+          const void *symtab,
+          size_t symsz)
 {
     int x = 0;
     ElfW(Rel) *entry;
@@ -671,9 +674,11 @@ dump_rel (const char *indent,
 static void
 dump_rela (const char *indent,
            const void *start,
-           int relasz,
+           size_t relasz,
            const char *strtab,
+           size_t strsz,
            const void *symtab,
+           size_t symsz,
            ElfW(Addr)  base)
 {
     int x = 0;
@@ -818,12 +823,13 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     ElfW(Dyn) *entry;
 
     size_t strsiz  = -1;
-    int relasz     = -1;
-    int relsz      = -1;
-    int jmprelsz   = -1;
+    size_t relasz  = -1;
+    size_t relsz   = -1;
+    size_t jmprelsz = -1;
     int verneednum = -1;
     int verdefnum  = -1;
     int jmpreltype = DT_NULL;
+    size_t symsz;
 
     const void *symtab = NULL;
     const void *versym = NULL;
@@ -837,10 +843,17 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
     {
         fprintf( stderr, "%s    string table at %p, %zu bytes\n",
                  indent, strtab, strsiz );
+
+        /* XXX Apparently the only way to find out the size of the dynamic
+           symbol section is to assume that the string table follows right
+           afterwards... —glibc elf/dl-fptr.c */
+        assert( strtab >= (const char *) symtab );
+        symsz = strtab - (const char *) symtab;
     }
     else
     {
         fprintf( stderr, "%s    no string table?!\n", indent );
+        symsz = 0;
     }
 
     for( entry = start + base;
@@ -902,10 +915,10 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
             break;
 
           case DT_RELA:
-            if( relasz == -1 )
+            if( relasz == (size_t) -1 )
                 relasz = find_value( base, start, DT_RELASZ );
             dump_rela( indent, (const void *) entry->d_un.d_ptr, relasz,
-                       strtab, symtab, base );
+                       strtab, strsiz, symtab, symsz, base );
             break;
 
           case DT_RELASZ:
@@ -917,10 +930,10 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
             break;
 
           case DT_REL:
-            if( relsz == -1 )
+            if( relsz == (size_t) -1 )
                 relsz = find_value( base, start, DT_RELSZ );
             dump_rel( indent, (const void *) entry->d_un.d_ptr, relsz,
-                      strtab, symtab );
+                      strtab, strsiz, symtab, symsz );
             break;
 
           case DT_PLTREL:
@@ -928,7 +941,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
             break;
 
           case DT_JMPREL:
-            if( jmprelsz == -1 )
+            if( jmprelsz == (size_t) -1 )
                 jmprelsz = find_value( base, start, DT_PLTRELSZ );
             if( jmpreltype == DT_NULL )
                 jmpreltype = find_value( base, start, DT_PLTREL );
@@ -939,12 +952,12 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
               case DT_REL:
                 dump_rel( indent, (const void *) entry->d_un.d_ptr, jmprelsz,
-                          strtab, symtab );
+                          strtab, strsiz, symtab, symsz );
                 break;
 
               case DT_RELA:
                 dump_rela( indent, (const void *) entry->d_un.d_ptr, jmprelsz,
-                           strtab, symtab, base );
+                           strtab, strsiz, symtab, symsz, base );
                 break;
 
               default:

@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <assert.h>
 #include <dlfcn.h>
 #include <inttypes.h>
 #include <stdlib.h>
@@ -287,13 +288,24 @@ reloc_type_name (int type)
 
 int
 process_dt_rela (const ElfW(Rela) *start,
-                 int relasz,
+                 size_t relasz,
                  const char *strtab,
+                 size_t strsz,
                  const ElfW(Sym) *symtab,
+                 size_t symsz,
                  void *base,
                  void *data)
 {
     const ElfW(Rela) *entry;
+
+    DEBUG( DEBUG_ELF,
+           "%zu RELA entries (%zu bytes) starting at %p",
+           relasz / sizeof(*entry),
+           relasz,
+           start );
+
+    if( relasz % sizeof(*entry) != 0 )
+        DEBUG( DEBUG_ELF, "%zu bytes left over?!", relasz % sizeof(*entry) );
 
     for( entry = start; entry < start + (relasz / sizeof(*entry)); entry++ )
     {
@@ -363,13 +375,24 @@ process_dt_rela (const ElfW(Rela) *start,
 
 int
 process_dt_rel (const ElfW(Rel) *start,
-                int relasz,
+                size_t relasz,
                 const char *strtab,
+                size_t strsz,
                 const ElfW(Sym) *symtab,
+                size_t symsz,
                 void *base,
                 void *data)
 {
     const ElfW(Rel) *entry;
+
+    DEBUG( DEBUG_ELF,
+           "%zu REL entries (%zu bytes) starting at %p",
+           relasz / sizeof(*entry),
+           relasz,
+           start );
+
+    if( relasz % sizeof(*entry) != 0 )
+        DEBUG( DEBUG_ELF, "%zu bytes left over?!", relasz % sizeof(*entry) );
 
     for( entry = start; entry < start + (relasz / sizeof(*entry)); entry++ )
     {
@@ -461,12 +484,14 @@ process_pt_dynamic (ElfW(Addr) start,
     int ret = 0;
     const ElfW(Dyn) *entries;
     const ElfW(Dyn) *entry;
-    int relasz     = -1;
-    int relsz      = -1;
-    int jmprelsz   = -1;
+    size_t relasz   = (size_t) -1;
+    size_t relsz    = (size_t) -1;
+    size_t jmprelsz = (size_t) -1;
     int jmpreltype = DT_NULL;
     const ElfW(Sym) *symtab = NULL;
-    const char *strtab = dynamic_section_find_strtab( base + start, base, NULL );
+    size_t strsz = (size_t) -1;
+    const char *strtab = dynamic_section_find_strtab( base + start, base, &strsz );
+    size_t symsz;
 
     DEBUG( DEBUG_ELF,
            "start: %#" PRIxPTR "; size: %" FMT_SIZE "; base: %p; handlers: %p %p; …",
@@ -486,7 +511,7 @@ process_pt_dynamic (ElfW(Addr) start,
         {
           case DT_PLTRELSZ:
             jmprelsz = entry->d_un.d_val;
-            DEBUG( DEBUG_ELF, "jmprelsz is %d", jmprelsz );
+            DEBUG( DEBUG_ELF, "jmprelsz is %zu", jmprelsz );
             break;
 
           case DT_SYMTAB:
@@ -496,12 +521,12 @@ process_pt_dynamic (ElfW(Addr) start,
 
           case DT_RELASZ:
             relasz = entry->d_un.d_val;
-            DEBUG( DEBUG_ELF, "relasz is %d", relasz );
+            DEBUG( DEBUG_ELF, "relasz is %zu", relasz );
             break;
 
           case DT_RELSZ:
             relsz = entry->d_un.d_val;
-            DEBUG( DEBUG_ELF, "relsz is %d", relsz );
+            DEBUG( DEBUG_ELF, "relsz is %zu", relsz );
             break;
 
           case DT_PLTREL:
@@ -516,6 +541,21 @@ process_pt_dynamic (ElfW(Addr) start,
             break;
         }
     }
+
+    /* XXX Apparently the only way to find out the size of the dynamic
+       symbol section is to assume that the string table follows right
+       afterwards... —glibc elf/dl-fptr.c */
+    assert( strtab >= (const char *) symtab );
+    symsz = strtab - (const char *) symtab;
+
+    DEBUG( DEBUG_ELF,
+           "%zu symbol table entries (%zu bytes) starting at %p",
+           symsz / sizeof(*symtab),
+           symsz,
+           symtab );
+
+    if( symsz % sizeof(*symtab) != 0 )
+        DEBUG( DEBUG_ELF, "%zu bytes left over?!", symsz % sizeof(*symtab) );
 
     for( entry = entries;
          (entry->d_tag != DT_NULL) &&
@@ -552,13 +592,13 @@ process_pt_dynamic (ElfW(Addr) start,
                 const ElfW(Rela) *relstart;
 
                 DEBUG( DEBUG_ELF, "processing DT_RELA section" );
-                if( relasz == -1 )
+                if( relasz == (size_t) -1 )
                 {
                     fprintf( stderr, "libcapsule: DT_RELA section not accompanied by DT_RELASZ, ignoring" );
                     break;
                 }
                 relstart = fix_addr( base, entry->d_un.d_ptr );
-                process_rela( relstart, relasz, strtab, symtab, base, data );
+                process_rela( relstart, relasz, strtab, strsz, symtab, symsz, base, data );
             }
             else
             {
@@ -583,13 +623,13 @@ process_pt_dynamic (ElfW(Addr) start,
                 const ElfW(Rel) *relstart;
 
                 DEBUG( DEBUG_ELF, "processing DT_REL section" );
-                if( relsz == -1 )
+                if( relsz == (size_t) -1 )
                 {
                     fprintf( stderr, "libcapsule: DT_REL section not accompanied by DT_RELSZ, ignoring" );
                     break;
                 }
                 relstart = fix_addr( base, entry->d_un.d_ptr );
-                process_rel( relstart, relsz, strtab, symtab, base, data );
+                process_rel( relstart, relsz, strtab, strsz, symtab, symsz, base, data );
             }
             else
             {
@@ -604,7 +644,7 @@ process_pt_dynamic (ElfW(Addr) start,
           IGNORE( DT_TEXTREL )
 
           case DT_JMPREL:
-            if( jmprelsz == -1 )
+            if( jmprelsz == (size_t) -1 )
             {
                 fprintf( stderr, "libcapsule: DT_JMPREL section not accompanied by DT_PLTRELSZ, ignoring" );
                 break;
@@ -627,8 +667,8 @@ process_pt_dynamic (ElfW(Addr) start,
                            "processing DT_JMPREL/DT_REL section" );
                     relstart = fix_addr( base, entry->d_un.d_ptr );
                     DEBUG( DEBUG_ELF, "  -> REL entry #0 at %p", relstart );
-                    ret = process_rel( relstart, jmprelsz, strtab,
-                                       symtab, base, data );
+                    ret = process_rel( relstart, jmprelsz, strtab, strsz,
+                                       symtab, symsz, base, data );
                 }
                 else
                 {
@@ -645,8 +685,8 @@ process_pt_dynamic (ElfW(Addr) start,
                     DEBUG( DEBUG_ELF,
                            "processing DT_JMPREL/DT_RELA section" );
                     relstart = fix_addr( base, entry->d_un.d_ptr );
-                    ret = process_rela( relstart, jmprelsz, strtab,
-                                        symtab, base, data );
+                    ret = process_rela( relstart, jmprelsz, strtab, strsz,
+                                        symtab, symsz, base, data );
                 }
                 else
                 {

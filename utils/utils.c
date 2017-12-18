@@ -134,16 +134,17 @@ dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, size_t 
  * find_symbol:
  * @idx: The symbol index
  * @stab: (array element-type=ElfW(Sym)): The symbol table
+ * @symsz: The length of the symbol table in bytes
  * @str: The string table
+ * @strsz: The length of the string table in bytes
  * @name: (out) (optional): Used to return the name, a pointer into @str
  *
  * If @idx is in-bounds for @stab, return a pointer to the @idx'th
  * entry in @stab. Otherwise return %NULL.
  */
 const ElfW(Sym) *
-find_symbol (int idx, const ElfW(Sym) *stab, const char *str, const char **name)
+find_symbol (int idx, const ElfW(Sym) *stab, size_t symsz, const char *str, size_t strsz, const char **name)
 {
-    const ElfW(Sym) *entry;
     const ElfW(Sym) *target = stab + idx;
 
     if( idx < 0 )
@@ -152,20 +153,13 @@ find_symbol (int idx, const ElfW(Sym) *stab, const char *str, const char **name)
     // we could just accept the index as legitimate but then we'd
     // run the risk of popping off into an unknown hyperspace coordinate
     // this way we stop if the target is past the known end of the table:
-    for( entry = stab;
-         ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
-           (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
-         entry++ )
-    {
-        if( entry == target )
-        {
-            if( name )
-                *name = str + entry->st_name;
-            return target;
-        }
-    }
+    if( (idx + 1) * sizeof(*target) > symsz )
+        return NULL;
 
-    return NULL;
+    if( name )
+        *name = str + target->st_name;
+
+    return target;
 }
 
 // ==========================================================================

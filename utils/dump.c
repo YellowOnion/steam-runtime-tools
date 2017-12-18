@@ -472,7 +472,9 @@ symbol_version ( const ElfW(Sym) *symbol,
 static void
 dump_symtab (const char *indent,
              const ElfW(Sym) *start,
+             size_t symsz,
              const char *strtab,
+             size_t strsz,
              const ElfW(Versym) *versym,
              const void *verdef,
              const int verdefnum)
@@ -481,8 +483,7 @@ dump_symtab (const char *indent,
     const ElfW(Sym) *entry;
 
     for( entry = start;
-         ( (ELFW_ST_TYPE(entry->st_info) < STT_NUM) &&
-           (ELFW_ST_BIND(entry->st_info) < STB_NUM) );
+         (entry - start + 1) * sizeof(*entry) <= symsz;
          entry++ )
     {
         int defversym = 0;
@@ -653,7 +654,7 @@ dump_rel (const char *indent,
         exit( 22 );
 #endif
 
-        symbol = find_symbol( sym, symtab, strtab, &name );
+        symbol = find_symbol( sym, symtab, symsz, strtab, strsz, &name );
         if( symbol )
             fprintf( stderr, "%s    // [%03d] %16s off: %"FMT_XADDR"; %s;\n",
                      indent,
@@ -707,7 +708,7 @@ dump_rela (const char *indent,
         exit( 22 );
 #endif
 
-        symbol = find_symbol( sym, symtab, strtab, &name );
+        symbol = find_symbol( sym, symtab, symsz, strtab, strsz, &name );
         if( symbol )
             fprintf( stderr, "%s    // [%03d] %16s off: %"FMT_XADDR"; %s; add: 0x%"FMT_XADDR"\n",
                      indent,
@@ -924,7 +925,7 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
             if( verdefnum == -1 )
                 verdefnum = find_value( base, start, DT_VERDEFNUM );
             symtab = fix_addr( (void *) base, entry->d_un.d_ptr );
-            dump_symtab( indent, symtab, strtab, versym, verdef, verdefnum );
+            dump_symtab( indent, symtab, symsz, strtab, strsiz, versym, verdef, verdefnum );
             break;
 
           case DT_RELA:

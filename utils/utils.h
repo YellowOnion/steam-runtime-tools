@@ -86,7 +86,9 @@ ElfW(Addr)        find_ptr (ElfW(Addr) base, void *start, int what);
 const char *      dynamic_section_find_strtab (const ElfW(Dyn) *entries, const void *base, size_t *siz);
 const ElfW(Sym) * find_symbol (int idx,
                                const ElfW(Sym) *stab,
+                               size_t symsz,
                                const char *str,
+                               size_t strsz,
                                const char **name);
 
 void oom( void ) __attribute__((noreturn));

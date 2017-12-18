@@ -327,7 +327,7 @@ process_dt_rela (const ElfW(Rela) *start,
 
         DEBUG( DEBUG_ELF, "RELA entry at %p", entry );
 
-        symbol = find_symbol( sym, symtab, strtab, &name );
+        symbol = find_symbol( sym, symtab, symsz, strtab, strsz, &name );
 
         DEBUG( DEBUG_ELF,
                "symbol %p; name: %p:%s", symbol, name, name ? name : "-" );
@@ -412,7 +412,7 @@ process_dt_rel (const ElfW(Rel) *start,
 #error Unsupported CPU architecture
 #endif
 
-        symbol = find_symbol( sym, symtab, strtab, &name );
+        symbol = find_symbol( sym, symtab, symsz, strtab, strsz, &name );
 
         DEBUG( DEBUG_ELF,
                "symbol %p; name: %p:%s", symbol, name, name ? name : "-" );

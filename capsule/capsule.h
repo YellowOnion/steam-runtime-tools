@@ -66,7 +66,7 @@ struct _capsule_item
 
 /**
  * capsule_metadata:
- * @namespace: #Lmid_t value for the namespace used for this capsule
+ * @capsule_abi: Version of the libcapsule ABI implmented by this struct
  * @soname: The soname of the encapsulated library
  * @default_prefix: The default root location of the filesystem from which the
  *                  encapsulated library should be loaded

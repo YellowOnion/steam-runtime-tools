@@ -111,7 +111,7 @@ struct _capsule_metadata
  *
  * Returns: a #capsule handle.
  *
- * Does any initialisation necessary to use libcapsule's functions.
+ * Does any initialisation necessary to use libcapsule’s functions.
  *
  * Initialises internal accounting structures within the capsule
  * and triggers the metadata setup if this caspsule has been
@@ -173,8 +173,8 @@ void *capsule_shim_dlopen (const capsule cap, const char *file, int flag);
  * directly in its own code (libGL is an example of this).
  *
  * Since the target library may have a different symbol set than the
- * one the libcapsule proxy shim was generated from we can't rely on
- * dlsym() finding those symbols in the shim's symbol table.
+ * one the libcapsule proxy shim was generated from we can’t rely on
+ * dlsym() finding those symbols in the shim’s symbol table.
  *
  * Instead we must intercept dlsym() calls made outside the capsule
  * and attempt to look for the required symbol in the namespace defined
@@ -220,10 +220,10 @@ void *capsule_external_dlopen(const char *file, int flag);
  * capsule_close:
  * @cap: a #capsule handle as returned by capsule_init()
  *
- * This function should be called from a capsule proxy library's destructor:
+ * This function should be called from a capsule proxy library’s destructor:
  * Its job is to clean up capsule-specific allocated memory and metadata when
  * a capsule proxy is discarded via dlclose(), and ensure that libproxy itself
- * won't try to access any related invalidated memory afterwards.
+ * won’t try to access any related invalidated memory afterwards.
  */
 _CAPSULE_PUBLIC
 void capsule_close (capsule cap);

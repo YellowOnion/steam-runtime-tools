@@ -121,25 +121,34 @@ struct _capsule_metadata
 _CAPSULE_PUBLIC
 capsule capsule_init (const char *soname);
 
+////////////////////////////////////////////////////////////////////////////
+// do not move the Returns declaration in this next doc-comment:
+// gtk-doc does not tolerate any non-whitespace text between the
+// last parameter and the Returns line if the name of the function
+// is capsule_shim_dlopen. This was discovered empirically.
+// As this is clearly insane, it must be a bad interaction with something
+// else which shares some element of that name, but I have no idea what.
+////////////////////////////////////////////////////////////////////////////
+
 /**
  * capsule_shim_dlopen:
  * @cap: The capsule from which `dlopen` was called
  * @file: SONAME or filename to be opened
- * @flag: dlopen() flags to pass to the real dlmopen() call
+ * @flag: `dlopen` flags to pass to the real `dlopen` call
  *
- * An implementation of `dlopen` suitable to be called from inside a
- * namespace. Load @file into @cap's namespace.
+ * An implementation of dlopen suitable to be called from inside a
+ * namespace. Load @file into @cap namespace.
  *
  * If @cap has a non-trivial prefix, load @file and its recursive
- * dependencies from @cap's prefix instead of from the root filesystem.
+ * dependencies from @cap prefix instead of from the root filesystem.
  *
  * This helper function exists because dlopen() cannot safely be called
  * by a DSO opened into a private namespace. It takes @file and @flag
- * arguments (cf dlopen()) and a @capsule handle,
+ * arguments cf dlopen() and a @cap handle,
  * and performs a safe dlmopen() call instead.
  *
  * Typically this function is used to implement a safe wrapper for dlopen()
- * which is assigned to the @int_dlopen member of the #capsule_metadata.
+ * which is assigned to the int_dlopen member of the #capsule_metadata.
  * This * replaces calls to dlopen() by all DSOs in the capsule,
  * allowing libraries which use dlopen() to work inside the capsule.
  *

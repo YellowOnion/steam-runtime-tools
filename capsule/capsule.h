@@ -136,6 +136,8 @@ capsule capsule_init (const char *soname);
  * @file: SONAME or filename to be opened
  * @flag: `dlopen` flags to pass to the real `dlopen` call
  *
+ * Returns: A handle as if for `dlopen`
+ *
  * An implementation of dlopen suitable to be called from inside a
  * namespace. Load @file into @cap namespace.
  *
@@ -154,11 +156,9 @@ capsule capsule_init (const char *soname);
  *
  * Limitations: RTLD_GLOBAL is not supported in @flag. This is a glibc
  * limitation in the dlmopen() implementation.
- *
- * Returns: A handle as if for `dlopen`
  */
 _CAPSULE_PUBLIC
-void *capsule_shim_dlopen(const capsule capsule, const char *file, int flag);
+void *capsule_shim_dlopen (const capsule cap, const char *file, int flag);
 
 /**
  * capsule_external_dlsym:

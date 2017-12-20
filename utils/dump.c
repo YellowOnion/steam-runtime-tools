@@ -839,6 +839,16 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
 
     fprintf( stderr, "%s{\n", indent );
 
+    for( entry = start + base;
+         (entry->d_tag != DT_NULL) && ((void *)entry < (start + base + size));
+         entry++ )
+    {
+        if( entry->d_tag == DT_SYMTAB )
+        {
+            symtab = fix_addr( (void *) base, entry->d_un.d_ptr );
+        }
+    }
+
     if( strtab )
     {
         fprintf( stderr, "%s    string table at %p, %zu bytes\n",
@@ -849,6 +859,9 @@ dump_dynamic (const char *indent, void *start, size_t size, ElfW(Addr) base)
            afterwards... —glibc elf/dl-fptr.c */
         assert( strtab >= (const char *) symtab );
         symsz = strtab - (const char *) symtab;
+
+        fprintf( stderr, "%s    symbol table at %p, %zu bytes\n",
+                 indent, symtab, symsz );
     }
     else
     {

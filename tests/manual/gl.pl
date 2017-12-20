@@ -885,8 +885,13 @@ foreach my $mutable (qw(/etc /var)) {
 
         while (defined(my $member = readdir $dir)) {
             next if $member eq '.' || $member eq '..';
+            next if "$mutable/$member" eq '/etc/group';
+            next if "$mutable/$member" eq '/etc/host.conf';
+            next if "$mutable/$member" eq '/etc/hosts';
+            next if "$mutable/$member" eq '/etc/localtime';
             next if "$mutable/$member" eq '/etc/machine-id';
             next if "$mutable/$member" eq '/etc/passwd';
+            next if "$mutable/$member" eq '/etc/resolv.conf';
 
             no autodie 'readlink';
             my $target = readlink "$container_tree$mutable/$member";
@@ -912,7 +917,23 @@ elsif (-e '/var/lib/dbus/machine-id') {
     push @bwrap, '--symlink', '/etc/machine-id', '/var/lib/dbus/machine-id';
 }
 
-push @bwrap, '--ro-bind', '/etc/passwd', '/etc/passwd';
+if (-e '/etc/localtime') {
+    no autodie 'readlink';
+    my $target = readlink '/etc/localtime';
+
+    if (defined $target && $target =~ m{^/usr/}) {
+        push @bwrap, '--symlink', $target, '/etc/localtime';
+    }
+    else {
+        push @bwrap, '--ro-bind', '/etc/localtime', '/etc/localtime';
+    }
+}
+
+foreach my $file (qw(resolv.conf host.conf hosts passwd group)) {
+    if (-e "/etc/$file") {
+        push @bwrap, '--ro-bind', "/etc/$file", "/etc/$file";
+    }
+}
 
 push @bwrap, bind_usr($container_tree);
 push @bwrap, bind_usr($gl_provider_tree, '/gl-provider');

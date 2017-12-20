@@ -10,6 +10,8 @@
 #include <ctype.h>
 #include <sys/param.h>
 
+#include <unistd.h>
+
 #define CAP_ENV_PREFIX "CAPSULE_"
 
 #define DUMP_STRV(what, css) \
@@ -84,6 +86,12 @@ ptr_list *_capsule_list  = NULL;
 dlsymfunc _capsule_original_dlsym = NULL;
 dlopnfunc _capsule_original_dlopen = NULL;
 
+freefunc   _capsule_original_free    = NULL;
+mallocfunc _capsule_original_malloc  = NULL;
+callocfunc _capsule_original_calloc  = NULL;
+rallocfunc _capsule_original_realloc = NULL;
+palignfunc _capsule_original_pmalign = NULL;
+
 static int str_equal (const void *a, const void *b)
 {
     if( a == b )
@@ -131,6 +139,17 @@ get_namespace (const char *default_prefix, const char *soname)
 
     return ns;
 }
+
+static capsule_item alloc_func[] =
+{
+    { "-"             , (capsule_addr) NULL                       },
+    { "-"             , (capsule_addr) NULL                       },
+    { "malloc"        , (capsule_addr) &_capsule_original_malloc  },
+    { "calloc"        , (capsule_addr) &_capsule_original_calloc  },
+    { "realloc"       , (capsule_addr) &_capsule_original_realloc },
+    { "posix_memalign", (capsule_addr) &_capsule_original_pmalign },
+    { NULL }
+};
 
 static void
 get_capsule_metadata (struct link_map *map, const char *only)
@@ -199,11 +218,19 @@ get_capsule_metadata (struct link_map *map, const char *only)
             // NOTE: the shim address here isn't used, but we give it the same
             // value as the real function address so it's never accidentally
             // a value the capsule code will care about:
+            int i = 0;
             static const capsule_item no_wrapper = { NULL };
             const capsule_item int_dlopen_wrapper =
             {
                 "dlopen", (capsule_addr) meta->int_dlopen,
                 (capsule_addr) meta->int_dlopen,
+            };
+
+            const capsule_item int_free_wrapper =
+            {
+                "free",
+                (capsule_addr) meta->int_free,
+                (capsule_addr) meta->int_free,
             };
 
             cap = xcalloc( 1, sizeof(struct _capsule) );
@@ -214,8 +241,20 @@ get_capsule_metadata (struct link_map *map, const char *only)
             cap->meta = meta;
             cap->seen.all  = ptr_list_alloc( 32 );
             cap->seen.some = ptr_list_alloc( 32 );
-            cap->int_dlopen_wrappers[0] = int_dlopen_wrapper;
-            cap->int_dlopen_wrappers[1] = no_wrapper;
+
+            cap->internal_wrappers[ 0 ] = int_dlopen_wrapper;
+            cap->internal_wrappers[ 1 ] = int_free_wrapper;
+
+            for( i = 2; alloc_func[ i ].name != NULL; i++ )
+            {
+                capsule_item *capi = &cap->internal_wrappers[ i ];
+                void        **slot = (void **) alloc_func[ i ].real;
+
+                capi->name = alloc_func[ i ].name;
+                capi->shim = capi->real = (capsule_addr) *slot;
+            }
+
+            cap->internal_wrappers[ i ] = no_wrapper;
             meta->handle = cap;
             ptr_list_push_ptr( _capsule_list, cap );
         }
@@ -383,6 +422,13 @@ static void __attribute__ ((constructor)) _init_capsule (void)
 
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
 
+    // these are needed if there is > 1 libc instance:
+    _capsule_original_free    = dlsym( RTLD_DEFAULT, "free"    );
+    _capsule_original_malloc  = dlsym( RTLD_DEFAULT, "malloc"  );
+    _capsule_original_calloc  = dlsym( RTLD_DEFAULT, "calloc"  );
+    _capsule_original_realloc = dlsym( RTLD_DEFAULT, "realloc" );
+    _capsule_original_pmalign = dlsym( RTLD_DEFAULT, "posix_memalign" );
+
     update_metadata( NULL );
 
     _capsule_original_dlsym = dlsym( RTLD_DEFAULT, "dlsym"  );
@@ -521,7 +567,7 @@ capsule_init (const char *soname)
         DUMP_STRV( exported, other->ns->combined_export  );
     }
 
-    dso = _capsule_load( cap, cap->int_dlopen_wrappers,
+    dso = _capsule_load( cap, cap->internal_wrappers,
                          &capsule_errno, &capsule_error );
 
     if( !dso )

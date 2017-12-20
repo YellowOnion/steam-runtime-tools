@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+#include <malloc.h>
 
 static int
 dso_is_exported (const char *dsopath, char **exported)
@@ -267,4 +269,75 @@ cleanup:
     ld_libs_finish( &ldlibs );
     free( errors );
     return res;
+}
+
+////////////////////////////////////////////////////////////////////////////
+// copy some vodoo out of libc.
+// it is to be hoped that this is a temporary hack but, well…
+#define SIZE_SZ (sizeof(size_t))
+
+struct malloc_chunk
+{
+  size_t               prev_size;  /* Size of previous chunk (if free).  */
+  size_t               size;       /* Size in bytes, including overhead. */
+
+  struct malloc_chunk* fd;         /* double links -- used only if free. */
+  struct malloc_chunk* bk;
+
+  struct malloc_chunk* fd_nextsize; /* double links -- used only if free. */
+  struct malloc_chunk* bk_nextsize;
+};
+
+typedef struct malloc_chunk* mchunkptr;
+
+#define chunk2mem(p)   ((void*)((char*)(p) + 2*SIZE_SZ))
+#define mem2chunk(mem) ((mchunkptr)((char*)(mem) - 2*SIZE_SZ))
+
+/* size field is or'ed with IS_MMAPPED if the chunk was obtained with mmap() */
+#define IS_MMAPPED 0x2
+/* check for mmap()'ed chunk */
+#define chunk_is_mmapped(p) ((p)->size & IS_MMAPPED)
+////////////////////////////////////////////////////////////////////////////
+
+void
+capsule_shim_free (const capsule cap, void *ptr)
+{
+    static ElfW(Addr) base = (ElfW(Addr)) NULL;
+    ElfW(Addr) top;
+
+    if( !ptr )
+        return;
+
+    top = (ElfW(Addr)) sbrk( 0 );
+
+    if( base == (ElfW(Addr)) NULL )
+    {
+        struct mallinfo mi = mallinfo();
+        base = top - (ElfW(Addr)) mi.arena;
+    }
+
+    // it's from the main heap, comes from the vanilla libc outside
+    // the capsule
+    if( (base < (ElfW(Addr)) ptr) && ((ElfW(Addr)) ptr < top) )
+    {
+        free( ptr );
+        return;
+    }
+
+    mchunkptr p = mem2chunk( ptr );
+
+    // mmapped pointer/chunk: can't tell whose this is but since we
+    // override the malloc/free cluster as early as possible we're
+    // kind of hoping we don't have any of these from inside the capsule
+    //
+    // we'd only have such a pointer if the libraries we dlmopen() into
+    // the capsule allocated large chunks of memory in their initialiser(s):
+    if (chunk_is_mmapped(p))
+    {
+        free( ptr );
+        return;
+    }
+
+    // probably from the pseudo heap inside the capsule?
+    cap->ns->free( ptr );
 }

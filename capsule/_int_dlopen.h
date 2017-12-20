@@ -31,3 +31,14 @@ _int_dlopen (const char *filename, int flag)
     }
     return capsule_shim_dlopen( cap, filename, flag );
 }
+
+// if the libc instances aren't unified (ie > 1 libc) then
+// we must try to dispatch the to-be-freed pointer to the one
+// that actually allocated it.
+// This is far from foolproof:
+static void
+_wrapped_free (void *ptr)
+{
+    if (ptr)
+        capsule_shim_free( cap, ptr );
+}

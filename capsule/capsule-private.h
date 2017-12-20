@@ -10,6 +10,11 @@ typedef void * (*dlopnfunc) (const char *file, int flags);
 // the capsule so that the memory allocation implementation
 // is unified (at least until we can force libc to be shared):
 typedef void   (*freefunc)   (void *ptr);
+typedef void * (*mallocfunc) (size_t size);
+typedef void * (*callocfunc) (size_t nmem, size_t size);
+typedef void * (*rallocfunc) (void *ptr, size_t size);
+typedef int    (*palignfunc) (void **memptr, size_t alignment, size_t size);
+
 typedef struct _capsule_namespace
 {
     Lmid_t ns;
@@ -27,12 +32,18 @@ struct _capsule
     struct { ptr_list *all; ptr_list *some; } seen;
     capsule_metadata *meta;
     capsule_namespace *ns;
-    capsule_item int_dlopen_wrappers[2];
+    capsule_item internal_wrappers[7];
 };
 
 extern ptr_list *_capsule_list;
 extern dlsymfunc _capsule_original_dlsym;
 extern dlopnfunc _capsule_original_dlopen;
+
+extern freefunc   _capsule_original_free;
+extern callocfunc _capsule_original_calloc;
+extern mallocfunc _capsule_original_malloc;
+extern rallocfunc _capsule_original_realloc;
+extern palignfunc _capsule_original_pmalign;
 
 /*
  * _capsule_load:

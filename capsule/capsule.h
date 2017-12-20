@@ -255,3 +255,15 @@ void capsule_close (capsule cap);
  **/
 _CAPSULE_PUBLIC
 char *capsule_get_prefix(const char *dflt, const char *soname);
+
+/**
+ * capsule_shim_free:
+ * @cap: The capsule from which `free` was called
+ * @ptr: The pointer to be freed
+ *
+ * Tries to safely route an allocated pointer to the correct free()
+ * implementation.
+ *
+ */
+_CAPSULE_PUBLIC
+void capsule_shim_free (const capsule cap, void *ptr);

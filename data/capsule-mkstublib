@@ -295,6 +295,7 @@ capsule_metadata capsule_meta =
     .export           = valid_dlsym_sources,
     .items            = relocs,
     .int_dlopen       = _int_dlopen,
+    .int_free         = _wrapped_free,
 };
 
 static void __attribute__ ((constructor)) _capsule_init (void)

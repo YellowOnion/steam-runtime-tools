@@ -101,6 +101,7 @@ struct _capsule_metadata
     const char  **export;
     capsule_item *items;
     void *(*int_dlopen) (const char *filename, int flag);
+    void  (*int_free) (void *ptr);
     /*< private >*/
     capsule handle;
 };

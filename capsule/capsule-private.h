@@ -6,12 +6,17 @@
 typedef void * (*dlsymfunc) (void *handle, const char *symbol);
 typedef void * (*dlopnfunc) (const char *file, int flags);
 
+// we need these to transplant the *alloc/free cluster into
+// the capsule so that the memory allocation implementation
+// is unified (at least until we can force libc to be shared):
+typedef void   (*freefunc)   (void *ptr);
 typedef struct _capsule_namespace
 {
     Lmid_t ns;
     const char *prefix;
     ptr_list *exclusions;
     ptr_list *exports;
+    freefunc  free;
     char  **combined_exclude;
     char  **combined_export;
 } capsule_namespace;

@@ -306,6 +306,11 @@ _capsule_load (const capsule cap,
     if( !ret )
         goto cleanup;
 
+    // stash any free/malloc/etc implementations _before_ we overwrite them:
+    // (currently just free)
+    if( cap->ns->free == NULL )
+        cap->ns->free = dlsym( ret, "free" );
+
     // TODO: failure in the dlopen fixup phase should probably be fatal:
     if( ret      != NULL && // no errors so far
         wrappers != NULL )  // have a dlopen fixup function

@@ -197,6 +197,11 @@ static int install_wrappers ( void *dl_handle,
     while( map->l_prev )
         map = map->l_prev;
 
+    unsigned long df = debug_flags;
+
+    if( debug_flags & DEBUG_WRAPPERS )
+        debug_flags |= DEBUG_RELOCS;
+
     if (map->l_next)
     {
         for( struct link_map *m = map; m; m = m->l_next )
@@ -212,6 +217,8 @@ static int install_wrappers ( void *dl_handle,
             }
         }
     }
+
+    debug_flags = df;
 
     return replacements;
 }

@@ -327,6 +327,19 @@ static int address_within_main_heap (ElfW(Addr) addr)
     return 1;
 }
 
+void *
+capsule_shim_realloc (const capsule cap, void *ptr, size_t size)
+{
+    if( !ptr || address_within_main_heap( (ElfW(Addr)) ptr ) )
+        return realloc( ptr, size );
+
+    mchunkptr p = mem2chunk( ptr );
+
+    if( chunk_is_mmapped( p ) || chunk_is_vanilla( p, ptr ) )
+        return realloc( ptr, size );
+
+    return cap->ns->mem->realloc( ptr, size );
+}
 
 void
 capsule_shim_free (const capsule cap, void *ptr)

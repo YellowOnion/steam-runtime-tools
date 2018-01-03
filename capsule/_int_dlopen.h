@@ -42,3 +42,9 @@ _wrapped_free (void *ptr)
     if (ptr)
         capsule_shim_free( cap, ptr );
 }
+
+static void *
+_wrapped_realloc (void *ptr, size_t size)
+{
+    return capsule_shim_realloc( cap, ptr, size );
+}

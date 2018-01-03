@@ -313,6 +313,10 @@ _capsule_load (const capsule cap,
     if( cap->ns->mem->free == NULL )
         cap->ns->mem->free = dlsym( ret, "free" );
 
+    if( cap->ns->mem->realloc == NULL )
+        cap->ns->mem->realloc = dlsym( ret, "realloc" );
+
+    // =====================================================================
     // TODO: failure in the dlopen fixup phase should probably be fatal:
     if( ret      != NULL && // no errors so far
         wrappers != NULL )  // have a dlopen fixup function

@@ -225,7 +225,8 @@ get_capsule_metadata (struct link_map *map, const char *only)
             static const capsule_item no_wrapper = { NULL };
             const capsule_item int_dlopen_wrapper =
             {
-                "dlopen", (capsule_addr) meta->int_dlopen,
+                "dlopen",
+                (capsule_addr) meta->int_dlopen,
                 (capsule_addr) meta->int_dlopen,
             };
 
@@ -234,6 +235,13 @@ get_capsule_metadata (struct link_map *map, const char *only)
                 "free",
                 (capsule_addr) meta->int_free,
                 (capsule_addr) meta->int_free,
+            };
+
+            const capsule_item int_realloc_wrapper =
+            {
+                "realloc",
+                (capsule_addr) meta->int_realloc,
+                (capsule_addr) meta->int_realloc,
             };
 
             cap = xcalloc( 1, sizeof(struct _capsule) );
@@ -247,12 +255,24 @@ get_capsule_metadata (struct link_map *map, const char *only)
 
             cap->internal_wrappers[ 0 ] = int_dlopen_wrapper;
             cap->internal_wrappers[ 1 ] = int_free_wrapper;
+            cap->internal_wrappers[ 2 ] = int_realloc_wrapper;
 
-            for( i = 2; alloc_func[ i ].name != NULL; i++ )
+            for( i = 3; alloc_func[ i ].name != NULL; i++ )
             {
+                // pre-populated functions that we should skip are
+                // flagged with an invalid name starting with '-'.
+                // in a properly laid out file they'll all be at the start of
+                // alloc_func and we should never see them, but just in case:
+                if( alloc_func[ i ].name[ 0 ] == '-' )
+                    continue;
+
                 capsule_item *capi = &cap->internal_wrappers[ i ];
                 void        **slot = (void **) alloc_func[ i ].real;
 
+                // the addresses held in alloc_func are actually the
+                // addresses of pointers to the real implementations,
+                // which are populated during capsule_init: we deref
+                // those here:
                 capi->name = alloc_func[ i ].name;
                 capi->shim = capi->real = (capsule_addr) *slot;
             }

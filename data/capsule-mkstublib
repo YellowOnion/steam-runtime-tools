@@ -296,6 +296,7 @@ capsule_metadata capsule_meta =
     .items            = relocs,
     .int_dlopen       = _int_dlopen,
     .int_free         = _wrapped_free,
+    .int_realloc      = _wrapped_realloc,
 };
 
 static void __attribute__ ((constructor)) _capsule_init (void)

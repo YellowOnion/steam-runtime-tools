@@ -102,6 +102,7 @@ struct _capsule_metadata
     capsule_item *items;
     void *(*int_dlopen) (const char *filename, int flag);
     void  (*int_free) (void *ptr);
+    void *(*int_realloc) (void *ptr, size_t size);
     /*< private >*/
     capsule handle;
 };
@@ -267,3 +268,7 @@ char *capsule_get_prefix(const char *dflt, const char *soname);
  */
 _CAPSULE_PUBLIC
 void capsule_shim_free (const capsule cap, void *ptr);
+
+_CAPSULE_PUBLIC
+void * capsule_shim_realloc (const capsule cap, void *ptr, size_t size);
+

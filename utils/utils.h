@@ -26,6 +26,9 @@
 
 #include "debug.h"
 
+#define UNLIKELY(x) __builtin_expect(x, 0)
+#define LIKELY(x)   __builtin_expect(x, 1)
+
 // these macros are secretly the same for elf32 & elf64:
 #define ELFW_ST_TYPE(a)       ELF32_ST_TYPE(a)
 #define ELFW_ST_BIND(a)       ELF32_ST_BIND(a)

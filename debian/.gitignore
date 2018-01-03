@@ -6,9 +6,11 @@
 /libGL-proxy/
 /libGL-proxy-build/
 /libcapsule-dev/
+/libcapsule-dev-bin
 /libcapsule-gl-shims/
 /libcapsule-tools/
 /libcapsule-libgl1-shims/
 /libcapsule-tests/
 /libcapsule0/
+/*-stamp
 /tmp/

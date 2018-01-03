@@ -134,19 +134,22 @@ get_namespace (const char *default_prefix, const char *soname)
     ns->prefix      = strdup( prefix );
     ns->exclusions  = ptr_list_alloc( 4 );
     ns->exports     = ptr_list_alloc( 4 );
+    ns->mem         = calloc( 1, sizeof(capsule_memory) );
 
     ptr_list_push_ptr( namespaces, ns );
 
     return ns;
 }
 
+// items with names starting with '-' are initialised by hand
+// and will be skipped in the automatic section below:
 static capsule_item alloc_func[] =
 {
-    { "-"             , (capsule_addr) NULL                       },
-    { "-"             , (capsule_addr) NULL                       },
+    { "-dlopen"       , (capsule_addr) NULL                       },
+    { "-free"         , (capsule_addr) NULL                       },
+    { "-realloc"      , (capsule_addr) NULL                       },
     { "malloc"        , (capsule_addr) &_capsule_original_malloc  },
     { "calloc"        , (capsule_addr) &_capsule_original_calloc  },
-    { "realloc"       , (capsule_addr) &_capsule_original_realloc },
     { "posix_memalign", (capsule_addr) &_capsule_original_pmalign },
     { NULL }
 };

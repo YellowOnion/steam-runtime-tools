@@ -1,5 +1,6 @@
 #include "capsule/capsule.h"
 #include "capsule/capsule-private.h"
+#include "capsule/capsule-malloc.h"
 #include "utils/utils.h"
 #include "utils/ld-libs.h"
 
@@ -271,44 +272,45 @@ cleanup:
     return res;
 }
 
-////////////////////////////////////////////////////////////////////////////
-// copy some vodoo out of libc.
-// it is to be hoped that this is a temporary hack but, well…
-#define SIZE_SZ (sizeof(size_t))
-
-struct malloc_chunk
+#ifdef CAPSULE_MALLOC_EXTRA_CHECKS
+static inline int chunk_is_vanilla (mchunkptr p, void *ptr)
 {
-  size_t               prev_size;  /* Size of previous chunk (if free).  */
-  size_t               size;       /* Size in bytes, including overhead. */
+    mstate av = arena_for_chunk (p);
 
-  struct malloc_chunk* fd;         /* double links -- used only if free. */
-  struct malloc_chunk* bk;
+    // arena_for_chunk can't find the main arena... but if this poiner
+    // is from the _main_ main arena then I think it would have been
+    // trapped by the heap check in capsule_shim_free already, so
+    // this did not come from the main instance of libc:
+    if( LIKELY(!av) )
+        return 0;
 
-  struct malloc_chunk* fd_nextsize; /* double links -- used only if free. */
-  struct malloc_chunk* bk_nextsize;
-};
+    size_t size = chunksize (p);
+    mchunkptr nextchunk = chunk_at_offset(p, size);
 
-typedef struct malloc_chunk* mchunkptr;
+    // invalid next size (fast)
+    if( UNLIKELY( nextchunk->size        <= 2 * SIZE_SZ   ) ||
+        UNLIKELY( chunksize( nextchunk ) >= av->system_mem) )
+        return 0;
 
-#define chunk2mem(p)   ((void*)((char*)(p) + 2*SIZE_SZ))
-#define mem2chunk(mem) ((mchunkptr)((char*)(mem) - 2*SIZE_SZ))
+    // double free or corruption (out)
+    if( UNLIKELY( contiguous(av) &&
+                  (char *)nextchunk >= (char *)av->top + chunksize( av->top )) )
+        return 0;
 
-/* size field is or'ed with IS_MMAPPED if the chunk was obtained with mmap() */
-#define IS_MMAPPED 0x2
-/* check for mmap()'ed chunk */
-#define chunk_is_mmapped(p) ((p)->size & IS_MMAPPED)
-////////////////////////////////////////////////////////////////////////////
+    return 1;
+}
+#else
+static inline chunk_is_vanilla (mchunkptr p, void *ptr) { return 0; }
+#endif
 
-void
-capsule_shim_free (const capsule cap, void *ptr)
+static int address_within_main_heap (ElfW(Addr) addr)
 {
     static ElfW(Addr) base = (ElfW(Addr)) NULL;
-    ElfW(Addr) top;
+    ElfW(Addr) top = (ElfW(Addr)) sbrk( 0 );
 
-    if( !ptr )
-        return;
-
-    top = (ElfW(Addr)) sbrk( 0 );
+    // past the end of the heap:
+    if( top <= addr )
+        return 0;
 
     if( base == (ElfW(Addr)) NULL )
     {
@@ -316,28 +318,43 @@ capsule_shim_free (const capsule cap, void *ptr)
         base = top - (ElfW(Addr)) mi.arena;
     }
 
-    // it's from the main heap, comes from the vanilla libc outside
-    // the capsule
-    if( (base < (ElfW(Addr)) ptr) && ((ElfW(Addr)) ptr < top) )
+    // address is below heap base
+    // ∴ either a mmapped address, non-malloc'd memory
+    // or an address from a secondary arena
+    if( base > addr )
+        return 0;
+
+    return 1;
+}
+
+
+void
+capsule_shim_free (const capsule cap, void *ptr)
+{
+    if( !ptr )
+        return;
+
+    // from the main heap: ie from the vanilla libc outside the capsule
+    if( address_within_main_heap( (ElfW(Addr)) ptr ) )
     {
         free( ptr );
         return;
     }
 
     mchunkptr p = mem2chunk( ptr );
-
     // mmapped pointer/chunk: can't tell whose this is but since we
     // override the malloc/free cluster as early as possible we're
     // kind of hoping we don't have any of these from inside the capsule
     //
     // we'd only have such a pointer if the libraries we dlmopen() into
     // the capsule allocated large chunks of memory in their initialiser(s):
-    if (chunk_is_mmapped(p))
+    if( chunk_is_mmapped( p ) || chunk_is_vanilla( p, ptr ) )
     {
         free( ptr );
         return;
     }
 
-    // probably from the pseudo heap inside the capsule?
-    cap->ns->free( ptr );
+    // doesn't look like a valid pointer to the main libc,
+    // pass it to the capsule libc and hope for the best:
+    cap->ns->mem->free( ptr );
 }

@@ -15,15 +15,24 @@ typedef void * (*callocfunc) (size_t nmem, size_t size);
 typedef void * (*rallocfunc) (void *ptr, size_t size);
 typedef int    (*palignfunc) (void **memptr, size_t alignment, size_t size);
 
+typedef struct _capsule_memory
+{
+    freefunc    free;
+    rallocfunc  realloc;
+    mallocfunc  malloc;           // UNUSED
+    callocfunc  calloc;           // UNUSED
+    palignfunc  posix_memalign;   // UNUSED
+} capsule_memory;
+
 typedef struct _capsule_namespace
 {
-    Lmid_t ns;
-    const char *prefix;
-    ptr_list *exclusions;
-    ptr_list *exports;
-    freefunc  free;
-    char  **combined_exclude;
-    char  **combined_export;
+    Lmid_t      ns;               // dlmopen namespace. LM_ID_NEWLM to create
+    const char *prefix;           // default library tree prefix, eg /host
+    ptr_list   *exclusions;       // sonames to ignore
+    ptr_list   *exports;          // sonames to expose/export
+    char      **combined_exclude; // combined exclude & export lists from all
+    char      **combined_export;  // capsules DSOs sharing the same namespace
+    capsule_memory *mem;
 } capsule_namespace;
 
 struct _capsule

@@ -98,6 +98,7 @@ libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           capsule/capsule-relocate.c \
                           capsule/capsule-init.c     \
                           capsule/capsule-private.h  \
+                          capsule/capsule-malloc.h   \
                           capsule/capsule-wrappers.c \
                           utils/dump.c               \
                           utils/process-pt-dynamic.c \

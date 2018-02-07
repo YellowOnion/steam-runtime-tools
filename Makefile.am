@@ -388,6 +388,7 @@ CLEANFILES             += $(nodist_tests_shim_libnotgles_la_SOURCES)
 EXTRA_DIST             += $(top_srcdir)/.version
 EXTRA_DIST             += autogen.sh
 EXTRA_DIST             += build-aux/git-version-gen
+EXTRA_DIST             += ci/Jenkinsfile
 EXTRA_DIST             += data/capsule-mkstublib
 EXTRA_DIST             += doc/Strategy.txt
 EXTRA_DIST             += doc/capsule-init-project.xml

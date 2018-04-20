@@ -163,10 +163,10 @@ static void usage (int code)
                "\tCapture every library in ld.so.cache that matches\n"
                "\ta shell-style glob (which will usually need to be\n"
                "\tquoted when using a shell)\n" );
-  fprintf( fh, "if-exists:SONAME\n"
-               "\tCapture SONAME, but don't fail if it doesn't exist\n" );
-  fprintf( fh, "even-if-older:SONAME\n"
-               "\tCapture SONAME, even if the version in CONTAINER\n"
+  fprintf( fh, "if-exists:PATTERN\n"
+               "\tCapture PATTERN, but don't fail if nothing matches\n" );
+  fprintf( fh, "even-if-older:PATTERN\n"
+               "\tCapture PATTERN, even if the version in CONTAINER\n"
                "\tappears newer\n" );
   fprintf( fh, "gl:\n"
                "\tShortcut for even-if-older:if-exists:soname:libGL.so.1,\n"

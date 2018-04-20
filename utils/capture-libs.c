@@ -680,7 +680,7 @@ main (int argc, char **argv)
                     if( build_filename( path, sizeof(path), optarg,
                                         LD_SO, NULL ) >= sizeof(path) )
                     {
-                        errx( 1, "\%s\" too long", optarg );
+                        errx( 1, "\"%s\" too long", optarg );
                     }
 
                     DEBUG( DEBUG_TOOL, "Starting with %s", path );

@@ -747,7 +747,7 @@ make_path("$tmpdir/updates", verbose => 1);
 if ($libc_provider_tree eq 'auto') {
     diag "Choosing GL provider's libc or container's libc automatically";
     capture_libs($gl_provider_tree, $container_tree, \@multiarch_tuples,
-        $updates_tree, ['libc.so.6'], "$tmpdir/scratch", '/gl-provider');
+        $updates_tree, ['literal:libc.so.6'], "$tmpdir/scratch", '/gl-provider');
 
     # See what we've got
     foreach my $tuple (@multiarch_tuples) {
@@ -773,7 +773,7 @@ if ($libc_provider_tree eq 'auto') {
 }
 elsif ($libc_provider_tree =~ m/^(?:gl-provider|host)$/) {
     capture_libs($gl_provider_tree, $container_tree, \@multiarch_tuples,
-        $updates_tree, ['even-if-older:libc.so.6'],
+        $updates_tree, ['even-if-older:literal:libc.so.6'],
         "$tmpdir/scratch", '/gl-provider');
     diag "${ansi_bright}${ansi_green}Adding GL provider's libc via /updates ".
         "as requested${ansi_reset}";
@@ -788,7 +788,7 @@ else {
     diag "${ansi_bright}${ansi_magenta}Adding ${libc_provider_tree} libc ".
         "via /updates as requested${ansi_reset}";
     capture_libs($libc_provider_tree, $container_tree, \@multiarch_tuples,
-        $updates_tree, ['even-if-older:libc.so.6'],
+        $updates_tree, ['even-if-older:literal:libc.so.6'],
         "$tmpdir/scratch", '/libc-provider');
     push @bwrap, use_ldso($libc_provider_tree, $container_tree,
         \@multiarch_tuples, "$tmpdir/scratch");
@@ -849,7 +849,7 @@ else {
 if ($libcapsule_tree eq 'auto') {
     diag "Using libcapsule from $gl_provider_tree if newer";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, ['libcapsule.so.0'],
+        \@multiarch_tuples, $updates_tree, ['literal:libcapsule.so.0'],
         "$tmpdir/scratch", '/gl-provider');
 }
 elsif ($libcapsule_tree eq 'container') {
@@ -858,13 +858,15 @@ elsif ($libcapsule_tree eq 'container') {
 elsif ($libcapsule_tree =~ m/^(?:gl-provider|host)$/) {
     diag "${ansi_green}Using libcapsule from GL provider as requested${ansi_reset}";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, ['even-if-older:libcapsule.so.0'],
+        \@multiarch_tuples, $updates_tree,
+        ['even-if-older:literal:libcapsule.so.0'],
         "$tmpdir/scratch", '/gl-provider');
 }
 else {
     diag "${ansi_magenta}Using libcapsule from $libcapsule_tree${ansi_reset}";
     capture_libs($libcapsule_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, ['even-if-older:libcapsule.so.0'],
+        \@multiarch_tuples, $updates_tree,
+        ['even-if-older:literal:libcapsule.so.0'],
         "$tmpdir/scratch", '/libcapsule-provider');
     push @bwrap, bind_usr($libcapsule_tree, '/libcapsule-provider');
 }
@@ -886,7 +888,7 @@ if ($x11_provider_tree eq 'auto') {
     diag "Using X libraries from $gl_provider_tree if newer";
     capture_libs($gl_provider_tree, $container_tree,
         \@multiarch_tuples, $updates_tree,
-        [map { "lib$_.so.*" } @XLIBS],
+        [map { "soname-match:lib$_.so.*" } @XLIBS],
         "$tmpdir/scratch", '/gl-provider');
 }
 elsif ($x11_provider_tree eq 'container') {
@@ -896,14 +898,14 @@ elsif ($x11_provider_tree =~ m/^(?:gl-provider|host)$/) {
     diag "${ansi_green}Using X libraries from GL provider as requested${ansi_reset}";
     capture_libs($gl_provider_tree, $container_tree,
         \@multiarch_tuples, $updates_tree,
-        [map { "even-if-older:lib$_.so.*" } @XLIBS],
+        [map { "even-if-older:soname-match:lib$_.so.*" } @XLIBS],
         "$tmpdir/scratch", '/gl-provider');
 }
 else {
     diag "${ansi_magenta}Using X libraries from $x11_provider_tree as requested${ansi_reset}";
     capture_libs($x11_provider_tree, $container_tree,
         \@multiarch_tuples, $updates_tree,
-        [map { "even-if-older:lib$_.so.*" } @XLIBS],
+        [map { "even-if-older:soname-match:lib$_.so.*" } @XLIBS],
         "$tmpdir/scratch", '/x11-provider', $ansi_magenta);
     push @bwrap, bind_usr($libcapsule_tree, '/x11-provider');
 }

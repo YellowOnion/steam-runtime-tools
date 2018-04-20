@@ -156,6 +156,10 @@ static void usage (int code)
                "SONAMEs (which will usually need to be quoted when using\n"
                "a shell), or one of the following special strings:\n" );
   fprintf( fh, "\n" );
+  fprintf( fh, "soname-match:GLOB\n"
+               "\tCapture every library in ld.so.cache that matches\n"
+               "\ta shell-style glob (which will usually need to be\n"
+               "\tquoted when using a shell)\n" );
   fprintf( fh, "if-exists:SONAME\n"
                "\tCapture SONAME, but don't fail if it doesn't exist\n" );
   fprintf( fh, "literal:SONAME\n"
@@ -471,8 +475,8 @@ cache_foreach_cb (const char *name, int flag, unsigned int osv,
 }
 
 static bool
-capture_wildcard( const char *pattern, capture_flags flags,
-                  int *code, char **message )
+capture_soname_match( const char *pattern, capture_flags flags,
+                      int *code, char **message )
 {
     _capsule_autofree char *cache_path = NULL;
     cache_foreach_context ctx = {
@@ -517,6 +521,12 @@ capture_pattern( const char *pattern, capture_flags flags,
     {
         return capture_one( pattern + strlen( "literal:" ),
                             flags, code, message );
+    }
+
+    if( strstarts( pattern, "soname-match:" ) )
+    {
+        return capture_soname_match( pattern + strlen( "soname-match:" ),
+                                     flags, code, message );
     }
 
     if( strstarts( pattern, "if-exists:" ) )
@@ -602,7 +612,7 @@ capture_pattern( const char *pattern, capture_flags flags,
         strchr( pattern, '?' ) != NULL ||
         strchr( pattern, '[' ) != NULL )
     {
-        return capture_wildcard( pattern, flags, code, message );
+        return capture_soname_match( pattern, flags, code, message );
     }
 
     return capture_one( pattern, flags, code, message );

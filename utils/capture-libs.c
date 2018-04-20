@@ -163,7 +163,7 @@ static void usage (int code)
   fprintf( fh, "even-if-older:SONAME\n"
                "\tCapture SONAME, even if the version in CONTAINER\n"
                "\tappears newer\n" );
-  fprintf( fh, "GL\n"
+  fprintf( fh, "gl:\n"
                "\tShortcut for even-if-older:libGL.so.1,\n"
                "\teven-if-older:libGLX_*.so.0, and various other\n"
                "\tGL-related libraries\n");
@@ -533,7 +533,7 @@ capture_pattern( const char *pattern, capture_flags flags,
                                 code, message );
     }
 
-    if( strcmp( pattern, "GL" ) == 0 )
+    if( strcmp( pattern, "gl:" ) == 0 )
     {
         // Useful information:
         // https://devtalk.nvidia.com/default/topic/915640/multiple-glx-client-libraries-in-the-nvidia-linux-driver-installer-package/

@@ -811,7 +811,7 @@ else {
 
     diag "Using GL stack from $gl_provider_tree";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $gl_provider_gl, ['GL'],
+        \@multiarch_tuples, $gl_provider_gl, ['gl:'],
         "$tmpdir/scratch", '/gl-provider');
 
     foreach my $tuple (@multiarch_tuples) {

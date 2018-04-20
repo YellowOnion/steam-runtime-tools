@@ -442,7 +442,7 @@ typedef struct
 {
     const char *pattern;
     capture_flags flags;
-    bool ret;
+    bool found;
     ld_cache cache;
     int *code;
     char **message;
@@ -467,6 +467,8 @@ cache_foreach_cb (const char *name, int flag, unsigned int osv,
   {
       DEBUG( DEBUG_TOOL, "%s matches %s", name, ctx->pattern );
 
+      ctx->found = true;
+
       if( !capture_one( name, ctx->flags | CAPTURE_FLAG_IF_EXISTS,
                         ctx->code, ctx->message ) )
           return 1;
@@ -484,10 +486,11 @@ capture_soname_match( const char *pattern, capture_flags flags,
         .pattern = pattern,
         .flags = flags,
         .cache = { .is_open = 0 },
-        .ret = false,
+        .found = false,
         .code = code,
         .message = message,
     };
+    bool ret = false;
 
     DEBUG( DEBUG_TOOL, "%s", pattern );
 
@@ -500,13 +503,21 @@ capture_soname_match( const char *pattern, capture_flags flags,
     if( ld_cache_foreach( &ctx.cache, cache_foreach_cb, &ctx ) != 0 )
         goto out;
 
-    ctx.ret = true;
+    if( !ctx.found && !( flags & CAPTURE_FLAG_IF_EXISTS ) )
+    {
+        _capsule_set_error( code, message, ENOENT,
+                            "no matches found for glob pattern \"%s\"",
+                            pattern );
+        goto out;
+    }
+
+    ret = true;
 
 out:
     if( ctx.cache.is_open )
         ld_cache_close( &ctx.cache );
 
-    return ctx.ret;
+    return ret;
 }
 
 #define strstarts(str, start) \

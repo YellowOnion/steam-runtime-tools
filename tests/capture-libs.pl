@@ -143,6 +143,28 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
 like(readlink "$libdir/libjpeg.so.62", qr{^$LIBDIR/libjpeg\.so\.62(?:[0-9.]+)$},
      '$libdir/libjpeg.so.62 is a symlink to /run/host + realpath of libjpeg-6b');
 
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+my $stderr;
+my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                          '--bind', $libdir, $libdir,
+                          qw(--dev-bind /dev /dev),
+                          $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                          "--dest=$libdir", "--provider=$host",
+                          'soname-match:this*library*does?not?exist'],
+                         '2>', \$stderr, '>&2');
+ok(! $result, 'a non-matching wildcard should fail');
+like($stderr, qr{"this\*library\*does\?not\?exist"});
+
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        '--bind', $libdir, $libdir,
+        qw(--dev-bind /dev /dev),
+        $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+        "--dest=$libdir", "--provider=$host",
+        'if-exists:soname-match:this*library*does?not?exist']);
+
 SKIP: {
     skip "not on Linux? Good luck!", 1 unless $^O eq 'linux';
     my $stdout;

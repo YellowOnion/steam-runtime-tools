@@ -136,6 +136,25 @@ B<Shift+Escape \quit> into the GUI window, when the demo has finished.
 The container can be a complete sysroot (with a F</usr>) instead of just
 a Flatpak runtime or a merged F</usr>.
 
+=item Using NVIDIA proprietary drivers
+
+    $ gl.pl --proposed-nvidia
+
+This uses the host NVIDIA drivers, without libcapsule.
+
+=item Using Mesa not via libcapsule
+
+    $ gl.pl --full-mesa
+
+This uses the host Mesa drivers, without libcapsule. We need to pull in
+lots of libraries from the host system.
+
+=item Using Mesa via libcapsule
+
+    $ gl.pl --proposed-mesa
+
+This uses the host Mesa drivers, with libcapsule.
+
 =item Using a non-host GL stack
 
     $ sudo debootstrap --include=(many packages) sid \
@@ -519,6 +538,8 @@ my $arch = 'x86_64';
 my $libc_provider_tree = 'auto';
 my $libcapsule_tree = 'container';
 my $x11_provider_tree = 'auto';
+my $mesa_drivers = 1;
+my $mesa_driver_deps = 1;
 
 GetOptions(
     'app=s' => \$app,
@@ -531,17 +552,33 @@ GetOptions(
     'libcapsule' => sub {
         $gl_stack = '/usr/lib/libcapsule/shims';
         $libcapsule_tree = '/';
+        $mesa_driver_deps = 0;
     },
     'libc-provider=s' => \$libc_provider_tree,
+    'mesa-drivers' => \$mesa_drivers,
+    'no-mesa-drivers' => sub { $mesa_drivers = 0; },
+    'mesa-driver-deps' => \$mesa_driver_deps,
+    'no-mesa-driver-deps' => sub { $mesa_driver_deps = 0; },
     'x11-provider=s' => \$x11_provider_tree,
     'multiarch=s' => sub {
         @multiarch_tuples = split /[\s,]+/, $_[1];
+    },
+    'full-mesa' => sub {
+        $gl_provider_tree = '/';
+        undef $gl_stack;
+        $libcapsule_tree = 'container';
+        $libc_provider_tree = 'auto';
+        $mesa_drivers = 1;
+        $mesa_driver_deps = 1;
+        $x11_provider_tree = 'auto';
     },
     'proposed-mesa' => sub {
         $gl_provider_tree = '/';
         $gl_stack = '/usr/lib/libcapsule/shims';
         $libcapsule_tree = '/';
         $libc_provider_tree = 'auto';
+        $mesa_drivers = 1;
+        $mesa_driver_deps = 0;
         $x11_provider_tree = 'auto';
     },
     'proposed-nvidia' => sub {
@@ -549,6 +586,8 @@ GetOptions(
         undef $gl_stack;
         $libcapsule_tree = 'container';
         $libc_provider_tree = 'container';
+        $mesa_drivers = 0;
+        $mesa_driver_deps = 0;
         $x11_provider_tree = 'container';
     },
     help => sub {
@@ -584,10 +623,20 @@ Options:
     --multiarch=TUPLE[,TUPLE…]          Enable architecture(s) by Debian
                                         multiarch tuple
                                         [x86_64-linux-gnu]
+    --full-mesa                         Use short-term handling for Mesa:
+                                        --gl-provider=/
+                                        --libcapsule
+                                        --libc-provider=auto
+                                        --mesa-drivers
+                                        --mesa-driver-deps
+                                        --x11-provider=auto
+                                        --libcapsule-provider=auto
     --proposed-mesa                     Use proposed handling for Mesa:
                                         --gl-provider=/
                                         --libcapsule
                                         --libc-provider=auto
+                                        --mesa-drivers
+                                        --no-mesa-driver-deps
                                         --x11-provider=auto
                                         --libcapsule-provider=auto
     --proposed-nvidia                   Use proposed handling for binary
@@ -814,24 +863,37 @@ else {
         \@multiarch_tuples, $gl_provider_gl, ['gl:'],
         "$tmpdir/scratch", '/gl-provider');
 
-    foreach my $tuple (@multiarch_tuples) {
-        my $ldso = multiarch_tuple_to_ldso($tuple);
-        my $libdir;
+    # If we're using Mesa, we need the DRI drivers too
+    if ($mesa_drivers || $mesa_driver_deps) {
+        foreach my $tuple (@multiarch_tuples) {
+            my $ldso = multiarch_tuple_to_ldso($tuple);
+            my $libdir;
 
-        my @search_path = ("/lib/$tuple", "/usr/lib/$tuple");
+            my @search_path = ("/lib/$tuple", "/usr/lib/$tuple");
 
-        if (defined $ldso) {
-            # Add /lib64 and /usr/lib64 if applicable
-            (undef, $libdir, undef) = File::Spec->splitpath($ldso);
-            push @search_path, $libdir, "/usr$libdir";
-        }
+            if (defined $ldso) {
+                # Add /lib64 and /usr/lib64 if applicable
+                (undef, $libdir, undef) = File::Spec->splitpath($ldso);
+                push @search_path, $libdir, "/usr$libdir";
+            }
 
-        foreach my $search (@search_path) {
-            if (-d "$gl_provider_tree$search/dri") {
-                diag "Using GL provider's $search/dri";
-                symlink("/gl-provider$search/dri",
-                    "$gl_provider_gl/lib/$tuple/dri");
-                push @dri_path, "/gl/lib/$tuple/dri";
+            foreach my $search (@search_path) {
+                if (-d "$gl_provider_tree$search/dri") {
+                    diag "Using GL provider's $search/dri";
+
+                    if ($mesa_drivers) {
+                        symlink("/gl-provider$search/dri",
+                            "$gl_provider_gl/lib/$tuple/dri");
+                        push @dri_path, "/gl/lib/$tuple/dri";
+                    }
+
+                    if ($mesa_driver_deps) {
+                        capture_libs($gl_provider_tree, $container_tree,
+                            \@multiarch_tuples, $updates_tree,
+                            ["only-dependencies:path-match:$search/dri/*"],
+                            "$tmpdir/scratch", '/gl-provider');
+                    }
+                }
             }
         }
     }

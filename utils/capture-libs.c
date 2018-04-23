@@ -242,13 +242,16 @@ capture_one( const char *soname, capture_flags flags,
     {
         _capsule_autofree char *target = NULL;
         struct stat statbuf;
+        const char *its_basename;
 
         if( !provider.needed[i].name )
         {
             continue;
         }
 
-        if( fstatat( dest_fd, provider.needed[i].name, &statbuf,
+        its_basename = my_basename( provider.needed[i].name );
+
+        if( fstatat( dest_fd, its_basename, &statbuf,
                      AT_SYMLINK_NOFOLLOW ) == 0 )
         {
             /* We already created a symlink for this library. No further

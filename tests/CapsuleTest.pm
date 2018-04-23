@@ -29,6 +29,7 @@ use IPC::Run qw(run);
 use Test::More;
 
 our @EXPORT = qw(
+    assert_run_verbose
     diag_multiline
     explain_wait_status
     get_symbols_with_nm
@@ -163,6 +164,25 @@ diag "Build or installation directory: $builddir";
 =head1 EXPORTED FUNCTIONS
 
 =over
+
+=item assert_run_verbose(I<ARGV>, ...)
+
+Log the given command, run it, and die if it didn't return success.
+I<ARGV> is an array-reference containing arguments.
+Subsequent parameters are passed to C<IPC::Run::run> and can be used
+to redirect output.
+
+=cut
+
+sub assert_run_verbose {
+    my $argv = shift;
+    my $debug = join(' ', @$argv);
+    diag($debug);
+    if (! run($argv, @_)) {
+        my $explained = explain_wait_status($?);
+        die "Command exited with status $? ($explained): '$debug'";
+    }
+}
 
 =item diag_multiline(I<TEXT>)
 

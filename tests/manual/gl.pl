@@ -380,7 +380,7 @@ sub multiarch_tuple_to_ldso {
         return $multiarch_tuple_to_ldso{$tuple};
     }
 
-    run_verbose([
+    assert_run_verbose([
         $CAPSULE_CAPTURE_LIBS_TOOLS{$tuple}, '--print-ld.so'
     ], '>', \$stdout);
     chomp $stdout;
@@ -408,7 +408,7 @@ sub real_path_of_ldso {
     my $stdout;
     $tree = '/' unless defined $tree;
 
-    run_verbose([
+    assert_run_verbose([
         'bwrap',
         '--ro-bind', '/', '/',
         '--tmpfs', $workspace,
@@ -482,7 +482,7 @@ sub capture_libs {
     foreach my $tuple (@multiarch_tuples) {
         make_path("$dest/lib/$tuple", verbose => 1);
 
-        run_verbose([
+        assert_run_verbose([
             'bwrap',
             '--ro-bind', '/', '/',
             '--bind', $dest, $dest,
@@ -613,13 +613,13 @@ if (defined $flatpak_runtime) {
 }
 
 foreach my $tuple (@multiarch_tuples) {
-    run_verbose([
+    assert_run_verbose([
         'env', "PKG_CONFIG_PATH=/usr/lib/$tuple/pkgconfig",
         'pkg-config', '--variable=CAPSULE_VERSION_TOOL', 'libcapsule-tools',
     ], '>', \$stdout);
     chomp $stdout;
     $CAPSULE_VERSION_TOOLS{$tuple} = $stdout;
-    run_verbose([
+    assert_run_verbose([
         'env', "PKG_CONFIG_PATH=/usr/lib/$tuple/pkgconfig",
         'pkg-config', '--variable=CAPSULE_CAPTURE_LIBS_TOOL',
         'libcapsule-tools',
@@ -633,7 +633,7 @@ $app = "$data_home/flatpak/app/org.debian.packages.mesa_utils/$arch/master/activ
 $container_tree = "$data_home/flatpak/runtime/net.debian.flatpak.Games.Platform/$arch/stretch/active/files"
     unless defined $container_tree;
 
-run_verbose(['glxinfo'], '>', \$stdout);
+assert_run_verbose(['glxinfo'], '>', \$stdout);
 diag_multiline($stdout);
 
 if ($stdout =~ /Error: couldn't find RGB GLX visual/) {
@@ -753,7 +753,7 @@ if ($libc_provider_tree eq 'auto') {
     foreach my $tuple (@multiarch_tuples) {
         foreach my $dir ('updates', 'gl') {
             next unless -d "$tmpdir/$dir/lib/$tuple";
-            run_verbose([
+            assert_run_verbose([
                 'ls', '-l', "$tmpdir/$dir/lib/$tuple",
             ], '>', \$stdout);
             diag_multiline $stdout;
@@ -991,7 +991,7 @@ elsif (exists $ENV{XDG_RUNTIME_DIR} &&
 foreach my $tuple (@multiarch_tuples) {
     foreach my $dir ('updates', 'gl') {
         next unless -d "$tmpdir/$dir/lib/$tuple";
-        run_verbose([
+        assert_run_verbose([
             'ls', '-l', "$tmpdir/$dir/lib/$tuple",
         ], '>', \$stdout);
         diag_multiline $stdout;

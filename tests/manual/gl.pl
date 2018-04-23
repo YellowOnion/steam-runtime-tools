@@ -540,6 +540,7 @@ my $libcapsule_tree = 'container';
 my $x11_provider_tree = 'auto';
 my $mesa_drivers = 1;
 my $mesa_driver_deps = 1;
+my $nvidia_only = 0;
 
 GetOptions(
     'app=s' => \$app,
@@ -559,6 +560,7 @@ GetOptions(
     'no-mesa-drivers' => sub { $mesa_drivers = 0; },
     'mesa-driver-deps' => \$mesa_driver_deps,
     'no-mesa-driver-deps' => sub { $mesa_driver_deps = 0; },
+    'nvidia-only' => \$nvidia_only,
     'x11-provider=s' => \$x11_provider_tree,
     'multiarch=s' => sub {
         @multiarch_tuples = split /[\s,]+/, $_[1];
@@ -570,6 +572,7 @@ GetOptions(
         $libc_provider_tree = 'auto';
         $mesa_drivers = 1;
         $mesa_driver_deps = 1;
+        $nvidia_only = 0;
         $x11_provider_tree = 'auto';
     },
     'proposed-mesa' => sub {
@@ -579,6 +582,7 @@ GetOptions(
         $libc_provider_tree = 'auto';
         $mesa_drivers = 1;
         $mesa_driver_deps = 0;
+        $nvidia_only = 0;
         $x11_provider_tree = 'auto';
     },
     'proposed-nvidia' => sub {
@@ -588,6 +592,7 @@ GetOptions(
         $libc_provider_tree = 'container';
         $mesa_drivers = 0;
         $mesa_driver_deps = 0;
+        $nvidia_only = 1;
         $x11_provider_tree = 'container';
     },
     help => sub {
@@ -623,6 +628,10 @@ Options:
     --multiarch=TUPLE[,TUPLE…]          Enable architecture(s) by Debian
                                         multiarch tuple
                                         [x86_64-linux-gnu]
+    --nvidia-only                       Only capture NVIDIA proprietary
+                                        libraries (and possibly GLVND
+                                        wrappers), not the rest of the
+                                        libGL stack
     --full-mesa                         Use short-term handling for Mesa:
                                         --gl-provider=/
                                         --libcapsule
@@ -645,6 +654,9 @@ Options:
                                         --x11-provider=container
                                         --libc-provider=container
                                         --libcapsule-provider=container
+                                        --no-mesa-drivers
+                                        --no-mesa-driver-deps
+                                        --nvidia-only
 EOF
         exit 0;
     },
@@ -854,6 +866,20 @@ if (defined $gl_stack) {
     foreach my $tuple (@multiarch_tuples) {
         push @ld_path, "/gl/lib/$tuple";
     }
+}
+elsif ($nvidia_only) {
+    my $gl_provider_gl = "$tmpdir/gl";
+
+    diag "Using NVIDIA-only GL stack from $gl_provider_tree";
+    capture_libs($gl_provider_tree, $container_tree,
+        \@multiarch_tuples, $gl_provider_gl, ['no-dependencies:nvidia:'],
+        "$tmpdir/scratch", '/gl-provider');
+
+    foreach my $tuple (@multiarch_tuples) {
+        push @ld_path, "/gl/lib/$tuple";
+    }
+
+    push @bwrap, '--ro-bind', $gl_provider_gl, '/gl';
 }
 else {
     my $gl_provider_gl = "$tmpdir/gl";

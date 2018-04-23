@@ -30,6 +30,7 @@ use Test::More;
 
 our @EXPORT = qw(
     diag_multiline
+    explain_wait_status
     get_symbols_with_nm
     run_ok
     run_verbose
@@ -176,6 +177,38 @@ sub diag_multiline {
     }
 }
 
+=item explain_wait_status(I<CODE>)
+
+Convert Unix-style wait status I<CODE> into something human-readable.
+
+=cut
+
+sub explain_wait_status {
+    my $status = shift;
+    my @ret;
+    my $signal = $status & 127;
+    my $code = ($status >> 8);
+
+    if ($signal) {
+        push @ret, "killed by signal $signal";
+    }
+
+    if ($status & 128) {
+        push @ret, 'core dumped';
+    }
+
+    if ($code & 128) {
+        my $maybe = $code & 127;
+        unshift @ret,
+            "exited with code $code (child process killed by signal $maybe?)";
+    }
+    elsif ($code || ! @ret) {
+        unshift @ret, "exited with code $code";
+    }
+
+    return join(', ', @ret);
+}
+
 =item run_ok(I<ARGV>, ...)
 
 A TAP assertion that the given command exits 0. I<ARGV> is an
@@ -188,7 +221,13 @@ sub run_ok {
     my $argv = shift;
     my $debug = join(' ', @$argv);
     diag($debug);
-    ok(run($argv, @_), qq{"$debug" should succeed});
+    if (run($argv, @_)) {
+        ok(1, qq{Command successful as expected: '$debug'});
+    }
+    else {
+        my $explained = explain_wait_status($?);
+        ok(0, "Command exited with status $? ($explained): '$debug'");
+    }
 }
 
 =item run_verbose(I<ARGV>, ...)

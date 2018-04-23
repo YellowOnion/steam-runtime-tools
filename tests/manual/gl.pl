@@ -658,12 +658,13 @@ my @bwrap = qw(
     --ro-bind /sys /sys
     --tmpfs /run
     --tmpfs /tmp
+    --tmpfs /var
     --tmpfs /var/tmp
     --symlink ../run /var/run
 );
 push @bwrap, '--bind', $ENV{HOME}, $ENV{HOME};
 
-foreach my $mutable (qw(/etc /var /var/lib)) {
+foreach my $mutable (qw(/etc /var/cache /var/lib)) {
     if (-d "$container_tree$mutable") {
         opendir(my $dir, "$container_tree$mutable");
 
@@ -676,8 +677,10 @@ foreach my $mutable (qw(/etc /var /var/lib)) {
             next if "$mutable/$member" eq '/etc/machine-id';
             next if "$mutable/$member" eq '/etc/passwd';
             next if "$mutable/$member" eq '/etc/resolv.conf';
-            next if "$mutable/$member" eq '/var/lib';
-            next if "$mutable/$member" eq '/var/run';
+            next if "$mutable/$member" eq '/var/lib/dbus';
+            next if "$mutable/$member" eq '/var/lib/dhcp';
+            next if "$mutable/$member" eq '/var/lib/sudo';
+            next if "$mutable/$member" eq '/var/lib/urandom';
 
             no autodie 'readlink';
             my $target = readlink "$container_tree$mutable/$member";

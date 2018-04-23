@@ -821,6 +821,7 @@ else {
         my @search_path = ("/lib/$tuple", "/usr/lib/$tuple");
 
         if (defined $ldso) {
+            # Add /lib64 and /usr/lib64 if applicable
             (undef, $libdir, undef) = File::Spec->splitpath($ldso);
             push @search_path, $libdir, "/usr$libdir";
         }

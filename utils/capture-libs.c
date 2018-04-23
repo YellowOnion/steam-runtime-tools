@@ -92,6 +92,19 @@ static struct option long_options[] =
 
 static int dest_fd = -1;
 
+/* Equivalent to GNU basename(3) from string.h, but not POSIX
+ * basename(3) from libgen.h. */
+static const char *my_basename (const char *path)
+{
+  const char *ret = strrchr( path, '/' );
+
+  if( ret == NULL )
+      return path;
+
+  assert( ret[0] == '/' );
+  return ret + 1;
+}
+
 static void usage (int code) __attribute__((noreturn));
 static void usage (int code)
 {
@@ -279,17 +292,14 @@ capture_one( const char *soname, capture_flags flags,
                 // doesn't chase symlinks if the prefix is '/' or empty.
                 p_realpath = realpath( provider.needed[i].path, NULL );
                 c_realpath = realpath( container.needed[0].path, NULL );
-                p_basename = strrchr( p_realpath, '/' );
-                c_basename = strrchr( c_realpath, '/' );
+                p_basename = my_basename( p_realpath );
+                c_basename = my_basename( c_realpath );
 
                 DEBUG( DEBUG_TOOL,
                        "Comparing %s \"%s\" from \"%s\" with "
                        "\"%s\" from \"%s\"",
                        provider.needed[i].name, p_basename, option_provider,
                        c_basename, option_container );
-
-                assert( p_basename );
-                assert( c_basename );
 
                 /* If equal, we prefer the provider over the container */
                 if( strverscmp( c_basename, p_basename ) > 0 )

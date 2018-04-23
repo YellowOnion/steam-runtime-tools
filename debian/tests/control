@@ -10,6 +10,7 @@ Depends:
  libcapsule-tests,
  libcapsule-tools,
  libipc-run-perl,
+ libglib2.0-0,
  libjpeg62 (>= 6b1) | libjpeg62-turbo,
  libtool,
  perl,

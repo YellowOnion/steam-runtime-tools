@@ -165,6 +165,101 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         "--dest=$libdir", "--provider=$host",
         'if-exists:soname-match:this*library*does?not?exist']);
 
+# libgobject-2.0.so.0 depends on libglib-2.0.so.0 so normally,
+# capturing GObject captures GLib
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        '--bind', $libdir, $libdir,
+        qw(--dev-bind /dev /dev),
+        $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+        "--dest=$libdir", "--provider=$host",
+        'soname:libgobject-2.0.so.0']);
+{
+    opendir(my $dir_iter, $libdir);
+    foreach my $symlink (readdir $dir_iter) {
+        next if $symlink eq '.' || $symlink eq '..';
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+}
+like(readlink "$libdir/libgobject-2.0.so.0",
+     qr{^$LIBDIR/libgobject-2\.0\.so\.0(?:[0-9.]+)$},
+     '$libdir/libgobject-2.0.so.0 is captured');
+like(readlink "$libdir/libglib-2.0.so.0",
+     qr{^$LIBDIR/libglib-2\.0\.so\.0(?:[0-9.]+)$},
+     '$libdir/libglib-2.0.so.0 is captured as a dependency');
+
+# only-dependencies: captures the dependency, GLib but not the
+# dependent library, GObject
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        '--bind', $libdir, $libdir,
+        qw(--dev-bind /dev /dev),
+        $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+        "--dest=$libdir", "--provider=$host",
+        'only-dependencies:soname:libgobject-2.0.so.0']);
+{
+    opendir(my $dir_iter, $libdir);
+    foreach my $symlink (readdir $dir_iter) {
+        next if $symlink eq '.' || $symlink eq '..';
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+}
+ok(! -e "$libdir/libgobject-2.0.so.0",
+   'only-dependencies: does not capture the library itself');
+like(readlink "$libdir/libglib-2.0.so.0",
+     qr{^$LIBDIR/libglib-2\.0\.so\.0(?:[0-9.]+)$},
+     '$libdir/libglib-2.0.so.0 is captured as a dependency');
+
+# no-dependencies: captures the dependent library, GObject but not the
+# dependency, GLib (not amazingly useful)
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        '--bind', $libdir, $libdir,
+        qw(--dev-bind /dev /dev),
+        $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+        "--dest=$libdir", "--provider=$host",
+        'no-dependencies:soname:libgobject-2.0.so.0']);
+{
+    opendir(my $dir_iter, $libdir);
+    foreach my $symlink (readdir $dir_iter) {
+        next if $symlink eq '.' || $symlink eq '..';
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+}
+like(readlink "$libdir/libgobject-2.0.so.0",
+     qr{^$LIBDIR/libgobject-2\.0\.so\.0(?:[0-9.]+)$},
+     '$libdir/libgobject-2.0.so.0 is captured');
+ok(! -e "$libdir/libglib-2.0.so.0",
+   'no-dependencies: does not capture libglib-2.0.so.0');
+
+# only-dependencies:no-dependencies: (either way round) is completely useless
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                          '--bind', $libdir, $libdir,
+                          qw(--dev-bind /dev /dev),
+                          $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                          "--dest=$libdir", "--provider=$host",
+                          'only-dependencies:no-dependencies:libglib-2.0.so.0'],
+                         '>&2');
+ok(! $result, 'only-dependencies:no-dependencies: is useless');
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                          '--bind', $libdir, $libdir,
+                          qw(--dev-bind /dev /dev),
+                          $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                          "--dest=$libdir", "--provider=$host",
+                          'no-dependencies:only-dependencies:libglib-2.0.so.0'],
+                         '>&2');
+ok(! $result, 'no-dependencies:only-dependencies: is useless');
+
 SKIP: {
     skip "not on Linux? Good luck!", 1 unless $^O eq 'linux';
     my $stdout;

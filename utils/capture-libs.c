@@ -163,6 +163,10 @@ static void usage (int code)
                "\tCapture every library in ld.so.cache that matches\n"
                "\ta shell-style glob (which will usually need to be\n"
                "\tquoted when using a shell)\n" );
+  fprintf( fh, "only-dependencies:PATTERN\n"
+               "\tCapture the dependencies of each library matched by\n"
+               "\tPATTERN, but not the library matched by PATTERN itself\n"
+               "\t(unless a match for PATTERN depends on another match)\n" );
   fprintf( fh, "if-exists:PATTERN\n"
                "\tCapture PATTERN, but don't fail if nothing matches\n" );
   fprintf( fh, "even-if-older:PATTERN\n"
@@ -180,6 +184,8 @@ typedef enum
   CAPTURE_FLAG_NONE = 0,
   CAPTURE_FLAG_EVEN_IF_OLDER = (1 << 0),
   CAPTURE_FLAG_IF_EXISTS = (1 << 1),
+  CAPTURE_FLAG_LIBRARY_ITSELF = ( 1 << 2 ),
+  CAPTURE_FLAG_DEPENDENCIES = ( 1 << 3 ),
 } capture_flags;
 
 static bool
@@ -252,6 +258,21 @@ capture_one( const char *soname, capture_flags flags,
         if( !provider.needed[i].name )
         {
             continue;
+        }
+
+        if( i == 0 && !( flags & CAPTURE_FLAG_LIBRARY_ITSELF ) )
+        {
+            DEBUG( DEBUG_TOOL, "Not capturing \"%s\" itself as requested",
+                   provider.needed[i].name );
+            continue;
+        }
+
+        if( i > 0 && !( flags & CAPTURE_FLAG_DEPENDENCIES ) )
+        {
+            DEBUG( DEBUG_TOOL,
+                   "Not capturing dependencies of \"%s\" as requested",
+                   provider.needed[0].name );
+            break;
         }
 
         its_basename = my_basename( provider.needed[i].name );
@@ -529,6 +550,17 @@ capture_pattern( const char *pattern, capture_flags flags,
 {
     DEBUG( DEBUG_TOOL, "%s", pattern );
 
+    if ( ( flags & ( CAPTURE_FLAG_LIBRARY_ITSELF |
+                     CAPTURE_FLAG_DEPENDENCIES ) ) == 0 )
+    {
+        _capsule_set_error( code, message, EINVAL,
+                            "combining no-dependencies: with "
+                            "only-dependencies: is meaningless, "
+                            "so \"%s\" is invalid",
+                            pattern );
+        return false;
+    }
+
     if( strstarts( pattern, "soname:" ) )
     {
         return capture_one( pattern + strlen( "soname:" ),
@@ -552,6 +584,20 @@ capture_pattern( const char *pattern, capture_flags flags,
     {
         return capture_pattern( pattern + strlen( "even-if-older:" ),
                                 flags | CAPTURE_FLAG_EVEN_IF_OLDER,
+                                code, message );
+    }
+
+    if( strstarts( pattern, "only-dependencies:" ) )
+    {
+        return capture_pattern( pattern + strlen( "only-dependencies:" ),
+                                flags & ~CAPTURE_FLAG_LIBRARY_ITSELF,
+                                code, message );
+    }
+
+    if( strstarts( pattern, "no-dependencies:" ) )
+    {
+        return capture_pattern( pattern + strlen( "no-dependencies:" ),
+                                flags & ~CAPTURE_FLAG_DEPENDENCIES,
                                 code, message );
     }
 
@@ -650,7 +696,8 @@ capture_patterns( const char * const *patterns, capture_flags flags,
 int
 main (int argc, char **argv)
 {
-    capture_flags flags = CAPTURE_FLAG_NONE;
+    capture_flags flags = (CAPTURE_FLAG_LIBRARY_ITSELF |
+                           CAPTURE_FLAG_DEPENDENCIES);
     int code = 0;
     char *message = NULL;
 

@@ -131,10 +131,6 @@ getopt_temp="$(getopt -o '' --long \
     'freedesktop-app-id:,help,home:,interactive,steam-app-id:,verbose' \
     -n "$me" -- "$@")"
 
-if [ $? -ne 0 ]; then
-    exit $?
-fi
-
 eval set -- "$getopt_temp"
 unset getopt_temp
 

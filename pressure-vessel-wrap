@@ -105,7 +105,8 @@ usage () {
     echo
     echo "Run COMMAND [ARGS...] in a container that protects \$HOME."
     echo
-    echo "The current working directory will be writeable for COMMAND."
+    echo "The current working directory will be writeable for COMMAND,"
+    echo "unless it is the real home directory."
     echo
     echo "Options:"
     echo "--steam-app-id=123            Use ~/.var/app/com.steampowered.App123"
@@ -254,7 +255,13 @@ fi
 # Make sure the current working directory (the game we are going to
 # run) is available. Some games write here.
 PWD="$(pwd)"
-set -- --bind "$PWD" "$PWD" --chdir "$PWD" "$@"
+if test "$HOME" -ef "$PWD"; then
+    echo "$me: Not making real $PWD available to container because it is" \
+         "the home directory" >&2
+else
+    set -- --bind "$PWD" "$PWD" "$@"
+fi
+set -- --chdir "$PWD" "$@"
 
 # We need libraries from the Steam Runtime, so make sure that's visible
 # (it should never need to be read/write though)

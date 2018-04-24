@@ -106,6 +106,51 @@ static const char *my_basename (const char *path)
   return ret + 1;
 }
 
+static bool resolve_ld_so ( const char *prefix,
+                            char path[PATH_MAX],
+                            const char **within_prefix,
+                            int *code,
+                            char **message )
+{
+    size_t prefix_len = strlen( prefix );
+
+    if( build_filename( path, PATH_MAX, prefix, LD_SO,
+                        NULL ) >= PATH_MAX )
+    {
+        _capsule_set_error( code, message, E2BIG,
+                            "prefix \"%s\" is too long",
+                            prefix );
+        return false;
+    }
+
+    DEBUG( DEBUG_TOOL, "Starting with %s", path );
+
+    while( resolve_link( prefix, path ) )
+    {
+        DEBUG( DEBUG_TOOL, "-> %s", path );
+    }
+
+    if( strcmp( prefix, "/" ) == 0 )
+    {
+        prefix_len = 0;
+    }
+
+    if( ( prefix_len > 0 &&
+          strncmp( path, prefix, prefix_len ) != 0 ) ||
+        path[prefix_len] != '/' )
+    {
+        _capsule_set_error( code, message, EXDEV,
+                            "\"%s\" is not within prefix \"%s\"",
+                            path, prefix );
+        return false;
+    }
+
+    if( within_prefix != NULL)
+        *within_prefix = path + prefix_len;
+
+    return true;
+}
+
 static void usage (int code) __attribute__((noreturn));
 static void usage (int code)
 {
@@ -935,35 +980,15 @@ main (int argc, char **argv)
             case OPTION_RESOLVE_LD_SO:
                 {
                     char path[PATH_MAX] = { 0 };
-                    size_t prefix_len = strlen( optarg );
+                    const char *within_prefix = NULL;
 
-                    if( build_filename( path, sizeof(path), optarg,
-                                        LD_SO, NULL ) >= sizeof(path) )
+                    if( !resolve_ld_so( optarg, path, &within_prefix,
+                                        &code, &message ) )
                     {
-                        errx( 1, "\"%s\" too long", optarg );
+                        errx( 1, "code %d: %s", code, message );
                     }
 
-                    DEBUG( DEBUG_TOOL, "Starting with %s", path );
-
-                    while( resolve_link( optarg, path ) )
-                    {
-                        DEBUG( DEBUG_TOOL, "-> %s", path );
-                    }
-
-                    if( strcmp( optarg, "/" ) == 0 )
-                    {
-                        prefix_len = 0;
-                    }
-
-                    if( ( prefix_len > 0 &&
-                          strncmp( path, optarg, prefix_len ) != 0 ) ||
-                        path[prefix_len] != '/' )
-                    {
-                        errx( 1, "\"%s\" is not within prefix \"%s\"",
-                              path, optarg );
-                    }
-
-                    puts( path + prefix_len );
+                    puts( within_prefix );
                     return 0;
                 }
                 break;

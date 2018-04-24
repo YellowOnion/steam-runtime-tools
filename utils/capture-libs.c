@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <fnmatch.h>
 #include <getopt.h>
+#include <glob.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -152,9 +153,7 @@ static void usage (int code)
   fprintf( fh, "--provider=PROVIDER\n"
                "\tFind libraries in PROVIDER [default: /]\n" );
   fprintf( fh, "\n" );
-  fprintf( fh, "Each PATTERN is a SONAME, or a shell-style glob matching\n"
-               "SONAMEs (which will usually need to be quoted when using\n"
-               "a shell), or one of the following special strings:\n" );
+  fprintf( fh, "Each PATTERN is one of:\n" );
   fprintf( fh, "\n" );
   fprintf( fh, "soname:SONAME\n"
                "\tCapture the library in ld.so.cache whose name is\n"
@@ -176,6 +175,20 @@ static void usage (int code)
                "\tShortcut for even-if-older:if-exists:soname:libGL.so.1,\n"
                "\teven-if-older:if-exists:soname-match:libGLX_*.so.0, and\n"
                "\tvarious other GL-related libraries\n" );
+  fprintf( fh, "path:ABS-PATH\n"
+               "\tResolve ABS-PATH as though chrooted into PROVIDER\n"
+               "\tand capture the result\n" );
+  fprintf( fh, "path-match:GLOB\n"
+               "\tResolve GLOB as though chrooted into PROVIDER\n"
+               "\tand capture the result\n" );
+  fprintf( fh, "an absolute path with no '?', '*', '['\n"
+               "\tSame as path:PATTERN\n" );
+  fprintf( fh, "a glob pattern starting with '/'\n"
+               "\tSame as path-match:PATTERN\n" );
+  fprintf( fh, "a glob pattern with no '/'\n"
+               "\tSame as soname-match:PATTERN\n" );
+  fprintf( fh, "a bare SONAME with no '/', '?', '*', '['\n"
+               "\tSame as soname:PATTERN\n" );
   exit( code );
 }
 
@@ -411,15 +424,15 @@ capture_one( const char *soname, capture_flags flags,
         assert( target != NULL );
 
         DEBUG( DEBUG_TOOL, "Creating symlink %s/%s -> %s",
-               option_dest, provider.needed[i].name, target );
+               option_dest, its_basename, target );
 
-        if( symlinkat( target, dest_fd, provider.needed[i].name ) < 0 )
+        if( symlinkat( target, dest_fd, its_basename ) < 0 )
         {
             warn( "warning: cannot create symlink %s/%s",
-                  option_dest, provider.needed[i].name );
+                  option_dest, its_basename );
         }
 
-        if( strcmp( provider.needed[i].name, "libc.so.6" ) == 0 )
+        if( strcmp( its_basename, "libc.so.6" ) == 0 )
         {
             /* Having captured libc, we need to capture the rest of
              * the related libraries from the same place */
@@ -527,7 +540,8 @@ capture_soname_match( const char *pattern, capture_flags flags,
     if( !ctx.found && !( flags & CAPTURE_FLAG_IF_EXISTS ) )
     {
         _capsule_set_error( code, message, ENOENT,
-                            "no matches found for glob pattern \"%s\"",
+                            "no matches found for glob pattern \"%s\" "
+                            "in ld.so.cache",
                             pattern );
         goto out;
     }
@@ -543,6 +557,86 @@ out:
 
 #define strstarts(str, start) \
   (strncmp( str, start, strlen( start ) ) == 0)
+
+static bool
+capture_path_match( const char *pattern, capture_flags flags,
+                    int *code, char **message )
+{
+    char *abs = NULL;
+    int res;
+    bool ret = false;
+    glob_t buffer;
+    size_t i;
+
+    DEBUG( DEBUG_TOOL, "%s", pattern );
+
+    abs = build_filename_alloc( option_provider, pattern, NULL );
+    res = glob( abs, 0, NULL, &buffer );
+
+    switch( res )
+    {
+        case 0:
+            ret = true;
+            for( i = 0; i < buffer.gl_pathc; i++)
+            {
+                const char *path = buffer.gl_pathv[i];
+
+                if( option_provider != NULL &&
+                    strcmp( option_provider, "/" ) != 0 &&
+                    ( !strstarts( path, option_provider ) ||
+                      path[strlen( option_provider )] != '/' ) )
+                {
+                  _capsule_set_error( code, message, EXDEV,
+                                      "path pattern \"%s\" matches \"%s\""
+                                      "which is not in \"%s\"",
+                                      pattern, path, option_provider );
+                  globfree( &buffer );
+                  return false;
+                }
+
+                if( !capture_one( path + strlen( option_provider ),
+                                  flags, code, message ) )
+                {
+                    ret = false;
+                    break;
+                }
+            }
+            globfree( &buffer );
+            break;
+
+        case GLOB_NOMATCH:
+            if( flags & CAPTURE_FLAG_IF_EXISTS )
+            {
+                ret = true;
+            }
+            else
+            {
+                _capsule_set_error( code, message, ENOENT,
+                                    "no matches found for glob pattern \"%s\" "
+                                    "in \"%s\"",
+                                    pattern, option_provider );
+            }
+            break;
+
+        case GLOB_NOSPACE:
+            _capsule_set_error( code, message, ENOMEM,
+                                "unable to match glob pattern \"%s\" "
+                                "in \"%s\"",
+                                pattern, option_provider );
+            break;
+
+        default:
+        case GLOB_ABORTED:
+            _capsule_set_error( code, message, EIO,
+                                "unable to match glob pattern \"%s\" "
+                                "in \"%s\"",
+                                pattern, option_provider );
+            break;
+    }
+
+    free( abs );
+    return ret;
+}
 
 static bool
 capture_pattern( const char *pattern, capture_flags flags,
@@ -561,6 +655,21 @@ capture_pattern( const char *pattern, capture_flags flags,
         return false;
     }
 
+    if( strstarts( pattern, "path:" ) )
+    {
+        if( !strstarts( pattern, "path:/" ) )
+        {
+            _capsule_set_error( code, message, EINVAL,
+                                "path: requires an absolute path as "
+                                "argument, not \"%s\"",
+                                pattern );
+            return false;
+        }
+
+        return capture_one( pattern + strlen( "path:" ),
+                            flags, code, message );
+    }
+
     if( strstarts( pattern, "soname:" ) )
     {
         return capture_one( pattern + strlen( "soname:" ),
@@ -571,6 +680,12 @@ capture_pattern( const char *pattern, capture_flags flags,
     {
         return capture_soname_match( pattern + strlen( "soname-match:" ),
                                      flags, code, message );
+    }
+
+    if( strstarts( pattern, "path-match:" ) )
+    {
+        return capture_path_match( pattern + strlen( "path-match:" ),
+                                   flags, code, message );
     }
 
     if( strstarts( pattern, "if-exists:" ) )
@@ -664,6 +779,40 @@ capture_pattern( const char *pattern, capture_flags flags,
                                 ( flags | CAPTURE_FLAG_IF_EXISTS |
                                   CAPTURE_FLAG_EVEN_IF_OLDER ),
                                 code, message );
+    }
+
+    if( strchr( pattern, ':' ) != NULL )
+    {
+        _capsule_set_error( code, message, EINVAL,
+                            "patterns containing ':' must match a known "
+                            "mode, not \"%s\" (use soname: or path: to "
+                            "take patterns containing ':' literally, if "
+                            "necessary)",
+                            pattern );
+        return false;
+    }
+
+    if( pattern[0] == '/' )
+    {
+        if( strchr( pattern, '*' ) != NULL ||
+            strchr( pattern, '?' ) != NULL ||
+            strchr( pattern, '[' ) != NULL )
+        {
+            // Interpret as if path-match:
+            return capture_path_match( pattern, flags, code, message );
+        }
+        else
+        {
+            return capture_one( pattern, flags, code, message );
+        }
+    }
+
+    if( strchr( pattern, '/' ) != NULL )
+    {
+        _capsule_set_error( code, message, EINVAL,
+                            "path arguments must be absolute, not \"%s\"",
+                            pattern );
+        return false;
     }
 
     if( strchr( pattern, '*' ) != NULL ||

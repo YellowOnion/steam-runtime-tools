@@ -88,6 +88,7 @@ fi
 
 fake_home=
 interactive=
+verbose=
 
 # Pop the pressure-vessel-wrap options from $@, leaving the command
 # and arguments.
@@ -120,13 +121,14 @@ usage () {
     echo "--interactive                 Run an interactive shell instead of"
     echo "                              COMMAND. Executing \"\$@\" in that"
     echo "                              shell will run COMMAND [ARGS]."
+    echo "--verbose                     Be more verbose."
     echo
 
     exit "$code"
 }
 
 getopt_temp="$(getopt -o '' --long \
-    'freedesktop-app-id:,help,home:,interactive,steam-app-id:' \
+    'freedesktop-app-id:,help,home:,interactive,steam-app-id:,verbose' \
     -n "$me" -- "$@")"
 
 if [ $? -ne 0 ]; then
@@ -155,6 +157,11 @@ while [ "$#" -gt 0 ]; do
 
         (--interactive)
             interactive=yes
+            shift
+            ;;
+
+        (--verbose)
+            verbose=yes
             shift
             ;;
 
@@ -343,6 +350,10 @@ fi
 
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)
+if [ -n "$verbose" ]; then
+    echo "$me: '$BWRAP $*'" >&2
+fi
+
 exec "$BWRAP" $bwrap_end_of_options "$@" || e=$?
 echo "$me: failed to execute '$BWRAP $*': exec status $?" >&2
 exit $?

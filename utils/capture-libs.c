@@ -781,6 +781,46 @@ capture_pattern( const char *pattern, capture_flags flags,
                                 code, message );
     }
 
+    if( strcmp( pattern, "nvidia:" ) == 0 )
+    {
+        static const char * const gl_patterns[] = {
+            "soname:libEGL.so.1",
+            "soname-match:libEGL_nvidia.so.*",
+
+            "soname:libGL.so.1",
+
+            "soname:libGLESv1_CM.so.1",
+            "soname-match:libGLESv1_CM_nvidia.so.*",
+
+            "soname:libGLESv2.so.2",
+            "soname-match:libGLESv2_nvidia.so.*",
+
+            "soname:libGLX.so.0",
+            "soname-match:libGLX_nvidia.so.*",
+            "soname:libGLX_indirect.so.0",
+
+            "soname-match:libGLdispatch.so.*",
+
+            "soname:libOpenGL.so.0",
+
+            "soname-match:libcuda.so.*",
+            "soname-match:libglx.so.*",
+            "soname-match:libnvcuvid.so.*",
+            "soname-match:libnvidia-*.so.*",
+            "soname-match:libOpenCL.so.*",
+            "soname-match:libvdpau_nvidia.so.*",
+            NULL
+        };
+
+        /* We certainly want to capture the host GL stack even if it
+         * appears older than what's in the container: the NVIDIA
+         * proprietary drivers have to be in lockstep with the kernel. */
+        return capture_patterns( gl_patterns,
+                                ( flags | CAPTURE_FLAG_IF_EXISTS |
+                                  CAPTURE_FLAG_EVEN_IF_OLDER ),
+                                code, message );
+    }
+
     if( strchr( pattern, ':' ) != NULL )
     {
         _capsule_set_error( code, message, EINVAL,

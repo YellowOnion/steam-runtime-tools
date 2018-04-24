@@ -156,14 +156,15 @@ static void usage (int code)
                "SONAMEs (which will usually need to be quoted when using\n"
                "a shell), or one of the following special strings:\n" );
   fprintf( fh, "\n" );
+  fprintf( fh, "soname:SONAME\n"
+               "\tCapture the library in ld.so.cache whose name is\n"
+               "\texactly SONAME\n" );
   fprintf( fh, "soname-match:GLOB\n"
                "\tCapture every library in ld.so.cache that matches\n"
                "\ta shell-style glob (which will usually need to be\n"
                "\tquoted when using a shell)\n" );
   fprintf( fh, "if-exists:SONAME\n"
                "\tCapture SONAME, but don't fail if it doesn't exist\n" );
-  fprintf( fh, "literal:SONAME\n"
-               "\tTake ':', '*' etc. in SONAME literally\n" );
   fprintf( fh, "even-if-older:SONAME\n"
                "\tCapture SONAME, even if the version in CONTAINER\n"
                "\tappears newer\n" );
@@ -517,9 +518,9 @@ capture_pattern( const char *pattern, capture_flags flags,
 {
     DEBUG( DEBUG_TOOL, "%s", pattern );
 
-    if( strstarts( pattern, "literal:" ) )
+    if( strstarts( pattern, "soname:" ) )
     {
-        return capture_one( pattern + strlen( "literal:" ),
+        return capture_one( pattern + strlen( "soname:" ),
                             flags, code, message );
     }
 

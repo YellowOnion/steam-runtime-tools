@@ -43,7 +43,7 @@ my $libdir = "${test_tempdir}/libdir";
 
 ok(! system('rm', '-fr', $libdir));
 mkdir($libdir);
-run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, 'literal:libc.so.6'], '>&2',
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, 'soname:libc.so.6'], '>&2',
     init => sub { chdir $libdir or die $!; });
 ok(-e "$libdir/libc.so.6", 'libc.so.6 was captured');
 like(readlink "$libdir/libc.so.6", qr{^$LIBDIR/libc\.so\.6$},
@@ -89,7 +89,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         qw(--dev-bind /dev /dev),
         $CAPSULE_CAPTURE_LIBS_TOOL,
         "--dest=$libdir",
-        "--provider=$host", 'literal:libc.so.6'], '>&2');
+        "--provider=$host", 'soname:libc.so.6'], '>&2');
 {
     opendir(my $dir_iter, $libdir);
     my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;
@@ -110,7 +110,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         qw(--dev-bind /dev /dev),
         $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
         "--dest=$libdir",
-        "--provider=$host", 'literal:libc.so.6'], '>&2');
+        "--provider=$host", 'soname:libc.so.6'], '>&2');
 {
     opendir(my $dir_iter, $libdir);
     my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;

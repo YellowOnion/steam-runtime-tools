@@ -351,5 +351,5 @@ if [ -n "$verbose" ]; then
 fi
 
 exec "$BWRAP" $bwrap_end_of_options "$@" || e=$?
-echo "$me: failed to execute '$BWRAP $*': exec status $?" >&2
-exit $?
+echo "$me: failed to execute '$BWRAP $*': exec status $e" >&2
+exit "$e"

@@ -92,8 +92,40 @@ interactive=
 # Pop the pressure-vessel-wrap options from $@, leaving the command
 # and arguments.
 
+usage () {
+    code="$1"
+    shift
+
+    if [ "$code" -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo
+    echo "Usage: $me [OPTIONS] [--] COMMAND [ARGS...]"
+    echo
+    echo "Run COMMAND [ARGS...] in a container that protects \$HOME."
+    echo
+    echo "The current working directory will be writeable for COMMAND."
+    echo
+    echo "Options:"
+    echo "--steam-app-id=123            Use ~/.var/app/com.steampowered.App123"
+    echo "                              as home directory."
+    echo "                              [Default: \$SteamAppId]"
+    echo "--freedesktop-app-id=ID       Use ~/.var/app/ID as home directory."
+    echo "                              ID is com.example.MyApp or similar."
+    echo "                              This interoperates with Flatpak."
+    echo "--home=HOME                   Use HOME as home directory."
+    echo
+    echo "--interactive                 Run an interactive shell instead of"
+    echo "                              COMMAND. Executing \"\$@\" in that"
+    echo "                              shell will run COMMAND [ARGS]."
+    echo
+
+    exit "$code"
+}
+
 getopt_temp="$(getopt -o '' --long \
-    'freedesktop-app-id:,home:,interactive,steam-app-id:' \
+    'freedesktop-app-id:,help,home:,interactive,steam-app-id:' \
     -n "$me" -- "$@")"
 
 if [ $? -ne 0 ]; then
@@ -125,6 +157,11 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
 
+        (--help)
+            usage 0
+            # not reached
+            ;;
+
         (--)
             shift
             break
@@ -132,7 +169,8 @@ while [ "$#" -gt 0 ]; do
 
         (--*)
             echo "$me: unknown option: $1" >&2
-            exit 2
+            usage 2
+            # not reached
             ;;
 
         (*)

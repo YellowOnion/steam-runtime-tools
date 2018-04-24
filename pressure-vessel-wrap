@@ -2,7 +2,7 @@
 
 # pressure-vessel — use containers for Steam
 #
-# Copyright © 2017 Collabora Ltd.
+# Copyright © 2017-2018 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -34,10 +34,10 @@ me="${me##*/}"
 # Undo any weird environment before we start running external
 # executables. We put it back before running the actual app/game.
 
-caller_ld_preload="$LD_PRELOAD"
+caller_ld_preload="${LD_PRELOAD:-}"
 unset LD_PRELOAD
 
-caller_ld_library_path="$LD_LIBRARY_PATH"
+caller_ld_library_path="${LD_LIBRARY_PATH:-}"
 
 if [ -n "$SYSTEM_LD_LIBRARY_PATH" ]; then
     export LD_LIBRARY_PATH="$SYSTEM_LD_LIBRARY_PATH"
@@ -45,12 +45,13 @@ else
     unset LD_LIBRARY_PATH
 fi
 
-caller_path="$PATH"
+caller_path="${PATH:-"${default_path}"}"
+default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
 
 if [ -n "$SYSTEM_PATH" ]; then
     export PATH="$SYSTEM_PATH"
 else
-    PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
+    export PATH="$default_path"
 fi
 
 # If bwrap isn't installed as a standalone binary on the PATH, see

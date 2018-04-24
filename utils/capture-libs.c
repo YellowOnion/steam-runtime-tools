@@ -169,9 +169,9 @@ static void usage (int code)
                "\tCapture SONAME, even if the version in CONTAINER\n"
                "\tappears newer\n" );
   fprintf( fh, "gl:\n"
-               "\tShortcut for even-if-older:libGL.so.1,\n"
-               "\teven-if-older:libGLX_*.so.0, and various other\n"
-               "\tGL-related libraries\n");
+               "\tShortcut for even-if-older:if-exists:soname:libGL.so.1,\n"
+               "\teven-if-older:if-exists:soname-match:libGLX_*.so.0, and\n"
+               "\tvarious other GL-related libraries\n" );
   exit( code );
 }
 
@@ -403,21 +403,21 @@ capture_one( const char *soname, capture_flags flags,
             /* Having captured libc, we need to capture the rest of
              * the related libraries from the same place */
             static const char * const libc_patterns[] = {
-                "libBrokenLocale.so.1",
-                "libanl.so.1",
-                "libcidn.so.1",
-                "libcrypt.so.1",
-                "libdl.so.2",
-                "libm.so.6",
-                "libmemusage.so",
-                "libmvec.so.1",
-                "libnsl.so.1",
-                "libpcprofile.so",
-                "libpthread.so.0",
-                "libresolv.so.2",
-                "librt.so.1",
-                "libthread_db.so.1",
-                "libutil.so.1",
+                "soname:libBrokenLocale.so.1",
+                "soname:libanl.so.1",
+                "soname:libcidn.so.1",
+                "soname:libcrypt.so.1",
+                "soname:libdl.so.2",
+                "soname:libm.so.6",
+                "soname:libmemusage.so",
+                "soname:libmvec.so.1",
+                "soname:libnsl.so.1",
+                "soname:libpcprofile.so",
+                "soname:libpthread.so.0",
+                "soname:libresolv.so.2",
+                "soname:librt.so.1",
+                "soname:libthread_db.so.1",
+                "soname:libutil.so.1",
                 NULL
             };
 
@@ -549,47 +549,47 @@ capture_pattern( const char *pattern, capture_flags flags,
         // Useful information:
         // https://devtalk.nvidia.com/default/topic/915640/multiple-glx-client-libraries-in-the-nvidia-linux-driver-installer-package/
         static const char * const gl_patterns[] = {
-            "libEGL.so.1",
+            "soname:libEGL.so.1",
             // Vendor ICDs for libEGL.so.1
             // (Registered via JSON in /usr/share/glvnd/egl_vendor.d)
-            "libEGL_*.so.*",
+            "soname-match:libEGL_*.so.*",
 
-            "libGL.so.1",
+            "soname:libGL.so.1",
 
-            "libGLESv1_CM.so.1",
+            "soname:libGLESv1_CM.so.1",
             // Vendor ICDs for libGLESv1_CM.so.1
-            "libGLESv1_CM_*.so.*",
+            "soname-match:libGLESv1_CM_*.so.*",
 
-            "libGLESv2.so.2",
+            "soname:libGLESv2.so.2",
             // Vendor ICDs for libGLESv2.so.2
-            "libGLESv2_*.so.*",
+            "soname:libGLESv2_*.so.*",
 
-            "libGLX.so.0",
+            "soname:libGLX.so.0",
             // Vendor ICDs for libGL.so.1 and/or libGLX.so.0
-            "libGLX_*.so.*",
+            "soname-match:libGLX_*.so.*",
             // This one looks redundant, but because it's usually a
             // symlink to someone else's implementation, we can't find
             // it in the ld.so cache under its own name: its SONAME is
             // libGLX_mesa.so.0 or libGLX_nvidia.so.0. So we can't find
             // it by wildcard-matching and have to look it up explicitly
             // instead.
-            "libGLX_indirect.so.0",
+            "soname:libGLX_indirect.so.0",
 
             // This is an implementation detail of GLVND, but it had
             // better match the GLVND dispatchers or bad things will
             // happen
-            "libGLdispatch.so.*",
+            "soname-match:libGLdispatch.so.*",
 
-            "libOpenGL.so.0",
+            "soname:libOpenGL.so.0",
 
             // Mostly used by Mesa, but apps/games are also allowed to
             // use it directly
-            "libgbm.so.1",
+            "soname:libgbm.so.1",
 
             // Mesa libraries should have DT_NEEDED for this, but some
             // historical versions didn't, so it wouldn't be picked up
             // by recursive dependency resolution
-            "libglapi.so.0",
+            "soname:libglapi.so.0",
 
             // Some libraries are not explicitly mentioned here:
             // For NVIDIA, we also need libnvidia-glcore.so.$VERSION,
@@ -613,9 +613,11 @@ capture_pattern( const char *pattern, capture_flags flags,
         strchr( pattern, '?' ) != NULL ||
         strchr( pattern, '[' ) != NULL )
     {
+        // Interpret as if soname-match:
         return capture_soname_match( pattern, flags, code, message );
     }
 
+    // Default: interpret as if soname:
     return capture_one( pattern, flags, code, message );
 }
 

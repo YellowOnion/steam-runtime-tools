@@ -164,7 +164,7 @@ if [ -n "$interactive" ]; then
 fi
 
 if [ -z "$fake_home" ]; then
-    if [ -n "$SteamAppId" ]; then
+    if [ -n "${SteamAppId:-}" ]; then
         fake_home="$HOME/.var/app/com.steampowered.App$SteamAppId"
     else
         echo "$me: either --home, --freedesktop-app-id, --steam-app-id" \

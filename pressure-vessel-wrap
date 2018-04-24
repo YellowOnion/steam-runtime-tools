@@ -305,18 +305,26 @@ if [ -e "$HOME/.steam/steam.pipe" ]; then
     set -- --bind "$HOME/.steam/steam.pipe" "$HOME/.steam/steam.pipe" "$@"
 fi
 
-# Set up the home directory
-mkdir -m700 -p "$fake_home"
-set -- --bind "$fake_home" "$HOME" --bind "$fake_home" "$fake_home" "$@"
+# The shellcheck tool warns that -m is only applied to the deepest
+# directory and not any parents created via -p, but that's fine here:
+# we use a separate mkdir -p for each directory whose permissions we
+# care about.
+# shellcheck disable=SC2174
+{
+    # Set up the home directory
+    mkdir -m700 -p "$fake_home"
+    set -- --bind "$fake_home" "$HOME" --bind "$fake_home" "$fake_home" "$@"
 
-# Set up /var/tmp, XDG_*_HOME like Flatpak does
-mkdir -m700 -p "$fake_home/cache/tmp"
-set -- --bind "$fake_home/cache/tmp" /var/tmp "$@"
-set -- --setenv XDG_CACHE_HOME "$fake_home/cache" "$@"
-mkdir -m700 -p "$fake_home/config"
-set -- --setenv XDG_CONFIG_HOME "$fake_home/config" "$@"
-mkdir -m700 -p "$fake_home/data"
-set -- --setenv XDG_DATA_HOME "$fake_home/data" "$@"
+    # Set up /var/tmp, XDG_*_HOME like Flatpak does
+    mkdir -m700 -p "$fake_home/cache"
+    mkdir -m700 -p "$fake_home/cache/tmp"
+    set -- --bind "$fake_home/cache/tmp" /var/tmp "$@"
+    set -- --setenv XDG_CACHE_HOME "$fake_home/cache" "$@"
+    mkdir -m700 -p "$fake_home/config"
+    set -- --setenv XDG_CONFIG_HOME "$fake_home/config" "$@"
+    mkdir -m700 -p "$fake_home/data"
+    set -- --setenv XDG_DATA_HOME "$fake_home/data" "$@"
+}
 
 # Protect other users' homes (but guard against the unlikely situation
 # that they don't exist)

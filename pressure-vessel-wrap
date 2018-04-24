@@ -146,14 +146,27 @@ if [ "$#" -eq 0 ]; then
     exit 2
 fi
 
-# bwrap doesn't support the -- syntax
-case "$1" in
-    (-*)
-        command="$1"
-        shift
-        set -- "./$command" "$@"
-        ;;
-esac
+if "$BWRAP" --help | grep -F '[--]' 2>/dev/null; then
+    bwrap_end_of_options="--"
+else
+    # bwrap doesn't support the -- syntax
+    bwrap_end_of_options=""
+    case "$1" in
+        (-*)
+            case "$1" in
+                (*=*)
+                    # env would interpret this as an environment variable
+                    echo "$me: Cannot execute command '$1' with bubblewrap < 0.2.2">&2
+                    exit 1
+                    ;;
+                (*)
+                    # Emulate it via env(1)
+                    bwrap_end_of_options="env"
+                    ;;
+            esac
+            ;;
+    esac
+fi
 
 if [ -n "$interactive" ]; then
     exec </dev/tty
@@ -285,6 +298,6 @@ fi
 
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)
-exec "$BWRAP" "$@" || e=$?
+exec "$BWRAP" $bwrap_end_of_options "$@" || e=$?
 echo "$me: failed to execute '$BWRAP $*': exec status $?" >&2
 exit $?

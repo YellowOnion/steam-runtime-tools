@@ -127,6 +127,14 @@ TODO
   They'll need some new special-case option analogous to
   Flatpak's `--filesystem=xdg-music:ro`.
 
+* To avoid [weird behaviour][] when part of a game respects
+  `XDG_CONFIG_HOME` and part of it hard-codes `~/.config`, maybe we
+  should make `$fake_home/config` a synonym (bind-mount) for
+  `$fake_home/.config`, and the same for `$fake_home/.local/share` with
+  `$fake_home/data` and `$fake_home/.cache` with `$fake_home/cache`?
+
+  [weird behaviour]: https://www.ctrl.blog/entry/flatpak-steamcloud-xdg
+
 Design
 ------
 

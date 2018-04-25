@@ -51,9 +51,9 @@ Instructions for testing
 
     - Run one of:
 
-        /path/to/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
-        /path/to/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
-        /path/to/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
+            /path/to/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
+            /path/to/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
+            /path/to/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
 
 Design constraints
 ------------------

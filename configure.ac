@@ -82,6 +82,19 @@ AS_IF([test "x$enable_host_prefix" = xno],
   [enable_host_prefix=""])
 AC_SUBST([HOST_PREFIX], [$enable_host_prefix])
 
+AC_ARG_ENABLE([tools-rpath],
+  [AS_HELP_STRING([--enable-tools-rpath=RPATH/yes/no],
+    [install link to tools with a RPATH ready to override with chrpath])],
+  [],
+  [enable_tools_rpath=no])
+
+AS_IF([test "x$enable_tools_rpath" = xyes],
+  [enable_tools_rpath="/_ORIGIN_/__/lib/$host"])
+AS_IF([test "x$enable_tools_rpath" = xno],
+  [enable_tools_rpath=""])
+AC_SUBST([enable_tools_rpath])
+AM_CONDITIONAL([ENABLE_TOOLS_RPATH], [test "x$enable_tools_rpath" != x])
+
 AC_SEARCH_LIBS([dlmopen], [dl])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 GTK_DOC_CHECK

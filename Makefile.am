@@ -34,6 +34,11 @@ pkgconfig_DATA          = data/libcapsule.pc data/libcapsule-tools.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
 
+if ENABLE_TOOLS_RPATH
+# Use -Wl to hide it from libtool
+tools_ldflags           = -Wl,-rpath,$(enable_tools_rpath)
+endif
+
 if ENABLE_HOST_PREFIX
 bin_SCRIPTS             = data/$(HOST_PREFIX)capsule-mkstublib
 
@@ -83,16 +88,20 @@ capsule_elf_dump_LDADD          = utils/libutils.la -ldl
 # This looks redundant, but it forces Automake to build separate
 # instantiations of dump.o for elf-dump and libcapsule
 capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)
+capsule_elf_dump_LDFLAGS        = $(AM_LDFLAGS) $(tools_ldflags)
 
 capsule_capture_libs_SOURCES = utils/capture-libs.c
 capsule_capture_libs_LDADD   = utils/libld.la
+capsule_capture_libs_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
 # now the rules for building our installables:
 capsule_symbols_SOURCES = utils/print-libstubs.c
 capsule_symbols_LDADD   = utils/libld.la
+capsule_symbols_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
 capsule_version_SOURCES = utils/print-version.c
 capsule_version_LDADD   = utils/libld.la
+capsule_version_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
 libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           capsule/capsule-relocate.c \

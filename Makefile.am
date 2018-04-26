@@ -27,12 +27,14 @@ static_docs             = Building Debugging Limitations Quick-Start Capsules
 
 # installable items:
 bin_PROGRAMS            = capsule-capture-libs capsule-symbols capsule-version
+if ENABLE_SHARED
 dist_bin_SCRIPTS        = data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
 pkgconfig_DATA          = data/libcapsule.pc data/libcapsule-tools.pc
 nobase_include_HEADERS  = capsule/capsule.h
 dist_doc_DATA           = $(foreach doc,$(static_docs),doc/$(doc).txt)
+endif
 
 if ENABLE_TOOLS_RPATH
 # Use -Wl to hide it from libtool
@@ -40,6 +42,7 @@ tools_ldflags           = -Wl,-rpath,$(enable_tools_rpath)
 endif
 
 if ENABLE_HOST_PREFIX
+if ENABLE_SHARED
 bin_SCRIPTS             = data/$(HOST_PREFIX)capsule-mkstublib
 
 # Write out a version of capsule-mkstublib with different defaults
@@ -52,6 +55,7 @@ data/$(HOST_PREFIX)capsule-mkstublib: data/capsule-mkstublib Makefile
 		echo ': "$${CAPSULE_SYMBOLS_TOOL:="$(bindir)/$(HOST_PREFIX)capsule-symbols"}"';\
 		sed -e 1d $<; \
 	) > $@.tmp; chmod +x $@.tmp; mv $@.tmp $@
+endif
 
 install-exec-hook:
 	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(HOST_PREFIX)capsule-symbols
@@ -65,12 +69,16 @@ uninstall-hook:
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-symbols
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-version
 else
+if ENABLE_SHARED
 dist_bin_SCRIPTS            += data/capsule-mkstublib
 endif
+endif
 
+if ENABLE_SHARED
 # Headers to be included by shim libraries
 nobase_include_HEADERS += capsule/capsule-shim.h \
                           capsule/_int_dlopen.h
+endif
 
 noinst_LTLIBRARIES = utils/libutils.la \
                      utils/libld.la
@@ -103,6 +111,7 @@ capsule_version_SOURCES = utils/print-version.c
 capsule_version_LDADD   = utils/libld.la
 capsule_version_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
+if ENABLE_SHARED
 libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           capsule/capsule-relocate.c \
                           capsule/capsule-init.c     \
@@ -126,16 +135,12 @@ dist_pkgdata_DATA       = data/capsule-shim.mk    \
                           data/shim-README.in     \
                           data/shim-configure.ac.in \
                           data/shim-target-Makefile.am
+endif
 
 BUILT_SOURCES           = $(top_srcdir)/.version
 
 $(top_srcdir)/.version:
 	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@
-
-dist-hook: dist-hook-git-version-gen
-.PHONY: dist-hook-git-version-gen
-dist-hook-git-version-gen:
-	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 
 include $(top_srcdir)/data/disabled.mk
 
@@ -144,6 +149,7 @@ include $(top_srcdir)/data/disabled.mk
 
 insttestsdir                         = $(libexecdir)/installed-tests/$(PACKAGE_TARNAME)
 
+if ENABLE_SHARED
 # /!\ Order is important here: the helper library must come first
 nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/green/libhelper.la                \
@@ -195,6 +201,7 @@ nobase_dist_insttests_DATA          += $(patsubst %,examples/shim/%.excluded,$(g
                                        tests/shim/libnotgles.so.1.excluded     \
                                        tests/shim/libnotgles.so.1.shared       \
                                        tests/shim/libnotgles.so.1.symbols
+endif
 
 maintainer-update-gl-shims:
 	@if test -z "${GL_SHIMS_SOURCE_MACHINE}"; then \
@@ -214,6 +221,7 @@ maintainer-update-gl-shims:
 		: > $(abs_top_srcdir)/examples/shim/"$$lib.symbols.updated-for"; \
 	done
 
+if ENABLE_SHARED
 tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
@@ -288,6 +296,7 @@ tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols d
 		$(srcdir)/tests/shim/$*.excluded \
 		$(srcdir)/tests/shim/$*.shared \
 		$@
+endif
 
 LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
                                        $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
@@ -309,6 +318,7 @@ AM_TESTS_ENVIRONMENT                 = export CAPSULE_CAPTURE_LIBS_TOOL="$(abs_b
                                        export MALLOC_CHECK_=2;                 \
                                        export NM="$(NM)";                      \
                                        export PKG_CONFIG_PATH="$(abs_builddir)/data";
+if ENABLE_SHARED
 test_extra_programs                  = tests/notgl-user                        \
                                        tests/notgl-helper-user                 \
                                        tests/notgl-dlopener
@@ -317,6 +327,7 @@ tests_notgl_helper_user_LDADD        = tests/lib/libnotgl.la                   \
                                        tests/lib/libnotgles.la                 \
                                        tests/helper/libhelper.la
 tests_notgl_dlopener_LDADD           = -ldl
+endif
 test_extra_scripts                   = tests/manual/gl.pl
 
 test_programs                        =
@@ -328,11 +339,15 @@ tests_utils_t_SOURCES                = tests/utils.c
 tests_utils_t_LDADD                  = utils/libutils.la $(GLIB_LIBS)
 
 test_scripts                         = tests/capture-libs.pl                   \
-                                       tests/gl-shim.pl                        \
-                                       tests/init-project.pl                   \
-                                       tests/notgl.pl                          \
                                        tests/symbols.pl                        \
                                        tests/version.pl
+
+if ENABLE_SHARED
+test_scripts                        += tests/gl-shim.pl                        \
+                                       tests/init-project.pl                   \
+                                       tests/notgl.pl
+endif
+
 nobase_insttests_PROGRAMS            = $(test_programs)                        \
                                        $(test_extra_programs)
 nobase_dist_insttests_SCRIPTS        = $(test_scripts)                         \
@@ -357,6 +372,7 @@ $(testmeta_DATA): tests/%.test: tests/% Makefile
 		echo "Exec=$(insttestsdir)/tests/$*$$maybe_tap"; \
 	) > $@.tmp && mv $@.tmp $@
 
+if ENABLE_SHARED
 # ============================================================================
 # gtk-doc configuration: see /usr/share/doc/gtk-doc-tools/examples/Makefile.am
 DOC_MODULE           = libcapsule
@@ -384,9 +400,18 @@ include  $(top_srcdir)/documentation.mk
 # Workaround for https://bugzilla.gnome.org/show_bug.cgi?id=786174
 $(DOC_MAIN_SGML_FILE): sgml-build.stamp
 	@true
+else
+CLEANFILES              =
+EXTRA_DIST              =
+endif
 
 # These need to come after we include gtk-doc.make, which unconditionally
-# defines these variables
+# defines these variables and targets
+dist-hook: dist-hook-git-version-gen
+.PHONY: dist-hook-git-version-gen
+dist-hook-git-version-gen:
+	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
+
 CLEANFILES             += $(testmeta_DATA)
 if ENABLE_HOST_PREFIX
 CLEANFILES             += data/$(HOST_PREFIX)capsule-mkstublib

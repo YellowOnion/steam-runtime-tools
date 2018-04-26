@@ -48,6 +48,8 @@ AX_COMPILER_FLAGS([], [], [], [], [ \
     -Wno-declaration-after-statement \
 ])
 
+AM_CONDITIONAL([ENABLE_SHARED], [test "x$enable_shared" = xyes])
+
 dnl make sure we've got the _right_ libelf (doesn't always ship a .pc)
 PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
     AC_MSG_WARN([libelf.pc not found])

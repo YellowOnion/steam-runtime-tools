@@ -23,6 +23,7 @@ use warnings;
 use strict;
 
 use autodie;
+use Cwd qw(realpath);
 use File::Path qw(make_path);
 use File::Spec qw();
 use File::Temp qw();
@@ -857,33 +858,42 @@ else {
 }
 
 my @dri_path;
+my $gl_provider_gl = "$tmpdir/gl";
+push @bwrap, '--ro-bind', $gl_provider_gl, '/gl';
+
+foreach my $tuple (@multiarch_tuples) {
+    push @ld_path, "/gl/lib/$tuple";
+    make_path("$gl_provider_gl/lib/$tuple", verbose => 1);
+}
 
 if (defined $gl_stack) {
     diag "Using standalone GL stack $gl_stack";
+    $gl_stack = realpath($gl_stack);
 
-    push @bwrap, '--ro-bind', $gl_stack, '/gl';
+    push @bwrap, '--ro-bind', $gl_stack, "/run/host$gl_stack";
 
     foreach my $tuple (@multiarch_tuples) {
-        push @ld_path, "/gl/lib/$tuple";
+        next unless -d "$gl_stack/lib/$tuple";
+        opendir(my $dir, "$gl_stack/lib/$tuple");
+
+        while(defined(my $member = readdir $dir)) {
+            next if $member eq '.' || $member eq '..';
+            my $target = realpath("$gl_stack/lib/$tuple/$member");
+            symlink(
+                "/run/host$target",
+                "$gl_provider_gl/lib/$tuple/$member");
+        }
+
+        closedir($dir);
     }
 }
 elsif ($nvidia_only) {
-    my $gl_provider_gl = "$tmpdir/gl";
-
     diag "Using NVIDIA-only GL stack from $gl_provider_tree";
     capture_libs($gl_provider_tree, $container_tree,
         \@multiarch_tuples, $gl_provider_gl, ['no-dependencies:nvidia:'],
         "$tmpdir/scratch", '/gl-provider');
-
-    foreach my $tuple (@multiarch_tuples) {
-        push @ld_path, "/gl/lib/$tuple";
-    }
-
-    push @bwrap, '--ro-bind', $gl_provider_gl, '/gl';
 }
 else {
-    my $gl_provider_gl = "$tmpdir/gl";
-
     diag "Using GL stack from $gl_provider_tree";
     capture_libs($gl_provider_tree, $container_tree,
         \@multiarch_tuples, $gl_provider_gl, ['gl:'],
@@ -923,12 +933,6 @@ else {
             }
         }
     }
-
-    foreach my $tuple (@multiarch_tuples) {
-        push @ld_path, "/gl/lib/$tuple";
-    }
-
-    push @bwrap, '--ro-bind', $gl_provider_gl, '/gl';
 }
 
 # These are libraries that can't have more than one instance in use.

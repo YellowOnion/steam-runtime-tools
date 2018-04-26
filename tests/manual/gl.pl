@@ -49,7 +49,7 @@ B<gl.pl> [I<OPTIONS>] [I<COMMAND> [I<ARGUMENTS...>]]
 Run C<I<COMMAND> I<ARGUMENTS...>> in the container, or if no command
 is given, run B<glxinfo>(1) and make some assertions about its output.
 
-The GL stack is made available in the container as F</gl/lib/*>.
+The GL stack is made available in the container as F</overrides/lib/*>.
 This can either be the host system's GL stack (provided as symbolic
 links into F</gl-provider/{usr/,}lib*>), a different sysroot's GL stack (again
 provided as symbolic links into F</gl-provider/{usr/,}lib*>), a
@@ -63,7 +63,7 @@ at F</gl-provider>.
 By default, glibc is taken from either the GL provider or the container,
 whichever has the newer version. It can also be taken from a third tree
 which will be mounted at F</libc-provider>. If the version in use is not
-the container's, F</updates/lib/*> is populated with symbolic links into
+the container's, F</overrides/lib/*> is populated with symbolic links into
 F</gl-provider/lib*> or F</libc-provider/lib*> as appropriate.
 
 Similarly, libcapsule and libelf are taken from either the GL provider
@@ -77,7 +77,7 @@ at F</x11-provider>.
 An application "payload" is mounted on F</app>, as if for Flatpak.
 
 The B<LD_LIBRARY_PATH> for the child process is made to include
-library directories from F</app>, F</gl> and F</updates>, but not
+library directories from F</app> and F</overrides>, but not
 F</gl-provider>, F</libc-provider> or F</libcapsule-provider>.
 
 =head1 EXAMPLES
@@ -226,7 +226,8 @@ as the OpenGL provider.
 
 A pre-prepared OpenGL stack, with F<lib/I<TUPLE>> subdirectories
 containing F<libGLX.so.1> and related libraries. It will be mounted
-at F</gl> and added to the B<LD_LIBRARY_PATH>.
+under F</run/host>, and F</overrides> will be populated with symlinks
+to it and added to the B<LD_LIBRARY_PATH>.
 
 =item --multiarch=I<TUPLE>[,I<TUPLE>...]
 
@@ -802,27 +803,29 @@ if (defined $app) {
     push @bwrap, '--setenv', 'PATH', '/app/bin:/app/sbin:/usr/bin:/bin:/usr/sbin:/sbin';
 }
 
-my $updates_tree = "$tmpdir/updates";
+my $overrides_tree = "$tmpdir/overrides";
 make_path("$tmpdir/scratch", verbose => 1);
-make_path("$tmpdir/updates", verbose => 1);
+make_path("$tmpdir/overrides", verbose => 1);
+
+foreach my $tuple (@multiarch_tuples) {
+    push @ld_path, "/overrides/lib/$tuple";
+    make_path("$overrides_tree/lib/$tuple", verbose => 1);
+}
 
 if ($libc_provider_tree eq 'auto') {
     diag "Choosing GL provider's libc or container's libc automatically";
     capture_libs($gl_provider_tree, $container_tree, \@multiarch_tuples,
-        $updates_tree, ['soname:libc.so.6'], "$tmpdir/scratch", '/gl-provider');
+        $overrides_tree, ['soname:libc.so.6'], "$tmpdir/scratch", '/gl-provider');
 
     # See what we've got
     foreach my $tuple (@multiarch_tuples) {
-        foreach my $dir ('updates', 'gl') {
-            next unless -d "$tmpdir/$dir/lib/$tuple";
-            assert_run_verbose([
-                'ls', '-l', "$tmpdir/$dir/lib/$tuple",
-            ], '>', \$stdout);
-            diag_multiline $stdout;
-        }
+        assert_run_verbose([
+            'ls', '-l', "$tmpdir/overrides/lib/$tuple",
+        ], '>', \$stdout);
+        diag_multiline $stdout;
     }
 
-    if (-l "$updates_tree/lib/$multiarch_tuples[0]/libc.so.6") {
+    if (-l "$overrides_tree/lib/$multiarch_tuples[0]/libc.so.6") {
         diag "${ansi_bright}${ansi_green}GL provider's libc appears ".
             "newer${ansi_reset}";
         push @bwrap, use_ldso($gl_provider_tree, $container_tree,
@@ -835,9 +838,9 @@ if ($libc_provider_tree eq 'auto') {
 }
 elsif ($libc_provider_tree =~ m/^(?:gl-provider|host)$/) {
     capture_libs($gl_provider_tree, $container_tree, \@multiarch_tuples,
-        $updates_tree, ['even-if-older:soname:libc.so.6'],
+        $overrides_tree, ['even-if-older:soname:libc.so.6'],
         "$tmpdir/scratch", '/gl-provider');
-    diag "${ansi_bright}${ansi_green}Adding GL provider's libc via /updates ".
+    diag "${ansi_bright}${ansi_green}Adding GL provider's libc via /overrides ".
         "as requested${ansi_reset}";
     push @bwrap, use_ldso($gl_provider_tree, $container_tree,
         \@multiarch_tuples, "$tmpdir/scratch");
@@ -848,9 +851,9 @@ elsif ($libc_provider_tree eq 'container') {
 }
 else {
     diag "${ansi_bright}${ansi_magenta}Adding ${libc_provider_tree} libc ".
-        "via /updates as requested${ansi_reset}";
+        "via /overrides as requested${ansi_reset}";
     capture_libs($libc_provider_tree, $container_tree, \@multiarch_tuples,
-        $updates_tree, ['even-if-older:soname:libc.so.6'],
+        $overrides_tree, ['even-if-older:soname:libc.so.6'],
         "$tmpdir/scratch", '/libc-provider');
     push @bwrap, use_ldso($libc_provider_tree, $container_tree,
         \@multiarch_tuples, "$tmpdir/scratch");
@@ -858,13 +861,6 @@ else {
 }
 
 my @dri_path;
-my $gl_provider_gl = "$tmpdir/gl";
-push @bwrap, '--ro-bind', $gl_provider_gl, '/gl';
-
-foreach my $tuple (@multiarch_tuples) {
-    push @ld_path, "/gl/lib/$tuple";
-    make_path("$gl_provider_gl/lib/$tuple", verbose => 1);
-}
 
 if (defined $gl_stack) {
     diag "Using standalone GL stack $gl_stack";
@@ -881,7 +877,7 @@ if (defined $gl_stack) {
             my $target = realpath("$gl_stack/lib/$tuple/$member");
             symlink(
                 "/run/host$target",
-                "$gl_provider_gl/lib/$tuple/$member");
+                "$overrides_tree/lib/$tuple/$member");
         }
 
         closedir($dir);
@@ -890,13 +886,13 @@ if (defined $gl_stack) {
 elsif ($nvidia_only) {
     diag "Using NVIDIA-only GL stack from $gl_provider_tree";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $gl_provider_gl, ['no-dependencies:nvidia:'],
+        \@multiarch_tuples, $overrides_tree, ['no-dependencies:nvidia:'],
         "$tmpdir/scratch", '/gl-provider');
 }
 else {
     diag "Using GL stack from $gl_provider_tree";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $gl_provider_gl, ['gl:'],
+        \@multiarch_tuples, $overrides_tree, ['gl:'],
         "$tmpdir/scratch", '/gl-provider');
 
     # If we're using Mesa, we need the DRI drivers too
@@ -919,13 +915,13 @@ else {
 
                     if ($mesa_drivers) {
                         symlink("/gl-provider$search/dri",
-                            "$gl_provider_gl/lib/$tuple/dri");
-                        push @dri_path, "/gl/lib/$tuple/dri";
+                            "$overrides_tree/lib/$tuple/dri");
+                        push @dri_path, "/overrides/lib/$tuple/dri";
                     }
 
                     if ($mesa_driver_deps) {
                         capture_libs($gl_provider_tree, $container_tree,
-                            \@multiarch_tuples, $updates_tree,
+                            \@multiarch_tuples, $overrides_tree,
                             ["only-dependencies:path-match:$search/dri/*"],
                             "$tmpdir/scratch", '/gl-provider');
                     }
@@ -941,7 +937,7 @@ else {
 if ($libcapsule_tree eq 'auto') {
     diag "Using libcapsule from $gl_provider_tree if newer";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree, ['soname:libcapsule.so.0'],
+        \@multiarch_tuples, $overrides_tree, ['soname:libcapsule.so.0'],
         "$tmpdir/scratch", '/gl-provider');
 }
 elsif ($libcapsule_tree eq 'container') {
@@ -950,14 +946,14 @@ elsif ($libcapsule_tree eq 'container') {
 elsif ($libcapsule_tree =~ m/^(?:gl-provider|host)$/) {
     diag "${ansi_green}Using libcapsule from GL provider as requested${ansi_reset}";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree,
+        \@multiarch_tuples, $overrides_tree,
         ['even-if-older:soname:libcapsule.so.0'],
         "$tmpdir/scratch", '/gl-provider');
 }
 else {
     diag "${ansi_magenta}Using libcapsule from $libcapsule_tree${ansi_reset}";
     capture_libs($libcapsule_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree,
+        \@multiarch_tuples, $overrides_tree,
         ['even-if-older:soname:libcapsule.so.0'],
         "$tmpdir/scratch", '/libcapsule-provider');
     push @bwrap, bind_usr($libcapsule_tree, '/libcapsule-provider');
@@ -979,7 +975,7 @@ my @XLIBS = qw(X11 X11-xcb xcb xcb-dri2 xcb-dri3 xcb-glx
 if ($x11_provider_tree eq 'auto') {
     diag "Using X libraries from $gl_provider_tree if newer";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree,
+        \@multiarch_tuples, $overrides_tree,
         [map { "soname-match:lib$_.so.*" } @XLIBS],
         "$tmpdir/scratch", '/gl-provider');
 }
@@ -989,24 +985,24 @@ elsif ($x11_provider_tree eq 'container') {
 elsif ($x11_provider_tree =~ m/^(?:gl-provider|host)$/) {
     diag "${ansi_green}Using X libraries from GL provider as requested${ansi_reset}";
     capture_libs($gl_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree,
+        \@multiarch_tuples, $overrides_tree,
         [map { "even-if-older:soname-match:lib$_.so.*" } @XLIBS],
         "$tmpdir/scratch", '/gl-provider');
 }
 else {
     diag "${ansi_magenta}Using X libraries from $x11_provider_tree as requested${ansi_reset}";
     capture_libs($x11_provider_tree, $container_tree,
-        \@multiarch_tuples, $updates_tree,
+        \@multiarch_tuples, $overrides_tree,
         [map { "even-if-older:soname-match:lib$_.so.*" } @XLIBS],
         "$tmpdir/scratch", '/x11-provider', $ansi_magenta);
     push @bwrap, bind_usr($libcapsule_tree, '/x11-provider');
 }
 
 foreach my $tuple (@multiarch_tuples) {
-    push @ld_path, "/updates/lib/$tuple";
+    push @ld_path, "/overrides/lib/$tuple";
 }
 
-push @bwrap, '--ro-bind', $updates_tree, '/updates';
+push @bwrap, '--ro-bind', $overrides_tree, '/overrides';
 
 if (@ld_path) {
     push @bwrap, '--setenv', 'LD_LIBRARY_PATH', join(':', @ld_path);
@@ -1084,7 +1080,7 @@ elsif (exists $ENV{XDG_RUNTIME_DIR} &&
 
 # See what we've got
 foreach my $tuple (@multiarch_tuples) {
-    foreach my $dir ('updates', 'gl') {
+    foreach my $dir ('overrides') {
         next unless -d "$tmpdir/$dir/lib/$tuple";
         assert_run_verbose([
             'ls', '-l', "$tmpdir/$dir/lib/$tuple",

@@ -87,6 +87,7 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
     exec "$@"
 fi
 
+declare -a wrapped_command
 fake_home=
 interactive=
 verbose=
@@ -216,7 +217,9 @@ if [ -n "$interactive" ]; then
     exec >/dev/tty
     exec 2>/dev/tty
     echo "$me: Starting interactive shell (original command is in \"\$@\")">&2
-    set -- bash -i -s "$@"
+    wrapped_command=(bash -i -s "$@")
+else
+    wrapped_command=("$@")
 fi
 
 if [ -z "$fake_home" ]; then
@@ -229,12 +232,13 @@ if [ -z "$fake_home" ]; then
     fi
 fi
 
-set -- $bwrap_end_of_options "$@"
-
-# Because this is a shell script, we only have access to one array, which
-# is $@; so we need to build up the bwrap command line backwards, with
-# "wider" mount points like / coming after "narrower" mount points
+# Because this was originally a Bourne shell script rather than a bash
+# script, we historically only had access to one array, which
+# was $@; so we needed to build up the bwrap command line backwards,
+# with "wider" mount points like / coming after "narrower" mount points
 # like $HOME.
+
+set --
 
 # Protect the controlling terminal from the app/game, unless we are
 # running an interactive shell in which case that would break its
@@ -358,11 +362,11 @@ fi
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)
 if [ -n "$verbose" ]; then
-    echo "$me: '$BWRAP $*'" >&2
+    echo "$me: '$BWRAP $* $bwrap_end_of_options ${wrapped_command[*]}'" >&2
 fi
 
-exec "$BWRAP" "$@" || e=$?
-echo "$me: failed to execute '$BWRAP $*': exec status $e" >&2
+exec "$BWRAP" "$@" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
+echo "$me: failed to execute '$BWRAP $* $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
 exit "$e"
 
 # vim:set sw=4 sts=4 et:

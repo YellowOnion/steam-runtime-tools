@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # pressure-vessel — use containers for Steam
 #
@@ -26,6 +26,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 set -e
+set -o pipefail
 set -u
 
 me="$0"
@@ -363,3 +364,5 @@ fi
 exec "$BWRAP" "$@" || e=$?
 echo "$me: failed to execute '$BWRAP $*': exec status $e" >&2
 exit "$e"
+
+# vim:set sw=4 sts=4 et:

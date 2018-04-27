@@ -29,7 +29,7 @@ int main (int argc, char **argv)
     void *handle;
     const char *libname;
 
-    set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
+    set_debug_flags( getenv("CAPSULE_DEBUG") );
 
     if( argc < 2 )
     {

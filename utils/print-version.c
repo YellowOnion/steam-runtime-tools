@@ -34,7 +34,7 @@ int main (int argc, char **argv)
     int error = 0;
     int e = 0;
 
-    set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
+    set_debug_flags( getenv("CAPSULE_DEBUG") );
 
     if( argc < 2 )
     {

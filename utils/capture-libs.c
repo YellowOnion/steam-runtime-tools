@@ -971,7 +971,7 @@ main (int argc, char **argv)
     int code = 0;
     char *message = NULL;
 
-    set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
+    set_debug_flags( getenv("CAPSULE_DEBUG") );
 
     while( 1 )
     {

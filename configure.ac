@@ -59,11 +59,11 @@ PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
     AC_CHECK_LIB([elf], [elf_begin], [],
                  [AC_MSG_ERROR([libelf not found])])
     AC_MSG_CHECKING([Elf_Cmd ELF_C_READ_MMAP])
-    AC_RUN_IFELSE([AC_LANG_PROGRAM([#include <libelf.h>],
-                                   [Elf_Cmd x = ELF_C_READ_MMAP;])],
-                  [AC_MSG_RESULT([yes])],
-                  [AC_MSG_RESULT([no])]
-                  [AC_MSG_ERROR([ELF_C_READ_MMAP missing: libelfg vs libelf0?])])
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <libelf.h>],
+                                    [Elf_Cmd x = ELF_C_READ_MMAP;])],
+                   [AC_MSG_RESULT([yes])],
+                   [AC_MSG_RESULT([no])]
+                   [AC_MSG_ERROR([ELF_C_READ_MMAP missing: libelfg vs libelf0?])])
     LIBS="$save_LIBS"
     LIBELF_LIBS=-lelf
 ])

@@ -239,6 +239,9 @@ static void usage (int code)
                "\tCapture the dependencies of each library matched by\n"
                "\tPATTERN, but not the library matched by PATTERN itself\n"
                "\t(unless a match for PATTERN depends on another match)\n" );
+  fprintf( fh, "no-dependencies:PATTERN\n"
+               "\tCapture each library matched by PATTERN, but not\n"
+               "\ttheir dependencies\n" );
   fprintf( fh, "if-exists:PATTERN\n"
                "\tCapture PATTERN, but don't fail if nothing matches\n" );
   fprintf( fh, "even-if-older:PATTERN\n"

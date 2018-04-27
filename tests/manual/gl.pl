@@ -852,12 +852,13 @@ elsif ($libc_provider_tree eq 'container') {
 else {
     diag "${ansi_bright}${ansi_magenta}Adding ${libc_provider_tree} libc ".
         "via /overrides as requested${ansi_reset}";
+    $libc_provider_tree = realpath($libc_provider_tree);
     capture_libs($libc_provider_tree, $container_tree, \@multiarch_tuples,
         $overrides_tree, ['even-if-older:soname:libc.so.6'],
-        "$tmpdir/scratch", "/run/host/$libc_provider_tree");
+        "$tmpdir/scratch", "/run/host$libc_provider_tree");
     push @bwrap, use_ldso($libc_provider_tree, $container_tree,
         \@multiarch_tuples, "$tmpdir/scratch");
-    push @bwrap, bind_usr($libc_provider_tree, "/run/host/$libc_provider_tree");
+    push @bwrap, bind_usr($libc_provider_tree, "/run/host$libc_provider_tree");
 }
 
 my @dri_path;
@@ -952,11 +953,12 @@ elsif ($libcapsule_tree =~ m/^(?:gl-provider|host)$/) {
 }
 else {
     diag "${ansi_magenta}Using libcapsule from $libcapsule_tree${ansi_reset}";
+    $libcapsule_tree = realpath($libcapsule_tree);
     capture_libs($libcapsule_tree, $container_tree,
         \@multiarch_tuples, $overrides_tree,
         ['even-if-older:soname:libcapsule.so.0'],
-        "$tmpdir/scratch", "/run/host/$libcapsule_tree");
-    push @bwrap, bind_usr($libcapsule_tree, "/run/host/$libcapsule_tree");
+        "$tmpdir/scratch", "/run/host$libcapsule_tree");
+    push @bwrap, bind_usr($libcapsule_tree, "/run/host$libcapsule_tree");
 }
 
 # These are more libraries that can't have more than one instance in use.
@@ -991,11 +993,12 @@ elsif ($x11_provider_tree =~ m/^(?:gl-provider|host)$/) {
 }
 else {
     diag "${ansi_magenta}Using X libraries from $x11_provider_tree as requested${ansi_reset}";
+    $x11_provider_tree = realpath($x11_provider_tree);
     capture_libs($x11_provider_tree, $container_tree,
         \@multiarch_tuples, $overrides_tree,
         [map { "even-if-older:soname-match:lib$_.so.*" } @XLIBS],
-        "$tmpdir/scratch", "/run/host/$x11_provider_tree", $ansi_magenta);
-    push @bwrap, bind_usr($libcapsule_tree, "/run/host/$x11_provider_tree")
+        "$tmpdir/scratch", "/run/host$x11_provider_tree", $ansi_magenta);
+    push @bwrap, bind_usr($libcapsule_tree, "/run/host$x11_provider_tree")
 }
 
 foreach my $tuple (@multiarch_tuples) {

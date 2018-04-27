@@ -28,8 +28,11 @@
 set -e
 set -o pipefail
 set -u
+shopt -s nullglob
 
 me="$0"
+me="$(readlink -f "$0")"
+here="${me%/*}"
 me="${me##*/}"
 
 # Undo any weird environment before we start running external
@@ -88,10 +91,15 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
 fi
 
 declare -a bwrap_options
+declare -a multiarch_tuples
 declare -a wrapped_command
 fake_home=
 interactive=
+runtime=
+tmpdir=
 verbose=
+
+multiarch_tuples=(x86_64-linux-gnu i386-linux-gnu)
 
 # Pop the pressure-vessel-wrap options from $@, leaving the command
 # and arguments.
@@ -124,6 +132,10 @@ usage () {
     echo "--interactive                 Run an interactive shell instead of"
     echo "                              COMMAND. Executing \"\$@\" in that"
     echo "                              shell will run COMMAND [ARGS]."
+    echo "--runtime=RUNTIME             Mount the given sysroot or"
+    echo "                              merged /usr in the container,"
+    echo "                              and augment it with the host"
+    echo "                              system's graphics stack."
     echo "--verbose                     Be more verbose."
     echo
 
@@ -131,7 +143,7 @@ usage () {
 }
 
 getopt_temp="$(getopt -o '' --long \
-    'freedesktop-app-id:,help,home:,interactive,steam-app-id:,verbose' \
+    'freedesktop-app-id:,help,home:,interactive,runtime:,steam-app-id:,verbose' \
     -n "$me" -- "$@")"
 
 eval set -- "$getopt_temp"
@@ -157,6 +169,11 @@ while [ "$#" -gt 0 ]; do
         (--interactive)
             interactive=yes
             shift
+            ;;
+
+        (--runtime)
+            runtime="$2"
+            shift 2
             ;;
 
         (--verbose)
@@ -233,6 +250,18 @@ if [ -z "$fake_home" ]; then
     fi
 fi
 
+cleanup () {
+    if [ -n "$tmpdir" ]; then
+        rm -fr "$tmpdir"
+    fi
+}
+
+trap cleanup EXIT
+
+tmpdir="$(mktemp -d)"
+scratch="${tmpdir}/scratch"
+mkdir "$scratch"
+
 bwrap_options=()
 
 # Protect the controlling terminal from the app/game, unless we are
@@ -251,15 +280,275 @@ fi
 if [ -n "$caller_path" ]; then
     bwrap_options+=(--setenv PATH "$caller_path")
 fi
-if [ -n "$caller_ld_library_path" ]; then
-    bwrap_options+=(--setenv LD_LIBRARY_PATH "$caller_ld_library_path")
+
+overrides=
+
+for t in "${multiarch_tuples[@]}"; do
+    overrides="${overrides:+"$overrides:"}/overrides/lib/$t"
+done
+
+if [ -n "$runtime" ]; then
+    # The LD_LIBRARY_PATH from the host system is not very relevant
+    # inside the container, so skip it
+    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides")
+elif [ -n "$caller_ld_library_path" ]; then
+    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides:$caller_ld_library_path")
 else
-    bwrap_options+=(--unsetenv LD_LIBRARY_PATH)
+    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides")
 fi
 
-# Everything comes from the root filesystem for now, except where
-# modified below
-bwrap_options+=(--bind / /)
+declare -a bind_usr_result
+bind_usr () {
+    local tree="$1"
+    local dest="$2"
+    local dir
+    bind_usr_result=()
+
+    if [ -d "$tree/usr" ]; then
+        bind_usr_result+=(--ro-bind "$tree/usr" "$dest/usr")
+    else
+        bind_usr_result+=(--ro-bind "$tree" "$dest/usr")
+    fi
+
+    for dir in "$tree"/lib* "$tree"/bin "$tree"/sbin; do
+        if [ -d "$dir" ]; then
+            local basename
+            basename="$(basename "$dir")"
+
+            if [ -d "$tree/usr" ]; then
+                bind_usr_result+=(--ro-bind "$dir" "$dest/$basename")
+            else
+                bind_usr_result+=(--symlink "usr/$basename" "$dest/$basename")
+            fi
+        fi
+    done
+
+    for etc in "/etc/ld.so.cache" "/etc/alternatives"; do
+        if [ -e "$tree$etc" ]; then
+            bind_usr_result+=(--ro-bind "$tree$etc" "$dest$etc")
+        fi
+    done
+}
+
+if [ -n "$runtime" ]; then
+    uid="$(id -u)"
+
+    bind_usr "$runtime" /
+    bwrap_options+=("${bind_usr_result[@]}")
+    bwrap_options+=(--setenv XDG_RUNTIME_DIR "/run/user/$uid")
+    bwrap_options+=(--proc /proc)
+    bwrap_options+=(--ro-bind /sys /sys)
+    bwrap_options+=(--tmpfs /run)
+    bwrap_options+=(--tmpfs /tmp)
+    bwrap_options+=(--tmpfs /var)
+    bwrap_options+=(--symlink ../run /var/run)
+
+    for dir in /etc /var/cache /var/lib; do
+        if [ -d "$runtime$dir" ]; then
+            for member in "$runtime$dir"/*; do
+                member="$(basename "$member")"
+
+                # These paths from the container aren't made available
+                case "$dir/$member" in
+                    (/etc/group|/etc/passwd)
+                        break
+                        ;;
+                    (/etc/host.conf|/etc/hosts|/etc/localtime)
+                        break
+                        ;;
+                    (/etc/machine-id|/etc/resolv.conf)
+                        break
+                        ;;
+                    (/var/lib/dbus|/var/lib/dhcp|/var/lib/sudo|/var/lib/urandom)
+                        break
+                        ;;
+                esac
+
+                if target="$(readlink "$runtime$dir/$member")"; then
+                    bwrap_options+=(--symlink "$target" "$dir/$member")
+                else
+                    bwrap_options+=(--ro-bind "$runtime$dir/$member" \
+                                    "$dir/$member")
+                fi
+            done
+        fi
+    done
+
+    # Take the machine ID from the host
+    if [ -e /etc/machine-id ]; then
+        bwrap_options+=(--ro-bind /etc/machine-id /etc/machine-id)
+        bwrap_options+=(--symlink /etc/machine-id /var/lib/dbus/machine-id)
+    elif [ -e /var/lib/dbus/machine-id ]; then
+        bwrap_options+=(--ro-bind /var/lib/dbus/machine-id /etc/machine-id)
+        bwrap_options+=(--symlink /etc/machine-id /var/lib/dbus/machine-id)
+    fi
+
+    # Take the timezone from the host
+    if target="$(readlink /etc/localtime)" && \
+        [ "${target#/usr/}" != "$target" ]; then
+        bwrap_options+=(--symlink "$target" /etc/localtime)
+    elif [ -e /etc/localtime ]; then
+        bwrap_options+=(--ro-bind /etc/localtime /etc/localtime)
+    fi
+
+    for file in resolv.conf host.conf hosts passwd group; do
+        if [ -e "/etc/$file" ]; then
+            bwrap_options+=(--ro-bind "/etc/$file" "/etc/$file")
+        fi
+    done
+
+    # Simplified version of flatpak run --socket=X11
+    if [ -n "${DISPLAY-}" ]; then
+        bwrap_options+=(--bind /tmp/.X11-unix /tmp/.X11-unix)
+        bwrap_options+=(--setenv DISPLAY "$DISPLAY")
+    fi
+    for xauth in "${XAUTHORITY-}" "$HOME/.Xauthority"; do
+        if [ -n "$xauth" ] && [ -e "$xauth" ]; then
+            bwrap_options+=(--ro-bind "$xauth" "/run/user/$uid/Xauthority")
+            bwrap_options+=(--setenv XAUTHORITY "/run/user/$uid/Xauthority")
+            break
+        fi
+    done
+
+    # Simplified version of flatpak run --socket=wayland
+    if [ -n "${XDG_RUNTIME_DIR-}" ] && \
+        [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY:="wayland-0"}" ]; then
+        bwrap_options+=(--bind "$XDG_RUNTIME_DIR/${WAYLAND_DISPLAY}" \
+                        "/run/user/$uid/$WAYLAND_DISPLAY")
+    fi
+
+    # Simplified version of flatpak run --socket=pulseaudio, modified to
+    # support the SteamOS system-wide PulseAudio instance
+    if false; then # FIXME
+    if [ -n "${XDG_RUNTIME_DIR-}" ] && \
+        [ -S "$XDG_RUNTIME_DIR/pulse/native" ]; then
+        bwrap_options+=(--bind "$XDG_RUNTIME_DIR/pulse/native" \
+                        "/run/user/$uid/pulse/native")
+        bwrap_options+=(--setenv PULSE_SERVER "unix:/run/user/$uid/pulse/native")
+    elif [ -S /var/run/pulse/native ]; then
+        bwrap_options+=(--bind /var/run/pulse/native \
+                        "/run/user/$uid/pulse/native")
+        bwrap_options+=(--setenv PULSE_SERVER "unix:/run/user/$uid/pulse/native")
+    fi
+    fi
+
+    # Simplified version of flatpak run --socket=system-bus
+    if [ -n "${DBUS_SYSTEM_BUS_ADDRESS-}" ]; then
+        path="$(perl -e '$_ = shift; print $1 if m/^unix:path=([^,;]*)/' \
+                "$DBUS_SYSTEM_BUS_ADDRESS")"
+        if [ -n "$path" ] && [ -S "$path" ]; then
+            bwrap_options+=(--bind "$path" /var/run/dbus/system_bus_socket)
+            bwrap_options+=(--unsetenv DBUS_SYSTEM_BUS_ADDRESS)
+        else
+            echo "$me: warning: Unable to parse DBUS_SYSTEM_BUS_ADDRESS" \
+                "\"$DBUS_SYSTEM_BUS_ADDRESS\"" >&2
+        fi
+    elif [ -S /var/run/dbus/system_bus_socket ]; then
+        bwrap_options+=(--bind /var/run/dbus/system_bus_socket \
+                        /run/dbus/system_bus_socket)
+    fi
+
+    # Simplified version of flatpak run --socket=system-bus
+    if [ -n "${DBUS_SESSION_BUS_ADDRESS-}" ]; then
+        path="$(perl -e '$_ = shift; print $1 if m/^unix:path=([^,;]*)/' \
+                "$DBUS_SESSION_BUS_ADDRESS")"
+        if [ "${DBUS_SESSION_BUS_ADDRESS#*abstract=}" != "$DBUS_SESSION_BUS_ADDRESS" ]; then
+            :    # Do nothing: abstract Unix sockets can pass through
+        elif [ -n "$path" ] && [ -S "$path" ]; then
+            bwrap_options+=(--bind "$path" "/run/user/$uid/bus")
+            bwrap_options+=(--setenv DBUS_SESSION_BUS_ADDRESS \
+                            "unix:path=/run/user/$uid/bus")
+        else
+            echo "$me: warning: Unable to parse DBUS_SESSION_BUS_ADDRESS" \
+                "\"$DBUS_SESSION_BUS_ADDRESS\"" >&2
+        fi
+    elif [ -n "${XDG_RUNTIME_DIR-}" ] && \
+        [ -S "$XDG_RUNTIME_DIR/bus" ]; then
+        bwrap_options+=(--bind "$XDG_RUNTIME_DIR/bus" \
+                        "/run/user/$uid/bus")
+        bwrap_options+=(--setenv DBUS_SESSION_BUS_ADDRESS \
+                        "unix:path=/run/user/$uid/bus")
+    fi
+
+    dri_path=
+
+    for t in "${multiarch_tuples[@]}"; do
+        # This has the side-effect of testing whether we can run
+        # binaries for this architecture
+        if ldso="$($here/${t}-capsule-capture-libs --print-ld.so)"; then
+            dri_path="${dri_path:+"$dri_path:"}/overrides/lib/$t/dri"
+
+            mkdir -p "$tmpdir/overrides/lib/$t"
+
+            bind_usr "$runtime" "$scratch"
+
+            "$BWRAP" \
+                --ro-bind / / \
+                --bind "$tmpdir/overrides" "$tmpdir/overrides" \
+                --tmpfs "$scratch" \
+                "${bind_usr_result[@]}" \
+                "$here/${t}-capsule-capture-libs" \
+                --container="$scratch" \
+                --link-target="/run/host" \
+                --dest="$tmpdir/overrides/lib/$t" \
+                --provider="/" \
+                gl:
+
+            # If we are going to use the host system's libc6 (likely)
+            # then we have to use its ld.so too.
+            if [ -L "$tmpdir/overrides/lib/$t/libc.so.6" ]; then
+                real_path_in_host="$(readlink -f "$ldso")"
+                real_path_in_runtime="$("$BWRAP" \
+                    --ro-bind / / \
+                    --bind "$tmpdir/overrides" "$tmpdir/overrides" \
+                    --tmpfs "$scratch" \
+                    "${bind_usr_result[@]}" \
+                    "$here/${t}-capsule-capture-libs" \
+                    --resolve-ld.so="$scratch")"
+
+                if [ -d "$runtime/usr" ] || \
+                    [ "$real_path_in_runtime#/usr/" != "$real_path_in_runtime" ]; then
+                    bwrap_options+=(--ro-bind "$real_path_in_host" \
+                                    "$real_path_in_runtime")
+                else
+                    # /lib, /lib64 are just going to be symlinks anyway
+                    bwrap_options+=(--ro-bind "$real_path_in_host" \
+                                    "/usr$real_path_in_runtime")
+                fi
+            fi
+
+            # /lib, /lib32 or /lib64
+            libQUAL="$(dirname "$ldso")"
+
+            for dir in "/lib/$t" "/usr/lib/$t" "$libQUAL" "/usr$libQUAL"; do
+                if [ -d "$dir/dri" ]; then
+                    ln -s "/run/host$dir/dri" "$tmpdir/overrides/lib/$t/dri"
+
+                    "$BWRAP" \
+                        --ro-bind / / \
+                        --bind "$tmpdir/overrides" "$tmpdir/overrides" \
+                        --tmpfs "$scratch" \
+                        "${bind_usr_result[@]}" \
+                        "$here/${t}-capsule-capture-libs" \
+                        --container="$scratch" \
+                        --link-target="/run/host" \
+                        --dest="$tmpdir/overrides/lib/$t" \
+                        --provider="/" \
+                        "only-dependencies:path-match:$dir/dri/*"
+                fi
+            done
+        fi
+    done
+
+    bwrap_options+=(--setenv LIBGL_DRIVERS_PATH "$dri_path")
+    bwrap_options+=(--ro-bind "$tmpdir/overrides" /overrides)
+    bind_usr / /run/host
+    bwrap_options+=("${bind_usr_result[@]}")
+else
+    # Everything comes from the root filesystem, except where
+    # modified below
+    bwrap_options+=(--bind / /)
+fi
 
 # Make /dev available
 bwrap_options+=(--dev-bind /dev /dev)
@@ -359,6 +648,11 @@ fi
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)
 if [ -n "$verbose" ]; then
+    echo "$BWRAP options:">&2
+    for x in "${bwrap_options[@]}"; do
+        printf '\t%s\n' "$x"
+    done
+
     echo "$me: '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}'" >&2
 fi
 

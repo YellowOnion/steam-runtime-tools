@@ -228,6 +228,8 @@ if [ -z "$fake_home" ]; then
     fi
 fi
 
+set -- $bwrap_end_of_options "$@"
+
 # Because this is a shell script, we only have access to one array, which
 # is $@; so we need to build up the bwrap command line backwards, with
 # "wider" mount points like / coming after "narrower" mount points
@@ -358,6 +360,6 @@ if [ -n "$verbose" ]; then
     echo "$me: '$BWRAP $*'" >&2
 fi
 
-exec "$BWRAP" $bwrap_end_of_options "$@" || e=$?
+exec "$BWRAP" "$@" || e=$?
 echo "$me: failed to execute '$BWRAP $*': exec status $e" >&2
 exit "$e"

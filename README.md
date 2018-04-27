@@ -26,6 +26,44 @@ driver stack. (This mode is not yet implemented.)
 
 [libcapsule]: https://gitlab.collabora.com/vivek/libcapsule/
 
+Building a relocatable install
+------------------------------
+
+On a system with autoconf-archive 20160916-1~bpo8+1 or later, check out
+libcapsule from git and use `aclocal -I m4 --install` to copy required
+macros to the `m4` directory. Put it in the `libcapsule/` subdirectory
+of `pressure-vessel`.
+
+The build system also needs `bubblewrap` and `debootstrap`.
+
+To make the built version compatible with older systems, you will need a
+Debian 8 'jessie' chroot with some extra packages (SteamOS 2 'brewmaster'
+is not suitable, because its amd64 and i386 linux-libc-dev packages are
+not co-installable).
+
+    sudo debootstrap jessie /srv/jessie http://deb.debian.org/debian
+    echo 'deb-src http://deb.debian.org/debian jessie main' | \
+        sudo tee -a /srv/jessie/etc/apt/sources.list
+    sudo chroot /srv/jessie dpkg --add-architecture i386
+    sudo chroot /srv/jessie apt update
+    sudo chroot /srv/jessie apt update
+    sudo chroot /srv/jessie apt install \
+        autoconf automake build-essential chrpath gcc-multilib git \
+        gtk-doc-tools libelf-dev libelf-dev:i386 libipc-run-perl \
+        libjpeg62-turbo libjpeg62-turbo:i386 perl xsltproc zlib1g zlib1g:i386
+    sudo chroot /srv/jessie apt install -t jessie-backports autoconf-archive
+    bwrap \
+        --ro-bind /srv/jessie / \
+        --dev-bind /dev /dev \
+        --tmpfs /tmp \
+        --bind /home /home \
+        --chdir $(pwd) \
+        --setenv LC_ALL C.UTF-8 \
+        make
+
+Binaries and source code end up in `relocatable-install/` which can be
+copied to wherever you want.
+
 Instructions for testing
 ------------------------
 

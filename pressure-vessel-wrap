@@ -263,6 +263,25 @@ else
     bwrap_options+=(--unsetenv LD_LIBRARY_PATH)
 fi
 
+# Everything comes from the root filesystem for now, except where
+# modified below
+bwrap_options+=(--bind / /)
+
+# Make /dev available
+bwrap_options+=(--dev-bind /dev /dev)
+if [ -d /dev/pts ]; then
+    bwrap_options+=(--bind /dev/pts /dev/pts)
+fi
+if [ -d /dev/shm ]; then
+    bwrap_options+=(--bind /dev/shm /dev/shm)
+fi
+
+# Protect other users' homes (but guard against the unlikely situation
+# that they don't exist)
+if [ -d /home ]; then
+    bwrap_options+=(--tmpfs /home)
+fi
+
 set --
 
 # Make sure the current working directory (the game we are going to
@@ -335,24 +354,6 @@ fi
     mkdir -m700 -p "$fake_home/data"
     bwrap_options+=(--setenv XDG_DATA_HOME "$fake_home/data")
 }
-
-# Protect other users' homes (but guard against the unlikely situation
-# that they don't exist)
-if [ -d /home ]; then
-    set -- --tmpfs /home "$@"
-fi
-
-# Make /dev available
-if [ -d /dev/pts ]; then
-    set -- --bind /dev/pts /dev/pts "$@"
-fi
-if [ -d /dev/shm ]; then
-    set -- --bind /dev/shm /dev/shm "$@"
-fi
-set -- --dev-bind /dev /dev "$@"
-
-# Everything else comes from the root filesystem for now
-set -- --bind / / "$@"
 
 if "$BWRAP" --help | grep unshare-uts >/dev/null; then
     # Set a standard hostname for the container to make it easier

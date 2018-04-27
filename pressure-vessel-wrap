@@ -87,6 +87,7 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
     exec "$@"
 fi
 
+declare -a bwrap_options
 declare -a wrapped_command
 fake_home=
 interactive=
@@ -238,29 +239,31 @@ fi
 # with "wider" mount points like / coming after "narrower" mount points
 # like $HOME.
 
-set --
+bwrap_options=()
 
 # Protect the controlling terminal from the app/game, unless we are
 # running an interactive shell in which case that would break its
 # job control.
 if [ -z "$interactive" ]; then
-    set -- --new-session "$@"
+    bwrap_options+=(--new-session)
 fi
 
 # Put the caller's LD_PRELOAD and search paths back.
 if [ -n "$caller_ld_preload" ]; then
-    set -- --setenv LD_PRELOAD "$caller_ld_preload" "$@"
+    bwrap_options+=(--setenv LD_PRELOAD "$caller_ld_preload")
 else
-    set -- --unsetenv LD_PRELOAD "$@"
+    bwrap_options+=(--unsetenv LD_PRELOAD)
 fi
 if [ -n "$caller_path" ]; then
-    set -- --setenv PATH "$caller_path" "$@"
+    bwrap_options+=(--setenv PATH "$caller_path")
 fi
 if [ -n "$caller_ld_library_path" ]; then
-    set -- --setenv LD_LIBRARY_PATH "$caller_ld_library_path" "$@"
+    bwrap_options+=(--setenv LD_LIBRARY_PATH "$caller_ld_library_path")
 else
-    set -- --unsetenv LD_LIBRARY_PATH "$@"
+    bwrap_options+=(--unsetenv LD_LIBRARY_PATH)
 fi
+
+set --
 
 # Make sure the current working directory (the game we are going to
 # run) is available. Some games write here.
@@ -271,7 +274,7 @@ if test "$HOME" -ef "$PWD"; then
 else
     set -- --bind "$PWD" "$PWD" "$@"
 fi
-set -- --chdir "$PWD" "$@"
+bwrap_options+=(--chdir "$PWD")
 
 # We need libraries from the Steam Runtime, so make sure that's visible
 # (it should never need to be read/write though)
@@ -326,11 +329,11 @@ fi
     mkdir -m700 -p "$fake_home/cache"
     mkdir -m700 -p "$fake_home/cache/tmp"
     set -- --bind "$fake_home/cache/tmp" /var/tmp "$@"
-    set -- --setenv XDG_CACHE_HOME "$fake_home/cache" "$@"
+    bwrap_options+=(--setenv XDG_CACHE_HOME "$fake_home/cache")
     mkdir -m700 -p "$fake_home/config"
-    set -- --setenv XDG_CONFIG_HOME "$fake_home/config" "$@"
+    bwrap_options+=(--setenv XDG_CONFIG_HOME "$fake_home/config")
     mkdir -m700 -p "$fake_home/data"
-    set -- --setenv XDG_DATA_HOME "$fake_home/data" "$@"
+    bwrap_options+=(--setenv XDG_DATA_HOME "$fake_home/data")
 }
 
 # Protect other users' homes (but guard against the unlikely situation
@@ -354,7 +357,7 @@ set -- --bind / / "$@"
 if "$BWRAP" --help | grep unshare-uts >/dev/null; then
     # Set a standard hostname for the container to make it easier
     # to see which shell is which
-    set -- --hostname pressure-vessel --unshare-uts "$@"
+    bwrap_options+=(--hostname pressure-vessel --unshare-uts)
 fi
 
 # Potential future expansion: use --unshare-pid for more isolation
@@ -362,11 +365,11 @@ fi
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)
 if [ -n "$verbose" ]; then
-    echo "$me: '$BWRAP $* $bwrap_end_of_options ${wrapped_command[*]}'" >&2
+    echo "$me: '$BWRAP ${bwrap_options[*]} $* $bwrap_end_of_options ${wrapped_command[*]}'" >&2
 fi
 
-exec "$BWRAP" "$@" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
-echo "$me: failed to execute '$BWRAP $* $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
+exec "$BWRAP" "${bwrap_options[@]}" "$@" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
+echo "$me: failed to execute '$BWRAP ${bwrap_options[*]} $* $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
 exit "$e"
 
 # vim:set sw=4 sts=4 et:

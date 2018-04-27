@@ -1,4 +1,18 @@
-all: install-amd64 install-i386
+all: install
+
+install: install-amd64 install-i386
+	install pressure-vessel-wrap relocatable-install/bin/
+	mkdir -p relocatable-install/sources
+	install -m644 THIRD-PARTY.md relocatable-install/sources/README.txt
+	install -m644 libcapsule/debian/copyright relocatable-install/sources/capsule-capture-libs.txt
+	install -m644 /usr/share/doc/zlib1g/copyright relocatable-install/sources/libz.txt
+	install -m644 /usr/share/doc/libelf1/copyright relocatable-install/sources/libelf.txt
+	cd libcapsule; \
+		git archive \
+		--prefix libcapsule-$$(git describe --match='v*')/ \
+		-o $(CURDIR)/relocatable-install/sources/libcapsule-$$(git describe --match='v*').tar.gz \
+		HEAD
+	cd relocatable-install/sources; apt-get --download-only source elfutils zlib
 
 libcapsule/configure:
 	set -e; cd libcapsule; NOCONFIGURE=1 ./autogen.sh

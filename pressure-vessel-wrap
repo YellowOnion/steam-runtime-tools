@@ -233,12 +233,6 @@ if [ -z "$fake_home" ]; then
     fi
 fi
 
-# Because this was originally a Bourne shell script rather than a bash
-# script, we historically only had access to one array, which
-# was $@; so we needed to build up the bwrap command line backwards,
-# with "wider" mount points like / coming after "narrower" mount points
-# like $HOME.
-
 bwrap_options=()
 
 # Protect the controlling terminal from the app/game, unless we are
@@ -282,23 +276,47 @@ if [ -d /home ]; then
     bwrap_options+=(--tmpfs /home)
 fi
 
-set --
+# The shellcheck tool warns that -m is only applied to the deepest
+# directory and not any parents created via -p, but that's fine here:
+# we use a separate mkdir -p for each directory whose permissions we
+# care about.
+# shellcheck disable=SC2174
+{
+    # Set up the home directory
+    mkdir -m700 -p "$fake_home"
+    bwrap_options+=(--bind "$fake_home" "$HOME")
+    bwrap_options+=(--bind "$fake_home" "$fake_home")
 
-# Make sure the current working directory (the game we are going to
-# run) is available. Some games write here.
-PWD="$(pwd)"
-if test "$HOME" -ef "$PWD"; then
-    echo "$me: Not making real $PWD available to container because it is" \
-         "the home directory" >&2
-else
-    set -- --bind "$PWD" "$PWD" "$@"
+    # Set up /var/tmp, XDG_*_HOME like Flatpak does
+    mkdir -m700 -p "$fake_home/cache"
+    mkdir -m700 -p "$fake_home/cache/tmp"
+    bwrap_options+=(--bind "$fake_home/cache/tmp" /var/tmp)
+    bwrap_options+=(--setenv XDG_CACHE_HOME "$fake_home/cache")
+    mkdir -m700 -p "$fake_home/config"
+    bwrap_options+=(--setenv XDG_CONFIG_HOME "$fake_home/config")
+    mkdir -m700 -p "$fake_home/data"
+    bwrap_options+=(--setenv XDG_DATA_HOME "$fake_home/data")
+}
+
+# These might be API entry points, according to .steam/steam/steam.sh.
+# On the host system they're symlinks to a real location, but in a
+# container it's easier to bind-mount them (this follows symlinks).
+# TODO: We probably want to hide part or all of root, steam, steambeta?
+for api in bin bin32 bin64 root sdk32 sdk64 steam steambeta; do
+    dir="$HOME/.steam/$api"
+    if [ -d "$dir" ]; then
+        bwrap_options+=(--ro-bind "$dir" "$dir")
+    fi
+done
+
+# steamclient.so relies on this for communication with Steam
+if [ -e "$HOME/.steam/steam.pid" ]; then
+    bwrap_options+=(--ro-bind "$HOME/.steam/steam.pid" "$HOME/.steam/steam.pid")
 fi
-bwrap_options+=(--chdir "$PWD")
 
-# We need libraries from the Steam Runtime, so make sure that's visible
-# (it should never need to be read/write though)
-if [ -n "${STEAM_RUNTIME:-}" ]; then
-    set -- --ro-bind "$STEAM_RUNTIME" "$STEAM_RUNTIME" "$@"
+# Make sure Steam IPC is available (TODO: do we need this? do we need more?)
+if [ -e "$HOME/.steam/steam.pipe" ]; then
+    bwrap_options+=(--bind "$HOME/.steam/steam.pipe" "$HOME/.steam/steam.pipe")
 fi
 
 # We need the LD_PRELOADs from Steam visible at the paths that were
@@ -308,52 +326,27 @@ old_ifs="$IFS"
 IFS=:
 for preload in $caller_ld_preload; do
     if [ -e "$preload" ]; then
-        set -- --ro-bind "$preload" "$preload" "$@"
+        bwrap_options+=(--ro-bind "$preload" "$preload")
     fi
 done
 IFS="$old_ifs"
 
-# These might be API entry points, according to .steam/steam/steam.sh.
-# On the host system they're symlinks to a real location, but in a
-# container it's easier to bind-mount them (this follows symlinks).
-# TODO: We probably want to hide part or all of root, steam, steambeta?
-for api in bin bin32 bin64 root sdk32 sdk64 steam steambeta; do
-    dir="$HOME/.steam/$api"
-    if [ -d "$dir" ]; then
-        set -- --ro-bind "$dir" "$dir" "$@"
-    fi
-done
-
-# steamclient.so relies on this for communication with Steam
-if [ -e "$HOME/.steam/steam.pid" ]; then
-    set -- --ro-bind "$HOME/.steam/steam.pid" "$HOME/.steam/steam.pid" "$@"
+# We need libraries from the Steam Runtime, so make sure that's visible
+# (it should never need to be read/write though)
+if [ -n "${STEAM_RUNTIME:-}" ]; then
+    bwrap_options+=(--ro-bind "$STEAM_RUNTIME" "$STEAM_RUNTIME")
 fi
 
-# Make sure Steam IPC is available (TODO: do we need this? do we need more?)
-if [ -e "$HOME/.steam/steam.pipe" ]; then
-    set -- --bind "$HOME/.steam/steam.pipe" "$HOME/.steam/steam.pipe" "$@"
+# Make sure the current working directory (the game we are going to
+# run) is available. Some games write here.
+PWD="$(pwd)"
+if test "$HOME" -ef "$PWD"; then
+    echo "$me: Not making real $PWD available to container because it is" \
+         "the home directory" >&2
+else
+    bwrap_options+=(--bind "$PWD" "$PWD")
 fi
-
-# The shellcheck tool warns that -m is only applied to the deepest
-# directory and not any parents created via -p, but that's fine here:
-# we use a separate mkdir -p for each directory whose permissions we
-# care about.
-# shellcheck disable=SC2174
-{
-    # Set up the home directory
-    mkdir -m700 -p "$fake_home"
-    set -- --bind "$fake_home" "$HOME" --bind "$fake_home" "$fake_home" "$@"
-
-    # Set up /var/tmp, XDG_*_HOME like Flatpak does
-    mkdir -m700 -p "$fake_home/cache"
-    mkdir -m700 -p "$fake_home/cache/tmp"
-    set -- --bind "$fake_home/cache/tmp" /var/tmp "$@"
-    bwrap_options+=(--setenv XDG_CACHE_HOME "$fake_home/cache")
-    mkdir -m700 -p "$fake_home/config"
-    bwrap_options+=(--setenv XDG_CONFIG_HOME "$fake_home/config")
-    mkdir -m700 -p "$fake_home/data"
-    bwrap_options+=(--setenv XDG_DATA_HOME "$fake_home/data")
-}
+bwrap_options+=(--chdir "$PWD")
 
 if "$BWRAP" --help | grep unshare-uts >/dev/null; then
     # Set a standard hostname for the container to make it easier
@@ -366,11 +359,11 @@ fi
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)
 if [ -n "$verbose" ]; then
-    echo "$me: '$BWRAP ${bwrap_options[*]} $* $bwrap_end_of_options ${wrapped_command[*]}'" >&2
+    echo "$me: '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}'" >&2
 fi
 
-exec "$BWRAP" "${bwrap_options[@]}" "$@" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
-echo "$me: failed to execute '$BWRAP ${bwrap_options[*]} $* $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
+exec "$BWRAP" "${bwrap_options[@]}" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
+echo "$me: failed to execute '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
 exit "$e"
 
 # vim:set sw=4 sts=4 et:

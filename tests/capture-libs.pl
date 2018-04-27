@@ -238,6 +238,33 @@ like(readlink "$libdir/libgobject-2.0.so.0",
 ok(! -e "$libdir/libglib-2.0.so.0",
    'no-dependencies: does not capture libglib-2.0.so.0');
 
+# --no-glibc doesn't capture glibc even if other dependencies are
+# captured
+ok(! system('rm', '-fr', $libdir));
+mkdir($libdir);
+run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
+        '--bind', $libdir, $libdir,
+        qw(--dev-bind /dev /dev),
+        $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+        "--dest=$libdir", "--provider=$host", "--no-glibc",
+        'soname:libgobject-2.0.so.0']);
+{
+    opendir(my $dir_iter, $libdir);
+    foreach my $symlink (readdir $dir_iter) {
+        next if $symlink eq '.' || $symlink eq '..';
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+}
+like(readlink "$libdir/libgobject-2.0.so.0",
+     qr{^$LIBDIR/libgobject-2\.0\.so\.0(?:[0-9.]+)$},
+     '$libdir/libgobject-2.0.so.0 is captured');
+like(readlink "$libdir/libglib-2.0.so.0",
+     qr{^$LIBDIR/libglib-2\.0\.so\.0(?:[0-9.]+)$},
+     '$libdir/libglib-2.0.so.0 is captured');
+ok(! -e "$libdir/libc.so.6",
+   '--no-glibc does not capture libc.so.6');
+
 # only-dependencies:no-dependencies: (either way round) is completely useless
 ok(! system('rm', '-fr', $libdir));
 mkdir($libdir);

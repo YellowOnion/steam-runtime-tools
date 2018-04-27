@@ -63,11 +63,32 @@
 # error Unsupported architecture: we do not know where ld.so is
 #endif
 
+static const char * const libc_patterns[] = {
+    "soname:libBrokenLocale.so.1",
+    "soname:libanl.so.1",
+    "soname:libc.so.6",
+    "soname:libcidn.so.1",
+    "soname:libcrypt.so.1",
+    "soname:libdl.so.2",
+    "soname:libm.so.6",
+    "soname:libmemusage.so",
+    "soname:libmvec.so.1",
+    "soname:libnsl.so.1",
+    "soname:libpcprofile.so",
+    "soname:libpthread.so.0",
+    "soname:libresolv.so.2",
+    "soname:librt.so.1",
+    "soname:libthread_db.so.1",
+    "soname:libutil.so.1",
+    NULL
+};
+
 enum
 {
   OPTION_CONTAINER,
   OPTION_DEST,
   OPTION_LINK_TARGET,
+  OPTION_NO_GLIBC,
   OPTION_PRINT_LD_SO,
   OPTION_PROVIDER,
   OPTION_RESOLVE_LD_SO,
@@ -78,6 +99,7 @@ static const char *option_container = "/";
 static const char *option_dest = ".";
 static const char *option_provider = "/";
 static const char *option_link_target = NULL;
+static bool option_glibc = true;
 
 static struct option long_options[] =
 {
@@ -85,6 +107,7 @@ static struct option long_options[] =
     { "dest", required_argument, NULL, OPTION_DEST },
     { "help", no_argument, NULL, 'h' },
     { "link-target", required_argument, NULL, OPTION_LINK_TARGET },
+    { "no-glibc", no_argument, NULL, OPTION_NO_GLIBC },
     { "print-ld.so", no_argument, NULL, OPTION_PRINT_LD_SO },
     { "provider", required_argument, NULL, OPTION_PROVIDER },
     { "resolve-ld.so", required_argument, NULL, OPTION_RESOLVE_LD_SO },
@@ -92,6 +115,9 @@ static struct option long_options[] =
 };
 
 static int dest_fd = -1;
+
+#define strstarts(str, start) \
+  (strncmp( str, start, strlen( start ) ) == 0)
 
 /* Equivalent to GNU basename(3) from string.h, but not POSIX
  * basename(3) from libgen.h. */
@@ -197,6 +223,8 @@ static void usage (int code)
                "\tcontainer is used [default: PROVIDER]\n" );
   fprintf( fh, "--provider=PROVIDER\n"
                "\tFind libraries in PROVIDER [default: /]\n" );
+  fprintf( fh, "--no-glibc\n"
+               "\tDon't capture libraries that are part of glibc\n" );
   fprintf( fh, "\n" );
   fprintf( fh, "Each PATTERN is one of:\n" );
   fprintf( fh, "\n" );
@@ -334,6 +362,33 @@ capture_one( const char *soname, capture_flags flags,
         }
 
         its_basename = my_basename( provider.needed[i].name );
+
+        if( !option_glibc )
+        {
+            unsigned int j;
+            bool capture = true;
+
+            for( j = 0; j < N_ELEMENTS( libc_patterns ); j++ )
+            {
+                if( libc_patterns[j] == NULL )
+                    break;
+
+                assert( strstarts( libc_patterns[j], "soname:" ) );
+
+                if( strcmp( libc_patterns[j] + strlen( "soname:" ),
+                            its_basename ) == 0 )
+                {
+                    DEBUG( DEBUG_TOOL,
+                           "Not capturing \"%s\" because it is part of glibc",
+                           provider.needed[0].name );
+                    capture = false;
+                    break;
+                }
+            }
+
+            if( !capture )
+                continue;
+        }
 
         if( fstatat( dest_fd, its_basename, &statbuf,
                      AT_SYMLINK_NOFOLLOW ) == 0 )
@@ -481,25 +536,6 @@ capture_one( const char *soname, capture_flags flags,
         {
             /* Having captured libc, we need to capture the rest of
              * the related libraries from the same place */
-            static const char * const libc_patterns[] = {
-                "soname:libBrokenLocale.so.1",
-                "soname:libanl.so.1",
-                "soname:libcidn.so.1",
-                "soname:libcrypt.so.1",
-                "soname:libdl.so.2",
-                "soname:libm.so.6",
-                "soname:libmemusage.so",
-                "soname:libmvec.so.1",
-                "soname:libnsl.so.1",
-                "soname:libpcprofile.so",
-                "soname:libpthread.so.0",
-                "soname:libresolv.so.2",
-                "soname:librt.so.1",
-                "soname:libthread_db.so.1",
-                "soname:libutil.so.1",
-                NULL
-            };
-
             DEBUG( DEBUG_TOOL,
                    "Capturing the rest of glibc to go with %s",
                    provider.needed[i].name );
@@ -599,9 +635,6 @@ out:
 
     return ret;
 }
-
-#define strstarts(str, start) \
-  (strncmp( str, start, strlen( start ) ) == 0)
 
 static bool
 capture_path_match( const char *pattern, capture_flags flags,
@@ -931,7 +964,7 @@ int
 main (int argc, char **argv)
 {
     capture_flags flags = (CAPTURE_FLAG_LIBRARY_ITSELF |
-                           CAPTURE_FLAG_DEPENDENCIES);
+                           CAPTURE_FLAG_DEPENDENCIES );
     int code = 0;
     char *message = NULL;
 
@@ -975,6 +1008,10 @@ main (int argc, char **argv)
 
             case OPTION_PROVIDER:
                 option_provider = optarg;
+                break;
+
+            case OPTION_NO_GLIBC:
+                option_glibc = false;
                 break;
 
             case OPTION_RESOLVE_LD_SO:

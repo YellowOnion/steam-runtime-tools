@@ -526,7 +526,7 @@ if [ -n "$runtime" ]; then
     for t in "${multiarch_tuples[@]}"; do
         # This has the side-effect of testing whether we can run
         # binaries for this architecture
-        if ldso="$($here/${t}-capsule-capture-libs --print-ld.so)"; then
+        if ldso="$("$here/${t}-capsule-capture-libs" --print-ld.so)"; then
             dri_path="${dri_path:+"$dri_path:"}/overrides/lib/$t/dri"
 
             mkdir -p "$tmpdir/overrides/lib/$t"

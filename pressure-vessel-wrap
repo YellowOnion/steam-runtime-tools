@@ -630,14 +630,24 @@ fi
 
 # Make sure the current working directory (the game we are going to
 # run) is available. Some games write here.
-PWD="$(pwd)"
-if test "$HOME" -ef "$PWD"; then
-    echo "$me: Not making real $PWD available to container because it is" \
+PWD_L="$(pwd -L)"
+if test "$HOME" -ef "$PWD_L"; then
+    echo "$me: Not making real $PWD_L available to container because it is" \
          "the home directory" >&2
 else
-    bwrap_options+=(--bind "$PWD" "$PWD")
+    bwrap_options+=(--bind "$PWD_L" "$PWD_L")
 fi
-bwrap_options+=(--chdir "$PWD")
+bwrap_options+=(--chdir "$PWD_L")
+
+PWD_P="$(pwd -P)"
+if test "$PWD_P" = "$PWD_L"; then
+    :   # Nothing special to do
+elif test "$HOME" -ef "$PWD_P"; then
+    echo "$me: Not making real $PWD_P available to container because it is" \
+         "the home directory" >&2
+else
+    bwrap_options+=(--bind "$PWD_P" "$PWD_P")
+fi
 
 # Put the caller's LD_PRELOAD and search paths back.
 if [ -n "$adjusted_ld_preload" ]; then

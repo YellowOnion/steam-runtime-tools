@@ -1,3 +1,37 @@
+libcapsule (0.20180430.0-0co1) UNRELEASED; urgency=medium
+
+  [ Vivek Das Mohapatra ]
+  * Fix a potential segfault in the ELF memory dumper
+  * Replace the free/*alloc cluster inside the capsule
+  * Improve API documentation
+  * Improve debug output
+  * debian: Ignore some package/build debris
+
+  [ Simon McVittie ]
+  * Add capture-libs tool and use it for tests/manual/gl.pl
+  * Don't stop reading symbol tables at an unknown ELFW_ST_TYPE, ELFW_ST_BIND
+  * Improve error propagation
+  * Improve debug output
+  * utils: Use getenv rather than secure_getenv to reduce glibc dependencies
+    (libcapsule itself still uses secure_getenv)
+  * libGL: Use the symbol set from GLVND libGL
+  * libGL: Add shims for libXi, libgbm, libGLX, libEGL, libOpenGL, libGLESv2
+  * libGL: Don't exclude misc X libraries from encapsulation
+  * tests/manual/gl.pl: Bind-mount more host files into the container
+  * tests/manual/gl.pl: Merge /gl and /updates into /overrides
+  * tests/manual/gl.pl: Make anything from the host available via /run/host
+  * build: Install capsule-elf-dump
+  * build: Consolidate lists of GL shims using patsubst
+  * build: Add maintainer-update-gl-shims convenience target
+  * build: Make host prefix for tools modifiable
+  * build: Add a build option to add a -rpath to the tools
+  * build: Allow shared library to be disabled, if you only want the tools
+  * build: Don't run a test program, just link it, to help cross-compiling
+  * ci: Add a Jenkinsfile to build libcapsule on SteamOS
+  * debian: Add more test dependencies
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 30 Apr 2018 13:21:36 +0100
+
 libcapsule (0.20171116.0-0co1) upstream; urgency=medium
 
   [ Vivek Das Mohapatra ]

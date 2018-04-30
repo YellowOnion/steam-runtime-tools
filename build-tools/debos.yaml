@@ -1,0 +1,28 @@
+{{- $mirror := or .mirror "http://deb.debian.org/debian" -}}
+{{- $version := or .version "0" -}}
+{{- $ospack := or .ospack "sysroot.tar.gz" -}}
+
+architecture: amd64
+actions:
+  - action: debootstrap
+    suite: jessie
+    components:
+      - main
+    mirror: {{ $mirror }}
+    merged-usr: false
+
+  - action: run
+    chroot: true
+    script: configure-sources.sh {{ $mirror }}
+
+  - action: run
+    chroot: true
+    script: install-dependencies.sh
+
+  - action: run
+    chroot: true
+    script: clean-sysroot.sh
+
+  - action: pack
+    compression: gz
+    file: {{ $ospack }}

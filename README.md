@@ -39,33 +39,36 @@ for libcapsule 0.20180430.0 or later, on a system with autoconf-archive
 
     dcmd cp ../build-area/libcapsule_0.20180430.0-0co1.dsc .
 
-The build system also needs `bubblewrap` and `debootstrap`.
-
 To make the built version compatible with older systems, you will need a
 Debian 8 'jessie' chroot with some extra packages. SteamOS 2 'brewmaster'
 is not suitable, because its amd64 and i386 linux-libc-dev packages are
 not co-installable.
 
-To prepare the chroot:
+The build also needs `bubblewrap`. To make the relocatable installation,
+by default it relies on [debos][] and [qemu-system-x86_64][qemu]. If
+you have that, you can just run:
 
-    sudo debootstrap jessie /srv/jessie http://deb.debian.org/debian
-    echo 'deb-src http://deb.debian.org/debian jessie main' | \
-        sudo tee -a /srv/jessie/etc/apt/sources.list
-    sudo chroot /srv/jessie dpkg --add-architecture i386
-    sudo chroot /srv/jessie apt update
-    sudo chroot /srv/jessie apt update
-    sudo chroot /srv/jessie apt install \
-        autoconf automake build-essential chrpath gcc-multilib git \
-        gtk-doc-tools libelf-dev libelf-dev:i386 libipc-run-perl \
-        libjpeg62-turbo libjpeg62-turbo:i386 perl xsltproc zlib1g zlib1g:i386
-    sudo chroot /srv/jessie apt install -t jessie-backports autoconf-archive
+    make
 
-To build the relocatable install:
+Alternatively, prepare a Debian jessie sysroot with `deb`
+and `deb-src` sources and an `i386` foreign architecture (see
+`build-tools/configure-sources.sh`), and all the packages listed in
+`build-tools/install-dependencies.sh`) and use:
 
-    make chroot=/srv/jessie
+    make chroot=/path/to/sysroot
+
+or compress a similar chroot into a gzipped tar file (containing `./etc`,
+`./usr` and so on, as used by [lxc][] and [pbuilder][]) and use:
+
+    make tarball=/path/to/tarball.tar.gz
 
 Binaries and source code end up in `relocatable-install/` which can be
 copied to wherever you want.
+
+[debos]: https://github.com/go-debos/debos
+[lxc]: https://github.com/lxc/lxc
+[pbuilder]: https://pbuilder.alioth.debian.org/
+[qemu]: https://www.qemu.org/
 
 Instructions for testing
 ------------------------

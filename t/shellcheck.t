@@ -36,6 +36,9 @@ cd "$TOP_SRCDIR"
 
 n=0
 for shell_script in \
+        build-tools/clean-chroot.sh \
+        build-tools/configure-sources.sh \
+        build-tools/install-dependencies.sh \
         pressure-vessel-wrap \
         t/shellcheck.t \
         ; do

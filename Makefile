@@ -1,11 +1,24 @@
 all: install
 
-chroot = /srv/jessie
+mirror = http://deb.debian.org/debian
+tarball = _build/sysroot.tar.gz
+sysroot = _build/sysroot
 
-in_chroot = \
+_build/sysroot/etc/debian_version: $(tarball) Makefile
+	rm -fr _build/sysroot
+	mkdir -p _build/sysroot
+	tar -zxf $(tarball) --exclude="./dev/*" -C _build/sysroot
+	touch $@
+
+_build/sysroot.tar.gz: build-tools/debos.yaml Makefile
+	mkdir -p $(dir $@)
+	debos -t mirror:$(mirror) -t ospack:$@ build-tools/debos.yaml
+
+in_sysroot = \
 	bwrap \
-	--ro-bind $(chroot) / \
+	--ro-bind $(CURDIR)/$(sysroot) / \
 	--dev-bind /dev /dev \
+	--ro-bind /etc/resolv.conf /etc/resolv.conf \
 	--tmpfs /tmp \
 	--tmpfs /home \
 	--bind $(CURDIR) $(CURDIR) \
@@ -13,7 +26,7 @@ in_chroot = \
 	--setenv LC_ALL C.UTF-8 \
 	$(NULL)
 
-install: install-amd64 install-i386 libcapsule/configure
+install: install-amd64 install-i386 libcapsule/configure $(sysroot)/etc/debian_version
 	install pressure-vessel-wrap relocatable-install/bin/
 	mkdir -p relocatable-install/sources
 	install -m644 THIRD-PARTY.md relocatable-install/sources/README.txt
@@ -21,13 +34,13 @@ install: install-amd64 install-i386 libcapsule/configure
 	install -m644 /usr/share/doc/zlib1g/copyright relocatable-install/sources/libz.txt
 	install -m644 /usr/share/doc/libelf1/copyright relocatable-install/sources/libelf.txt
 	dcmd install -m644 libcapsule*.dsc relocatable-install/sources/
-	$(in_chroot) $(MAKE) in-chroot/install
+	$(in_sysroot) $(MAKE) in-sysroot/install
 
-in-chroot/install:
+in-sysroot/install:
 	cd relocatable-install/sources; \
 	apt-get --download-only source elfutils zlib
 
-libcapsule/configure:
+libcapsule/configure: $(sysroot)/etc/debian_version
 	rm -fr libcapsule
 	first=; \
 	for t in libcapsule*.dsc; do \
@@ -38,18 +51,18 @@ libcapsule/configure:
 			exit 1; \
 		fi; \
 	done
-	$(in_chroot) $(MAKE) in-chroot/libcapsule/configure
+	$(in_sysroot) $(MAKE) in-sysroot/libcapsule/configure
 
-in-chroot/libcapsule/configure:
+in-sysroot/libcapsule/configure:
 	dpkg-source -x libcapsule*.dsc
 	mv libcapsule-*/ libcapsule
 	set -e; cd libcapsule; NOCONFIGURE=1 ./autogen.sh
 
-_build/%/config.status: libcapsule/configure Makefile
+_build/%/config.status: libcapsule/configure Makefile $(sysroot)/etc/debian_version
 	mkdir -p _build/$*/libcapsule
-	$(in_chroot) $(MAKE) in-chroot/configure-$*
+	$(in_sysroot) $(MAKE) in-sysroot/configure-$*
 
-in-chroot/configure-%:
+in-sysroot/configure-%:
 	set -eu; \
 	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
 	case "$${DEB_BUILD_ARCH}/$${DEB_HOST_ARCH}" in \
@@ -67,14 +80,14 @@ in-chroot/configure-%:
 	    --disable-gtk-doc \
 	    $(NULL)
 
-build-%: _build/%/config.status Makefile
-	$(in_chroot) $(MAKE) -C _build/$*/libcapsule
+build-%: _build/%/config.status Makefile $(sysroot)/etc/debian_version
+	$(in_sysroot) $(MAKE) -C _build/$*/libcapsule
 
-install-%: build-% Makefile
+install-%: build-% Makefile $(sysroot)/etc/debian_version
 	mkdir -p relocatable-install/bin
-	$(in_chroot) $(MAKE) in-chroot/install-$*
+	$(in_sysroot) $(MAKE) in-sysroot/install-$*
 
-in-chroot/install-%:
+in-sysroot/install-%:
 	set -eu; \
 	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
 	mkdir -p "relocatable-install/lib/$${DEB_HOST_MULTIARCH}"; \

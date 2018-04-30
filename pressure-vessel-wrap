@@ -271,16 +271,6 @@ if [ -z "$interactive" ]; then
     bwrap_options+=(--new-session)
 fi
 
-# Put the caller's LD_PRELOAD and search paths back.
-if [ -n "$caller_ld_preload" ]; then
-    bwrap_options+=(--setenv LD_PRELOAD "$caller_ld_preload")
-else
-    bwrap_options+=(--unsetenv LD_PRELOAD)
-fi
-if [ -n "$caller_path" ]; then
-    bwrap_options+=(--setenv PATH "$caller_path")
-fi
-
 overrides=
 
 for t in "${multiarch_tuples[@]}"; do
@@ -613,9 +603,21 @@ fi
 # locations
 old_ifs="$IFS"
 IFS=:
+adjusted_ld_preload=
 for preload in $caller_ld_preload; do
     if [ -e "$preload" ]; then
-        bwrap_options+=(--ro-bind "$preload" "$preload")
+        case "$preload" in
+            (/usr/*|/lib*)
+                # We can't write here, so redirect them to the
+                # corresponding locations in /run/host
+                bwrap_options+=(--ro-bind "$preload" "/run/host$preload")
+                adjusted_ld_preload="${adjusted_ld_preload:+"$adjusted_ld_preload:"}/run/host$preload"
+                ;;
+            (*)
+                bwrap_options+=(--ro-bind "$preload" "$preload")
+                adjusted_ld_preload="${adjusted_ld_preload:+"$adjusted_ld_preload:"}$preload"
+                ;;
+        esac
     fi
 done
 IFS="$old_ifs"
@@ -636,6 +638,16 @@ else
     bwrap_options+=(--bind "$PWD" "$PWD")
 fi
 bwrap_options+=(--chdir "$PWD")
+
+# Put the caller's LD_PRELOAD and search paths back.
+if [ -n "$adjusted_ld_preload" ]; then
+    bwrap_options+=(--setenv LD_PRELOAD "$adjusted_ld_preload")
+else
+    bwrap_options+=(--unsetenv LD_PRELOAD)
+fi
+if [ -n "$caller_path" ]; then
+    bwrap_options+=(--setenv PATH "$caller_path")
+fi
 
 if "$BWRAP" --help | grep unshare-uts >/dev/null; then
     # Set a standard hostname for the container to make it easier

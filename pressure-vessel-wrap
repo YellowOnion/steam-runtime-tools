@@ -38,24 +38,42 @@ me="${me##*/}"
 # Undo any weird environment before we start running external
 # executables. We put it back before running the actual app/game.
 
-caller_ld_preload="${LD_PRELOAD:-}"
-unset LD_PRELOAD
+if { [ -n "${LD_LIBRARY_PATH-}" ] && \
+        [ "${LD_LIBRARY_PATH-}" != "${SYSTEM_LD_LIBRARY_PATH-}" ]; } \
+    || [ -n "${LD_PRELOAD-}" ]; then
+    caller_ld_preload="${LD_PRELOAD:-}"
+    unset LD_PRELOAD
 
-caller_ld_library_path="${LD_LIBRARY_PATH:-}"
+    caller_ld_library_path="${LD_LIBRARY_PATH:-}"
 
-if [ -n "${SYSTEM_LD_LIBRARY_PATH-}" ]; then
-    export LD_LIBRARY_PATH="$SYSTEM_LD_LIBRARY_PATH"
-else
-    unset LD_LIBRARY_PATH
-fi
+    if [ -n "${SYSTEM_LD_LIBRARY_PATH-}" ]; then
+        export LD_LIBRARY_PATH="$SYSTEM_LD_LIBRARY_PATH"
+    else
+        unset LD_LIBRARY_PATH
+    fi
 
-caller_path="${PATH:-"${default_path}"}"
-default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
+    caller_path="${PATH:-"${default_path}"}"
+    default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
 
-if [ -n "${SYSTEM_PATH-}" ]; then
-    export PATH="$SYSTEM_PATH"
-else
-    export PATH="$default_path"
+    if [ -n "${SYSTEM_PATH-}" ]; then
+        export PATH="$SYSTEM_PATH"
+    else
+        export PATH="$default_path"
+    fi
+
+    if [ -n "$caller_ld_preload" ]; then
+        set -- --ld-preload="$caller_ld_preload" "$@"
+    fi
+
+    if [ -n "$caller_ld_library_path" ]; then
+        set -- --ld-library-path="$caller_ld_library_path" "$@"
+    fi
+
+    if [ -n "$caller_path" ]; then
+        set -- --path="$caller_path" "$@"
+    fi
+
+    exec "$0" "$@"
 fi
 
 # If bwrap isn't installed as a standalone binary on the PATH, see
@@ -72,24 +90,6 @@ if [ -z "${BWRAP:-}" ]; then
     fi
 fi
 
-if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
-    echo "$me: cannot find bwrap or it doesn't work, falling back to executing '$*' directly" >&2
-
-    if [ -n "$caller_ld_preload" ]; then
-        export LD_PRELOAD="$caller_ld_preload"
-    fi
-    if [ -n "$caller_path" ]; then
-        export PATH="$caller_path"
-    fi
-    if [ -n "$caller_ld_library_path" ]; then
-        export LD_LIBRARY_PATH="$caller_ld_library_path"
-    else
-        unset LD_LIBRARY_PATH
-    fi
-
-    exec "$@"
-fi
-
 declare -a bwrap_options
 declare -a multiarch_tuples
 declare -a wrapped_command
@@ -97,6 +97,9 @@ declare -a original_argv
 original_argv=("$@")
 fake_home=
 interactive=
+ld_library_path=
+ld_preload=
+path=
 runtime=
 tmpdir=
 verbose=
@@ -134,6 +137,12 @@ usage () {
     echo "--interactive                 Run an interactive shell instead of"
     echo "                              COMMAND. Executing \"\$@\" in that"
     echo "                              shell will run COMMAND [ARGS]."
+    echo "--ld-library-path=DIR[:DIR]   Set LD_LIBRARY_PATH to DIR[:DIR]"
+    echo "                              when executing COMMAND."
+    echo "--ld-preload=MODULE[:MODULE]  Set LD_PRELOAD to MODULE[:MODULE]"
+    echo "                              when executing COMMAND."
+    echo "--path=DIR[:DIR]              Set PATH to DIR[:DIR] when executing"
+    echo "                              COMMAND."
     echo "--runtime=RUNTIME             Mount the given sysroot or"
     echo "                              merged /usr in the container,"
     echo "                              and augment it with the host"
@@ -145,7 +154,7 @@ usage () {
 }
 
 getopt_temp="$(getopt -o '' --long \
-    'freedesktop-app-id:,help,home:,interactive,runtime:,steam-app-id:,verbose' \
+    'freedesktop-app-id:,help,home:,interactive,ld-library-path:,ld-preload:,path:,runtime:,steam-app-id:,verbose' \
     -n "$me" -- "$@")"
 
 eval set -- "$getopt_temp"
@@ -171,6 +180,21 @@ while [ "$#" -gt 0 ]; do
         (--interactive)
             interactive=yes
             shift
+            ;;
+
+        (--ld-library-path)
+            ld_library_path="$2"
+            shift 2
+            ;;
+
+        (--ld-preload)
+            ld_preload="$2"
+            shift 2
+            ;;
+
+        (--path)
+            path="$2"
+            shift 2
             ;;
 
         (--runtime)
@@ -220,11 +244,29 @@ if [ -n "$verbose" ]; then
     printf '\t%s\n' "Logical: $(pwd -L)" >&2
     printf '\t%s\n' "Physical: $(pwd -P)" >&2
     echo "Environment:" >&2
-    printf '\t%s\n' "Original PATH: $caller_path" >&2
-    printf '\t%s\n' "Original LD_LIBRARY_PATH: $caller_ld_library_path" >&2
-    printf '\t%s\n' "Original LD_PRELOAD: $caller_ld_preload" >&2
+    printf '\t%s\n' "PATH: $path" >&2
+    printf '\t%s\n' "LD_LIBRARY_PATH: $ld_library_path" >&2
+    printf '\t%s\n' "LD_PRELOAD: $ld_preload" >&2
     echo "Other environment variables:" >&2
     env | sed -e 's/^/\t/' >&2
+fi
+
+if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
+    echo "$me: cannot find bwrap or it doesn't work, falling back to executing '$*' directly" >&2
+
+    if [ -n "$ld_preload" ]; then
+        export LD_PRELOAD="$ld_preload"
+    fi
+    if [ -n "$path" ]; then
+        export PATH="$path"
+    fi
+    if [ -n "$ld_library_path" ]; then
+        export LD_LIBRARY_PATH="$ld_library_path"
+    else
+        unset LD_LIBRARY_PATH
+    fi
+
+    exec "$@"
 fi
 
 if "$BWRAP" --help | grep -F '[--]' 2>/dev/null; then
@@ -300,8 +342,8 @@ if [ -n "$runtime" ]; then
     # The LD_LIBRARY_PATH from the host system is not very relevant
     # inside the container, so skip it
     bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides")
-elif [ -n "$caller_ld_library_path" ]; then
-    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides:$caller_ld_library_path")
+elif [ -n "$ld_library_path" ]; then
+    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides:$ld_library_path")
 else
     bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides")
 fi
@@ -623,7 +665,7 @@ fi
 old_ifs="$IFS"
 IFS=:
 adjusted_ld_preload=
-for preload in $caller_ld_preload; do
+for preload in $ld_preload; do
     if [ -e "$preload" ]; then
         case "$preload" in
             (/usr/*|/lib*)
@@ -674,8 +716,8 @@ if [ -n "$adjusted_ld_preload" ]; then
 else
     bwrap_options+=(--unsetenv LD_PRELOAD)
 fi
-if [ -n "$caller_path" ]; then
-    bwrap_options+=(--setenv PATH "$caller_path")
+if [ -n "$path" ]; then
+    bwrap_options+=(--setenv PATH "$path")
 fi
 
 if "$BWRAP" --help | grep unshare-uts >/dev/null; then

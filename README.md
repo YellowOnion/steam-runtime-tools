@@ -117,6 +117,12 @@ Instructions for testing
       `usr/bin/env`, `usr/share/locale`, `usr/lib/python2.7` and so on,
       optionally with `bin`, `lib` etc. being symlinks into `usr`
 
+    In this mode, graphics drivers come from the host system, while
+    their dependencies (notably glibc and libstdc++) come from either
+    the host system or the runtime, whichever appears to be newer. This
+    is currently hard-coded in `pressure-vessel-wrap` and cannot be
+    configured.
+
 Design constraints
 ------------------
 

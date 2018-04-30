@@ -180,9 +180,6 @@ Assumptions
 TODO
 ----
 
-* Flatpak-like *runtimes* that replace `/usr` (and also `/lib*`, `/bin`,
-  `/sbin` on systems without merged `/usr`) are not yet implemented.
-
 * Games can currently read each other's static data via `~/.steam/steam`
   and `~/.steam/root`. This could be prevented, if we can define which
   parts of `~/.steam` are considered to be API and which are to be

@@ -739,8 +739,15 @@ if [ -n "$verbose" ]; then
     echo "$me: '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}'" >&2
 fi
 
-exec "$BWRAP" "${bwrap_options[@]}" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
-echo "$me: failed to execute '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
+e=0
+"$BWRAP" "${bwrap_options[@]}" $bwrap_end_of_options "${wrapped_command[@]}" || e=$?
+if [ "$e" -eq 0 ]; then
+    if [ -n "$verbose" ]; then
+        echo "$me: '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}': successful" >&2
+    fi
+else
+    echo "$me: failed to execute '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}': exec status $e" >&2
+fi
 exit "$e"
 
 # vim:set sw=4 sts=4 et:

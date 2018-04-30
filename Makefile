@@ -7,14 +7,13 @@ install: install-amd64 install-i386
 	install -m644 libcapsule/debian/copyright relocatable-install/sources/capsule-capture-libs.txt
 	install -m644 /usr/share/doc/zlib1g/copyright relocatable-install/sources/libz.txt
 	install -m644 /usr/share/doc/libelf1/copyright relocatable-install/sources/libelf.txt
-	cd libcapsule; \
-		git archive \
-		--prefix libcapsule-$$(git describe --match='v*')/ \
-		-o $(CURDIR)/relocatable-install/sources/libcapsule-$$(git describe --match='v*').tar.gz \
-		HEAD
+	install -m644 libcapsule-*.tar.* relocatable-install/sources/
 	cd relocatable-install/sources; apt-get --download-only source elfutils zlib
 
 libcapsule/configure:
+	rm -fr libcapsule
+	tar -zxvf libcapsule-*.tar.*
+	mv libcapsule-*/ libcapsule
 	set -e; cd libcapsule; NOCONFIGURE=1 ./autogen.sh
 
 _build/%/config.status: libcapsule/configure Makefile

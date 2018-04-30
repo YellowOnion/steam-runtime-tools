@@ -93,6 +93,8 @@ fi
 declare -a bwrap_options
 declare -a multiarch_tuples
 declare -a wrapped_command
+declare -a original_argv
+original_argv=("$@")
 fake_home=
 interactive=
 runtime=
@@ -206,6 +208,23 @@ done
 if [ "$#" -eq 0 ]; then
     echo "$me: an executable to run is required" >&2
     exit 2
+fi
+
+if [ -n "$verbose" ]; then
+    echo "Original argv:" >&2
+    printf '\t%s\n' "\$0: $0" >&2
+    for arg in "${original_argv[@]}"; do
+        printf '\t%s\n' "\$@: $arg" >&2
+    done
+    echo "Current working directory:" >&2
+    printf '\t%s\n' "Logical: $(pwd -L)" >&2
+    printf '\t%s\n' "Physical: $(pwd -P)" >&2
+    echo "Environment:" >&2
+    printf '\t%s\n' "Original PATH: $caller_path" >&2
+    printf '\t%s\n' "Original LD_LIBRARY_PATH: $caller_ld_library_path" >&2
+    printf '\t%s\n' "Original LD_PRELOAD: $caller_ld_preload" >&2
+    echo "Other environment variables:" >&2
+    env | sed -e 's/^/\t/' >&2
 fi
 
 if "$BWRAP" --help | grep -F '[--]' 2>/dev/null; then

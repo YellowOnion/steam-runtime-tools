@@ -5,7 +5,7 @@ Maintainer: Vivek Das Mohapatra <vivek@collabora.com>
 Standards-Version: 3.9.8
 Build-Depends:
  autoconf,
- autoconf-archive,
+ autoconf-archive <pkg.libcapsule.from-git>,
  automake,
  bubblewrap,
  debhelper,

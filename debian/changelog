@@ -1,4 +1,4 @@
-libcapsule (0.20180430.0-0co1) UNRELEASED; urgency=medium
+libcapsule (0.20180430.0-0co1) upstream; urgency=medium
 
   [ Vivek Das Mohapatra ]
   * Fix a potential segfault in the ELF memory dumper
@@ -30,7 +30,7 @@ libcapsule (0.20180430.0-0co1) UNRELEASED; urgency=medium
   * ci: Add a Jenkinsfile to build libcapsule on SteamOS
   * debian: Add more test dependencies
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 30 Apr 2018 13:21:36 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 30 Apr 2018 14:35:22 +0100
 
 libcapsule (0.20171116.0-0co1) upstream; urgency=medium
 

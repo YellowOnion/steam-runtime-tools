@@ -1,2 +1,4 @@
 /_build/
 /relocatable-install/
+/libcapsule_*.dsc
+/libcapsule_*.tar.[gx]z

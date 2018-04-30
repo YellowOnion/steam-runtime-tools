@@ -21,25 +21,32 @@ that won't be synchronised, other than /tmp or similar.)
 We can get a more predictable library stack than the
 `LD_LIBRARY_PATH`-based Steam Runtime by making an alternative runtime
 available over `/usr`, `/lib*`, `/bin`, `/sbin`, analogous to Flatpak
-runtimes, possibly using [libcapsule][] to share the host's graphics
-driver stack. (This mode is not yet implemented.)
+runtimes, using some or all of the host system's graphics stack.
+
+A future goal is to use [libcapsule][] to avoid the library dependencies
+of the host system's graphics stack influencing the libraries loaded by
+games, particularly libstdc++. This is not yet implemented.
 
 [libcapsule]: https://gitlab.collabora.com/vivek/libcapsule/
 
 Building a relocatable install
 ------------------------------
 
-On a system with autoconf-archive 20160916-1~bpo8+1 or later, check out
-libcapsule from git and use `aclocal -I m4 --install` to copy required
-macros to the `m4` directory. Put it in the `libcapsule/` subdirectory
-of `pressure-vessel`.
+Build a Debian source package (`.dsc`, `.debian.tar.*`, `.orig.tar.*`
+for libcapsule 0.20180430.0 or later, on a system with autoconf-archive
+20160916-1~bpo8+1 or later. Put it in the top-level directory of
+`pressure-vessel`, for example:
+
+    dcmd cp ../build-area/libcapsule_0.20180430.0-0co1.dsc .
 
 The build system also needs `bubblewrap` and `debootstrap`.
 
 To make the built version compatible with older systems, you will need a
-Debian 8 'jessie' chroot with some extra packages (SteamOS 2 'brewmaster'
+Debian 8 'jessie' chroot with some extra packages. SteamOS 2 'brewmaster'
 is not suitable, because its amd64 and i386 linux-libc-dev packages are
-not co-installable).
+not co-installable.
+
+To prepare the chroot:
 
     sudo debootstrap jessie /srv/jessie http://deb.debian.org/debian
     echo 'deb-src http://deb.debian.org/debian jessie main' | \
@@ -52,14 +59,10 @@ not co-installable).
         gtk-doc-tools libelf-dev libelf-dev:i386 libipc-run-perl \
         libjpeg62-turbo libjpeg62-turbo:i386 perl xsltproc zlib1g zlib1g:i386
     sudo chroot /srv/jessie apt install -t jessie-backports autoconf-archive
-    bwrap \
-        --ro-bind /srv/jessie / \
-        --dev-bind /dev /dev \
-        --tmpfs /tmp \
-        --bind /home /home \
-        --chdir $(pwd) \
-        --setenv LC_ALL C.UTF-8 \
-        make
+
+To build the relocatable install:
+
+    make chroot=/srv/jessie
 
 Binaries and source code end up in `relocatable-install/` which can be
 copied to wherever you want.

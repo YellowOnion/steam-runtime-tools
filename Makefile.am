@@ -57,13 +57,15 @@ data/$(HOST_PREFIX)capsule-mkstublib: data/capsule-mkstublib Makefile
 	) > $@.tmp; chmod +x $@.tmp; mv $@.tmp $@
 endif
 
-install-exec-hook:
+install-exec-hook: install-exec-hook-host-prefix
+install-exec-hook-host-prefix:
 	cd $(DESTDIR)$(bindir) && ln -f capsule-symbols $(HOST_PREFIX)capsule-symbols
 	cd $(DESTDIR)$(bindir) && ln -f capsule-version $(HOST_PREFIX)capsule-version
 	cd $(DESTDIR)$(bindir) && ln -f capsule-elf-dump $(HOST_PREFIX)capsule-elf-dump
 	cd $(DESTDIR)$(bindir) && ln -f capsule-capture-libs $(HOST_PREFIX)capsule-capture-libs
 
-uninstall-hook:
+uninstall-hook: uninstall-hook-host-prefix
+uninstall-hook-host-prefix:
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-capture-libs
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-elf-dump
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-symbols
@@ -163,26 +165,7 @@ nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/shim/libnotgl.la                  \
                                        tests/shim/libnotgles.la
 nobase_dist_insttests_DATA           = tests/CapsuleTest.pm                    \
-                                       tests/CapsuleTestDpkg.pm
-# Install the source code so we can rebuild it inside a container if we want to
-gl_shims =                             libEGL.so.1                             \
-                                       libGL.so.1                              \
-                                       libGLESv2.so.2                          \
-                                       libGLX.so.0                             \
-                                       libOpenGL.so.0                          \
-                                       libX11.so.6                             \
-                                       libXext.so.6                            \
-                                       libXi.so.6                              \
-                                       libgbm.so.1                             \
-                                       libxcb-dri2.so.0                        \
-                                       libxcb-glx.so.0                         \
-                                       libxcb-present.so.0                     \
-                                       libxcb-sync.so.1                        \
-                                       libxcb.so.1
-nobase_dist_insttests_DATA          += $(patsubst %,examples/shim/%.excluded,$(gl_shims)) \
-                                       $(patsubst %,examples/shim/%.shared,$(gl_shims)) \
-                                       $(patsubst %,examples/shim/%.symbols,$(gl_shims)) \
-                                       $(patsubst %,examples/shim/%.symbols.updated-for,$(gl_shims)) \
+                                       tests/CapsuleTestDpkg.pm                \
                                        tests/notgl.h                           \
                                        tests/notgl-green.c                     \
                                        tests/notgl-red.c                       \
@@ -201,6 +184,56 @@ nobase_dist_insttests_DATA          += $(patsubst %,examples/shim/%.excluded,$(g
                                        tests/shim/libnotgles.so.1.excluded     \
                                        tests/shim/libnotgles.so.1.shared       \
                                        tests/shim/libnotgles.so.1.symbols
+# Install the source code so we can rebuild it inside a container if we want to
+gl_shims =                             libEGL.so.1                             \
+                                       libGL.so.1                              \
+                                       libGLESv2.so.2                          \
+                                       libGLX.so.0                             \
+                                       libOpenGL.so.0                          \
+                                       libX11.so.6                             \
+                                       libXext.so.6                            \
+                                       libXi.so.6                              \
+                                       libgbm.so.1                             \
+                                       libxcb-dri2.so.0                        \
+                                       libxcb-glx.so.0                         \
+                                       libxcb-present.so.0                     \
+                                       libxcb-sync.so.1                        \
+                                       libxcb.so.1
+# We don't do this via nobase_dist_insttests_DATA because patsubst doesn't
+# work for make dist, so we would have to write it out longhand
+install-data-local-shim-sources:
+	$(AM_V_GEN)set -e; \
+	$(mkinstalldirs) $(DESTDIR)$(insttestsdir)/examples/shim; \
+	for lib in ${gl_shims}; do \
+		$(INSTALL_DATA) \
+			$(srcdir)/examples/shim/$$lib.excluded \
+			$(srcdir)/examples/shim/$$lib.shared \
+			$(srcdir)/examples/shim/$$lib.symbols \
+			$(srcdir)/examples/shim/$$lib.symbols.updated-for \
+			$(DESTDIR)$(insttestsdir)/examples/shim; \
+	done
+uninstall-hook: uninstall-hook-shim-sources
+uninstall-hook-shim-sources:
+	$(AM_V_GEN)set -e; \
+	for lib in ${gl_shims}; do \
+		rm -fr \
+			$(DESTDIR)$(insttestsdir)/examples/shim/$$lib.excluded \
+			$(DESTDIR)$(insttestsdir)/examples/shim/$$lib.shared \
+			$(DESTDIR)$(insttestsdir)/examples/shim/$$lib.symbols \
+			$(DESTDIR)$(insttestsdir)/examples/shim/$$lib.symbols.updated-for \
+		; \
+	done
+dist-hook-shim-sources:
+	$(AM_V_GEN)set -e; \
+	$(MKDIR_P) $(distdir)/examples/shim; \
+	for lib in ${gl_shims}; do \
+		cp \
+			$(srcdir)/examples/shim/$$lib.excluded \
+			$(srcdir)/examples/shim/$$lib.shared \
+			$(srcdir)/examples/shim/$$lib.symbols \
+			$(srcdir)/examples/shim/$$lib.symbols.updated-for \
+			$(distdir)/examples/shim; \
+	done
 endif
 
 maintainer-update-gl-shims:
@@ -409,8 +442,15 @@ endif
 # defines these variables and targets
 dist-hook: dist-hook-git-version-gen
 .PHONY: dist-hook-git-version-gen
+
 dist-hook-git-version-gen:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
+
+dist-hook: dist-hook-shim-sources
+.PHONY: dist-hook-shim-sources
+
+install-data-local: install-data-local-shim-sources
+.PHONY: install-data-local-shim-sources
 
 CLEANFILES             += $(testmeta_DATA)
 if ENABLE_HOST_PREFIX

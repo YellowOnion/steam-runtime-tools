@@ -79,11 +79,11 @@ Instructions for testing
 
 * Configure the launch options for a game in Steam to be:
 
-        /path/to/pressure-vessel-wrap -- %command%
+        /path/to/bin/pressure-vessel-wrap -- %command%
 
 * For interactive testing, if you ran Steam from a shell, you can use:
 
-        /path/to/pressure-vessel-wrap --interactive -- %command%
+        /path/to/bin/pressure-vessel-wrap --interactive -- %command%
 
     The interactive shell's current working directory matches the game's.
     Run `"$@"` in the interactive shell to run the game.
@@ -95,9 +95,27 @@ Instructions for testing
 
     - Run one of:
 
-            /path/to/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
-            /path/to/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
-            /path/to/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
+            /path/to/bin/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
+            /path/to/bin/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
+            /path/to/bin/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
+
+* To use a runtime instead of the host system, use:
+
+        /path/to/bin/pressure-vessel-wrap --runtime=$HOME/some-runtime -- ./whatever-game
+
+    The runtime can be either:
+
+    - A merged `/usr` containing `bin/bash`, `lib/ld-linux.so.2`,
+      `bin/env`, `share/locale`, `lib/python2.7` and so on
+
+    - A Flatpak runtime such as
+      `~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta/active/files`,
+      for example produced by [flatdeb][] (this is a special case of a
+      merged `/usr`)
+
+    - A sysroot containing `bin/bash`, `lib/ld-linux.so.2`,
+      `usr/bin/env`, `usr/share/locale`, `usr/lib/python2.7` and so on,
+      optionally with `bin`, `lib` etc. being symlinks into `usr`
 
 Design constraints
 ------------------
@@ -178,6 +196,9 @@ TODO
   `$fake_home/data` and `$fake_home/.cache` with `$fake_home/cache`?
 
   [weird behaviour]: https://www.ctrl.blog/entry/flatpak-steamcloud-xdg
+
+* Team Fortress 2 reports an error because it is unable to set the
+  `en_US.UTF-8` locale (but then starts successfully anyway).
 
 Design
 ------

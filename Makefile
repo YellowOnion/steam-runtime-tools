@@ -1,16 +1,18 @@
-all: install
+VERSION := $(shell ./build-aux/git-version-gen .tarball-version)
+
+all: binary
 
 mirror = http://deb.debian.org/debian
 tarball = _build/sysroot.tar.gz
 sysroot = _build/sysroot
 
-_build/sysroot/etc/debian_version: $(tarball) Makefile
+_build/sysroot/etc/debian_version: $(tarball)
 	rm -fr _build/sysroot
 	mkdir -p _build/sysroot
 	tar -zxf $(tarball) --exclude="./dev/*" -C _build/sysroot
 	touch $@
 
-_build/sysroot.tar.gz: sysroot/debos.yaml Makefile
+_build/sysroot.tar.gz: sysroot/debos.yaml
 	mkdir -p $(dir $@)
 	debos -t mirror:$(mirror) -t ospack:$@ sysroot/debos.yaml
 
@@ -26,7 +28,9 @@ in_sysroot = \
 	--setenv LC_ALL C.UTF-8 \
 	$(NULL)
 
-install: install-amd64 install-i386 libcapsule/configure $(sysroot)/etc/debian_version
+install:
+	rm -fr relocatable-install
+	$(MAKE) install-amd64 install-i386
 	install pressure-vessel-wrap relocatable-install/bin/
 	mkdir -p relocatable-install/sources
 	install -m644 THIRD-PARTY.md relocatable-install/sources/README.txt
@@ -58,9 +62,10 @@ in-sysroot/libcapsule/configure:
 	mv libcapsule-*/ libcapsule
 	set -e; cd libcapsule; NOCONFIGURE=1 ./autogen.sh
 
-_build/%/config.status: libcapsule/configure Makefile $(sysroot)/etc/debian_version
+_build/%/config.stamp: libcapsule/configure $(sysroot)/etc/debian_version
 	mkdir -p _build/$*/libcapsule
 	$(in_sysroot) $(MAKE) in-sysroot/configure-$*
+	touch $@
 
 in-sysroot/configure-%:
 	set -eu; \
@@ -80,10 +85,11 @@ in-sysroot/configure-%:
 	    --disable-gtk-doc \
 	    $(NULL)
 
-build-%: _build/%/config.status Makefile $(sysroot)/etc/debian_version
+_build/%/build.stamp: _build/%/config.stamp $(sysroot)/etc/debian_version
 	$(in_sysroot) $(MAKE) -C _build/$*/libcapsule
+	touch $@
 
-install-%: build-% Makefile $(sysroot)/etc/debian_version
+install-%:
 	mkdir -p relocatable-install/bin
 	$(in_sysroot) $(MAKE) in-sysroot/install-$*
 
@@ -105,3 +111,15 @@ in-sysroot/install-%:
 
 check:
 	prove -v t/
+
+binary: pressure-vessel-$(VERSION)-bin.tar.gz
+pressure-vessel-$(VERSION)-bin.tar.gz:
+	$(MAKE) install
+	tar -C relocatable-install -zcvf $@.tmp .
+	mv $@.tmp $@
+
+clean:
+	rm -fr pressure-vessel-[0-9]*.tar.gz
+	rm -fr _build
+	rm -fr relocatable-install
+	rm -fr libcapsule

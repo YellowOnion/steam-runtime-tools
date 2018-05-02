@@ -10,9 +10,9 @@ _build/sysroot/etc/debian_version: $(tarball) Makefile
 	tar -zxf $(tarball) --exclude="./dev/*" -C _build/sysroot
 	touch $@
 
-_build/sysroot.tar.gz: build-tools/debos.yaml Makefile
+_build/sysroot.tar.gz: sysroot/debos.yaml Makefile
 	mkdir -p $(dir $@)
-	debos -t mirror:$(mirror) -t ospack:$@ build-tools/debos.yaml
+	debos -t mirror:$(mirror) -t ospack:$@ sysroot/debos.yaml
 
 in_sysroot = \
 	bwrap \

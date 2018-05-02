@@ -52,8 +52,8 @@ you have that, you can just run:
 
 Alternatively, prepare a Debian jessie sysroot with `deb`
 and `deb-src` sources and an `i386` foreign architecture (see
-`build-tools/configure-sources.sh`), and all the packages listed in
-`build-tools/install-dependencies.sh`) and use:
+`sysroot/configure-sources.sh`), and all the packages listed in
+`sysroot/install-dependencies.sh`) and use:
 
     make chroot=/path/to/sysroot
 

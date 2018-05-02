@@ -36,10 +36,10 @@ cd "$TOP_SRCDIR"
 
 n=0
 for shell_script in \
-        build-tools/clean-chroot.sh \
-        build-tools/configure-sources.sh \
-        build-tools/install-dependencies.sh \
         pressure-vessel-wrap \
+        sysroot/clean-chroot.sh \
+        sysroot/configure-sources.sh \
+        sysroot/install-dependencies.sh \
         t/shellcheck.t \
         ; do
     n=$((n + 1))

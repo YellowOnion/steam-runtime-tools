@@ -16,7 +16,7 @@
 # License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
 AUTOMAKE_OPTIONS        = subdir-objects
-ACLOCAL_AMFLAGS         = -I m4
+ACLOCAL_AMFLAGS         = -I m4 --install
 AM_CFLAGS               = -fvisibility=hidden \
                           --std=c99 \
                           $(WARN_CFLAGS) \

@@ -93,7 +93,7 @@ _build/%/build.stamp: _build/%/config.stamp $(sysroot)/etc/debian_version
 	$(in_sysroot) $(MAKE) -C _build/$*/libcapsule
 	touch $@
 
-install-%:
+install-%: _build/%/build.stamp
 	mkdir -p relocatable-install/bin
 	$(in_sysroot) $(MAKE) in-sysroot/install-$*
 

@@ -566,6 +566,15 @@ if [ -n "$runtime" ]; then
                     bwrap_options+=(--ro-bind "$real_path_in_host" \
                                     "/usr$real_path_in_runtime")
                 fi
+
+                # We should also pick up its locale archives.
+                if [ -e /usr/lib/locale ]; then
+                    bwrap_options+=(--ro-bind /usr/lib/locale /usr/lib/locale)
+                fi
+
+                if [ -e /usr/share/i18n ]; then
+                    bwrap_options+=(--ro-bind /usr/share/i18n /usr/share/i18n)
+                fi
             fi
 
             # /lib, /lib32 or /lib64

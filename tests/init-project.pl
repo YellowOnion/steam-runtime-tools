@@ -44,6 +44,16 @@ if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
     push @libcapsule_environment, "LD_LIBRARY_PATH=$ENV{G_TEST_BUILDDIR}/.libs";
 }
 
+my @configure_arguments = ();
+
+if (length $ENV{CAPSULE_TESTS_GNU_BUILD}) {
+    push @configure_arguments, '--build', $ENV{CAPSULE_TESTS_GNU_BUILD};
+}
+
+if (length $ENV{CAPSULE_TESTS_GNU_HOST}) {
+    push @configure_arguments, '--host', $ENV{CAPSULE_TESTS_GNU_HOST};
+}
+
 run_ok([$CAPSULE_INIT_PROJECT_TOOL,
         '--search-tree=/',
         '--runtime-tree=/run/host',
@@ -52,6 +62,7 @@ run_ok([$CAPSULE_INIT_PROJECT_TOOL,
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
         'sh', "$test_tempdir/libz-proxy",
+        @configure_arguments,
         '--with-search-tree=/',
         '--with-runtime-tree=/host',
     ], '>&2');

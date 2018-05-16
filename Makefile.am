@@ -343,8 +343,11 @@ AM_TESTS_ENVIRONMENT                 = export CAPSULE_CAPTURE_LIBS_TOOL="$(abs_b
                                        export CAPSULE_CFLAGS="-I$(abs_top_srcdir) -I$(abs_top_builddir)"; \
                                        export CAPSULE_LIBS="$(abs_top_builddir)/libcapsule.la"; \
                                        export CAPSULE_SYMBOLS_TOOL="$(abs_builddir)/capsule-symbols";\
+                                       export CAPSULE_TESTS_GNU_BUILD="${build}"; \
+                                       export CAPSULE_TESTS_GNU_HOST="${host}"; \
                                        export CAPSULE_TESTS_UNINSTALLED=1;     \
                                        export CAPSULE_VERSION_TOOL="$(abs_builddir)/capsule-version";\
+                                       export CC="${CC}";                      \
                                        export G_TEST_SRCDIR="$(abs_srcdir)";   \
                                        export G_TEST_BUILDDIR="$(abs_builddir)";\
                                        export G_DEBUG=gc-friendly;             \

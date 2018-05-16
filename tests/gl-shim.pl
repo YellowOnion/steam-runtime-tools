@@ -51,6 +51,16 @@ my @sonames = qw(libEGL.so.1 libGL.so.1 libGLESv2.so.2 libGLX.so.0
     libxcb-dri2.so.0 libxcb-glx.so.0 libxcb-present.so.0 libxcb-sync.so.1
     libxcb.so.1);
 
+my @configure_arguments = ();
+
+if (length $ENV{CAPSULE_TESTS_GNU_BUILD}) {
+    push @configure_arguments, '--build', $ENV{CAPSULE_TESTS_GNU_BUILD};
+}
+
+if (length $ENV{CAPSULE_TESTS_GNU_HOST}) {
+    push @configure_arguments, '--host', $ENV{CAPSULE_TESTS_GNU_HOST};
+}
+
 # Don't require running capsule-version - just use the major versions
 sub use_major_version {
     my $soname = shift;
@@ -73,6 +83,7 @@ run_ok([$CAPSULE_INIT_PROJECT_TOOL,
 run_ok([
         'sh', '-euc', 'cd "$1"; shift; ./configure "$@"',
         'sh', "$test_tempdir/libEGL-proxy",
+        @configure_arguments,
     ], '>&2');
 run_ok(['make', '-C', "$test_tempdir/libEGL-proxy", 'V=1'], '>&2');
 

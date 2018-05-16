@@ -11,6 +11,12 @@ confflags = \
 	--libexecdir=\$${exec_prefix}/lib/libcapsule \
 	$(NULL)
 
+ifeq ($(DEB_HOST_ARCH),amd64)
+confflags += --with-glib
+else
+confflags += --without-glib
+endif
+
 override_dh_auto_configure:
 	dh_auto_configure -- $(confflags)
 

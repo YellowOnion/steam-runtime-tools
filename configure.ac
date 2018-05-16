@@ -68,7 +68,16 @@ PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
     LIBELF_LIBS=-lelf
 ])
 
-PKG_CHECK_MODULES([GLIB], [glib-2.0], [have_glib=yes], [have_glib=no])
+AC_ARG_WITH([glib],
+  [AS_HELP_STRING([--with-glib=yes/no],
+    [use GLib for better test coverage [default=yes]])],
+  [],
+  [with_glib=auto])
+AS_IF([test "$with_glib" != no],
+  [PKG_CHECK_MODULES([GLIB], [glib-2.0], [have_glib=yes], [have_glib=no])],
+  [have_glib=no])
+AS_IF([test "$with_glib" = yes && test "$have_glib" = no],
+  [AC_MSG_ERROR([GLib required but not found])])
 AM_CONDITIONAL([HAVE_GLIB], [test "x$have_glib" = xyes])
 
 AC_ARG_ENABLE([host-prefix],

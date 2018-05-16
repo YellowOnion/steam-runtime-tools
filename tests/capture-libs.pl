@@ -268,23 +268,23 @@ ok(! -e "$libdir/libc.so.6",
 # only-dependencies:no-dependencies: (either way round) is completely useless
 ok(! system('rm', '-fr', $libdir));
 mkdir($libdir);
-my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
-                          '--bind', $libdir, $libdir,
-                          qw(--dev-bind /dev /dev),
-                          $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
-                          "--dest=$libdir", "--provider=$host",
-                          'only-dependencies:no-dependencies:libglib-2.0.so.0'],
-                         '>&2');
+$result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                       '--bind', $libdir, $libdir,
+                       qw(--dev-bind /dev /dev),
+                       $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                       "--dest=$libdir", "--provider=$host",
+                       'only-dependencies:no-dependencies:libglib-2.0.so.0'],
+                       '>&2');
 ok(! $result, 'only-dependencies:no-dependencies: is useless');
 ok(! system('rm', '-fr', $libdir));
 mkdir($libdir);
-my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
-                          '--bind', $libdir, $libdir,
-                          qw(--dev-bind /dev /dev),
-                          $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
-                          "--dest=$libdir", "--provider=$host",
-                          'no-dependencies:only-dependencies:libglib-2.0.so.0'],
-                         '>&2');
+$result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                       '--bind', $libdir, $libdir,
+                       qw(--dev-bind /dev /dev),
+                       $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                       "--dest=$libdir", "--provider=$host",
+                       'no-dependencies:only-dependencies:libglib-2.0.so.0'],
+                       '>&2');
 ok(! $result, 'no-dependencies:only-dependencies: is useless');
 
 SKIP: {

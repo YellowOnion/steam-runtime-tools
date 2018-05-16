@@ -55,7 +55,7 @@ and `deb-src` sources and an `i386` foreign architecture (see
 `sysroot/configure-sources.sh`), and all the packages listed in
 `sysroot/install-dependencies.sh`) and use:
 
-    make chroot=/path/to/sysroot
+    make sysroot=/path/to/sysroot
 
 or compress a similar chroot into a gzipped tar file (containing `./etc`,
 `./usr` and so on, as used by [lxc][] and [pbuilder][]) and use:

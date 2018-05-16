@@ -16,6 +16,9 @@ _build/sysroot.tar.gz: sysroot/debos.yaml
 	mkdir -p $(dir $@)
 	debos -t mirror:$(mirror) -t ospack:$@ sysroot/debos.yaml
 
+ifeq ($(sysroot),/)
+in_sysroot =
+else
 in_sysroot = \
 	bwrap \
 	--ro-bind $(CURDIR)/$(sysroot) / \
@@ -27,6 +30,7 @@ in_sysroot = \
 	--chdir $(CURDIR) \
 	--setenv LC_ALL C.UTF-8 \
 	$(NULL)
+endif
 
 install:
 	rm -fr relocatable-install

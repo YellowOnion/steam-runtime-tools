@@ -40,13 +40,17 @@ for libcapsule 0.20180430.0 or later, on a system with autoconf-archive
     dcmd cp ../build-area/libcapsule_0.20180430.0-0co1.dsc .
 
 To make the built version compatible with older systems, you will need a
-Debian 8 'jessie' chroot with some extra packages. SteamOS 2 'brewmaster'
+Debian 8 'jessie' environment with some extra packages. SteamOS 2 'brewmaster'
 is not suitable, because its amd64 and i386 linux-libc-dev packages are
 not co-installable.
 
-The build also needs `bubblewrap`. To make the relocatable installation,
-by default it relies on [debos][] and [qemu-system-x86_64][qemu]. If
-you have that, you can just run:
+The simplest way is to do the build in a Debian 8 'jessie' container:
+
+    make sysroot=/
+
+Alternatively, you can use `bubblewrap` to enter a sysroot prepared
+using [debos][] and [qemu-system-x86_64][qemu]. If
+you have all those, you can just run:
 
     make
 

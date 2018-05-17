@@ -109,8 +109,8 @@ in-sysroot/install-%:
 	"relocatable-install/bin/$${DEB_HOST_MULTIARCH}-capsule-capture-libs" \
 	    --dest=_build/$*/lib \
 	    --no-glibc \
-	    "soname-match:libelf.so.*" \
-	    "soname-match:libz.so.*" \
+	    "soname:libelf.so.1" \
+	    "soname:libz.so.1" \
 	    $(NULL); \
 	cp -a --dereference _build/$*/lib/*.so.* "relocatable-install/lib/$${DEB_HOST_MULTIARCH}"
 

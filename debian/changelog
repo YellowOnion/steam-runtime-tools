@@ -1,3 +1,18 @@
+libcapsule (0.20180517.0-0co1) upstream; urgency=medium
+
+  * build: Bundle updated m4 macros in source releases so that they can
+    be built on older host OSs that do not have a recent autoconf-archive
+  * capture-libs test: Cope with i686, cmov CPU capability flags
+  * tests: Fix perl warnings for shadowing a local variable
+  * Fix cross-compilation for i386 on amd64:
+    - Architecture-qualify perl as :any
+    - Only build GLib-based tests on amd64 since libglib2.0-dev was not
+      multiarch co-installable until recently
+    - tests: Work when compiling for i386 on amd64
+  * ci: Run autopkgtests on Debian stretch and SteamOS brewmaster
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 17 May 2018 21:35:21 +0100
+
 libcapsule (0.20180430.0-0co1) upstream; urgency=medium
 
   [ Vivek Das Mohapatra ]

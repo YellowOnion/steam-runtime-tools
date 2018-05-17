@@ -87,6 +87,7 @@ in-sysroot/configure-%:
 	    --enable-tools-rpath="/_ORIGIN_/__/lib/$${DEB_BUILD_MULTIARCH}" \
 	    --disable-shared \
 	    --disable-gtk-doc \
+	    --without-glib \
 	    $(NULL)
 
 _build/%/build.stamp: _build/%/config.stamp $(sysroot)/etc/debian_version

@@ -117,11 +117,12 @@ in-sysroot/install-%:
 check:
 	prove -v t/
 
-binary: pressure-vessel-$(VERSION)-bin.tar.gz
-pressure-vessel-$(VERSION)-bin.tar.gz:
+binary:
 	$(MAKE) install
-	tar -C relocatable-install -zcvf $@.tmp .
-	mv $@.tmp $@
+	tar --transform='s,^relocatable-install,pressure-vessel-$(VERSION),' -zcvf pressure-vessel-$(VERSION)-bin+src.tar.gz.tmp relocatable-install
+	tar --transform='s,^relocatable-install,pressure-vessel-$(VERSION),' --exclude=sources -zcvf pressure-vessel-$(VERSION)-bin.tar.gz.tmp relocatable-install
+	mv pressure-vessel-$(VERSION)-bin+src.tar.gz.tmp pressure-vessel-$(VERSION)-bin+src.tar.gz
+	mv pressure-vessel-$(VERSION)-bin.tar.gz.tmp pressure-vessel-$(VERSION)-bin.tar.gz
 
 clean:
 	rm -fr pressure-vessel-[0-9]*.tar.gz

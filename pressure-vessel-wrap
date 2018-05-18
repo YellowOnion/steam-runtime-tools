@@ -252,6 +252,16 @@ if [ -n "$verbose" ]; then
     env | sed -e 's/^/\t/' >&2
 fi
 
+if [ -n "$interactive" ]; then
+    exec </dev/tty
+    exec >/dev/tty
+    exec 2>/dev/tty
+    echo "$me: Starting interactive shell (original command is in \"\$@\")">&2
+    wrapped_command=(bash -i -s "$@")
+else
+    wrapped_command=("$@")
+fi
+
 if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
     echo "$me: cannot find bwrap or it doesn't work, falling back to executing '$*' directly" >&2
 
@@ -269,7 +279,7 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
         unset LD_LIBRARY_PATH
     fi
 
-    exec "$@"
+    exec "${wrapped_command[@]}"
 fi
 
 if "$BWRAP" --help | grep -F '[--]' 2>/dev/null; then
@@ -292,16 +302,6 @@ else
             esac
             ;;
     esac
-fi
-
-if [ -n "$interactive" ]; then
-    exec </dev/tty
-    exec >/dev/tty
-    exec 2>/dev/tty
-    echo "$me: Starting interactive shell (original command is in \"\$@\")">&2
-    wrapped_command=(bash -i -s "$@")
-else
-    wrapped_command=("$@")
 fi
 
 if [ -z "$fake_home" ]; then

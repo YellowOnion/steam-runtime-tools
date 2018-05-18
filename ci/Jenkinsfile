@@ -105,6 +105,7 @@ pipeline {
         ( cd src; make sysroot=/ )
         '''
         archiveArtifacts 'src/pressure-vessel-*-bin.tar.gz'
+        archiveArtifacts 'src/pressure-vessel-*-bin+src.tar.gz'
       }
       post {
         always {

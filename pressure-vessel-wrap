@@ -104,6 +104,7 @@ path=
 runtime=
 tmpdir=
 verbose=
+xterm=
 
 multiarch_tuples=(x86_64-linux-gnu i386-linux-gnu)
 
@@ -149,13 +150,15 @@ usage () {
     echo "                              and augment it with the host"
     echo "                              system's graphics stack."
     echo "--verbose                     Be more verbose."
+    echo "--xterm                       Same as --interactive, but run an"
+    echo "                              xterm in the container."
     echo
 
     exit "$code"
 }
 
 getopt_temp="$(getopt -o '' --long \
-    'freedesktop-app-id:,help,home:,interactive,ld-library-path:,ld-preload:,path:,runtime:,steam-app-id:,verbose' \
+    'freedesktop-app-id:,help,home:,interactive,ld-library-path:,ld-preload:,path:,runtime:,steam-app-id:,verbose,xterm' \
     -n "$me" -- "$@")"
 
 eval set -- "$getopt_temp"
@@ -252,7 +255,9 @@ if [ -n "$verbose" ]; then
     env | sed -e 's/^/\t/' >&2
 fi
 
-if [ -n "$interactive" ]; then
+if [ -n "$xterm" ]; then
+    wrapped_command=(xterm -e bash -i -s "$@")
+elif [ -n "$interactive" ]; then
     exec </dev/tty
     exec >/dev/tty
     exec 2>/dev/tty

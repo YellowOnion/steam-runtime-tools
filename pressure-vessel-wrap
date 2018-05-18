@@ -604,6 +604,21 @@ if [ -n "$runtime" ]; then
                         --provider="/" \
                         "only-dependencies:path-match:$dir/dri/*"
                 fi
+
+                # S3TC or S2TC support for Mesa
+                if [ -e "$dir/libtxc_dxtn.so" ]; then
+                    "$BWRAP" \
+                        --ro-bind / / \
+                        --bind "$tmpdir/overrides" "$tmpdir/overrides" \
+                        --tmpfs "$scratch" \
+                        "${bind_usr_result[@]}" \
+                        "$here/${t}-capsule-capture-libs" \
+                        --container="$scratch" \
+                        --link-target="/run/host" \
+                        --dest="$tmpdir/overrides/lib/$t" \
+                        --provider="/" \
+                        "path-match:$dir/libtxc_dxtn.so"
+                fi
             done
         fi
     done

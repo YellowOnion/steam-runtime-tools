@@ -678,10 +678,15 @@ for preload in $ld_preload; do
     if [ -e "$preload" ]; then
         case "$preload" in
             (/usr/*|/lib*)
-                # We can't write here, so redirect them to the
-                # corresponding locations in /run/host
-                bwrap_options+=(--ro-bind "$preload" "/run/host$preload")
-                adjusted_ld_preload="${adjusted_ld_preload:+"$adjusted_ld_preload:"}/run/host$preload"
+                if [ -n "$runtime" ]; then
+                    # We can't write here, so redirect them to the
+                    # corresponding locations in /run/host
+                    bwrap_options+=(--ro-bind "$preload" "/run/host$preload")
+                    adjusted_ld_preload="${adjusted_ld_preload:+"$adjusted_ld_preload:"}/run/host$preload"
+                else
+                    bwrap_options+=(--ro-bind "$preload" "$preload")
+                    adjusted_ld_preload="${adjusted_ld_preload:+"$adjusted_ld_preload:"}$preload"
+                fi
                 ;;
             (*)
                 bwrap_options+=(--ro-bind "$preload" "$preload")

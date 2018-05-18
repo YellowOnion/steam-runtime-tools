@@ -98,11 +98,11 @@ Instructions for testing
 
     - be a user who can sudo
 
-        $ cd /opt
-        $ sudo mkdir pressure-vessel
-        $ sudo chown $(id -nu) pressure-vessel
-        $ tar --strip-components=1 -C pressure-vessel -xzvf ~/pressure-vessel-*-bin.tar.gz
-        $ chmod -R a+rX pressure-vessel
+            $ cd /opt
+            $ sudo mkdir pressure-vessel
+            $ sudo chown $(id -nu) pressure-vessel
+            $ tar --strip-components=1 -C pressure-vessel -xzvf ~/pressure-vessel-*-bin.tar.gz
+            $ chmod -R a+rX pressure-vessel
 
 * Launch a game once without pressure-vessel
 
@@ -110,12 +110,12 @@ Instructions for testing
 
     - be the Steam user, possibly via sudo -u steam -s
 
-        $ nano ~/.steam/steam/userdata/[0-9]*/config/localconfig.vdf
+            $ nano ~/.steam/steam/userdata/[0-9]*/config/localconfig.vdf
 
     - navigate to UserLocalConfigStore/Software/Valve/Steam/Apps/*game ID*
     - below LastPlayed, add:
 
-        "LaunchOptions" "/opt/pressure-vessel/bin/pressure-vessel-wrap -- %command%"
+            "LaunchOptions" "/opt/pressure-vessel/bin/pressure-vessel-wrap -- %command%"
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 

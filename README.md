@@ -44,7 +44,8 @@ Debian 8 'jessie' environment with some extra packages. SteamOS 2 'brewmaster'
 is not suitable, because its amd64 and i386 linux-libc-dev packages are
 not co-installable.
 
-The simplest way is to do the build in a Debian 8 'jessie' container:
+The simplest way is to do the build in a Debian 8 'jessie' amd64 container
+with selected i386 packages available, like `ci/Jenkinsfile` does:
 
     make sysroot=/
 
@@ -77,35 +78,61 @@ copied to wherever you want.
 Instructions for testing
 ------------------------
 
-* Install Steam and some games
+* Install Steam and some games. Convenient choices for a reasonably
+  small free-to-play game on various engines include:
 
-* Run Steam in desktop mode (not Big Picture)
+    - Floating Point (game ID 302380)
+        - very small/quick to install, works OK on weak hardware
+        - UnityPlayer 4.3.4f1
+    - Life is Strange, episode 1 (319630)
+        - Unreal Engine 3
+    - Team Fortress 2 (440)
+        - Source engine
+    - Unturned (304930)
+        - UnityPlayer 5.5.3f1
 
-* Configure the launch options for a game in Steam to be:
+* Unpack `pressure-vessel-`*VERSION*`-bin.tar.gz` (or `...-bin+src.tar.gz`)
+  in some convenient place (I used `/opt/pressure-vessel`, but a
+  production deployment in Steam would more realistically use somewhere
+  under `~/.steam` or `~/.local/share/Steam`):
 
-        /path/to/bin/pressure-vessel-wrap -- %command%
+    - be a user who can sudo
 
-* For interactive testing, if you ran Steam from a shell, you can use:
+        $ cd /opt
+        $ sudo mkdir pressure-vessel
+        $ sudo chown $(id -nu) pressure-vessel
+        $ tar --strip-components=1 -C pressure-vessel -xzvf ~/pressure-vessel-*-bin.tar.gz
+        $ chmod -R a+rX pressure-vessel
 
-        /path/to/bin/pressure-vessel-wrap --interactive -- %command%
+* Launch a game once without pressure-vessel
 
-    The interactive shell's current working directory matches the game's.
-    Run `"$@"` in the interactive shell to run the game.
+* Configure the launch options for the chosen game:
 
-* To test something manually:
+    - be the Steam user, possibly via sudo -u steam -s
 
-    - cd to the directory that you want to be the current working directory
-      inside the container
+        $ nano ~/.steam/steam/userdata/[0-9]*/config/localconfig.vdf
 
-    - Run one of:
+    - navigate to UserLocalConfigStore/Software/Valve/Steam/Apps/*game ID*
+    - below LastPlayed, add:
 
-            /path/to/bin/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
-            /path/to/bin/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
-            /path/to/bin/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
+        "LaunchOptions" "/opt/pressure-vessel/bin/pressure-vessel-wrap -- %command%"
+
+    - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
+
+        - TODO: Is there a scriptable way to make Steam edit `localconfig.vdf`
+            itself, or to make it reload an edited `localconfig.vdf`?
+
+* Run the game. If successful, `pstree -pa` will look something like this:
+
+        |-SteamChildMonit,13109 -tenfoot -steamos -enableremotecontrol
+        |   `-sh,13110 -c...
+        |       `-pressure-vessel,13111 /opt/pressure-vessel/bin/pressure-vessel-wrap...
+        |           `-bwrap,13132 --new-session --setenv LD_LIBRARY_PATH...
+        |               `-Floating Point.,13133
 
 * To use a runtime instead of the host system, use:
 
-        /path/to/bin/pressure-vessel-wrap --runtime=$HOME/some-runtime -- ./whatever-game
+        /opt/pressure-vessel/bin/pressure-vessel-wrap --runtime=$HOME/some-runtime -- %command%
 
     The runtime can be either:
 
@@ -115,7 +142,16 @@ Instructions for testing
     - A Flatpak runtime such as
       `~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta/active/files`,
       for example produced by [flatdeb][] (this is a special case of a
-      merged `/usr`)
+      merged `/usr`). For example, as the user that will run Steam:
+
+            $ flatpak --user remote-add --no-gpg-verify smcv-flatdeb https://people.collabora.com/~smcv/flatdeb/repo
+            $ flatpak --user install smcv-flatdeb com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta
+            $ ln -fns ~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta/active/files \
+                ~/scout_beta-runtime
+
+        and then set the launch options to:
+
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --runtime=$HOME/scout_beta-runtime -- %command%
 
     - A sysroot containing `bin/bash`, `lib/ld-linux.so.2`,
       `usr/bin/env`, `usr/share/locale`, `usr/lib/python2.7` and so on,
@@ -126,6 +162,43 @@ Instructions for testing
     the host system or the runtime, whichever appears to be newer. This
     is currently hard-coded in `pressure-vessel-wrap` and cannot be
     configured.
+
+    To see the filesystem in which the game is executing, get the process ID
+    of some game process from `ps` and use:
+
+        $ sudo ls -l /proc/$game_pid/root/
+
+    You'll see that the graphics drivers and possibly their dependencies
+    are available in `/overrides` inside that filesystem, while selected
+    files from the host are visible in `/run/host`.
+
+* To test something manually:
+
+    - cd to the directory that you want to be the current working directory
+      inside the container
+
+    - Run one of:
+
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
+
+* For interactive testing, if your runtime (if used) or host system (if no
+    runtime) contains an xterm binary, you can use something like:
+
+        /opt/pressure-vessel/bin/pressure-vessel-wrap --xterm -- %command%
+
+    to run an xterm containing an interactive shell. The interactive
+    shell's current working directory matches the game's. Run `"$@"` in
+    the interactive shell to run the game.
+
+* For interactive testing, if you ran Steam from a shell (not normally
+    valid on SteamOS!), you can use:
+
+        /opt/pressure-vessel/bin/pressure-vessel-wrap --interactive -- %command%
+
+    The interactive shell's current working directory matches the game's.
+    Run `"$@"` in the interactive shell to run the game.
 
 Design constraints
 ------------------
@@ -246,5 +319,4 @@ to set that up.
   `--freedesktop-app-id=com.egosoft.X3TC` or `--steam-app-id=2820`.
 
 The app is not currently made available read-only on `/app` (as it
-would be in Flatpak) because that would require us to reassemble the
-root directory.
+would be in Flatpak). It could be, if desired.

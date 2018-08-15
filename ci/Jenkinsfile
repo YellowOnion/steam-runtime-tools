@@ -87,7 +87,7 @@ pipeline {
       steps {
         sh 'git config --global user.name Jenkins'
         sh 'git config --global user.email nobody@example.com'
-        checkoutCollaboraGitlab('steam/steamos-devkit', 'master', 'src')
+        checkoutCollaboraGitlab('vivek/libcapsule', 'master', 'src')
         unstash 'debs'
         sh '''
         mkdir -p tmp

@@ -16,7 +16,7 @@ Build-Depends:
  libglib2.0-0 <!nocheck>,
  libglib2.0-dev [amd64],
  libjpeg62-turbo <!nocheck> | libjpeg62 (>= 6b1) <!nocheck>,
- perl:any,
+ perl:any | perl,
  xsltproc,
  zlib1g <!nocheck>,
 Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git

@@ -16,9 +16,9 @@ set -e
        echo "*** $0 ARGS..."                                     ;
        echo ""                                                   ) >&2;
   fi;
-  aclocal --install || exit $?;
-  gtkdocize         || exit $?;
-  autoreconf -ivf   || exit $?; );
+  aclocal -I m4 --install || exit $?;
+  gtkdocize               || exit $?;
+  autoreconf -ivf         || exit $?; );
 
 if [ "$NOCONFIGURE" = "" ];
 then

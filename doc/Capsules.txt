@@ -94,7 +94,8 @@ The constructor for libcapsule runs, and does the following:
       - the soname specific env var (eg CAPSULE_LIBGL_SO_1_PREFIX)
       - the CAPSULE_PREFIX env var
       - the static prefix in the capsule's metadata 
-      - NOTE: env vars don't apply here to setuid/setgid processes
+      - NOTE: env vars don't apply here to setuid/setgid processes,
+        or if libcapsule was compiled using glibc older than 2.17
   - aggregates the exclude and export metadata lists, grouping
     them by prefix (and deduplicating the resulting lists)
     - eg the ‘export’ list from a namespace will be all the sonames from

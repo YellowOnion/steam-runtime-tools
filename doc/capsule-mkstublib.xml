@@ -157,7 +157,9 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
           <para>
             The default is the soname-specific environment variable (eg
             CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1), or the CAPSULE_PREFIX
-            environment variable, or /host.
+            environment variable, or /host. The environment variables are
+            ignored if the process is privileged, or if libcapsule was
+            compiled with glibc older than 2.17.
           </para>
         </listitem>
       </varlistentry>
@@ -212,9 +214,14 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <listitem>
           <para>
             Find libraries to be proxied in this chroot, sysroot or
-            container at runtime if CAPSULE_PREFIX or the
-            library-specific env var (eg CAPSULE_LIBGL_SO_1_PREFIX for
-            libGL.so.1) is unset.
+            container at runtime. The default is /host.
+          </para>
+          <para>
+            If libcapsule was compiled with glibc 2.17 or later and the
+            process is not privileged, this can be overridden at runtime
+            by setting a SONAME-specific environment variable (for
+            example CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1) or by
+            setting the generic CAPSULE_PREFIX environment variable.
           </para>
         </listitem>
       </varlistentry>

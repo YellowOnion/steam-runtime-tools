@@ -48,6 +48,8 @@ AX_COMPILER_FLAGS([], [], [], [], [ \
     -Wno-declaration-after-statement \
 ])
 
+AC_CHECK_FUNCS_ONCE([secure_getenv])
+
 AM_CONDITIONAL([ENABLE_SHARED], [test "x$enable_shared" = xyes])
 
 dnl make sure we've got the _right_ libelf (doesn't always ship a .pc)

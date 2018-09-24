@@ -145,9 +145,14 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         <listitem>
           <para>
             Find libraries to be proxied in this chroot, sysroot or
-            container at runtime if the library-specific env var (eg
-            CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1) or CAPSULE_PREFIX
-            or is unset.
+            container at runtime. The default is /host.
+          </para>
+          <para>
+            If libcapsule was compiled with glibc 2.17 or later and the
+            process is not privileged, this can be overridden at runtime
+            by setting a SONAME-specific environment variable (for
+            example CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1) or by
+            setting the generic CAPSULE_PREFIX environment variable.
           </para>
         </listitem>
       </varlistentry>

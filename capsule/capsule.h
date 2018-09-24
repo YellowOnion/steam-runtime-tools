@@ -250,6 +250,11 @@ void capsule_close (capsule cap);
  * - Next: The default to the value passed in @dflt
  * - And if all that failed, NULL (which is internally equivalent to "/")
  *
+ * The environment variables are ignored if the process is privileged
+ * (setuid, setgid, given special capabilities, or marked as privileged
+ * by a LSM), or if libcapsule was compiled against a glibc version
+ * older than 2.17.
+ *
  * Although the value is newly allocated it will typically be cached
  * in a structure that needs to survive the entire lifespan of the
  * running program, so freeing it is unlikely to be a concern.

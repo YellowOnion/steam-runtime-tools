@@ -443,7 +443,9 @@ static void __attribute__ ((constructor)) _init_capsule (void)
 {
     _capsule_list = ptr_list_alloc( 16 );
 
+#ifdef HAVE_SECURE_GETENV
     set_debug_flags( secure_getenv("CAPSULE_DEBUG") );
+#endif
 
     // these are needed if there is > 1 libc instance:
     _capsule_original_free    = dlsym( RTLD_DEFAULT, "free"    );
@@ -490,6 +492,7 @@ capsule_get_prefix (const char *dflt, const char *soname)
 static const char *
 get_prefix_nocopy (const char *dflt, const char *soname)
 {
+#ifdef HAVE_SECURE_GETENV
     char env_var[PATH_MAX] = CAP_ENV_PREFIX;
     const size_t offs = strlen( CAP_ENV_PREFIX );
     size_t x = 0;
@@ -519,6 +522,7 @@ get_prefix_nocopy (const char *dflt, const char *soname)
                prefix );
         return prefix;
     }
+#endif
 
     if( dflt )
     {

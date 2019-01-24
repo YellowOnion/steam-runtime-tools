@@ -97,6 +97,7 @@ declare -a wrapped_command
 declare -a original_argv
 original_argv=("$@")
 fake_home=
+host_fallback=
 interactive=
 ld_library_path=
 ld_preload=
@@ -136,6 +137,8 @@ usage () {
     echo "                              This interoperates with Flatpak."
     echo "--home=HOME                   Use HOME as home directory."
     echo
+    echo "--host-fallback               Run COMMAND on the host system if we"
+    echo "                              cannot run it in a container."
     echo "--interactive                 Run an interactive shell instead of"
     echo "                              COMMAND. Executing \"\$@\" in that"
     echo "                              shell will run COMMAND [ARGS]."
@@ -160,6 +163,7 @@ usage () {
 getopt_temp="help"
 getopt_temp="${getopt_temp},freedesktop-app-id:"
 getopt_temp="${getopt_temp},home:"
+getopt_temp="${getopt_temp},host-fallback"
 getopt_temp="${getopt_temp},interactive"
 getopt_temp="${getopt_temp},ld-library-path:"
 getopt_temp="${getopt_temp},ld-preload:"
@@ -188,6 +192,11 @@ while [ "$#" -gt 0 ]; do
         (--home)
             fake_home="$2"
             shift 2
+            ;;
+
+        (--host-fallback)
+            host_fallback=yes
+            shift
             ;;
 
         (--interactive)
@@ -282,7 +291,13 @@ else
 fi
 
 if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
-    echo "$me: cannot find bwrap or it doesn't work, falling back to executing '${wrapped_command[*]}' directly" >&2
+    echo "$me: Cannot find bwrap or it doesn't work" >&2
+
+    if [ -z "$host_fallback" ]; then
+        exit 1
+    fi
+
+    echo "$me: Falling back to executing '${wrapped_command[*]}' directly" >&2
 
     if [ -n "$ld_preload" ]; then
         export LD_PRELOAD="$ld_preload"

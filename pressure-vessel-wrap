@@ -282,7 +282,7 @@ else
 fi
 
 if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
-    echo "$me: cannot find bwrap or it doesn't work, falling back to executing '$*' directly" >&2
+    echo "$me: cannot find bwrap or it doesn't work, falling back to executing '${wrapped_command[*]}' directly" >&2
 
     if [ -n "$ld_preload" ]; then
         export LD_PRELOAD="$ld_preload"

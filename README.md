@@ -172,6 +172,8 @@ Instructions for testing
     are available in `/overrides` inside that filesystem, while selected
     files from the host are visible in `/run/host`.
 
+* If you don't want to protect `$HOME`, add the `--share-home` option.
+
 * To test something manually:
 
     - cd to the directory that you want to be the current working directory
@@ -179,9 +181,10 @@ Instructions for testing
 
     - Run one of:
 
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --fake-home=/some/path --interactive -- ./whatever-game
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything --interactive -- ./whatever-game
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --steam-app-id=70 --interactive -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --fake-home=/some/path -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --steam-app-id=70 -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap --share-home -- ./whatever-game
 
 * For interactive testing, if your runtime (if used) or host system (if no
     runtime) contains an xterm binary, you can use something like:
@@ -210,8 +213,9 @@ Steam integration
 
 If a future version of Steam is modified to run certain games using
 pressure-vessel, it should remove the Steam Runtime environment variables
-from the environment with which it runs them, and use `pressure-vessel-wrap`
-directly. `pressure-vessel-unruntime` is just a workaround for this not
+from the environment with which it runs them (like it does for
+"Add non-Steam game"), and use `pressure-vessel-wrap` directly.
+`pressure-vessel-unruntime` is just a workaround for this not
 being something that Steam supports yet.
 
 Design constraints
@@ -219,13 +223,13 @@ Design constraints
 
 * Steam games assume that they are executed with the current working
   directory equal to the game's base directory, typically something
-  like `~/.steam/steam/SteamApps/common/Half-Life`.
+  like `SteamApps/common/Half-Life`.
 
 * Steam games are delivered via existing code to use the Steam CDN, not
   as Flatpak packages.
 
 * Each game is assumed to have one subdirectory of `SteamApps`
-  (for example `~/.steam/steam/SteamApps/common/Half-Life`) and one
+  (for example `SteamApps/common/Half-Life`) and one
   *AppID* (for example 70 for [Half-Life][]). These are not correlated
   in any obvious way.
 
@@ -291,9 +295,6 @@ TODO
 
   [weird behaviour]: https://www.ctrl.blog/entry/flatpak-steamcloud-xdg
 
-* Team Fortress 2 reports an error because it is unable to set the
-  `en_US.UTF-8` locale (but then starts successfully anyway).
-
 Design
 ------
 
@@ -316,7 +317,8 @@ will write there.
 
 Anything that hard-codes a path relative to `$HOME` (including `.config`,
 `.local/share` or `.cache`) will write to the corresponding directory in
-`~/.var/app`.
+`~/.var/app`. This is the same as the behaviour of a Flatpak app with
+`--persist=.`.
 
 * Example: [Avorion][] writes to `~/.avorion/` in the container, which is
   `~/.var/app/com.steampowered.App445220/.avorion/` in the real home

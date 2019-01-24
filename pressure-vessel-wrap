@@ -211,6 +211,11 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
 
+        (--xterm)
+            xterm=yes
+            shift
+            ;;
+
         (--help)
             usage 0
             # not reached

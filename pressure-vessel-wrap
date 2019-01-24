@@ -261,7 +261,7 @@ if [ -n "$verbose" ]; then
 fi
 
 if [ -n "$xterm" ]; then
-    wrapped_command=(xterm -e bash -i -s "$@")
+    wrapped_command=(xterm -e sh -c 'echo; echo "$1: Starting interactive shell (original command is in \"\$@\")"; echo; shift; exec "$@"' sh "$me" bash -i -s "$@")
 elif [ -n "$interactive" ]; then
     exec </dev/tty
     exec >/dev/tty

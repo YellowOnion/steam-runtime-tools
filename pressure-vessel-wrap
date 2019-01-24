@@ -326,7 +326,7 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
     exec "${wrapped_command[@]}"
 fi
 
-if "$BWRAP" --help | grep -F '[--]' 2>/dev/null; then
+if "$BWRAP" --help 2>&1 | grep -F '[--]' >/dev/null 2>/dev/null; then
     bwrap_end_of_options="--"
 else
     # bwrap doesn't support the -- syntax

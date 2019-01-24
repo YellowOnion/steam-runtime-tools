@@ -261,6 +261,16 @@ if [ "$#" -eq 0 ]; then
     exit 2
 fi
 
+if [ -z "$fake_home" ]; then
+    if [ -n "${SteamAppId:-}" ]; then
+        fake_home="$HOME/.var/app/com.steampowered.App$SteamAppId"
+    else
+        echo "$me: either --home, --freedesktop-app-id, --steam-app-id" \
+            "or \$SteamAppId is required" >&2
+        exit 2
+    fi
+fi
+
 if [ -n "$verbose" ]; then
     echo "Original argv:" >&2
     printf '\t%s\n' "\$0: $0" >&2
@@ -336,16 +346,6 @@ else
             esac
             ;;
     esac
-fi
-
-if [ -z "$fake_home" ]; then
-    if [ -n "${SteamAppId:-}" ]; then
-        fake_home="$HOME/.var/app/com.steampowered.App$SteamAppId"
-    else
-        echo "$me: either --home, --freedesktop-app-id, --steam-app-id" \
-            "or \$SteamAppId is required" >&2
-        exit 2
-    fi
 fi
 
 cleanup () {

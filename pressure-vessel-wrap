@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# pressure-vessel — use containers for Steam
+# pressure-vessel-wrap — run a program in a container that protects $HOME,
+# optionally using a Flatpak-style runtime
 #
-# Copyright © 2017-2018 Collabora Ltd.
+# Copyright © 2017-2019 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -35,46 +36,10 @@ me="$(readlink -f "$0")"
 here="${me%/*}"
 me="${me##*/}"
 
-default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
-
-# Undo any weird environment before we start running external
-# executables. We put it back before running the actual app/game.
-
-if { [ -n "${LD_LIBRARY_PATH-}" ] && \
-        [ "${LD_LIBRARY_PATH-}" != "${SYSTEM_LD_LIBRARY_PATH-}" ]; } \
-    || [ -n "${LD_PRELOAD-}" ]; then
-    caller_ld_preload="${LD_PRELOAD:-}"
-    unset LD_PRELOAD
-
-    caller_ld_library_path="${LD_LIBRARY_PATH:-}"
-
-    if [ -n "${SYSTEM_LD_LIBRARY_PATH-}" ]; then
-        export LD_LIBRARY_PATH="$SYSTEM_LD_LIBRARY_PATH"
-    else
-        unset LD_LIBRARY_PATH
-    fi
-
-    caller_path="${PATH:-"${default_path}"}"
-
-    if [ -n "${SYSTEM_PATH-}" ]; then
-        export PATH="$here:$SYSTEM_PATH"
-    else
-        export PATH="$here:$default_path"
-    fi
-
-    if [ -n "$caller_ld_preload" ]; then
-        set -- --ld-preload="$caller_ld_preload" "$@"
-    fi
-
-    if [ -n "$caller_ld_library_path" ]; then
-        set -- --ld-library-path="$caller_ld_library_path" "$@"
-    fi
-
-    if [ -n "$caller_path" ]; then
-        set -- --path="$caller_path" "$@"
-    fi
-
-    exec "$0" "$@"
+if [ -n "${STEAM_RUNTIME+set}" ]; then
+    echo "$me: This program should not be run in the Steam Runtime." >&2
+    echo "$me: Use pressure-vessel-unruntime instead." >&2
+    exit 2
 fi
 
 # If bwrap isn't installed as a standalone binary on the PATH, see
@@ -95,13 +60,14 @@ declare -a bwrap_options
 declare -a multiarch_tuples
 declare -a wrapped_command
 declare -a original_argv
+declare -a ld_preload
+declare -a env_if_host
 original_argv=("$@")
+env_if_host=()
 fake_home=
 host_fallback=
+ld_preload=()
 interactive=
-ld_library_path=
-ld_preload=
-path=
 runtime=
 tmpdir=
 verbose=
@@ -142,16 +108,15 @@ usage () {
     echo "--interactive                 Run an interactive shell instead of"
     echo "                              COMMAND. Executing \"\$@\" in that"
     echo "                              shell will run COMMAND [ARGS]."
-    echo "--ld-library-path=DIR[:DIR]   Set LD_LIBRARY_PATH to DIR[:DIR]"
-    echo "                              when executing COMMAND."
-    echo "--ld-preload=MODULE[:MODULE]  Set LD_PRELOAD to MODULE[:MODULE]"
-    echo "                              when executing COMMAND."
-    echo "--path=DIR[:DIR]              Set PATH to DIR[:DIR] when executing"
-    echo "                              COMMAND."
+    echo "--host-ld-preload=MODULE      Add MODULE from host system to"
+    echo "                              LD_PRELOAD when executing COMMAND."
     echo "--runtime=RUNTIME             Mount the given sysroot or"
     echo "                              merged /usr in the container,"
     echo "                              and augment it with the host"
     echo "                              system's graphics stack."
+    echo "--env-if-host=VAR=VAL         Set VAR=VAL if COMMAND is run with"
+    echo "                              /usr from the host system, but not if"
+    echo "                              it is run with /usr from RUNTIME."
     echo "--verbose                     Be more verbose."
     echo "--xterm                       Same as --interactive, but run an"
     echo "                              xterm in the container."
@@ -161,13 +126,12 @@ usage () {
 }
 
 getopt_temp="help"
+getopt_temp="${getopt_temp},env-if-host:"
 getopt_temp="${getopt_temp},freedesktop-app-id:"
 getopt_temp="${getopt_temp},home:"
 getopt_temp="${getopt_temp},host-fallback"
+getopt_temp="${getopt_temp},host-ld-preload:"
 getopt_temp="${getopt_temp},interactive"
-getopt_temp="${getopt_temp},ld-library-path:"
-getopt_temp="${getopt_temp},ld-preload:"
-getopt_temp="${getopt_temp},path:"
 getopt_temp="${getopt_temp},runtime:"
 getopt_temp="${getopt_temp},steam-app-id:"
 getopt_temp="${getopt_temp},verbose"
@@ -179,6 +143,19 @@ unset getopt_temp
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        (--env-if-host)
+            case "$2" in
+                (*=*)
+                    ;;
+                (*)
+                    echo "$me: --env-if-host argument must be VAR=VALUE" >&2
+                    exit 2
+                    ;;
+            esac
+            env_if_host+=("$2")
+            shift 2
+            ;;
+
         (--freedesktop-app-id)
             fake_home="$HOME/.var/app/$2"
             shift 2
@@ -199,24 +176,14 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
 
+        (--host-ld-preload)
+            ld_preload+=("host:$2")
+            shift 2
+            ;;
+
         (--interactive)
             interactive=yes
             shift
-            ;;
-
-        (--ld-library-path)
-            ld_library_path="$2"
-            shift 2
-            ;;
-
-        (--ld-preload)
-            ld_preload="$2"
-            shift 2
-            ;;
-
-        (--path)
-            path="$2"
-            shift 2
             ;;
 
         (--runtime)
@@ -280,16 +247,17 @@ if [ -n "$verbose" ]; then
     echo "Current working directory:" >&2
     printf '\t%s\n' "Logical: $(pwd -L)" >&2
     printf '\t%s\n' "Physical: $(pwd -P)" >&2
-    echo "Environment:" >&2
-    printf '\t%s\n' "PATH: $path" >&2
-    printf '\t%s\n' "LD_LIBRARY_PATH: $ld_library_path" >&2
-    printf '\t%s\n' "LD_PRELOAD: $ld_preload" >&2
-    echo "Other environment variables:" >&2
+    echo "Environment variables:" >&2
     env | sed -e 's/^/\t/' >&2
 fi
 
 if [ -n "$xterm" ]; then
-    wrapped_command=(xterm -e sh -c 'echo; echo "$1: Starting interactive shell (original command is in \"\$@\")"; echo; shift; exec "$@"' sh "$me" bash -i -s "$@")
+    {
+        # Yes, this weird quoting is really what I mean. Shells within
+        # shells...
+        # shellcheck disable=SC2016
+        wrapped_command=(xterm -e sh -c 'echo; echo "$1: Starting interactive shell (original command is in \"\$@\")"; echo; shift; exec "$@"' sh "$me" bash -i -s "$@")
+    }
 elif [ -n "$interactive" ]; then
     exec </dev/tty
     exec >/dev/tty
@@ -300,6 +268,13 @@ else
     wrapped_command=("$@")
 fi
 
+# Make sure wrapped_command is something we can validly pass to env(1)
+case "${wrapped_command[0]}" in
+    (*=*)
+        wrapped_command=(sh -c 'exec "$@"' sh "${wrapped_command[@]}")
+        ;;
+esac
+
 if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
     echo "$me: Cannot find bwrap or it doesn't work" >&2
 
@@ -309,43 +284,16 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
 
     echo "$me: Falling back to executing '${wrapped_command[*]}' directly" >&2
 
-    if [ -n "$ld_preload" ]; then
-        export LD_PRELOAD="$ld_preload"
-    fi
-    if [ -n "$path" ]; then
-        export PATH="$path"
-    else
-        export PATH="$default_path"
-    fi
-    if [ -n "$ld_library_path" ]; then
-        export LD_LIBRARY_PATH="$ld_library_path"
-    else
-        unset LD_LIBRARY_PATH
-    fi
-
-    exec "${wrapped_command[@]}"
+    exec env -- "${env_if_host[@]}" "${wrapped_command[@]}"
 fi
 
 if "$BWRAP" --help 2>&1 | grep -F '[--]' >/dev/null 2>/dev/null; then
     bwrap_end_of_options="--"
 else
-    # bwrap doesn't support the -- syntax
-    bwrap_end_of_options=""
-    case "$1" in
-        (-*)
-            case "$1" in
-                (*=*)
-                    # env would interpret this as an environment variable
-                    echo "$me: Cannot execute command '$1' with bubblewrap < 0.2.2">&2
-                    exit 1
-                    ;;
-                (*)
-                    # Emulate it via env(1)
-                    bwrap_end_of_options="env"
-                    ;;
-            esac
-            ;;
-    esac
+    # bwrap doesn't support the -- syntax, but we ensured that
+    # wrapped_command is not treated as an environment variable
+    # expansion by env, so this is OK
+    bwrap_end_of_options="env"
 fi
 
 cleanup () {
@@ -376,12 +324,6 @@ for t in "${multiarch_tuples[@]}"; do
 done
 
 if [ -n "$runtime" ]; then
-    # The LD_LIBRARY_PATH from the host system is not very relevant
-    # inside the container, so skip it
-    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides")
-elif [ -n "$ld_library_path" ]; then
-    bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides:$ld_library_path")
-else
     bwrap_options+=(--setenv LD_LIBRARY_PATH "$overrides")
 fi
 
@@ -723,10 +665,12 @@ fi
 # We need the LD_PRELOADs from Steam visible at the paths that were
 # used for them, which might be their physical rather than logical
 # locations
-old_ifs="$IFS"
-IFS=:
 adjusted_ld_preload=
-for preload in $ld_preload; do
+for preload in "${ld_preload[@]}"; do
+    # Currently the only preloaded modules we support are ones that come
+    # from the host.
+    preload="${preload#host:}"
+
     if [ -e "$preload" ]; then
         case "$preload" in
             (/usr/*|/lib*)
@@ -745,15 +689,10 @@ for preload in $ld_preload; do
                 adjusted_ld_preload="${adjusted_ld_preload:+"$adjusted_ld_preload:"}$preload"
                 ;;
         esac
+    elif [ -n "$preload" ]; then
+        echo "$me: LD_PRELOAD module '$preload' does not exist" >&2
     fi
 done
-IFS="$old_ifs"
-
-# We need libraries from the Steam Runtime, so make sure that's visible
-# (it should never need to be read/write though)
-if [ -n "${STEAM_RUNTIME:-}" ]; then
-    bwrap_options+=(--ro-bind "$STEAM_RUNTIME" "$STEAM_RUNTIME")
-fi
 
 # Make sure the current working directory (the game we are going to
 # run) is available. Some games write here.
@@ -782,19 +721,31 @@ if [ -n "$adjusted_ld_preload" ]; then
 else
     bwrap_options+=(--unsetenv LD_PRELOAD)
 fi
-if [ -n "$path" ]; then
-    bwrap_options+=(--setenv PATH "$path")
-else
-    bwrap_options+=(--setenv PATH "$default_path")
-fi
 
-if "$BWRAP" --help | grep unshare-uts >/dev/null; then
+if "$BWRAP" --help 2>&1 | grep unshare-uts >/dev/null; then
     # Set a standard hostname for the container to make it easier
     # to see which shell is which
     bwrap_options+=(--hostname pressure-vessel --unshare-uts)
 fi
 
 # Potential future expansion: use --unshare-pid for more isolation
+
+# Put Steam Runtime environment variables back, if /usr is mounted
+# from the host.
+if [ -z "$runtime" ]; then
+    # We need libraries from the Steam Runtime, so make sure that's visible
+    # (it should never need to be read/write though)
+    for env in "${env_if_host[@]}"; do
+        case "$env" in
+            (STEAM_RUNTIME=/*)
+                value="${env#STEAM_RUNTIME=}"
+                bwrap_options+=(--ro-bind "$value" "$value")
+                ;;
+        esac
+    done
+
+    wrapped_command=(env -- "${env_if_host[@]}" "${wrapped_command[@]}")
+fi
 
 # Replace this process with bwrap, which replaces itself with the
 # desired command (unless exec fails)

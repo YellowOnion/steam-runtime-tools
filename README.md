@@ -115,7 +115,7 @@ Instructions for testing
     - navigate to UserLocalConfigStore/Software/Valve/Steam/Apps/*game ID*
     - below LastPlayed, add:
 
-            "LaunchOptions" "/opt/pressure-vessel/bin/pressure-vessel-wrap -- %command%"
+            "LaunchOptions" "/opt/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 
@@ -132,7 +132,7 @@ Instructions for testing
 
 * To use a runtime instead of the host system, use:
 
-        /opt/pressure-vessel/bin/pressure-vessel-wrap --runtime=$HOME/some-runtime -- %command%
+        /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/some-runtime -- %command%
 
     The runtime can be either:
 
@@ -151,7 +151,7 @@ Instructions for testing
 
         and then set the launch options to:
 
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --runtime=$HOME/scout_beta-runtime -- %command%
+            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/scout_beta-runtime -- %command%
 
     - A sysroot containing `bin/bash`, `lib/ld-linux.so.2`,
       `usr/bin/env`, `usr/share/locale`, `usr/lib/python2.7` and so on,
@@ -199,6 +199,20 @@ Instructions for testing
 
     The interactive shell's current working directory matches the game's.
     Run `"$@"` in the interactive shell to run the game.
+
+Use `pressure-vessel-unruntime` if you are in a Steam Runtime environment
+(the Steam Runtime's `run.sh` or a Steam game), and `pressure-vessel-wrap`
+if you are not ("Add non-Steam game" in Steam, or a non-Steam-related
+interactive shell).
+
+Steam integration
+-----------------
+
+If a future version of Steam is modified to run certain games using
+pressure-vessel, it should remove the Steam Runtime environment variables
+from the environment with which it runs them, and use `pressure-vessel-wrap`
+directly. `pressure-vessel-unruntime` is just a workaround for this not
+being something that Steam supports yet.
 
 Design constraints
 ------------------

@@ -777,7 +777,7 @@ fi
 if [ -n "$verbose" ]; then
     echo "$BWRAP options:">&2
     for x in "${bwrap_options[@]}"; do
-        printf '\t%s\n' "$x"
+        printf '\t%s\n' "$x" >&2
     done
 
     echo "$me: '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}'" >&2

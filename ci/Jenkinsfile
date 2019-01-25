@@ -31,13 +31,7 @@ pipeline {
   stages {
     stage ("libcapsule") {
       agent {
-        docker {
-          label 'docker-slave'
-          image "docker-registry.internal.collabora.com/steamos/package-builder:stretch"
-          registryUrl 'https://docker-registry.internal.collabora.com'
-          registryCredentialsId 'ccu-docker-internal-collabora-com'
-          alwaysPull true
-        }
+        label 'docker-slave'
       }
       environment {
         HOME="${env.WORKSPACE}"
@@ -55,15 +49,29 @@ pipeline {
           extensions: [[$class: 'PruneStaleBranch'], [$class: 'RelativeTargetDirectory', relativeTargetDir: 'libcapsule']],
           userRemoteConfigs: [[name: 'origin', url: "git@gitlab.collabora.com:vivek/libcapsule", credentialsId: 'GITLABSSHKEY']]
         ]
-        sh '''
-        set -e
-        mkdir -p debs
-        echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
-        export NSS_WRAPPER_PASSWD=$(pwd)/passwd
-        export NSS_WRAPPER_GROUP=/dev/null
-        export LD_PRELOAD=libnss_wrapper.so
-        ( cd libcapsule; deb-build-snapshot -d ../debs --no-check -s -u localhost )
-        '''
+        script {
+          if (env.CI_DOCKER_REGISTRY_CRED == '') {
+            dockerRegistryCred = null;
+          }
+          else {
+            dockerRegistryCred = env.CI_DOCKER_REGISTRY_CRED;
+          }
+
+          docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
+            docker.image("${env.CI_DOCKER_REGISTRY}/steamos/package-builder:stretch").inside('') {
+              sh '''
+              set -e
+              mkdir -p debs
+              echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
+              export NSS_WRAPPER_PASSWD=$(pwd)/passwd
+              export NSS_WRAPPER_GROUP=/dev/null
+              export LD_PRELOAD=libnss_wrapper.so
+              ( cd libcapsule; deb-build-snapshot -d ../debs --no-check -s -u localhost )
+              '''
+            }
+          }
+        }
+
         stash name: 'debs', includes: 'debs/**'
       }
       post {
@@ -75,13 +83,7 @@ pipeline {
 
     stage ("pressure-vessel") {
       agent {
-        docker {
-          label 'docker-slave'
-          image "docker-registry.internal.collabora.com/steamos/package-builder:jessie"
-          registryUrl 'https://docker-registry.internal.collabora.com'
-          registryCredentialsId 'ccu-docker-internal-collabora-com'
-          alwaysPull true
-        }
+        label 'docker-slave'
       }
       environment {
         HOME="${env.WORKSPACE}"
@@ -95,15 +97,29 @@ pipeline {
         '''
         checkoutCollaboraGitlab('steam/pressure-vessel', 'master', 'src')
         unstash 'debs'
-        sh '''
-        set -e
-        echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
-        export NSS_WRAPPER_PASSWD=$(pwd)/passwd
-        export NSS_WRAPPER_GROUP=/dev/null
-        export LD_PRELOAD=libnss_wrapper.so
-        mv debs/*.dsc debs/*.tar.* src/
-        ( cd src; make sysroot=/ )
-        '''
+
+        script {
+          if (env.CI_DOCKER_REGISTRY_CRED == '') {
+            dockerRegistryCred = null;
+          }
+          else {
+            dockerRegistryCred = env.CI_DOCKER_REGISTRY_CRED;
+          }
+
+          docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
+            docker.image("${env.CI_DOCKER_REGISTRY}/steamos/package-builder:jessie").inside('') {
+            sh '''
+            set -e
+            echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
+            export NSS_WRAPPER_PASSWD=$(pwd)/passwd
+            export NSS_WRAPPER_GROUP=/dev/null
+            export LD_PRELOAD=libnss_wrapper.so
+            mv debs/*.dsc debs/*.tar.* src/
+            ( cd src; make sysroot=/ )
+            '''
+          }
+        }
+
         archiveArtifacts 'src/pressure-vessel-*-bin.tar.gz'
         archiveArtifacts 'src/pressure-vessel-*-bin+src.tar.gz'
       }

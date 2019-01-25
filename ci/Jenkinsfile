@@ -47,7 +47,7 @@ pipeline {
           $class: 'GitSCM',
           branches: [[name: "origin/master"]],
           extensions: [[$class: 'PruneStaleBranch'], [$class: 'RelativeTargetDirectory', relativeTargetDir: 'libcapsule']],
-          userRemoteConfigs: [[name: 'origin', url: "git@gitlab.collabora.com:vivek/libcapsule", credentialsId: 'GITLABSSHKEY']]
+          userRemoteConfigs: [[name: 'origin', url: 'https://gitlab.collabora.com/vivek/libcapsule.git', credentialsId: null]]
         ]
         script {
           if (env.CI_DOCKER_REGISTRY_CRED == '') {

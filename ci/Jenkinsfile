@@ -108,15 +108,16 @@ pipeline {
 
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
             docker.image("${env.CI_DOCKER_REGISTRY}/steamos/package-builder:jessie").inside('') {
-            sh '''
-            set -e
-            echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
-            export NSS_WRAPPER_PASSWD=$(pwd)/passwd
-            export NSS_WRAPPER_GROUP=/dev/null
-            export LD_PRELOAD=libnss_wrapper.so
-            mv debs/*.dsc debs/*.tar.* src/
-            ( cd src; make sysroot=/ )
-            '''
+              sh '''
+              set -e
+              echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
+              export NSS_WRAPPER_PASSWD=$(pwd)/passwd
+              export NSS_WRAPPER_GROUP=/dev/null
+              export LD_PRELOAD=libnss_wrapper.so
+              mv debs/*.dsc debs/*.tar.* src/
+              ( cd src; make sysroot=/ )
+              '''
+            }
           }
         }
 

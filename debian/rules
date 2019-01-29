@@ -58,7 +58,7 @@ override_dh_auto_build:
 		$(NULL)
 	# Copy it, so we can install the original source as an example
 	cp -a debian/libGL-proxy debian/libGL-proxy-build
-	cd debian/libGL-proxy-build && autoreconf -fi
+	cd debian/libGL-proxy-build && autoreconf -fi -I $(CURDIR)/m4
 	cd debian/libGL-proxy-build && ./configure --prefix=/usr $(proxy_vars)
 	$(MAKE) -C debian/libGL-proxy-build V=1 $(proxy_vars)
 

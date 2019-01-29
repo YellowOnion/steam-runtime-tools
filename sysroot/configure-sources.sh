@@ -28,10 +28,14 @@ set -u
 
 mirror="$1"
 shift
+security_mirror="$1"
+shift
 
 cat > /etc/apt/sources.list <<EOF
 deb ${mirror} jessie main
 deb-src ${mirror} jessie main
+deb ${security_mirror} jessie/updates main
+deb-src ${security_mirror} jessie/updates main
 EOF
 rm -fr /etc/apt/sources.list.d
 dpkg --add-architecture i386

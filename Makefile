@@ -3,6 +3,7 @@ VERSION := $(shell ./build-aux/git-version-gen .tarball-version)
 all: binary
 
 mirror = http://deb.debian.org/debian
+security_mirror = http://security.debian.org/debian-security
 tarball = _build/sysroot.tar.gz
 sysroot = _build/sysroot
 
@@ -12,9 +13,9 @@ _build/sysroot/etc/debian_version: $(tarball)
 	tar -zxf $(tarball) --exclude="./dev/*" -C _build/sysroot
 	touch $@
 
-_build/sysroot.tar.gz: sysroot/debos.yaml
+_build/sysroot.tar.gz: $(wildcard sysroot/*)
 	mkdir -p $(dir $@)
-	debos -t mirror:$(mirror) -t ospack:$@ sysroot/debos.yaml
+	debos -t mirror:$(mirror) -t security_mirror:$(security_mirror) -t ospack:$@ sysroot/debos.yaml
 
 ifeq ($(sysroot),/)
 in_sysroot =

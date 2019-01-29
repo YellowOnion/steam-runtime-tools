@@ -85,6 +85,16 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:if>
   </xsl:template>
 
+  <xsl:template match="refsynopsisdiv/synopsis/link" mode="refnamediv">
+    <xsl:param name="matched" select="."/>
+    <xsl:if test="$matched = $target">
+      <xsl:element name="refname">
+        <xsl:value-of select="."/>
+      </xsl:element>
+      <xsl:apply-templates/>
+    </xsl:if>
+  </xsl:template>
+
   <xsl:template name="paramdef" match="parameter" mode="funcsig">
     <xsl:param name="tok"   select="string:tokenize(., ' ')"/>
     <xsl:param name="last"  select="ext:node-set($tok)[last()]"/>
@@ -157,7 +167,14 @@ License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
         </xsl:element>
       </xsl:element>
       <xsl:element name="refnamediv">
-        <xsl:apply-templates select="refsect1[@role='functions_proto']"/>
+        <xsl:choose>
+          <xsl:when test="refsect1[@role='functions_proto']">
+            <xsl:apply-templates select="refsect1[@role='functions_proto']"/>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:apply-templates select="refsynopsisdiv[@role='synopsis']" mode="refnamediv"/>
+          </xsl:otherwise>
+        </xsl:choose>
       </xsl:element>
       <xsl:element name="refsynopsisdiv">
         <xsl:element name="funcsynopsis">

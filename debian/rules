@@ -8,6 +8,7 @@
 binaries := $(shell dh_listpackages)
 confflags = \
 	--disable-Werror \
+	--disable-silent-rules \
 	--enable-host-prefix=$(DEB_HOST_GNU_TYPE)- \
 	--libexecdir=\$${exec_prefix}/lib/libcapsule \
 	$(NULL)

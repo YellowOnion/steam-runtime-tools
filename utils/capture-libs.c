@@ -643,7 +643,7 @@ static bool
 capture_path_match( const char *pattern, capture_flags flags,
                     int *code, char **message )
 {
-    char *abs = NULL;
+    char *abs_path = NULL;
     int res;
     bool ret = false;
     glob_t buffer;
@@ -651,8 +651,8 @@ capture_path_match( const char *pattern, capture_flags flags,
 
     DEBUG( DEBUG_TOOL, "%s", pattern );
 
-    abs = build_filename_alloc( option_provider, pattern, NULL );
-    res = glob( abs, 0, NULL, &buffer );
+    abs_path = build_filename_alloc( option_provider, pattern, NULL );
+    res = glob( abs_path, 0, NULL, &buffer );
 
     switch( res )
     {
@@ -715,7 +715,7 @@ capture_path_match( const char *pattern, capture_flags flags,
             break;
     }
 
-    free( abs );
+    free( abs_path );
     return ret;
 }
 

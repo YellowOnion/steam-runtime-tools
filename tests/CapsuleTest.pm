@@ -275,7 +275,7 @@ skipped (as if via C<plan skip_all =E<gt> ...>), and exit.
 
 sub skip_all_unless_bwrap {
     if (! run([qw(
-                bwrap --ro-bind / / --unshare-ipc --unshare-net
+                env bwrap --ro-bind / / --unshare-ipc --unshare-net
                 --unshare-pid --unshare-user --unshare-uts true
             )], '>&2')) {
         plan(skip_all => 'Cannot run bwrap');

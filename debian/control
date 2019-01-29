@@ -41,6 +41,20 @@ Description:
  .
  This package contains the files needed to build libcapsule proxy libraries.
 
+Package: libcapsule-doc
+Architecture: all
+Multi-Arch: foreign
+Section: doc
+Depends:
+ ${misc:Depends},
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains documentation.
+
 Package: libcapsule-tools
 Architecture: amd64 i386
 Multi-Arch: same

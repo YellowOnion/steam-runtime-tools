@@ -5,11 +5,17 @@
 %:
 	dh $@ --with autoreconf
 
+binaries := $(shell dh_listpackages)
 confflags = \
-	--enable-gtk-doc \
 	--enable-host-prefix=$(DEB_HOST_GNU_TYPE)- \
 	--libexecdir=\$${exec_prefix}/lib/libcapsule \
 	$(NULL)
+
+ifneq ($(filter libcapsule-doc,$(binaries)),)
+confflags += --enable-gtk-doc
+else
+confflags += --disable-gtk-doc
+endif
 
 ifeq ($(DEB_HOST_ARCH),amd64)
 confflags += --with-glib

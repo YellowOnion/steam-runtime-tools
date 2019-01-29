@@ -17,6 +17,6 @@
 
 #pragma once
 
-void dump_elf_data (const char *basename);
+void dump_elf_data (const char *soname);
 
 void debug_link_maps (void);

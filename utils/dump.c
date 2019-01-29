@@ -1089,9 +1089,9 @@ struct dl_phdr_info                  \n\
 }
 
 void
-dump_elf_data (const char *basename)
+dump_elf_data (const char *soname)
 {
-    dl_iterate_phdr( phdr_cb, (void *) basename );
+    dl_iterate_phdr( phdr_cb, (void *) soname );
 }
 
 static int

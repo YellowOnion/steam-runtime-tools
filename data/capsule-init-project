@@ -181,6 +181,7 @@ echo "Creating project directory $dest";
 
 mkdir -p "$dest";
 cd $dest;
+mkdir -p m4;
 mkdir -p shim;
 
 echo "Working in $PWD";

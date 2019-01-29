@@ -19,6 +19,8 @@ Build-Depends:
  perl:any | perl,
  xsltproc,
  zlib1g <!nocheck>,
+Build-Depends-Indep:
+ libglib2.0-dev,
 Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
 Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule
 Homepage: https://gitlab.collabora.com/vivek/libcapsule

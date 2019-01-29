@@ -145,7 +145,9 @@ main (int argc,
       char **argv)
 {
   g_test_init (&argc, &argv, NULL);
+#if GLIB_CHECK_VERSION(2, 38, 0)
   g_test_set_nonfatal_assertions ();
+#endif
 
   g_test_add ("/build-filename", Fixture, NULL, setup,
               test_build_filename, teardown);

@@ -261,7 +261,9 @@ reloc_type_name (int type)
       CASE( R_386_TLS_DTPMOD32 )
       CASE( R_386_TLS_DTPOFF32 )
       CASE( R_386_TLS_TPOFF32 )
+#ifdef R_386_SIZE32
       CASE( R_386_SIZE32 )
+#endif
       CASE( R_386_TLS_GOTDESC )
       CASE( R_386_TLS_DESC_CALL )
       CASE( R_386_TLS_DESC )

@@ -26,7 +26,9 @@ AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_ARG_VAR([PERL])
 AC_PATH_PROG([PERL], [perl], [perl])
 
-m4_pattern_forbid([^AX_], [Please install GNU autoconf-archive])
+m4_pattern_forbid(
+    [^AX_(IS_RELEASE|COMPILER_FLAGS)],
+    [Please install GNU autoconf-archive 2016.09.16 or later])
 
 dnl don't kvetch about gnu makefile syntax
 dnl and don't require ChangeLog &co if they don't exist

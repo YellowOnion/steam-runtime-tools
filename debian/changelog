@@ -1,3 +1,30 @@
+libcapsule (0.20190130.0-0co1) upstream; urgency=medium
+
+  * Be more compatible with older distributions:
+    - debian: Be compatible with Ubuntu 14.04's dpkg
+    - Compile on older glibc that didn't have secure_getenv()
+    - dump: Avoid naming collision with basename()
+    - capture-libs: Avoid shadowing global abs()
+    - process-pt-dynamic: Don't print name of R_386_SIZE32 if undefined
+    - devhelp2man: Add minimal support for older gtk-doc versions
+    - debian: Install libglib2.0-dev if building documentation,
+      as required by older gtk-doc versions
+    - debian: Use macros from libcapsule itself to build libGL proxy
+    - tests/utils.c: Tolerate archaic GLib versions
+  * autogen.sh: Install macros into m4/
+  * capsule-init-project: Create m4/
+  * debian: Separate documentation into libcapsule-doc
+  * debian: Don't build with fatal warnings
+  * debian: Explicitly disable silent makefile rules,
+    which debhelper didn't always do for us
+  * build: Be more specific about the tokens we don't want to see,
+    to future-proof against newer autoconf-archive versions
+  * ci: Check out the right git repository
+  * CapsuleTest: Tolerate bwrap not being installed at all
+  * tests/capture-libs.pl: Make executable
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 30 Jan 2019 15:48:43 +0000
+
 libcapsule (0.20180517.0-0co1) upstream; urgency=medium
 
   * build: Bundle updated m4 macros in source releases so that they can

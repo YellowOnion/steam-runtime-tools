@@ -287,14 +287,6 @@ TODO
   They'll need some new special-case option analogous to
   Flatpak's `--filesystem=xdg-music:ro`.
 
-* To avoid [weird behaviour][] when part of a game respects
-  `XDG_CONFIG_HOME` and part of it hard-codes `~/.config`, maybe we
-  should make `$fake_home/config` a synonym (bind-mount) for
-  `$fake_home/.config`, and the same for `$fake_home/.local/share` with
-  `$fake_home/data` and `$fake_home/.cache` with `$fake_home/cache`?
-
-  [weird behaviour]: https://www.ctrl.blog/entry/flatpak-steamcloud-xdg
-
 Design
 ------
 
@@ -307,13 +299,21 @@ freedesktop.org app ID is based on its Steam AppID, for example
 `com.steampowered.App70` for Half-Life.
 
 For the game, `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME`
-are set to the `./config`, `./data` and `./cache` directories inside
-its private home directory, so well-behaved freedesktop-style apps
-will write there.
+are set to the `./.config`, `./.local/share` and `./.cache` directories
+inside its private home directory, so that well-behaved freedesktop-style
+apps will write there, and badly-behaved freedesktop-style apps that
+ignore the environment variables and hard-code their default values will
+*also* write there.
 
 * Example: [X3: Terran Conflict][] writes to `$XDG_CONFIG_HOME/EgoSoft/X3TC`
 * Example: Mesa writes to `$XDG_CACHE_HOME/mesa` (assuming
   `$MESA_GLSL_CACHE_DIR` is unset)
+
+`./config`, `./data` and `./cache` in the private home directory are symbolic
+links to `.config`, `.local/share` and `.cache` respectively, for better
+discoverability and compatibility with Flatpak (which uses those directories in
+`~/.var/app` as its usual values for `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and
+`XDG_CACHE_HOME`).
 
 Anything that hard-codes a path relative to `$HOME` (including `.config`,
 `.local/share` or `.cache`) will write to the corresponding directory in

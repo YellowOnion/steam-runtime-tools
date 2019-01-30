@@ -642,14 +642,24 @@ else
         bwrap_options+=(--bind "$fake_home" "$fake_home")
 
         # Set up /var/tmp, XDG_*_HOME like Flatpak does
-        mkdir -m700 -p "$fake_home/cache"
-        mkdir -m700 -p "$fake_home/cache/tmp"
-        bwrap_options+=(--bind "$fake_home/cache/tmp" /var/tmp)
-        bwrap_options+=(--setenv XDG_CACHE_HOME "$fake_home/cache")
-        mkdir -m700 -p "$fake_home/config"
-        bwrap_options+=(--setenv XDG_CONFIG_HOME "$fake_home/config")
-        mkdir -m700 -p "$fake_home/data"
-        bwrap_options+=(--setenv XDG_DATA_HOME "$fake_home/data")
+        mkdir -m700 -p "$fake_home/.cache"
+        mkdir -m700 -p "$fake_home/.cache/tmp"
+        if [ ! -e "$fake_home/cache" ]; then
+            ln -fns .cache "$fake_home/cache"
+        fi
+        bwrap_options+=(--bind "$fake_home/.cache/tmp" /var/tmp)
+        bwrap_options+=(--setenv XDG_CACHE_HOME "$fake_home/.cache")
+        mkdir -m700 -p "$fake_home/.config"
+        if [ ! -e "$fake_home/config" ]; then
+            ln -fns .config "$fake_home/config"
+        fi
+        bwrap_options+=(--setenv XDG_CONFIG_HOME "$fake_home/.config")
+        mkdir -m700 -p "$fake_home/.local"
+        mkdir -m700 -p "$fake_home/.local/share"
+        if [ ! -e "$fake_home/data" ]; then
+            ln -fns .local/share "$fake_home/data"
+        fi
+        bwrap_options+=(--setenv XDG_DATA_HOME "$fake_home/.local/share")
     }
 
     # These might be API entry points, according to .steam/steam/steam.sh.

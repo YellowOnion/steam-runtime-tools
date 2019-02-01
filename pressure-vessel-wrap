@@ -141,7 +141,7 @@ getopt_temp="${getopt_temp},verbose"
 getopt_temp="${getopt_temp},xterm"
 
 getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
-eval set -- "$getopt_temp"
+eval "set -- $getopt_temp"
 unset getopt_temp
 
 while [ "$#" -gt 0 ]; do

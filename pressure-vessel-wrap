@@ -196,7 +196,7 @@ while [ "$#" -gt 0 ]; do
 
         (--share-home)
             share_home=yes
-            shift 2
+            shift
             ;;
 
         (--verbose)

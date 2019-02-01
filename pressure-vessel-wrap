@@ -292,7 +292,7 @@ if [ -z "$BWRAP" ] || ! "$BWRAP" --bind / / true; then
 
     echo "$me: Falling back to executing '${wrapped_command[*]}' directly" >&2
 
-    exec env -- "${env_if_host[@]}" "${wrapped_command[@]}"
+    exec env -- ${env_if_host+"${env_if_host[@]}"} "${wrapped_command[@]}"
 fi
 
 if "$BWRAP" --help 2>&1 | grep -F '[--]' >/dev/null 2>/dev/null; then
@@ -688,7 +688,7 @@ fi
 # used for them, which might be their physical rather than logical
 # locations
 adjusted_ld_preload=
-for preload in "${ld_preload[@]}"; do
+for preload in ${ld_preload+"${ld_preload[@]}"}; do
     # Currently the only preloaded modules we support are ones that come
     # from the host.
     preload="${preload#host:}"
@@ -757,7 +757,7 @@ fi
 if [ -z "$runtime" ]; then
     # We need libraries from the Steam Runtime, so make sure that's visible
     # (it should never need to be read/write though)
-    for env in "${env_if_host[@]}"; do
+    for env in ${env_if_host+"${env_if_host[@]}"}; do
         case "$env" in
             (STEAM_RUNTIME=/*)
                 value="${env#STEAM_RUNTIME=}"
@@ -766,7 +766,7 @@ if [ -z "$runtime" ]; then
         esac
     done
 
-    wrapped_command=(env -- "${env_if_host[@]}" "${wrapped_command[@]}")
+    wrapped_command=(env -- ${env_if_host+"${env_if_host[@]}"} "${wrapped_command[@]}")
 fi
 
 # Replace this process with bwrap, which replaces itself with the

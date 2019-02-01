@@ -78,7 +78,7 @@ AC_ARG_WITH([glib],
   [],
   [with_glib=auto])
 AS_IF([test "$with_glib" != no],
-  [PKG_CHECK_MODULES([GLIB], [glib-2.0], [have_glib=yes], [have_glib=no])],
+  [PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.38], [have_glib=yes], [have_glib=no])],
   [have_glib=no])
 AS_IF([test "$with_glib" = yes && test "$have_glib" = no],
   [AC_MSG_ERROR([GLib required but not found])])

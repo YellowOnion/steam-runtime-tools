@@ -23,7 +23,7 @@ confflags += --disable-gtk-doc
 endif
 
 ifeq ($(DEB_HOST_ARCH),amd64)
-confflags += --with-glib
+confflags += --with-glib=auto
 else
 confflags += --without-glib
 endif

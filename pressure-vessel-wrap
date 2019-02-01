@@ -257,6 +257,10 @@ if [ -n "$verbose" ]; then
     printf '\tPhysical: %q\n' "$(pwd -P)" >&2
     echo "Environment variables:" >&2
     env | sed -e 's/^/\t/' >&2
+    echo "Wrapped command:" >&2
+    for arg in "$@"; do
+        printf '\t%q\n' "$arg" >&2
+    done
 fi
 
 if [ -n "$xterm" ]; then

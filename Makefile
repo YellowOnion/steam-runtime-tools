@@ -36,6 +36,7 @@ endif
 install:
 	rm -fr relocatable-install
 	$(MAKE) install-amd64 install-i386
+	install pressure-vessel-unruntime relocatable-install/bin/
 	install pressure-vessel-wrap relocatable-install/bin/
 	mkdir -p relocatable-install/sources
 	install -m644 THIRD-PARTY.md relocatable-install/sources/README.txt

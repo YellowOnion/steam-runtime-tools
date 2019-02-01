@@ -248,13 +248,13 @@ fi
 
 if [ -n "$verbose" ]; then
     echo "Original argv:" >&2
-    printf '\t%s\n' "\$0: $0" >&2
+    printf '\t$0: %q\n' "$0" >&2
     for arg in "${original_argv[@]}"; do
-        printf '\t%s\n' "\$@: $arg" >&2
+        printf '\t$@: %q\n' "$arg" >&2
     done
     echo "Current working directory:" >&2
-    printf '\t%s\n' "Logical: $(pwd -L)" >&2
-    printf '\t%s\n' "Physical: $(pwd -P)" >&2
+    printf '\tLogical: %q\n' "$(pwd -L)" >&2
+    printf '\tPhysical: %q\n' "$(pwd -P)" >&2
     echo "Environment variables:" >&2
     env | sed -e 's/^/\t/' >&2
 fi
@@ -774,7 +774,7 @@ fi
 if [ -n "$verbose" ]; then
     echo "$BWRAP options:">&2
     for x in "${bwrap_options[@]}"; do
-        printf '\t%s\n' "$x" >&2
+        printf '\t%q\n' "$x" >&2
     done
 
     echo "$me: '$BWRAP ${bwrap_options[*]} $bwrap_end_of_options ${wrapped_command[*]}'" >&2

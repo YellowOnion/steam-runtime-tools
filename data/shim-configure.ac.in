@@ -18,6 +18,10 @@ AC_SYS_LARGEFILE
 LT_INIT([disable-static])
 
 PKG_CHECK_MODULES([CAPSULE], [libcapsule])
+m4_ifndef([PKG_CHECK_VAR],
+          [AC_DEFUN([PKG_CHECK_VAR],
+                    [AC_ARG_VAR([$1])
+                     : ${$1:=$PKG_CONFIG --variable="$3" "$2"}])])
 PKG_CHECK_VAR([CAPSULE_MKINC], [libcapsule-tools], [makeinc])
 PKG_CHECK_VAR([CAPSULE_MKSTUBLIB_TOOL], [libcapsule-tools], [CAPSULE_MKSTUBLIB_TOOL])
 PKG_CHECK_VAR([CAPSULE_SYMBOLS_TOOL], [libcapsule-tools], [CAPSULE_SYMBOLS_TOOL])

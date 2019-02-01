@@ -585,7 +585,7 @@ if [ -n "$runtime" ]; then
                         --link-target="/run/host" \
                         --dest="$tmpdir/overrides/lib/$t" \
                         --provider="/" \
-                        "only-dependencies:path-match:$dir/dri/*"
+                        "only-dependencies:if-exists:path-match:$dir/dri/*.so"
                     "$BWRAP" \
                         --ro-bind / / \
                         --tmpfs /run \

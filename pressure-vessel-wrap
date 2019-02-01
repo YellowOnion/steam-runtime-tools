@@ -573,7 +573,7 @@ if [ -n "$runtime" ]; then
 
             for dir in "/lib/$t" "/usr/lib/$t" "$libQUAL" "/usr$libQUAL"; do
                 if [ -d "$dir/dri" ]; then
-                    ln -s "/run/host$dir/dri" "$tmpdir/overrides/lib/$t/dri"
+                    mkdir -p "$tmpdir/overrides/lib/$t/dri"
 
                     "$BWRAP" \
                         --ro-bind / / \
@@ -586,6 +586,13 @@ if [ -n "$runtime" ]; then
                         --dest="$tmpdir/overrides/lib/$t" \
                         --provider="/" \
                         "only-dependencies:path-match:$dir/dri/*"
+                    "$BWRAP" \
+                        --ro-bind / / \
+                        --tmpfs /run \
+                        --ro-bind / /run/host \
+                        --bind "$tmpdir/overrides" "$tmpdir/overrides" \
+                        sh -c 'ln -fns "$1"/* "$2"' \
+                        sh "/run/host$dir/dri" "$tmpdir/overrides/lib/$t/dri"
                 fi
 
                 # S3TC or S2TC support for Mesa

@@ -105,8 +105,10 @@ in-sysroot/install-%:
 	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
 	mkdir -p "relocatable-install/lib/$${DEB_HOST_MULTIARCH}"; \
 	install "_build/$*/libcapsule/capsule-capture-libs" "_build/$${DEB_HOST_MULTIARCH}-capsule-capture-libs"; \
+	install "_build/$*/libcapsule/capsule-symbols" "_build/$${DEB_HOST_MULTIARCH}-capsule-symbols"; \
 	chrpath -r "\$${ORIGIN}/../lib/$${DEB_HOST_MULTIARCH}" "_build/$${DEB_HOST_MULTIARCH}"-*; \
 	install "_build/$${DEB_HOST_MULTIARCH}-capsule-capture-libs" relocatable-install/bin; \
+	install "_build/$${DEB_HOST_MULTIARCH}-capsule-symbols" relocatable-install/bin; \
 	mkdir -p _build/$*/lib; \
 	"relocatable-install/bin/$${DEB_HOST_MULTIARCH}-capsule-capture-libs" \
 	    --dest=_build/$*/lib \

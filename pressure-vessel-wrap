@@ -100,14 +100,14 @@ usage () {
     echo "unless it is the real home directory."
     echo
     echo "Options:"
+    echo "--share-home                  Use the real home directory. [Default]"
     echo "--steam-app-id=123            Use ~/.var/app/com.steampowered.App123"
     echo "                              as home directory."
-    echo "                              [Default: \$SteamAppId]"
+    echo "                              [Hint: try --steam-app-id=\$SteamAppId]"
     echo "--freedesktop-app-id=ID       Use ~/.var/app/ID as home directory."
     echo "                              ID is com.example.MyApp or similar."
     echo "                              This interoperates with Flatpak."
     echo "--home=HOME                   Use HOME as home directory."
-    echo "--share-home                  Use the real home directory."
     echo
     echo "--host-fallback               Run COMMAND on the host system if we"
     echo "                              cannot run it in a container."
@@ -241,13 +241,7 @@ if [ "$#" -eq 0 ]; then
 fi
 
 if [ -z "$share_home" ] && [ -z "$fake_home" ]; then
-    if [ -n "${SteamAppId:-}" ]; then
-        fake_home="$HOME/.var/app/com.steampowered.App$SteamAppId"
-    else
-        echo "$me: either --home, --freedesktop-app-id, --steam-app-id" \
-            "or \$SteamAppId is required" >&2
-        exit 2
-    fi
+    share_home=yes
 fi
 
 if [ -n "$verbose" ]; then
@@ -647,6 +641,8 @@ if [ -d /home ]; then
 fi
 
 if [ -n "$share_home" ]; then
+    # Share the home directory, and inherit HOME and XDG_*_HOME
+    # from the parent process.
     bwrap_options+=(--bind "$HOME" "$HOME")
 else
     # The shellcheck tool warns that -m is only applied to the deepest
@@ -739,8 +735,11 @@ done
 # run) is available. Some games write here.
 PWD_L="$(pwd -L)"
 if test "$HOME" -ef "$PWD_L"; then
-    echo "$me: Not making real $PWD_L available to container because it is" \
-         "the home directory" >&2
+    # Keep quiet about this if we're sharing $HOME anyway
+    if [ -z "$share_home" ]; then
+        echo "$me: Not making real $PWD_L available to container because it is" \
+            "the home directory" >&2
+    fi
 else
     bwrap_options+=(--bind "$PWD_L" "$PWD_L")
 fi
@@ -750,8 +749,11 @@ PWD_P="$(pwd -P)"
 if test "$PWD_P" = "$PWD_L"; then
     :   # Nothing special to do
 elif test "$HOME" -ef "$PWD_P"; then
-    echo "$me: Not making real $PWD_P available to container because it is" \
-         "the home directory" >&2
+    # Keep quiet about this if we're sharing $HOME anyway
+    if [ -z "$share_home" ]; then
+        echo "$me: Not making real $PWD_P available to container because it is" \
+            "the home directory" >&2
+    fi
 else
     bwrap_options+=(--bind "$PWD_P" "$PWD_P")
 fi

@@ -169,7 +169,7 @@ find_symbol (int idx, const ElfW(Sym) *stab, size_t symsz, const char *str, size
 // way about truncation though, should probably fix that:
 char *safe_strncpy (char *dest, const char *src, size_t n)
 {
-    char *rv = strncpy( dest, src, n );
+    char *rv = strncpy( dest, src, n - 1 );
     dest[ n - 1 ] = '\0';
     return rv;
 }

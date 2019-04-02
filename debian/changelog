@@ -1,3 +1,14 @@
+libcapsule (0.20190402.0-0co1) upstream; urgency=medium
+
+  * debian: Install tools with canonicalized multiarch prefix
+  * debian: Build relocatable versions of libcapsule binary tools
+  * debian: Use dh_missing --fail-missing
+  * Build *.1 man pages with xsltproc even if gtk-doc is disabled
+  * shim: Add a minimal fallback version of PKG_CHECK_VAR
+  * Skip GLib tests when GLib is older than 2.38
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 02 Apr 2019 17:32:19 +0100
+
 libcapsule (0.20190130.0-0co1) upstream; urgency=medium
 
   * Be more compatible with older distributions:

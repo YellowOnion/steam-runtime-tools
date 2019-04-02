@@ -6,10 +6,13 @@
 	dh $@ --with autoreconf
 
 binaries := $(shell dh_listpackages)
+fake_rpath :=  /_ORIGIN_/__/lib/${DEB_HOST_MULTIARCH}
+real_rpath := $${ORIGIN}/../lib/${DEB_HOST_MULTIARCH}
 confflags = \
 	--disable-Werror \
 	--disable-silent-rules \
 	--enable-host-prefix=$(DEB_HOST_MULTIARCH)- \
+	--enable-tools-rpath='${fake_rpath}' \
 	--libexecdir=\$${exec_prefix}/lib/libcapsule \
 	$(NULL)
 
@@ -72,6 +75,26 @@ override_dh_auto_install:
 			ln -s "$$bin" "$(DEB_HOST_GNU_TYPE)-$$tail"; \
 		done; \
 	fi
+	install -d debian/tmp/usr/lib/libcapsule/relocatable
+	cp -a \
+		debian/tmp/usr/bin/*-capsule-capture-libs \
+		debian/tmp/usr/bin/*-capsule-elf-dump \
+		debian/tmp/usr/bin/*-capsule-symbols \
+		debian/tmp/usr/bin/*-capsule-version \
+		debian/tmp/usr/lib/libcapsule/relocatable
+	set -e; for bin in debian/tmp/usr/bin/$(DEB_HOST_MULTIARCH)-*; do \
+		case "$$bin" in \
+			(*-capsule-mkstublib) \
+				;; \
+			(*) \
+				chrpath -d "$$bin"; \
+				chrpath -l "$$bin" || :; \
+				;; \
+		esac; \
+	done
+	chrpath -r '${real_rpath}' \
+		debian/tmp/usr/lib/libcapsule/relocatable/$(DEB_HOST_MULTIARCH)-*
+	chrpath -l debian/tmp/usr/lib/libcapsule/relocatable/*
 	$(MAKE) -C debian/libGL-proxy-build install V=1 $(proxy_vars) \
 		DESTDIR=$(CURDIR)/debian/libGL-proxy-build/shims
 	install -d debian/tmp/usr/lib/libcapsule/shims/lib/$(DEB_HOST_MULTIARCH)

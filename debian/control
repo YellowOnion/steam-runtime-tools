@@ -8,6 +8,7 @@ Build-Depends:
  autoconf-archive <pkg.libcapsule.from-git>,
  automake,
  bubblewrap,
+ chrpath,
  debhelper,
  dh-autoreconf,
  gtk-doc-tools,
@@ -72,6 +73,26 @@ Description:
  part of the host OS, such as an incompatible libstdc++ version.
  .
  This package contains the files needed to generate libcapsule proxy libraries.
+
+Package: libcapsule-tools-relocatable
+Architecture: amd64 i386
+Multi-Arch: same
+Section: misc
+Depends:
+ ${shlibs:Depends},
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains relocatable versions of the tools used to enumerate
+ library symbols and dependencies. After building this package on a system
+ with the oldest glibc that is to be supported, they can be bundled in
+ projects that need to run on an arbitrary host system and make use of
+ libcapsule to prepare a container. To do this, the relocatable tools
+ must be copied to PATH/bin/TUPLE-capsule-TOOL, and their required
+ non-glibc libraries (libelf and zlib) must be copied to PATH/lib/TUPLE.
 
 Package: libcapsule-gl-shims
 Architecture: amd64 i386

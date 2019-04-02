@@ -9,7 +9,7 @@ binaries := $(shell dh_listpackages)
 confflags = \
 	--disable-Werror \
 	--disable-silent-rules \
-	--enable-host-prefix=$(DEB_HOST_GNU_TYPE)- \
+	--enable-host-prefix=$(DEB_HOST_MULTIARCH)- \
 	--libexecdir=\$${exec_prefix}/lib/libcapsule \
 	$(NULL)
 
@@ -64,6 +64,14 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	dh_auto_install
+	if [ $(DEB_HOST_MULTIARCH) != $(DEB_HOST_GNU_TYPE) ]; then \
+		set -e; \
+		cd debian/tmp/usr/bin; \
+		for bin in $(DEB_HOST_MULTIARCH)-*; do \
+			tail="$${bin#$(DEB_HOST_MULTIARCH)-}"; \
+			ln -s "$$bin" "$(DEB_HOST_GNU_TYPE)-$$tail"; \
+		done; \
+	fi
 	$(MAKE) -C debian/libGL-proxy-build install V=1 $(proxy_vars) \
 		DESTDIR=$(CURDIR)/debian/libGL-proxy-build/shims
 	install -d debian/tmp/usr/lib/libcapsule/shims/lib/$(DEB_HOST_MULTIARCH)

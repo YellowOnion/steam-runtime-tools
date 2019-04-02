@@ -707,6 +707,7 @@ process_pt_dynamic (ElfW(Addr) start,
                 ret = 1;
                 break;
             }
+            break;
 
           IGNORE( DT_BIND_NOW )
           IGNORE( DT_INIT_ARRAY )

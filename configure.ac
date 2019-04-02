@@ -112,6 +112,7 @@ AM_CONDITIONAL([ENABLE_TOOLS_RPATH], [test "x$enable_tools_rpath" != x])
 
 AC_SEARCH_LIBS([dlmopen], [dl])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
+AM_CONDITIONAL([HAVE_XSLTPROC], [test "x$XSLTPROC" != x])
 GTK_DOC_CHECK
 AC_CONFIG_FILES([Makefile data/libcapsule.pc data/libcapsule-uninstalled.pc data/libcapsule-tools.pc data/libcapsule-tools-uninstalled.pc data/dirconf.txt])
 AC_OUTPUT

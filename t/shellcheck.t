@@ -43,7 +43,9 @@ for shell_script in \
         t/shellcheck.t \
         ; do
     n=$((n + 1))
-    if shellcheck "$shell_script"; then
+
+    # Ignore SC2039: we assume a Debian-style shell that has 'local'.
+    if shellcheck --exclude=SC2039 "$shell_script"; then
         echo "ok $n - $shell_script"
     else
         echo "not ok $n # TODO - $shell_script"

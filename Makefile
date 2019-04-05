@@ -2,37 +2,6 @@ VERSION := $(shell ./build-aux/git-version-gen .tarball-version)
 
 all: binary
 
-mirror = http://deb.debian.org/debian
-security_mirror = http://security.debian.org/debian-security
-tarball = _build/sysroot.tar.gz
-sysroot = _build/sysroot
-
-_build/sysroot/etc/debian_version: $(tarball)
-	rm -fr _build/sysroot
-	mkdir -p _build/sysroot
-	tar -zxf $(tarball) --exclude="./dev/*" -C _build/sysroot
-	touch $@
-
-_build/sysroot.tar.gz: $(wildcard sysroot/*)
-	mkdir -p $(dir $@)
-	debos -t mirror:$(mirror) -t security_mirror:$(security_mirror) -t ospack:$@ sysroot/debos.yaml
-
-ifeq ($(sysroot),/)
-in_sysroot =
-else
-in_sysroot = \
-	bwrap \
-	--ro-bind $(CURDIR)/$(sysroot) / \
-	--dev-bind /dev /dev \
-	--ro-bind /etc/resolv.conf /etc/resolv.conf \
-	--tmpfs /tmp \
-	--tmpfs /home \
-	--bind $(CURDIR) $(CURDIR) \
-	--chdir $(CURDIR) \
-	--setenv LC_ALL C.UTF-8 \
-	$(NULL)
-endif
-
 install:
 	rm -fr relocatable-install
 	$(MAKE) install-amd64 install-i386
@@ -44,13 +13,10 @@ install:
 	install -m644 /usr/share/doc/zlib1g/copyright relocatable-install/sources/libz.txt
 	install -m644 /usr/share/doc/libelf1/copyright relocatable-install/sources/libelf.txt
 	dcmd install -m644 libcapsule*.dsc relocatable-install/sources/
-	$(in_sysroot) $(MAKE) in-sysroot/install
-
-in-sysroot/install:
 	cd relocatable-install/sources; \
 	apt-get --download-only source elfutils zlib
 
-libcapsule/configure: $(sysroot)/etc/debian_version
+libcapsule/configure:
 	rm -fr libcapsule
 	first=; \
 	for t in libcapsule*.dsc; do \
@@ -61,19 +27,12 @@ libcapsule/configure: $(sysroot)/etc/debian_version
 			exit 1; \
 		fi; \
 	done
-	$(in_sysroot) $(MAKE) in-sysroot/libcapsule/configure
-
-in-sysroot/libcapsule/configure:
 	dpkg-source -x libcapsule*.dsc
 	mv libcapsule-*/ libcapsule
 	set -e; cd libcapsule; NOCONFIGURE=1 ./autogen.sh
 
-_build/%/config.stamp: libcapsule/configure $(sysroot)/etc/debian_version
+_build/%/config.stamp: libcapsule/configure
 	mkdir -p _build/$*/libcapsule
-	$(in_sysroot) $(MAKE) in-sysroot/configure-$*
-	touch $@
-
-in-sysroot/configure-%:
 	set -eu; \
 	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
 	case "$${DEB_BUILD_ARCH}/$${DEB_HOST_ARCH}" in \
@@ -91,16 +50,14 @@ in-sysroot/configure-%:
 	    --disable-gtk-doc \
 	    --without-glib \
 	    $(NULL)
+	touch $@
 
-_build/%/build.stamp: _build/%/config.stamp $(sysroot)/etc/debian_version
-	$(in_sysroot) $(MAKE) -C _build/$*/libcapsule
+_build/%/build.stamp: _build/%/config.stamp
+	$(MAKE) -C _build/$*/libcapsule
 	touch $@
 
 install-%: _build/%/build.stamp
 	mkdir -p relocatable-install/bin
-	$(in_sysroot) $(MAKE) in-sysroot/install-$*
-
-in-sysroot/install-%:
 	set -eu; \
 	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
 	mkdir -p "relocatable-install/lib/$${DEB_HOST_MULTIARCH}"; \

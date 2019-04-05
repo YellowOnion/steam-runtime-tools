@@ -47,28 +47,30 @@ not co-installable.
 The simplest way is to do the build in a Debian 8 'jessie' amd64 container
 with selected i386 packages available, like `ci/Jenkinsfile` does:
 
-    make sysroot=/
+    make
 
 Alternatively, you can use `bubblewrap` to enter a sysroot prepared
 using [debos][] and [qemu-system-x86_64][qemu]. If
 you have all those, you can just run:
 
-    make
+    make -C sysroot
+
+which will automatically build and use the sysroot.
 
 Alternatively, prepare a Debian jessie sysroot with `deb`
 and `deb-src` sources and an `i386` foreign architecture (see
 `sysroot/configure-sources.sh`), and all the packages listed in
-`sysroot/install-dependencies.sh`) and use:
+`sysroot/install-dependencies.sh`). Then use:
 
-    make sysroot=/path/to/sysroot
+    make -C sysroot sysroot=/path/to/sysroot
 
 or compress a similar chroot into a gzipped tar file (containing `./etc`,
 `./usr` and so on, as used by [lxc][] and [pbuilder][]) and use:
 
-    make tarball=/path/to/tarball.tar.gz
+    make -C sysroot tarball=/path/to/tarball.tar.gz
 
-Binaries and source code end up in `relocatable-install/` which can be
-copied to wherever you want.
+Whichever method you use, binaries and source code end up in
+`relocatable-install/` which can be copied to wherever you want.
 
 [debos]: https://github.com/go-debos/debos
 [lxc]: https://github.com/lxc/lxc

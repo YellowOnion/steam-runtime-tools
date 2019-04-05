@@ -26,7 +26,6 @@
 set -e
 set -u
 
-rm -fr /usr/share/doc
 rm -fr /usr/share/info
 rm -fr /usr/share/lintian
 rm -fr /usr/share/locale

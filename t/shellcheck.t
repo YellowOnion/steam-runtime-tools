@@ -37,7 +37,7 @@ cd "$TOP_SRCDIR"
 n=0
 for shell_script in \
         pressure-vessel-wrap \
-        sysroot/clean-chroot.sh \
+        sysroot/clean-sysroot.sh \
         sysroot/configure-sources.sh \
         sysroot/install-dependencies.sh \
         t/shellcheck.t \

@@ -56,24 +56,33 @@ _build/%/build.stamp: _build/%/config.stamp
 	$(MAKE) -C _build/$*/libcapsule
 	touch $@
 
-install-%: _build/%/build.stamp
+relocatabledir = /usr/lib/libcapsule/relocatable
+
+install-%:
 	mkdir -p relocatable-install/bin
 	set -eu; \
 	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
-	mkdir -p "relocatable-install/lib/$${DEB_HOST_MULTIARCH}"; \
-	install "_build/$*/libcapsule/capsule-capture-libs" "_build/$${DEB_HOST_MULTIARCH}-capsule-capture-libs"; \
-	install "_build/$*/libcapsule/capsule-symbols" "_build/$${DEB_HOST_MULTIARCH}-capsule-symbols"; \
-	chrpath -r "\$${ORIGIN}/../lib/$${DEB_HOST_MULTIARCH}" "_build/$${DEB_HOST_MULTIARCH}"-*; \
-	install "_build/$${DEB_HOST_MULTIARCH}-capsule-capture-libs" relocatable-install/bin; \
-	install "_build/$${DEB_HOST_MULTIARCH}-capsule-symbols" relocatable-install/bin; \
+	dhm="$${DEB_HOST_MULTIARCH}"; \
+	mkdir -p "relocatable-install/lib/$${dhm}"; \
+	if [ -e $(relocatabledir)/$${dhm}-capsule-capture-libs ]; then \
+		install $(relocatabledir)/$${dhm}-capsule-capture-libs _build/; \
+		install $(relocatabledir)/$${dhm}-capsule-symbols _build/; \
+	else \
+		$(MAKE) _build/$*/build.stamp; \
+		install "_build/$*/libcapsule/capsule-capture-libs" "_build/$${dhm}-capsule-capture-libs"; \
+		install "_build/$*/libcapsule/capsule-symbols" "_build/$${dhm}-capsule-symbols"; \
+		chrpath -r "\$${ORIGIN}/../lib/$${dhm}" "_build/$${dhm}"-*; \
+		install "_build/$${dhm}-capsule-capture-libs" relocatable-install/bin; \
+		install "_build/$${dhm}-capsule-symbols" relocatable-install/bin; \
+	fi; \
 	mkdir -p _build/$*/lib; \
-	"relocatable-install/bin/$${DEB_HOST_MULTIARCH}-capsule-capture-libs" \
+	"relocatable-install/bin/$${dhm}-capsule-capture-libs" \
 	    --dest=_build/$*/lib \
 	    --no-glibc \
 	    "soname:libelf.so.1" \
 	    "soname:libz.so.1" \
 	    $(NULL); \
-	cp -a --dereference _build/$*/lib/*.so.* "relocatable-install/lib/$${DEB_HOST_MULTIARCH}"
+	cp -a --dereference _build/$*/lib/*.so.* "relocatable-install/lib/$${dhm}"
 
 check:
 	prove -v t/

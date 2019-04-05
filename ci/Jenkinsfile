@@ -55,11 +55,6 @@ pipeline {
             docker.image("${env.CI_DOCKER_REGISTRY}/steamrt/sdk:scout").inside('--mount type=tmpfs,destination=/var/cache/apt/archives') {
               sh '''
               set -e
-              echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
-              export NSS_WRAPPER_PASSWD=$(pwd)/passwd
-              export NSS_WRAPPER_GROUP=/dev/null
-              export LD_PRELOAD=libnss_wrapper.so
-
               if [ -d /usr/lib/libcapsule/relocatable ]; then
                 make -C src
               else

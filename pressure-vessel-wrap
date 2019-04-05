@@ -248,6 +248,8 @@ fi
 
 if [ -n "$verbose" ]; then
     echo "Original argv:" >&2
+    # Deliberately not expanding $0 in format string
+    # shellcheck disable=SC2016
     printf '\t$0: %q\n' "$0" >&2
     for arg in "${original_argv[@]}"; do
         printf '\t$@: %q\n' "$arg" >&2
@@ -586,6 +588,8 @@ if [ -n "$runtime" ]; then
                         --dest="$tmpdir/overrides/lib/$t" \
                         --provider="/" \
                         "only-dependencies:if-exists:path-match:$dir/dri/*.so"
+                    # Deliberately not expanding $1, $2 in sh -c
+                    # shellcheck disable=SC2016
                     "$BWRAP" \
                         --ro-bind / / \
                         --tmpfs /run \

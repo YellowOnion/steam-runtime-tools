@@ -30,11 +30,12 @@ NULL=
 export DEBIAN_FRONTEND=noninteractive
 apt-get -q -y update
 apt-get -q -y upgrade
-apt-get -q -y install \
+apt-get -q -y --no-install-recommends install \
     autoconf \
     automake \
     build-essential \
     chrpath \
+    devscripts \
     gcc-multilib \
     git \
     gtk-doc-tools \

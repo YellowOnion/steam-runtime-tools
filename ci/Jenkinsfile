@@ -42,6 +42,12 @@ pipeline {
         git config --global user.email nobody@example.com
         '''
         checkoutCollaboraGitlab('steam/pressure-vessel', 'master', 'src')
+        dir('src') {
+          sh '''
+          ./build-aux/git-version-gen .tarball-version > .tarball-version_
+          mv .tarball-version_ .tarball-version
+          '''
+        }
 
         script {
           if (env.CI_DOCKER_REGISTRY_CRED == '') {

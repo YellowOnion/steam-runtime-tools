@@ -37,9 +37,7 @@ cd "$TOP_SRCDIR"
 n=0
 for shell_script in \
         pressure-vessel-wrap \
-        sysroot/clean-sysroot.sh \
-        sysroot/configure-sources.sh \
-        sysroot/install-dependencies.sh \
+        sysroot/*.sh \
         t/shellcheck.t \
         ; do
     n=$((n + 1))

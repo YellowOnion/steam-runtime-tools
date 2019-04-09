@@ -34,7 +34,11 @@ libcapsule/configure:
 _build/%/config.stamp: libcapsule/configure
 	mkdir -p _build/$*/libcapsule
 	set -eu; \
-	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
+	DEB_BUILD_ARCH="$$(dpkg-architecture -a"$*" -qDEB_BUILD_ARCH)"; \
+	DEB_HOST_ARCH="$$(dpkg-architecture -a"$*" -qDEB_HOST_ARCH)"; \
+	DEB_BUILD_GNU_TYPE="$$(dpkg-architecture -a"$*" -qDEB_BUILD_GNU_TYPE)"; \
+	DEB_HOST_GNU_TYPE="$$(dpkg-architecture -a"$*" -qDEB_HOST_GNU_TYPE)"; \
+	DEB_HOST_MULTIARCH="$$(dpkg-architecture -a"$*" -qDEB_HOST_MULTIARCH)"; \
 	case "$${DEB_BUILD_ARCH}/$${DEB_HOST_ARCH}" in \
 	    (amd64/i386) \
 	        export CC="cc -m32"; \
@@ -61,8 +65,7 @@ relocatabledir = /usr/lib/libcapsule/relocatable
 install-%:
 	mkdir -p relocatable-install/bin
 	set -eu; \
-	eval "$$(dpkg-architecture -a"$*" --print-set)"; \
-	dhm="$${DEB_HOST_MULTIARCH}"; \
+	dhm="$$(dpkg-architecture -a"$*" -qDEB_HOST_MULTIARCH)"; \
 	mkdir -p "relocatable-install/lib/$${dhm}"; \
 	if [ -e $(relocatabledir)/$${dhm}-capsule-capture-libs ]; then \
 		install $(relocatabledir)/$${dhm}-capsule-capture-libs _build/; \

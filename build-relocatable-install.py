@@ -165,7 +165,7 @@ def main():
         for so in glob.glob(
             os.path.join('_build', arch, 'lib', '*.so.*'),
         ):
-            install(so, os.path.join(DESTDIR, 'lib', 'ma'))
+            install(so, os.path.join(DESTDIR, 'lib', ma))
 
     source_to_download = set()      # type: typing.Set[str]
 

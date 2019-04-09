@@ -1,4 +1,5 @@
 VERSION := $(shell ./build-aux/git-version-gen .tarball-version)
+PYTHON ?= python3
 relocatabledir = /usr/lib/libcapsule/relocatable
 
 all: binary
@@ -10,7 +11,7 @@ _relocatabledir =
 endif
 
 install:
-	./build-relocatable-install.py $(_relocatabledir)
+	$(PYTHON) ./build-relocatable-install.py $(_relocatabledir)
 
 check:
 	prove -v t/*.sh

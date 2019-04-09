@@ -55,16 +55,7 @@ pipeline {
             docker.image("${env.CI_DOCKER_REGISTRY}/steamrt/sdk:scout").inside('--mount type=tmpfs,destination=/var/cache/apt/archives') {
               sh '''
               set -e
-              if [ -d /usr/lib/libcapsule/relocatable ]; then
-                make -C src
-              else
-                apt-get download libcapsule-tools-relocatable:amd64
-                apt-get download libcapsule-tools-relocatable:i386
-                dpkg-deb -x libcapsule-tools-relocatable_*_amd64.deb .
-                dpkg-deb -x libcapsule-tools-relocatable_*_i386.deb .
-
-                make -C src relocatabledir=$(pwd)/usr/lib/libcapsule/relocatable
-              fi
+              make -C src
               '''
             }
           }

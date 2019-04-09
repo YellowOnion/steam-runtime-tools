@@ -32,20 +32,35 @@ games, particularly libstdc++. This is not yet implemented.
 Building a relocatable install
 ------------------------------
 
-Build a Debian source package (`.dsc`, `.debian.tar.*`, `.orig.tar.*`
-for libcapsule 0.20180430.0 or later, on a system with autoconf-archive
-20160916-1~bpo8+1 or later. Put it in the top-level directory of
-`pressure-vessel`, for example:
+To make the built version compatible with older systems, you will need
+an environment based on Ubuntu 12.04 'precise' or Debian 8 'jessie'.
+SteamRT 1 'scout' or SteamRT 1.5 'heavy' should be suitable.
+SteamOS 2 'brewmaster' is not suitable, because its amd64 and i386
+linux-libc-dev packages are not currently co-installable.
 
-    dcmd cp ../build-area/libcapsule_0.20180430.0-0co1.dsc .
+The most straightforward method is to have a prebuilt version of
+libcapsule-tools-relocatable:amd64 and libcapsule-tools-relocatable:i386
+in your build environment. For example, you could do the build in a
+SteamRT 1 'scout' or SteamRT 1.5 'heavy' Docker image that has those
+packages already. Then you can just do:
 
-To make the built version compatible with older systems, you will need a
-Debian 8 'jessie' environment with some extra packages. SteamOS 2 'brewmaster'
-is not suitable, because its amd64 and i386 linux-libc-dev packages are
-not co-installable.
+    make
 
-The simplest way is to do the build in a Debian 8 'jessie' amd64 container
-with selected i386 packages available, like `ci/Jenkinsfile` does:
+Or, if your build environment has those packages available but
+uninstalled, you can unpack them with `dpkg-deb -x` and use something
+like:
+
+    make relocatabledir=./usr/lib/libcapsule/relocatable
+
+Alternatively, build a Debian source package (`.dsc`, `.debian.tar.*`,
+`.orig.tar.*` for libcapsule 0.20190402.0 or later, which will require
+autoconf-archive 20160916-1~bpo8+1 or later if you are building from git.
+Put it in the top-level directory of `pressure-vessel`, for example:
+
+    dcmd cp ../build-area/libcapsule_0.20190402.0-0co1.dsc .
+
+After that, the simplest way is (again) to do the build already inside
+a suitable container:
 
     make
 
@@ -55,12 +70,15 @@ you have all those, you can just run:
 
     make -C sysroot
 
-which will automatically build and use the sysroot.
+which will automatically build and use the sysroot. (This sysroot
+won't have libcapsule-tools-relocatable, so you will need a
+`libcapsule_*.dsc` or the `relocatabledir` variable, as above.)
 
 Alternatively, prepare a Debian jessie sysroot with `deb`
 and `deb-src` sources and an `i386` foreign architecture (see
-`sysroot/configure-sources.sh`), and all the packages listed in
-`sysroot/install-dependencies.sh`). Then use:
+`sysroot/configure-sources.sh`), all the packages listed in
+`sysroot/install-dependencies.sh`, and optionally
+libcapsule-tools-relocatable. Then use:
 
     make -C sysroot sysroot=/path/to/sysroot
 

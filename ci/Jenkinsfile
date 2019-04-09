@@ -21,82 +21,27 @@
 @Library('steamos-ci') _
 
 pipeline {
-  agent none
-
   options {
     timestamps()
     skipDefaultCheckout()
   }
+  agent {
+    label 'docker-slave'
+  }
+  environment {
+    HOME="${env.WORKSPACE}"
+    TMPDIR="${env.WORKSPACE}"
+    PYTHONUNBUFFERED="1"
+  }
 
   stages {
-    stage ("libcapsule") {
-      agent {
-        label 'docker-slave'
-      }
-      environment {
-        HOME="${env.WORKSPACE}"
-        TMPDIR="${env.WORKSPACE}"
-        PYTHONUNBUFFERED="1"
-      }
-      steps {
-        sh '''
-        git config --global user.name Jenkins
-        git config --global user.email nobody@example.com
-        '''
-        checkout changelog: true, poll: true, scm: [
-          $class: 'GitSCM',
-          branches: [[name: "origin/master"]],
-          extensions: [[$class: 'PruneStaleBranch'], [$class: 'RelativeTargetDirectory', relativeTargetDir: 'libcapsule']],
-          userRemoteConfigs: [[name: 'origin', url: 'https://gitlab.collabora.com/vivek/libcapsule.git', credentialsId: null]]
-        ]
-        script {
-          if (env.CI_DOCKER_REGISTRY_CRED == '') {
-            dockerRegistryCred = null;
-          }
-          else {
-            dockerRegistryCred = env.CI_DOCKER_REGISTRY_CRED;
-          }
-
-          docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
-            docker.image("${env.CI_DOCKER_REGISTRY}/steamos/package-builder:stretch").inside('') {
-              sh '''
-              set -e
-              mkdir -p debs
-              echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
-              export NSS_WRAPPER_PASSWD=$(pwd)/passwd
-              export NSS_WRAPPER_GROUP=/dev/null
-              export LD_PRELOAD=libnss_wrapper.so
-              ( cd libcapsule; deb-build-snapshot -d ../debs --no-check -s -u localhost )
-              '''
-            }
-          }
-        }
-
-        stash name: 'debs', includes: 'debs/**'
-      }
-      post {
-        always {
-          deleteDir()
-        }
-      }
-    }
-
     stage ("pressure-vessel") {
-      agent {
-        label 'docker-slave'
-      }
-      environment {
-        HOME="${env.WORKSPACE}"
-        TMPDIR="${env.WORKSPACE}"
-        PYTHONUNBUFFERED="1"
-      }
       steps {
         sh '''
         git config --global user.name Jenkins
         git config --global user.email nobody@example.com
         '''
         checkoutCollaboraGitlab('steam/pressure-vessel', 'master', 'src')
-        unstash 'debs'
 
         script {
           if (env.CI_DOCKER_REGISTRY_CRED == '') {
@@ -107,15 +52,24 @@ pipeline {
           }
 
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
-            docker.image("${env.CI_DOCKER_REGISTRY}/steamos/package-builder:jessie").inside('') {
+            docker.image("${env.CI_DOCKER_REGISTRY}/steamrt/sdk:scout").inside('--mount type=tmpfs,destination=/var/cache/apt/archives') {
               sh '''
               set -e
               echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
               export NSS_WRAPPER_PASSWD=$(pwd)/passwd
               export NSS_WRAPPER_GROUP=/dev/null
               export LD_PRELOAD=libnss_wrapper.so
-              mv debs/*.dsc debs/*.tar.* src/
-              ( cd src; make sysroot=/ )
+
+              if [ -d /usr/lib/libcapsule/relocatable ]; then
+                make -C src
+              else
+                apt-get download libcapsule-tools-relocatable:amd64
+                apt-get download libcapsule-tools-relocatable:i386
+                dpkg-deb -x libcapsule-tools-relocatable_*_amd64.deb .
+                dpkg-deb -x libcapsule-tools-relocatable_*_i386.deb .
+
+                make -C src relocatabledir=$(pwd)/usr/lib/libcapsule/relocatable
+              fi
               '''
             }
           }
@@ -124,11 +78,12 @@ pipeline {
         archiveArtifacts 'src/pressure-vessel-*-bin.tar.gz'
         archiveArtifacts 'src/pressure-vessel-*-bin+src.tar.gz'
       }
-      post {
-        always {
-          deleteDir()
-        }
-      }
+    }
+  }
+
+  post {
+    cleanup {
+      deleteDir()
     }
   }
 }

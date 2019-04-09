@@ -1,6 +1,13 @@
 VERSION := $(shell ./build-aux/git-version-gen .tarball-version)
+relocatabledir = /usr/lib/libcapsule/relocatable
 
 all: binary
+
+ifeq (,$(wildcard libcapsule_*.dsc))
+_relocatabledir = $(relocatabledir)
+else
+_relocatabledir =
+endif
 
 install:
 	rm -fr relocatable-install
@@ -60,16 +67,14 @@ _build/%/build.stamp: _build/%/config.stamp
 	$(MAKE) -C _build/$*/libcapsule
 	touch $@
 
-relocatabledir = /usr/lib/libcapsule/relocatable
-
 install-%:
 	mkdir -p relocatable-install/bin
 	set -eu; \
 	dhm="$$(dpkg-architecture -a"$*" -qDEB_HOST_MULTIARCH)"; \
 	mkdir -p "relocatable-install/lib/$${dhm}"; \
-	if [ -e $(relocatabledir)/$${dhm}-capsule-capture-libs ]; then \
-		install $(relocatabledir)/$${dhm}-capsule-capture-libs _build/; \
-		install $(relocatabledir)/$${dhm}-capsule-symbols _build/; \
+	if [ -n "$(_relocatabledir)" ]; then \
+		install $(_relocatabledir)/$${dhm}-capsule-capture-libs _build/; \
+		install $(_relocatabledir)/$${dhm}-capsule-symbols _build/; \
 	else \
 		$(MAKE) _build/$*/build.stamp; \
 		install "_build/$*/libcapsule/capsule-capture-libs" "_build/$${dhm}-capsule-capture-libs"; \

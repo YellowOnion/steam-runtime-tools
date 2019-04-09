@@ -44,8 +44,8 @@ _build/%/config.stamp: libcapsule/configure
 	../../../libcapsule/configure \
 	    --build="$${DEB_BUILD_GNU_TYPE}" \
 	    --host="$${DEB_HOST_GNU_TYPE}" \
-	    --enable-host-prefix="$${DEB_BUILD_MULTIARCH}-" \
-	    --enable-tools-rpath="/_ORIGIN_/__/lib/$${DEB_BUILD_MULTIARCH}" \
+	    --enable-host-prefix="$${DEB_HOST_MULTIARCH}-" \
+	    --enable-tools-rpath="/_ORIGIN_/__/lib/$${DEB_HOST_MULTIARCH}" \
 	    --disable-shared \
 	    --disable-gtk-doc \
 	    --without-glib \

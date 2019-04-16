@@ -383,7 +383,7 @@ capture_one( const char *soname, capture_flags flags,
                 {
                     DEBUG( DEBUG_TOOL,
                            "Not capturing \"%s\" because it is part of glibc",
-                           provider.needed[0].name );
+                           provider.needed[i].name );
                     capture = false;
                     break;
                 }

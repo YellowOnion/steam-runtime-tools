@@ -53,6 +53,10 @@ if [ -z "${BWRAP:-}" ]; then
                 break
             fi
         done
+
+        if [ -z "${BWRAP:-}" ] && [ -x "${here}/bwrap" ]; then
+            BWRAP="${here}/bwrap"
+        fi
     fi
 fi
 

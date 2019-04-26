@@ -27,6 +27,7 @@ import argparse
 import glob
 import os
 import re
+import shlex
 import shutil
 import subprocess
 
@@ -38,20 +39,57 @@ else:
     typing      # silence pyflakes
 
 
+class Architecture:
+    def __init__(
+        self,
+        name,           # type: str
+        multiarch,      # type: str
+        ld_so           # type: str
+    ):
+        # type: (...) -> None
+        self.name = name
+        self.multiarch = multiarch
+        self.ld_so = ld_so
+
+
 # Debian architecture => Debian multiarch tuple
-ARCHS = {
-    'amd64': 'x86_64-linux-gnu',
-    'i386': 'i386-linux-gnu',
-}
+ARCHS = [
+    Architecture(
+        name='amd64',
+        multiarch='x86_64-linux-gnu',
+        ld_so='/lib64/ld-linux-x86-64.so.2',
+    ),
+    Architecture(
+        name='i386',
+        multiarch='i386-linux-gnu',
+        ld_so='/lib/ld-linux.so.2',
+    ),
+]
 # package to install from => source package for copyright information
 DEPENDENCIES = {
     'libcapsule-tools-relocatable': 'libcapsule',
     'libelf1': 'elfutils',
     'zlib1g': 'zlib',
 }
+# program to install => binary package
+WRAPPED_PROGRAMS = {
+    'bwrap': 'bubblewrap',
+}
+PRIMARY_ARCH_DEPENDENCIES = {
+    'bubblewrap': 'bubblewrap',
+    'libcap2': 'libcap2',
+    'libselinux1': 'libselinux',
+    'libpcre3': 'pcre3',
+}
 DESTDIR = 'relocatable-install'
-SCRIPTS = ('pressure-vessel-unruntime', 'pressure-vessel-wrap')
-TOOLS = ('capsule-capture-libs', 'capsule-symbols')
+SCRIPTS = [
+    'pressure-vessel-unruntime',
+    'pressure-vessel-wrap'
+]
+TOOLS = [
+    'capsule-capture-libs',
+    'capsule-symbols',
+]
 
 
 def install(src, dst, mode=0o644):
@@ -92,9 +130,9 @@ def main():
     os.makedirs(os.path.join(DESTDIR, 'bin'), exist_ok=True)
     os.makedirs(os.path.join(DESTDIR, 'sources'), exist_ok=True)
 
-    for ma in ARCHS.values():
+    for arch in ARCHS:
         os.makedirs(
-            os.path.join(DESTDIR, 'lib', ma),
+            os.path.join(DESTDIR, 'lib', arch.multiarch),
             exist_ok=True,
         )
 
@@ -108,12 +146,12 @@ def main():
     )
 
     if args.relocatabledir is not None:
-        for arch, ma in ARCHS.items():
+        for arch in ARCHS:
             for tool in TOOLS:
                 install_exe(
                     os.path.join(
                         args.relocatabledir,
-                        '{}-{}'.format(ma, tool),
+                        '{}-{}'.format(arch.multiarch, tool),
                     ),
                     os.path.join(DESTDIR, 'bin'),
                 )
@@ -125,19 +163,28 @@ def main():
     else:
         v_check_call(['make', '-f', 'Makefile.libcapsule'])
 
-        for arch, ma in ARCHS.items():
+        for arch in ARCHS:
             for tool in TOOLS:
                 install_exe(
-                    os.path.join('_build', arch, 'libcapsule', tool),
-                    os.path.join('_build', '{}-{}'.format(ma, tool)),
+                    os.path.join('_build', arch.name, 'libcapsule', tool),
+                    os.path.join(
+                        '_build',
+                        '{}-{}'.format(arch.multiarch, tool),
+                    ),
                 )
                 v_check_call([
                     'chrpath', '-r',
-                    '${ORIGIN}/../lib/' + ma,
-                    os.path.join('_build', '{}-{}'.format(ma, tool)),
+                    '${ORIGIN}/../lib/' + arch.multiarch,
+                    os.path.join(
+                        '_build',
+                        '{}-{}'.format(arch.multiarch, tool),
+                    ),
                 ])
                 install_exe(
-                    os.path.join('_build', '{}-{}'.format(ma, tool)),
+                    os.path.join(
+                        '_build',
+                        '{}-{}'.format(arch.multiarch, tool),
+                    ),
                     os.path.join(DESTDIR, 'bin'),
                 )
 
@@ -152,45 +199,117 @@ def main():
                     os.path.join(DESTDIR, 'sources'),
                 ])
 
-    for arch, ma in ARCHS.items():
-        os.makedirs(os.path.join('_build', arch, 'lib'), exist_ok=True)
+    primary_architecture = subprocess.check_output([
+        'dpkg', '--print-architecture',
+    ]).decode('utf-8').strip()
+
+    for arch in ARCHS:
+        os.makedirs(os.path.join('_build', arch.name, 'lib'), exist_ok=True)
+
         v_check_call([
-            '{}/bin/{}-capsule-capture-libs'.format(DESTDIR, ma),
-            '--dest=_build/{}/lib'.format(arch),
+            '{}/bin/{}-capsule-capture-libs'.format(DESTDIR, arch.multiarch),
+            '--dest=_build/{}/lib'.format(arch.name),
             '--no-glibc',
             'soname:libelf.so.1',
             'soname:libz.so.1',
         ])
 
+        if arch.name == primary_architecture:
+            v_check_call([
+                '{}/bin/{}-capsule-capture-libs'.format(
+                    DESTDIR,
+                    arch.multiarch,
+                ),
+                '--dest=_build/{}/lib'.format(arch.name),
+                '--no-glibc',
+                'soname:libcap.so.2',
+                'soname:libpcre.so.3',
+                'soname:libselinux.so.1',
+            ])
+
         for so in glob.glob(
-            os.path.join('_build', arch, 'lib', '*.so.*'),
+            os.path.join('_build', arch.name, 'lib', '*.so.*'),
         ):
-            install(so, os.path.join(DESTDIR, 'lib', ma))
+            install(so, os.path.join(DESTDIR, 'lib', arch.multiarch))
+
+    # For bwrap (and possibly other programs in future) we don't have
+    # a relocatable version with a RPATH/RUNPATH, so we wrap a script
+    # around it instead. The script avoids setting LD_LIBRARY_PATH
+    # because that would leak through to the programs invoked by bwrap.
+    for exe, package in WRAPPED_PROGRAMS.items():
+        path = '/usr/bin/{}'.format(exe)
+
+        if not os.path.exists(path):
+            v_check_call([
+                'apt-get',
+                'download',
+                package,
+            ])
+            v_check_call(
+                'dpkg-deb -x {}_*.deb _build'.format(shlex.quote(package)),
+                shell=True,
+            )
+            path = '_build/usr/bin/{}'.format(exe)
+
+        for arch in ARCHS:
+            if arch.name != primary_architecture:
+                continue
+
+            install_exe(
+                path,
+                os.path.join(DESTDIR, 'bin', exe + '.bin'),
+            )
+
+            with open(
+                os.path.join('_build', arch.name, exe),
+                'w',
+            ) as writer:
+                writer.write('#!/bin/sh\n')
+                writer.write('set -eu\n')
+                writer.write('here="$(dirname "$0")"\n')
+                writer.write(
+                    'exec {} --library-path "$here"/../lib/{} '
+                    '"$here"/{}.bin "$@"\n'.format(
+                        shlex.quote(arch.ld_so),
+                        shlex.quote(arch.multiarch),
+                        shlex.quote(exe),
+                    )
+                )
+
+            install_exe(
+                os.path.join('_build', arch.name, exe),
+                os.path.join(DESTDIR, 'bin', exe),
+            )
 
     source_to_download = set()      # type: typing.Set[str]
 
-    for package, source in DEPENDENCIES.items():
+    for package, source in (
+        list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
+    ):
         if args.relocatabledir is None and source == 'libcapsule':
             continue
 
-        install(
-            '/usr/share/doc/{}/copyright'.format(package),
-            os.path.join(DESTDIR, 'sources', '{}.txt'.format(source)),
-        )
-        install(
-            '/usr/share/doc/{}/copyright'.format(package),
-            os.path.join(DESTDIR, 'sources', '{}.txt'.format(source)),
-        )
+        if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
+            install(
+                '/usr/share/doc/{}/copyright'.format(package),
+                os.path.join(DESTDIR, 'sources', '{}.txt'.format(source)),
+            )
 
-        for expr in set(
-            v_check_output([
-                'dpkg-query',
-                '-W',
-                '-f', '${source:Package}=${source:Version}\n',
-                package,
-            ], universal_newlines=True).splitlines()
-        ):
-            source_to_download.add(re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
+            for expr in set(
+                v_check_output([
+                    'dpkg-query',
+                    '-W',
+                    '-f', '${source:Package}=${source:Version}\n',
+                    package,
+                ], universal_newlines=True).splitlines()
+            ):
+                source_to_download.add(re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
+        else:
+            install(
+                '_build/usr/share/doc/{}/copyright'.format(package),
+                os.path.join(DESTDIR, 'sources', '{}.txt'.format(source)),
+            )
+            source_to_download.add(source)
 
     v_check_call(
         [

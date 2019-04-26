@@ -44,6 +44,7 @@ pipeline {
         checkoutCollaboraGitlab('steam/pressure-vessel', 'master', 'src')
         dir('src') {
           sh '''
+          set -eu
           ./build-aux/git-version-gen .tarball-version > .tarball-version_
           mv .tarball-version_ .tarball-version
           '''
@@ -62,8 +63,19 @@ pipeline {
               sh '''
               set -eu
               make -C src PYTHON=python3.5
+              make -C src check PYTHON=python3.5
               '''
             }
+          }
+
+          /* Check for self-containedness by repeating relocatable-install.sh
+           * in a somewhat minimal container. */
+          docker.image('debian:buster-slim').inside() {
+            sh '''
+            set -eu
+            cd src
+            ./t/relocatable-install.sh
+            '''
           }
         }
 

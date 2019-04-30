@@ -96,6 +96,10 @@ for word in $ld_preload; do
 done
 IFS="$old_IFS"
 
+if [ -n "${PRESSURE_VESSEL_WRAP_NATIVE+set}" ]; then
+    exec "${here}/pressure-vessel-wrap-c" ${options+"${options[@]}"} "$@"
+fi
+
 exec "$here/pressure-vessel-wrap" ${options+"${options[@]}"} "$@"
 
 # vim:set sw=4 sts=4 et:

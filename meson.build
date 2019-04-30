@@ -152,6 +152,78 @@ if libcapsule_dsc != ''
   endforeach
 endif
 
+if host_machine.cpu_family() == 'x86_64'
+  multiarch = 'x86_64-linux-gnu'
+elif host_machine.cpu_family() == 'x86'
+  multiarch = 'i386-linux-gnu'
+else
+  error('CPU family not supported')
+endif
+
+cc = meson.get_compiler('c')
+
+conf_data = configuration_data()
+conf_data.set('VERSION', version)
+
+check_functions = [
+  'renameat2',
+  'memfd_create',
+  'copy_file_range',
+]
+foreach check_function : check_functions
+  if cc.compiles('''
+    #include <sys/types.h>
+    #include <unistd.h>
+    #include <stdio.h>
+    #include <sys/mount.h>
+    #include <fcntl.h>
+    #include <sched.h>
+    #include <linux/loop.h>
+    #include <linux/random.h>
+    #include <sys/mman.h>
+
+    int func (void) {
+      (void) ''' + check_function + ''';
+    }
+    ''',
+    args : '-D_GNU_SOURCE',
+    name : check_function + '() is declared',
+  )
+    conf_data.set('HAVE_DECL_' + check_function.underscorify().to_upper(), 1)
+  endif
+endforeach
+
+configure_file(
+  input : 'config.h.in',
+  output : 'config.h',
+  configuration : conf_data,
+)
+
+executable(
+  'pressure-vessel-wrap-c',
+  sources : [
+    'src/glib-backports.c',
+    'src/glib-backports.h',
+    'src/flatpak-bwrap.c',
+    'src/flatpak-bwrap-private.h',
+    'src/flatpak-utils.c',
+    'src/flatpak-utils-private.h',
+    'src/wrap.c',
+  ],
+  c_args : [
+    '-Wno-unused-local-typedefs',
+  ],
+  dependencies : [
+    dependency('gio-unix-2.0', required : true),
+    dependency('xau', required : true),
+    subproject('libglnx').get_variable('libglnx_dep'),
+  ],
+  build_rpath : '${ORIGIN}/../lib/' + multiarch,
+  install : true,
+  install_dir : get_option('bindir'),
+  install_rpath : '${ORIGIN}/../lib/' + multiarch,
+)
+
 meson.add_install_script(
   python.path(),
   join_paths(meson.current_source_dir(), 'build-relocatable-install.py'),

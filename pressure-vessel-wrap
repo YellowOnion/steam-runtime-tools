@@ -36,6 +36,10 @@ me="$(readlink -f "$0")"
 here="${me%/*}"
 me="${me##*/}"
 
+if [ -n "${PRESSURE_VESSEL_WRAP_NATIVE+set}" ]; then
+    exec "${here}/pressure-vessel-wrap-c" "$@"
+fi
+
 if [ -n "${STEAM_RUNTIME+set}" ]; then
     echo "$me: This program should not be run in the Steam Runtime." >&2
     echo "$me: Use pressure-vessel-unruntime instead." >&2

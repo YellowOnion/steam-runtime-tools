@@ -37,6 +37,11 @@ except ImportError:
 else:
     typing      # silence pyflakes
 
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote     # noqa
+
 
 class Architecture:
     def __init__(
@@ -76,13 +81,21 @@ WRAPPED_PROGRAMS = {
 }
 PRIMARY_ARCH_DEPENDENCIES = {
     'bubblewrap': 'bubblewrap',
+    'libblkid1': 'util-linux',
     'libcap2': 'libcap2',
-    'libselinux1': 'libselinux',
+    'libffi6': 'libffi',
+    'libglib2.0-0': 'glib2.0',
+    'libmount1': 'util-linux',
     'libpcre3': 'pcre3',
+    'libxau6': 'libxau',
+    'libselinux1': 'libselinux',
 }
 SCRIPTS = [
     'pressure-vessel-unruntime',
     'pressure-vessel-wrap'
+]
+EXECUTABLES = [
+    'pressure-vessel-wrap-c'
 ]
 TOOLS = [
     'capsule-capture-libs',
@@ -124,12 +137,12 @@ def main():
     parser.add_argument(
         '--srcdir', default=os.getenv('MESON_SOURCE_ROOT', '.'))
     parser.add_argument(
-        '--builddir', default=os.getenv('MESON_BUILD_ROOT', '.'))
+        '--builddir', default=os.getenv('MESON_BUILD_ROOT', '_build'))
     parser.add_argument(
         '--prefix',
         default=os.getenv(
             'MESON_INSTALL_PREFIX',
-            os.path.abspath('relocatable-build'),
+            os.path.abspath(os.path.join('_build', 'relocatable-install')),
         ),
     )
     parser.add_argument(
@@ -145,9 +158,6 @@ def main():
         args.destdir + args.prefix,
     )
 
-    if os.path.exists(destdir_prefix):
-        shutil.rmtree(destdir_prefix)
-
     os.makedirs(os.path.join(destdir_prefix, 'bin'), exist_ok=True)
     os.makedirs(os.path.join(destdir_prefix, 'sources'), exist_ok=True)
 
@@ -160,6 +170,12 @@ def main():
     for script in SCRIPTS:
         install_exe(
             os.path.join(args.srcdir, script),
+            os.path.join(destdir_prefix, 'bin'),
+        )
+
+    for exe in EXECUTABLES:
+        install_exe(
+            os.path.join(args.builddir, exe),
             os.path.join(destdir_prefix, 'bin'),
         )
 
@@ -262,7 +278,9 @@ def main():
                 ),
                 '--dest=build-relocatable/{}/lib'.format(arch.name),
                 '--no-glibc',
+                'soname:libXau.so.6',
                 'soname:libcap.so.2',
+                'soname:libgio-2.0.so.0',
                 'soname:libpcre.so.3',
                 'soname:libselinux.so.1',
             ])
@@ -287,7 +305,7 @@ def main():
             ])
             v_check_call(
                 'dpkg-deb -x {}_*.deb build-relocatable'.format(
-                    shlex.quote(package),
+                    quote(package),
                 ),
                 shell=True,
             )
@@ -312,9 +330,9 @@ def main():
                 writer.write(
                     'exec {} --library-path "$here"/../lib/{} '
                     '"$here"/{}.bin "$@"\n'.format(
-                        shlex.quote(arch.ld_so),
-                        shlex.quote(arch.multiarch),
-                        shlex.quote(exe),
+                        quote(arch.ld_so),
+                        quote(arch.multiarch),
+                        quote(exe),
                     )
                 )
 
@@ -370,6 +388,81 @@ def main():
         ] + list(source_to_download),
         cwd=os.path.join(destdir_prefix, 'sources'),
     )
+
+    os.makedirs(
+        os.path.join(destdir_prefix, 'sources', 'pressure-vessel'),
+        exist_ok=True,
+    )
+
+    for src_tar in (
+        os.path.join(
+            args.srcdir,
+            'pressure-vessel-{}.tar.gz'.format(args.version),
+        ),
+        os.path.join(
+            args.srcdir,
+            'pressure-vessel-{}.tar.xz'.format(args.version),
+        ),
+    ):
+        if os.path.exists(src_tar):
+            subprocess.check_call([
+                'tar',
+                '-C', os.path.join(
+                    destdir_prefix,
+                    'sources',
+                    'pressure-vessel',
+                ),
+                '--strip-components=1',
+                '-xvf', src_tar,
+            ])
+            break
+    else:
+        if os.path.exists('/usr/bin/git'):
+            git_archive = subprocess.Popen([
+                'git', 'archive', '--format=tar', 'HEAD',
+            ], cwd=args.srcdir, stdout=subprocess.PIPE)
+            subprocess.check_call([
+                'tar',
+                '-C', os.path.join(
+                    destdir_prefix,
+                    'sources',
+                    'pressure-vessel',
+                ),
+                '-xvf-',
+            ], stdin=git_archive.stdout)
+
+            if git_archive.wait() != 0:
+                raise subprocess.CalledProcessError(
+                    returncode=git_archive.returncode,
+                    cmd=git_archive.args,
+                )
+        else:
+            tar = subprocess.Popen([
+                'tar',
+                '-C', args.srcdir,
+                '--exclude=./.git',
+                '--exclude=./_build',
+                '--exclude=./relocatable-install',
+                '--exclude=./.mypy_cache',
+                '--exclude=.*.swp',
+                '-cf-',
+                '.',
+            ], stdout=subprocess.PIPE)
+            subprocess.check_call([
+                'tar',
+                '-C', os.path.join(
+                    destdir_prefix,
+                    'sources',
+                    'pressure-vessel',
+                ),
+                '-xvf-',
+            ], stdin=tar.stdout)
+
+            if tar.wait() != 0:
+                raise subprocess.CalledProcessError(
+                    returncode=git_archive.returncode,
+                    cmd=git_archive.args,
+                )
 
     bin_tar = 'pressure-vessel-{}-bin.tar.gz'.format(args.version)
     src_tar = 'pressure-vessel-{}-bin+src.tar.gz'.format(args.version)

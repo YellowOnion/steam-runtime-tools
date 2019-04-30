@@ -47,6 +47,7 @@ packages already. Then you can do:
     meson --prefix=$(pwd)/_build/relocatable-install _build
     ninja -C _build
     meson test -v -C _build             # optional
+    rm -fr $(pwd)/_build/relocatable-install
     ninja -C _build install
 
 For more convenient use on a development system, if you have a
@@ -70,6 +71,7 @@ like:
         _build
     ninja -C _build
     meson test -v -C _build             # optional
+    rm -fr $(pwd)/_build/relocatable-install
     ninja -C _build install
 
 Alternatively, build a Debian source package (`.dsc`, `.debian.tar.*`,

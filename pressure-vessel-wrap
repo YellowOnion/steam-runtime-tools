@@ -69,11 +69,13 @@ declare -a env_if_host
 original_argv=("$@")
 env_if_host=()
 fake_home=
+freedesktop_app_id=
 host_fallback=
 ld_preload=()
 interactive=
 runtime=
-share_home=
+share_home=yes
+steam_app_id="${SteamAppId-}"
 tmpdir=
 verbose=
 xterm=
@@ -101,14 +103,20 @@ usage () {
     echo
     echo "Options:"
     echo "--share-home                  Use the real home directory. [Default]"
-    echo "--steam-app-id=123            Use ~/.var/app/com.steampowered.App123"
-    echo "                              as home directory."
-    echo "                              [Hint: try --steam-app-id=\$SteamAppId]"
-    echo "--freedesktop-app-id=ID       Use ~/.var/app/ID as home directory."
+    echo "--unshare-home                Use a fake home directory, chosen"
+    echo "                              automatically according to"
+    echo "                              --freedesktop-app-id,"
+    echo "                              --steam-app-id, \$SteamAppId."
+    echo "--home=HOME                   Use HOME as home directory. Implies"
+    echo "                              --unshare-home."
+    echo
+    echo "--env-if-host=VAR=VAL         Set VAR=VAL if COMMAND is run with"
+    echo "                              /usr from the host system, but not if"
+    echo "                              it is run with /usr from RUNTIME."
+    echo "--freedesktop-app-id=ID       Make --unshare-home default to"
+    echo "                              ~/.var/app/ID as home directory."
     echo "                              ID is com.example.MyApp or similar."
     echo "                              This interoperates with Flatpak."
-    echo "--home=HOME                   Use HOME as home directory."
-    echo
     echo "--host-fallback               Run COMMAND on the host system if we"
     echo "                              cannot run it in a container."
     echo "--interactive                 Run an interactive shell instead of"
@@ -120,9 +128,10 @@ usage () {
     echo "                              merged /usr in the container,"
     echo "                              and augment it with the host"
     echo "                              system's graphics stack."
-    echo "--env-if-host=VAR=VAL         Set VAR=VAL if COMMAND is run with"
-    echo "                              /usr from the host system, but not if"
-    echo "                              it is run with /usr from RUNTIME."
+    echo "--steam-app-id=123            Make --unshare-home use"
+    echo "                              ~/.var/app/com.steampowered.App123"
+    echo "                              as home directory."
+    echo "                              [Default: \$SteamAppId]"
     echo "--verbose                     Be more verbose."
     echo "--xterm                       Same as --interactive, but run an"
     echo "                              xterm in the container."
@@ -141,6 +150,7 @@ getopt_temp="${getopt_temp},interactive"
 getopt_temp="${getopt_temp},runtime:"
 getopt_temp="${getopt_temp},share-home"
 getopt_temp="${getopt_temp},steam-app-id:"
+getopt_temp="${getopt_temp},unshare-home"
 getopt_temp="${getopt_temp},verbose"
 getopt_temp="${getopt_temp},xterm"
 
@@ -164,17 +174,18 @@ while [ "$#" -gt 0 ]; do
             ;;
 
         (--freedesktop-app-id)
-            fake_home="$HOME/.var/app/$2"
+            freedesktop_app_id="$2"
             shift 2
             ;;
 
         (--steam-app-id)
-            fake_home="$HOME/.var/app/com.steampowered.App$2"
+            steam_app_id="$2"
             shift 2
             ;;
 
         (--home)
             fake_home="$2"
+            share_home=
             shift 2
             ;;
 
@@ -200,6 +211,11 @@ while [ "$#" -gt 0 ]; do
 
         (--share-home)
             share_home=yes
+            shift
+            ;;
+
+        (--unshare-home)
+            share_home=
             shift
             ;;
 
@@ -238,10 +254,6 @@ done
 if [ "$#" -eq 0 ]; then
     echo "$me: an executable to run is required" >&2
     exit 2
-fi
-
-if [ -z "$share_home" ] && [ -z "$fake_home" ]; then
-    share_home=yes
 fi
 
 if [ -n "$verbose" ]; then
@@ -645,6 +657,18 @@ if [ -n "$share_home" ]; then
     # from the parent process.
     bwrap_options+=(--bind "$HOME" "$HOME")
 else
+    if [ -n "$fake_home" ]; then
+        :   # OK
+    elif [ -n "$freedesktop_app_id" ]; then
+        fake_home="$HOME/.var/app/$freedesktop_app_id"
+    elif [ -n "$steam_app_id" ]; then
+        fake_home="$HOME/.var/app/com.steampowered.App$steam_app_id"
+    else
+        echo "$me: Error: --unshare-home requires --fake-home," >&2
+        echo "$me: --freedesktop-app-id, --steam-app-id or \$SteamAppId" >&2
+        exit 2
+    fi
+
     # The shellcheck tool warns that -m is only applied to the deepest
     # directory and not any parents created via -p, but that's fine here:
     # we use a separate mkdir -p for each directory whose permissions we

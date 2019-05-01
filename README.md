@@ -192,19 +192,22 @@ Instructions for testing
     are available in `/overrides` inside that filesystem, while selected
     files from the host are visible in `/run/host`.
 
-* If you don't want to protect `$HOME`, add the `--share-home` option.
+* To protect `$HOME`, add one of the following options before `--`:
+
+    - `--fake-home=/some/path` (automatically unshares the home directory)
+    - `--freedesktop-app-id=com.example.Anything --unshare-home`
+    - `--steam-app-id=70 --unshare-home` (when running from Steam you can use `--steam-app-id=${SteamAppId}`)
 
 * To test something manually:
 
     - cd to the directory that you want to be the current working directory
       inside the container
 
-    - Run one of:
+    - Run:
 
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --fake-home=/some/path -- ./whatever-game
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --freedesktop-app-id=com.example.Anything -- ./whatever-game
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --steam-app-id=70 -- ./whatever-game
-            /opt/pressure-vessel/bin/pressure-vessel-wrap --share-home -- ./whatever-game
+            /opt/pressure-vessel/bin/pressure-vessel-wrap -- ./whatever-game
+
+      Optionally add more options before the `--`.
 
 * For interactive testing, if your runtime (if used) or host system (if no
     runtime) contains an xterm binary, you can use something like:

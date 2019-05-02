@@ -24,8 +24,13 @@ fi
 
 echo "1..1"
 
+# Ignore E402: when using GObject-Introspection, not all imports
+# can come first
+
 if "${PYCODESTYLE}" \
+    --ignore=E402 \
     "$G_TEST_SRCDIR"/*.py \
+    "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
     "${G_TEST_SRCDIR}"/sysroot/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"

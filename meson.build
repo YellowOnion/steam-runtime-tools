@@ -40,6 +40,7 @@ endif
 
 scripts = [
   'pressure-vessel-wrap',
+  'pressure-vessel-test-ui',
   'pressure-vessel-unruntime',
 ]
 

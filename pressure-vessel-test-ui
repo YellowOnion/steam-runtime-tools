@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+
+# Copyright © 2019 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+import logging
+import os
+import sys
+
+try:
+    import typing
+except ImportError:
+    pass
+else:
+    typing      # silence pyflakes
+
+import gi
+gi.require_version('Gtk', '3.0')
+
+from gi.repository import Gtk
+
+logger = logging.getLogger('pressure-vessel-test-ui')
+
+
+class Gui:
+    def __init__(self):
+        self.window = Gtk.Window()
+        self.window.set_default_size(600, 300)
+        self.window.connect('delete-event', Gtk.main_quit)
+        self.window.set_title('Choose pressure-vessel runtime')
+
+        self.grid = Gtk.Grid(
+            row_spacing=6,
+            column_spacing=6,
+            margin_top=12,
+            margin_bottom=12,
+            margin_start=12,
+            margin_end=12,
+        )
+        self.window.add(self.grid)
+
+        row = 0
+
+        runtime_label = Gtk.Label.new('Runtime')
+        self.grid.attach(runtime_label, 0, row, 1, 1)
+
+        self.runtime_combo = Gtk.ComboBoxText.new()
+        self.runtime_combo.append('/', 'None (use host system)')
+        self.runtime_combo.append('scout', "SteamRT 1 'scout' (./scout)")
+        self.runtime_combo.append('spy', "SteamRT 2 'spy' (./spy)")
+        self.runtime_combo.set_active(1)
+        self.grid.attach(self.runtime_combo, 1, row, 1, 1)
+
+        row += 1
+
+        self.native_check = Gtk.CheckButton.new_with_label(
+            'Use native-code version of pressure-vessel-wrap'
+        )
+        self.grid.attach(self.native_check, 1, row, 1, 1)
+
+        row += 1
+
+        self.share_home_check = Gtk.CheckButton.new_with_label(
+            'Share real home directory'
+        )
+        self.share_home_check.set_active(True)
+        self.grid.attach(self.share_home_check, 1, row, 1, 1)
+
+        row += 1
+
+        self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
+        self.xterm_check.set_active(True)
+        self.grid.attach(self.xterm_check, 1, row, 1, 1)
+
+        row += 1
+
+        buttons_grid = Gtk.Grid(
+            column_spacing=6,
+            column_homogeneous=True,
+            halign=Gtk.Align.END,
+        )
+
+        cancel_button = Gtk.Button.new_with_label('Cancel')
+        cancel_button.connect('clicked', Gtk.main_quit)
+        buttons_grid.attach(cancel_button, 0, 0, 1, 1)
+
+        run_button = Gtk.Button.new_with_label('Run')
+        run_button.connect('clicked', self.run_cb)
+        buttons_grid.attach(run_button, 1, 0, 1, 1)
+
+        self.grid.attach(buttons_grid, 0, row, 2, 1)
+
+        row += 1
+
+    def run_cb(self, _ignored=None):
+
+        if self.native_check.get_active():
+            wrap = 'pressure-vessel-wrap-c'
+        else:
+            wrap = 'pressure-vessel-wrap'
+
+        argv = [
+            'env',
+            'G_MESSAGES_DEBUG=all',
+            os.path.join(
+                os.path.dirname(sys.argv[0]),
+                wrap,
+            ),
+        ]
+
+        id = self.runtime_combo.get_active_id()
+
+        if id is None:
+            pass
+        elif id == '/':
+            pass
+        else:
+            path = os.path.join(
+                os.path.dirname(sys.argv[0]),
+                '..',
+                id,
+                'files',
+            )
+            argv.append('--runtime')
+            argv.append(path)
+
+        if self.share_home_check.get_active():
+            argv.append('--share-home')
+        else:
+            argv.append('--unshare-home')
+
+        if self.xterm_check.get_active():
+            argv.append('--xterm')
+
+        argv.append('--verbose')
+        argv.extend(sys.argv[1:])
+
+        os.execvp(argv[0], argv)
+
+    def run(self):
+        self.window.show_all()
+        Gtk.main()
+
+
+if __name__ == '__main__':
+    Gui().run()

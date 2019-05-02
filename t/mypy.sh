@@ -21,6 +21,7 @@ export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
 i=0
 for script in \
     "${G_TEST_SRCDIR}"/*.py \
+    "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
     "${G_TEST_SRCDIR}"/sysroot/*.py \
 ; do
     i=$((i + 1))

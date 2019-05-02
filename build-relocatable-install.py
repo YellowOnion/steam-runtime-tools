@@ -91,6 +91,7 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libselinux1': 'libselinux',
 }
 SCRIPTS = [
+    'pressure-vessel-test-ui',
     'pressure-vessel-unruntime',
     'pressure-vessel-wrap'
 ]

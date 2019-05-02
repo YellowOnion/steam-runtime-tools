@@ -1,6 +1,14 @@
 #!/bin/sh
 set -eu
 
+if [ -z "${G_TEST_SRCDIR-}" ]; then
+    me="$(readlink -f "$0")"
+    srcdir="${me%/*}"
+    G_TEST_SRCDIR="${srcdir%/*}"
+fi
+
+: "${G_TEST_BUILDDIR:=.}"
+
 n=0
 failed=
 
@@ -18,15 +26,17 @@ pressure-vessel-wrap
 pressure-vessel-unruntime
 "
 
-if ! [ -e relocatable-install ]; then
-    echo "1..0 # SKIP relocatable-install not built"
+relocatable_install="${G_TEST_BUILDDIR}/relocatable-install"
+
+if ! [ -e "${relocatable_install}" ]; then
+    echo "1..0 # SKIP relocatable-install not in expected location"
     exit 0
 fi
 
 for exe in $EXES; do
     n=$(( n + 1 ))
 
-    if "relocatable-install/bin/$exe" --help >&2; then
+    if "${relocatable_install}/bin/$exe" --help >&2; then
         echo "ok $n - $exe --help"
     else
         echo "not ok $n - $exe --help"
@@ -45,7 +55,7 @@ for basename in $MULTIARCH; do
 
         n=$(( n + 1 ))
 
-        if [ -x "relocatable-install/bin/$exe" ]; then
+        if [ -x "${relocatable_install}/bin/$exe" ]; then
             echo "ok $n - $exe exists and is executable"
         else
             echo "not ok $n - $exe not executable"
@@ -58,7 +68,7 @@ for basename in $MULTIARCH; do
             echo "ok $n - $exe # SKIP: $ld_so not found"
         elif [ "$basename" = "capsule-symbols" ]; then
             echo "ok $n - $exe # SKIP: capsule-symbols has no --help yet"
-        elif "relocatable-install/bin/$exe" --help >&2; then
+        elif "${relocatable_install}/bin/$exe" --help >&2; then
             echo "ok $n - $exe --help"
         else
             echo "not ok $n - $exe --help"
@@ -72,7 +82,7 @@ for exe in $SCRIPTS; do
 
     if ! [ -x /bin/bash ]; then
         echo "ok $n - $exe # SKIP Cannot run a bash script without bash"
-    elif "relocatable-install/bin/$exe" --help >&2; then
+    elif "${relocatable_install}/bin/$exe" --help >&2; then
         echo "ok $n - $exe --help"
     else
         echo "not ok $n - $exe --help"

@@ -42,15 +42,35 @@ The most straightforward method is to have a prebuilt version of
 libcapsule-tools-relocatable:amd64 and libcapsule-tools-relocatable:i386
 in your build environment. For example, you could do the build in a
 SteamRT 1 'scout' or SteamRT 1.5 'heavy' Docker image that has those
-packages already. Then you can just do:
+packages already. Then you can do:
 
-    make
+    meson --prefix=$(pwd)/_build/relocatable-install _build
+    ninja -C _build
+    meson test -v -C _build             # optional
+    ninja -C _build install
 
-Or, if your build environment has those packages available but
-uninstalled, you can unpack them with `dpkg-deb -x` and use something
+For more convenient use on a development system, if you have a
+SteamRT 1 'scout' SDK tarball or an unpacked sysroot, you can place a
+tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
+`_build/sysroot`, and prefix those commands with
+`./sysroot/run-in-sysroot.py`:
+
+    ./sysroot/run-in-sysroot.py meson ...
+
+(Or put them in different locations and pass the `--sysroot` and
+`--tarball` options to `./sysroot/run-in-sysroot.py`.)
+
+If your build environment has `libcapsule-tools-relocatable` available
+but uninstalled, you can unpack them with `dpkg-deb -x` and use something
 like:
 
-    make relocatabledir=./usr/lib/libcapsule/relocatable
+    meson \
+        --prefix=$(pwd)/_build/relocatable-install \
+        -Drelocatabledir=./usr/lib/libcapsule/relocatable \
+        _build
+    ninja -C _build
+    meson test -v -C _build             # optional
+    ninja -C _build install
 
 Alternatively, build a Debian source package (`.dsc`, `.debian.tar.*`,
 `.orig.tar.*` for libcapsule 0.20190402.0 or later, which will require
@@ -59,41 +79,12 @@ Put it in the top-level directory of `pressure-vessel`, for example:
 
     dcmd cp ../build-area/libcapsule_0.20190402.0-0co1.dsc .
 
-After that, the simplest way is (again) to do the build already inside
-a suitable container:
+There is experimental support in `sysroot/` for building a container
+for the build using debos, but it requires an unusual container
+(Debian jessie or SteamRT 1.5 'heavy' with a backport of meson) and
+so is not currently recommended.
 
-    make
-
-Alternatively, you can use `bubblewrap` to enter a sysroot prepared
-using [debos][] and [qemu-system-x86_64][qemu]. If
-you have all those, you can just run:
-
-    make -C sysroot
-
-which will automatically build and use the sysroot. (This sysroot
-won't have libcapsule-tools-relocatable, so you will need a
-`libcapsule_*.dsc` or the `relocatabledir` variable, as above.)
-
-Alternatively, prepare a Debian jessie sysroot with `deb`
-and `deb-src` sources and an `i386` foreign architecture (see
-`sysroot/configure-sources.sh`), all the packages listed in
-`sysroot/install-dependencies.sh`, and optionally
-libcapsule-tools-relocatable. Then use:
-
-    make -C sysroot sysroot=/path/to/sysroot
-
-or compress a similar chroot into a gzipped tar file (containing `./etc`,
-`./usr` and so on, as used by [lxc][] and [pbuilder][]) and use:
-
-    make -C sysroot tarball=/path/to/tarball.tar.gz
-
-Whichever method you use, binaries and source code end up in
-`relocatable-install/` which can be copied to wherever you want.
-
-[debos]: https://github.com/go-debos/debos
-[lxc]: https://github.com/lxc/lxc
-[pbuilder]: https://pbuilder.alioth.debian.org/
-[qemu]: https://www.qemu.org/
+The relocatable install ends up in `_build/relocatable-install`.
 
 Instructions for testing
 ------------------------

@@ -27,7 +27,6 @@ import argparse
 import glob
 import os
 import re
-import shlex
 import shutil
 import subprocess
 
@@ -81,7 +80,6 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libselinux1': 'libselinux',
     'libpcre3': 'pcre3',
 }
-DESTDIR = 'relocatable-install'
 SCRIPTS = [
     'pressure-vessel-unruntime',
     'pressure-vessel-wrap'
@@ -121,31 +119,57 @@ def main():
     # type: () -> None
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('relocatabledir', default=None, nargs='?')
+    parser.add_argument(
+        '--destdir', default=os.getenv('DESTDIR', ''))
+    parser.add_argument(
+        '--srcdir', default=os.getenv('MESON_SOURCE_ROOT', '.'))
+    parser.add_argument(
+        '--builddir', default=os.getenv('MESON_BUILD_ROOT', '.'))
+    parser.add_argument(
+        '--prefix',
+        default=os.getenv(
+            'MESON_INSTALL_PREFIX',
+            os.path.abspath('relocatable-build'),
+        ),
+    )
+    parser.add_argument(
+        '--archive', default=os.getenv('MESON_BUILD_ROOT', '.'))
+    parser.add_argument('--relocatabledir', default='')
+    parser.add_argument('--set-version', dest='version', default='unknown')
     args = parser.parse_args()
 
-    if os.path.exists(DESTDIR):
-        shutil.rmtree(DESTDIR)
+    os.chdir(args.builddir)
 
-    os.makedirs(os.path.join(DESTDIR, 'bin'), exist_ok=True)
-    os.makedirs(os.path.join(DESTDIR, 'sources'), exist_ok=True)
+    destdir_prefix = os.getenv(
+        'MESON_INSTALL_DESTDIR_PREFIX',
+        args.destdir + args.prefix,
+    )
+
+    if os.path.exists(destdir_prefix):
+        shutil.rmtree(destdir_prefix)
+
+    os.makedirs(os.path.join(destdir_prefix, 'bin'), exist_ok=True)
+    os.makedirs(os.path.join(destdir_prefix, 'sources'), exist_ok=True)
 
     for arch in ARCHS:
         os.makedirs(
-            os.path.join(DESTDIR, 'lib', arch.multiarch),
+            os.path.join(destdir_prefix, 'lib', arch.multiarch),
             exist_ok=True,
         )
 
     for script in SCRIPTS:
-        install_exe(script, os.path.join(DESTDIR, 'bin'))
+        install_exe(
+            os.path.join(args.srcdir, script),
+            os.path.join(destdir_prefix, 'bin'),
+        )
 
     install(
-        'THIRD-PARTY.md',
-        os.path.join(DESTDIR, 'sources', 'README.txt'),
+        os.path.join(args.srcdir, 'THIRD-PARTY.md'),
+        os.path.join(destdir_prefix, 'sources', 'README.txt'),
         0o644,
     )
 
-    if args.relocatabledir is not None:
+    if args.relocatabledir:
         for arch in ARCHS:
             for tool in TOOLS:
                 install_exe(
@@ -153,22 +177,25 @@ def main():
                         args.relocatabledir,
                         '{}-{}'.format(arch.multiarch, tool),
                     ),
-                    os.path.join(DESTDIR, 'bin'),
+                    os.path.join(destdir_prefix, 'bin'),
                 )
 
         install(
             '/usr/share/doc/libcapsule-tools-relocatable/copyright',
-            os.path.join(DESTDIR, 'sources', 'libcapsule.txt'),
+            os.path.join(destdir_prefix, 'sources', 'libcapsule.txt'),
         )
     else:
-        v_check_call(['make', '-f', 'Makefile.libcapsule'])
-
         for arch in ARCHS:
             for tool in TOOLS:
                 install_exe(
-                    os.path.join('_build', arch.name, 'libcapsule', tool),
                     os.path.join(
-                        '_build',
+                        'build-relocatable',
+                        arch.name,
+                        'libcapsule',
+                        tool,
+                    ),
+                    os.path.join(
+                        'build-relocatable',
                         '{}-{}'.format(arch.multiarch, tool),
                     ),
                 )
@@ -176,27 +203,34 @@ def main():
                     'chrpath', '-r',
                     '${ORIGIN}/../lib/' + arch.multiarch,
                     os.path.join(
-                        '_build',
+                        'build-relocatable',
                         '{}-{}'.format(arch.multiarch, tool),
                     ),
                 ])
                 install_exe(
                     os.path.join(
-                        '_build',
+                        'build-relocatable',
                         '{}-{}'.format(arch.multiarch, tool),
                     ),
-                    os.path.join(DESTDIR, 'bin'),
+                    os.path.join(destdir_prefix, 'bin'),
                 )
 
             install(
-                os.path.join('libcapsule', 'debian', 'copyright'),
-                os.path.join(DESTDIR, 'sources', 'libcapsule.txt'),
+                os.path.join(
+                    args.builddir,
+                    'libcapsule',
+                    'debian',
+                    'copyright',
+                ),
+                os.path.join(destdir_prefix, 'sources', 'libcapsule.txt'),
             )
 
-            for dsc in glob.glob('libcapsule*.dsc'):
+            for dsc in glob.glob(
+                os.path.join(args.srcdir, 'libcapsule*.dsc')
+            ):
                 v_check_call([
                     'dcmd', 'install', '-m644', dsc,
-                    os.path.join(DESTDIR, 'sources'),
+                    os.path.join(destdir_prefix, 'sources'),
                 ])
 
     primary_architecture = subprocess.check_output([
@@ -204,11 +238,17 @@ def main():
     ]).decode('utf-8').strip()
 
     for arch in ARCHS:
-        os.makedirs(os.path.join('_build', arch.name, 'lib'), exist_ok=True)
+        os.makedirs(
+            os.path.join('build-relocatable', arch.name, 'lib'),
+            exist_ok=True,
+        )
 
         v_check_call([
-            '{}/bin/{}-capsule-capture-libs'.format(DESTDIR, arch.multiarch),
-            '--dest=_build/{}/lib'.format(arch.name),
+            '{}/bin/{}-capsule-capture-libs'.format(
+                destdir_prefix,
+                arch.multiarch,
+            ),
+            '--dest=build-relocatable/{}/lib'.format(arch.name),
             '--no-glibc',
             'soname:libelf.so.1',
             'soname:libz.so.1',
@@ -217,10 +257,10 @@ def main():
         if arch.name == primary_architecture:
             v_check_call([
                 '{}/bin/{}-capsule-capture-libs'.format(
-                    DESTDIR,
+                    destdir_prefix,
                     arch.multiarch,
                 ),
-                '--dest=_build/{}/lib'.format(arch.name),
+                '--dest=build-relocatable/{}/lib'.format(arch.name),
                 '--no-glibc',
                 'soname:libcap.so.2',
                 'soname:libpcre.so.3',
@@ -228,9 +268,9 @@ def main():
             ])
 
         for so in glob.glob(
-            os.path.join('_build', arch.name, 'lib', '*.so.*'),
+            os.path.join('build-relocatable', arch.name, 'lib', '*.so.*'),
         ):
-            install(so, os.path.join(DESTDIR, 'lib', arch.multiarch))
+            install(so, os.path.join(destdir_prefix, 'lib', arch.multiarch))
 
     # For bwrap (and possibly other programs in future) we don't have
     # a relocatable version with a RPATH/RUNPATH, so we wrap a script
@@ -246,10 +286,12 @@ def main():
                 package,
             ])
             v_check_call(
-                'dpkg-deb -x {}_*.deb _build'.format(shlex.quote(package)),
+                'dpkg-deb -x {}_*.deb build-relocatable'.format(
+                    shlex.quote(package),
+                ),
                 shell=True,
             )
-            path = '_build/usr/bin/{}'.format(exe)
+            path = 'build-relocatable/usr/bin/{}'.format(exe)
 
         for arch in ARCHS:
             if arch.name != primary_architecture:
@@ -257,11 +299,11 @@ def main():
 
             install_exe(
                 path,
-                os.path.join(DESTDIR, 'bin', exe + '.bin'),
+                os.path.join(destdir_prefix, 'bin', exe + '.bin'),
             )
 
             with open(
-                os.path.join('_build', arch.name, exe),
+                os.path.join('build-relocatable', arch.name, exe),
                 'w',
             ) as writer:
                 writer.write('#!/bin/sh\n')
@@ -277,8 +319,8 @@ def main():
                 )
 
             install_exe(
-                os.path.join('_build', arch.name, exe),
-                os.path.join(DESTDIR, 'bin', exe),
+                os.path.join('build-relocatable', arch.name, exe),
+                os.path.join(destdir_prefix, 'bin', exe),
             )
 
     source_to_download = set()      # type: typing.Set[str]
@@ -286,13 +328,17 @@ def main():
     for package, source in (
         list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
     ):
-        if args.relocatabledir is None and source == 'libcapsule':
+        if not args.relocatabledir and source == 'libcapsule':
             continue
 
         if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
             install(
                 '/usr/share/doc/{}/copyright'.format(package),
-                os.path.join(DESTDIR, 'sources', '{}.txt'.format(source)),
+                os.path.join(
+                    destdir_prefix,
+                    'sources',
+                    '{}.txt'.format(source),
+                ),
             )
 
             for expr in set(
@@ -306,8 +352,12 @@ def main():
                 source_to_download.add(re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
         else:
             install(
-                '_build/usr/share/doc/{}/copyright'.format(package),
-                os.path.join(DESTDIR, 'sources', '{}.txt'.format(source)),
+                'build-relocatable/usr/share/doc/{}/copyright'.format(package),
+                os.path.join(
+                    destdir_prefix,
+                    'sources',
+                    '{}.txt'.format(source),
+                ),
             )
             source_to_download.add(source)
 
@@ -318,8 +368,35 @@ def main():
             '--only-source',
             'source',
         ] + list(source_to_download),
-        cwd=os.path.join(DESTDIR, 'sources'),
+        cwd=os.path.join(destdir_prefix, 'sources'),
     )
+
+    bin_tar = 'pressure-vessel-{}-bin.tar.gz'.format(args.version)
+    src_tar = 'pressure-vessel-{}-bin+src.tar.gz'.format(args.version)
+
+    subprocess.check_call([
+        'tar',
+        r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
+            args.version,
+        ),
+        '-zcvf', src_tar + '.tmp',
+        '-C', destdir_prefix,
+        '.',
+    ])
+    subprocess.check_call([
+        'tar',
+        r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
+            args.version,
+        ),
+        '--exclude=sources',
+        '-zcvf', bin_tar + '.tmp',
+        '-C', destdir_prefix,
+        '.',
+    ])
+    os.rename(bin_tar + '.tmp', bin_tar)
+    os.rename(src_tar + '.tmp', src_tar)
+    print('Generated {}'.format(os.path.abspath(bin_tar)))
+    print('Generated {}'.format(os.path.abspath(src_tar)))
 
 
 if __name__ == '__main__':

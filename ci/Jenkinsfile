@@ -62,8 +62,11 @@ pipeline {
             docker.image("${env.CI_DOCKER_REGISTRY}/steamrt/sdk:scout").inside('--mount type=tmpfs,destination=/var/cache/apt/archives') {
               sh '''
               set -eu
-              make -C src PYTHON=python3.5
-              make -C src check PYTHON=python3.5
+              cd src
+              meson --prefix="${WORKSPACE}/src/_build/relocatable-install" -Dpython=python3.5 _build
+              ninja -C _build
+              ninja -C _build install
+              meson test --verbose -C _build
               '''
             }
           }
@@ -73,14 +76,18 @@ pipeline {
           docker.image('debian:buster-slim').inside() {
             sh '''
             set -eu
+            export G_TEST_SRCDIR="${WORKSPACE}/src"
+            export G_TEST_BUILDDIR="${WORKSPACE}/src/_build"
             cd src
             ./t/relocatable-install.sh
             '''
           }
         }
 
-        archiveArtifacts 'src/pressure-vessel-*-bin.tar.gz'
-        archiveArtifacts 'src/pressure-vessel-*-bin+src.tar.gz'
+        dir('src/_build') {
+          archiveArtifacts 'pressure-vessel-*-bin.tar.gz'
+          archiveArtifacts 'pressure-vessel-*-bin+src.tar.gz'
+        }
       }
     }
   }

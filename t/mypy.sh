@@ -8,11 +8,20 @@
 set -e
 set -u
 
-export MYPYPATH="${PYTHONPATH:=$(pwd)}"
+if [ -z "${G_TEST_SRCDIR-}" ]; then
+    me="$(readlink -f "$0")"
+    srcdir="${me%/*}"
+    G_TEST_SRCDIR="${srcdir%/*}"
+fi
+
+cd "$G_TEST_SRCDIR"
+
+export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
 
 i=0
 for script in \
-    ./*.py \
+    "${G_TEST_SRCDIR}"/*.py \
+    "${G_TEST_SRCDIR}"/sysroot/*.py \
 ; do
     i=$((i + 1))
     if [ "x${MYPY:="$(command -v mypy || echo false)"}" = xfalse ]; then

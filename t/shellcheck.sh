@@ -26,16 +26,18 @@ if ! command -v shellcheck >/dev/null 2>&1; then
     exit 0
 fi
 
-if [ -z "${TOP_SRCDIR-}" ]; then
+if [ -z "${G_TEST_SRCDIR-}" ]; then
     me="$(readlink -f "$0")"
     srcdir="${me%/*}"
-    TOP_SRCDIR="${srcdir%/*}"
+    G_TEST_SRCDIR="${srcdir%/*}"
 fi
 
-cd "$TOP_SRCDIR"
+cd "$G_TEST_SRCDIR"
 
 n=0
 for shell_script in \
+        *.sh \
+        sysroot/*.sh \
         t/*.sh \
         ; do
     n=$((n + 1))

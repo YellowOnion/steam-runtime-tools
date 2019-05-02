@@ -8,6 +8,14 @@
 set -e
 set -u
 
+if [ -z "${G_TEST_SRCDIR-}" ]; then
+    me="$(readlink -f "$0")"
+    srcdir="${me%/*}"
+    G_TEST_SRCDIR="${srcdir%/*}"
+fi
+
+cd "$G_TEST_SRCDIR"
+
 if [ "x${PYCODESTYLE:=pycodestyle}" = xfalse ] || \
         [ -z "$(command -v "$PYCODESTYLE")" ]; then
     echo "1..0 # SKIP pycodestyle not found"
@@ -17,7 +25,8 @@ fi
 echo "1..1"
 
 if "${PYCODESTYLE}" \
-    ./*.py \
+    "$G_TEST_SRCDIR"/*.py \
+    "${G_TEST_SRCDIR}"/sysroot/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"
 else

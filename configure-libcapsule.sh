@@ -1,6 +1,6 @@
 #!/bin/sh
-
-# Copyright © 2017-2018 Collabora Ltd.
+#
+# Copyright © 2019 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -23,29 +23,36 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-set -e
-set -u
+set -eu
 NULL=
 
-export DEBIAN_FRONTEND=noninteractive
-apt-get -q -y update
-apt-get -q -y upgrade
-apt-get -q -y --no-install-recommends install \
-    autoconf \
-    automake \
-    build-essential \
-    chrpath \
-    devscripts \
-    gcc-multilib \
-    git \
-    gtk-doc-tools \
-    libelf-dev libelf-dev:i386 \
-    libipc-run-perl \
-    libjpeg62-turbo libjpeg62-turbo:i386 \
-    meson \
-    perl \
-    xsltproc \
-    zlib1g zlib1g:i386 \
-    ${NULL}
+DEB_BUILD_ARCH="$(dpkg-architecture -a"$1" -qDEB_BUILD_ARCH)"
+DEB_HOST_ARCH="$(dpkg-architecture -a"$1" -qDEB_HOST_ARCH)"
+DEB_BUILD_GNU_TYPE="$(dpkg-architecture -a"$1" -qDEB_BUILD_GNU_TYPE)"
+DEB_HOST_GNU_TYPE="$(dpkg-architecture -a"$1" -qDEB_HOST_GNU_TYPE)"
+DEB_HOST_MULTIARCH="$(dpkg-architecture -a"$1" -qDEB_HOST_MULTIARCH)"
 
-# vim:set sw=4 sts=4 et:
+case "${DEB_BUILD_ARCH}/${DEB_HOST_ARCH}" in
+    (amd64/i386)
+        export CC="cc -m32"
+        ;;
+esac
+
+mkdir -p "build-relocatable/$1/libcapsule"
+
+(
+  cd "build-relocatable/$1/libcapsule"
+  ../../../libcapsule/configure \
+      --build="${DEB_BUILD_GNU_TYPE}" \
+      --host="${DEB_HOST_GNU_TYPE}" \
+      --enable-host-prefix="${DEB_HOST_MULTIARCH}-" \
+      --enable-tools-rpath="/_ORIGIN_/__/lib/${DEB_HOST_MULTIARCH}" \
+      --disable-shared \
+      --disable-gtk-doc \
+      --without-glib \
+      ${NULL}
+)
+
+touch "$2"
+
+# vim:set sw=2 sts=2 et:

@@ -85,6 +85,72 @@ def isexec(path):
         return False
 
 
+def check_dependencies(test, relocatable_install, path, is_wrapper=False):
+    # type: (TapTest, str, str, bool) -> None
+
+    if is_wrapper:
+        argv = [
+            'env',
+            'RELOCATABLE_INSTALL_WRAPPER=env LD_TRACE_LOADED_OBJECTS=1',
+            path,
+        ]
+    else:
+        argv = ['ldd', path]
+
+    subproc = subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE,
+        universal_newlines=True,
+    )
+
+    for line in subproc.stdout:
+        line = line.strip()
+
+        if (
+            line.startswith('linux-gate.so.')
+            or line.startswith('linux-vdso.so.')
+            or line.startswith('/lib/ld-linux.so.2 ')
+            or line.startswith('/lib64/ld-linux-x86-64.so.2 ')
+        ):
+            continue
+
+        if ' => ' not in line:
+            test.not_ok('Unknown ldd output {!r}'.format(line))
+            continue
+
+        soname, rest = line.split(' => ')
+        lib = rest.split()[0]
+
+        test.diag(
+            '{} depends on {} found at {!r}'.format(
+                path, soname, lib,
+            )
+        )
+
+        if soname in (
+            'libc.so.6',
+            'libdl.so.2',
+            'libpthread.so.0',
+            'libresolv.so.2',
+            'librt.so.1',
+        ):
+            test.ok('{} is part of glibc'.format(soname))
+            continue
+
+        if lib.startswith(relocatable_install + '/'):
+            test.ok(
+                '{} depends on {} in the relocatable install'.format(
+                    path, lib
+                )
+            )
+        else:
+            test.not_ok(
+                '{} depends on {} outside the relocatable install'.format(
+                    path, lib
+                )
+            )
+
+
 def main():
     # type: () -> None
     relocatable_install = os.path.join(G_TEST_BUILDDIR, 'relocatable-install')
@@ -105,9 +171,11 @@ def main():
 
     for exe in EXES:
         path = os.path.join(relocatable_install, 'bin', exe)
+        check_dependencies(test, relocatable_install, path)
 
     for exe in WRAPPED:
         path = os.path.join(relocatable_install, 'bin', exe)
+        check_dependencies(test, relocatable_install, path, is_wrapper=True)
 
     for basename in MULTIARCH:
         for multiarch, ld_so in LD_SO:
@@ -127,6 +195,8 @@ def main():
                 test.ok('{} --help'.format(path))
             else:
                 test.not_ok('{} --help'.format(path))
+
+            check_dependencies(test, relocatable_install, path)
 
     for exe in SCRIPTS:
         path = os.path.join(relocatable_install, 'bin', exe)

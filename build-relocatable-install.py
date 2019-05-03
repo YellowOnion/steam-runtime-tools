@@ -329,7 +329,8 @@ def main():
                 writer.write('set -eu\n')
                 writer.write('here="$(dirname "$0")"\n')
                 writer.write(
-                    'exec {} --library-path "$here"/../lib/{} '
+                    'exec ${{RELOCATABLE_INSTALL_WRAPPER-}} {} '
+                    '--library-path "$here"/../lib/{} '
                     '"$here"/{}.bin "$@"\n'.format(
                         quote(arch.ld_so),
                         quote(arch.multiarch),

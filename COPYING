@@ -1,0 +1,9 @@
+See individual source files for copyright and licensing details, and
+in particular THIRD-PARTY.md for details of third-party libraries used
+or included in this project.
+
+The overall license of pressure-vessel is
+LGPL-2.1-or-later <https://spdx.org/licenses/LGPL-2.1-or-later.html>.
+
+Unit tests, scripts, the build system, etc. are mostly under the
+permissive MIT/X11 license <https://spdx.org/licenses/MIT.html>.

@@ -26,12 +26,14 @@ echo "1..1"
 
 # Ignore E402: when using GObject-Introspection, not all imports
 # can come first
+# Ignore W503: allow wrapping long expressions before a binary operator
 
 if "${PYCODESTYLE}" \
-    --ignore=E402 \
+    --ignore=E402,W503 \
     "$G_TEST_SRCDIR"/*.py \
     "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
     "${G_TEST_SRCDIR}"/sysroot/*.py \
+    "${G_TEST_SRCDIR}"/t/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"
 else

@@ -45,11 +45,11 @@ scripts = [
 ]
 
 tests = [
-  'mypy',
-  'pycodestyle',
-  'pyflakes',
-  'relocatable-install',
-  'shellcheck',
+  'mypy.sh',
+  'pycodestyle.sh',
+  'pyflakes.sh',
+  'relocatable-install.py',
+  'shellcheck.sh',
 ]
 
 test_env = environment()
@@ -60,7 +60,7 @@ foreach test_name : tests
   if prove.found()
     test(
       test_name, prove,
-      args : ['-v', files('t/' + test_name + '.sh')],
+      args : ['-v', files('t/' + test_name)],
       env : test_env,
     )
   endif

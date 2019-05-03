@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+# Copyright 2018-2019 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+
+import os
+import subprocess
+import sys
+
+try:
+    import typing
+    typing      # silence pyflakes
+except ImportError:
+    pass
+
+
+G_TEST_SRCDIR = os.getenv(
+    'G_TEST_SRCDIR',
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), os.pardir),
+    ),
+)
+G_TEST_BUILDDIR = os.getenv('G_TEST_BUILDDIR', os.path.abspath('_build'))
+
+
+class TapTest:
+    def __init__(self):
+        # type: () -> None
+        self.test_num = 0
+        self.failed = False
+
+    def ok(self, desc):
+        # type: (str) -> None
+        self.test_num += 1
+        print('ok %d - %s' % (self.test_num, desc))
+
+    def skip(self, desc):
+        # type: (str) -> None
+        self.test_num += 1
+        print('ok %d # SKIP %s' % (self.test_num, desc))
+
+    def diag(self, text):
+        # type: (str) -> None
+        print('# %s' % text)
+
+    def not_ok(self, desc):
+        # type: (str) -> None
+        self.test_num += 1
+        print('not ok %d - %s' % (self.test_num, desc))
+        self.failed = True
+
+    def done_testing(self):
+        # type: () -> None
+        print('1..%d' % self.test_num)
+
+        if self.failed:
+            sys.exit(1)
+
+
+EXES = [
+    'pressure-vessel-wrap-c',
+]
+WRAPPED = [
+    'bwrap',
+]
+MULTIARCH = [
+    'capsule-capture-libs',
+    'capsule-symbols',
+]
+SCRIPTS = [
+    'pressure-vessel-unruntime',
+    'pressure-vessel-wrap',
+]
+LD_SO = [
+    ('x86_64-linux-gnu', '/lib64/ld-linux-x86-64.so.2'),
+    ('i386-linux-gnu', '/lib/ld-linux.so.2'),
+]
+
+
+def isexec(path):
+    # type: (str) -> bool
+    try:
+        return (os.stat(path).st_mode & 0o111) != 0
+    except OSError:
+        return False
+
+
+def main():
+    # type: () -> None
+    relocatable_install = os.path.join(G_TEST_BUILDDIR, 'relocatable-install')
+
+    if not os.path.exists(relocatable_install):
+        print('1..0 # SKIP relocatable-install not in expected location')
+        sys.exit(0)
+
+    test = TapTest()
+
+    for exe in EXES + WRAPPED:
+        path = os.path.join(relocatable_install, 'bin', exe)
+
+        if subprocess.call([path, '--help'], stdout=2) == 0:
+            test.ok('{} --help'.format(path))
+        else:
+            test.not_ok('{} --help'.format(path))
+
+    for exe in EXES:
+        path = os.path.join(relocatable_install, 'bin', exe)
+
+    for exe in WRAPPED:
+        path = os.path.join(relocatable_install, 'bin', exe)
+
+    for basename in MULTIARCH:
+        for multiarch, ld_so in LD_SO:
+            exe = '{}-{}'.format(multiarch, basename)
+            path = os.path.join(relocatable_install, 'bin', exe)
+
+            if isexec(path):
+                test.ok('{} exists and is executable'.format(path))
+            else:
+                test.not_ok('{} not executable'.format(path))
+
+            if not isexec(ld_so):
+                test.skip('{} not found'.format(ld_so))
+            elif basename == 'capsule-symbols':
+                test.skip('capsule-symbols has no --help yet')
+            elif subprocess.call([path, '--help'], stdout=2) == 0:
+                test.ok('{} --help'.format(path))
+            else:
+                test.not_ok('{} --help'.format(path))
+
+    for exe in SCRIPTS:
+        path = os.path.join(relocatable_install, 'bin', exe)
+        if not isexec('/bin/bash'):
+            test.skip('bash not found')
+        elif subprocess.call([path, '--help'], stdout=2) == 0:
+            test.ok('{} --help'.format(path))
+        else:
+            test.not_ok('{} --help'.format(path))
+
+    test.done_testing()
+
+
+if __name__ == '__main__':
+    main()
+
+# vi: set sw=4 sts=4 et:

@@ -23,6 +23,7 @@ for script in \
     "${G_TEST_SRCDIR}"/*.py \
     "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
     "${G_TEST_SRCDIR}"/sysroot/*.py \
+    "${G_TEST_SRCDIR}"/t/*.py \
 ; do
     i=$((i + 1))
     if [ "x${MYPY:="$(command -v mypy || echo false)"}" = xfalse ]; then

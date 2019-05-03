@@ -70,18 +70,6 @@ pipeline {
               '''
             }
           }
-
-          /* Check for self-containedness by repeating relocatable-install.sh
-           * in a somewhat minimal container. */
-          docker.image('debian:buster-slim').inside() {
-            sh '''
-            set -eu
-            export G_TEST_SRCDIR="${WORKSPACE}/src"
-            export G_TEST_BUILDDIR="${WORKSPACE}/src/_build"
-            cd src
-            ./t/relocatable-install.sh
-            '''
-          }
         }
 
         dir('src/_build') {

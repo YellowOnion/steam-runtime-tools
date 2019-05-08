@@ -1,3 +1,4 @@
 FROM @BASE_IMAGE@
+COPY sources.list /etc/apt/sources.list.d/pressure-vessel.list
 RUN apt-get update
 # vim:set sw=4 sts=4 et ft=dockerfile:

@@ -68,6 +68,11 @@ pipeline {
 
           sh """
           sed -e 's!@BASE_IMAGE@!${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
+          if [ -n "${env.CI_APT_SOURCES_FILE}" ]; then
+            cp "${env.CI_APT_SOURCES_FILE}" src/ci/sources.list
+          else
+            touch src/ci/sources.list
+          fi
           """
 
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {

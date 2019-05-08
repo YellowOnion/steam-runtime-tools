@@ -62,8 +62,12 @@ pipeline {
             env.CI_DOCKER_IMAGE = 'steamrt/sdk:scout'
           }
 
+          if (!env.CI_DOCKER_OPTIONS) {
+            env.CI_DOCKER_OPTIONS = ''
+          }
+
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
-            docker.image("${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}").inside('--mount type=tmpfs,destination=/var/cache/apt/archives') {
+            docker.image("${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}").inside("--mount type=tmpfs,destination=/var/cache/apt/archives ${env.CI_DOCKER_OPTIONS}") {
               sh '''
               set -eu
               cd src

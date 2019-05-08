@@ -1,0 +1,3 @@
+FROM @BASE_IMAGE@
+RUN apt-get update
+# vim:set sw=4 sts=4 et ft=dockerfile:

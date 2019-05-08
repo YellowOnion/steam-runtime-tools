@@ -66,8 +66,12 @@ pipeline {
             env.CI_DOCKER_OPTIONS = ''
           }
 
+          sh """
+          sed -e 's!@BASE_IMAGE@!${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
+          """
+
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
-            docker.image("${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}").inside("--mount type=tmpfs,destination=/var/cache/apt/archives ${env.CI_DOCKER_OPTIONS}") {
+            docker.build("${env.CI_DOCKER_REGISTRY}/pressure-vessel", '-f src/ci/Dockerfile').inside("--mount type=tmpfs,destination=/var/cache/apt/archives ${env.CI_DOCKER_OPTIONS}") {
               sh '''
               set -eu
               cd src

@@ -37,6 +37,7 @@ else:
 import gi
 gi.require_version('Gtk', '3.0')
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 logger = logging.getLogger('pressure-vessel-test-ui')
@@ -45,6 +46,32 @@ logger = logging.getLogger('pressure-vessel-test-ui')
 class Gui:
     def __init__(self):
         # type: (...) -> None
+
+        self.home = GLib.get_home_dir()
+
+        self.runtimes = {}      # type: typing.Dict[str, str]
+
+        for search in (
+            '..',
+            '../..',
+            os.path.expanduser(
+                '~/.steam/root/steamapps/common/Steam Linux Runtime'
+            ),
+        ):
+            source_of_runtimes = os.path.join(
+                os.path.dirname(sys.argv[0]),
+                search,
+            )
+            for member in os.listdir(source_of_runtimes):
+                path = os.path.realpath(
+                    os.path.join(source_of_runtimes, member)
+                )
+                files = os.path.join(path, 'files')
+                metadata = os.path.join(path, 'metadata')
+
+                if os.path.isdir(files) and os.path.exists(metadata):
+                    description = self._describe_runtime(path)
+                    self.runtimes[path] = description
 
         self.window = Gtk.Window()
         self.window.set_default_size(600, 300)
@@ -68,9 +95,15 @@ class Gui:
 
         self.runtime_combo = Gtk.ComboBoxText.new()
         self.runtime_combo.append('/', 'None (use host system)')
-        self.runtime_combo.append('scout', "SteamRT 1 'scout' (./scout)")
-        self.runtime_combo.append('spy', "SteamRT 2 'spy' (./spy)")
-        self.runtime_combo.set_active(1)
+
+        for path, description in sorted(self.runtimes.items()):
+            self.runtime_combo.append(path, description)
+
+        if self.runtimes:
+            self.runtime_combo.set_active(1)
+        else:
+            self.runtime_combo.set_active(0)
+
         self.grid.attach(self.runtime_combo, 1, row, 1, 1)
 
         row += 1
@@ -115,6 +148,71 @@ class Gui:
 
         row += 1
 
+    def _describe_runtime(
+        self,
+        path        # type: str
+    ):
+        # type: (...) -> str
+
+        description = path
+        files = os.path.join(path, 'files')
+        metadata = os.path.join(path, 'metadata')
+
+        if description.startswith(self.home + '/'):
+            description = '~' + description[len(self.home):]
+
+        name = None             # type: typing.Optional[str]
+        pretty_name = None      # type: typing.Optional[str]
+        build_id = None         # type: typing.Optional[str]
+
+        try:
+            keyfile = GLib.KeyFile.new()
+            keyfile.load_from_file(
+                metadata, GLib.KeyFileFlags.NONE)
+            try:
+                build_id = keyfile.get_string('Runtime', 'x-flatdeb-build-id')
+            except GLib.Error:
+                pass
+
+            try:
+                name = keyfile.get_string('Runtime', 'runtime')
+            except GLib.Error:
+                pass
+        except GLib.Error:
+            pass
+
+        try:
+            with open(
+                os.path.join(files, 'lib', 'os-release')
+            ) as reader:
+                for line in reader:
+                    if line.startswith('PRETTY_NAME='):
+                        pretty_name = line.split('=', 1)[1].strip()
+                        pretty_name = GLib.shell_unquote(
+                            pretty_name
+                        )
+        except (GLib.Error, EnvironmentError):
+            pass
+
+        if pretty_name is None:
+            pretty_name = name
+
+        if pretty_name is None:
+            pretty_name = os.path.basename(path)
+
+        if build_id is None:
+            build_id = ''
+        else:
+            build_id = ' build {}'.format(build_id)
+
+        description = '{}{}\n({})'.format(
+            pretty_name,
+            build_id,
+            description,
+        )
+
+        return description
+
     def run_cb(self, _ignored=None):
         # type: (typing.Any) -> None
 
@@ -139,14 +237,8 @@ class Gui:
         elif id == '/':
             pass
         else:
-            path = os.path.join(
-                os.path.dirname(sys.argv[0]),
-                '..',
-                id,
-                'files',
-            )
             argv.append('--runtime')
-            argv.append(path)
+            argv.append(os.path.join(id, 'files'))
 
         if self.share_home_check.get_active():
             argv.append('--share-home')

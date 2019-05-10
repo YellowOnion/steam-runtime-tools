@@ -21,6 +21,7 @@
  */
 
 #include "config.h"
+#include "subprojects/libglnx/config.h"
 
 #include "flatpak-utils-private.h"
 

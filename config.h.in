@@ -1,6 +1,3 @@
 #define _GNU_SOURCE
 #define G_LOG_DOMAIN "pressure-vessel"
-#mesondefine HAVE_DECL_COPY_FILE_RANGE
-#mesondefine HAVE_DECL_MEMFD_CREATE
-#mesondefine HAVE_DECL_RENAMEAT2
 #mesondefine VERSION

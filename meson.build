@@ -167,34 +167,6 @@ cc = meson.get_compiler('c')
 conf_data = configuration_data()
 conf_data.set('VERSION', version)
 
-check_functions = [
-  'renameat2',
-  'memfd_create',
-  'copy_file_range',
-]
-foreach check_function : check_functions
-  if cc.compiles('''
-    #include <sys/types.h>
-    #include <unistd.h>
-    #include <stdio.h>
-    #include <sys/mount.h>
-    #include <fcntl.h>
-    #include <sched.h>
-    #include <linux/loop.h>
-    #include <linux/random.h>
-    #include <sys/mman.h>
-
-    int func (void) {
-      (void) ''' + check_function + ''';
-    }
-    ''',
-    args : '-D_GNU_SOURCE',
-    name : check_function + '() is declared',
-  )
-    conf_data.set('HAVE_DECL_' + check_function.underscorify().to_upper(), 1)
-  endif
-endforeach
-
 configure_file(
   input : 'config.h.in',
   output : 'config.h',

@@ -23,6 +23,7 @@
  */
 
 #include "config.h"
+#include "subprojects/libglnx/config.h"
 
 #include <glib.h>
 #include <glib/gstdio.h>

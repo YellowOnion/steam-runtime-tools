@@ -42,6 +42,7 @@ scripts = [
   'pressure-vessel-wrap.sh',
   'pressure-vessel-test-ui',
   'pressure-vessel-unruntime',
+  'pressure-vessel-unruntime-test-ui',
 ]
 
 tests = [

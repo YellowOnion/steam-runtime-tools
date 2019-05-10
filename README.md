@@ -6,16 +6,6 @@ pressure-vessel is a bit like a simplified version of Flatpak for Steam games.
 Use cases
 ---------
 
-### Protecting `$HOME`
-
-If we change the meaning of `/home` for a game to be a fake
-app-specific directory, then the game can't write random files in unknown
-subdirectories of $HOME, and we can be reasonably sure that uninstalling
-a game removes all of its files. (As a side benefit, this could make it
-easier to be sure that all the necessary files have been selected for
-Steam Cloud Sync, because we could prevent the game writing anywhere
-that won't be synchronised, other than /tmp or similar.)
-
 ### Using an alternative runtime
 
 We can get a more predictable library stack than the
@@ -23,11 +13,76 @@ We can get a more predictable library stack than the
 available over `/usr`, `/lib*`, `/bin`, `/sbin`, analogous to Flatpak
 runtimes, using some or all of the host system's graphics stack.
 
+In particular, this would avoid or mitigate the following problems with
+the `LD_LIBRARY_PATH`-based Steam Runtime:
+
+* The Steam Runtime cannot contain glibc, because the path to
+    [`ld.so(8)`][ld.so] is hard-coded into all executables (it is the ELF
+    interpreter, part of the platform ABI), the version of `ld.so` is
+    coupled to `libdl.so.2`, and the version of `libdl.so.2` is
+    coupled to the rest of glibc; so everything in the Steam Runtime
+    must be built for a glibc at least as old as the oldest system that
+    Steam supports. This makes it difficult to advance beyond
+    the Ubuntu 12.04-based 'scout' runtime: everything that is updated
+    effectively has to be backported to Ubuntu 12.04.
+
+* The Steam Runtime was originally designed to prefer its own version of
+    each library even if the version in the host system was newer, but
+    this broke any graphics driver that relied on a newer version of a
+    host library, notably `libstdc++`.
+
+* More recent versions of the Steam Runtime prefer the "pinned" host
+    system version of most libraries that appear to be at least as new as
+    the Runtime's own version, but this can also break things if
+    libraries claim to be compatible (by having the same ELF `DT_SONAME`)
+    but are in fact not compatible, for example:
+
+    - libcurl.so.4 linked to libssl 1.0 is not completely compatible with
+        libcurl.so.4 linked to libssl 1.1
+
+    - The history of libcurl.so.4 in Debian/Ubuntu has involved two
+       incompatible sets of versioned symbols, due to some decisions
+       made in 2005 and 2007 that, with hindsight, were less wise than
+       they appeared at the time
+
+    - Various libraries can be compiled with or without particular
+        features and dependencies; if the version in the Steam Runtime
+        has a feature, and the host system version is newer but does not
+        have that feature, then games cannot rely on the feature
+
+    - In the worst-case, compiling a library without a particular
+        feature or dependency can result in symbols disappearing from
+        its ABI, resulting in games that reference those symbols crashing
+
+    - There is a fairly subtle interaction between libdbus,
+        libdbusmenu-gtk, libdbusmenu-glib and Ubuntu's patched GTK 2
+        that has resulted in these libraries being forced to be taken
+        from the Steam Runtime, to avoid breaking the Unity dock
+
+* Preferring the "pinned" host system libraries makes it very easy for
+    a game developer to make their game depend on a newer host-system
+    library without realising that they have done so, resulting in their
+    game not running correctly on older host systems, or on host systems
+    that do not have a library with a matching `DT_SONAME`.
+
 A future goal is to use [libcapsule][] to avoid the library dependencies
 of the host system's graphics stack influencing the libraries loaded by
-games, particularly libstdc++. This is not yet implemented.
+games at all, and in particular allow game logic to use the Runtime's
+libstdc++ while the host system graphics driver uses a different,
+newer libstdc++. This is not yet implemented.
 
+[ld.so]: https://linux.die.net/man/8/ld.so
 [libcapsule]: https://gitlab.collabora.com/vivek/libcapsule/
+
+### Protecting `$HOME`
+
+If we change the meaning of `/home` for a game to be a fake
+app-specific directory, then the game can't write random files in unknown
+subdirectories of $HOME, and we can be reasonably sure that uninstalling
+a game removes all of its files. As a side benefit, this could make it
+easier to be sure that all the necessary files have been selected for
+Steam Cloud Sync, because we could prevent the game writing anywhere
+that won't be synchronised, other than /tmp or similar.
 
 Building a relocatable install
 ------------------------------
@@ -104,79 +159,121 @@ Instructions for testing
     - Unturned (304930)
         - UnityPlayer 5.5.3f1
 
+* Install bubblewrap or Flatpak (in Debian, Ubuntu or SteamOS:
+  `sudo apt-get install bubblewrap`). pressure-vessel bundles its own
+  fallback copy of bubblewrap, but that one will only work on kernels
+  that are configured to allow unprivileged user namespaces, such as
+  recent Ubuntu and Fedora (but not, for example, Debian, Arch Linux or
+  Red Hat Enterprise Linux unless specially configured).
+
+* Install Python 3, PyGI and GTK 3 introspection data
+  (in Debian, Ubuntu or SteamOS:
+  `sudo apt-get install python3-gi gir1.2-gtk-3.0`).
+  This is not necessary for production use but is very convenient when
+  testing interactively.
+
 * Unpack `pressure-vessel-`*VERSION*`-bin.tar.gz` (or `...-bin+src.tar.gz`)
-  in some convenient place (I used `/opt/pressure-vessel`, but a
-  production deployment in Steam would more realistically use somewhere
-  under `~/.steam` or `~/.local/share/Steam`):
+  in some convenient place, for example
+  `~/.steam/root/steamapps/common/Steam Linux Runtime/pressure-vessel`:
 
-    - be a user who can sudo
-
-            $ cd /opt
-            $ sudo mkdir pressure-vessel
-            $ sudo chown $(id -nu) pressure-vessel
-            $ tar --strip-components=1 -C pressure-vessel -xzvf ~/pressure-vessel-*-bin.tar.gz
-            $ chmod -R a+rX pressure-vessel
+        $ mkdir -p ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel
+        $ tar \
+            --strip-components=1 \
+            -C ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel \
+            -xzvf ~/pressure-vessel-*-bin.tar.gz
 
 * Launch a game once without pressure-vessel
 
-* Configure the launch options for the chosen game:
+* Configure the launch options for the chosen game. Either use the Steam
+    (non-Big-Picture) UI, for example by logging in as the `desktop`
+    user on SteamOS, or:
 
     - be the Steam user, possibly via sudo -u steam -s
 
-            $ nano ~/.steam/steam/userdata/[0-9]*/config/localconfig.vdf
+    - `$ nano ~/.steam/root/userdata/[0-9]*/config/localconfig.vdf`
 
     - navigate to UserLocalConfigStore/Software/Valve/Steam/Apps/*game ID*
+
     - below LastPlayed, add:
 
-            "LaunchOptions" "/opt/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
+            "LaunchOptions" "~/.steam/root/steamapps/common/'Steam Linux Runtime'/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
+
+    - optionally put some Flatpak-style runtimes alongside pressure-vessel,
+      for example `~/.steam/root/steamapps/common/Steam Linux Runtime/scout`
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 
         - TODO: Is there a scriptable way to make Steam edit `localconfig.vdf`
             itself, or to make it reload an edited `localconfig.vdf`?
 
-* Run the game. If successful, `pstree -pa` will look something like this:
+* Run the game. If successful, you will get a GUI launcher that lists possible
+    runtimes. Choose one, uncheck "Run in an xterm" for now, and click Run.
+    You should get a game. `pstree -pa` will look something like this:
 
-        |-SteamChildMonit,13109 -tenfoot -steamos -enableremotecontrol
+        |-SteamChildMonit,13109
         |   `-sh,13110 -c...
-        |       `-pressure-vessel,13111 /opt/pressure-vessel/bin/pressure-vessel-wrap...
+        |       `-pressure-vessel,13111 --runtime /home/desktop/.local...
         |           `-bwrap,13132 --new-session --setenv LD_LIBRARY_PATH...
         |               `-Floating Point.,13133
 
-* To use a runtime instead of the host system, use:
+* The test UI automatically looks for runtimes in the following locations:
 
-        /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/some-runtime -- %command%
+    - Next to pressure-vessel's `bin` and `lib` directories
+    - The directory above pressure-vessel's `bin` and `lib` directories
+    - `~/.steam/root/steamapps/common/Steam Linux Runtime`
 
-    The runtime can be either:
+    Runtimes intended for the test UI must have a `files` subdirectory
+    and a `metadata` file, like Flatpak runtimes.
+
+    You can also choose to use the host system `/usr` directly.
+
+* For a more production-ready version without the test UI, set the launch
+    options to:
+
+        "LaunchOptions" "~/.steam/root/steamapps/common/'Steam Linux Runtime'/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
+
+    and then add more options just before the `--` as desired.
+    This mode does not require Python 3, PyGI, GTK or a normal
+    window manager, and is probably more suitable for Big Picture mode.
+
+* When not using the test UI, the default runtime is the host system,
+    with the `LD_LIBRARY_PATH` Steam Runtime overlaid onto it.
+    You can specify a runtime with the `--runtime` option. It can be
+    any of these:
+
+    - The `files` subdirectory of a Flatpak-style runtime such as
+        `~/.steam/root/steamapps/common/Steam Linux Runtime/scout` or
+        `~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout/active`,
+        for example produced by [flatdeb][] (this is a special case of a
+        merged `/usr`). For example, you could use:
+
+            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/.steam/root/steamapps/common/'Steam Linux Runtime'/scout -- %command%
+
+        or:
+
+            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout/active -- %command%
 
     - A merged `/usr` containing `bin/bash`, `lib/ld-linux.so.2`,
       `bin/env`, `share/locale`, `lib/python2.7` and so on
 
-    - A Flatpak runtime such as
-      `~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta/active/files`,
-      for example produced by [flatdeb][] (this is a special case of a
-      merged `/usr`). For example, as the user that will run Steam:
-
-            $ flatpak --user remote-add --no-gpg-verify smcv-flatdeb https://people.collabora.com/~smcv/flatdeb/repo
-            $ flatpak --user install smcv-flatdeb com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta
-            $ ln -fns ~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout_beta/active/files \
-                ~/scout_beta-runtime
-
-        and then set the launch options to:
-
-            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/scout_beta-runtime -- %command%
-
     - A sysroot containing `bin/bash`, `lib/ld-linux.so.2`,
-      `usr/bin/env`, `usr/share/locale`, `usr/lib/python2.7` and so on,
-      optionally with `bin`, `lib` etc. being symlinks into `usr`
+        `usr/bin/env`, `usr/share/locale`, `usr/lib/python2.7` and so on,
+        optionally with `bin`, `lib` etc. being symlinks into `usr`.
+        For example, if you have a chroot in
+        `/var/chroots/steamrt_scout_amd64` generated by [`setup_chroot.sh`][],
+        you could use:
 
-    In this mode, graphics drivers come from the host system, while
-    their dependencies (notably glibc and libstdc++) come from either
-    the host system or the runtime, whichever appears to be newer. This
-    is currently hard-coded in `pressure-vessel-wrap` and cannot be
-    configured.
+            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=/var/chroots/steamrt_scout_amd64 -- %command%
 
-    To see the filesystem in which the game is executing, get the process ID
+When using a runtime, graphics drivers come from the host system, while
+their dependencies (notably glibc and libstdc++) come from either
+the host system or the runtime, whichever appears to be newer. This
+is currently hard-coded in `pressure-vessel-wrap` and cannot be
+configured.
+
+### Debugging
+
+* To see the filesystem in which the game is executing, get the process ID
     of some game process from `ps` and use:
 
         $ sudo ls -l /proc/$game_pid/root/
@@ -185,12 +282,6 @@ Instructions for testing
     are available in `/overrides` inside that filesystem, while selected
     files from the host are visible in `/run/host`.
 
-* To protect `$HOME`, add one of the following options before `--`:
-
-    - `--fake-home=/some/path` (automatically unshares the home directory)
-    - `--freedesktop-app-id=com.example.Anything --unshare-home`
-    - `--steam-app-id=70 --unshare-home` (when running from Steam you can use `--steam-app-id=${SteamAppId}`)
-
 * To test something manually:
 
     - cd to the directory that you want to be the current working directory
@@ -198,31 +289,62 @@ Instructions for testing
 
     - Run:
 
+            /opt/pressure-vessel/bin/pressure-vessel-test-ui -- ./whatever-game
+
+      or:
+
             /opt/pressure-vessel/bin/pressure-vessel-wrap -- ./whatever-game
 
-      Optionally add more options before the `--`.
+      Optionally add more options before the `--`, such as `--runtime`,
+      `--xterm` and `--interactive`.
 
-* For interactive testing, if your runtime (if used) or host system (if no
-    runtime) contains an xterm binary, you can use something like:
+* For interactive testing from Steam, if your runtime (if used) or host
+    system (if no runtime) contains an `xterm` binary, you can use
+    something like:
 
-        /opt/pressure-vessel/bin/pressure-vessel-wrap --xterm -- %command%
+        /opt/pressure-vessel/bin/pressure-vessel-unruntime --xterm -- %command%
 
     to run an xterm containing an interactive shell. The interactive
-    shell's current working directory matches the game's. Run `"$@"` in
-    the interactive shell to run the game.
+    shell's current working directory matches the game's, and you can
+    explore the container from there.
+
+    When ready, run `"$@"` in the interactive shell (with the double
+    quotes included!) to run the game.
+
+    Checking "Run in an xterm" in the GUI launcher is the
+    same as `--xterm` on the command-line.
 
 * For interactive testing, if you ran Steam from a shell (not normally
     valid on SteamOS!), you can use:
 
-        /opt/pressure-vessel/bin/pressure-vessel-wrap --interactive -- %command%
+        /opt/pressure-vessel/bin/pressure-vessel-unruntime --interactive -- %command%
+
+    This is a simpler version of `--xterm`, which uses the terminal from
+    which you ran Steam instead of an xterm inside the container.
 
     The interactive shell's current working directory matches the game's.
-    Run `"$@"` in the interactive shell to run the game.
+    As with `--xterm`, run `"$@"` in the interactive shell to run the game.
 
-Use `pressure-vessel-unruntime` if you are in a Steam Runtime environment
-(the Steam Runtime's `run.sh` or a Steam game), and `pressure-vessel-wrap`
+### More options
+
+Use `pressure-vessel-unruntime` or `pressure-vessel-unruntime-test-ui`
+if you are in a Steam Runtime environment (the Steam Runtime's `run.sh`
+or a Steam game), and `pressure-vessel-wrap` or `pressure-vessel-test-ui`
 if you are not ("Add non-Steam game" in Steam, or a non-Steam-related
 interactive shell).
+
+* To protect `$HOME`, add one of the following options before `--`:
+
+    - `--fake-home=/some/path` (automatically unshares the home directory)
+    - `--freedesktop-app-id=com.example.Anything --unshare-home`
+    - `--steam-app-id=70 --unshare-home` (when running from Steam you can use
+    `--steam-app-id=${SteamAppId}`, which is the default)
+
+    Unchecking "Share real home directory" in the GUI launcher is the
+    same as `--unshare-home` on the command-line. It is an error to do
+    this without telling `pressure-vessel-wrap` what to use for the home
+    directory, either via `--fake-home`, `--freedesktop-app-id`,
+    `--steam-app-id`, or having the `SteamAppId` environment variable.
 
 Steam integration
 -----------------
@@ -305,6 +427,31 @@ TODO
 
 Design
 ------
+
+### Setting up the container
+
+With a runtime, the container is basically the same as a Flatpak
+sandbox. The root directory is a tmpfs. The runtime is bind-mounted on
+`/usr`, with symbolic links at `/bin`, `/sbin` and `/lib*` so that
+commonly-hard-coded paths like `/bin/sh`, `/sbin/ldconfig` and
+`/lib/ld-linux.so.2` work as expected.
+
+With a sysroot-style runtime, or when using the host system as the
+runtime, the setup is the same, except that `/bin`, `/sbin` and `/lib*`
+might be real directories bind-mounted from the runtime or host if it
+has not undergone the [/usr merge][].
+
+Either way, selected paths from the host system are exposed in `/run/host`,
+the same as for `flatpak run --filesystem=host` in Flatpak.
+
+[/usr merge]: https://fedoraproject.org/wiki/Features/UsrMove
+
+### Interactive debugging
+
+`--interactive` and `--xterm` work by wrapping an increasingly long
+"adverb" command around the command to be run.
+
+### Unsharing the home directory
 
 Each game gets a private home directory in `~/.var/app`, the same as
 Flatpak apps do. The name of the private home directory follows the

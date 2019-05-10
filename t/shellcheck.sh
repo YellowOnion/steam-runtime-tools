@@ -37,6 +37,8 @@ cd "$G_TEST_SRCDIR"
 n=0
 for shell_script in \
         *.sh \
+        pressure-vessel-unruntime \
+        pressure-vessel-unruntime-test-ui \
         sysroot/*.sh \
         t/*.sh \
         ; do

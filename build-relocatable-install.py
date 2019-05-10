@@ -93,10 +93,10 @@ PRIMARY_ARCH_DEPENDENCIES = {
 SCRIPTS = [
     'pressure-vessel-test-ui',
     'pressure-vessel-unruntime',
-    'pressure-vessel-wrap'
+    'pressure-vessel-wrap.sh'
 ]
 EXECUTABLES = [
-    'pressure-vessel-wrap-c'
+    'pressure-vessel-wrap'
 ]
 TOOLS = [
     'capsule-capture-libs',

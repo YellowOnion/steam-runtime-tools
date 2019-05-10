@@ -39,7 +39,7 @@ if version == 'auto'
 endif
 
 scripts = [
-  'pressure-vessel-wrap',
+  'pressure-vessel-wrap.sh',
   'pressure-vessel-test-ui',
   'pressure-vessel-unruntime',
 ]
@@ -201,7 +201,7 @@ configure_file(
 )
 
 executable(
-  'pressure-vessel-wrap-c',
+  'pressure-vessel-wrap',
   sources : [
     'src/glib-backports.c',
     'src/glib-backports.h',

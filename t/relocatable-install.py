@@ -77,7 +77,7 @@ class TapTest:
 
 
 EXES = [
-    'pressure-vessel-wrap-c',
+    'pressure-vessel-wrap',
 ]
 WRAPPED = [
     'bwrap',
@@ -88,7 +88,7 @@ MULTIARCH = [
 ]
 SCRIPTS = [
     'pressure-vessel-unruntime',
-    'pressure-vessel-wrap',
+    'pressure-vessel-wrap.sh',
 ]
 LD_SO = [
     ('x86_64-linux-gnu', '/lib64/ld-linux-x86-64.so.2'),

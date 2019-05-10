@@ -73,10 +73,11 @@ class Gui:
 
         row += 1
 
-        self.native_check = Gtk.CheckButton.new_with_label(
-            'Use native-code version of pressure-vessel-wrap'
+        self.script_check = Gtk.CheckButton.new_with_label(
+            'Use old shell script version of pressure-vessel-wrap'
         )
-        self.grid.attach(self.native_check, 1, row, 1, 1)
+        self.script_check.set_active(False)
+        self.grid.attach(self.script_check, 1, row, 1, 1)
 
         row += 1
 
@@ -114,8 +115,8 @@ class Gui:
 
     def run_cb(self, _ignored=None):
 
-        if self.native_check.get_active():
-            wrap = 'pressure-vessel-wrap-c'
+        if self.script_check.get_active():
+            wrap = 'pressure-vessel-wrap.sh'
         else:
             wrap = 'pressure-vessel-wrap'
 

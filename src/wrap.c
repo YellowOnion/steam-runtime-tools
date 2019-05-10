@@ -39,6 +39,7 @@
 #include "glib-backports.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-private.h"
+#include "utils.h"
 
 static const char * const multiarch_tuples[] =
 {
@@ -48,21 +49,6 @@ static const char * const multiarch_tuples[] =
 
 /* In Flatpak this is optional, in pressure-vessel not so much */
 #define ENABLE_XAUTH
-
-static void
-avoid_gvfs (void)
-{
-  g_autofree gchar *old_env = NULL;
-
-  /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
-  old_env = g_strdup (g_getenv ("GIO_USE_VFS"));
-  g_setenv ("GIO_USE_VFS", "local", TRUE);
-  g_vfs_get_default ();
-  if (old_env)
-    g_setenv ("GIO_USE_VFS", old_env, TRUE);
-  else
-    g_unsetenv ("GIO_USE_VFS");
-}
 
 static gchar *
 find_executable_dir (GError **error)
@@ -84,49 +70,6 @@ search_path_append (GString *search_path,
     g_string_append (search_path, ":");
 
   g_string_append (search_path, item);
-}
-
-static int
-envp_cmp (const void *p1,
-          const void *p2)
-{
-  const char * const * s1 = p1;
-  const char * const * s2 = p2;
-  size_t l1 = strlen (*s1);
-  size_t l2 = strlen (*s2);
-  size_t min;
-  const char *tmp;
-  int ret;
-
-  tmp = strchr (*s1, '=');
-
-  if (tmp != NULL)
-    l1 = tmp - *s1;
-
-  tmp = strchr (*s2, '=');
-
-  if (tmp != NULL)
-    l2 = tmp - *s2;
-
-  min = MIN (l1, l2);
-  ret = strncmp (*s1, *s2, min);
-
-  if (ret != 0)
-    return ret;
-
-  if ((*s1)[min] == '\0')
-    return -1;
-
-  if ((*s2)[min] == '\0')
-    return 1;
-
-  if ((*s1)[min] == '=')
-    return -1;
-
-  if ((*s2)[min] == '=')
-    return 1;
-
-  return strcmp (*s1, *s2);
 }
 
 static gchar *
@@ -1544,46 +1487,6 @@ static GOptionEntry options[] =
   { NULL }
 };
 
-/* Return TRUE if a and b are names for the same inode. */
-static gboolean
-is_same_file (const gchar *a,
-              const gchar *b)
-{
-  GStatBuf a_buffer, b_buffer;
-
-  g_return_val_if_fail (a != NULL, FALSE);
-  g_return_val_if_fail (b != NULL, FALSE);
-
-  if (strcmp (a, b) == 0)
-    return TRUE;
-
-  return (stat (a, &a_buffer) == 0
-          && stat (b, &b_buffer) == 0
-          && a_buffer.st_dev == b_buffer.st_dev
-          && a_buffer.st_ino == b_buffer.st_ino);
-}
-
-/*
- * If the environment variable `PWD` contains a path to `cwd`, return
- * a copy of `PWD`. Otherwise return a copy of `cwd`.
- *
- * Equivalent to `$(pwd -L)` in a shell.
- */
-static gchar *
-get_logical_current_dir (const gchar *cwd)
-{
-  const gchar *pwd;
-
-  g_return_val_if_fail (cwd != NULL, NULL);
-
-  pwd = g_getenv ("PWD");
-
-  if (pwd != NULL && is_same_file (pwd, cwd))
-    return g_strdup (pwd);
-  else
-    return g_strdup (cwd);
-}
-
 static void
 cli_log_func (const gchar *log_domain,
               GLogLevelFlags log_level,
@@ -1614,7 +1517,6 @@ main (int argc,
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   GPid child_pid;
   ChildExitedClosure child_exited_closure = { FALSE, 0 };
-  g_autofree gchar *cwd = NULL;
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   const gchar *home;
@@ -1623,7 +1525,7 @@ main (int argc,
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   GSpawnFlags spawn_flags = G_SPAWN_DO_NOT_REAP_CHILD;
 
-  avoid_gvfs ();
+  pv_avoid_gvfs ();
 
   g_set_prgname ("pressure-vessel-wrap");
 
@@ -1721,9 +1623,7 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
-  cwd = g_get_current_dir ();
-  cwd_p = flatpak_canonicalize_filename (cwd);
-  cwd_l = get_logical_current_dir (cwd);
+  pv_get_current_dirs (&cwd_p, &cwd_l);
 
   if (opt_verbose)
     {
@@ -1748,7 +1648,7 @@ main (int argc,
 
       g_message ("Environment variables:");
 
-      qsort (env, g_strv_length (env), sizeof (char *), envp_cmp);
+      qsort (env, g_strv_length (env), sizeof (char *), pv_envp_cmp);
 
       for (i = 0; env[i] != NULL; i++)
         {
@@ -2015,7 +1915,7 @@ main (int argc,
 
   g_debug ("Making home directory available...");
 
-  if (is_same_file (home, cwd_l))
+  if (pv_is_same_file (home, cwd_l))
     {
       g_debug ("Not making logical working directory \"%s\" available to "
                "container because it is the home directory",
@@ -2036,7 +1936,7 @@ main (int argc,
     {
       g_debug ("Physical and logical working directory coincide");
     }
-  else if (is_same_file (home, cwd_p))
+  else if (pv_is_same_file (home, cwd_p))
     {
       g_debug ("Not making physical working directory \"%s\" available to "
                "container because it is the home directory",

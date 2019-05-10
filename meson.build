@@ -182,6 +182,8 @@ executable(
     'src/flatpak-bwrap-private.h',
     'src/flatpak-utils.c',
     'src/flatpak-utils-private.h',
+    'src/utils.c',
+    'src/utils.h',
     'src/wrap.c',
   ],
   c_args : [

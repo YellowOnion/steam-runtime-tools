@@ -364,7 +364,7 @@ write_xauth (char *number, FILE *output)
           local_xa = *xa;
           if (local_xa.number)
             {
-              local_xa.number = "99";
+              local_xa.number = (char *) "99";
               local_xa.number_length = 2;
             }
 
@@ -684,7 +684,6 @@ flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
     }
   else
     {
-      g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
       struct stat statbuf;
 
       dbus_session_socket = g_build_filename (user_runtime_dir, "bus", NULL);

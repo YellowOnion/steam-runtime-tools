@@ -38,6 +38,74 @@ if version == 'auto'
   version = git_version_gen.stdout().strip()
 endif
 
+
+warning_cflags = [
+    '-Wall',
+    '-Wextra',
+    '-Warray-bounds',
+    '-Wcast-align',
+    '-Wdeclaration-after-statement',
+    '-Wdouble-promotion',
+    '-Wduplicated-branches',
+    '-Wduplicated-cond',
+    '-Wformat-nonliteral',
+    '-Wformat-security',
+    '-Wformat=2',
+    '-Wimplicit-function-declaration',
+    '-Winit-self',
+    '-Winline',
+    '-Wjump-misses-init',
+    '-Wlogical-op',
+    '-Wmissing-declarations',
+    '-Wmissing-format-attribute',
+    '-Wmissing-include-dirs',
+    '-Wmissing-noreturn',
+    '-Wmissing-prototypes',
+    '-Wnested-externs',
+    '-Wnull-dereference',
+    '-Wold-style-definition',
+    '-Wpacked',
+    '-Wpointer-arith',
+    '-Wredundant-decls',
+    '-Wrestrict',
+    '-Wreturn-type',
+    '-Wshadow',
+    '-Wstrict-aliasing',
+    '-Wstrict-prototypes',
+    '-Wswitch-default',
+    '-Wswitch-enum',
+    '-Wundef',
+    '-Wunused-but-set-variable',
+    '-Wwrite-strings',
+]
+no_warning_cflags = [
+    'declaration-after-statement',
+    'missing-field-initializers',
+    'sign-compare',
+    'unused-parameter',
+]
+# This trips some warnings in the libglnx subproject but not in
+# pressure-vessel itself
+project_warning_cflags = [
+    '-Wsign-compare',
+]
+
+
+c_compiler = meson.get_compiler('c')
+supported_warning_cflags = c_compiler.get_supported_arguments(warning_cflags)
+add_global_arguments(supported_warning_cflags, language : 'c')
+
+foreach flag : no_warning_cflags
+  supported_no_warning_cflags = c_compiler.get_supported_arguments([
+    '-Wno-error=' + flag,
+    '-Wno-' + flag,
+  ])
+  add_global_arguments(supported_no_warning_cflags, language : 'c')
+endforeach
+
+supported_warning_cflags = c_compiler.get_supported_arguments(project_warning_cflags)
+add_project_arguments(supported_warning_cflags, language : 'c')
+
 scripts = [
   'pressure-vessel-wrap.sh',
   'pressure-vessel-test-ui',

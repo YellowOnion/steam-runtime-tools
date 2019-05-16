@@ -176,6 +176,7 @@ Instructions for testing
   in some convenient place, for example
   `~/.steam/root/steamapps/common/Steam Linux Runtime/pressure-vessel`:
 
+        $ rm -fr ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel
         $ mkdir -p ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel
         $ tar \
             --strip-components=1 \
@@ -199,7 +200,17 @@ Instructions for testing
             "LaunchOptions" "~/.steam/root/steamapps/common/'Steam Linux Runtime'/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
 
     - optionally put some Flatpak-style runtimes alongside pressure-vessel,
-      for example `~/.steam/root/steamapps/common/Steam Linux Runtime/scout`
+      for example `~/.steam/root/steamapps/common/Steam Linux Runtime/scout`.
+      If you have done it right, you should have
+      `~/.steam/root/steamapps/common/Steam Linux Runtime/scout/files/` and.
+      `~/.steam/root/steamapps/common/Steam Linux Runtime/scout/metadata`, for
+      example:
+
+            $ rm -fr ~/.steam/root/steamapps/common/"Steam Linux Runtime"/scout
+            $ mkdir -p ~/.steam/root/steamapps/common/"Steam Linux Runtime"/scout
+            $ tar \
+                -C ~/.steam/root/steamapps/common/"Steam Linux Runtime"/scout \
+                -xzvf ~/com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 

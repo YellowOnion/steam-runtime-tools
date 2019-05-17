@@ -1914,28 +1914,7 @@ main (int argc,
 
   g_debug ("Making home directory available...");
 
-  if (pv_is_same_file (home, cwd_l))
-    {
-      g_debug ("Not making logical working directory \"%s\" available to "
-               "container because it is the home directory",
-               cwd_l);
-    }
-  else
-    {
-      flatpak_bwrap_add_args (bwrap,
-                              "--bind", cwd_l, cwd_l,
-                              NULL);
-    }
-
-  flatpak_bwrap_add_args (bwrap,
-                          "--chdir", cwd_l,
-                          NULL);
-
-  if (strcmp (cwd_p, cwd_l) == 0)
-    {
-      g_debug ("Physical and logical working directory coincide");
-    }
-  else if (pv_is_same_file (home, cwd_p))
+  if (pv_is_same_file (home, cwd_p))
     {
       g_debug ("Not making physical working directory \"%s\" available to "
                "container because it is the home directory",
@@ -1943,12 +1922,15 @@ main (int argc,
     }
   else
     {
-      /* Mount it in case the symlink resolution works out differently
-       * inside the container */
       flatpak_bwrap_add_args (bwrap,
                               "--bind", cwd_p, cwd_p,
                               NULL);
     }
+
+  flatpak_bwrap_add_args (bwrap,
+                          "--chdir", cwd_p,
+                          "--unsetenv", "PWD",
+                          NULL);
 
   if (strstr (bwrap_help, "unshare-uts") != NULL)
     {

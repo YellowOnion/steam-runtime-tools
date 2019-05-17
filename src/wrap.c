@@ -1254,7 +1254,7 @@ use_fake_home (FlatpakBwrap *bwrap,
     {
       g_unlink (cache2);
 
-      if (!symlink (".cache", cache2))
+      if (symlink (".cache", cache2) != 0)
         return glnx_throw_errno_prefix (error,
                                         "Unable to create symlink %s -> .cache",
                                         cache2);
@@ -1264,7 +1264,7 @@ use_fake_home (FlatpakBwrap *bwrap,
     {
       g_unlink (config2);
 
-      if (!symlink (".config", config2))
+      if (symlink (".config", config2) != 0)
         return glnx_throw_errno_prefix (error,
                                         "Unable to create symlink %s -> .config",
                                         config2);
@@ -1274,7 +1274,7 @@ use_fake_home (FlatpakBwrap *bwrap,
     {
       g_unlink (data2);
 
-      if (!symlink (".local/share", data2))
+      if (symlink (".local/share", data2) != 0)
         return glnx_throw_errno_prefix (error,
                                         "Unable to create symlink %s -> .local/share",
                                         data2);

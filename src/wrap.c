@@ -1212,9 +1212,12 @@ bind_runtime (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
+/* Order matters here: root is a symlink to the root of the Steam
+ * installation, so we want to bind-mount its target before we deal
+ * with the rest. */
 static const char * const steam_api_subdirs[] =
 {
-  "bin", "bin32", "bin64", "root", "sdk32", "sdk64", "steam", "steambeta"
+  "root", "bin", "bin32", "bin64", "sdk32", "sdk64", "steam", "steambeta"
 };
 
 static gboolean
@@ -1233,6 +1236,7 @@ use_fake_home (FlatpakBwrap *bwrap,
   g_autofree gchar *data2 = g_build_filename (fake_home, "data", NULL);
   g_autofree gchar *steam_pid = NULL;
   g_autofree gchar *steam_pipe = NULL;
+  g_autoptr(GHashTable) mounted = NULL;
   gsize i;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
@@ -1285,27 +1289,42 @@ use_fake_home (FlatpakBwrap *bwrap,
                           "--setenv", "XDG_DATA_HOME", data,
                           NULL);
 
+  mounted = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                   g_free, NULL);
+
   /*
    * These might be API entry points, according to Steam/steam.sh.
-   * On the host system they're symlinks to a real location, but
-   * in a container it's easier to bind-mount them (this follows
-   * symlinks).
+   * They're usually symlinks into the Steam root, except for in
+   * older steam Debian packages that had Debian bug #916303.
    *
    * TODO: We probably want to hide part or all of root, steam,
    * steambeta?
-   *
-   * TODO: Should we make them symlinks, and mount the Steam directory
-   * in its rightful place?
    */
   for (i = 0; i < G_N_ELEMENTS (steam_api_subdirs); i++)
     {
       g_autofree gchar *dir = g_build_filename (real_home, ".steam",
                                                 steam_api_subdirs[i], NULL);
+      g_autofree gchar *target = NULL;
 
-      if (g_file_test (dir, G_FILE_TEST_IS_DIR))
-        flatpak_bwrap_add_args (bwrap,
-                                "--ro-bind", dir, dir,
-                                NULL);
+      target = glnx_readlinkat_malloc (-1, dir, NULL, NULL);
+
+      if (target != NULL)
+        {
+          flatpak_bwrap_add_args (bwrap, "--symlink", target, dir, NULL);
+
+          if (strcmp (steam_api_subdirs[i], "root") == 0)
+            {
+              flatpak_bwrap_add_args (bwrap,
+                                      "--ro-bind", target, target,
+                                      NULL);
+              g_hash_table_add (mounted, g_steal_pointer (&target));
+            }
+        }
+      else if (!g_hash_table_contains (mounted, dir))
+        {
+          flatpak_bwrap_add_args (bwrap, "--ro-bind", dir, dir, NULL);
+          g_hash_table_add (mounted, g_steal_pointer (&dir));
+        }
     }
 
   /* steamclient.so relies on this for communication with Steam */

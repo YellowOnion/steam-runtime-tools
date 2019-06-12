@@ -18,7 +18,6 @@
  * License along with this package.  If not, see
  * <http://www.gnu.org/licenses/>.
  */
-@Library('steamos-ci') _
 
 pipeline {
   options {
@@ -41,14 +40,6 @@ pipeline {
         git config --global user.name Jenkins
         git config --global user.email nobody@example.com
         '''
-        checkoutCollaboraGitlab('steam/pressure-vessel', 'master', 'src')
-        dir('src') {
-          sh '''
-          set -eu
-          ./build-aux/git-version-gen .tarball-version > .tarball-version_
-          mv .tarball-version_ .tarball-version
-          '''
-        }
 
         script {
           if (env.CI_DOCKER_REGISTRY_CRED == '') {
@@ -56,6 +47,10 @@ pipeline {
           }
           else {
             dockerRegistryCred = env.CI_DOCKER_REGISTRY_CRED;
+          }
+
+          if (!env.CI_DOCKER_REGISTRY) {
+            env.CI_DOCKER_REGISTRY = 'docker.steamos.cloud'
           }
 
           if (!env.CI_DOCKER_IMAGE) {
@@ -66,15 +61,49 @@ pipeline {
             env.CI_DOCKER_OPTIONS = ''
           }
 
-          sh """
-          sed -e 's!@BASE_IMAGE@!${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
-          if [ -n "${env.CI_APT_SOURCES_FILE}" ]; then
-            cp "${env.CI_APT_SOURCES_FILE}" src/ci/sources.list
-          else
-            touch src/ci/sources.list
-          fi
-          """
+          if (!env.CI_PRESSURE_VESSEL_GIT_REPO) {
+            env.CI_PRESSURE_VESSEL_GIT_REPO = 'https://gitlab.steamos.cloud/steam/pressure-vessel.git'
+          }
 
+          if (!env.CI_PRESSURE_VESSEL_GIT_CRED) {
+            env.CI_PRESSURE_VESSEL_GIT_CRED = ''
+          }
+
+          if (!env.CI_APT_SOURCES_FILE) {
+            env.CI_APT_SOURCES_FILE = ''
+          }
+
+          checkout changelog: true, poll: true, scm: [
+            $class: 'GitSCM',
+            branches: [[name: "origin/${env.CI_PRESSURE_VESSEL_GIT_BRANCH}"]],
+            extensions: [
+              [$class: 'RelativeTargetDirectory', relativeTargetDir: 'src'],
+              [$class: 'PruneStaleBranch'],
+            ],
+            userRemoteConfigs: [
+              [name: 'origin', url: env.CI_PRESSURE_VESSEL_GIT_REPO, credentialsId: env.CI_PRESSURE_VESSEL_GIT_CRED]
+            ]
+          ]
+        }
+
+        dir('src') {
+          sh '''
+          set -eu
+          ./build-aux/git-version-gen .tarball-version > .tarball-version_
+          mv .tarball-version_ .tarball-version
+          '''
+        }
+
+        sh """
+        sed -e 's!@BASE_IMAGE@!${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
+        if [ -n "${env.CI_APT_SOURCES_FILE}" ]; then
+          cp "${env.CI_APT_SOURCES_FILE}" src/ci/sources.list
+        else
+          touch src/ci/sources.list
+        fi
+        """
+
+        script {
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
             docker.build("${env.CI_DOCKER_REGISTRY}/pressure-vessel", '-f src/ci/Dockerfile src/ci').inside("${env.CI_DOCKER_OPTIONS}") {
               sh '''

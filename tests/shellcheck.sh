@@ -40,7 +40,7 @@ for shell_script in \
         pressure-vessel-unruntime \
         pressure-vessel-unruntime-test-ui \
         sysroot/*.sh \
-        t/*.sh \
+        tests/*.sh \
         ; do
     n=$((n + 1))
 

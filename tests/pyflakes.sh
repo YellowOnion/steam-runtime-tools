@@ -41,7 +41,7 @@ elif "${PYFLAKES}" \
     "${G_TEST_SRCDIR}"/*.py \
     "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
     "${G_TEST_SRCDIR}"/sysroot/*.py \
-    "${G_TEST_SRCDIR}"/t/*.py \
+    "${G_TEST_SRCDIR}"/tests/*.py \
     >&2; then
     echo "1..1"
     echo "ok 1 - $PYFLAKES reported no issues"

@@ -129,7 +129,7 @@ foreach test_name : tests
   if prove.found()
     test(
       test_name, prove,
-      args : ['-v', files('t/' + test_name)],
+      args : ['-v', files('tests/' + test_name)],
       env : test_env,
     )
   endif

@@ -34,28 +34,28 @@ fi
 
 cd "$G_TEST_SRCDIR"
 
-if [ "x${PYCODESTYLE:=pycodestyle}" = xfalse ] || \
-        [ -z "$(command -v "$PYCODESTYLE")" ]; then
-    echo "1..0 # SKIP pycodestyle not found"
-    exit 0
-fi
+export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
 
-echo "1..1"
-
-# Ignore E402: when using GObject-Introspection, not all imports
-# can come first
-# Ignore W503: allow wrapping long expressions before a binary operator
-
-if "${PYCODESTYLE}" \
-    --ignore=E402,W503 \
-    "$G_TEST_SRCDIR"/*.py \
+i=0
+for script in \
+    "${G_TEST_SRCDIR}"/*.py \
     "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
     "${G_TEST_SRCDIR}"/sysroot/*.py \
-    "${G_TEST_SRCDIR}"/t/*.py \
-    >&2; then
-    echo "ok 1 - $PYCODESTYLE reported no issues"
-else
-    echo "not ok 1 # TODO $PYCODESTYLE issues reported"
-fi
+    "${G_TEST_SRCDIR}"/tests/*.py \
+; do
+    i=$((i + 1))
+    if [ "x${MYPY:="$(command -v mypy || echo false)"}" = xfalse ]; then
+        echo "ok $i - $script # SKIP mypy not found"
+    elif "${MYPY}" \
+            --python-executable="${PYTHON:=python3}" \
+            --follow-imports=skip \
+            --ignore-missing-imports \
+            "$script"; then
+        echo "ok $i - $script"
+    else
+        echo "not ok $i - $script # TODO mypy issues reported"
+    fi
+done
+echo "1..$i"
 
 # vim:set sw=4 sts=4 et:

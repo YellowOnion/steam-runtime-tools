@@ -1,0 +1,3 @@
+usr/include/*
+usr/lib/*/libsteam-runtime-tools-0.so
+usr/lib/*/pkgconfig/steam-runtime-tools-0.pc

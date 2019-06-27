@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -e
+set -x
+
+cd "$AUTOPKGTEST_TMP"
+
+cat > trivial.c <<'EOF'
+#include <steam-runtime-tools/steam-runtime-tools.h>
+
+int main (void)
+{
+  /* ignore result */
+  srt_architecture_can_run_i386 ();
+  return 0;
+}
+EOF
+
+gcc -o trivial trivial.c $(pkg-config --cflags --libs steam-runtime-tools-0)
+test -x trivial
+./trivial

@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+export LC_ALL=C.UTF-8
+
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	rm -fr builddir
+
+override_dh_auto_configure:
+	meson builddir \
+		--prefix=/usr \
+		--libexecdir=/usr/libexec \
+		-Dintrospection=false \
+		$(NULL)
+
+override_dh_auto_build:
+	ninja -C builddir
+
+override_dh_auto_test:
+	meson test -C builddir --verbose
+
+override_dh_auto_install:
+	DESTDIR=$(CURDIR)/debian/tmp ninja -C builddir install
+
+override_dh_missing:
+	dh_missing --fail-missing

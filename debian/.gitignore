@@ -1,0 +1,10 @@
+/*-stamp
+/*.debhelper
+/*.log
+/*.substvars
+/files
+/libsteam-runtime-tools-0-0/
+/libsteam-runtime-tools-0-dev/
+/libsteam-runtime-tools-0-doc/
+/libsteam-runtime-tools-0-tests/
+/tmp/

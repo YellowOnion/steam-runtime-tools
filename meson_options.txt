@@ -1,0 +1,21 @@
+option(
+  'gtk_doc',
+  type : 'boolean',
+  value : true,
+  description : 'use gtk-doc to build documentation',
+)
+
+option(
+  'installed_tests',
+  type : 'boolean',
+  value : true,
+  description : 'enable installed tests',
+)
+
+option(
+  'introspection',
+  type : 'boolean',
+  value : true,
+  description : 'enable GObject-Introspection',
+)
+

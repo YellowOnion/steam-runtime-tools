@@ -1,0 +1,71 @@
+Source: steam-runtime-tools
+Section: libs
+Priority: optional
+Maintainer: Simon McVittie <smcv@collabora.com>
+Standards-Version: 4.3.0
+Build-Depends:
+ debhelper,
+ gtk-doc-tools <!nodoc>,
+ meson,
+Build-Depends-Indep:
+ libglib2.0-dev,
+Vcs-Git: https://gitlab.steamos.cloud/steam/steam-runtime-tools.git
+Vcs-Browser: https://gitlab.steamos.cloud/steam/steam-runtime-tools
+
+Package: libsteam-runtime-tools-0-dev
+Architecture: any
+Multi-Arch: same
+Section: libdevel
+Depends:
+ libc6-dev,
+ libglib2.0-dev,
+ libsteam-runtime-tools-0-0 (= ${binary:Version}),
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam Runtime utility library - development files
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains development files.
+
+Package: libsteam-runtime-tools-doc
+Architecture: all
+Multi-Arch: foreign
+Section: doc
+Depends:
+ ${misc:Depends},
+Description: Steam Runtime utility library - documentation
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains documentation.
+
+Package: libsteam-runtime-tools-0-0
+Architecture: any
+Multi-Arch: same
+Section: libdevel
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ libsteam-runtime-tools-0-helpers,
+Description: Steam Runtime utility library - shared library
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains the shared library.
+
+Package: libsteam-runtime-tools-0-tests
+Architecture: any
+Section: misc
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description:
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains automated tests.

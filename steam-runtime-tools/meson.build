@@ -21,6 +21,8 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+libdl = c_compiler.find_library('dl', required : false)
+
 libsteamrt_sources = [
     'architecture.c',
 ]
@@ -41,9 +43,13 @@ libsteamrt = library(
   c_args : [
     '-DG_LOG_DOMAIN="' + meson.project_name() + '"',
     '-D_SRT_COMPILATION',
+    '-D_GNU_SOURCE',
+    '-D_SRT_SONAME="libsteam-runtime-tools-' + api_major + '.so.' + abi_major + '"',
+    '-D_SRT_MULTIARCH="' + multiarch + '"',
+    '-D_SRT_API_MAJOR="' + api_major + '"',
   ],
   include_directories : project_include_dirs,
-  dependencies : [glib, gobject],
+  dependencies : [glib, gobject, libdl],
   soversion : abi_major,
   version : abi_major + '.' + abi_minor,
   install : true,

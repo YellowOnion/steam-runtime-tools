@@ -103,7 +103,20 @@ gobject = dependency(
 )
 project_include_dirs = include_directories('.')
 
+if host_machine.cpu_family() == 'x86_64'
+  multiarch = 'x86_64-linux-gnu'
+elif host_machine.cpu_family() == 'x86'
+  multiarch = 'i386-linux-gnu'
+else
+  multiarch = ''
+endif
+
 subdir('steam-runtime-tools')
+
+if multiarch != ''
+  subdir('helpers')
+endif
+
 subdir('docs')
 subdir('examples')
 subdir('tests')

@@ -57,6 +57,21 @@ Description: Steam Runtime utility library - shared library
  .
  This package contains the shared library.
 
+Package: libsteam-runtime-tools-0-helpers
+Architecture: amd64 i386
+Multi-Arch: same
+Section: misc
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description:
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains helper tools used to examine the library stack
+ available for each architecture.
+
 Package: libsteam-runtime-tools-0-tests
 Architecture: any
 Section: misc

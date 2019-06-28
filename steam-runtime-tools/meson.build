@@ -25,6 +25,8 @@ libdl = c_compiler.find_library('dl', required : false)
 
 libsteamrt_sources = [
     'architecture.c',
+    'utils-internal.h',
+    'utils.c',
 ]
 
 libsteamrt_public_headers = [

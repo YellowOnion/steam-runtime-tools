@@ -1,9 +1,11 @@
 #!/bin/sh
 
 set -e
+set -u
 set -x
 
-cd "$AUTOPKGTEST_TMP"
+tempdir="$(mktemp -d)"
+cd "$tempdir"
 
 cat > trivial.c <<'EOF'
 #include <steam-runtime-tools/steam-runtime-tools.h>
@@ -19,3 +21,5 @@ EOF
 gcc -o trivial trivial.c $(pkg-config --cflags --libs steam-runtime-tools-0)
 test -x trivial
 ./trivial
+
+rm -fr "$tempdir"

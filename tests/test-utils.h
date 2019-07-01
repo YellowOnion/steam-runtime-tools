@@ -25,6 +25,11 @@
 
 #pragma once
 
+/*
+ * Simplified implementations of some of the GLib test assertion macros,
+ * for use with older GLib versions.
+ */
+
 #ifndef g_assert_true
 #define g_assert_true(x) g_assert ((x))
 #endif

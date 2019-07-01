@@ -23,6 +23,17 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/*
+ * Output basic information about the system on which the tool is run.
+ * The output is a JSON object with the following keys:
+ *
+ * can-run:
+ *   An object. The keys are strings representing multiarch tuples, as
+ *   used in Debian and the freedesktop.org SDK runtime. The values are
+ *   boolean: true if we can definitely run executables of this
+ *   architecture, or false if we cannot prove that we can do so.
+ */
+
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <glib.h>

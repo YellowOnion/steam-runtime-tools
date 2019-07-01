@@ -25,6 +25,10 @@
 
 # This is basically a small reimplementation of gnome-desktop-testing-runner,
 # for older runtimes that don't have it.
+#
+# To run manually:
+#
+# ./debian/tests/run || echo FAILED
 
 set -eu
 

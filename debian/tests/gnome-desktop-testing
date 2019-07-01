@@ -1,4 +1,10 @@
 #!/bin/sh
+# Copyright © 2019 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+# (see debian/copyright)
+
+# Run tests from /usr/share/installed-tests/steam-runtime-tools-0
+# via the gnome-desktop-testing-runner test harness (if available).
 
 set -eu
 

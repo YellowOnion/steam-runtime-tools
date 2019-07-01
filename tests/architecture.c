@@ -53,6 +53,9 @@ teardown (Fixture *f,
   G_GNUC_UNUSED const Config *config = context;
 }
 
+/*
+ * Test basic functionality of the architecture module.
+ */
 static void
 test_architecture (Fixture *f,
                    gconstpointer context)

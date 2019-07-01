@@ -1,4 +1,10 @@
 #!/bin/sh
+# Copyright © 2019 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+# (see debian/copyright)
+
+# Check that the library can be linked by using pkg-config in the most
+# obvious way.
 
 set -e
 set -u

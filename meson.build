@@ -233,7 +233,7 @@ endif
 cc = meson.get_compiler('c')
 
 conf_data = configuration_data()
-conf_data.set('VERSION', version)
+conf_data.set_quoted('VERSION', version)
 
 configure_file(
   input : 'config.h.in',

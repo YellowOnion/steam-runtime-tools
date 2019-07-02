@@ -336,7 +336,7 @@ def main():
             )
 
     source_to_download = set()      # type: typing.Set[str]
-    binaries = set()                # type: typing.Set[str]
+    installed_binaries = set()      # type: typing.Set[str]
 
     for package, source in (
         list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
@@ -344,9 +344,9 @@ def main():
         if not args.relocatabledir and source == 'libcapsule':
             continue
 
-        binaries.add(package)
-
         if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
+            installed_binaries.add(package)
+
             install(
                 '/usr/share/doc/{}/copyright'.format(package),
                 os.path.join(
@@ -387,7 +387,7 @@ def main():
             '-W',
             '-f',
             r'${binary:Package}\t${Version}\t${Source}\t${Installed-Size}\n',
-        ] + sorted(binaries), stdout=writer)
+        ] + sorted(installed_binaries), stdout=writer)
 
     with open(
         os.path.join(destdir_prefix, 'metadata', 'VERSION.txt'),

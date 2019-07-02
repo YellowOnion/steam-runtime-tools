@@ -31,6 +31,7 @@
 
 #include <X11/Xauth.h>
 
+#include <locale.h>
 #include <stdlib.h>
 #include <sys/utsname.h>
 
@@ -1543,6 +1544,7 @@ main (int argc,
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   GSpawnFlags spawn_flags = G_SPAWN_DO_NOT_REAP_CHILD;
 
+  setlocale (LC_ALL, "");
   pv_avoid_gvfs ();
 
   g_set_prgname ("pressure-vessel-wrap");

@@ -1447,6 +1447,7 @@ static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime = NULL;
 static gboolean opt_share_home = TRUE;
 static gboolean opt_verbose = FALSE;
+static gboolean opt_version = FALSE;
 static gboolean opt_xterm = FALSE;
 
 static gboolean
@@ -1503,6 +1504,8 @@ static GOptionEntry options[] =
     "must be installed in the RUNTIME, if used.", NULL },
   { "verbose", 0, 0, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
+  { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version,
+    "Print version number and exit.", NULL },
   { NULL }
 };
 
@@ -1575,6 +1578,13 @@ main (int argc,
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
+
+  if (opt_version)
+    {
+      g_print ("pressure-vessel version %s\n", VERSION);
+      ret = 0;
+      goto out;
+    }
 
   if (argc < 2)
     {

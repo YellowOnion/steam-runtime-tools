@@ -373,6 +373,12 @@ def main():
             )
             source_to_download.add(source)
 
+    with open(
+        os.path.join(destdir_prefix, 'metadata', 'VERSION.txt'),
+        'w',
+    ) as writer:
+        writer.write('{}\n'.format(args.version))
+
     shutil.copytree(
         os.path.join(destdir_prefix, 'metadata'),
         os.path.join(destdir_prefix, 'sources'),
@@ -471,6 +477,17 @@ def main():
                     returncode=git_archive.returncode,
                     cmd=git_archive.args,
                 )
+
+    with open(
+        os.path.join(
+            destdir_prefix,
+            'sources',
+            'pressure-vessel',
+            '.tarball-version',
+        ),
+        'w',
+    ) as writer:
+        writer.write('{}\n'.format(args.version))
 
     bin_tar = 'pressure-vessel-{}-bin.tar.gz'.format(args.version)
     src_tar = 'pressure-vessel-{}-bin+src.tar.gz'.format(args.version)

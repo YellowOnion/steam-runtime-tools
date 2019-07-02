@@ -160,7 +160,7 @@ def main():
     )
 
     os.makedirs(os.path.join(destdir_prefix, 'bin'), exist_ok=True)
-    os.makedirs(os.path.join(destdir_prefix, 'sources'), exist_ok=True)
+    os.makedirs(os.path.join(destdir_prefix, 'metadata'), exist_ok=True)
 
     for arch in ARCHS:
         os.makedirs(
@@ -182,7 +182,7 @@ def main():
 
     install(
         os.path.join(args.srcdir, 'THIRD-PARTY.md'),
-        os.path.join(destdir_prefix, 'sources', 'README.txt'),
+        os.path.join(destdir_prefix, 'metadata', 'README.txt'),
         0o644,
     )
 
@@ -199,7 +199,7 @@ def main():
 
         install(
             '/usr/share/doc/libcapsule-tools-relocatable/copyright',
-            os.path.join(destdir_prefix, 'sources', 'libcapsule.txt'),
+            os.path.join(destdir_prefix, 'metadata', 'libcapsule.txt'),
         )
     else:
         for arch in ARCHS:
@@ -239,16 +239,8 @@ def main():
                     'debian',
                     'copyright',
                 ),
-                os.path.join(destdir_prefix, 'sources', 'libcapsule.txt'),
+                os.path.join(destdir_prefix, 'metadata', 'libcapsule.txt'),
             )
-
-            for dsc in glob.glob(
-                os.path.join(args.srcdir, 'libcapsule*.dsc')
-            ):
-                v_check_call([
-                    'dcmd', 'install', '-m644', dsc,
-                    os.path.join(destdir_prefix, 'sources'),
-                ])
 
     primary_architecture = subprocess.check_output([
         'dpkg', '--print-architecture',
@@ -356,7 +348,7 @@ def main():
                 '/usr/share/doc/{}/copyright'.format(package),
                 os.path.join(
                     destdir_prefix,
-                    'sources',
+                    'metadata',
                     '{}.txt'.format(source),
                 ),
             )
@@ -375,11 +367,25 @@ def main():
                 'build-relocatable/usr/share/doc/{}/copyright'.format(package),
                 os.path.join(
                     destdir_prefix,
-                    'sources',
+                    'metadata',
                     '{}.txt'.format(source),
                 ),
             )
             source_to_download.add(source)
+
+    shutil.copytree(
+        os.path.join(destdir_prefix, 'metadata'),
+        os.path.join(destdir_prefix, 'sources'),
+    )
+
+    if not args.relocatabledir:
+        for dsc in glob.glob(
+            os.path.join(args.srcdir, 'libcapsule*.dsc')
+        ):
+            v_check_call([
+                'dcmd', 'install', '-m644', dsc,
+                os.path.join(destdir_prefix, 'sources'),
+            ])
 
     v_check_call(
         [
@@ -474,6 +480,7 @@ def main():
         r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
             args.version,
         ),
+        '--exclude=metadata',       # this is all duplicated in sources/
         '-zcvf', src_tar + '.tmp',
         '-C', destdir_prefix,
         '.',

@@ -31,4 +31,37 @@ executable(
   )
 )
 
+glib_dep = dependency('glib-2.0')
+x11_dep = dependency('x11')
+
+executable(
+  multiarch + '-check-gl',
+  'check-gl.c',
+  install : true,
+  install_dir : join_paths(
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+  ),
+  dependencies : [ glib_dep, 
+    x11_dep, 
+    dependency('gl'), 
+    dependency('xcomposite')
+  ]
+)
+
+executable(
+  multiarch + '-check-gles',
+  'check-gles.c',
+  install : true,
+  install_dir : join_paths(
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+  ),
+  dependencies: [ glib_dep,
+    x11_dep,
+    dependency('egl'),
+    dependency('glesv2')
+  ]
+)
+
 # vim:set sw=2 sts=2 et:

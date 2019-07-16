@@ -27,6 +27,17 @@
 
 #include "steam-runtime-tools/utils-internal.h"
 
+/**
+ * SECTION:architecture
+ * @title: Architectures
+ * @short_description: CPU architectures and ABIs
+ * @include: steam-runtime-tools/steam-runtime-tools.h
+ *
+ * On a typical x86 PC, it might be possible to run 32-bit and/or 64-bit
+ * executables, depending on the capabilities of the CPU, OS kernel and
+ * operating system.
+ */
+
 static gboolean
 _srt_architecture_can_run (const char *multiarch)
 {
@@ -70,12 +81,47 @@ out:
   return ret;
 }
 
+/**
+ * srt_architecture_can_run_i386:
+ *
+ * Check whether we can run an i386 executable.
+ *
+ * For this check to work as intended, the contents of the
+ * `libsteam-runtime-tools-0-helpers:i386` package must be available
+ * in the same directory hierarchy as the `libsteam-runtime-tools-0`
+ * shared library, something like this:
+ *
+ * |[
+ * any directory/
+ *      lib/
+ *          x86_64-linux-gnu/
+ *              libsteam-runtime-tools-0.so.0
+ *      libexec/
+ *          steam-runtime-tools-0/
+ *              i386-linux-gnu-*
+ *              x86_64-linux-gnu-*
+ * ]|
+ *
+ * Returns: %TRUE if we can run an i386 executable.
+ */
 gboolean
 srt_architecture_can_run_i386 (void)
 {
   return _srt_architecture_can_run ("i386-linux-gnu");
 }
 
+/**
+ * srt_architecture_can_run_x86_64:
+ *
+ * Check whether we can run an x86_64 executable.
+ *
+ * For this check to work as intended, the contents of the
+ * `libsteam-runtime-tools-0-helpers:amd64` package must be available
+ * in the same directory hierarchy as the `libsteam-runtime-tools-0`
+ * shared library. See srt_architecture_can_run_i386() for details.
+ *
+ * Returns: %TRUE if we can run an x86_64 executable.
+ */
 gboolean
 srt_architecture_can_run_x86_64 (void)
 {

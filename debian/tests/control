@@ -1,11 +1,15 @@
 Tests: build
 Restrictions: allow-stderr
-Depends: libsteam-runtime-tools-0-dev
+Depends:
+ libsteam-runtime-tools-0-dev,
 
 Tests: run
 Restrictions: allow-stderr
-Depends: libsteam-runtime-tools-0-tests
+Depends:
+ libsteam-runtime-tools-0-tests,
 
 Tests: gnome-desktop-testing
 Restrictions: allow-stderr
-Depends: gnome-desktop-testing, libsteam-runtime-tools-0-tests
+Depends:
+ gnome-desktop-testing,
+ libsteam-runtime-tools-0-tests,

@@ -37,6 +37,7 @@ x11_dep = dependency('x11')
 executable(
   multiarch + '-check-gl',
   'check-gl.c',
+  include_directories : project_include_dirs,
   install : true,
   install_dir : join_paths(
     get_option('libexecdir'),
@@ -52,6 +53,7 @@ executable(
 executable(
   multiarch + '-check-gles',
   'check-gles.c',
+  include_directories : project_include_dirs,
   install : true,
   install_dir : join_paths(
     get_option('libexecdir'),

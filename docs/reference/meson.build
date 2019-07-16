@@ -37,6 +37,10 @@ gnome.gtkdoc(
   src_dir : ['steam-runtime-tools'],
   dependencies : libsteamrt_dep,
   install: true,
+  scan_args : [
+    '--rebuild-sections',
+    '--rebuild-types',
+  ],
 )
 
 # vim:set sw=2 sts=2 et:

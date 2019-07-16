@@ -25,14 +25,24 @@ libdl = c_compiler.find_library('dl', required : false)
 
 libsteamrt_sources = [
     'architecture.c',
+    'library-internal.h',
+    'library.c',
     'utils-internal.h',
     'utils.c',
 ]
 
 libsteamrt_public_headers = [
     'architecture.h',
+    'library.h',
     'steam-runtime-tools.h',
 ]
+
+enums = gnome.mkenums_simple(
+  'enums',
+  install_dir : join_paths('steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
+  install_header : true,
+  sources : libsteamrt_public_headers,
+)
 
 install_headers(
   libsteamrt_public_headers,
@@ -41,7 +51,7 @@ install_headers(
 
 libsteamrt = library(
   'steam-runtime-tools-' + api_major,
-  libsteamrt_sources + libsteamrt_public_headers,
+  libsteamrt_sources + libsteamrt_public_headers + enums,
   c_args : [
     '-DG_LOG_DOMAIN="' + meson.project_name() + '"',
     '-D_SRT_COMPILATION',

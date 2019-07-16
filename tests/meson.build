@@ -28,6 +28,7 @@ test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'he
 
 tests = [
   'architecture',
+  'library',
 ]
 
 tests_dir = join_paths(
@@ -45,7 +46,7 @@ foreach test_name : tests
   exe = executable(
     'test-' + test_name,
     files(test_name + '.c'),
-    dependencies : [glib, libsteamrt_dep],
+    dependencies : [glib, gobject, libsteamrt_dep],
     install : get_option('installed_tests'),
     install_dir : tests_dir,
   )

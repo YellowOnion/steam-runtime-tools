@@ -45,9 +45,9 @@ main (int argc,
   g_print ("{\n");
 
   g_print ("  \"can-run\": {\n");
-  g_print ("    \"i386-linux-gnu\": %s,\n",
+  g_print ("    \"%s\": %s,\n", SRT_ABI_I386,
            srt_architecture_can_run_i386 () ? "true" : "false");
-  g_print ("    \"x86_64-linux-gnu\": %s\n",
+  g_print ("    \"%s\": %s\n", SRT_ABI_X86_64,
            srt_architecture_can_run_x86_64 () ? "true" : "false");
   g_print ("  }\n");
 

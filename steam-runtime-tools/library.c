@@ -25,6 +25,7 @@
 
 #include "steam-runtime-tools/library.h"
 
+#include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
 
 /**
@@ -183,8 +184,8 @@ srt_library_class_init (SrtLibraryClass *cls)
   properties[PROP_MULTIARCH_TUPLE] =
     g_param_spec_string ("multiarch-tuple", "Multiarch tuple",
                          "Debian-style multiarch tuple representing the "
-                         "ABI of this library, usually i386-linux-gnu "
-                         "or x86_64-linux-gnu",
+                         "ABI of this library, usually " SRT_ABI_I386 " "
+                         "or " SRT_ABI_X86_64,
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -220,8 +221,8 @@ srt_library_get_soname (SrtLibrary *self)
  *
  * Return the multiarch tuple representing the ABI of @self.
  *
- * Returns: A Debian-style multiarch tuple, usually `i386-linux-gnu`
- *  or `x86_64-linux-gnu`
+ * Returns: A Debian-style multiarch tuple, usually %SRT_ABI_I386
+ *  or %SRT_ABI_X86_64
  */
 const char *
 srt_library_get_multiarch_tuple (SrtLibrary *self)

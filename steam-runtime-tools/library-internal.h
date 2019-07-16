@@ -30,7 +30,7 @@
 
 /*
  * _srt_library_new:
- * @multiarch_tuple: A multiarch tuple like i386-linux-gnu,
+ * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386,
  *  representing an ABI
  * @soname: A SONAME like libz.so.1
  * @issues: Problems found when loading a @multiarch_tuple copy

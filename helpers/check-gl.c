@@ -91,6 +91,8 @@
 #include <GL/gl.h>
 #include <GL/glx.h>
 
+#include "steam-runtime-tools/glib-compat.h"
+
 #include "gnome-session-check-accelerated-common.h"
 
 #define SIZE_UNSET 0

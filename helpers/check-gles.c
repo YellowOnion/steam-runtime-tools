@@ -35,6 +35,8 @@
 #include <GLES2/gl2ext.h>
 #include <EGL/egl.h>
 
+#include "steam-runtime-tools/glib-compat.h"
+
 #include "gnome-session-check-accelerated-common.h"
 
 static char *

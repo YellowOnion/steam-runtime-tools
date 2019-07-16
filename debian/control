@@ -35,7 +35,7 @@ Description: Steam Runtime utility library - development files
  .
  This package contains development files.
 
-Package: libsteam-runtime-tools-doc
+Package: libsteam-runtime-tools-0-doc
 Architecture: all
 Multi-Arch: foreign
 Section: doc

@@ -30,7 +30,7 @@ configure_file(
 )
 
 gnome.gtkdoc(
-  'steam-runtime-tools',
+  'steam-runtime-tools-0',
   main_xml : 'steam-runtime-tools.xml',
   namespace : 'srt',
   mode : 'none',

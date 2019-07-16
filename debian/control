@@ -18,6 +18,21 @@ Build-Depends-Indep:
 Vcs-Git: https://gitlab.steamos.cloud/steam/steam-runtime-tools.git
 Vcs-Browser: https://gitlab.steamos.cloud/steam/steam-runtime-tools
 
+Package: libsteam-runtime-tools-0-0
+Architecture: any
+Multi-Arch: same
+Section: libdevel
+Depends:
+ libsteam-runtime-tools-0-helpers,
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam Runtime utility library - shared library
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains the shared library.
+
 Package: libsteam-runtime-tools-0-dev
 Architecture: any
 Multi-Arch: same
@@ -47,21 +62,6 @@ Description: Steam Runtime utility library - documentation
  supporting code used by the Steam client to discover system information.
  .
  This package contains documentation.
-
-Package: libsteam-runtime-tools-0-0
-Architecture: any
-Multi-Arch: same
-Section: libdevel
-Depends:
- ${misc:Depends},
- ${shlibs:Depends},
- libsteam-runtime-tools-0-helpers,
-Description: Steam Runtime utility library - shared library
- The Steam Runtime is the library stack used to run the Steam client
- on Linux. The Steam Runtime Tools utility library contains open-source
- supporting code used by the Steam client to discover system information.
- .
- This package contains the shared library.
 
 Package: libsteam-runtime-tools-0-helpers
 Architecture: amd64 i386

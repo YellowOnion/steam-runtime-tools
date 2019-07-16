@@ -107,6 +107,7 @@ _print_error (const char *str)
         fprintf (stderr, "gnome-session-is-accelerated: %s\n", str);
 }
 
+#if 0
 static gboolean
 _is_comment (const char *line)
 {
@@ -117,6 +118,7 @@ _is_comment (const char *line)
                 return TRUE;
         return FALSE;
 }
+#endif
 
 static gboolean
 _is_gl_renderer_blacklisted (const char *renderer)
@@ -270,6 +272,7 @@ out:
         return renderer;
 }
 
+#if 0
 static gboolean
 _has_extension (const char *extension_list,
                 const char *extension)
@@ -329,6 +332,7 @@ _display_has_extension (Display *display, const char *extension)
 out:
         return ret;
 }
+#endif
 
 static gboolean print_renderer = FALSE;
 

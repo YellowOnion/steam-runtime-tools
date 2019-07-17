@@ -1,5 +1,5 @@
-steam-runtime-tools (0-0+collabora1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20190717.0-0+collabora1) upstream; urgency=medium
 
   * Initial release
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 02 Apr 2019 17:32:19 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 17 Jul 2019 12:59:02 +0100

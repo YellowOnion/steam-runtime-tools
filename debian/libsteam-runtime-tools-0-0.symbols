@@ -1,4 +1,4 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
- srt_architecture_can_run_i386@Base 0~
- srt_architecture_can_run_x86_64@Base 0~
+ srt_architecture_can_run_i386@Base 0.20190717.0
+ srt_architecture_can_run_x86_64@Base 0.20190717.0

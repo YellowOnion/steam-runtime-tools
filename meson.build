@@ -21,11 +21,11 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-project('steam-runtime-tools', 'c', version : '0.20190627.0')
+project('steam-runtime-tools', 'c', version : '0.20190717.0')
 
 api_major = '0'
 abi_major = '0'
-abi_minor = '0.0'
+abi_minor = '20190717.0'
 
 pkg = import('pkgconfig')
 gnome = import('gnome')

@@ -35,8 +35,9 @@ G_GNUC_INTERNAL const char *
 _srt_get_helpers_path (void)
 {
   const char *path;
-  void *handle = NULL;
+  Dl_info ignored;
   struct link_map *map = NULL;
+  gchar *dir;
 
   path = helpers_path;
 
@@ -48,52 +49,33 @@ _srt_get_helpers_path (void)
   if (path != NULL)
     goto out;
 
-  handle = dlopen (NULL, RTLD_LAZY|RTLD_GLOBAL);
-
-  if (handle == NULL)
+  if (dladdr1 (_srt_get_helpers_path, &ignored, (void **) &map,
+               RTLD_DL_LINKMAP) == 0 ||
+      map == NULL)
     {
-      g_warning ("Unable to dlopen self: %s", dlerror ());
+      g_warning ("Unable to locate shared library containing "
+                 "_srt_get_helpers_path()");
       goto out;
     }
 
-  if (dlinfo (handle, RTLD_DI_LINKMAP, &map) != 0)
-    {
-      g_warning ("dlinfo RTLD_DI_LINKMAP: %s", dlerror ());
-      goto out;
-    }
+  g_debug ("Found _srt_get_helpers_path() in %s", map->l_name);
+  dir = g_path_get_dirname (map->l_name);
 
-  while (map != NULL && map->l_prev != NULL)
-    map = map->l_prev;
+  if (g_str_has_suffix (dir, "/" _SRT_MULTIARCH))
+    dir[strlen (dir) - strlen ("/" _SRT_MULTIARCH)] = '\0';
 
-  for (; map != NULL; map = map->l_next)
-    {
-      g_debug ("%s", map->l_name);
+  if (g_str_has_suffix (dir, "/lib"))
+    dir[strlen (dir) - strlen ("/lib")] = '\0';
 
-      if (g_str_has_suffix (map->l_name, "/" _SRT_SONAME))
-        {
-          gchar *dir = g_path_get_dirname (map->l_name);
+  /* deliberate one-per-process leak */
+  helpers_path = g_build_filename (
+      dir, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,
+      NULL);
+  path = helpers_path;
 
-          if (g_str_has_suffix (dir, "/" _SRT_MULTIARCH))
-            dir[strlen (dir) - strlen ("/" _SRT_MULTIARCH)] = '\0';
-
-          if (g_str_has_suffix (dir, "/lib"))
-            dir[strlen (dir) - strlen ("/lib")] = '\0';
-
-          /* deliberate one-per-process leak */
-          helpers_path = g_build_filename (
-              dir, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,
-              NULL);
-          path = helpers_path;
-
-          g_free (dir);
-          break;
-        }
-    }
+  g_free (dir);
 
 out:
-  if (handle != NULL)
-    dlclose (handle);
-
   /* We have to return *something* non-NULL */
   if (path == NULL)
     {

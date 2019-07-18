@@ -61,10 +61,11 @@ _srt_get_helpers_path (void)
   g_debug ("Found _srt_get_helpers_path() in %s", map->l_name);
   dir = g_path_get_dirname (map->l_name);
 
-  if (g_str_has_suffix (dir, "/" _SRT_MULTIARCH))
-    dir[strlen (dir) - strlen ("/" _SRT_MULTIARCH)] = '\0';
-
-  if (g_str_has_suffix (dir, "/lib"))
+  if (g_str_has_suffix (dir, "/lib/" _SRT_MULTIARCH))
+    dir[strlen (dir) - strlen ("/lib/" _SRT_MULTIARCH)] = '\0';
+  else if (g_str_has_suffix (dir, "/lib64"))
+    dir[strlen (dir) - strlen ("/lib64")] = '\0';
+  else if (g_str_has_suffix (dir, "/lib"))
     dir[strlen (dir) - strlen ("/lib")] = '\0';
 
   /* deliberate one-per-process leak */

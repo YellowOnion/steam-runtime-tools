@@ -14,6 +14,7 @@
   <chapter id="ch-sysinfo">
     <title>System information</title>
     <xi:include href="xml/architecture.xml"/>
+    <xi:include href="xml/library.xml"/>
   </chapter>
 
   <xi:include href="xml/annotation-glossary.xml"><xi:fallback /></xi:include>

@@ -84,7 +84,7 @@ out:
 /**
  * srt_architecture_can_run_i386:
  *
- * Check whether we can run an i386 executable.
+ * Check whether we can run an i386 (%SRT_ABI_I386) executable.
  *
  * For this check to work as intended, the contents of the
  * `libsteam-runtime-tools-0-helpers:i386` package must be available
@@ -107,13 +107,13 @@ out:
 gboolean
 srt_architecture_can_run_i386 (void)
 {
-  return _srt_architecture_can_run ("i386-linux-gnu");
+  return _srt_architecture_can_run (SRT_ABI_I386);
 }
 
 /**
  * srt_architecture_can_run_x86_64:
  *
- * Check whether we can run an x86_64 executable.
+ * Check whether we can run an x86_64 (%SRT_ABI_X86_64) executable.
  *
  * For this check to work as intended, the contents of the
  * `libsteam-runtime-tools-0-helpers:amd64` package must be available
@@ -125,5 +125,5 @@ srt_architecture_can_run_i386 (void)
 gboolean
 srt_architecture_can_run_x86_64 (void)
 {
-  return _srt_architecture_can_run ("x86_64-linux-gnu");
+  return _srt_architecture_can_run (SRT_ABI_X86_64);
 }

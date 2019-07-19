@@ -1,0 +1,87 @@
+# libsteam-runtime-tools itself
+{
+   libsrt deliberate one-per-process leak
+   Memcheck:Leak
+   ...
+   fun:g_build_filename
+   fun:_srt_get_helpers_path
+}
+
+# Dependencies
+{
+   GTest
+   Memcheck:Leak
+   ...
+   fun:g_test_add_vtable
+}
+{
+   GLib logging
+   Memcheck:Leak
+   ...
+   fun:g_private_get
+   ...
+   fun:g_logv
+   fun:g_log
+}
+{
+   GTest RNG
+   Memcheck:Leak
+   ...
+   fun:g_rand_new_with_seed_array
+   obj:*/libglib-2.0.so.0*
+   obj:*/libglib-2.0.so.0*
+   fun:g_test_run_suite
+}
+{
+   GLib character set for printing
+   Memcheck:Leak
+   ...
+   fun:g_get_charset
+   fun:g_print
+}
+{
+   GLib logging mutex
+   Memcheck:Leak
+   ...
+   fun:g_mutex_lock
+   fun:g_log_set_always_fatal
+   fun:g_test_init
+}
+{
+   GLib test initialization
+   Memcheck:Leak
+   ...
+   fun:g_test_init
+}
+{
+   GLib constructors
+   Memcheck:Leak
+   ...
+   obj:*/libglib-2.0.so.0*
+   ...
+   fun:_dl_init
+}
+{
+   GLib interned strings are allocated and never freed
+   Memcheck:Leak
+   ...
+   fun:g_intern_static_string
+}
+{
+   GLib quarks are basically interned strings
+   Memcheck:Leak
+   ...
+   fun:g_quark_from_string
+}
+{
+   GObject type classes are allocated and never freed
+   Memcheck:Leak
+   ...
+   fun:g_type_class_ref
+}
+{
+   GObject static type structures are allocated and never freed
+   Memcheck:Leak
+   ...
+   fun:g_type_register_static
+}

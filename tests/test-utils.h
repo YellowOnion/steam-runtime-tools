@@ -30,6 +30,8 @@
  * for use with older GLib versions.
  */
 
+#include <glib.h>
+
 #ifndef g_assert_true
 #define g_assert_true(x) g_assert ((x))
 #endif
@@ -42,6 +44,23 @@
 #define g_assert_cmpint(a, op, b) g_assert ((a) op (b))
 #endif
 
+#ifndef g_assert_cmpmem
+#define g_assert_cmpmem(m1, l1, m2, l2) \
+    g_assert (l1 == l2 && memcmp (m1, m2, l1) == 0)
+#endif
+
 #ifndef g_assert_cmpstr
 #define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
+#endif
+
+#ifndef g_assert_nonnull
+#define g_assert_nonnull(x) g_assert ((x) != NULL)
+#endif
+
+#ifndef g_assert_null
+#define g_assert_null(x) g_assert ((x) == NULL)
+#endif
+
+#if !GLIB_CHECK_VERSION(2, 38, 0)
+#define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
 #endif

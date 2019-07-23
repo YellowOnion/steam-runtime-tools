@@ -68,6 +68,15 @@ _srt_get_helpers_path (void)
   else if (g_str_has_suffix (dir, "/lib"))
     dir[strlen (dir) - strlen ("/lib")] = '\0';
 
+  /* If the library was found in /lib/MULTIARCH, /lib64 or /lib on a
+   * merged-/usr system, assume --prefix=/usr (/libexec doesn't
+   * normally exist) */
+  if (dir[0] == '\0')
+    {
+      g_free (dir);
+      dir = g_strdup ("/usr");
+    }
+
   /* deliberate one-per-process leak */
   helpers_path = g_build_filename (
       dir, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,

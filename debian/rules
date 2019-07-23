@@ -7,8 +7,20 @@ export LC_ALL=C.UTF-8
 
 include /usr/share/dpkg/default.mk
 
+gtk_doc_has_cflags := $(shell \
+	if gtkdoc-scangobj --help 2>&1 | grep '[-]-cflags' >/dev/null; then \
+		echo true; \
+	else \
+		echo false; \
+	fi \
+)
+dh_options :=
+ifeq ($(gtk_doc_has_cflags),false)
+dh_options += -Nlibsteam-runtime-tools-0-doc
+endif
+
 %:
-	dh $@
+	dh $@ $(dh_options)
 
 # We open-code the Meson clean, configure, build, test, install steps
 # because the debhelper in SteamRT 1 'scout' is too old to have built-in
@@ -21,6 +33,7 @@ override_dh_auto_configure:
 	meson builddir \
 		--prefix=/usr \
 		--libexecdir=/usr/libexec \
+		-Dgtk_doc=$(gtk_doc_has_cflags) \
 		-Dintrospection=false \
 		$(NULL)
 

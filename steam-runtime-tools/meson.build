@@ -77,6 +77,7 @@ pkg.generate(
 libsteamrt_dep = declare_dependency(
   include_directories : project_include_dirs,
   link_with : libsteamrt,
+  sources : libsteamrt_public_headers + [enums[1]],
 )
 
 if get_option('introspection')

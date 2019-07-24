@@ -222,14 +222,6 @@ if libcapsule_dsc != ''
   endforeach
 endif
 
-if host_machine.cpu_family() == 'x86_64'
-  multiarch = 'x86_64-linux-gnu'
-elif host_machine.cpu_family() == 'x86'
-  multiarch = 'i386-linux-gnu'
-else
-  error('CPU family not supported')
-endif
-
 cc = meson.get_compiler('c')
 
 conf_data = configuration_data()
@@ -262,10 +254,10 @@ executable(
     dependency('xau', required : true),
     subproject('libglnx').get_variable('libglnx_dep'),
   ],
-  build_rpath : '${ORIGIN}/../lib/' + multiarch,
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
   install : true,
   install_dir : get_option('bindir'),
-  install_rpath : '${ORIGIN}/../lib/' + multiarch,
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
 )
 
 meson.add_install_script(

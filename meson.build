@@ -260,15 +260,17 @@ executable(
   install_rpath : '${ORIGIN}/../' + get_option('libdir'),
 )
 
-meson.add_install_script(
-  python.path(),
-  join_paths(meson.current_source_dir(), 'build-relocatable-install.py'),
-  '--srcdir', meson.current_source_dir(),
-  '--builddir', meson.current_build_dir(),
-  '--relocatabledir', relocatabledir,
-  '--prefix', get_option('prefix'),
-  '--archive', meson.current_build_dir(),
-  '--set-version', version,
-)
+if get_option('relocatable')
+  meson.add_install_script(
+    python.path(),
+    join_paths(meson.current_source_dir(), 'build-relocatable-install.py'),
+    '--srcdir', meson.current_source_dir(),
+    '--builddir', meson.current_build_dir(),
+    '--relocatabledir', relocatabledir,
+    '--prefix', get_option('prefix'),
+    '--archive', meson.current_build_dir(),
+    '--set-version', version,
+  )
+endif
 
 # vim:set sw=2 sts=2 et:

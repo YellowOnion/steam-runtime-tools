@@ -405,7 +405,7 @@ $(testmeta_DATA): tests/%.test: tests/% Makefile
 		echo "[Test]"; \
 		echo "Type=session"; \
 		echo "Output=TAP"; \
-		echo "Exec=$(insttestsdir)/tests/$*$$maybe_tap"; \
+		echo "Exec=env CAPSULE_TESTS_GNU_HOST=$(host) $(insttestsdir)/tests/$*$$maybe_tap"; \
 	) > $@.tmp && mv $@.tmp $@
 
 if ENABLE_SHARED

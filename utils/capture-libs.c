@@ -244,6 +244,9 @@ static void usage (int code)
                "\ttheir dependencies\n" );
   fprintf( fh, "if-exists:PATTERN\n"
                "\tCapture PATTERN, but don't fail if nothing matches\n" );
+  fprintf( fh, "if-same-abi:PATTERN\n"
+               "\tCapture PATTERN, but don't fail if it points to a\n"
+               "\tlibrary with mismatched word size or architecture\n" );
   fprintf( fh, "even-if-older:PATTERN\n"
                "\tCapture PATTERN, even if the version in CONTAINER\n"
                "\tappears newer\n" );
@@ -256,7 +259,7 @@ static void usage (int code)
                "\tand capture the result\n" );
   fprintf( fh, "path-match:GLOB\n"
                "\tResolve GLOB as though chrooted into PROVIDER\n"
-               "\tand capture the result\n" );
+               "\tand capture any results that are of the right ABI\n" );
   fprintf( fh, "an absolute path with no '?', '*', '['\n"
                "\tSame as path:PATTERN\n" );
   fprintf( fh, "a glob pattern starting with '/'\n"
@@ -275,6 +278,7 @@ typedef enum
   CAPTURE_FLAG_IF_EXISTS = (1 << 1),
   CAPTURE_FLAG_LIBRARY_ITSELF = ( 1 << 2 ),
   CAPTURE_FLAG_DEPENDENCIES = ( 1 << 3 ),
+  CAPTURE_FLAG_IF_SAME_ABI = ( 1 << 4 ),
 } capture_flags;
 
 static bool
@@ -325,12 +329,17 @@ capture_one( const char *soname, capture_flags flags,
             _capsule_clear( &local_message );
             return true;
         }
-        else
+
+        if( ( flags & CAPTURE_FLAG_IF_SAME_ABI ) && local_code == ENOEXEC )
         {
-            _capsule_propagate_error( code, message, local_code,
-                                      _capsule_steal_pointer( &local_message ) );
-            return false;
+            DEBUG( DEBUG_TOOL, "%s is a different ABI: %s", soname, local_message );
+            _capsule_clear( &local_message );
+            return true;
         }
+
+        _capsule_propagate_error( code, message, local_code,
+                                  _capsule_steal_pointer( &local_message ) );
+        return false;
     }
 
     if( !ld_libs_find_dependencies( &provider, code, message ) )
@@ -676,7 +685,8 @@ capture_path_match( const char *pattern, capture_flags flags,
                 }
 
                 if( !capture_one( path + strlen( option_provider ),
-                                  flags, code, message ) )
+                                  flags | CAPTURE_FLAG_IF_SAME_ABI,
+                                  code, message ) )
                 {
                     ret = false;
                     break;
@@ -773,6 +783,13 @@ capture_pattern( const char *pattern, capture_flags flags,
     {
         return capture_pattern( pattern + strlen( "if-exists:" ),
                                 flags | CAPTURE_FLAG_IF_EXISTS,
+                                code, message );
+    }
+
+    if( strstarts( pattern, "if-same-abi:" ) )
+    {
+        return capture_pattern( pattern + strlen( "if-same-abi:" ),
+                                flags | CAPTURE_FLAG_IF_SAME_ABI,
                                 code, message );
     }
 

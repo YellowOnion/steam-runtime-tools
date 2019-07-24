@@ -307,6 +307,65 @@ SKIP: {
         "--resolve-ld.so=$host should print ".abs_path($ld_so));
 };
 
+SKIP: {
+    my $multiarch;
+    my $other_multiarch;
+
+    # For simplicity, we only consider this case on x86.
+    skip "$ENV{CAPSULE_TESTS_GNU_HOST} not x86_64 or i386", 1
+        unless $ENV{CAPSULE_TESTS_GNU_HOST} =~ m/^(x86_64|i.86)-/;
+
+    if ($ENV{CAPSULE_TESTS_GNU_HOST} =~ m/^x86_64-/) {
+        $other_multiarch = 'i386-linux-gnu';
+    }
+    else {
+        $other_multiarch = 'x86_64-linux-gnu';
+    }
+
+    skip "$other_multiarch libjpeg.so.62 not available", 1
+        unless -e "/usr/lib/$other_multiarch/libjpeg.so.62";
+
+    # Normally, the wrong ABI is an error...
+    ok(! system('rm', '-fr', $libdir));
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                           "--dest=$libdir", "--provider=$host",
+                           "path:/usr/lib/$other_multiarch/libjpeg.so.62"],
+                           '>&2');
+    ok(! $result, 'library of wrong ABI yields an error');
+    ok(! -e "$libdir/libjpeg.so.62");
+
+    # ... but when we're dealing with a glob match, other ABIs are silently
+    # ignored.
+    ok(! system('rm', '-fr', $libdir));
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                           "--dest=$libdir", "--provider=$host",
+                           "path-match:/usr/lib/$other_multiarch/libjpeg.so.62"],
+                           '>&2');
+    ok($result, 'library of wrong ABI ignored when using path-match');
+    ok(! -e "$libdir/libjpeg.so.62");
+
+    # We can also ignore this case explicitly.
+    ok(! system('rm', '-fr', $libdir));
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
+                           "--dest=$libdir", "--provider=$host",
+                           "if-same-abi:path:/usr/lib/$other_multiarch/libjpeg.so.62"],
+                           '>&2');
+    ok($result, 'library of wrong ABI ignored when using if-same-abi');
+    ok(! -e "$libdir/libjpeg.so.62");
+};
+
 done_testing;
 
 # vim:set sw=4 sts=4 et:

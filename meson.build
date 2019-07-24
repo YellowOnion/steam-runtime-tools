@@ -233,6 +233,15 @@ configure_file(
   configuration : conf_data,
 )
 
+if get_option('relocatable')
+  rpath_kwargs = {
+    'build_rpath' : '${ORIGIN}/../' + get_option('libdir'),
+    'install_rpath' : '${ORIGIN}/../' + get_option('libdir'),
+  }
+else
+  rpath_kwargs = {}
+endif
+
 executable(
   'pressure-vessel-wrap',
   sources : [
@@ -254,10 +263,9 @@ executable(
     dependency('xau', required : true),
     subproject('libglnx').get_variable('libglnx_dep'),
   ],
-  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
   install : true,
   install_dir : get_option('bindir'),
-  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  kwargs : rpath_kwargs,
 )
 
 if get_option('relocatable')

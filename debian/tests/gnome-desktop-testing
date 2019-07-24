@@ -8,4 +8,6 @@
 
 set -eu
 
+export G_MESSAGES_DEBUG=all
+
 exec gnome-desktop-testing-runner steam-runtime-tools-0

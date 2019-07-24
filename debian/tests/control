@@ -9,7 +9,7 @@ Depends:
  libsteam-runtime-tools-0-tests,
 
 Tests: gnome-desktop-testing
-Restrictions: allow-stderr
+Restrictions: allow-stderr, skip-not-installable
 Depends:
  gnome-desktop-testing,
  libsteam-runtime-tools-0-tests,

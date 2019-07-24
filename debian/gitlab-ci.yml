@@ -1,0 +1,24 @@
+include:
+    - project: 'steam/steam-ci-pipeline'
+      file: '/steam-gitlab-ci-common.yml'
+
+    - project: 'steam/steam-ci-pipeline'
+      file: '/steam-gitlab-ci-pipeline.yml'
+
+variables:
+    BUILD_IMAGE: docker.internal.steamos.cloud/steamrt/sdk:scout-latest
+    STEAM_CI_USE_BINARIES_FROM: autopkgtest
+    STEAM_CI_DEPENDENCIES: >-
+        debhelper
+        gtk-doc-tools
+        libegl1-mesa-dev
+        libgl1-mesa-dev
+        libgles2-mesa-dev
+        libglib2.0-dev
+        libx11-dev
+        libxcomposite-dev
+        meson
+
+build:
+    variables:
+        BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster

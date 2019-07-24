@@ -1,3 +1,13 @@
+libcapsule (0.20190724.0-0co1) upstream; urgency=medium
+
+  * process_pt_dynamic: Add missing 'break' to DT_JMPREL case
+  * safe_strncpy: Work around -Werror=stringop-truncation
+  * Add some notes on building from git on older host systems
+  * capture-libs: Fix a misleading debug message
+  * capture-libs: Don't capture results of path-match if they are other ABIs
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jul 2019 17:13:32 +0100
+
 libcapsule (0.20190402.0-0co1) upstream; urgency=medium
 
   * debian: Install tools with canonicalized multiarch prefix

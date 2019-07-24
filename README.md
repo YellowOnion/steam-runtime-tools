@@ -84,8 +84,65 @@ easier to be sure that all the necessary files have been selected for
 Steam Cloud Sync, because we could prevent the game writing anywhere
 that won't be synchronised, other than /tmp or similar.
 
-Building a relocatable install
-------------------------------
+Building a local test version of pressure-vessel
+------------------------------------------------
+
+pressure-vessel is a reasonably ordinary Meson project. It depends on
+GLib and libXau.
+
+If you are using it with the under-development Steam Linux Runtime,
+you will probably want to compile it with an unusual ${prefix}:
+
+    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/Steam Linux Runtime/pressure-vessel"
+    libdir="lib/x86_64-linux-gnu"
+    meson --prefix="$prefix" --libdir="$libdir" _build
+    ninja -C _build
+    meson test -v -C _build             # optional
+    ninja -C _build install
+
+Note that this will give you a non-production version of pressure-vessel
+that is likely to depend on libraries from your host system, which is
+good for quick turnaround and debugging, but not suitable for deployment
+to the public. For that, you'll want a relocatable installation: see below.
+
+If you are developing pressure-vessel, you might well want to alter
+the bundled libcapsule tools. You can do this by building your own
+copy of libcapsule. This requires 32- and 64-bit copies of libelf (the
+version from elfutils) and its development files.
+
+Automake doesn't like installation paths with spaces in, so you'll have
+to use a symlink to trick it:
+
+    ln -s "Steam Linux Runtime" \
+    "${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/Steam_Linux_Runtime"
+
+    git clone https://gitlab.collabora.com/vivek/libcapsule.git
+    cd libcapsule
+    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/Steam_Linux_Runtime/pressure-vessel"
+    libdir="lib/x86_64-linux-gnu"
+    NOCONFIGURE=1 ./autogen.sh
+    mkdir _build _build/i386 _build/x86_64
+    ( cd _build/x86_64; ../../configure
+    --host=x86_64-linux-gnu --enable-host-prefix=x86_64-linux-gnu- \
+    --prefix="$prefix" --libdir="\${prefix}/$libdir" \
+    --disable-gtk-doc --disable-shared --without-glib )
+    ( cd _build/i386; ../../configure
+    --host=i686-linux-gnu --enable-host-prefix=i386-linux-gnu- \
+    --prefix="$prefix" --libdir="\${prefix}/$libdir" \
+    --disable-gtk-doc --disable-shared --without-glib )
+    make -C _build/x86_64
+    make -C _build/i386
+    make -C _build/x86_64 install
+    make -C _build/i386 install
+
+For the i386 build, if you don't have a `i686-linux-gnu-gcc` you might
+have to add `CC="gcc -m32"` to the configure command line instead.
+
+Again, this will give you a non-production version of libcapsule that is
+likely to depend on libraries from your host system.
+
+Building a relocatable install for deployment
+---------------------------------------------
 
 To make the built version compatible with older systems, you will need
 an environment based on Ubuntu 12.04 'precise' or Debian 8 'jessie'.
@@ -93,13 +150,13 @@ SteamRT 1 'scout' or SteamRT 1.5 'heavy' should be suitable.
 SteamOS 2 'brewmaster' is not suitable, because its amd64 and i386
 linux-libc-dev packages are not currently co-installable.
 
-The most straightforward method is to have a prebuilt version of
-libcapsule-tools-relocatable:amd64 and libcapsule-tools-relocatable:i386
-in your build environment. For example, you could do the build in a
-SteamRT 1 'scout' or SteamRT 1.5 'heavy' Docker image that has those
-packages already. Then you can do:
+The most straightforward method is to have prebuilt versions of
+libcapsule-tools-relocatable:amd64, libcapsule-tools-relocatable:i386
+and bubblewrap in your build environment. For example, you could do the
+build in a SteamRT 1 'scout' or SteamRT 1.5 'heavy' Docker image that
+has those packages already. Then you can do:
 
-    meson --prefix=$(pwd)/_build/relocatable-install _build
+    meson --prefix=$(pwd)/_build/relocatable-install -Drelocatable=true _build
     ninja -C _build
     meson test -v -C _build             # optional
     rm -fr $(pwd)/_build/relocatable-install
@@ -122,6 +179,7 @@ like:
 
     meson \
         --prefix=$(pwd)/_build/relocatable-install \
+        -Drelocatable=true \
         -Drelocatabledir=./usr/lib/libcapsule/relocatable \
         _build
     ninja -C _build
@@ -130,7 +188,7 @@ like:
     ninja -C _build install
 
 Alternatively, build a Debian source package (`.dsc`, `.debian.tar.*`,
-`.orig.tar.*` for libcapsule 0.20190402.0 or later, which will require
+`.orig.tar.*` for libcapsule 0.20190724.0 or later, which will require
 autoconf-archive 20160916-1~bpo8+1 or later if you are building from git.
 Put it in the top-level directory of `pressure-vessel`, for example:
 

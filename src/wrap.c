@@ -42,10 +42,23 @@
 #include "flatpak-utils-private.h"
 #include "utils.h"
 
+/*
+ * Supported Debian-style multiarch tuples
+ */
 static const char * const multiarch_tuples[] =
 {
   "x86_64-linux-gnu",
   "i386-linux-gnu"
+};
+
+/*
+ * Directories other than /usr/lib that we must search for loadable
+ * modules, in the same order as multiarch_tuples
+ */
+static const char * const libquals[] =
+{
+  "lib64",
+  "lib32"
 };
 
 /* In Flatpak this is optional, in pressure-vessel not so much */
@@ -1078,7 +1091,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           g_autofree gchar *this_dri_path_in_container = g_build_filename (libdir_in_container,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
-          g_autofree gchar *libqual = NULL;
+          const gchar *libqual = NULL;
 
           search_path_append (dri_path, this_dri_path_in_container);
 
@@ -1172,16 +1185,18 @@ bind_runtime (FlatpakBwrap *bwrap,
                                         NULL);
             }
 
-          /* /lib, /lib32 or /lib64 */
-          libqual = g_path_get_dirname (ld_so);
+          /* /lib32 or /lib64 */
+          libqual = libquals[i];
 
-          dirs = g_new0 (gchar *, 5);
+          dirs = g_new0 (gchar *, 7);
           dirs[0] = g_build_filename ("/lib", multiarch_tuples[i], NULL);
           dirs[1] = g_build_filename ("/usr", "lib", multiarch_tuples[i], NULL);
-          dirs[2] = g_strdup (libqual);
-          dirs[3] = g_build_filename ("/usr", libqual, NULL);
+          dirs[2] = g_strdup ("/lib");
+          dirs[3] = g_strdup ("/usr/lib");
+          dirs[4] = g_build_filename ("/", libqual, NULL);
+          dirs[5] = g_build_filename ("/usr", libqual, NULL);
 
-          for (j = 0; j < 4; j++)
+          for (j = 0; j < 6; j++)
             {
               if (!try_bind_dri (bwrap, run_in_container, overrides, scratch,
                                  tool_path, dirs[j], libdir_on_host, error))

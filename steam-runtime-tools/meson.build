@@ -39,7 +39,7 @@ libsteamrt_public_headers = [
 
 enums = gnome.mkenums_simple(
   'enums',
-  install_dir : join_paths('steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
+  install_dir : join_paths(get_option('includedir'), 'steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
   install_header : true,
   sources : libsteamrt_public_headers,
 )
@@ -77,6 +77,7 @@ pkg.generate(
 libsteamrt_dep = declare_dependency(
   include_directories : project_include_dirs,
   link_with : libsteamrt,
+  sources : libsteamrt_public_headers + [enums[1]],
 )
 
 if get_option('introspection')

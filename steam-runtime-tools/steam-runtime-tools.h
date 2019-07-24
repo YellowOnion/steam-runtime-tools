@@ -28,6 +28,7 @@
 #define _SRT_IN_SINGLE_HEADER
 
 #include <steam-runtime-tools/architecture.h>
+#include <steam-runtime-tools/enums.h>
 #include <steam-runtime-tools/library.h>
 
 #undef _SRT_IN_SINGLE_HEADER

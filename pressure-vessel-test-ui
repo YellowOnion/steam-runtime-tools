@@ -54,9 +54,6 @@ class Gui:
         for search in (
             '..',
             '../..',
-            os.path.expanduser(
-                '~/.steam/root/steamapps/common/Steam Linux Runtime'
-            ),
         ):
             source_of_runtimes = os.path.join(
                 os.path.dirname(sys.argv[0]),

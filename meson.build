@@ -73,6 +73,7 @@ no_warning_cflags = [
     'declaration-after-statement',
     'missing-field-initializers',
     'sign-compare',
+    'unused-local-typedefs',
     'unused-parameter',
 ]
 

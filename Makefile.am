@@ -468,6 +468,7 @@ EXTRA_DIST             += $(top_srcdir)/.version
 EXTRA_DIST             += autogen.sh
 EXTRA_DIST             += build-aux/git-version-gen
 EXTRA_DIST             += ci/Jenkinsfile
+EXTRA_DIST             += ci/gitlab-ci.yml
 EXTRA_DIST             += data/capsule-mkstublib
 EXTRA_DIST             += doc/Building-libcapsule.txt
 EXTRA_DIST             += doc/Strategy.txt

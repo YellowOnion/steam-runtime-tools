@@ -1,0 +1,96 @@
+# Copyright © 2019 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+variables:
+    # A known-good version of deb-build-snapshot
+    DEB_BUILD_SNAPSHOT_TAG: v0.20190828.0
+
+    # Name of the package with libjpeg.so.62 in. Set to libjpeg62 in
+    # Ubuntu or really old versions of Debian
+    LIBJPEG62: libjpeg62-turbo
+
+before_script:
+    - |
+        set -eux
+        apt-get -y update
+        apt-get install -y --no-install-recommends \
+          autoconf \
+          autoconf-archive \
+          automake \
+          bubblewrap \
+          build-essential \
+          ca-certificates \
+          chrpath \
+          debhelper \
+          devscripts \
+          dh-autoreconf \
+          git \
+          gtk-doc-tools \
+          libelf-dev \
+          libipc-run-perl \
+          libglib2.0-dev \
+          ${LIBJPEG62} \
+          perl \
+          python3-debian \
+          rsync \
+          xsltproc \
+          zlib1g \
+          ${NULL+}
+
+.build:
+    image: ${BUILD_IMAGE}
+    script: |
+        set -eux
+
+        set -- --upstream --source
+
+        mkdir -p "debian/tmp/artifacts/${CI_JOB_NAME}"
+        set -- "$@" --download "$(pwd)/debian/tmp/artifacts/${CI_JOB_NAME}"
+
+        if [ -n "${CI_DISPOSABLE_ENVIRONMENT-}" ]; then
+            set -- "$@" --install --force-local-install
+        fi
+
+        tempdir="$(mktemp -d)"
+        git clone --branch ${DEB_BUILD_SNAPSHOT_TAG} https://gitlab.collabora.com/smcv/deb-build-snapshot.git "$tempdir/deb-build-snapshot"
+        "$tempdir/deb-build-snapshot/deb-build-snapshot" "$@" localhost
+        rm -fr "$tempdir"
+    artifacts:
+        paths:
+            - debian/tmp/artifacts/${CI_JOB_NAME}
+
+build:stretch:
+    extends: .build
+    variables:
+        BUILD_IMAGE: 'debian:stretch'
+
+build:buster:
+    extends: .build
+    variables:
+        BUILD_IMAGE: 'debian:buster'
+
+build:bionic:
+    extends: .build
+    variables:
+        BUILD_IMAGE: 'ubuntu:bionic'
+        LIBJPEG62: 'libjpeg62'

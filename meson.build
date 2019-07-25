@@ -88,6 +88,8 @@ foreach flag : no_warning_cflags
   add_project_arguments(supported_no_warning_cflags, language : 'c')
 endforeach
 
+add_project_arguments(['-std=c99'], language : 'c')
+
 glib = dependency(
   'glib-2.0',
   version : '>= 2.32',

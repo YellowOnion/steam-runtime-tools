@@ -17,6 +17,7 @@
 
 AUTOMAKE_OPTIONS        = subdir-objects
 ACLOCAL_AMFLAGS         = -I m4 --install
+AM_CPPFLAGS             = -DHOST_PREFIX=\"$(HOST_PREFIX)\"
 AM_CFLAGS               = -fvisibility=hidden \
                           --std=c99 \
                           $(WARN_CFLAGS) \
@@ -94,22 +95,23 @@ utils_libld_la_LIBADD      = utils/libutils.la -ldl $(LIBELF_LIBS)
 bin_PROGRAMS           += capsule-elf-dump
 
 capsule_elf_dump_SOURCES        = utils/elf-dump.c utils/dump.c
+capsule_elf_dump_SOURCES       += utils/tools.c utils/tools.h
 capsule_elf_dump_LDADD          = utils/libutils.la -ldl
 # This looks redundant, but it forces Automake to build separate
 # instantiations of dump.o for elf-dump and libcapsule
 capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)
 capsule_elf_dump_LDFLAGS        = $(AM_LDFLAGS) $(tools_ldflags)
 
-capsule_capture_libs_SOURCES = utils/capture-libs.c
+capsule_capture_libs_SOURCES = utils/capture-libs.c utils/tools.c utils/tools.h
 capsule_capture_libs_LDADD   = utils/libld.la
 capsule_capture_libs_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
 # now the rules for building our installables:
-capsule_symbols_SOURCES = utils/print-libstubs.c
+capsule_symbols_SOURCES = utils/print-libstubs.c utils/tools.c utils/tools.h
 capsule_symbols_LDADD   = utils/libld.la
 capsule_symbols_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
-capsule_version_SOURCES = utils/print-version.c
+capsule_version_SOURCES = utils/print-version.c utils/tools.c utils/tools.h
 capsule_version_LDADD   = utils/libld.la
 capsule_version_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 

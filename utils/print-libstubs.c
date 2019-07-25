@@ -16,6 +16,7 @@
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <dlfcn.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -30,9 +31,32 @@
 
 #include <link.h>
 
+#include "tools.h"
 #include "utils.h"
 #include "ld-cache.h"
 #include "ld-libs.h"
+
+static void usage (int code) __attribute__((noreturn));
+static void usage (int code)
+{
+  FILE *fh;
+
+  if( code == 0 )
+  {
+      fh = stdout;
+  }
+  else
+  {
+      fh = stderr;
+  }
+
+  fprintf( fh, "Usage: %s SONAME [SYSROOT]\n",
+           program_invocation_short_name );
+  fprintf( fh, "SONAME is the machine-readable name of a shared library,\n"
+               "for example 'libz.so.1'.\n" );
+  fprintf( fh, "SYSROOT is the root directory where we look for SONAME.\n" );
+  exit( code );
+}
 
 typedef struct
 {
@@ -288,6 +312,19 @@ dump_symbols (void *handle, const char *libname)
 
 }
 
+enum
+{
+  OPTION_HELP,
+  OPTION_VERSION,
+};
+
+static struct option long_options[] =
+{
+    { "help", no_argument, NULL, OPTION_HELP },
+    { "version", no_argument, NULL, OPTION_VERSION },
+    { NULL }
+};
+
 int main (int argc, char **argv)
 {
     const char *libname;
@@ -298,38 +335,61 @@ int main (int argc, char **argv)
     Lmid_t ns = LM_ID_BASE;
     void *handle;
 
-    if( argc < 2 )
+    while( 1 )
     {
-        fprintf( stderr, "usage: %s <ELF-DSO> [/path/prefix]\n", argv[0] );
-        exit( 1 );
+        int opt = getopt_long( argc, argv, "", long_options, NULL );
+
+        if( opt == -1 )
+        {
+            break;
+        }
+
+        switch( opt )
+        {
+            case '?':
+            default:
+                usage( 2 );
+                break;  // not reached
+
+            case OPTION_HELP:
+                usage( 0 );
+                break;  // not reached
+
+            case OPTION_VERSION:
+                _capsule_tools_print_version( "capsule-symbols" );
+                return 0;
+        }
     }
 
-    set_debug_flags( getenv("CAPSULE_DEBUG") );
+    if( argc < optind + 1 || argc > optind + 2)
+        usage( 1 );
 
-    if( argc > 2 )
-        prefix = argv[2];
+    if( argc > optind + 1 )
+        prefix = argv[optind + 1];
+
+    set_debug_flags( getenv("CAPSULE_DEBUG") );
 
     if( !ld_libs_init( &ldlibs, NULL, prefix, 0, &error, &message ) )
     {
         fprintf( stderr, "%s: failed to initialize for prefix %s (%d: %s)\n",
-                 argv[0], argv[2], error, message );
+                 program_invocation_short_name, prefix, error, message );
         exit( error ? error : ENOENT );
     }
 
-    if( !ld_libs_set_target( &ldlibs, argv[1], &error, &message ) ||
+    if( !ld_libs_set_target( &ldlibs, argv[optind], &error, &message ) ||
         !ld_libs_find_dependencies( &ldlibs, &error, &message ) )
     {
         fprintf( stderr, "%s: failed to open [%s]%s (%d: %s)\n",
-                 argv[0], argv[2], argv[1], error, message );
+                 program_invocation_short_name, prefix, argv[optind], error, message );
         exit( error ? error : ENOENT );
     }
 
     if( ( handle = ld_libs_load( &ldlibs, &ns, 0, &error, &message ) ) )
     {
-        if( (libname = strrchr( argv[1], '/' )) )
+        if( (libname = strrchr( argv[optind], '/' )) )
             libname = libname + 1;
         else
-            libname = argv[1];
+            libname = argv[optind];
 
         // dl_iterate_phdr won't work with private dlmopen namespaces:
         dump_symbols( handle, libname );
@@ -337,7 +397,7 @@ int main (int argc, char **argv)
     else
     {
         fprintf( stderr, "%s: failed to open [%s]%s (%d: %s)\n",
-                 argv[0], argv[2], argv[1], error, message );
+                 program_invocation_short_name, prefix, argv[optind], error, message );
         exit(error ? error : ENOENT);
     }
 

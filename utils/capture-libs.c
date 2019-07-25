@@ -32,6 +32,7 @@
 
 #include "debug.h"
 #include "ld-libs.h"
+#include "tools.h"
 #include "utils.h"
 
 // We only really care about x86 here because that's the only thing
@@ -92,6 +93,7 @@ enum
   OPTION_PRINT_LD_SO,
   OPTION_PROVIDER,
   OPTION_RESOLVE_LD_SO,
+  OPTION_VERSION,
 };
 
 static const char * const *arg_patterns = NULL;
@@ -111,6 +113,7 @@ static struct option long_options[] =
     { "print-ld.so", no_argument, NULL, OPTION_PRINT_LD_SO },
     { "provider", required_argument, NULL, OPTION_PROVIDER },
     { "resolve-ld.so", required_argument, NULL, OPTION_RESOLVE_LD_SO },
+    { "version", no_argument, NULL, OPTION_VERSION },
     { NULL }
 };
 
@@ -1033,6 +1036,10 @@ main (int argc, char **argv)
             case OPTION_NO_GLIBC:
                 option_glibc = false;
                 break;
+
+            case OPTION_VERSION:
+                _capsule_tools_print_version( "capsule-capture-libs" );
+                return 0;
 
             case OPTION_RESOLVE_LD_SO:
                 {

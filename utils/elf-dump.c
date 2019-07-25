@@ -17,12 +17,48 @@
 
 #include <dlfcn.h>
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "debug.h"
 #include "dump.h"
+#include "tools.h"
+
+static void usage (int code) __attribute__((noreturn));
+static void usage (int code)
+{
+  FILE *fh;
+
+  if( code == 0 )
+  {
+      fh = stdout;
+  }
+  else
+  {
+      fh = stderr;
+  }
+
+  fprintf( fh, "Usage: %s SONAME\n",
+           program_invocation_short_name );
+  fprintf( fh, "SONAME is the machine-readable name of a shared library,\n"
+               "for example 'libz.so.1'.\n" );
+  exit( code );
+}
+
+enum
+{
+  OPTION_HELP,
+  OPTION_VERSION,
+};
+
+static struct option long_options[] =
+{
+    { "help", no_argument, NULL, OPTION_HELP },
+    { "version", no_argument, NULL, OPTION_VERSION },
+    { NULL }
+};
 
 int main (int argc, char **argv)
 {
@@ -31,26 +67,49 @@ int main (int argc, char **argv)
 
     set_debug_flags( getenv("CAPSULE_DEBUG") );
 
-    if( argc < 2 )
+    while( 1 )
     {
-        fprintf( stderr, "usage: %s <ELF-DSO>\n", argv[0] );
-        exit( 1 );
+        int opt = getopt_long( argc, argv, "", long_options, NULL );
+
+        if( opt == -1 )
+        {
+            break;
+        }
+
+        switch( opt )
+        {
+            case '?':
+            default:
+                usage( 2 );
+                break;  // not reached
+
+            case OPTION_HELP:
+                usage( 0 );
+                break;  // not reached
+
+            case OPTION_VERSION:
+                _capsule_tools_print_version( "capsule-elf-dump" );
+                return 0;
+        }
     }
 
-    handle = dlopen( argv[1], RTLD_LAZY );
+    if( argc != optind + 1 )
+        usage( 1 );
+
+    handle = dlopen( argv[optind], RTLD_LAZY );
 
     if( !handle )
     {
         int e = errno;
         const char *err = dlerror();
-        fprintf( stderr, "%s: dlopen failed (%s)\n", argv[0], err );
+        fprintf( stderr, "%s: dlopen failed (%s)\n", program_invocation_short_name, err );
         return e ? e : ENOENT;
     }
 
-    if( (libname = strrchr( argv[1], '/' )) )
+    if( (libname = strrchr( argv[optind], '/' )) )
         libname = libname + 1;
     else
-        libname = argv[1];
+        libname = argv[optind];
 
     dump_elf_data( libname );
 

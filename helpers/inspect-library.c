@@ -230,9 +230,6 @@ main (int argc,
                       free (merged_string);
                     }
                 }
-              free (line);
-              line = NULL;
-              len = 0;
             }
         }
       free (line);

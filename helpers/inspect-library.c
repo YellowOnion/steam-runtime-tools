@@ -120,7 +120,6 @@ main (int argc,
   size_t missing_n = 0;
   size_t misversioned_n = 0;
   char *line = NULL;
-  char *r = NULL;
   size_t len = 0;
   ssize_t chars;
   bool first;
@@ -198,13 +197,14 @@ main (int argc,
           /* Skip any empty line */
           if (chars > 1)
             {
-              r = line;
-              symbol = strsep(&line, "@");
-              version = strsep(&line, "@");
+              char *pointer_into_line = line;
+
+              symbol = strsep (&pointer_into_line, "@");
+              version = strsep (&pointer_into_line, "@");
               if (symbol == NULL)
                 {
                   fprintf (stderr, "Probably the symbol@version pair is mispelled.");
-                  free (r);
+                  free (line);
                   free (missing_symbols);
                   free (misversioned_symbols);
                   clean_exit (handle);
@@ -230,7 +230,9 @@ main (int argc,
                       free (merged_string);
                     }
                 }
-              free (r);
+              free (line);
+              line = NULL;
+              len = 0;
             }
         }
       free (line);

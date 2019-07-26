@@ -10,9 +10,11 @@ Build-Depends:
  libgl1-mesa-dev,
  libgles2-mesa-dev,
  libglib2.0-dev,
+ libjson-glib-dev (>= 1.0),
  libx11-dev,
  libxcomposite-dev,
  meson,
+ zlib1g <!nocheck>,
 Build-Depends-Indep:
  libglib2.0-dev,
 Vcs-Git: https://gitlab.steamos.cloud/steam/steam-runtime-tools.git

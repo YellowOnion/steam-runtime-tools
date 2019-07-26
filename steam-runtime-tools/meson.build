@@ -21,8 +21,6 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-libdl = c_compiler.find_library('dl', required : false)
-
 libsteamrt_sources = [
     'architecture.c',
     'library-internal.h',
@@ -61,7 +59,7 @@ libsteamrt = library(
     '-D_SRT_API_MAJOR="' + api_major + '"',
   ],
   include_directories : project_include_dirs,
-  dependencies : [glib, gobject, libdl],
+  dependencies : [glib, gobject, libdl, json_glib],
   soversion : abi_major,
   version : abi_major + '.' + abi_minor,
   install : true,

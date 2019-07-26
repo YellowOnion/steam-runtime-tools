@@ -27,6 +27,10 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
+#include "steam-runtime-tools/library-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
+
+#include <json-glib/json-glib.h>
 
 /**
  * SECTION:library
@@ -43,8 +47,11 @@ struct _SrtLibrary
 {
   /*< private >*/
   GObject parent;
+  gchar *absolute_path;
   gchar *soname;
+  GStrv dependencies;
   GStrv missing_symbols;
+  GStrv misversioned_symbols;
   GQuark multiarch_tuple;
   SrtLibraryIssues issues;
 };
@@ -57,10 +64,13 @@ struct _SrtLibraryClass
 
 enum {
   PROP_0,
+  PROP_ABSOLUTE_PATH,
+  PROP_DEPENDENCIES,
   PROP_ISSUES,
   PROP_MISSING_SYMBOLS,
   PROP_MULTIARCH_TUPLE,
   PROP_SONAME,
+  PROP_MISVERSIONED_SYMBOLS,
   N_PROPERTIES
 };
 
@@ -81,6 +91,14 @@ srt_library_get_property (GObject *object,
 
   switch (prop_id)
     {
+      case PROP_ABSOLUTE_PATH:
+        g_value_set_string (value, self->absolute_path);
+        break;
+
+      case PROP_DEPENDENCIES:
+        g_value_set_boxed (value, self->dependencies);
+        break;
+
       case PROP_ISSUES:
         g_value_set_flags (value, self->issues);
         break;
@@ -95,6 +113,10 @@ srt_library_get_property (GObject *object,
 
       case PROP_SONAME:
         g_value_set_string (value, self->soname);
+        break;
+
+      case PROP_MISVERSIONED_SYMBOLS:
+        g_value_set_boxed (value, self->misversioned_symbols);
         break;
 
       default:
@@ -112,6 +134,23 @@ srt_library_set_property (GObject *object,
 
   switch (prop_id)
     {
+      case PROP_ABSOLUTE_PATH:
+        /* Construct-only */
+        g_return_if_fail (self->absolute_path == NULL);
+        self->absolute_path = g_value_dup_string (value);
+        break;
+
+      case PROP_DEPENDENCIES:
+        /* Construct-only */
+        g_return_if_fail (self->dependencies == NULL);
+        self->dependencies = g_value_dup_boxed (value);
+
+        /* Guarantee non-NULL */
+        if (self->dependencies == NULL)
+          self->dependencies = g_new0 (gchar *, 1);
+
+        break;
+
       case PROP_ISSUES:
         /* Construct-only */
         g_return_if_fail (self->issues == 0);
@@ -142,6 +181,17 @@ srt_library_set_property (GObject *object,
         self->soname = g_value_dup_string (value);
         break;
 
+      case PROP_MISVERSIONED_SYMBOLS:
+        /* Construct-only */
+        g_return_if_fail (self->misversioned_symbols == NULL);
+        self->misversioned_symbols = g_value_dup_boxed (value);
+
+        /* Guarantee non-NULL */
+        if (self->misversioned_symbols == NULL)
+          self->misversioned_symbols = g_new0 (gchar *, 1);
+
+        break;
+
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -152,8 +202,11 @@ srt_library_finalize (GObject *object)
 {
   SrtLibrary *self = SRT_LIBRARY (object);
 
+  g_free (self->absolute_path);
   g_free (self->soname);
+  g_strfreev (self->dependencies);
   g_strfreev (self->missing_symbols);
+  g_strfreev (self->misversioned_symbols);
 
   G_OBJECT_CLASS (srt_library_parent_class)->finalize (object);
 }
@@ -169,6 +222,19 @@ srt_library_class_init (SrtLibraryClass *cls)
   object_class->set_property = srt_library_set_property;
   object_class->finalize = srt_library_finalize;
 
+  properties[PROP_ABSOLUTE_PATH] =
+    g_param_spec_string ("absolute-path", "Absolute path",
+                         "The absolute path of this library, for example "
+                         "/usr/lib/libz.so.1",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  properties[PROP_DEPENDENCIES] =
+    g_param_spec_boxed ("dependencies", "Dependencies",
+                        "Dependencies of this library",
+                        G_TYPE_STRV,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
   properties[PROP_ISSUES] =
     g_param_spec_flags ("issues", "Issues", "Problems with this library",
                         SRT_TYPE_LIBRARY_ISSUES, SRT_LIBRARY_ISSUES_NONE,
@@ -195,8 +261,31 @@ srt_library_class_init (SrtLibraryClass *cls)
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
+  properties[PROP_MISVERSIONED_SYMBOLS] =
+    g_param_spec_boxed ("misversioned-symbols", "Misversioned symbols",
+                        "Symbols that were expected to be in this library, "
+                        "but were available with a different version",
+                        G_TYPE_STRV,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
+}
+
+/**
+ * srt_library_get_absolute_path:
+ * @self: a library
+ *
+ * Return the absolute path of @self.
+ *
+ * Returns: A string like `/usr/lib/libz.so.1`, which is valid as long as
+ *  @self is not destroyed.
+ */
+const char *
+srt_library_get_absolute_path (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return self->absolute_path;
 }
 
 /**
@@ -248,6 +337,23 @@ srt_library_get_issues (SrtLibrary *self)
 }
 
 /**
+ * srt_library_get_dependencies:
+ * @self: a library
+ *
+ * Return the dependencies of @self.
+ *
+ * Returns: (array zero-terminated=1) (element-type utf8): The dependencies
+ *  of @self, as a %NULL-terminated array. The pointer remains valid
+ *  until @self is destroyed.
+ */
+const char * const *
+srt_library_get_dependencies (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return (const char * const *) self->dependencies;
+}
+
+/**
  * srt_library_get_missing_symbols:
  * @self: a library
  *
@@ -263,4 +369,188 @@ srt_library_get_missing_symbols (SrtLibrary *self)
 {
   g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
   return (const char * const *) self->missing_symbols;
+}
+
+/**
+ * srt_library_get_misversioned_symbols:
+ * @self: a library
+ *
+ * Return the symbols that were expected to be provided by self but were
+ * available with a different version. Note that this list contains the symbol
+ * we expected, not the symbol we found. For example, if we expected to find
+ * the versioned symbol `curl_getenv@CURL_OPENSSL_3` in `libcurl.so.4` (as
+ * seen in Ubuntu 12.04 and the Steam Runtime), but we actually found either
+ * `curl_getenv@CURL_OPENSSL_4` (as seen in Debian 10) or an unversioned
+ * curl_getenv, then this list would contain `curl_getenv@CURL_OPENSSL_3`
+ *
+ * Returns: (array zero-terminated=1) (element-type utf8): The symbols
+ *  were available with a different version from @self, as a %NULL-terminated
+ *  array. The pointer remains valid until @self is destroyed.
+ */
+const char * const *
+srt_library_get_misversioned_symbols (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return (const char * const *) self->misversioned_symbols;
+}
+
+/**
+ * srt_check_library_presence:
+ * @soname: (type filename): The `SONAME` of a shared library, for example `libjpeg.so.62`
+ * @multiarch: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
+ * @symbols_path: (nullable): (type filename): The filename of a file with one
+ *  symbol per line, in the format `jpeg_input_complete@LIBJPEG_6.2` for
+ *  versioned symbols or `DGifOpen@Base` for symbols not associated with a version,
+ *  or %NULL if we do not know which symbols the library is meant to contain.
+ * @more_details_out: (out) (optional) (transfer full): Used to return an
+ *  #SrtLibrary object representing the shared library provided by @soname.
+ *  Free with `g_object_unref()`.
+ *
+ * Attempt to load @soname into a helper subprocess, and check whether it conforms
+ * to the ABI provided in `symbols_path`.
+ *
+ * Returns: A bitfield containing problems, or %SRT_LIBRARY_ISSUES_NONE
+ *  if no problems were found.
+ */
+
+SrtLibraryIssues
+srt_check_library_presence (const char *soname,
+                            const char *multiarch,
+                            const char *symbols_path,
+                            SrtLibrary **more_details_out)
+{
+  gchar *helper = NULL;
+  gchar *output = NULL;
+  gchar *absolute_path = NULL;
+  const gchar *argv[] = { "inspect-library", soname, symbols_path, NULL };
+  int exit_status = -1;
+  JsonParser *parser = NULL;
+  JsonNode *node = NULL;
+  JsonObject *json;
+  JsonArray *missing_array;
+  JsonArray *misversioned_array;
+  JsonArray *dependencies_array;
+  GError *error = NULL;
+  GStrv missing_symbols = NULL;
+  GStrv misversioned_symbols = NULL;
+  GStrv dependencies = NULL;
+  SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
+
+  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+
+  helper = g_strdup_printf ("%s/%s-inspect-library",
+                            _srt_get_helpers_path (), multiarch);
+  argv[0] = helper;
+  g_debug ("Checking library %s integrity with %s", soname, helper);
+
+  if (!g_spawn_sync (NULL,    /* working directory */
+                     (gchar **) argv,
+                     NULL,    /* envp */
+                     0,       /* flags */
+                     NULL,    /* child setup */
+                     NULL,    /* user data */
+                     &output, /* stdout */
+                     NULL,    /* stderr */
+                     &exit_status,
+                     &error))
+    {
+      g_debug ("An error occurred calling the helper: %s", error->message);
+      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+      goto out;
+    }
+
+  if (exit_status != 0)
+    {
+      g_debug ("... wait status %d", exit_status);
+      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+      goto out;
+    }
+
+  /* We can't use `json_from_string()` directly because we are targeting an
+   * older json-glib version */
+  parser = json_parser_new ();
+
+  if (!json_parser_load_from_data (parser, output, -1, &error))
+    {
+      g_debug ("The helper output is not a valid JSON: %s", error->message);
+      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+      goto out;
+    }
+
+  node = json_parser_get_root (parser);
+  json = json_node_get_object (node);
+  if (!json_object_has_member (json, soname))
+    {
+      g_debug ("The helper output is missing the expected soname %s", soname);
+      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+      goto out;
+    }
+  json = json_object_get_object_member (json, soname);
+
+  absolute_path = g_strdup (json_object_get_string_member (json, "path"));
+
+  missing_array = json_object_get_array_member (json, "missing_symbols");
+  if (missing_array != NULL)
+    {
+      if (json_array_get_length (missing_array) > 0)
+        {
+          issues |= SRT_LIBRARY_ISSUES_MISSING_SYMBOLS;
+          missing_symbols = g_new0 (gchar *, json_array_get_length (missing_array) + 1);
+          for (guint i = 0; i < json_array_get_length (missing_array); i++)
+            {
+              missing_symbols[i] = g_strdup (json_array_get_string_element (missing_array, i));
+            }
+          missing_symbols[json_array_get_length (missing_array)] = NULL;
+        }
+    }
+
+  misversioned_array = json_object_get_array_member (json, "misversioned_symbols");
+  if (misversioned_array != NULL)
+    {
+      if (json_array_get_length (misversioned_array) > 0)
+        {
+          issues |= SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS;
+          misversioned_symbols = g_new0 (gchar *, json_array_get_length (misversioned_array) + 1);
+          for (guint i = 0; i < json_array_get_length (misversioned_array); i++)
+            {
+              misversioned_symbols[i] = g_strdup (json_array_get_string_element (misversioned_array, i));
+            }
+          misversioned_symbols[json_array_get_length (misversioned_array)] = NULL;
+        }
+    }
+
+  dependencies_array = json_object_get_array_member (json, "dependencies");
+  if (dependencies_array != NULL)
+    {
+      dependencies = g_new0 (gchar *, json_array_get_length (dependencies_array) + 1);
+      for (guint i = 0; i < json_array_get_length (dependencies_array); i++)
+        {
+          dependencies[i] = g_strdup (json_array_get_string_element (dependencies_array, i));
+        }
+      dependencies[json_array_get_length (dependencies_array)] = NULL;
+    }
+
+out:
+  if (more_details_out != NULL)
+    *more_details_out = _srt_library_new (multiarch,
+                                          absolute_path,
+                                          soname,
+                                          issues,
+                                          (const char **) missing_symbols,
+                                          (const char **) misversioned_symbols,
+                                          (const char **) dependencies);
+
+  if (parser != NULL)
+    g_object_unref (parser);
+
+  g_strfreev (missing_symbols);
+  g_strfreev (misversioned_symbols);
+  g_strfreev (dependencies);
+  g_free (absolute_path);
+  g_free (helper);
+  g_free (output);
+  g_clear_error (&error);
+  return issues;
 }

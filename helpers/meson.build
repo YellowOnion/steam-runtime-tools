@@ -31,6 +31,20 @@ executable(
   )
 )
 
+executable(
+  multiarch + '-inspect-library',
+  'inspect-library.c',
+  dependencies : [libdl],
+  c_args : [
+      '-D_GNU_SOURCE',
+    ],
+  install : true,
+  install_dir : join_paths(
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+  )
+)
+
 glib_dep = dependency('glib-2.0')
 x11_dep = dependency('x11')
 

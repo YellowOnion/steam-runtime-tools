@@ -125,7 +125,11 @@ main (int argc,
 
   if (argc == 3)
     {
-      fp = fopen(argv[2], "r");
+      if (strcmp(argv[2], "-") == 0)
+        fp = stdin;
+      else
+        fp = fopen(argv[2], "r");
+
       if (fp == NULL)
         {
           int saved_errno = errno;

@@ -35,6 +35,7 @@
 #include <argz.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <getopt.h>
 #include <link.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -71,6 +72,37 @@ do { \
       oom (); \
 } while (0)
 
+enum
+{
+  OPTION_HELP = 1,
+};
+
+struct option long_options[] =
+{
+    { "help", no_argument, NULL, OPTION_HELP },
+    { NULL, 0, NULL, 0 }
+};
+
+static void usage (int code) __attribute__((__noreturn__));
+
+/*
+ * Print usage information and exit with status @code.
+ */
+static void
+usage (int code)
+{
+  FILE *fp;
+
+  if (code == 0)
+    fp = stdout;
+  else
+    fp = stderr;
+
+  fprintf (fp, "Usage: %s [OPTIONS] SONAME [SYMBOLS_FILENAME]\n",
+           program_invocation_short_name);
+  exit (code);
+}
+
 int
 main (int argc,
       char **argv)
@@ -92,14 +124,32 @@ main (int argc,
   size_t len = 0;
   ssize_t chars;
   bool first;
+  int opt;
 
-  if (argc < 2 || argc > 3)
+  while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
-      fprintf (stderr, "Expected, as argument, one SONAME and optionally a filename for symbols.\n");
-      return 1;
+      switch (opt)
+        {
+          case OPTION_HELP:
+            usage (0);
+            break;
+
+          case '?':
+          default:
+            usage (1);
+            break;  /* not reached */
+
+          case -1:
+            break;
+        }
     }
 
-  soname = argv[1];
+  if (argc < optind + 1 || argc > optind + 2)
+    {
+      usage (1);
+    }
+
+  soname = argv[optind];
   printf ("{\n");
   printf ("  \"");
   print_json_string_content (soname);
@@ -123,18 +173,19 @@ main (int argc,
   print_json_string_content (the_library->l_name);
   printf ("\"");
 
-  if (argc == 3)
+  if (argc >= optind + 2)
     {
-      if (strcmp(argv[2], "-") == 0)
+      if (strcmp(argv[optind + 1], "-") == 0)
         fp = stdin;
       else
-        fp = fopen(argv[2], "r");
+        fp = fopen(argv[optind + 1], "r");
 
       if (fp == NULL)
         {
           int saved_errno = errno;
 
-          fprintf (stderr, "Error reading \"%s\": %s\n", argv[2], strerror (saved_errno));
+          fprintf (stderr, "Error reading \"%s\": %s\n",
+                   argv[optind + 1], strerror (saved_errno));
           clean_exit (handle);
           return 1;
         }

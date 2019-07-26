@@ -29,6 +29,8 @@
 #include <link.h>
 #include <string.h>
 
+#include <glib-object.h>
+
 static gchar *helpers_path = NULL;
 
 G_GNUC_INTERNAL const char *
@@ -95,3 +97,12 @@ out:
 
   return path;
 }
+
+#if !GLIB_CHECK_VERSION(2, 36, 0)
+static void _srt_constructor (void) __attribute__((__constructor__));
+static void
+_srt_constructor (void)
+{
+  g_type_init ();
+}
+#endif

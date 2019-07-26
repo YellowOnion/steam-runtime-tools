@@ -227,6 +227,7 @@ test_presence (Fixture *f,
 
   expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
                                    "inflateBack@ZLIB_1.2.0\n"
+                                   "adler32\n"
                                    "gzopen@Base");
 
   result = g_file_set_contents (tmp_file, expected_symbols->str, -1, &error);

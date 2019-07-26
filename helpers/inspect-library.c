@@ -211,7 +211,7 @@ main (int argc,
                   return 1;
                 }
 
-              if (strcmp (version, BASE) == 0)
+              if (version == NULL || strcmp (version, BASE) == 0)
                 {
                   if (!has_symbol (handle, symbol))
                     argz_add_or_die (&missing_symbols, &missing_n, symbol);

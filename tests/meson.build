@@ -46,6 +46,9 @@ foreach test_name : tests
   exe = executable(
     'test-' + test_name,
     files(test_name + '.c'),
+    c_args : [
+      '-D_SRT_MULTIARCH="' + multiarch + '"',
+    ],
     dependencies : [glib, gobject, libsteamrt_dep],
     install : get_option('installed_tests'),
     install_dir : tests_dir,

@@ -104,6 +104,13 @@ gobject = dependency(
   'gobject-2.0',
   version : '>= 2.32',
 )
+json_glib = dependency(
+  'json-glib-1.0',
+  version : '>= 1.0',
+)
+
+libdl = c_compiler.find_library('dl', required : false)
+
 project_include_dirs = include_directories('.')
 
 if host_machine.cpu_family() == 'x86_64'

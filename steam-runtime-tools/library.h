@@ -50,6 +50,8 @@ GType srt_library_get_type (void);
  * @SRT_LIBRARY_ISSUES_CANNOT_LOAD: The library could not be loaded
  * @SRT_LIBRARY_ISSUES_MISSING_SYMBOLS: Some of the expected symbols
  *  were not present
+ * @SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS: Some of the expected symbols
+ *  were available with a different version
  *
  * A bitfield with flags representing problems with a library, or
  * %SRT_LIBRARY_ISSUES_NONE (which is numerically zero) if no problems
@@ -61,10 +63,18 @@ typedef enum
 {
   SRT_LIBRARY_ISSUES_CANNOT_LOAD = (1 << 0),
   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS = (1 << 1),
+  SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS = (1 << 2),
   SRT_LIBRARY_ISSUES_NONE = 0
 } SrtLibraryIssues;
 
+const char *srt_library_get_absolute_path (SrtLibrary *self);
 const char *srt_library_get_soname (SrtLibrary *self);
 const char *srt_library_get_multiarch_tuple (SrtLibrary *self);
 SrtLibraryIssues srt_library_get_issues (SrtLibrary *self);
 const char * const *srt_library_get_missing_symbols (SrtLibrary *self);
+const char * const *srt_library_get_misversioned_symbols (SrtLibrary *self);
+const char * const *srt_library_get_dependencies (SrtLibrary *self);
+SrtLibraryIssues srt_check_library_presence (const char *soname,
+                                             const char *multiarch,
+                                             const char *symbols_path,
+                                             SrtLibrary **more_details_out);

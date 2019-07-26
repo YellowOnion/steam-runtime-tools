@@ -237,6 +237,7 @@ test_presence (Fixture *f,
   issues = srt_check_library_presence ("libz.so.1",
                                        _SRT_MULTIARCH,
                                        tmp_file,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
 
@@ -266,6 +267,77 @@ test_presence (Fixture *f,
   g_unlink (tmp_file);
   g_free (tmp_file);
   g_string_free (expected_symbols, TRUE);
+  g_object_unref (library);
+  g_clear_error (&error);
+}
+
+/*
+ * Test parsing a deb-symbols(5) file.
+ */
+static void
+test_deb_symbols (Fixture *f,
+                  gconstpointer context)
+{
+  gboolean result;
+  char *tmp_file = NULL;
+  static const char expected_symbols[] =
+    "# A comment.\n"
+    /* Obviously this library doesn't really exist: it's here to check
+     * that we do the right thing for files that describe more than one
+     * SONAME, like libglib2.0-0:*.symbols. */
+    "libzextra.so.0 libzextra0 #MINVER#\n"
+    " some_fictitious_symbol@Base 1:2.0\n"
+    "libz.so.1 zlib1g #MINVER#\n"
+    "| libz1 #MINVER\n"
+    "* Build-Depends-Package: zlib1g-dev\n"
+    " adler32@Base 1:1.1.4\n"
+    " inflateBack@ZLIB_1.2.0 1:1.2.0\n"
+    /* These symbols don't exist: they're here to check that we don't miss
+     * checking for symbols in the correct section of the file. */
+    " nope@MISSING 1:1.2.0\n"
+    " also_nope@Base 1:1.2.0\n"
+    /* This library doesn't exist either. */
+    "libzmore.so.0 libzmore0 #MINVER#\n"
+    " some_other_fictitious_symbol@Base 1:2.0\n";
+  SrtLibrary *library = NULL;
+  SrtLibraryIssues issues;
+  const char * const *missing_symbols;
+  int fd;
+  GError *error = NULL;
+
+  if (strcmp (_SRT_MULTIARCH, "") == 0)
+    {
+      g_test_skip ("Unsupported architecture");
+      return;
+    }
+
+  fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
+  g_assert_no_error (error);
+  g_assert_cmpint (fd, !=, -1);
+  close (fd);
+
+  result = g_file_set_contents (tmp_file, expected_symbols, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
+
+  issues = srt_check_library_presence ("libz.so.1",
+                                       _SRT_MULTIARCH,
+                                       tmp_file,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
+                                       &library);
+  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISSING_SYMBOLS);
+
+  /* If we had mistakenly parsed the sections that refer to libzextra.so.0
+   * and libzmore.so.0, then we would see more missing symbols than this.
+   * If we had not parsed the libz.so.1 section, we would see fewer. */
+  missing_symbols = srt_library_get_missing_symbols (library);
+  g_assert_nonnull (missing_symbols);
+  g_assert_cmpstr (missing_symbols[0], ==, "nope@MISSING");
+  g_assert_cmpstr (missing_symbols[1], ==, "also_nope");
+  g_assert_cmpstr (missing_symbols[2], ==, NULL);
+
+  g_unlink (tmp_file);
+  g_free (tmp_file);
   g_object_unref (library);
   g_clear_error (&error);
 }
@@ -312,6 +384,7 @@ test_empty_line (Fixture *f,
   issues = srt_check_library_presence ("libz.so.1",
                                        _SRT_MULTIARCH,
                                        tmp_file,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
 
@@ -371,6 +444,7 @@ test_missing_symbols (Fixture *f,
   issues = srt_check_library_presence ("libz.so.1",
                                        _SRT_MULTIARCH,
                                        tmp_file,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISSING_SYMBOLS);
 
@@ -449,6 +523,7 @@ test_misversioned_symbols (Fixture *f,
   issues = srt_check_library_presence ("libz.so.1",
                                        _SRT_MULTIARCH,
                                        tmp_file,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS);
 
@@ -529,6 +604,7 @@ test_missing_symbols_and_versions (Fixture *f,
   issues = srt_check_library_presence ("libz.so.1",
                                        _SRT_MULTIARCH,
                                        tmp_file,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS, !=, 0);
@@ -592,12 +668,14 @@ test_missing_library (Fixture *f,
   issues = srt_check_library_presence ("libMISSING.so.62",
                                        _SRT_MULTIARCH,
                                        NULL,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        NULL);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
 
   issues = srt_check_library_presence ("libMISSING.so.62",
                                        _SRT_MULTIARCH,
                                        NULL,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
@@ -633,6 +711,7 @@ test_missing_arch (Fixture *f,
   issues = srt_check_library_presence ("libz.so.1",
                                        "hal9000-linux-gnu",
                                        NULL,
+                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
@@ -661,6 +740,8 @@ main (int argc,
   g_test_add ("/object", Fixture, NULL,
               setup, test_object, teardown);
   g_test_add ("/presence", Fixture, NULL, setup, test_presence,
+              teardown);
+  g_test_add ("/deb_symbols", Fixture, NULL, setup, test_deb_symbols,
               teardown);
   g_test_add ("/empty_line", Fixture, NULL, setup, test_empty_line,
               teardown);

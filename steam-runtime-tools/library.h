@@ -67,6 +67,19 @@ typedef enum
   SRT_LIBRARY_ISSUES_NONE = 0
 } SrtLibraryIssues;
 
+/**
+ * SrtLibrarySymbolsFormat:
+ * @SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN: One symbol per line
+ * @SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS: deb-symbols(5) format
+ *
+ * The format of a file listing expected symbols.
+ */
+typedef enum
+{
+  SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN = 0,
+  SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS
+} SrtLibrarySymbolsFormat;
+
 const char *srt_library_get_absolute_path (SrtLibrary *self);
 const char *srt_library_get_soname (SrtLibrary *self);
 const char *srt_library_get_multiarch_tuple (SrtLibrary *self);
@@ -77,4 +90,5 @@ const char * const *srt_library_get_dependencies (SrtLibrary *self);
 SrtLibraryIssues srt_check_library_presence (const char *soname,
                                              const char *multiarch,
                                              const char *symbols_path,
+                                             SrtLibrarySymbolsFormat symbols_format,
                                              SrtLibrary **more_details_out);

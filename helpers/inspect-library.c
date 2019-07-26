@@ -75,10 +75,12 @@ do { \
 enum
 {
   OPTION_HELP = 1,
+  OPTION_DEB_SYMBOLS,
 };
 
 struct option long_options[] =
 {
+    { "deb-symbols", no_argument, NULL, OPTION_DEB_SYMBOLS },
     { "help", no_argument, NULL, OPTION_HELP },
     { NULL, 0, NULL, 0 }
 };
@@ -123,12 +125,17 @@ main (int argc,
   size_t len = 0;
   ssize_t chars;
   bool first;
+  bool deb_symbols = false;
   int opt;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
       switch (opt)
         {
+          case OPTION_DEB_SYMBOLS:
+            deb_symbols = true;
+            break;
+
           case OPTION_HELP:
             usage (0);
             break;
@@ -174,6 +181,10 @@ main (int argc,
 
   if (argc >= optind + 2)
     {
+      size_t soname_len = strlen (soname);
+      bool found_our_soname = false;
+      bool in_our_soname = false;
+
       if (strcmp(argv[optind + 1], "-") == 0)
         fp = stdin;
       else
@@ -197,10 +208,58 @@ main (int argc,
           /* Skip any empty line */
           if (chars > 1)
             {
-              char *pointer_into_line = line;
+              char *pointer_into_line;
+
+              if (deb_symbols)
+                {
+                  if (line[0] == '#' || line[0] == '*' || line[0] == '|')
+                    {
+                      /* comment or metadata lines, ignore:
+                       * "# comment"
+                       * "* Field: Value"
+                       * "| alternative-dependency" */
+                      continue;
+                    }
+                  else if (line[0] == ' ')
+                    {
+                      /* this line represents a symbol:
+                       * " symbol@Base 1.2-3~" */
+                      if (!in_our_soname)
+                        {
+                          /* this is a symbol from a different library,
+                           * ignore */
+                          continue;
+                        }
+                    }
+                  else
+                    {
+                      /* This line introduces a new SONAME, which might
+                       * be the one we are interested in:
+                       * "libz.so.1 zlib1g #MINVER#" */
+                      if (strncmp (soname, line, soname_len) == 0
+                          && (line[soname_len] == ' ' || line[soname_len] == '\t'))
+                        {
+                          found_our_soname = true;
+                          in_our_soname = true;
+                        }
+                      else
+                        {
+                          in_our_soname = false;
+                        }
+
+                      /* This is not a symbol */
+                      continue;
+                    }
+
+                  pointer_into_line = &line[1];
+                }
+              else
+                {
+                  pointer_into_line = line;
+                }
 
               symbol = strsep (&pointer_into_line, "@");
-              version = strsep (&pointer_into_line, "@");
+              version = strsep (&pointer_into_line, deb_symbols ? "@ \t" : "@");
               if (symbol == NULL)
                 {
                   fprintf (stderr, "Probably the symbol@version pair is mispelled.");
@@ -234,6 +293,12 @@ main (int argc,
         }
       free (line);
       fclose (fp);
+
+      if (deb_symbols && !found_our_soname)
+        {
+          fprintf (stderr, "Warning: \"%s\" does not describe ABI of \"%s\"\n",
+                   argv[optind + 1], soname);
+        }
 
       first = true;
       entry = 0;

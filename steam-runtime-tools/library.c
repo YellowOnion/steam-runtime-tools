@@ -398,16 +398,25 @@ srt_library_get_misversioned_symbols (SrtLibrary *self)
  * srt_check_library_presence:
  * @soname: (type filename): The `SONAME` of a shared library, for example `libjpeg.so.62`
  * @multiarch: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
- * @symbols_path: (nullable): (type filename): The filename of a file with one
- *  symbol per line, in the format `jpeg_input_complete@LIBJPEG_6.2` for
- *  versioned symbols or `DGifOpen@Base` for symbols not associated with a version,
- *  or %NULL if we do not know which symbols the library is meant to contain.
+ * @symbols_path: (nullable): (type filename): The filename of a file listing
+ *  symbols, or %NULL if we do not know which symbols the library is meant to
+ *  contain.
+ * @symbols_format: The format of @symbols_path.
  * @more_details_out: (out) (optional) (transfer full): Used to return an
  *  #SrtLibrary object representing the shared library provided by @soname.
  *  Free with `g_object_unref()`.
  *
  * Attempt to load @soname into a helper subprocess, and check whether it conforms
  * to the ABI provided in `symbols_path`.
+ *
+ * If @symbols_format is %SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, @symbols_path must
+ * list one symbol per line, in the format `jpeg_input_complete@LIBJPEG_6.2`
+ * for versioned symbols or `DGifOpen@Base` (or just `DGifOpen`) for symbols
+ * not associated with a version.
+ *
+ * If @symbols_format is %SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS, @symbols_path
+ * must be in deb-symbols(5) format. It may list symbols for more SONAMEs than
+ * just @soname; if so, they are ignored.
  *
  * Returns: A bitfield containing problems, or %SRT_LIBRARY_ISSUES_NONE
  *  if no problems were found.
@@ -417,12 +426,16 @@ SrtLibraryIssues
 srt_check_library_presence (const char *soname,
                             const char *multiarch,
                             const char *symbols_path,
+                            SrtLibrarySymbolsFormat symbols_format,
                             SrtLibrary **more_details_out)
 {
   gchar *helper = NULL;
   gchar *output = NULL;
   gchar *absolute_path = NULL;
-  const gchar *argv[] = { "inspect-library", soname, symbols_path, NULL };
+  const gchar *argv[] =
+    {
+      "inspect-library", "--deb-symbols", soname, symbols_path, NULL
+    };
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -439,6 +452,22 @@ srt_check_library_presence (const char *soname,
   g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+
+  switch (symbols_format)
+    {
+      case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
+        argv[1] = soname;
+        argv[2] = symbols_path;
+        argv[3] = NULL;
+        break;
+
+      case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
+        /* do nothing, argv is already set up for this */
+        break;
+
+      default:
+        g_return_val_if_reached (SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+    }
 
   helper = g_strdup_printf ("%s/%s-inspect-library",
                             _srt_get_helpers_path (), multiarch);

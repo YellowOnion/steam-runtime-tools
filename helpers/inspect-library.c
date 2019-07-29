@@ -144,9 +144,6 @@ main (int argc,
           default:
             usage (1);
             break;  /* not reached */
-
-          case -1:
-            break;
         }
     }
 

@@ -29,6 +29,7 @@ test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'he
 tests = [
   'architecture',
   'library',
+  'system-info',
 ]
 
 tests_dir = join_paths(
@@ -41,6 +42,8 @@ tests_metadir = join_paths(
   'installed-tests',
   meson.project_name() + '-' + api_major,
 )
+
+install_subdir('expectations', install_dir : tests_dir)
 
 foreach test_name : tests
   exe = executable(

@@ -1,3 +1,4 @@
+/*<private_header>*/
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -25,11 +26,6 @@
 
 #pragma once
 
-#define _SRT_IN_SINGLE_HEADER
+#include <glib.h>
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/system-info.h>
-
-#undef _SRT_IN_SINGLE_HEADER
+G_GNUC_INTERNAL gboolean _srt_architecture_can_run (const char *multiarch);

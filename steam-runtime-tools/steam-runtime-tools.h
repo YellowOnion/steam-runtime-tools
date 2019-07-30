@@ -29,6 +29,7 @@
 
 #include <steam-runtime-tools/architecture.h>
 #include <steam-runtime-tools/enums.h>
+#include <steam-runtime-tools/graphics.h>
 #include <steam-runtime-tools/library.h>
 #include <steam-runtime-tools/runtime.h>
 #include <steam-runtime-tools/steam.h>

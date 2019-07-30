@@ -42,7 +42,8 @@ _srt_steal_pointer (gpointer pointer_to_pointer)
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 34, 0)
-#define g_clear_pointer(x, destroy) _srt_clear_pointer (x, destroy)
+#define g_clear_pointer(x, destroy) \
+  _srt_clear_pointer (x, (GDestroyNotify) (void (*)(void)) destroy)
 /* A simplified version of g_clear_pointer without type-safety. */
 static inline void
 _srt_clear_pointer (gpointer pointer_to_pointer,

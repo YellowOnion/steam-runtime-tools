@@ -86,6 +86,7 @@ Section: misc
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+ zlib1g,
 Description:
  The Steam Runtime is the library stack used to run the Steam client
  on Linux. The Steam Runtime Tools utility library contains open-source

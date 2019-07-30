@@ -24,6 +24,7 @@
  */
 
 #include "steam-runtime-tools/architecture.h"
+#include "steam-runtime-tools/architecture-internal.h"
 
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -38,7 +39,7 @@
  * operating system.
  */
 
-static gboolean
+gboolean
 _srt_architecture_can_run (const char *multiarch)
 {
   gchar *helper = NULL;

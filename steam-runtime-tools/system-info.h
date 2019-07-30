@@ -25,11 +25,29 @@
 
 #pragma once
 
-#define _SRT_IN_SINGLE_HEADER
+#if !defined(_SRT_IN_SINGLE_HEADER) && !defined(_SRT_COMPILATION)
+#error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
+#endif
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
+#include <glib.h>
+#include <glib-object.h>
+
 #include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/system-info.h>
 
-#undef _SRT_IN_SINGLE_HEADER
+typedef struct _SrtSystemInfo SrtSystemInfo;
+typedef struct _SrtSystemInfoClass SrtSystemInfoClass;
+
+#define SRT_TYPE_SYSTEM_INFO srt_system_info_get_type ()
+#define SRT_SYSTEM_INFO(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_SYSTEM_INFO, SrtSystemInfo))
+#define SRT_SYSTEM_INFO_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_SYSTEM_INFO, SrtSystemInfoClass))
+#define SRT_IS_SYSTEM_INFO(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_SYSTEM_INFO))
+#define SRT_IS_SYSTEM_INFO_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_SYSTEM_INFO))
+#define SRT_SYSTEM_INFO_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_SYSTEM_INFO, SrtSystemInfoClass)
+
+GType srt_system_info_get_type (void);
+
+SrtSystemInfo *srt_system_info_new (const char *expectations);
+
+gboolean srt_system_info_can_run (SrtSystemInfo *self,
+                                  const char *multiarch_tuple);
+gboolean srt_system_info_can_write_to_uinput (SrtSystemInfo *self);

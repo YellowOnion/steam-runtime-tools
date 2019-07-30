@@ -22,9 +22,11 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 libsteamrt_sources = [
+    'architecture-internal.h',
     'architecture.c',
     'library-internal.h',
     'library.c',
+    'system-info.c',
     'utils-internal.h',
     'utils.c',
 ]
@@ -33,6 +35,7 @@ libsteamrt_public_headers = [
     'architecture.h',
     'library.h',
     'steam-runtime-tools.h',
+    'system-info.h',
 ]
 
 enums = gnome.mkenums_simple(

@@ -352,7 +352,7 @@ configured.
     are available in `/overrides` inside that filesystem, while selected
     files from the host are visible in `/run/host`.
 
-* To test something manually:
+* To test something manually, or to debug startup issues:
 
     - cd to the directory that you want to be the current working directory
       inside the container
@@ -361,12 +361,19 @@ configured.
 
             /opt/pressure-vessel/bin/pressure-vessel-test-ui -- ./whatever-game
 
-      or:
+      or for the low-level version:
 
             /opt/pressure-vessel/bin/pressure-vessel-wrap -- ./whatever-game
 
       Optionally add more options before the `--`, such as `--runtime`,
       `--xterm` and `--interactive`.
+
+    In particular, if the `xterm` can't be launched and you are debugging
+    why, use the `--interactive` option to get a shell in the container.
+
+    If `bwrap` is failing to start up and so you can't get a shell in the
+    container at all, construct a simpler-but-simpler `bwrap` command-line
+    (based on what `pressure-vessel-wrap` logs to stderr) and try that.
 
 * For interactive testing from Steam, if your runtime (if used) or host
     system (if no runtime) contains an `xterm` binary, you can use

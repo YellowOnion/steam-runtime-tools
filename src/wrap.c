@@ -2043,6 +2043,16 @@ main (int argc,
           quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
           g_message ("\t%s", quoted);
         }
+
+      g_message ("%s environment:", bwrap_executable);
+
+      for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
+        {
+          g_autofree gchar *quoted = NULL;
+
+          quoted = g_shell_quote (bwrap->envp[i]);
+          g_message ("\t%s", quoted);
+        }
     }
 
   /* flatpak_bwrap_finish did this */

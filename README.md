@@ -93,7 +93,7 @@ GLib and libXau.
 If you are using it with the under-development Steam Linux Runtime,
 you will probably want to compile it with an unusual ${prefix}:
 
-    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/Steam Linux Runtime/pressure-vessel"
+    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/SteamLinuxRuntime/pressure-vessel"
     libdir="lib/x86_64-linux-gnu"
     meson --prefix="$prefix" --libdir="$libdir" _build
     ninja -C _build
@@ -110,15 +110,9 @@ the bundled libcapsule tools. You can do this by building your own
 copy of libcapsule. This requires 32- and 64-bit copies of libelf (the
 version from elfutils) and its development files.
 
-Automake doesn't like installation paths with spaces in, so you'll have
-to use a symlink to trick it:
-
-    ln -s "Steam Linux Runtime" \
-    "${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/Steam_Linux_Runtime"
-
     git clone https://gitlab.collabora.com/vivek/libcapsule.git
     cd libcapsule
-    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/Steam_Linux_Runtime/pressure-vessel"
+    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/SteamLinuxRuntime/pressure-vessel"
     libdir="lib/x86_64-linux-gnu"
     NOCONFIGURE=1 ./autogen.sh
     mkdir _build _build/i386 _build/x86_64
@@ -236,11 +230,11 @@ Instructions for testing
   in some convenient place, for example
   `~/.steam/root/steamapps/common/Steam Linux Runtime/pressure-vessel`:
 
-        $ rm -fr ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel
-        $ mkdir -p ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel
+        $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel
+        $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel
         $ tar \
             --strip-components=1 \
-            -C ~/.steam/root/steamapps/common/"Steam Linux Runtime"/pressure-vessel \
+            -C ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/pressure-vessel \
             -xzvf ~/pressure-vessel-*-bin.tar.gz
 
 * Launch a game once without pressure-vessel
@@ -251,7 +245,7 @@ Instructions for testing
 
     - be the Steam user, possibly via sudo -u steam -s
 
-    - `$ nano ~/.steam/root/userdata/[0-9]*/config/localconfig.vdf`
+    - `$ nano ~/.steam/steam/userdata/[0-9]*/config/localconfig.vdf`
 
     - navigate to UserLocalConfigStore/Software/Valve/Steam/Apps/*game ID*
 
@@ -260,16 +254,16 @@ Instructions for testing
             "LaunchOptions" "~/.steam/root/steamapps/common/'Steam Linux Runtime'/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
 
     - optionally put some Flatpak-style runtimes alongside pressure-vessel,
-      for example `~/.steam/root/steamapps/common/Steam Linux Runtime/scout`.
+      for example `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout`.
       If you have done it right, you should have
-      `~/.steam/root/steamapps/common/Steam Linux Runtime/scout/files/` and.
-      `~/.steam/root/steamapps/common/Steam Linux Runtime/scout/metadata`, for
+      `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/files/` and.
+      `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/metadata`, for
       example:
 
-            $ rm -fr ~/.steam/root/steamapps/common/"Steam Linux Runtime"/scout
-            $ mkdir -p ~/.steam/root/steamapps/common/"Steam Linux Runtime"/scout
+            $ rm -fr ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/scout
+            $ mkdir -p ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/scout
             $ tar \
-                -C ~/.steam/root/steamapps/common/"Steam Linux Runtime"/scout \
+                -C ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/scout \
                 -xzvf ~/com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
@@ -300,7 +294,7 @@ Instructions for testing
 * For a more production-ready version without the test UI, set the launch
     options to:
 
-        "LaunchOptions" "~/.steam/root/steamapps/common/'Steam Linux Runtime'/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
+        "LaunchOptions" "~/.steam/root/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
 
     and then add more options just before the `--` as desired.
     This mode does not require Python 3, PyGI, GTK or a normal
@@ -312,12 +306,12 @@ Instructions for testing
     any of these:
 
     - The `files` subdirectory of a Flatpak-style runtime such as
-        `~/.steam/root/steamapps/common/Steam Linux Runtime/scout` or
+        `~/.steam/root/steamapps/common/SteamLinuxRuntime/scout` or
         `~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout/active`,
         for example produced by [flatdeb][] (this is a special case of a
         merged `/usr`). For example, you could use:
 
-            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/.steam/root/steamapps/common/'Steam Linux Runtime'/scout -- %command%
+            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/.steam/steam/steamapps/common/'Steam Linux Runtime'/scout -- %command%
 
         or:
 

@@ -2029,7 +2029,7 @@ main (int argc,
     }
 
   g_debug ("Adding wrapped command...");
-  flatpak_bwrap_append_bwrap (bwrap, wrapped_command);
+  flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
   flatpak_bwrap_finish (bwrap);
 
   if (opt_verbose)

@@ -291,7 +291,6 @@ Instructions for testing
 
     - Next to pressure-vessel's `bin` and `lib` directories
     - The directory above pressure-vessel's `bin` and `lib` directories
-    - `~/.steam/root/steamapps/common/Steam Linux Runtime`
 
     Runtimes intended for the test UI must have a `files` subdirectory
     and a `metadata` file, like Flatpak runtimes.

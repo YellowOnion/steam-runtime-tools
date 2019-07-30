@@ -135,8 +135,10 @@ to use a symlink to trick it:
     make -C _build/x86_64 install
     make -C _build/i386 install
 
-For the i386 build, if you don't have a `i686-linux-gnu-gcc` you might
-have to add `CC="gcc -m32"` to the configure command line instead.
+Use `--host=i586-linux-gnu` instead of `--host=i686-linux-gnu` if your
+distribution uses that tuple for its 32-bit compiler. For the i386 build,
+if you don't have an `i?86-linux-gnu-gcc` you might have to add
+`CC="gcc -m32"` to the i386 configure command line.
 
 Again, this will give you a non-production version of libcapsule that is
 likely to depend on libraries from your host system.

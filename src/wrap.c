@@ -1978,18 +1978,6 @@ main (int argc,
                           "--unsetenv", "PWD",
                           NULL);
 
-  if (strstr (bwrap_help, "unshare-uts") != NULL)
-    {
-      g_debug ("Setting hostname...");
-
-      /* Set a standard hostname for the container to make it easier
-       * to see which shell is which */
-      flatpak_bwrap_add_args (bwrap,
-                              "--unshare-uts",
-                              "--hostname", "pressure-vessel",
-                              NULL);
-    }
-
   /* TODO: Potential future expansion: use --unshare-pid for more isolation */
 
   /* Put Steam Runtime environment variables back, if /usr is mounted

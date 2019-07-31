@@ -161,6 +161,7 @@ class Gui:
         name = None             # type: typing.Optional[str]
         pretty_name = None      # type: typing.Optional[str]
         build_id = None         # type: typing.Optional[str]
+        variant = None          # type: typing.Optional[str]
 
         try:
             keyfile = GLib.KeyFile.new()
@@ -185,9 +186,13 @@ class Gui:
                 for line in reader:
                     if line.startswith('PRETTY_NAME='):
                         pretty_name = line.split('=', 1)[1].strip()
-                        pretty_name = GLib.shell_unquote(
-                            pretty_name
-                        )
+                        pretty_name = GLib.shell_unquote(pretty_name)
+                    elif line.startswith('BUILD_ID='):
+                        build_id = line.split('=', 1)[1].strip()
+                        build_id = GLib.shell_unquote(build_id)
+                    elif line.startswith('VARIANT='):
+                        variant = line.split('=', 1)[1].strip()
+                        variant = GLib.shell_unquote(variant)
         except (GLib.Error, EnvironmentError):
             pass
 
@@ -202,8 +207,14 @@ class Gui:
         else:
             build_id = ' build {}'.format(build_id)
 
-        description = '{}{}\n({})'.format(
+        if variant is None:
+            variant = ''
+        else:
+            variant = ' {}'.format(variant)
+
+        description = '{}{}{}\n({})'.format(
             pretty_name,
+            variant,
             build_id,
             description,
         )

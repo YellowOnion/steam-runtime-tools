@@ -209,6 +209,39 @@ Instructions for testing
             -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel \
             -xzvf ~/pressure-vessel-*-bin.tar.gz
 
+* Put some Flatpak-style runtimes alongside pressure-vessel,
+    for example `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout`,
+    so that you have a
+    `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/files/` directory
+    and a `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/metadata`
+    file. For example, download a
+    `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
+    from http://repo.steampowered.com/steamrt/steamrt-scout/snapshots/ and
+    unpack it like this:
+
+        $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
+        $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
+        $ tar \
+            -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout \
+            -xzvf ~/com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
+
+    Or to have a SDK environment with more debugging tools, and optionally
+    detached debugging symbols, download a
+    `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
+    and optionally a matching
+    `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-debug.tar.gz`,
+    and unpack them like this:
+
+        $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout_sdk
+        $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout_sdk
+        $ tar \
+            -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout_sdk \
+            -xzvf ~/com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz
+
+        $ tar --strip-components=1 \
+            -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout_sdk/files/lib/debug/ \
+            -xzvf ~/com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-debug.tar.gz
+
 * Launch a game once without pressure-vessel
 
 * Configure the launch options for the chosen game. Either use the Steam
@@ -224,19 +257,6 @@ Instructions for testing
     - below LastPlayed, add:
 
             "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
-
-    - optionally put some Flatpak-style runtimes alongside pressure-vessel,
-      for example `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout`.
-      If you have done it right, you should have
-      `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/files/` and.
-      `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/metadata`, for
-      example:
-
-            $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
-            $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
-            $ tar \
-                -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout \
-                -xzvf ~/com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 

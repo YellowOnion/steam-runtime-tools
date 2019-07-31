@@ -66,7 +66,7 @@ class Gui:
                 files = os.path.join(path, 'files')
                 metadata = os.path.join(path, 'metadata')
 
-                if os.path.isdir(files) and os.path.exists(metadata):
+                if os.path.isdir(files):
                     description = self._describe_runtime(path)
                     self.runtimes[path] = description
 
@@ -155,6 +155,9 @@ class Gui:
         files = os.path.join(path, 'files')
         metadata = os.path.join(path, 'metadata')
 
+        if os.path.islink(files):
+            description = os.path.realpath(files)
+
         if description.startswith(self.home + '/'):
             description = '~' + description[len(self.home):]
 
@@ -176,6 +179,8 @@ class Gui:
                 name = keyfile.get_string('Runtime', 'runtime')
             except GLib.Error:
                 pass
+            else:
+                variant = name.split('.')[-1]
         except GLib.Error:
             pass
 

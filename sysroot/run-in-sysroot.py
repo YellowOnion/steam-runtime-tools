@@ -99,6 +99,9 @@ def main():
         [
             'bwrap',
             '--ro-bind', abs_sysroot, '/',
+            '--bind',
+            os.path.join(abs_sysroot, 'var', 'lib', 'apt'),
+            '/var/lib/apt',
             '--dev-bind', '/dev', '/dev',
             '--ro-bind', '/etc/resolv.conf', '/etc/resolv.conf',
             '--proc', '/proc',

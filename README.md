@@ -161,6 +161,7 @@ tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
 `_build/sysroot`, and prefix those commands with
 `./sysroot/run-in-sysroot.py`:
 
+    ./sysroot/run-in-sysroot.py apt-get update
     ./sysroot/run-in-sysroot.py meson ...
 
 (Or put them in different locations and pass the `--sysroot` and

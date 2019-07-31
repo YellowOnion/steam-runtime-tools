@@ -141,16 +141,13 @@ Building a relocatable install for deployment
 ---------------------------------------------
 
 To make the built version compatible with older systems, you will need
-an environment based on Ubuntu 12.04 'precise' or Debian 8 'jessie'.
-SteamRT 1 'scout' or SteamRT 1.5 'heavy' should be suitable.
-SteamOS 2 'brewmaster' is not suitable, because its amd64 and i386
-linux-libc-dev packages are not currently co-installable.
+a SteamRT 1 'scout' environment.
 
 The most straightforward method is to have prebuilt versions of
 libcapsule-tools-relocatable:amd64, libcapsule-tools-relocatable:i386
 and bubblewrap in your build environment. For example, you could do the
-build in a SteamRT 1 'scout' or SteamRT 1.5 'heavy' Docker image that
-has those packages already. Then you can do:
+build in a SteamRT 1 'scout' SDK Docker image that has those packages
+already. Then you can do:
 
     meson --prefix=$(pwd)/_build/relocatable-install -Drelocatable=true _build
     ninja -C _build
@@ -168,32 +165,6 @@ tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
 
 (Or put them in different locations and pass the `--sysroot` and
 `--tarball` options to `./sysroot/run-in-sysroot.py`.)
-
-If your build environment has `libcapsule-tools-relocatable` available
-but uninstalled, you can unpack them with `dpkg-deb -x` and use something
-like:
-
-    meson \
-        --prefix=$(pwd)/_build/relocatable-install \
-        -Drelocatable=true \
-        -Drelocatabledir=./usr/lib/libcapsule/relocatable \
-        _build
-    ninja -C _build
-    meson test -v -C _build             # optional
-    rm -fr $(pwd)/_build/relocatable-install
-    ninja -C _build install
-
-Alternatively, build a Debian source package (`.dsc`, `.debian.tar.*`,
-`.orig.tar.*` for libcapsule 0.20190724.0 or later, which will require
-autoconf-archive 20160916-1~bpo8+1 or later if you are building from git.
-Put it in the top-level directory of `pressure-vessel`, for example:
-
-    dcmd cp ../build-area/libcapsule_0.20190402.0-0co1.dsc .
-
-There is experimental support in `sysroot/` for building a container
-for the build using debos, but it requires an unusual container
-(Debian jessie or SteamRT 1.5 'heavy' with a backport of meson) and
-so is not currently recommended.
 
 The relocatable install ends up in `_build/relocatable-install`.
 

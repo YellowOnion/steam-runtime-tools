@@ -142,86 +142,6 @@ foreach script : scripts
   )
 endforeach
 
-relocatabledir = get_option('relocatabledir')
-
-if relocatabledir == 'auto'
-  dsc_exists = run_command(
-    sh,
-    '-euc',
-    '''
-      cd "$MESON_SOURCE_ROOT"
-      if test -e libcapsule_*.dsc
-        then echo libcapsule_*.dsc
-      else
-        exit 1
-      fi
-    ''',
-  )
-  if dsc_exists.returncode() == 0
-    libcapsule_dsc = dsc_exists.stdout().strip()
-    relocatabledir = ''
-  else
-    libcapsule_dsc = ''
-    relocatabledir = '/usr/lib/libcapsule/relocatable'
-  endif
-endif
-
-if libcapsule_dsc != ''
-  libcapsule_configure = custom_target(
-    'libcapsule_configure',
-    command: [
-      sh,
-      '-euc',
-      '''
-        rm -fr libcapsule
-        dpkg-source -x "$1"
-        mv libcapsule-* libcapsule
-        ( cd libcapsule; NOCONFIGURE=1 ./autogen.sh )
-        touch "$2"
-      ''',
-      'sh',
-      '@INPUT@',
-      '@OUTPUT@',
-    ],
-    input : files(libcapsule_dsc),
-    output : 'libcapsule_configure.stamp',
-    build_by_default : true,
-  )
-
-  foreach arch : ['amd64', 'i386']
-    config_stamp = custom_target(
-      'build-relocatable_' + arch + '_config.stamp',
-      command : [
-        sh,
-        files('configure-libcapsule.sh'),
-        arch,
-        '@OUTPUT@',
-      ],
-      depends : libcapsule_configure,
-      output : 'build-relocatable_' + arch + '_config.stamp',
-      build_by_default : true,
-    )
-
-    custom_target(
-      'build-relocatable_' + arch + '_build.stamp',
-      command: [
-        sh,
-        '-euc',
-        '''
-          make -C "build-relocatable/$1/libcapsule"
-          touch "$2"
-        ''',
-        'sh',
-        arch,
-        '@OUTPUT@',
-      ],
-      depends : config_stamp,
-      output : 'build-relocatable_' + arch + '_build.stamp',
-      build_by_default : true,
-    )
-  endforeach
-endif
-
 cc = meson.get_compiler('c')
 
 conf_data = configuration_data()
@@ -274,7 +194,7 @@ if get_option('relocatable')
     join_paths(meson.current_source_dir(), 'build-relocatable-install.py'),
     '--srcdir', meson.current_source_dir(),
     '--builddir', meson.current_build_dir(),
-    '--relocatabledir', relocatabledir,
+    '--relocatabledir', '/usr/lib/libcapsule/relocatable',
     '--prefix', get_option('prefix'),
     '--archive', meson.current_build_dir(),
     '--set-version', version,

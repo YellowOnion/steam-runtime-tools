@@ -1140,7 +1140,10 @@ bind_runtime (FlatpakBwrap *bwrap,
               g_autofree gchar *real_path_in_host = NULL;
               g_autofree gchar *real_path_in_runtime = NULL;
 
+              g_debug ("Making host ld.so visible in container");
+
               real_path_in_host = flatpak_canonicalize_filename (ld_so);
+              g_debug ("Host path: %s -> %s", ld_so, real_path_in_host);
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
@@ -1158,9 +1161,21 @@ bind_runtime (FlatpakBwrap *bwrap,
               if (real_path_in_runtime == NULL)
                 return FALSE;
 
-              if (runtime_is_usr
-                  || g_str_has_prefix (real_path_in_runtime, "/usr/"))
+              g_debug ("Container path: %s -> %s", ld_so, real_path_in_runtime);
+
+              if (runtime_is_usr)
                 {
+                  g_debug ("Runtime is just /usr anyway");
+                  g_debug ("Mounting %s on %s", real_path_in_host, real_path_in_runtime);
+                  flatpak_bwrap_add_args (bwrap,
+                                          "--ro-bind", real_path_in_host,
+                                          real_path_in_runtime,
+                                          NULL);
+                }
+              else if (g_str_has_prefix (real_path_in_runtime, "/usr/"))
+                {
+                  g_debug ("Path in runtime starts with /usr already");
+                  g_debug ("Mounting %s on %s", real_path_in_host, real_path_in_runtime);
                   flatpak_bwrap_add_args (bwrap,
                                           "--ro-bind", real_path_in_host,
                                           real_path_in_runtime,
@@ -1168,9 +1183,13 @@ bind_runtime (FlatpakBwrap *bwrap,
                 }
               else
                 {
-                  /* /lib, /lib64 are just going to be symlinks anyway */
+                  /* We assume that /lib, /lib64 are just going to be
+                   * symlinks anyway.
+                   *
+                   * TODO: Support for non-merged-/usr runtimes? */
                   g_autofree gchar *usr_path_in_runtime = NULL;
 
+                  g_debug ("Assuming runtime is merged-/usr");
                   usr_path_in_runtime = g_build_filename ("/usr",
                                                           real_path_in_runtime,
                                                           NULL);
@@ -1179,6 +1198,8 @@ bind_runtime (FlatpakBwrap *bwrap,
                                           usr_path_in_runtime,
                                           NULL);
                 }
+
+              g_debug ("Making host locale data visible in container");
 
               if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
                 flatpak_bwrap_add_args (bwrap,

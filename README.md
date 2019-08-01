@@ -252,6 +252,12 @@ Instructions for testing
         $ ln -s /var/chroots/steamrt_scout_amd64 \
             ~/.steam/root/common/SteamLinuxRuntime/scout-chroot/files
 
+    (TODO: This is currently broken for chroots that are not merged-/usr.
+    so you will need to unpack
+    `com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-sysroot.tar.gz`
+    into `/var/chroots/steamrt_scout_amd64` instead of using
+    [`setup_chroot.sh`][].)
+
 * Launch a game once without pressure-vessel
 
 * Configure the launch options for the chosen game. Either use the Steam

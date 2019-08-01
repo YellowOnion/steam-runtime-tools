@@ -48,6 +48,17 @@
  *
  * This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
+ *
+ * The #SrtSystemInfo object is not thread-aware. It should be considered
+ * to be "owned" by the thread that created it. Only the thread that
+ * "owns" the #SrtSystemInfo may call its methods.
+ * Other threads may create their own parallel #SrtSystemInfo object and
+ * use that instead, if desired.
+ *
+ * Ownership can be transferred to other threads by an operation that
+ * implies a memory barrier, such as g_atomic_pointer_set() or
+ * g_object_ref(), but after this is done the previous owner must not
+ * continue to call methods.
  */
 
 typedef enum

@@ -228,7 +228,7 @@ Instructions for testing
 
 * Unpack `pressure-vessel-`*VERSION*`-bin.tar.gz` (or `...-bin+src.tar.gz`)
   in some convenient place, for example
-  `~/.steam/root/steamapps/common/SteamLinuxRuntime/pressure-vessel`:
+  `~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel`:
 
         $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel
         $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel
@@ -251,7 +251,7 @@ Instructions for testing
 
     - below LastPlayed, add:
 
-            "LaunchOptions" "~/.steam/root/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
+            "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
 
     - optionally put some Flatpak-style runtimes alongside pressure-vessel,
       for example `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout`.
@@ -294,7 +294,7 @@ Instructions for testing
 * For a more production-ready version without the test UI, set the launch
     options to:
 
-        "LaunchOptions" "~/.steam/root/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
+        "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
 
     and then add more options just before the `--` as desired.
     This mode does not require Python 3, PyGI, GTK or a normal
@@ -306,7 +306,7 @@ Instructions for testing
     any of these:
 
     - The `files` subdirectory of a Flatpak-style runtime such as
-        `~/.steam/root/steamapps/common/SteamLinuxRuntime/scout` or
+        `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout` or
         `~/.local/share/flatpak/runtime/com.valvesoftware.SteamRuntime.Platform/x86_64/scout/active`,
         for example produced by [flatdeb][] (this is a special case of a
         merged `/usr`). For example, you could use:

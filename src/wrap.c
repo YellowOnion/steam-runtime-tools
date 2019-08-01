@@ -737,6 +737,17 @@ capture_output (const char * const * argv,
   gint exit_status;
   g_autofree gchar *output = NULL;
   g_autofree gchar *errors = NULL;
+  gsize i;
+  g_autoptr(GString) command = g_string_new ("");
+
+  for (i = 0; argv[i] != NULL; i++)
+    {
+      g_autofree gchar *quoted = g_shell_quote (argv[i]);
+
+      g_string_append_printf (command, " %s", quoted);
+    }
+
+  g_debug ("run:%s", command->str);
 
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) argv,
@@ -760,6 +771,8 @@ capture_output (const char * const * argv,
   if (len > 0 && output[len - 1] == '\n')
     output[len - 1] = '\0';
 
+  g_debug ("-> %s", output);
+
   return g_steal_pointer (&output);
 }
 
@@ -770,6 +783,22 @@ run_bwrap (FlatpakBwrap *bwrap,
   gint exit_status;
   g_autofree gchar *output = NULL;
   g_autofree gchar *errors = NULL;
+  guint i;
+  g_autoptr(GString) command = g_string_new ("");
+
+  for (i = 0; i < bwrap->argv->len; i++)
+    {
+      g_autofree gchar *quoted = NULL;
+      char *unquoted = g_ptr_array_index (bwrap->argv, i);
+
+      if (unquoted == NULL)
+        break;
+
+      quoted = g_shell_quote (unquoted);
+      g_string_append_printf (command, " %s", quoted);
+    }
+
+  g_debug ("run:%s", command->str);
 
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) bwrap->argv->pdata,

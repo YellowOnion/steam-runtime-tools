@@ -228,13 +228,13 @@ Instructions for testing
 
 * Unpack `pressure-vessel-`*VERSION*`-bin.tar.gz` (or `...-bin+src.tar.gz`)
   in some convenient place, for example
-  `~/.steam/root/steamapps/common/Steam Linux Runtime/pressure-vessel`:
+  `~/.steam/root/steamapps/common/SteamLinuxRuntime/pressure-vessel`:
 
         $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel
         $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel
         $ tar \
             --strip-components=1 \
-            -C ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/pressure-vessel \
+            -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel \
             -xzvf ~/pressure-vessel-*-bin.tar.gz
 
 * Launch a game once without pressure-vessel
@@ -251,7 +251,7 @@ Instructions for testing
 
     - below LastPlayed, add:
 
-            "LaunchOptions" "~/.steam/root/steamapps/common/'Steam Linux Runtime'/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
+            "LaunchOptions" "~/.steam/root/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
 
     - optionally put some Flatpak-style runtimes alongside pressure-vessel,
       for example `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout`.
@@ -260,10 +260,10 @@ Instructions for testing
       `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/metadata`, for
       example:
 
-            $ rm -fr ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/scout
-            $ mkdir -p ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/scout
+            $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
+            $ mkdir -p ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
             $ tar \
-                -C ~/.steam/steam/steamapps/common/"Steam Linux Runtime"/scout \
+                -C ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout \
                 -xzvf ~/com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
@@ -311,7 +311,7 @@ Instructions for testing
         for example produced by [flatdeb][] (this is a special case of a
         merged `/usr`). For example, you could use:
 
-            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/.steam/steam/steamapps/common/'Steam Linux Runtime'/scout -- %command%
+            /opt/pressure-vessel/bin/pressure-vessel-unruntime --runtime=$HOME/.steam/steam/steamapps/common/SteamLinuxRuntime/scout -- %command%
 
         or:
 

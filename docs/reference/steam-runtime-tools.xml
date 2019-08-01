@@ -12,7 +12,12 @@
   </bookinfo>
 
   <chapter id="ch-sysinfo">
-    <title>System information</title>
+    <title>General system information</title>
+    <xi:include href="xml/system-info.xml"/>
+  </chapter>
+
+  <chapter id="ch-specific">
+    <title>Specific system information</title>
     <xi:include href="xml/architecture.xml"/>
     <xi:include href="xml/library.xml"/>
   </chapter>

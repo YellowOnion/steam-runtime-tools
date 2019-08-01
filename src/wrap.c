@@ -911,7 +911,6 @@ bind_runtime (FlatpakBwrap *bwrap,
   gsize i, j;
   const gchar *member;
   g_autoptr(GString) dri_path = g_string_new ("");
-  gboolean runtime_is_usr = FALSE;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -920,12 +919,6 @@ bind_runtime (FlatpakBwrap *bwrap,
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   usr = g_build_filename (runtime, "usr", NULL);
-
-  if (!g_file_test (usr, G_FILE_TEST_IS_DIR))
-    {
-      /* runtime is assumed to be a merged /usr */
-      runtime_is_usr = TRUE;
-    }
 
   if (!bind_usr (bwrap, runtime, "/", error))
     return FALSE;
@@ -1148,10 +1141,15 @@ bind_runtime (FlatpakBwrap *bwrap,
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
               temp_bwrap = flatpak_bwrap_new (NULL);
-              flatpak_bwrap_append_bwrap (temp_bwrap, run_in_container);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      tool_path,
-                                      "--resolve-ld.so", scratch,
+                                      bwrap->argv->pdata[0],
+                                      NULL);
+
+              if (!bind_usr (temp_bwrap, runtime, "/", error))
+                return FALSE;
+
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      "readlink", "-f", ld_so,
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);
 
@@ -1162,42 +1160,10 @@ bind_runtime (FlatpakBwrap *bwrap,
                 return FALSE;
 
               g_debug ("Container path: %s -> %s", ld_so, real_path_in_runtime);
-
-              if (runtime_is_usr)
-                {
-                  g_debug ("Runtime is just /usr anyway");
-                  g_debug ("Mounting %s on %s", real_path_in_host, real_path_in_runtime);
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", real_path_in_host,
-                                          real_path_in_runtime,
-                                          NULL);
-                }
-              else if (g_str_has_prefix (real_path_in_runtime, "/usr/"))
-                {
-                  g_debug ("Path in runtime starts with /usr already");
-                  g_debug ("Mounting %s on %s", real_path_in_host, real_path_in_runtime);
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", real_path_in_host,
-                                          real_path_in_runtime,
-                                          NULL);
-                }
-              else
-                {
-                  /* We assume that /lib, /lib64 are just going to be
-                   * symlinks anyway.
-                   *
-                   * TODO: Support for non-merged-/usr runtimes? */
-                  g_autofree gchar *usr_path_in_runtime = NULL;
-
-                  g_debug ("Assuming runtime is merged-/usr");
-                  usr_path_in_runtime = g_build_filename ("/usr",
-                                                          real_path_in_runtime,
-                                                          NULL);
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", real_path_in_host,
-                                          usr_path_in_runtime,
-                                          NULL);
-                }
+              flatpak_bwrap_add_args (bwrap,
+                                      "--ro-bind", real_path_in_host,
+                                      real_path_in_runtime,
+                                      NULL);
 
               g_debug ("Making host locale data visible in container");
 

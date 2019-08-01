@@ -260,16 +260,24 @@ bind_usr (FlatpakBwrap *bwrap,
                                       "--symlink", target, dest,
                                       NULL);
             }
-          /* TODO: else if it's a symlink, create the same symlink in the
-           * container? */
           else
             {
               g_autofree gchar *path = g_build_filename (host_path,
                                                          member, NULL);
+              g_autofree gchar *target = glnx_readlinkat_malloc (-1, path, NULL, NULL);
 
-              flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", path, dest,
-                                      NULL);
+              if (target != NULL)
+                {
+                  flatpak_bwrap_add_args (bwrap,
+                                          "--symlink", target, dest,
+                                          NULL);
+                }
+              else
+                {
+                  flatpak_bwrap_add_args (bwrap,
+                                          "--ro-bind", path, dest,
+                                          NULL);
+                }
             }
 
           g_clear_pointer (&dest, g_free);

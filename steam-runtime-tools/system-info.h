@@ -51,3 +51,10 @@ SrtSystemInfo *srt_system_info_new (const char *expectations);
 gboolean srt_system_info_can_run (SrtSystemInfo *self,
                                   const char *multiarch_tuple);
 gboolean srt_system_info_can_write_to_uinput (SrtSystemInfo *self);
+SrtLibraryIssues srt_system_info_check_libraries (SrtSystemInfo *self,
+                                                  const gchar *multiarch_tuple,
+                                                  GList **libraries_out);
+SrtLibraryIssues srt_system_info_check_library (SrtSystemInfo *self,
+                                                const gchar *multiarch_tuple,
+                                                const gchar *soname,
+                                                SrtLibrary **more_details_out);

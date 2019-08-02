@@ -1,3 +1,36 @@
+steam-runtime-tools (0.20190801.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Add inspect-library helper and wrapper
+
+  [ Simon McVittie ]
+  * Add a skeleton for SrtLibrary, representing a shared library
+  * Add symbolic constants for the i386 and x86_64 ABIs
+  * Locate libsteam-runtime-tools with dladdr1(), not by iterating link map
+  * _srt_get_helpers_path: Adjust mapping from ${libdir} to ${prefix}
+  * Add a script to wrap tests with valgrind
+  * Don't build gtk-doc documentation if gtk-doc is too old
+  * Install enums.h below ${includedir} as intended
+  * Add missing enums.h to <steam-runtime-tools/steam-runtime-tools.h>
+  * build: Ensure that enums.[ch] are generated before compiling examples
+  * _srt_get_helpers_path: If in /lib, assume helpers are in /usr/libexec
+  * test-utils: Add some missing test assertions etc.
+  * d/tests: Log debug messages
+  * d/tests: Mark gnome-desktop-testing to be skipped if not installable
+  * debian: Enable Gitlab-CI
+  * utils: Ensure that g_type_init() gets called
+  * build: Allow C99 constructs
+  * build: Disable -Wunused-local-typedefs
+  * inspect-library: Treat "-" as meaning stdin
+  * inspect-library: Add simple command-line parsing
+  * inspect-library: Make memory management more obvious
+  * inspect-library: Reuse a buffer between iterations
+  * inspect-library: Allow just a symbol on a line, with no @
+  * inspect-library: Add support for consuming deb-symbols(5) files
+  * Add a skeleton for SrtSystemInfo
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 01 Aug 2019 18:54:13 +0100
+
 steam-runtime-tools (0.20190717.0-0+collabora1) upstream; urgency=medium
 
   * Initial release

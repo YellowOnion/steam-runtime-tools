@@ -52,6 +52,8 @@ GType srt_library_get_type (void);
  *  were not present
  * @SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS: Some of the expected symbols
  *  were available with a different version
+ * @SRT_LIBRARY_ISSUES_INTERNAL_ERROR: Generic internal error, for example
+ *  a function has been called with a missing required parameter
  *
  * A bitfield with flags representing problems with a library, or
  * %SRT_LIBRARY_ISSUES_NONE (which is numerically zero) if no problems
@@ -64,6 +66,7 @@ typedef enum
   SRT_LIBRARY_ISSUES_CANNOT_LOAD = (1 << 0),
   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS = (1 << 1),
   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS = (1 << 2),
+  SRT_LIBRARY_ISSUES_INTERNAL_ERROR = (1 << 3),
   SRT_LIBRARY_ISSUES_NONE = 0
 } SrtLibraryIssues;
 

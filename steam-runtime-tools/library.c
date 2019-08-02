@@ -449,9 +449,10 @@ srt_check_library_presence (const char *soname,
   GStrv dependencies = NULL;
   SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
 
-  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
-  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
-  g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
+                        SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
 
   switch (symbols_format)
     {

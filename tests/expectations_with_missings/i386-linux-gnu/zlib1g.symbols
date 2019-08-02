@@ -1,0 +1,7 @@
+# Cut-down version of zlib1g:amd64.symbols.
+# It has been appended also a missing symbol `missing@NotAvailable`
+# In this way we can simulate an available library with a missing symbol
+libz.so.1 zlib1g #MINVER#
+ adler32@Base 1:1.1.4
+ crc32@WRONG_VERSION 1:1.1.4
+ missing@NotAvailable 1:1.1.4

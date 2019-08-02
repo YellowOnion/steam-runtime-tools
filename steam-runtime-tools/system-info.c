@@ -48,6 +48,17 @@
  *
  * This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
+ *
+ * The #SrtSystemInfo object is not thread-aware. It should be considered
+ * to be "owned" by the thread that created it. Only the thread that
+ * "owns" the #SrtSystemInfo may call its methods.
+ * Other threads may create their own parallel #SrtSystemInfo object and
+ * use that instead, if desired.
+ *
+ * Ownership can be transferred to other threads by an operation that
+ * implies a memory barrier, such as g_atomic_pointer_set() or
+ * g_object_ref(), but after this is done the previous owner must not
+ * continue to call methods.
  */
 
 typedef enum
@@ -202,6 +213,25 @@ srt_system_info_class_init (SrtSystemInfoClass *cls)
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
+/**
+ * srt_system_info_new:
+ * @expectations: (nullable) (type filename): Path to a directory
+ *  containing details of the state that the system is expected to have
+ *
+ * Return a new #SrtSystemInfo.
+ *
+ * The @expectations directory should contain a subdirectory for each
+ * supported CPU architecture, named for the multiarch tuple as printed
+ * by `gcc -print-multiarch` in the Steam Runtime (in practice this means
+ * %SRT_ABI_I386 or %SRT_ABI_X86_64).
+ *
+ * The per-architecture directories may contain files whose names end with
+ * `.symbols`. Those files are interpreted as describing libraries that
+ * the runtime environment should support, in
+ * [deb-symbols(5)](https://manpages.debian.org/deb-symbols.5) format.
+ *
+ * Returns: (transfer full): A new #SrtSystemInfo. Free with g_object_unref()
+ */
 SrtSystemInfo *
 srt_system_info_new (const char *expectations)
 {
@@ -213,6 +243,32 @@ srt_system_info_new (const char *expectations)
                        NULL);
 }
 
+/**
+ * srt_system_info_can_run:
+ * @self: A #SrtSystemInfo object
+ * @multiarch_tuple: A multiarch tuple defining an ABI, as printed
+ *  by `gcc -print-multiarch` in the Steam Runtime
+ *
+ * Check whether an executable for the given ABI can be run.
+ *
+ * For this check (and all similar checks) to work as intended, the
+ * contents of the `libsteam-runtime-tools-0-helpers:i386` package must
+ * be available in the same directory hierarchy as the
+ * `libsteam-runtime-tools-0` shared library, something like this:
+ *
+ * |[
+ * any directory/
+ *      lib/
+ *          x86_64-linux-gnu/
+ *              libsteam-runtime-tools-0.so.0
+ *      libexec/
+ *          steam-runtime-tools-0/
+ *              i386-linux-gnu-*
+ *              x86_64-linux-gnu-*
+ * ]|
+ *
+ * Returns: %TRUE if executables belonging to @multiarch_tuple can be run
+ */
 gboolean
 srt_system_info_can_run (SrtSystemInfo *self,
                          const char *multiarch_tuple)
@@ -235,6 +291,17 @@ srt_system_info_can_run (SrtSystemInfo *self,
   return (abi->can_run == TRI_YES);
 }
 
+/**
+ * srt_system_info_can_write_to_uinput:
+ * @self: a #SrtSystemInfo object
+ *
+ * Return %TRUE if the current user can write to `/dev/uinput`.
+ * This is required for the Steam client to be able to emulate gamepads,
+ * keyboards, mice and other input devices based on input from the
+ * Steam Controller or a remote streaming client.
+ *
+ * Returns: %TRUE if `/dev/uinput` can be opened for writing
+ */
 gboolean
 srt_system_info_can_write_to_uinput (SrtSystemInfo *self)
 {

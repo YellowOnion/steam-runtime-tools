@@ -1,3 +1,4 @@
+/*< internal_header >*/
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -23,23 +24,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdio.h>
+#pragma once
 
-#include "../steam-runtime-tools/graphics-test-defines.h"
-
-int
-main (int argc,
-      char **argv)
-{
-  // Give software renderer output
-  printf ("{\n\t\"waffle\": {\n\t\t\"platform\": \"glx\",\n\t\t\"api\": \"gl\"\n\t\t},\n\t\"OpenGL\": {\n\t\t\"vendor string\": \"VMware, Inc.\",\n"
-          "\t\t\"renderer string\": \""
-          SRT_TEST_SOFTWARE_GRAPHICS_RENDERER
-          "\",\n\t\t\"version string\": \""
-          SRT_TEST_SOFTWARE_GRAPHICS_VERSION
-          "\",\n\t\t\"shading language version string\": \"1.40\",\n"
-          "\t\t\"extensions\": [\n"
-          "\t\t]\n\t}\n}\n");
-  return 0;
-}
+// Test strings for use in mock and graphics test
+#define SRT_TEST_GOOD_GRAPHICS_RENDERER "Mesa DRI Intel(R) Haswell Desktop "
+#define SRT_TEST_SOFTWARE_GRAPHICS_RENDERER "llvmpipe (LLVM 8.0, 256 bits)"
+#define SRT_TEST_GOOD_GRAPHICS_VERSION "3.0 Mesa 19.1.3"
+#define SRT_TEST_SOFTWARE_GRAPHICS_VERSION "3.1 Mesa 19.1.3"
 

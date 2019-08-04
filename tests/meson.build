@@ -29,6 +29,7 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 tests = [
   'architecture',
+  'graphics',
   'library',
   'system-info',
   'system-info-cli',

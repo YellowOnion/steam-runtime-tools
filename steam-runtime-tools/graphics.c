@@ -235,7 +235,19 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
-G_GNUC_INTERNAL SrtGraphicsIssues
+/**
+ * srt_check_graphics:
+ * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
+ * @winsys: The window system to check.
+ * @renderer: The graphics renderer to check.
+ * @details_out: The SrtGraphics object containing the details of the check.
+ *
+ * Return the problems found when checking the graphics stack given.
+ *
+ * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
+ *  if no problems were found
+ */
+SrtGraphicsIssues
 srt_check_graphics (const char *multiarch_tuple,
                      SrtWindowSystem window_system,
                      SrtRenderingInterface rendering_interface,

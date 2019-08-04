@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "steam-runtime-tools/graphics.h"
+#include "steam-runtime-tools/steam-runtime-tools.h"
 
 /*
  * _srt_graphics_new:
@@ -68,5 +68,13 @@ _srt_graphics_new (const char *multiarch_tuple,
                        "version-string", version_string,
                        NULL);
 }
+
+static inline int _srt_graphics_hash_key(SrtWindowSystem window_system, SrtRenderingInterface rendering_interface)
+{
+  /* This allows us to have up to 100 unique renderers, we won't need nearly that
+     many, but setting to 100 just to allow room to grow */
+  return (int)window_system * 100 + (int)rendering_interface;
+}
+
 #endif
 

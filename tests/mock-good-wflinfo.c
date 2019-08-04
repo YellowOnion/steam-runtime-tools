@@ -25,7 +25,7 @@
 
 #include <stdio.h>
 
-void usage(void);
+#include "../steam-runtime-tools/graphics-test-defines.h"
 
 int
 main (int argc,
@@ -33,7 +33,11 @@ main (int argc,
 {
   // Give good output
   printf ("{\n\t\"waffle\": {\n\t\t\"platform\": \"glx\",\n\t\t\"api\": \"gl\"\n\t},\n\t\"OpenGL\": {\n\t\t\"vendor string\": \"Intel Open Source Technology Center\",\n"
-          "\t\t\"renderer string\": \"Mesa DRI Intel(R) Haswell Desktop \",\n\t\t\"version string\": \"3.0 Mesa 19.1.3\",\n\t\t\"shading language version string\": \"1.30\",\n"
+          "\t\t\"renderer string\": \""
+          SRT_TEST_GOOD_GRAPHICS_RENDERER
+          "\",\n\t\t\"version string\": \""
+          SRT_TEST_GOOD_GRAPHICS_VERSION
+          "\",\n\t\t\"shading language version string\": \"1.30\",\n"
           "\t\t\"extensions\": [\n"
           "\t\t]\n\t}\n}\n");
   return 0;

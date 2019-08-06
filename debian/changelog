@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20190802.0-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20190802.0-0+steamrt1.1) scout; urgency=medium
 
   [ Simon McVittie ]
   * SrtSystemInfo: Document (lack of) thread-safety

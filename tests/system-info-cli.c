@@ -95,7 +95,6 @@ libraries_presence (Fixture *f,
   JsonObject *json_arch;
   GError *error = NULL;
   gchar *output = NULL;
-  gchar *examples = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
@@ -148,7 +147,6 @@ libraries_presence (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
-  g_free (examples);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);
@@ -215,7 +213,6 @@ libraries_missing (Fixture *f,
   JsonObject *json_arch;
   GError *error = NULL;
   gchar *output = NULL;
-  gchar *examples = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations_with_missings", NULL);
   const gchar *argv[] =
@@ -264,7 +261,6 @@ libraries_missing (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
-  g_free (examples);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);
@@ -320,7 +316,6 @@ libraries_presence_verbose (Fixture *f,
   JsonObject *json_arch;
   GError *error = NULL;
   gchar *output = NULL;
-  gchar *examples = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
@@ -369,7 +364,6 @@ libraries_presence_verbose (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
-  g_free (examples);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);
@@ -389,7 +383,6 @@ no_arguments (Fixture *f,
   JsonObject *json_arch;
   GError *error = NULL;
   gchar *output = NULL;
-  gchar *examples = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
@@ -431,7 +424,6 @@ no_arguments (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
-  g_free (examples);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);

@@ -121,7 +121,7 @@ usage (int code)
 }
 
 static FILE *
-divert_stdout_to_stderr (GError *error)
+divert_stdout_to_stderr (GError **error)
 {
   int original_stdout_fd;
   FILE *original_stdout;
@@ -134,7 +134,7 @@ divert_stdout_to_stderr (GError *error)
     {
       int saved_errno = errno;
 
-      g_set_error (&error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
+      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
                    "Unable to duplicate fd %d: %s",
                    STDOUT_FILENO, g_strerror (saved_errno));
       return NULL;
@@ -147,7 +147,7 @@ divert_stdout_to_stderr (GError *error)
       int saved_errno = errno;
 
       close (original_stdout_fd);
-      g_set_error (&error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
+      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
                    "Unable to make fd %d a copy of fd %d: %s",
                    STDOUT_FILENO, STDERR_FILENO, g_strerror (saved_errno));
       return NULL;
@@ -161,7 +161,7 @@ divert_stdout_to_stderr (GError *error)
       int saved_errno = errno;
 
       close (original_stdout_fd);
-      g_set_error (&error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
+      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
                    "Unable to create a stdio wrapper for fd %d: %s",
                    original_stdout_fd, g_strerror (saved_errno));
       return NULL;
@@ -273,13 +273,11 @@ main (int argc,
             break;
 
           case OPTION_HELP:
-            printf ("HELP\n");
             usage (0);
             break;
 
           case '?':
           default:
-            printf ("DEFAULT\n");
             usage (1);
             break;  /* not reached */
         }

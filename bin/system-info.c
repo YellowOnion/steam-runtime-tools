@@ -255,7 +255,6 @@ main (int argc,
   JsonGenerator *generator;
   gboolean can_run = FALSE;
   gchar *json_output;
-  GList *detailed_errors = NULL;
   int opt;
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
 
@@ -332,7 +331,6 @@ main (int argc,
           print_libraries_details (builder, libraries, verbose);
 
       json_builder_end_object (builder);
-      g_list_free_full (detailed_errors, g_free);
       g_list_free_full (libraries, g_object_unref);
     }
 

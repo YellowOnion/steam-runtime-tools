@@ -35,9 +35,6 @@ executable(
   multiarch + '-inspect-library',
   'inspect-library.c',
   dependencies : [libdl],
-  c_args : [
-      '-D_GNU_SOURCE',
-    ],
   install : true,
   install_dir : join_paths(
     get_option('libexecdir'),

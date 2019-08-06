@@ -56,7 +56,6 @@ libsteamrt = library(
   c_args : [
     '-DG_LOG_DOMAIN="' + meson.project_name() + '"',
     '-D_SRT_COMPILATION',
-    '-D_GNU_SOURCE',
     '-D_SRT_SONAME="libsteam-runtime-tools-' + api_major + '.so.' + abi_major + '"',
     '-D_SRT_MULTIARCH="' + multiarch + '"',
     '-D_SRT_API_MAJOR="' + api_major + '"',

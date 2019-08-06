@@ -24,7 +24,10 @@
 executable(
   'steam-runtime-system-info',
   'system-info.c',
-  dependencies : [glib, libsteamrt_dep],
+  dependencies : [glib, libsteamrt_dep, json_glib],
+  c_args : [
+      '-D_GNU_SOURCE',
+  ],
   install : true,
 )
 

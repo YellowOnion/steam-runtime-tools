@@ -1,3 +1,14 @@
+steam-runtime-tools (0.20190806.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Enhance examples/system-info.c to show libraries and uinput capabilities
+  * Add C argument `-D_GNU_SOURCE` for the whole project
+
+  [ Simon McVittie ]
+  * system-info: Avoid g_debug() interfering with machine-readable stdout
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 06 Aug 2019 15:56:51 +0100
+
 steam-runtime-tools (0.20190802.0-0+steamrt1.1) scout; urgency=medium
 
   [ Simon McVittie ]

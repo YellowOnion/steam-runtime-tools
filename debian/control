@@ -86,6 +86,7 @@ Section: misc
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+ steam-runtime-tools-bin,
  zlib1g,
 Description:
  The Steam Runtime is the library stack used to run the Steam client
@@ -93,3 +94,24 @@ Description:
  supporting code used by the Steam client to discover system information.
  .
  This package contains automated tests.
+
+Package: steam-runtime-tools-bin
+Architecture: any
+Multi-Arch: foreign
+Section: libdevel
+Breaks:
+ libsteam-runtime-tools-0-tests (<< 0.20190806.0~),
+Replaces:
+ libsteam-runtime-tools-0-tests (<< 0.20190806.0~),
+Depends:
+ libsteam-runtime-tools-0-0,
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam Runtime utility library - command-line tools
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains the command-line tool steam-runtime-system-info,
+ which summarizes everything that the libsteam-runtime-tools library
+ can find out.

@@ -120,6 +120,56 @@ usage (int code)
   exit (code);
 }
 
+static FILE *
+divert_stdout_to_stderr (GError *error)
+{
+  int original_stdout_fd;
+  FILE *original_stdout;
+
+  /* Duplicate the original stdout so that we still have a way to write
+   * machine-readable output. */
+  original_stdout_fd = dup (STDOUT_FILENO);
+
+  if (original_stdout_fd < 0)
+    {
+      int saved_errno = errno;
+
+      g_set_error (&error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
+                   "Unable to duplicate fd %d: %s",
+                   STDOUT_FILENO, g_strerror (saved_errno));
+      return NULL;
+    }
+
+  /* If something like g_debug writes to stdout, make it come out of
+   * our original stderr. */
+  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
+    {
+      int saved_errno = errno;
+
+      close (original_stdout_fd);
+      g_set_error (&error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
+                   "Unable to make fd %d a copy of fd %d: %s",
+                   STDOUT_FILENO, STDERR_FILENO, g_strerror (saved_errno));
+      return NULL;
+    }
+
+  /* original_stdout takes ownership of original_stdout_fd on success */
+  original_stdout = fdopen (original_stdout_fd, "w");
+
+  if (original_stdout == NULL)
+    {
+      int saved_errno = errno;
+
+      close (original_stdout_fd);
+      g_set_error (&error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
+                   "Unable to create a stdio wrapper for fd %d: %s",
+                   original_stdout_fd, g_strerror (saved_errno));
+      return NULL;
+    }
+
+  return original_stdout;
+}
+
 static void
 jsonify_library_issues (JsonBuilder *builder,
                         SrtLibraryIssues issues)
@@ -195,6 +245,8 @@ int
 main (int argc,
       char **argv)
 {
+  FILE *original_stdout = NULL;
+  GError *error = NULL;
   SrtSystemInfo *info;
   SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
   char *expectations = NULL;
@@ -235,6 +287,17 @@ main (int argc,
 
   if (optind != argc)
     usage (1);
+
+  /* stdout is reserved for machine-readable output, so avoid having
+   * things like g_debug() pollute it. */
+  original_stdout = divert_stdout_to_stderr (&error);
+
+  if (original_stdout == NULL)
+    {
+      g_warning ("%s", error->message);
+      g_clear_error (&error);
+      return 1;
+    }
 
   info = srt_system_info_new (expectations);
 
@@ -282,7 +345,12 @@ main (int argc,
   json_generator_set_root (generator, root);
   json_generator_set_pretty (generator, TRUE);
   json_output = json_generator_to_data (generator, NULL);
-  g_print ("%s", json_output);
+
+  if (fputs (json_output, original_stdout) < 0)
+    g_warning ("Unable to write output: %s", g_strerror (errno));
+
+  if (fclose (original_stdout) != 0)
+    g_warning ("Unable to close stdout: %s", g_strerror (errno));
 
   g_free (json_output);
   g_object_unref (generator);

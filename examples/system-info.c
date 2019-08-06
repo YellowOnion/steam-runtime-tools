@@ -347,6 +347,9 @@ main (int argc,
   if (fputs (json_output, original_stdout) < 0)
     g_warning ("Unable to write output: %s", g_strerror (errno));
 
+  if (fputs ("\n", original_stdout) < 0)
+    g_warning ("Unable to write final newline: %s", g_strerror (errno));
+
   if (fclose (original_stdout) != 0)
     g_warning ("Unable to close stdout: %s", g_strerror (errno));
 

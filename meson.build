@@ -129,8 +129,8 @@ if multiarch != ''
   subdir('helpers')
 endif
 
+subdir('bin')
 subdir('docs')
-subdir('examples')
 subdir('tests')
 
 # vim:set sw=2 sts=2 et:

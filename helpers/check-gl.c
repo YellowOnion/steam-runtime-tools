@@ -69,9 +69,6 @@
  * [3] http://git.compiz.org/fusion/misc/compiz-manager/tree/compiz-manager
  */
 
-/* for strcasestr */
-#define _GNU_SOURCE
-
 #include <ctype.h>
 #include <locale.h>
 #include <stdio.h>

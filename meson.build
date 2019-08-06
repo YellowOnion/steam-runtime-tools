@@ -91,6 +91,8 @@ endforeach
 
 add_project_arguments(['-std=c99'], language : 'c')
 
+add_project_arguments(['-D_GNU_SOURCE'], language : 'c')
+
 glib = dependency(
   'glib-2.0',
   version : '>= 2.32',

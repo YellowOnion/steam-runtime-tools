@@ -23,9 +23,6 @@
  *   Cosimo Cecchi <cosimo@endlessm.com>
  */
 
-/* for strcasestr */
-#define _GNU_SOURCE
-
 #include <locale.h>
 #include <stdlib.h>
 #include <string.h>

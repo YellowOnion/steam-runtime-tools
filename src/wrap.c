@@ -1526,24 +1526,6 @@ wrap_interactive (FlatpakBwrap *wrapped_command,
   return TRUE;
 }
 
-typedef struct
-{
-  gboolean exited;
-  gint wait_status;
-} ChildExitedClosure;
-
-static void
-child_exited_cb (GPid pid,
-                 gint wait_status,
-                 gpointer user_data)
-{
-  ChildExitedClosure *closure = user_data;
-
-  closure->exited = TRUE;
-  closure->wait_status = wait_status;
-  g_spawn_close_pid (pid);
-}
-
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
@@ -1645,15 +1627,12 @@ main (int argc,
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) ld_library_path = g_string_new ("");
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
-  GPid child_pid;
-  ChildExitedClosure child_exited_closure = { FALSE, 0 };
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   const gchar *home;
   g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
-  GSpawnFlags spawn_flags = G_SPAWN_DO_NOT_REAP_CHILD;
 
   setlocale (LC_ALL, "");
   pv_avoid_gvfs ();
@@ -1760,6 +1739,21 @@ main (int argc,
   /* Finished parsing arguments, so any subsequent failures will make
    * us exit 1. */
   ret = 1;
+
+  if (!opt_interactive)
+    {
+      int fd;
+
+      if (!glnx_openat_rdonly (-1, "/dev/null", TRUE, &fd, error))
+          goto out;
+
+      if (dup2 (fd, STDIN_FILENO) < 0)
+        {
+          glnx_throw_errno_prefix (error,
+                                   "Cannot replace stdin with /dev/null");
+          goto out;
+        }
+    }
 
   pv_get_current_dirs (&cwd_p, &cwd_l);
 
@@ -2167,47 +2161,15 @@ main (int argc,
   /* flatpak_bwrap_finish did this */
   g_assert (g_ptr_array_index (bwrap->argv, bwrap->argv->len - 1) == NULL);
 
-  g_debug ("Launching child process...");
+  g_debug ("Replacing self with bwrap...");
 
-  if (opt_interactive)
-    spawn_flags |= G_SPAWN_CHILD_INHERITS_STDIN;
+  flatpak_bwrap_child_setup_cb (bwrap->fds);
+  execve (bwrap->argv->pdata[0],
+          (char * const *) bwrap->argv->pdata,
+          bwrap->envp);
 
-  if (!g_spawn_async (NULL,   /* cwd */
-                      (gchar **) bwrap->argv->pdata,
-                      bwrap->envp,
-                      spawn_flags,
-                      flatpak_bwrap_child_setup_cb,
-                      bwrap->fds,
-                      &child_pid,
-                      error))
-    {
-      ret = 127;
-      goto out;
-    }
-
-  g_child_watch_add (child_pid, child_exited_cb, &child_exited_closure);
-
-  while (!child_exited_closure.exited)
-    g_main_context_iteration (NULL, TRUE);
-
-  if (opt_verbose)
-    {
-      if (WIFEXITED (child_exited_closure.wait_status))
-        g_message ("Command exited with status %d",
-                    WEXITSTATUS (child_exited_closure.wait_status));
-      else if (WIFSIGNALED (child_exited_closure.wait_status))
-        g_message ("Command killed by signal %d",
-                   WTERMSIG (child_exited_closure.wait_status));
-      else
-        g_message ("Command terminated in an unknown way");
-    }
-
-  if (WIFEXITED (child_exited_closure.wait_status))
-    ret = WEXITSTATUS (child_exited_closure.wait_status);
-  else if (WIFSIGNALED (child_exited_closure.wait_status))
-    ret = 128 + WTERMSIG (child_exited_closure.wait_status);
-  else
-    ret = 126;
+  /* If we are still here then execve failed */
+  g_warning ("execve failed: %s", g_strerror (errno));
 
 out:
   if (local_error != NULL)

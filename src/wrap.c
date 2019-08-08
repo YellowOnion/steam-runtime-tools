@@ -2153,6 +2153,17 @@ main (int argc,
 
   flatpak_bwrap_finish (bwrap);
 
+  /* Clean up temporary directory before running our long-running process */
+  if (tmpdir != NULL &&
+      !glnx_shutil_rm_rf_at (-1, tmpdir, NULL, error))
+    {
+      g_warning ("Unable to delete temporary directory: %s",
+                 local_error->message);
+      g_clear_error (&local_error);
+    }
+
+  g_clear_pointer (&tmpdir, g_free);
+
   /* flatpak_bwrap_finish did this */
   g_assert (g_ptr_array_index (bwrap->argv, bwrap->argv->len - 1) == NULL);
 

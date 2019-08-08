@@ -2040,15 +2040,30 @@ main (int argc,
         }
     }
 
+  if (opt_verbose)
+    {
+      g_message ("%s options before bundling:", bwrap_executable);
+
+      for (i = 0; i < bwrap->argv->len; i++)
+        {
+          g_autofree gchar *quoted = NULL;
+
+          quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
+          g_message ("\t%s", quoted);
+        }
+    }
+
+  if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
+    goto out;
+
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
-  flatpak_bwrap_finish (bwrap);
 
   if (opt_verbose)
     {
-      g_message ("%s options:", bwrap_executable);
+      g_message ("Final %s options:", bwrap_executable);
 
-      for (i = 0; i < bwrap->argv->len - 1; i++)
+      for (i = 0; i < bwrap->argv->len; i++)
         {
           g_autofree gchar *quoted = NULL;
 
@@ -2066,6 +2081,8 @@ main (int argc,
           g_message ("\t%s", quoted);
         }
     }
+
+  flatpak_bwrap_finish (bwrap);
 
   /* flatpak_bwrap_finish did this */
   g_assert (g_ptr_array_index (bwrap->argv, bwrap->argv->len - 1) == NULL);

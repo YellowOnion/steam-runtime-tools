@@ -31,6 +31,7 @@
 
 #include <X11/Xauth.h>
 
+#include <ftw.h>
 #include <locale.h>
 #include <stdlib.h>
 #include <sys/utsname.h>
@@ -906,6 +907,76 @@ try_bind_dri (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
+/* nftw() doesn't have a user_data argument so we need to use a global
+ * variable :-( */
+static struct
+{
+  FlatpakBwrap *bwrap;
+  const char *symlink_farm;
+  const char *dest;
+} nftw_data;
+
+static int
+add_symlinks_to_bwrap (const char *fpath,
+                       const struct stat *sb,
+                       int typeflag,
+                       struct FTW *ftwbuf)
+{
+  const char *path_in_container;
+  g_autofree gchar *target = NULL;
+  gsize prefix_len;
+
+  g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.symlink_farm), 1);
+  g_return_val_if_fail (g_str_has_suffix (nftw_data.symlink_farm, nftw_data.dest), 1);
+
+  prefix_len = strlen (nftw_data.symlink_farm) - strlen (nftw_data.dest);
+  path_in_container = fpath + prefix_len;
+
+  switch (typeflag)
+    {
+      case FTW_D:
+        flatpak_bwrap_add_args (nftw_data.bwrap,
+                                "--dir", path_in_container,
+                                NULL);
+        break;
+
+      case FTW_SL:
+        target = glnx_readlinkat_malloc (-1, fpath, NULL, NULL);
+        flatpak_bwrap_add_args (nftw_data.bwrap,
+                                "--symlink", target, path_in_container,
+                                NULL);
+        break;
+
+      default:
+        g_warning ("Don't know how to handle ftw type flag %d at %s",
+                   typeflag, fpath);
+    }
+
+  return 0;
+}
+
+/*
+ * For every symbolic link in @farm, add a corresponding symbolic link
+ * via the bwrap command-line.
+ */
+static void
+add_symlink_farm (FlatpakBwrap *bwrap,
+                  const char *farm,
+                  const char *dest)
+{
+  g_return_if_fail (nftw_data.bwrap == NULL);
+  g_return_if_fail (dest[0] == '/');
+  g_return_if_fail (g_str_has_suffix (farm, dest));
+
+  nftw_data.bwrap = bwrap;
+  nftw_data.symlink_farm = farm;
+  nftw_data.dest = dest;
+  nftw (farm, add_symlinks_to_bwrap, 100, FTW_PHYS);
+  nftw_data.bwrap = NULL;
+  nftw_data.symlink_farm = NULL;
+  nftw_data.dest = NULL;
+}
+
 static gboolean
 bind_runtime (FlatpakBwrap *bwrap,
               const char *tools_dir,
@@ -1242,9 +1313,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                               "--unsetenv", "LIBGL_DRIVERS_PATH",
                               NULL);
 
-  flatpak_bwrap_add_args (bwrap,
-                          "--ro-bind", overrides, "/overrides",
-                          NULL);
+  add_symlink_farm (bwrap, overrides, "/overrides");
 
   if (!bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;

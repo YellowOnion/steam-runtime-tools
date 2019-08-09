@@ -52,6 +52,19 @@ build:scout:
             ninja -C _build
             ninja -C _build install
             meson test --verbose -C _build
+            ./build-relocatable-install.py \
+              --srcdir . \
+              --builddir _build \
+              --libcapsuledir /usr/lib/libcapsule/relocatable \
+              --prefix="$(pwd)/_build/relocatable-install" \
+              --archive "$(pwd)/_build" \
+              --set-version "$(cat .tarball-version)" \
+              ${NULL+}
+            prove -v ./tests/relocatable-install.py :: \
+              --srcdir . \
+              --builddir _build \
+              --prefix="$(pwd)/_build/relocatable-install" \
+              ${NULL+}
 
 # Artifacts are currently disabled because uploading them to the
 # coordinator results in HTTP 413 Request Entity Too Large.

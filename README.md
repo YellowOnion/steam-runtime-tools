@@ -151,9 +151,17 @@ already. Then you can do:
 
     meson --prefix=$(pwd)/_build/relocatable-install -Drelocatable=true _build
     ninja -C _build
-    meson test -v -C _build             # optional
     rm -fr $(pwd)/_build/relocatable-install
+    meson test -v -C _build             # optional
     ninja -C _build install
+    ./build-relocatable-install.py \
+        --srcdir . \
+        --builddir _build \
+        --libcapsuledir /usr/lib/libcapsule/relocatable \
+        --archive .
+    ./tests/relocatable-install.py \
+        --srcdir . \
+        --builddir _build               # optional
 
 For more convenient use on a development system, if you have a
 SteamRT 1 'scout' SDK tarball or an unpacked sysroot, you can place a
@@ -163,11 +171,16 @@ tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
 
     ./sysroot/run-in-sysroot.py apt-get update
     ./sysroot/run-in-sysroot.py meson ...
+    rm -fr $(pwd)/_build/relocatable-install
+    ./sysroot/run-in-sysroot.py ninja ...
+    ./sysroot/run-in-sysroot.py ./build-relocatable-install.py ...
 
 (Or put them in different locations and pass the `--sysroot` and
 `--tarball` options to `./sysroot/run-in-sysroot.py`.)
 
-The relocatable install ends up in `_build/relocatable-install`.
+The relocatable install goes into`_build/relocatable-install` (or
+whatever you used as the `--prefix`), and a compressed version ends
+up in the directory passed as an argument to `--archive`.
 
 Instructions for testing
 ------------------------

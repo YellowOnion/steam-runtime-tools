@@ -117,7 +117,6 @@ tests = [
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
-  'relocatable-install.py',
   'shellcheck.sh',
 ]
 
@@ -187,18 +186,5 @@ executable(
   install_dir : get_option('bindir'),
   kwargs : rpath_kwargs,
 )
-
-if get_option('relocatable')
-  meson.add_install_script(
-    python.path(),
-    join_paths(meson.current_source_dir(), 'build-relocatable-install.py'),
-    '--srcdir', meson.current_source_dir(),
-    '--builddir', meson.current_build_dir(),
-    '--relocatabledir', '/usr/lib/libcapsule/relocatable',
-    '--prefix', get_option('prefix'),
-    '--archive', meson.current_build_dir(),
-    '--set-version', version,
-  )
-endif
 
 # vim:set sw=2 sts=2 et:

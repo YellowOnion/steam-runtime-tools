@@ -25,6 +25,7 @@
 
 import argparse
 import glob
+import json
 import os
 import re
 import shutil
@@ -139,25 +140,40 @@ def main():
         '--srcdir', default=os.getenv('MESON_SOURCE_ROOT', '.'))
     parser.add_argument(
         '--builddir', default=os.getenv('MESON_BUILD_ROOT', '_build'))
-    parser.add_argument(
-        '--prefix',
-        default=os.getenv(
-            'MESON_INSTALL_PREFIX',
-            os.path.abspath(os.path.join('_build', 'relocatable-install')),
-        ),
-    )
-    parser.add_argument(
-        '--archive', default=os.getenv('MESON_BUILD_ROOT', '.'))
-    parser.add_argument('--relocatabledir', default='')
+    parser.add_argument('--prefix', default=None)
+    parser.add_argument('--archive', default=None)
+    parser.add_argument('--libcapsuledir', default='')
     parser.add_argument('--set-version', dest='version', default='unknown')
     args = parser.parse_args()
 
+    if args.destdir:
+        args.destdir = os.path.abspath(args.destdir)
+
+    args.srcdir = os.path.abspath(args.srcdir)
+    args.builddir = os.path.abspath(args.builddir)
+
+    if args.archive is None:
+        args.archive = args.builddir
+    else:
+        args.archive = os.path.abspath(args.archive)
+
+    if args.prefix is None:
+        blob = subprocess.check_output([
+            'meson', 'introspect', args.builddir, '--buildoptions',
+        ], universal_newlines=True)
+        for opt in json.loads(blob):
+            if opt['name'] == 'prefix':
+                args.prefix = opt['value']
+                break
+        else:
+            raise RuntimeError(
+                'Unable to determine installation prefix from Meson, '
+                'please specify --prefix'
+            )
+
     os.chdir(args.builddir)
 
-    destdir_prefix = os.getenv(
-        'MESON_INSTALL_DESTDIR_PREFIX',
-        args.destdir + args.prefix,
-    )
+    destdir_prefix = args.destdir + args.prefix
 
     os.makedirs(os.path.join(destdir_prefix, 'bin'), exist_ok=True)
     os.makedirs(os.path.join(destdir_prefix, 'metadata'), exist_ok=True)
@@ -186,12 +202,12 @@ def main():
         0o644,
     )
 
-    if args.relocatabledir:
+    if args.libcapsuledir:
         for arch in ARCHS:
             for tool in TOOLS:
                 install_exe(
                     os.path.join(
-                        args.relocatabledir,
+                        args.libcapsuledir,
                         '{}-{}'.format(arch.multiarch, tool),
                     ),
                     os.path.join(destdir_prefix, 'bin'),
@@ -341,7 +357,7 @@ def main():
     for package, source in (
         list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
     ):
-        if not args.relocatabledir and source == 'libcapsule':
+        if not args.libcapsuledir and source == 'libcapsule':
             continue
 
         if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
@@ -400,7 +416,7 @@ def main():
         os.path.join(destdir_prefix, 'sources'),
     )
 
-    if not args.relocatabledir:
+    if not args.libcapsuledir:
         for dsc in glob.glob(
             os.path.join(args.srcdir, 'libcapsule*.dsc')
         ):

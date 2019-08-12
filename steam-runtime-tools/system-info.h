@@ -58,3 +58,6 @@ SrtLibraryIssues srt_system_info_check_library (SrtSystemInfo *self,
                                                 const gchar *multiarch_tuple,
                                                 const gchar *soname,
                                                 SrtLibrary **more_details_out);
+
+void srt_system_info_set_environ (SrtSystemInfo *self,
+                                  gchar * const *env);

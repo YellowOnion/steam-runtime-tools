@@ -77,6 +77,8 @@ struct _SrtSystemInfo
   GObject parent;
   /* "" if we have tried and failed to auto-detect */
   gchar *expectations;
+  /* Fake environment variables, or %NULL to use the real environment */
+  gchar **env;
   Tristate can_write_uinput;
   /* (element-type Abi) */
   GPtrArray *abis;
@@ -200,6 +202,7 @@ srt_system_info_finalize (GObject *object)
 
   g_clear_pointer (&self->abis, g_ptr_array_unref);
   g_free (self->expectations);
+  g_strfreev (self->env);
 
   G_OBJECT_CLASS (srt_system_info_parent_class)->finalize (object);
 }
@@ -348,6 +351,15 @@ library_compare (SrtLibrary *a, SrtLibrary *b)
   return g_strcmp0 (srt_library_get_soname (a), srt_library_get_soname (b));
 }
 
+static gchar **
+get_environ (SrtSystemInfo *self)
+{
+  if (self->env != NULL)
+    return self->env;
+  else
+    return environ;
+}
+
 static gboolean
 ensure_expectations (SrtSystemInfo *self)
 {
@@ -357,7 +369,7 @@ ensure_expectations (SrtSystemInfo *self)
       const char *sysroot = "/";
       gchar *def;
 
-      runtime = g_getenv ("STEAM_RUNTIME");
+      runtime = g_environ_getenv (get_environ (self), "STEAM_RUNTIME");
 
       if (runtime != NULL && runtime[0] == '/')
         sysroot = runtime;
@@ -656,4 +668,44 @@ srt_system_info_check_library (SrtSystemInfo *self,
       g_dir_close (dir);
 
     return ret;
+}
+
+/*
+ * Forget whether we can load libraries.
+ */
+static void
+forget_libraries (SrtSystemInfo *self)
+{
+  gsize i;
+
+  for (i = 0; i < self->abis->len; i++)
+    {
+      Abi *abi = g_ptr_array_index (self->abis, i);
+
+      g_hash_table_remove_all (abi->cached_results);
+      abi->cached_combined_issues = SRT_LIBRARY_ISSUES_NONE;
+      abi->libraries_cache_available = FALSE;
+    }
+}
+
+/**
+ * srt_system_info_set_environ:
+ * @self: The #SrtSystemInfo
+ * @env: (nullable) (array zero-terminated=1) (element-type filename) (transfer none): An
+ *  array of environment variables
+ *
+ * Use @env instead of the real environment variable block `environ`
+ * when locating the Steam Runtime.
+ *
+ * If @env is %NULL, go back to using the real environment variables.
+ */
+void
+srt_system_info_set_environ (SrtSystemInfo *self,
+                             gchar * const *env)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  forget_libraries (self);
+  g_strfreev (self->env);
+  self->env = g_strdupv ((gchar **) env);
 }

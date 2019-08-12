@@ -319,7 +319,7 @@ main (int argc,
       can_run = srt_system_info_can_run (info, multiarch_tuples[i]);
       json_builder_add_boolean_value (builder, can_run);
 
-      if (can_run && expectations != NULL)
+      if (can_run)
         {
           json_builder_set_member_name (builder, "library-issues-summary");
           json_builder_begin_array (builder);

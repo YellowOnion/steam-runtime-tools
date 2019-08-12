@@ -623,9 +623,9 @@ wrong_expectations (Fixture *f,
       return;
     }
 
-  /* Set the expectations folder to NULL.
-   * We expect the library checks to fail. */
-  info = srt_system_info_new (NULL);
+  /* Set the expectations folder to one that does not contain the
+   * necessary files. We expect the library checks to fail. */
+  info = srt_system_info_new ("/dev");
 
   issues = srt_system_info_check_libraries (info,
                                             _SRT_MULTIARCH,

@@ -75,6 +75,7 @@ struct _SrtSystemInfo
 {
   /*< private >*/
   GObject parent;
+  /* "" if we have tried and failed to auto-detect */
   gchar *expectations;
   Tristate can_write_uinput;
   /* (element-type Abi) */
@@ -347,6 +348,34 @@ library_compare (SrtLibrary *a, SrtLibrary *b)
   return g_strcmp0 (srt_library_get_soname (a), srt_library_get_soname (b));
 }
 
+static gboolean
+ensure_expectations (SrtSystemInfo *self)
+{
+  if (self->expectations == NULL)
+    {
+      const char *runtime;
+      const char *sysroot = "/";
+      gchar *def;
+
+      runtime = g_getenv ("STEAM_RUNTIME");
+
+      if (runtime != NULL && runtime[0] == '/')
+        sysroot = runtime;
+
+      def = g_build_filename (sysroot, "usr", "lib", "steamrt",
+                              "expectations", NULL);
+
+      if (g_file_test (def, G_FILE_TEST_IS_DIR))
+        self->expectations = g_steal_pointer (&def);
+      else
+        self->expectations = g_strdup ("");
+
+      g_free (def);
+    }
+
+  return self->expectations[0] != '\0';
+}
+
 /**
  * srt_system_info_check_libraries:
  * @self: The #SrtSystemInfo object to use.
@@ -384,7 +413,7 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
   g_return_val_if_fail (libraries_out == NULL || *libraries_out == NULL,
                         SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
 
-  if (self->expectations == NULL)
+  if (!ensure_expectations (self))
     {
       /* We don't know which libraries to check. */
       return SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
@@ -538,7 +567,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
       return srt_library_get_issues (library);
     }
 
-  if (self->expectations != NULL)
+  if (ensure_expectations (self))
     {
       dir_path = g_build_filename (self->expectations, multiarch_tuple, NULL);
       dir = g_dir_open (dir_path, 0, &error);

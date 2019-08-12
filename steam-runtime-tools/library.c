@@ -470,6 +470,9 @@ srt_check_library_presence (const char *soname,
         g_return_val_if_reached (SRT_LIBRARY_ISSUES_CANNOT_LOAD);
     }
 
+  if (symbols_path == NULL)
+    issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
+
   helper = g_strdup_printf ("%s/%s-inspect-library",
                             _srt_get_helpers_path (), multiarch);
   argv[0] = helper;

@@ -54,6 +54,9 @@ GType srt_library_get_type (void);
  *  were available with a different version
  * @SRT_LIBRARY_ISSUES_INTERNAL_ERROR: Generic internal error, for example
  *  a function has been called with a missing required parameter
+ * @SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS: No directory containing
+ *  expected ABIs has been set, so we cannot know which libraries we are
+ *  meant to have found
  *
  * A bitfield with flags representing problems with a library, or
  * %SRT_LIBRARY_ISSUES_NONE (which is numerically zero) if no problems
@@ -67,6 +70,7 @@ typedef enum
   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS = (1 << 1),
   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS = (1 << 2),
   SRT_LIBRARY_ISSUES_INTERNAL_ERROR = (1 << 3),
+  SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS = (1 << 4),
   SRT_LIBRARY_ISSUES_NONE = 0
 } SrtLibraryIssues;
 

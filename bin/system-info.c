@@ -185,6 +185,9 @@ jsonify_library_issues (JsonBuilder *builder,
 
   if ((issues & SRT_LIBRARY_ISSUES_INTERNAL_ERROR) != 0)
     json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS) != 0)
+    json_builder_add_string_value (builder, "unknown-expectations");
 }
 
 static void

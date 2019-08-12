@@ -670,14 +670,18 @@ test_missing_library (Fixture *f,
                                        NULL,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        NULL);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
 
   issues = srt_check_library_presence ("libMISSING.so.62",
                                        _SRT_MULTIARCH,
                                        NULL,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
 
   missing_symbols = srt_library_get_missing_symbols (library);
@@ -713,7 +717,9 @@ test_missing_arch (Fixture *f,
                                        NULL,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
 
   missing_symbols = srt_library_get_missing_symbols (library);

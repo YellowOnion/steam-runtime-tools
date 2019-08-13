@@ -384,6 +384,12 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
   g_return_val_if_fail (libraries_out == NULL || *libraries_out == NULL,
                         SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
 
+  if (self->expectations == NULL)
+    {
+      /* We don't know which libraries to check. */
+      return SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
+    }
+
   abi = ensure_abi (self, multiarch_tuple);
 
   /* If we cached already the result, we return it */
@@ -405,8 +411,10 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
     {
       g_debug ("An error occurred while opening the symbols directory: %s", error->message);
       g_clear_error (&error);
+      ret = SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
       goto out;
     }
+
   while ((filename = g_dir_read_name (dir)))
     {
       char *line = NULL;
@@ -509,7 +517,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
   ssize_t chars;
   FILE *fp = NULL;
   SrtLibraryIssues issues;
-  GDir *dir;
+  GDir *dir = NULL;
   GError *error = NULL;
   SrtLibraryIssues ret = SRT_LIBRARY_ISSUES_INTERNAL_ERROR;
 
@@ -530,16 +538,19 @@ srt_system_info_check_library (SrtSystemInfo *self,
       return srt_library_get_issues (library);
     }
 
-
-  dir_path = g_build_filename (self->expectations, multiarch_tuple, NULL);
-  dir = g_dir_open (dir_path, 0, &error);
-  if (error)
+  if (self->expectations != NULL)
     {
-      g_debug ("An error occurred while opening the symbols directory: %s", error->message);
-      g_clear_error (&error);
-      goto out;
+      dir_path = g_build_filename (self->expectations, multiarch_tuple, NULL);
+      dir = g_dir_open (dir_path, 0, &error);
+
+      if (error)
+        {
+          g_debug ("An error occurred while opening the symbols directory: %s", error->message);
+          g_clear_error (&error);
+        }
     }
-  while ((filename = g_dir_read_name (dir)))
+
+  while (dir != NULL && (filename = g_dir_read_name (dir)))
     {
       if (!g_str_has_suffix (filename, ".symbols"))
         continue;
@@ -590,6 +601,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
       g_clear_pointer (&line, g_free);
       g_clear_pointer (&fp, fclose);
     }
+
   /* The SONAME's symbols file is not available.
    * We do instead a simple absence/presence check. */
   issues = srt_check_library_presence (soname,

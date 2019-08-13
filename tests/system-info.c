@@ -586,7 +586,9 @@ library_missing (Fixture *f,
                                           _SRT_MULTIARCH,
                                           "libMISSING.so.62",
                                           &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   check_library_missing_lib_result (library);
 
   g_clear_pointer (&library, g_object_unref);
@@ -595,7 +597,9 @@ library_missing (Fixture *f,
                                           _SRT_MULTIARCH,
                                           "libMISSING.so.62",
                                           &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   check_library_missing_lib_result (library);
 
   g_object_unref (library);
@@ -626,13 +630,13 @@ wrong_expectations (Fixture *f,
   issues = srt_system_info_check_libraries (info,
                                             _SRT_MULTIARCH,
                                             NULL);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS);
 
   issues = srt_system_info_check_library (info,
                                           _SRT_MULTIARCH,
                                           "libz.so.1",
                                           NULL);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS);
 
   g_object_unref (info);
 }

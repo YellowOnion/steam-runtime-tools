@@ -327,7 +327,7 @@ main (int argc,
           print_json_string_content (entry);
           printf ("\"");
         }
-      printf ("\n    ],");
+      printf ("\n    ]");
 
       free (missing_symbols);
       free (misversioned_symbols);
@@ -339,7 +339,7 @@ main (int argc,
   while (dep_map != NULL && dep_map->l_prev != NULL)
     dep_map = dep_map->l_prev;
 
-  printf ("\n    \"dependencies\": [");
+  printf (",\n    \"dependencies\": [");
   first = true;
   for (; dep_map != NULL; dep_map = dep_map->l_next)
     {

@@ -440,9 +440,9 @@ srt_check_library_presence (const char *soname,
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
-  JsonArray *missing_array;
-  JsonArray *misversioned_array;
-  JsonArray *dependencies_array;
+  JsonArray *missing_array = NULL;
+  JsonArray *misversioned_array = NULL;
+  JsonArray *dependencies_array = NULL;
   GError *error = NULL;
   GStrv missing_symbols = NULL;
   GStrv misversioned_symbols = NULL;
@@ -469,6 +469,9 @@ srt_check_library_presence (const char *soname,
       default:
         g_return_val_if_reached (SRT_LIBRARY_ISSUES_CANNOT_LOAD);
     }
+
+  if (symbols_path == NULL)
+    issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
 
   helper = g_strdup_printf ("%s/%s-inspect-library",
                             _srt_get_helpers_path (), multiarch);
@@ -521,7 +524,8 @@ srt_check_library_presence (const char *soname,
 
   absolute_path = g_strdup (json_object_get_string_member (json, "path"));
 
-  missing_array = json_object_get_array_member (json, "missing_symbols");
+  if (json_object_has_member (json, "missing_symbols"))
+    missing_array = json_object_get_array_member (json, "missing_symbols");
   if (missing_array != NULL)
     {
       if (json_array_get_length (missing_array) > 0)
@@ -536,7 +540,8 @@ srt_check_library_presence (const char *soname,
         }
     }
 
-  misversioned_array = json_object_get_array_member (json, "misversioned_symbols");
+  if (json_object_has_member (json, "misversioned_symbols"))
+    misversioned_array = json_object_get_array_member (json, "misversioned_symbols");
   if (misversioned_array != NULL)
     {
       if (json_array_get_length (misversioned_array) > 0)
@@ -551,7 +556,8 @@ srt_check_library_presence (const char *soname,
         }
     }
 
-  dependencies_array = json_object_get_array_member (json, "dependencies");
+  if (json_object_has_member (json, "dependencies"))
+    dependencies_array = json_object_get_array_member (json, "dependencies");
   if (dependencies_array != NULL)
     {
       dependencies = g_new0 (gchar *, json_array_get_length (dependencies_array) + 1);

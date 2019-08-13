@@ -47,6 +47,7 @@ tests_metadir = join_paths(
 
 install_subdir('expectations', install_dir : tests_dir)
 install_subdir('expectations_with_missings', install_dir : tests_dir)
+install_subdir('fake-steam-runtime', install_dir : tests_dir)
 
 foreach test_name : tests
   exe = executable(

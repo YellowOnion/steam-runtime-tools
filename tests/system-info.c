@@ -286,6 +286,44 @@ libraries_presence (Fixture *f,
   g_object_unref (info);
 }
 
+/*
+ * Check that the expectations can be auto-detected from the
+ * `STEAM_RUNTIME` environment variable.
+ */
+static void
+auto_expectations (Fixture *f,
+                   gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar *steam_runtime = NULL;
+  GList *libraries = NULL;
+  SrtLibraryIssues issues;
+  gchar **env;
+
+  if (strcmp (_SRT_MULTIARCH, "") == 0)
+    {
+      g_test_skip ("Unsupported architecture");
+      return;
+    }
+
+  env = g_get_environ ();
+  steam_runtime = g_build_filename (f->srcdir, "fake-steam-runtime", NULL);
+  env = g_environ_setenv (env, "STEAM_RUNTIME", steam_runtime, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, env);
+  issues = srt_system_info_check_libraries (info,
+                                            _SRT_MULTIARCH,
+                                            &libraries);
+  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
+  check_libraries_result (libraries);
+  g_list_free_full (libraries, g_object_unref);
+
+  g_object_unref (info);
+  g_strfreev (env);
+  g_free (steam_runtime);
+}
+
 static void
 check_library_result (SrtLibrary *library)
 {
@@ -623,9 +661,9 @@ wrong_expectations (Fixture *f,
       return;
     }
 
-  /* Set the expectations folder to NULL.
-   * We expect the library checks to fail. */
-  info = srt_system_info_new (NULL);
+  /* Set the expectations folder to one that does not contain the
+   * necessary files. We expect the library checks to fail. */
+  info = srt_system_info_new ("/dev");
 
   issues = srt_system_info_check_libraries (info,
                                             _SRT_MULTIARCH,
@@ -652,6 +690,8 @@ main (int argc,
               setup, test_object, teardown);
   g_test_add ("/system-info/libraries_presence", Fixture, NULL,
               setup, libraries_presence, teardown);
+  g_test_add ("/system-info/auto_expectations", Fixture, NULL,
+              setup, auto_expectations, teardown);
   g_test_add ("/system-info/library_presence", Fixture, NULL,
               setup, library_presence, teardown);
   g_test_add ("/system-info/libraries_missing", Fixture, NULL,

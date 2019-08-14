@@ -10,18 +10,6 @@ Copyright:
  © 2019 Collabora Ltd.
 License: Expat
 
-Files:
- helpers/check-gl.c
- helpers/check-gles.c
- helpers/gnome-session-check-accelerated-common.h
-Copyright:
- © 2006-2009 Red Hat, Inc.
- © 2010 Novell, Inc.
- © 2013 SUSE LINUX Products GmbH
- © 2016 Endless Mobile, Inc
- © 2019 Collabora Ltd.
-License: GPL-2+
-
 License: Expat
  Permission is hereby granted, free of charge, to any person obtaining
  a copy of this software and associated documentation files (the
@@ -44,19 +32,3 @@ License: Expat
 Comment:
  SPDX-License-Identifier: MIT
 
-License: GPL-2+
- This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; either version 2 of the License, or
- (at your option) any later version.
- .
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-Comment:
- SPDX-License-Identifier: GPL-2.0-or-later
- .
- On Debian systems, a copy of the GPL can be found in
- /usr/share/common-licenses/GPL-2. In the Steam Runtime, a copy of the
- GPL can be found in steam-runtime/common-licenses/GPL-2.

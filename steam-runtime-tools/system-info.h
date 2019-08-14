@@ -33,6 +33,8 @@
 #include <glib-object.h>
 
 #include <steam-runtime-tools/library.h>
+#include <steam-runtime-tools/runtime.h>
+#include <steam-runtime-tools/steam.h>
 
 typedef struct _SrtSystemInfo SrtSystemInfo;
 typedef struct _SrtSystemInfoClass SrtSystemInfoClass;
@@ -61,3 +63,12 @@ SrtLibraryIssues srt_system_info_check_library (SrtSystemInfo *self,
 
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);
+void srt_system_info_set_expected_runtime_version (SrtSystemInfo *self,
+                                                   const char *version);
+gchar *srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self);
+SrtRuntimeIssues srt_system_info_get_runtime_issues (SrtSystemInfo *self);
+gchar *srt_system_info_dup_runtime_path (SrtSystemInfo *self);
+gchar *srt_system_info_dup_runtime_version (SrtSystemInfo *self);
+
+SrtSteamIssues srt_system_info_get_steam_issues (SrtSystemInfo *self);
+gchar *srt_system_info_dup_steam_installation_path (SrtSystemInfo *self);

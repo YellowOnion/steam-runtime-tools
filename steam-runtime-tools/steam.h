@@ -25,13 +25,30 @@
 
 #pragma once
 
-#define _SRT_IN_SINGLE_HEADER
+#if !defined(_SRT_IN_SINGLE_HEADER) && !defined(_SRT_COMPILATION)
+#error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
+#endif
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
-
-#undef _SRT_IN_SINGLE_HEADER
+/**
+ * SrtSteamIssues:
+ * @SRT_STEAM_ISSUES_NONE: There are no problems
+ * @SRT_STEAM_ISSUES_INTERNAL_ERROR: Unable to detect the status of the
+ *  Steam installation
+ * @SRT_STEAM_ISSUES_CANNOT_FIND: Unable to find the Steam installation
+ * @SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK: `~/.steam/steam` is not
+ *  a symbolic link to a Steam installation, which for example can happen
+ *  if Steam was installed on a system with https://bugs.debian.org/916303
+ *
+ * A bitfield with flags representing problems with the Steam
+ * installation, or %SRT_STEAM_ISSUES_NONE (which is numerically zero)
+ * if no problems were detected.
+ *
+ * In general, more bits set means more problems.
+ */
+typedef enum
+{
+  SRT_STEAM_ISSUES_INTERNAL_ERROR = (1 << 0),
+  SRT_STEAM_ISSUES_CANNOT_FIND = (1 << 1),
+  SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK = (1 << 2),
+  SRT_STEAM_ISSUES_NONE = 0
+} SrtSteamIssues;

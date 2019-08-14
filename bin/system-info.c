@@ -191,6 +191,55 @@ jsonify_library_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_steam_issues (JsonBuilder *builder,
+                      SrtSteamIssues issues)
+{
+  if ((issues & SRT_STEAM_ISSUES_INTERNAL_ERROR) != 0)
+    json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_STEAM_ISSUES_CANNOT_FIND) != 0)
+    json_builder_add_string_value (builder, "cannot-find");
+
+  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK) != 0)
+    json_builder_add_string_value (builder, "dot-steam-steam-not-symlink");
+}
+
+static void
+jsonify_runtime_issues (JsonBuilder *builder,
+                        SrtRuntimeIssues issues)
+{
+  if ((issues & SRT_RUNTIME_ISSUES_INTERNAL_ERROR) != 0)
+    json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_RUNTIME_ISSUES_DISABLED) != 0)
+    json_builder_add_string_value (builder, "disabled");
+
+  if ((issues & SRT_RUNTIME_ISSUES_NOT_RUNTIME) != 0)
+    json_builder_add_string_value (builder, "not-runtime");
+
+  if ((issues & SRT_RUNTIME_ISSUES_UNOFFICIAL) != 0)
+    json_builder_add_string_value (builder, "unofficial");
+
+  if ((issues & SRT_RUNTIME_ISSUES_UNEXPECTED_LOCATION) != 0)
+    json_builder_add_string_value (builder, "unexpected-location");
+
+  if ((issues & SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION) != 0)
+    json_builder_add_string_value (builder, "unexpected-version");
+
+  if ((issues & SRT_RUNTIME_ISSUES_NOT_IN_LD_PATH) != 0)
+    json_builder_add_string_value (builder, "not-in-ld-path");
+
+  if ((issues & SRT_RUNTIME_ISSUES_NOT_IN_PATH) != 0)
+    json_builder_add_string_value (builder, "not-in-path");
+
+  if ((issues & SRT_RUNTIME_ISSUES_NOT_IN_ENVIRONMENT) != 0)
+    json_builder_add_string_value (builder, "not-in-environment");
+
+  if ((issues & SRT_RUNTIME_ISSUES_NOT_USING_NEWER_HOST_LIBRARIES) != 0)
+    json_builder_add_string_value (builder, "not-using-newer-host-libraries");
+}
+
+static void
 print_libraries_details (JsonBuilder *builder,
                          GList *libraries,
                          gboolean verbose)
@@ -251,13 +300,18 @@ main (int argc,
   FILE *original_stdout = NULL;
   GError *error = NULL;
   SrtSystemInfo *info;
-  SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
+  SrtLibraryIssues library_issues = SRT_LIBRARY_ISSUES_NONE;
+  SrtSteamIssues steam_issues = SRT_STEAM_ISSUES_NONE;
+  SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
   JsonGenerator *generator;
   gboolean can_run = FALSE;
   gchar *json_output;
+  gchar *version = NULL;
+  gchar *inst_path = NULL;
+  gchar *rt_path = NULL;
   int opt;
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
 
@@ -306,6 +360,33 @@ main (int argc,
   json_builder_set_member_name (builder, "can-write-uinput");
   json_builder_add_boolean_value (builder, srt_system_info_can_write_to_uinput (info));
 
+  json_builder_set_member_name (builder, "steam-installation");
+  json_builder_begin_object (builder);
+  json_builder_set_member_name (builder, "path");
+  inst_path = srt_system_info_dup_steam_installation_path (info);
+  json_builder_add_string_value (builder, inst_path);
+  json_builder_set_member_name (builder, "issues");
+  json_builder_begin_array (builder);
+  steam_issues = srt_system_info_get_steam_issues (info);
+  jsonify_steam_issues (builder, steam_issues);
+  json_builder_end_array (builder);
+  json_builder_end_object (builder);
+
+  json_builder_set_member_name (builder, "runtime");
+  json_builder_begin_object (builder);
+  json_builder_set_member_name (builder, "path");
+  rt_path = srt_system_info_dup_runtime_path (info);
+  json_builder_add_string_value (builder, rt_path);
+  json_builder_set_member_name (builder, "version");
+  version = srt_system_info_dup_runtime_version (info);
+  json_builder_add_string_value (builder, version);
+  json_builder_set_member_name (builder, "issues");
+  json_builder_begin_array (builder);
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  jsonify_runtime_issues (builder, runtime_issues);
+  json_builder_end_array (builder);
+  json_builder_end_object (builder);
+
   json_builder_set_member_name (builder, "architectures");
   json_builder_begin_object (builder);
 
@@ -323,14 +404,14 @@ main (int argc,
         {
           json_builder_set_member_name (builder, "library-issues-summary");
           json_builder_begin_array (builder);
-          issues = srt_system_info_check_libraries (info,
-                                                    multiarch_tuples[i],
-                                                    &libraries);
-          jsonify_library_issues (builder, issues);
+          library_issues = srt_system_info_check_libraries (info,
+                                                            multiarch_tuples[i],
+                                                            &libraries);
+          jsonify_library_issues (builder, library_issues);
           json_builder_end_array (builder);
         }
 
-      if (libraries != NULL && (issues != SRT_LIBRARY_ISSUES_NONE || verbose))
+      if (libraries != NULL && (library_issues != SRT_LIBRARY_ISSUES_NONE || verbose))
           print_libraries_details (builder, libraries, verbose);
 
       json_builder_end_object (builder);
@@ -360,6 +441,9 @@ main (int argc,
   json_node_free (root);
   g_object_unref (builder);
   g_object_unref (info);
+  g_free (rt_path);
+  g_free (inst_path);
+  g_free (version);
 
   return 0;
 }

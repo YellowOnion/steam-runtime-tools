@@ -20,6 +20,8 @@
     <title>Specific system information</title>
     <xi:include href="xml/architecture.xml"/>
     <xi:include href="xml/library.xml"/>
+    <xi:include href="xml/runtime.xml"/>
+    <xi:include href="xml/steam.xml"/>
   </chapter>
 
   <xi:include href="xml/annotation-glossary.xml"><xi:fallback /></xi:include>

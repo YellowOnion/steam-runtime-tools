@@ -39,7 +39,6 @@ for shell_script in \
         *.sh \
         pressure-vessel-unruntime \
         pressure-vessel-unruntime-test-ui \
-        sysroot/*.sh \
         tests/*.sh \
         ; do
     n=$((n + 1))

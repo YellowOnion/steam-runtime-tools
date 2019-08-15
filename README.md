@@ -143,25 +143,24 @@ Building a relocatable install for deployment
 To make the built version compatible with older systems, you will need
 a SteamRT 1 'scout' environment.
 
-The most straightforward method is to have prebuilt versions of
-libcapsule-tools-relocatable:amd64, libcapsule-tools-relocatable:i386
-and bubblewrap in your build environment. For example, you could do the
-build in a SteamRT 1 'scout' SDK Docker image that has those packages
-already. Then you can do:
+For this, you need prebuilt versions of libcapsule-tools-relocatable:amd64
+and libcapsule-tools-relocatable:i386 either in your build environment
+or available via apt-get. For example, you could do the build in a
+SteamRT 1 'scout' SDK Docker image that has those packages already.
+Then you can do:
 
-    meson --prefix=$(pwd)/_build/relocatable-install _build
+    meson --prefix="$(pwd)/_build/prefix" _build
     ninja -C _build
-    rm -fr $(pwd)/_build/relocatable-install
     meson test -v -C _build             # optional
     ninja -C _build install
+    rm -fr _build/relocatable-install
     ./build-relocatable-install.py \
         --srcdir . \
         --builddir _build \
         --libcapsuledir /usr/lib/libcapsule/relocatable \
+        --output _build/relocatable-install \
         --archive .
-    ./tests/relocatable-install.py \
-        --srcdir . \
-        --builddir _build               # optional
+    ./tests/relocatable-install.py _build/relocatable-install  # optional
 
 For more convenient use on a development system, if you have a
 SteamRT 1 'scout' SDK tarball or an unpacked sysroot, you can place a
@@ -170,16 +169,15 @@ tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
 `./sysroot/run-in-sysroot.py`:
 
     ./sysroot/run-in-sysroot.py apt-get update
-    ./sysroot/run-in-sysroot.py meson ...
-    rm -fr $(pwd)/_build/relocatable-install
-    ./sysroot/run-in-sysroot.py ninja ...
-    ./sysroot/run-in-sysroot.py ./build-relocatable-install.py ...
+    ./sysroot/run-in-sysroot.py meson --prefix="$(pwd)/_build/prefix" _build
+    ./sysroot/run-in-sysroot.py ninja -C _build
+    (etc.)
 
 (Or put them in different locations and pass the `--sysroot` and
 `--tarball` options to `./sysroot/run-in-sysroot.py`.)
 
-The relocatable install goes into`_build/relocatable-install` (or
-whatever you used as the `--prefix`), and a compressed version ends
+The relocatable install goes into `relocatable-install` (or
+whatever you used as the `--output`), and a compressed version ends
 up in the directory passed as an argument to `--archive`.
 
 Instructions for testing

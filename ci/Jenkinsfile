@@ -109,23 +109,21 @@ pipeline {
               sh '''
               set -eu
               cd src
-              meson --prefix="${WORKSPACE}/src/_build/relocatable-install" -Dpython=python3.5 _build
+              meson --prefix="$(pwd)/_build/prefix" -Dpython=python3.5 _build
               ninja -C _build
-              ninja -C _build install
               meson test --verbose -C _build
+              ninja -C _build install
+              rm -fr ../relocatable-install
               ./build-relocatable-install.py \
                 --srcdir . \
                 --builddir _build \
                 --libcapsuledir /usr/lib/libcapsule/relocatable \
-                --prefix="${WORKSPACE}/src/_build/relocatable-install" \
+                --output "${WORKSPACE}/relocatable-install" \
                 --archive "${WORKSPACE}" \
                 --set-version "$(cat .tarball-version)" \
                 ${NULL+}
               prove -v ./tests/relocatable-install.py :: \
-                --srcdir . \
-                --builddir _build \
-                --prefix="${WORKSPACE}/src/_build/relocatable-install" \
-                ${NULL+}
+                "${WORKSPACE}/relocatable-install"
               '''
             }
           }

@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 
 try:
     import typing
@@ -141,6 +142,7 @@ def main():
     parser.add_argument(
         '--builddir', default=os.getenv('MESON_BUILD_ROOT', '_build'))
     parser.add_argument('--prefix', default=None)
+    parser.add_argument('--output', '-o', default=None)
     parser.add_argument('--archive', default=None)
     parser.add_argument('--libcapsuledir', default='')
     parser.add_argument('--set-version', dest='version', default='unknown')
@@ -171,389 +173,423 @@ def main():
                 'please specify --prefix'
             )
 
-    os.chdir(args.builddir)
+    with tempfile.TemporaryDirectory(prefix='pressure-vessel-') as tmpdir:
+        if args.output is None:
+            installation = os.path.join(tmpdir, 'installation')
+        else:
+            installation = args.output
 
-    destdir_prefix = args.destdir + args.prefix
+        if os.path.exists(installation):
+            raise RuntimeError('--output directory must not already exist')
 
-    os.makedirs(os.path.join(destdir_prefix, 'bin'), exist_ok=True)
-    os.makedirs(os.path.join(destdir_prefix, 'metadata'), exist_ok=True)
+        destdir_prefix = args.destdir + args.prefix
 
-    for arch in ARCHS:
-        os.makedirs(
-            os.path.join(destdir_prefix, 'lib', arch.multiarch),
-            exist_ok=True,
-        )
+        os.makedirs(os.path.join(installation, 'bin'), exist_ok=True)
+        os.makedirs(os.path.join(installation, 'metadata'), exist_ok=True)
 
-    for script in SCRIPTS:
-        install_exe(
-            os.path.join(args.srcdir, script),
-            os.path.join(destdir_prefix, 'bin'),
-        )
-
-    for exe in EXECUTABLES:
-        install_exe(
-            os.path.join(args.builddir, exe),
-            os.path.join(destdir_prefix, 'bin'),
-        )
-
-    install(
-        os.path.join(args.srcdir, 'THIRD-PARTY.md'),
-        os.path.join(destdir_prefix, 'metadata', 'README.txt'),
-        0o644,
-    )
-
-    if args.libcapsuledir:
         for arch in ARCHS:
-            for tool in TOOLS:
-                install_exe(
-                    os.path.join(
-                        args.libcapsuledir,
-                        '{}-{}'.format(arch.multiarch, tool),
-                    ),
-                    os.path.join(destdir_prefix, 'bin'),
-                )
+            os.makedirs(
+                os.path.join(installation, 'lib', arch.multiarch),
+                exist_ok=True,
+            )
+
+        for script in SCRIPTS:
+            install_exe(
+                os.path.join(destdir_prefix, 'bin', script),
+                os.path.join(installation, 'bin'),
+            )
+
+        for exe in EXECUTABLES:
+            install_exe(
+                os.path.join(destdir_prefix, 'bin', exe),
+                os.path.join(installation, 'bin'),
+            )
 
         install(
-            '/usr/share/doc/libcapsule-tools-relocatable/copyright',
-            os.path.join(destdir_prefix, 'metadata', 'libcapsule.txt'),
+            os.path.join(args.srcdir, 'THIRD-PARTY.md'),
+            os.path.join(installation, 'metadata', 'README.txt'),
+            0o644,
         )
-    else:
-        for arch in ARCHS:
-            for tool in TOOLS:
-                install_exe(
-                    os.path.join(
-                        'build-relocatable',
-                        arch.name,
-                        'libcapsule',
-                        tool,
-                    ),
-                    os.path.join(
-                        'build-relocatable',
-                        '{}-{}'.format(arch.multiarch, tool),
-                    ),
-                )
-                v_check_call([
-                    'chrpath', '-r',
-                    '${ORIGIN}/../lib/' + arch.multiarch,
-                    os.path.join(
-                        'build-relocatable',
-                        '{}-{}'.format(arch.multiarch, tool),
-                    ),
-                ])
-                install_exe(
-                    os.path.join(
-                        'build-relocatable',
-                        '{}-{}'.format(arch.multiarch, tool),
-                    ),
-                    os.path.join(destdir_prefix, 'bin'),
-                )
+
+        if args.libcapsuledir:
+            for arch in ARCHS:
+                for tool in TOOLS:
+                    install_exe(
+                        os.path.join(
+                            args.libcapsuledir,
+                            '{}-{}'.format(arch.multiarch, tool),
+                        ),
+                        os.path.join(installation, 'bin'),
+                    )
 
             install(
-                os.path.join(
-                    args.builddir,
-                    'libcapsule',
-                    'debian',
-                    'copyright',
-                ),
-                os.path.join(destdir_prefix, 'metadata', 'libcapsule.txt'),
+                '/usr/share/doc/libcapsule-tools-relocatable/copyright',
+                os.path.join(installation, 'metadata', 'libcapsule.txt'),
+            )
+        else:
+            for arch in ARCHS:
+                for tool in TOOLS:
+                    install_exe(
+                        os.path.join(
+                            args.builddir,
+                            'build-relocatable',
+                            arch.name,
+                            'libcapsule',
+                            tool,
+                        ),
+                        os.path.join(
+                            tmpdir,
+                            'build-relocatable',
+                            '{}-{}'.format(arch.multiarch, tool),
+                        ),
+                    )
+                    v_check_call([
+                        'chrpath', '-r',
+                        '${ORIGIN}/../lib/' + arch.multiarch,
+                        os.path.join(
+                            tmpdir,
+                            'build-relocatable',
+                            '{}-{}'.format(arch.multiarch, tool),
+                        ),
+                    ])
+                    install_exe(
+                        os.path.join(
+                            tmpdir,
+                            'build-relocatable',
+                            '{}-{}'.format(arch.multiarch, tool),
+                        ),
+                        os.path.join(installation, 'bin'),
+                    )
+
+                install(
+                    os.path.join(
+                        args.builddir,
+                        'libcapsule',
+                        'debian',
+                        'copyright',
+                    ),
+                    os.path.join(installation, 'metadata', 'libcapsule.txt'),
+                )
+
+        primary_architecture = subprocess.check_output([
+            'dpkg', '--print-architecture',
+        ]).decode('utf-8').strip()
+
+        for arch in ARCHS:
+            os.makedirs(
+                os.path.join(tmpdir, 'build-relocatable', arch.name, 'lib'),
+                exist_ok=True,
             )
 
-    primary_architecture = subprocess.check_output([
-        'dpkg', '--print-architecture',
-    ]).decode('utf-8').strip()
+            v_check_call([
+                '{}/bin/{}-capsule-capture-libs'.format(
+                    installation,
+                    arch.multiarch,
+                ),
+                '--dest={}/build-relocatable/{}/lib'.format(
+                    tmpdir,
+                    arch.name,
+                ),
+                '--no-glibc',
+                'soname:libelf.so.1',
+                'soname:libz.so.1',
+            ])
 
-    for arch in ARCHS:
+            if arch.name == primary_architecture:
+                v_check_call([
+                    '{}/bin/{}-capsule-capture-libs'.format(
+                        installation,
+                        arch.multiarch,
+                    ),
+                    '--dest={}/build-relocatable/{}/lib'.format(
+                        tmpdir,
+                        arch.name,
+                    ),
+                    '--no-glibc',
+                    'soname:libXau.so.6',
+                    'soname:libcap.so.2',
+                    'soname:libgio-2.0.so.0',
+                    'soname:libpcre.so.3',
+                    'soname:libselinux.so.1',
+                ])
+
+            for so in glob.glob(
+                os.path.join(
+                    tmpdir,
+                    'build-relocatable',
+                    arch.name,
+                    'lib',
+                    '*.so.*',
+                ),
+            ):
+                install(so, os.path.join(installation, 'lib', arch.multiarch))
+
+        # For bwrap (and possibly other programs in future) we don't have
+        # a relocatable version with a RPATH/RUNPATH, so we wrap a script
+        # around it instead. The script avoids setting LD_LIBRARY_PATH
+        # because that would leak through to the programs invoked by bwrap.
+        for exe, package in WRAPPED_PROGRAMS.items():
+            path = '/usr/bin/{}'.format(exe)
+
+            if not os.path.exists(path):
+                v_check_call([
+                    'apt-get',
+                    'download',
+                    package,
+                ], cwd=tmpdir)
+                v_check_call(
+                    'dpkg-deb -x {}_*.deb build-relocatable'.format(
+                        quote(package),
+                    ),
+                    cwd=tmpdir,
+                    shell=True,
+                )
+                path = '{}/build-relocatable/usr/bin/{}'.format(tmpdir, exe)
+
+            for arch in ARCHS:
+                if arch.name != primary_architecture:
+                    continue
+
+                install_exe(
+                    path,
+                    os.path.join(installation, 'bin', exe + '.bin'),
+                )
+
+                with open(
+                    os.path.join(tmpdir, 'build-relocatable', arch.name, exe),
+                    'w',
+                ) as writer:
+                    writer.write('#!/bin/sh\n')
+                    writer.write('set -eu\n')
+                    writer.write('here="$(dirname "$0")"\n')
+                    writer.write(
+                        'exec ${{RELOCATABLE_INSTALL_WRAPPER-}} {} '
+                        '--library-path "$here"/../lib/{} '
+                        '"$here"/{}.bin "$@"\n'.format(
+                            quote(arch.ld_so),
+                            quote(arch.multiarch),
+                            quote(exe),
+                        )
+                    )
+
+                install_exe(
+                    os.path.join(tmpdir, 'build-relocatable', arch.name, exe),
+                    os.path.join(installation, 'bin', exe),
+                )
+
+        source_to_download = set()      # type: typing.Set[str]
+        installed_binaries = set()      # type: typing.Set[str]
+
+        for package, source in (
+            list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
+        ):
+            if not args.libcapsuledir and source == 'libcapsule':
+                continue
+
+            if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
+                installed_binaries.add(package)
+
+                install(
+                    '/usr/share/doc/{}/copyright'.format(package),
+                    os.path.join(
+                        installation,
+                        'metadata',
+                        '{}.txt'.format(source),
+                    ),
+                )
+
+                for expr in set(
+                    v_check_output([
+                        'dpkg-query',
+                        '-W',
+                        '-f', '${source:Package}=${source:Version}\n',
+                        package,
+                    ], universal_newlines=True).splitlines()
+                ):
+                    source_to_download.add(re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
+            else:
+                install(
+                    '{}/build-relocatable/usr/share/doc/{}/copyright'.format(
+                        tmpdir,
+                        package,
+                    ),
+                    os.path.join(
+                        installation,
+                        'metadata',
+                        '{}.txt'.format(source),
+                    ),
+                )
+                source_to_download.add(source)
+
+        with open(
+            os.path.join(installation, 'metadata', 'packages.txt'), 'w'
+        ) as writer:
+            writer.write(
+                '#Package[:Architecture]\t#Version\t#Source\t#Installed-Size\n'
+            )
+            v_check_call([
+                'dpkg-query',
+                '-W',
+                '-f',
+                r'${binary:Package}\t${Version}\t${Source}\t${Installed-Size}\n',
+            ] + sorted(installed_binaries), stdout=writer)
+
+        with open(
+            os.path.join(installation, 'metadata', 'VERSION.txt'),
+            'w',
+        ) as writer:
+            writer.write('{}\n'.format(args.version))
+
+        shutil.copytree(
+            os.path.join(installation, 'metadata'),
+            os.path.join(installation, 'sources'),
+        )
+
+        if not args.libcapsuledir:
+            for dsc in glob.glob(
+                os.path.join(args.srcdir, 'libcapsule*.dsc')
+            ):
+                v_check_call([
+                    'dcmd', 'install', '-m644', dsc,
+                    os.path.join(installation, 'sources'),
+                ])
+
+        v_check_call(
+            [
+                'apt-get',
+                '--download-only',
+                '--only-source',
+                'source',
+            ] + list(source_to_download),
+            cwd=os.path.join(installation, 'sources'),
+        )
+
         os.makedirs(
-            os.path.join('build-relocatable', arch.name, 'lib'),
+            os.path.join(installation, 'sources', 'pressure-vessel'),
             exist_ok=True,
         )
 
-        v_check_call([
-            '{}/bin/{}-capsule-capture-libs'.format(
-                destdir_prefix,
-                arch.multiarch,
+        for src_tar in (
+            os.path.join(
+                args.srcdir,
+                '..',
+                'pressure-vessel_{}.orig.tar.xz'.format(args.version),
             ),
-            '--dest=build-relocatable/{}/lib'.format(arch.name),
-            '--no-glibc',
-            'soname:libelf.so.1',
-            'soname:libz.so.1',
-        ])
-
-        if arch.name == primary_architecture:
-            v_check_call([
-                '{}/bin/{}-capsule-capture-libs'.format(
-                    destdir_prefix,
-                    arch.multiarch,
+            os.path.join(
+                args.builddir,
+                'meson-dist/pressure-vessel-{}.tar.gz'.format(
+                    args.version,
                 ),
-                '--dest=build-relocatable/{}/lib'.format(arch.name),
-                '--no-glibc',
-                'soname:libXau.so.6',
-                'soname:libcap.so.2',
-                'soname:libgio-2.0.so.0',
-                'soname:libpcre.so.3',
-                'soname:libselinux.so.1',
-            ])
-
-        for so in glob.glob(
-            os.path.join('build-relocatable', arch.name, 'lib', '*.so.*'),
+            ),
+            os.path.join(
+                args.srcdir,
+                'pressure-vessel-{}.tar.xz'.format(args.version),
+            ),
         ):
-            install(so, os.path.join(destdir_prefix, 'lib', arch.multiarch))
+            if os.path.exists(src_tar):
+                subprocess.check_call([
+                    'tar',
+                    '-C', os.path.join(
+                        installation,
+                        'sources',
+                        'pressure-vessel',
+                    ),
+                    '--strip-components=1',
+                    '-xvf', src_tar,
+                ])
+                break
+        else:
+            if os.path.exists('/usr/bin/git'):
+                git_archive = subprocess.Popen([
+                    'git', 'archive', '--format=tar', 'HEAD',
+                ], cwd=args.srcdir, stdout=subprocess.PIPE)
+                subprocess.check_call([
+                    'tar',
+                    '-C', os.path.join(
+                        installation,
+                        'sources',
+                        'pressure-vessel',
+                    ),
+                    '-xvf-',
+                ], stdin=git_archive.stdout)
 
-    # For bwrap (and possibly other programs in future) we don't have
-    # a relocatable version with a RPATH/RUNPATH, so we wrap a script
-    # around it instead. The script avoids setting LD_LIBRARY_PATH
-    # because that would leak through to the programs invoked by bwrap.
-    for exe, package in WRAPPED_PROGRAMS.items():
-        path = '/usr/bin/{}'.format(exe)
-
-        if not os.path.exists(path):
-            v_check_call([
-                'apt-get',
-                'download',
-                package,
-            ])
-            v_check_call(
-                'dpkg-deb -x {}_*.deb build-relocatable'.format(
-                    quote(package),
-                ),
-                shell=True,
-            )
-            path = 'build-relocatable/usr/bin/{}'.format(exe)
-
-        for arch in ARCHS:
-            if arch.name != primary_architecture:
-                continue
-
-            install_exe(
-                path,
-                os.path.join(destdir_prefix, 'bin', exe + '.bin'),
-            )
-
-            with open(
-                os.path.join('build-relocatable', arch.name, exe),
-                'w',
-            ) as writer:
-                writer.write('#!/bin/sh\n')
-                writer.write('set -eu\n')
-                writer.write('here="$(dirname "$0")"\n')
-                writer.write(
-                    'exec ${{RELOCATABLE_INSTALL_WRAPPER-}} {} '
-                    '--library-path "$here"/../lib/{} '
-                    '"$here"/{}.bin "$@"\n'.format(
-                        quote(arch.ld_so),
-                        quote(arch.multiarch),
-                        quote(exe),
+                if git_archive.wait() != 0:
+                    raise subprocess.CalledProcessError(
+                        returncode=git_archive.returncode,
+                        cmd=git_archive.args,
                     )
-                )
+            else:
+                tar = subprocess.Popen([
+                    'tar',
+                    '-C', args.srcdir,
+                    '--exclude=./.git',
+                    '--exclude=./_build',
+                    '--exclude=./relocatable-install',
+                    '--exclude=./.mypy_cache',
+                    '--exclude=.*.swp',
+                    '-cf-',
+                    '.',
+                ], stdout=subprocess.PIPE)
+                subprocess.check_call([
+                    'tar',
+                    '-C', os.path.join(
+                        installation,
+                        'sources',
+                        'pressure-vessel',
+                    ),
+                    '-xvf-',
+                ], stdin=tar.stdout)
 
-            install_exe(
-                os.path.join('build-relocatable', arch.name, exe),
-                os.path.join(destdir_prefix, 'bin', exe),
-            )
+                if tar.wait() != 0:
+                    raise subprocess.CalledProcessError(
+                        returncode=git_archive.returncode,
+                        cmd=git_archive.args,
+                    )
 
-    source_to_download = set()      # type: typing.Set[str]
-    installed_binaries = set()      # type: typing.Set[str]
+        with open(
+            os.path.join(
+                installation,
+                'sources',
+                'pressure-vessel',
+                '.tarball-version',
+            ),
+            'w',
+        ) as writer:
+            writer.write('{}\n'.format(args.version))
 
-    for package, source in (
-        list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
-    ):
-        if not args.libcapsuledir and source == 'libcapsule':
-            continue
-
-        if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
-            installed_binaries.add(package)
-
-            install(
-                '/usr/share/doc/{}/copyright'.format(package),
-                os.path.join(
-                    destdir_prefix,
-                    'metadata',
-                    '{}.txt'.format(source),
-                ),
-            )
-
-            for expr in set(
-                v_check_output([
-                    'dpkg-query',
-                    '-W',
-                    '-f', '${source:Package}=${source:Version}\n',
-                    package,
-                ], universal_newlines=True).splitlines()
-            ):
-                source_to_download.add(re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
-        else:
-            install(
-                'build-relocatable/usr/share/doc/{}/copyright'.format(package),
-                os.path.join(
-                    destdir_prefix,
-                    'metadata',
-                    '{}.txt'.format(source),
-                ),
-            )
-            source_to_download.add(source)
-
-    with open(
-        os.path.join(destdir_prefix, 'metadata', 'packages.txt'), 'w'
-    ) as writer:
-        writer.write(
-            '#Package[:Architecture]\t#Version\t#Source\t#Installed-Size\n'
+        bin_tar = os.path.join(
+            args.archive,
+            'pressure-vessel-{}-bin.tar.gz'.format(args.version),
         )
-        v_check_call([
-            'dpkg-query',
-            '-W',
-            '-f',
-            r'${binary:Package}\t${Version}\t${Source}\t${Installed-Size}\n',
-        ] + sorted(installed_binaries), stdout=writer)
+        src_tar = os.path.join(
+            args.archive,
+            'pressure-vessel-{}-bin+src.tar.gz'.format(args.version),
+        )
 
-    with open(
-        os.path.join(destdir_prefix, 'metadata', 'VERSION.txt'),
-        'w',
-    ) as writer:
-        writer.write('{}\n'.format(args.version))
-
-    shutil.copytree(
-        os.path.join(destdir_prefix, 'metadata'),
-        os.path.join(destdir_prefix, 'sources'),
-    )
-
-    if not args.libcapsuledir:
-        for dsc in glob.glob(
-            os.path.join(args.srcdir, 'libcapsule*.dsc')
-        ):
-            v_check_call([
-                'dcmd', 'install', '-m644', dsc,
-                os.path.join(destdir_prefix, 'sources'),
-            ])
-
-    v_check_call(
-        [
-            'apt-get',
-            '--download-only',
-            '--only-source',
-            'source',
-        ] + list(source_to_download),
-        cwd=os.path.join(destdir_prefix, 'sources'),
-    )
-
-    os.makedirs(
-        os.path.join(destdir_prefix, 'sources', 'pressure-vessel'),
-        exist_ok=True,
-    )
-
-    for src_tar in (
-        os.path.join(
-            args.srcdir,
-            'pressure-vessel-{}.tar.gz'.format(args.version),
-        ),
-        os.path.join(
-            args.srcdir,
-            'pressure-vessel-{}.tar.xz'.format(args.version),
-        ),
-    ):
-        if os.path.exists(src_tar):
-            subprocess.check_call([
-                'tar',
-                '-C', os.path.join(
-                    destdir_prefix,
-                    'sources',
-                    'pressure-vessel',
-                ),
-                '--strip-components=1',
-                '-xvf', src_tar,
-            ])
-            break
-    else:
-        if os.path.exists('/usr/bin/git'):
-            git_archive = subprocess.Popen([
-                'git', 'archive', '--format=tar', 'HEAD',
-            ], cwd=args.srcdir, stdout=subprocess.PIPE)
-            subprocess.check_call([
-                'tar',
-                '-C', os.path.join(
-                    destdir_prefix,
-                    'sources',
-                    'pressure-vessel',
-                ),
-                '-xvf-',
-            ], stdin=git_archive.stdout)
-
-            if git_archive.wait() != 0:
-                raise subprocess.CalledProcessError(
-                    returncode=git_archive.returncode,
-                    cmd=git_archive.args,
-                )
-        else:
-            tar = subprocess.Popen([
-                'tar',
-                '-C', args.srcdir,
-                '--exclude=./.git',
-                '--exclude=./_build',
-                '--exclude=./relocatable-install',
-                '--exclude=./.mypy_cache',
-                '--exclude=.*.swp',
-                '-cf-',
-                '.',
-            ], stdout=subprocess.PIPE)
-            subprocess.check_call([
-                'tar',
-                '-C', os.path.join(
-                    destdir_prefix,
-                    'sources',
-                    'pressure-vessel',
-                ),
-                '-xvf-',
-            ], stdin=tar.stdout)
-
-            if tar.wait() != 0:
-                raise subprocess.CalledProcessError(
-                    returncode=git_archive.returncode,
-                    cmd=git_archive.args,
-                )
-
-    with open(
-        os.path.join(
-            destdir_prefix,
-            'sources',
-            'pressure-vessel',
-            '.tarball-version',
-        ),
-        'w',
-    ) as writer:
-        writer.write('{}\n'.format(args.version))
-
-    bin_tar = os.path.join(
-        args.archive,
-        'pressure-vessel-{}-bin.tar.gz'.format(args.version),
-    )
-    src_tar = os.path.join(
-        args.archive,
-        'pressure-vessel-{}-bin+src.tar.gz'.format(args.version),
-    )
-
-    subprocess.check_call([
-        'tar',
-        r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
-            args.version,
-        ),
-        '--exclude=metadata',       # this is all duplicated in sources/
-        '-zcvf', src_tar + '.tmp',
-        '-C', destdir_prefix,
-        '.',
-    ])
-    subprocess.check_call([
-        'tar',
-        r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
-            args.version,
-        ),
-        '--exclude=sources',
-        '-zcvf', bin_tar + '.tmp',
-        '-C', destdir_prefix,
-        '.',
-    ])
-    os.rename(bin_tar + '.tmp', bin_tar)
-    os.rename(src_tar + '.tmp', src_tar)
-    print('Generated {}'.format(os.path.abspath(bin_tar)))
-    print('Generated {}'.format(os.path.abspath(src_tar)))
+        subprocess.check_call([
+            'tar',
+            r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
+                args.version,
+            ),
+            '--exclude=metadata',       # this is all duplicated in sources/
+            '-zcvf', src_tar + '.tmp',
+            '-C', installation,
+            '.',
+        ])
+        subprocess.check_call([
+            'tar',
+            r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
+                args.version,
+            ),
+            '--exclude=sources',
+            '-zcvf', bin_tar + '.tmp',
+            '-C', installation,
+            '.',
+        ])
+        os.rename(bin_tar + '.tmp', bin_tar)
+        os.rename(src_tar + '.tmp', src_tar)
+        print('Generated {}'.format(os.path.abspath(bin_tar)))
+        print('Generated {}'.format(os.path.abspath(src_tar)))
 
 
 if __name__ == '__main__':

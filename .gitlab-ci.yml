@@ -38,32 +38,28 @@ build:scout:
             apt-get -y --no-install-recommends install \
             bubblewrap \
             libcapsule0 \
-            libcapsule-tools-relocatable \
+            libcapsule-tools-relocatable:amd64 \
+            libcapsule-tools-relocatable:i386 \
             libglib2.0-dev \
             libxau-dev \
             meson \
             ${NULL+}
 
-            meson \
-                --prefix="$(pwd)/_build/relocatable-install" \
-                -Dpython=python3.5 \
-                _build
+            meson --prefix="$(pwd)/_build/prefix" -Dpython=python3.5 _build
             ninja -C _build
-            ninja -C _build install
             meson test --verbose -C _build
+            ninja -C _build install
+            rm -fr _build/relocatable-install
             ./build-relocatable-install.py \
               --srcdir . \
               --builddir _build \
               --libcapsuledir /usr/lib/libcapsule/relocatable \
-              --prefix="$(pwd)/_build/relocatable-install" \
+              --output _build/relocatable-install \
               --archive "$(pwd)/_build" \
               --set-version "$(cat .tarball-version)" \
               ${NULL+}
             prove -v ./tests/relocatable-install.py :: \
-              --srcdir . \
-              --builddir _build \
-              --prefix="$(pwd)/_build/relocatable-install" \
-              ${NULL+}
+              "$(pwd)/_build/relocatable-install"
 
 # Artifacts are currently disabled because uploading them to the
 # coordinator results in HTTP 413 Request Entity Too Large.

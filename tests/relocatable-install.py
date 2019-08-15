@@ -176,40 +176,10 @@ def main():
     # type: () -> None
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--destdir', default=os.getenv('DESTDIR', ''))
-    parser.add_argument('--srcdir', default=G_TEST_SRCDIR)
-    parser.add_argument('--builddir', default=G_TEST_BUILDDIR)
-    parser.add_argument('--prefix', default=None)
+    parser.add_argument('path')
     args = parser.parse_args()
 
-    if args.destdir:
-        args.destdir = os.path.abspath(args.destdir)
-
-    args.srcdir = os.path.abspath(args.srcdir)
-    args.builddir = os.path.abspath(args.builddir)
-
-    if args.prefix is None:
-        blob = subprocess.check_output([
-            'meson', 'introspect', args.builddir, '--buildoptions',
-        ], universal_newlines=True)
-        for opt in json.loads(blob):
-            if opt['name'] == 'prefix':
-                args.prefix = opt['value']
-                break
-        else:
-            raise RuntimeError(
-                'Unable to determine installation prefix from Meson, '
-                'please specify --prefix'
-            )
-
-    relocatable_install = args.destdir + args.prefix
-
-    if relocatable_install is None:
-        relocatable_install = os.path.join(args.builddir, 'relocatable-install')
-
-        if not os.path.exists(relocatable_install):
-            print('1..0 # SKIP relocatable-install not in expected location')
-            sys.exit(0)
+    relocatable_install = os.path.abspath(args.path)
 
     test = TapTest()
 

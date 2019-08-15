@@ -45,17 +45,18 @@ build:scout:
             meson \
             ${NULL+}
 
-            meson --prefix="$(pwd)/_build/prefix" -Dpython=python3.5 _build
+            meson \
+              --prefix="$(pwd)/_build/prefix" \
+              -Dpython=python3.5 \
+              -Dsrcdir=src \
+              _build
             ninja -C _build
             meson test --verbose -C _build
             ninja -C _build install
             rm -fr _build/relocatable-install
-            ./build-relocatable-install.py \
-              --srcdir . \
-              --builddir _build \
+            _build/prefix/bin/pressure-vessel-build-relocatable-install \
               --output _build/relocatable-install \
               --archive "$(pwd)/_build" \
-              --set-version "$(cat .tarball-version)" \
               ${NULL+}
             prove -v ./tests/relocatable-install.py :: \
               "$(pwd)/_build/relocatable-install"

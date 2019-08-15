@@ -1,0 +1,7 @@
+#!@sh@
+exec "@python@" \
+"${DESTDIR}@prefix@/@srcdir@/build-relocatable-install.py" \
+--prefix "@prefix@" \
+--srcdir "@srcdir@" \
+--set-version "@version@" \
+"$@"

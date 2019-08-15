@@ -25,7 +25,6 @@
 
 import argparse
 import glob
-import json
 import os
 import re
 import shutil
@@ -135,42 +134,30 @@ def main():
     # type: () -> None
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--destdir', default=os.getenv('DESTDIR', ''))
-    parser.add_argument(
-        '--srcdir', default=os.getenv('MESON_SOURCE_ROOT', '.'))
-    parser.add_argument(
-        '--builddir', default=os.getenv('MESON_BUILD_ROOT', '_build'))
+    parser.add_argument('--destdir', default=os.getenv('DESTDIR'))
     parser.add_argument('--prefix', default=None)
+    parser.add_argument('--srcdir', default=None)
     parser.add_argument('--output', '-o', default=None)
     parser.add_argument('--archive', default=None)
-    parser.add_argument('--set-version', dest='version', default='unknown')
+    parser.add_argument('--set-version', dest='version', default=None)
     args = parser.parse_args()
 
-    if args.destdir:
-        args.destdir = os.path.abspath(args.destdir)
-
-    args.srcdir = os.path.abspath(args.srcdir)
-    args.builddir = os.path.abspath(args.builddir)
-
-    if args.archive is None:
-        args.archive = args.builddir
-    else:
-        args.archive = os.path.abspath(args.archive)
+    if args.srcdir is None:
+        args.srcdir = os.path.dirname(__file__)
 
     if args.prefix is None:
-        blob = subprocess.check_output([
-            'meson', 'introspect', args.builddir, '--buildoptions',
-        ], universal_newlines=True)
-        for opt in json.loads(blob):
-            if opt['name'] == 'prefix':
-                args.prefix = opt['value']
-                break
-        else:
-            raise RuntimeError(
-                'Unable to determine installation prefix from Meson, '
-                'please specify --prefix'
-            )
+        args.prefix = '/usr/lib/pressure-vessel/relocatable'
+
+    if not os.path.isabs(args.srcdir):
+        args.srcdir = os.path.join(args.prefix, args.srcdir)
+
+    if args.destdir:
+        args.prefix = args.destdir + args.prefix
+        args.srcdir = args.destdir + args.srcdir
+
+    if args.version is None:
+        with open(os.path.join(args.srcdir, '.tarball-version')) as reader:
+            args.version = reader.read().strip()
 
     with tempfile.TemporaryDirectory(prefix='pressure-vessel-') as tmpdir:
         if args.output is None:
@@ -180,8 +167,6 @@ def main():
 
         if os.path.exists(installation):
             raise RuntimeError('--output directory must not already exist')
-
-        destdir_prefix = args.destdir + args.prefix
 
         os.makedirs(os.path.join(installation, 'bin'), exist_ok=True)
         os.makedirs(os.path.join(installation, 'metadata'), exist_ok=True)
@@ -194,13 +179,13 @@ def main():
 
         for script in SCRIPTS:
             install_exe(
-                os.path.join(destdir_prefix, 'bin', script),
+                os.path.join(args.prefix, 'bin', script),
                 os.path.join(installation, 'bin'),
             )
 
         for exe in EXECUTABLES:
             install_exe(
-                os.path.join(destdir_prefix, 'bin', exe),
+                os.path.join(args.prefix, 'bin', exe),
                 os.path.join(installation, 'bin'),
             )
 
@@ -430,82 +415,33 @@ def main():
             exist_ok=True,
         )
 
-        for src_tar in (
-            os.path.join(
-                args.srcdir,
-                '..',
-                'pressure-vessel_{}.orig.tar.xz'.format(args.version),
+        tar = subprocess.Popen([
+            'tar',
+            '-C', args.srcdir,
+            '--exclude=.*.sw?',
+            '--exclude=./.git',
+            '--exclude=./.mypy_cache',
+            '--exclude=./_build',
+            '--exclude=./debian',
+            '--exclude=./relocatable-install',
+            '-cf-',
+            '.',
+        ], stdout=subprocess.PIPE)
+        subprocess.check_call([
+            'tar',
+            '-C', os.path.join(
+                installation,
+                'sources',
+                'pressure-vessel',
             ),
-            os.path.join(
-                args.builddir,
-                'meson-dist/pressure-vessel-{}.tar.gz'.format(
-                    args.version,
-                ),
-            ),
-            os.path.join(
-                args.srcdir,
-                'pressure-vessel-{}.tar.xz'.format(args.version),
-            ),
-        ):
-            if os.path.exists(src_tar):
-                subprocess.check_call([
-                    'tar',
-                    '-C', os.path.join(
-                        installation,
-                        'sources',
-                        'pressure-vessel',
-                    ),
-                    '--strip-components=1',
-                    '-xvf', src_tar,
-                ])
-                break
-        else:
-            if os.path.exists('/usr/bin/git'):
-                git_archive = subprocess.Popen([
-                    'git', 'archive', '--format=tar', 'HEAD',
-                ], cwd=args.srcdir, stdout=subprocess.PIPE)
-                subprocess.check_call([
-                    'tar',
-                    '-C', os.path.join(
-                        installation,
-                        'sources',
-                        'pressure-vessel',
-                    ),
-                    '-xvf-',
-                ], stdin=git_archive.stdout)
+            '-xvf-',
+        ], stdin=tar.stdout)
 
-                if git_archive.wait() != 0:
-                    raise subprocess.CalledProcessError(
-                        returncode=git_archive.returncode,
-                        cmd=git_archive.args,
-                    )
-            else:
-                tar = subprocess.Popen([
-                    'tar',
-                    '-C', args.srcdir,
-                    '--exclude=./.git',
-                    '--exclude=./_build',
-                    '--exclude=./relocatable-install',
-                    '--exclude=./.mypy_cache',
-                    '--exclude=.*.swp',
-                    '-cf-',
-                    '.',
-                ], stdout=subprocess.PIPE)
-                subprocess.check_call([
-                    'tar',
-                    '-C', os.path.join(
-                        installation,
-                        'sources',
-                        'pressure-vessel',
-                    ),
-                    '-xvf-',
-                ], stdin=tar.stdout)
-
-                if tar.wait() != 0:
-                    raise subprocess.CalledProcessError(
-                        returncode=git_archive.returncode,
-                        cmd=git_archive.args,
-                    )
+        if tar.wait() != 0:
+            raise subprocess.CalledProcessError(
+                returncode=tar.returncode,
+                cmd=tar.args,
+            )
 
         with open(
             os.path.join(

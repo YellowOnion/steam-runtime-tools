@@ -26,6 +26,7 @@ override_dh_auto_configure:
 	meson _build \
 		--prefix=/usr/lib/pressure-vessel/relocatable \
 		-Dpython=/usr/bin/$$python \
+		-Dsrcdir=src \
 		-Dversion=$(DEB_VERSION) \
 		$(NULL)
 

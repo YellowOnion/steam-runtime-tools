@@ -109,17 +109,18 @@ pipeline {
               sh '''
               set -eu
               cd src
-              meson --prefix="$(pwd)/_build/prefix" -Dpython=python3.5 _build
+              meson \
+                --prefix="$(pwd)/_build/prefix" \
+                -Dpython=python3.5 \
+                -Dsrcdir=src \
+                _build
               ninja -C _build
               meson test --verbose -C _build
               ninja -C _build install
               rm -fr ../relocatable-install
-              ./build-relocatable-install.py \
-                --srcdir . \
-                --builddir _build \
+              _build/prefix/bin/pressure-vessel-build-relocatable-install \
                 --output "${WORKSPACE}/relocatable-install" \
                 --archive "${WORKSPACE}" \
-                --set-version "$(cat .tarball-version)" \
                 ${NULL+}
               prove -v ./tests/relocatable-install.py :: \
                 "${WORKSPACE}/relocatable-install"

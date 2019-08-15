@@ -149,14 +149,12 @@ or available via apt-get. For example, you could do the build in a
 SteamRT 1 'scout' SDK Docker image that has those packages already.
 Then you can do:
 
-    meson --prefix="$(pwd)/_build/prefix" _build
+    meson --prefix="$(pwd)/_build/prefix" -Dsrcdir=src _build
     ninja -C _build
     meson test -v -C _build             # optional
     ninja -C _build install
     rm -fr _build/relocatable-install
-    ./build-relocatable-install.py \
-        --srcdir . \
-        --builddir _build \
+    _build/prefix/bin/pressure-vessel-build-relocatable-install \
         --output _build/relocatable-install \
         --archive .
     ./tests/relocatable-install.py _build/relocatable-install  # optional

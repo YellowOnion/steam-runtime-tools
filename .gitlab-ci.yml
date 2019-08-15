@@ -47,7 +47,6 @@ build:scout:
             meson \
                 --prefix="$(pwd)/_build/relocatable-install" \
                 -Dpython=python3.5 \
-                -Drelocatable=true \
                 _build
             ninja -C _build
             ninja -C _build install

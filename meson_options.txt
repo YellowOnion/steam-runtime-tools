@@ -1,3 +1,2 @@
 option('python', type : 'string', value : 'python3')
-option('relocatable', type : 'boolean', value : false)
 option('version', type : 'string', value : 'auto')

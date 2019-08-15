@@ -149,7 +149,7 @@ and bubblewrap in your build environment. For example, you could do the
 build in a SteamRT 1 'scout' SDK Docker image that has those packages
 already. Then you can do:
 
-    meson --prefix=$(pwd)/_build/relocatable-install -Drelocatable=true _build
+    meson --prefix=$(pwd)/_build/relocatable-install _build
     ninja -C _build
     rm -fr $(pwd)/_build/relocatable-install
     meson test -v -C _build             # optional

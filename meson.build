@@ -152,15 +152,6 @@ configure_file(
   configuration : conf_data,
 )
 
-if get_option('relocatable')
-  rpath_kwargs = {
-    'build_rpath' : '${ORIGIN}/../' + get_option('libdir'),
-    'install_rpath' : '${ORIGIN}/../' + get_option('libdir'),
-  }
-else
-  rpath_kwargs = {}
-endif
-
 executable(
   'pressure-vessel-wrap',
   sources : [
@@ -184,7 +175,8 @@ executable(
   ],
   install : true,
   install_dir : get_option('bindir'),
-  kwargs : rpath_kwargs,
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
 )
 
 # vim:set sw=2 sts=2 et:

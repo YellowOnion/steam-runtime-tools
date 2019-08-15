@@ -19,10 +19,12 @@ Architecture: amd64 i386
 Multi-Arch: foreign
 Depends:
  bubblewrap,
- pressure-vessel-libs-amd64,
- pressure-vessel-libs-i386,
+ libcapsule-tools-relocatable,
  ${misc:Depends},
  ${shlibs:Depends},
+Recommends:
+ pressure-vessel-libs-amd64,
+ pressure-vessel-libs-i386,
 Description: Steam container launcher
  pressure-vessel puts Steam games in containers.
  .

@@ -1,0 +1,2 @@
+Tests: relocatable-install
+Restrictions: allow-stderr, needs-root

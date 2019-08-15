@@ -1,4 +1,22 @@
+include:
+    - project: 'steam/steam-ci-pipeline'
+      file: '/steam-gitlab-ci-common.yml'
+
+    - project: 'steam/steam-ci-pipeline'
+      file: '/steam-gitlab-ci-pipeline.yml'
+
 variables:
+    BUILD_IMAGE: docker.internal.steamos.cloud/steamrt/sdk:scout-latest
+    STEAM_CI_USE_BINARIES_FROM: autopkgtest
+    STEAM_CI_DEPENDENCIES: >-
+        debhelper
+        libglib2.0-dev
+        libxau-dev
+        meson
+        python3
+        python3.5
+        zlib1g
+
     DEBIAN_FRONTEND: noninteractive
 
     SCOUT_DOCKER_REGISTRY: docker.steamos.cloud
@@ -7,7 +25,12 @@ variables:
     DEVEL_DOCKER_REGISTRY: docker.steamos.cloud
     DEVEL_DOCKER_IMAGE: steamos/package-builder:buster
 
+build:
+    variables:
+        BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
+
 build:devel:
+    stage: build
     image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
     script:
         - |
@@ -25,6 +48,7 @@ build:devel:
             meson test --verbose -C _build
 
 build:scout:
+    stage: build
     image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}"
     script:
         - |

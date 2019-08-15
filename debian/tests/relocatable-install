@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set -eux
+
+dpkg --add-architecture amd64
+dpkg --add-architecture i386
+apt-get -y install \
+    libcapsule-tools-relocatable:amd64 \
+    libcapsule-tools-relocatable:i386 \
+    ${NULL+}
+
+/usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+    --output "${AUTOPKGTEST_TMP}/relocatable-install" \
+    --archive "${AUTOPKGTEST_TMP}"
+
+./tests/relocatable-install.py "${AUTOPKGTEST_TMP}/relocatable-install"
+
+for archive in "${AUTOPKGTEST_TMP}"/*.tar.*; do
+    echo "==== $(basename "$archive") ===="
+    tar -tvf "$archive"
+done
+
+# TODO: When the coordinator can accept bigger artifacts, use
+# --archive=${AUTOPKGTEST_ARTIFACTS} instead

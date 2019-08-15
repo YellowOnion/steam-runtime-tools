@@ -521,8 +521,14 @@ def main():
     ) as writer:
         writer.write('{}\n'.format(args.version))
 
-    bin_tar = 'pressure-vessel-{}-bin.tar.gz'.format(args.version)
-    src_tar = 'pressure-vessel-{}-bin+src.tar.gz'.format(args.version)
+    bin_tar = os.path.join(
+        args.archive,
+        'pressure-vessel-{}-bin.tar.gz'.format(args.version),
+    )
+    src_tar = os.path.join(
+        args.archive,
+        'pressure-vessel-{}-bin+src.tar.gz'.format(args.version),
+    )
 
     subprocess.check_call([
         'tar',

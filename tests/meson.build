@@ -34,6 +34,11 @@ tests = [
   'system-info-cli',
 ]
 
+tests_utils = [
+  'fake-home.c',
+  'test-utils.c',
+]
+
 tests_dir = join_paths(
   get_option('libexecdir'),
   'installed-tests',
@@ -52,7 +57,7 @@ install_subdir('fake-steam-runtime', install_dir : tests_dir)
 foreach test_name : tests
   exe = executable(
     'test-' + test_name,
-    files(test_name + '.c'),
+    files(test_name + '.c') + tests_utils,
     c_args : [
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],

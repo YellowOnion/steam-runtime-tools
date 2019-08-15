@@ -39,6 +39,7 @@
 #include <json-glib/json-glib.h>
 
 #include "test-utils.h"
+#include "fake-home.h"
 
 static const char *argv0;
 static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
@@ -346,6 +347,10 @@ libraries_presence_verbose (Fixture *f,
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
   
+  g_assert_true (json_object_has_member (json, "steam-installation"));
+
+  g_assert_true (json_object_has_member (json, "runtime"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -384,7 +389,6 @@ no_arguments (Fixture *f,
   GError *error = NULL;
   gchar *output = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
-  gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
 
   g_assert_true (g_spawn_sync (NULL,    /* working directory */
@@ -424,7 +428,186 @@ no_arguments (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
-  g_free (expectations_in);
+  g_free (output);
+  g_clear_error (&error);
+}
+
+/*
+ * Test a system with a good Steam installation.
+ */
+static void
+steam_presence (Fixture *f,
+                gconstpointer context)
+{
+  int exit_status = -1;
+  JsonParser *parser = NULL;
+  JsonNode *node = NULL;
+  JsonObject *json;
+  JsonObject *json_sub_object;
+  JsonArray *array;
+  GError *error = NULL;
+  gchar *output = NULL;
+  const gchar *path = NULL;
+  const gchar *version = NULL;
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  const gchar *argv[] = { "steam-runtime-system-info", NULL };
+  FakeHome *fake_home;
+
+  fake_home = fake_home_new ();
+  fake_home_create_structure (fake_home);
+
+  g_assert_true (g_spawn_sync (NULL,    /* working directory */
+                               (gchar **) argv,
+                               fake_home->env, /* envp */
+                               G_SPAWN_SEARCH_PATH,
+                               NULL,    /* child setup */
+                               NULL,    /* user data */
+                               &output, /* stdout */
+                               NULL,    /* stderr */
+                               &exit_status,
+                               &error));
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_null (error);
+  g_assert_nonnull (output);
+
+  /* We can't use `json_from_string()` directly because we are targeting an
+   * older json-glib version */
+  parser = json_parser_new ();
+  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  node = json_parser_get_root (parser);
+  json = json_node_get_object (node);
+
+  g_assert_true (json_object_has_member (json, "can-write-uinput"));
+  
+  g_assert_true (json_object_has_member (json, "steam-installation"));
+  json_sub_object = json_object_get_object_member (json, "steam-installation");
+
+  g_assert_true (json_object_has_member (json_sub_object, "path"));
+  path = json_object_get_string_member (json_sub_object, "path");
+  g_assert_cmpstr (path, !=, NULL);
+  g_assert_true (path[0] == '/');
+
+  g_assert_true (json_object_has_member (json_sub_object, "issues"));
+  array = json_object_get_array_member (json_sub_object, "issues");
+  g_assert_cmpint (json_array_get_length (array), ==, 0);
+
+  g_assert_true (json_object_has_member (json, "runtime"));
+  json_sub_object = json_object_get_object_member (json, "runtime");
+
+  g_assert_true (json_object_has_member (json_sub_object, "path"));
+  path = json_object_get_string_member (json_sub_object, "path");
+  g_assert_cmpstr (path, !=, NULL);
+  g_assert_true (path[0] == '/');
+
+  g_assert_true (json_object_has_member (json_sub_object, "version"));
+  version = json_object_get_string_member (json_sub_object, "version");
+  g_assert_cmpstr (version, !=, NULL);
+
+  g_assert_true (json_object_has_member (json_sub_object, "issues"));
+  array = json_object_get_array_member (json_sub_object, "issues");
+  g_assert_cmpint (json_array_get_length (array), ==, 0);
+
+  g_assert_true (json_object_has_member (json, "architectures"));
+  
+  fake_home_clean_up (fake_home);
+  g_object_unref (parser);
+  g_object_unref (info);
+  g_free (output);
+  g_clear_error (&error);
+}
+
+/*
+ * Test a system with a Steam installation with issues.
+ */
+static void
+steam_issues (Fixture *f,
+                gconstpointer context)
+{
+  int exit_status = -1;
+  JsonParser *parser = NULL;
+  JsonNode *node = NULL;
+  JsonObject *json;
+  JsonObject *json_sub_object;
+  JsonArray *array;
+  GError *error = NULL;
+  gchar *output = NULL;
+  const gchar *path = NULL;
+  const gchar *version = NULL;
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  const gchar *argv[] = { "steam-runtime-system-info", NULL };
+  FakeHome *fake_home;
+
+  g_assert_true (TRUE);
+
+  fake_home = fake_home_new ();
+  fake_home->create_pinning_libs = FALSE;
+  fake_home->create_steam_symlink = FALSE;
+  fake_home->create_steamrt_files = FALSE;
+  fake_home_create_structure (fake_home);
+
+  g_assert_true (g_spawn_sync (NULL,    /* working directory */
+                               (gchar **) argv,
+                               fake_home->env, /* envp */
+                               G_SPAWN_SEARCH_PATH,
+                               NULL,    /* child setup */
+                               NULL,    /* user data */
+                               &output, /* stdout */
+                               NULL,    /* stderr */
+                               &exit_status,
+                               &error));
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_null (error);
+  g_assert_nonnull (output);
+
+  /* We can't use `json_from_string()` directly because we are targeting an
+   * older json-glib version */
+  parser = json_parser_new ();
+  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  node = json_parser_get_root (parser);
+  json = json_node_get_object (node);
+
+  g_assert_true (json_object_has_member (json, "can-write-uinput"));
+  
+
+  g_assert_true (json_object_has_member (json, "steam-installation"));
+  json_sub_object = json_object_get_object_member (json, "steam-installation");
+
+  g_assert_true (json_object_has_member (json_sub_object, "path"));
+  path = json_object_get_string_member (json_sub_object, "path");
+  g_assert_cmpstr (path, !=, NULL);
+  g_assert_true (path[0] == '/');
+
+  g_assert_true (json_object_has_member (json_sub_object, "issues"));
+  array = json_object_get_array_member (json_sub_object, "issues");
+  g_assert_cmpint (json_array_get_length (array), ==, 1);
+  g_assert_cmpstr (json_array_get_string_element (array, 0), ==,
+                   "dot-steam-steam-not-symlink");
+
+  g_assert_true (json_object_has_member (json, "runtime"));
+  json_sub_object = json_object_get_object_member (json, "runtime");
+
+  g_assert_true (json_object_has_member (json_sub_object, "path"));
+  path = json_object_get_string_member (json_sub_object, "path");
+  g_assert_cmpstr (path, !=, NULL);
+  g_assert_true (path[0] == '/');
+
+  g_assert_true (json_object_has_member (json_sub_object, "version"));
+  version = json_object_get_string_member (json_sub_object, "version");
+  g_assert_cmpstr (version, ==, NULL);
+
+  g_assert_true (json_object_has_member (json_sub_object, "issues"));
+  array = json_object_get_array_member (json_sub_object, "issues");
+  g_assert_cmpint (json_array_get_length (array), ==, 2);
+  g_assert_cmpstr (json_array_get_string_element (array, 0), ==,
+                   "not-runtime");
+  g_assert_cmpstr (json_array_get_string_element (array, 1), ==,
+                   "not-using-newer-host-libraries");
+
+  g_assert_true (json_object_has_member (json, "architectures"));
+  
+  fake_home_clean_up (fake_home);
+  g_object_unref (parser);
+  g_object_unref (info);
   g_free (output);
   g_clear_error (&error);
 }
@@ -436,14 +619,18 @@ main (int argc,
   argv0 = argv[0];
 
   g_test_init (&argc, &argv, NULL);
-  g_test_add ("/system-info/libraries_presence", Fixture, NULL,
+  g_test_add ("/system-info-cli/libraries_presence", Fixture, NULL,
               setup, libraries_presence, teardown);
-  g_test_add ("/system-info/libraries_missing", Fixture, NULL,
+  g_test_add ("/system-info-cli/libraries_missing", Fixture, NULL,
               setup, libraries_missing, teardown);
-  g_test_add ("/system-info/libraries_presence_verbose", Fixture, NULL,
+  g_test_add ("/system-info-cli/libraries_presence_verbose", Fixture, NULL,
               setup, libraries_presence_verbose, teardown);
-  g_test_add ("/system-info/no_arguments", Fixture, NULL,
+  g_test_add ("/system-info-cli/no_arguments", Fixture, NULL,
               setup, no_arguments, teardown);
+  g_test_add ("/system-info-cli/steam_presence", Fixture, NULL,
+              setup, steam_presence, teardown);
+  g_test_add ("/system-info-cli/steam_issues", Fixture, NULL,
+              setup, steam_issues, teardown);
 
   return g_test_run ();
 }

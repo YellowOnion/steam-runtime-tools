@@ -53,7 +53,6 @@ build:scout:
             ./build-relocatable-install.py \
               --srcdir . \
               --builddir _build \
-              --libcapsuledir /usr/lib/libcapsule/relocatable \
               --output _build/relocatable-install \
               --archive "$(pwd)/_build" \
               --set-version "$(cat .tarball-version)" \

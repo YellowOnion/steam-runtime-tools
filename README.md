@@ -157,7 +157,6 @@ Then you can do:
     ./build-relocatable-install.py \
         --srcdir . \
         --builddir _build \
-        --libcapsuledir /usr/lib/libcapsule/relocatable \
         --output _build/relocatable-install \
         --archive .
     ./tests/relocatable-install.py _build/relocatable-install  # optional

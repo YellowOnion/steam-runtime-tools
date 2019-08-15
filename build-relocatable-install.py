@@ -100,7 +100,7 @@ SCRIPTS = [
 EXECUTABLES = [
     'pressure-vessel-wrap'
 ]
-TOOLS = [
+LIBCAPSULE_TOOLS = [
     'capsule-capture-libs',
     'capsule-symbols',
 ]
@@ -144,7 +144,6 @@ def main():
     parser.add_argument('--prefix', default=None)
     parser.add_argument('--output', '-o', default=None)
     parser.add_argument('--archive', default=None)
-    parser.add_argument('--libcapsuledir', default='')
     parser.add_argument('--set-version', dest='version', default='unknown')
     args = parser.parse_args()
 
@@ -211,64 +210,34 @@ def main():
             0o644,
         )
 
-        if args.libcapsuledir:
-            for arch in ARCHS:
-                for tool in TOOLS:
-                    install_exe(
-                        os.path.join(
-                            args.libcapsuledir,
-                            '{}-{}'.format(arch.multiarch, tool),
-                        ),
-                        os.path.join(installation, 'bin'),
-                    )
-
-            install(
-                '/usr/share/doc/libcapsule-tools-relocatable/copyright',
-                os.path.join(installation, 'metadata', 'libcapsule.txt'),
+        for arch in ARCHS:
+            path = '/usr/lib/libcapsule/relocatable/{}-{}'.format(
+                arch.multiarch,
+                LIBCAPSULE_TOOLS[0],
             )
-        else:
-            for arch in ARCHS:
-                for tool in TOOLS:
-                    install_exe(
-                        os.path.join(
-                            args.builddir,
-                            'build-relocatable',
-                            arch.name,
-                            'libcapsule',
-                            tool,
-                        ),
-                        os.path.join(
-                            tmpdir,
-                            'build-relocatable',
-                            '{}-{}'.format(arch.multiarch, tool),
-                        ),
-                    )
-                    v_check_call([
-                        'chrpath', '-r',
-                        '${ORIGIN}/../lib/' + arch.multiarch,
-                        os.path.join(
-                            tmpdir,
-                            'build-relocatable',
-                            '{}-{}'.format(arch.multiarch, tool),
-                        ),
-                    ])
-                    install_exe(
-                        os.path.join(
-                            tmpdir,
-                            'build-relocatable',
-                            '{}-{}'.format(arch.multiarch, tool),
-                        ),
-                        os.path.join(installation, 'bin'),
-                    )
 
-                install(
-                    os.path.join(
-                        args.builddir,
-                        'libcapsule',
-                        'debian',
-                        'copyright',
+            if not os.path.exists(path):
+                v_check_call([
+                    'apt-get',
+                    'download',
+                    package,
+                ], cwd=tmpdir)
+                v_check_call(
+                    'dpkg-deb -x {}_*.deb build-relocatable'.format(
+                        quote(package),
                     ),
-                    os.path.join(installation, 'metadata', 'libcapsule.txt'),
+                    cwd=tmpdir,
+                    shell=True,
+                )
+                path = '{}/build-relocatable/usr/bin/TOOL'.format(tmpdir)
+
+            for tool in LIBCAPSULE_TOOLS:
+                install_exe(
+                    os.path.join(
+                        os.path.dirname(path),
+                        '{}-{}'.format(arch.multiarch, tool),
+                    ),
+                    os.path.join(installation, 'bin'),
                 )
 
         primary_architecture = subprocess.check_output([
@@ -383,9 +352,6 @@ def main():
         for package, source in (
             list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
         ):
-            if not args.libcapsuledir and source == 'libcapsule':
-                continue
-
             if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
                 installed_binaries.add(package)
 
@@ -444,15 +410,6 @@ def main():
             os.path.join(installation, 'metadata'),
             os.path.join(installation, 'sources'),
         )
-
-        if not args.libcapsuledir:
-            for dsc in glob.glob(
-                os.path.join(args.srcdir, 'libcapsule*.dsc')
-            ):
-                v_check_call([
-                    'dcmd', 'install', '-m644', dsc,
-                    os.path.join(installation, 'sources'),
-                ])
 
         v_check_call(
             [

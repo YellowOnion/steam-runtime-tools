@@ -351,7 +351,8 @@ def main():
         installed_binaries = set()      # type: typing.Set[str]
 
         for package, source in (
-            list(DEPENDENCIES.items()) + list(PRIMARY_ARCH_DEPENDENCIES.items())
+            list(DEPENDENCIES.items())
+            + list(PRIMARY_ARCH_DEPENDENCIES.items())
         ):
             if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
                 installed_binaries.add(package)
@@ -373,7 +374,8 @@ def main():
                         package,
                     ], universal_newlines=True).splitlines()
                 ):
-                    source_to_download.add(re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
+                    source_to_download.add(
+                        re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
             else:
                 install(
                     '{}/build-relocatable/usr/share/doc/{}/copyright'.format(
@@ -398,7 +400,8 @@ def main():
                 'dpkg-query',
                 '-W',
                 '-f',
-                r'${binary:Package}\t${Version}\t${Source}\t${Installed-Size}\n',
+                (r'${binary:Package}\t${Version}\t'
+                 r'${Source}\t${Installed-Size}\n'),
             ] + sorted(installed_binaries), stdout=writer)
 
         with open(

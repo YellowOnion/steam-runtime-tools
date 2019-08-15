@@ -64,7 +64,6 @@ class Gui:
                     os.path.join(source_of_runtimes, member)
                 )
                 files = os.path.join(path, 'files')
-                metadata = os.path.join(path, 'metadata')
 
                 if os.path.isdir(files):
                     description = self._describe_runtime(path)
@@ -180,6 +179,7 @@ class Gui:
             except GLib.Error:
                 pass
             else:
+                assert name is not None
                 variant = name.split('.')[-1]
         except GLib.Error:
             pass

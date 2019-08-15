@@ -1,0 +1,4 @@
+"manifest"
+{
+  "commandline_waitforexitandrun" "/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- "
+}

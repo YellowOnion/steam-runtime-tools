@@ -1,0 +1,26 @@
+"DepotBuildConfig"
+{
+	"DepotID" "1070561"
+	"FileMapping"
+	{
+		"LocalPath" "../pressure-vessel/*"
+		"DepotPath" "pressure-vessel"
+		"recursive" "1"
+	}
+	"FileMapping"
+	{
+		"LocalPath" "../scout/*"
+		"DepotPath" "scout"
+		"recursive" "1"
+	}
+	"FileMapping"
+	{
+		"LocalPath" "../com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz"
+		"DepotPath" "."
+	}
+	"FileMapping"
+	{
+		"LocalPath" "../toolmanifest.vdf"
+		"DepotPath" "."
+	}
+}

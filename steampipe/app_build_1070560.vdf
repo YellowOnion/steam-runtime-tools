@@ -1,0 +1,9 @@
+"appbuild"
+{
+	"appid" "1070560"
+	"buildoutput" "output"
+	"depots"
+	{
+		"1070561" "depot_build_1070561.vdf"
+	}
+}

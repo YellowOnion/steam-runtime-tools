@@ -141,6 +141,15 @@ test_object (Fixture *f,
   g_free (expectations_in);
   g_free (expectations);
   g_object_unref (info);
+
+  info = srt_system_info_new (NULL);
+  g_assert_nonnull (info);
+  srt_system_info_set_helpers_path (info, f->builddir);
+  g_assert_true (srt_system_info_can_run (info, "mock"));
+  /* The real helpers are not present here */
+  g_assert_false (srt_system_info_can_run (info, SRT_ABI_I386));
+  g_assert_false (srt_system_info_can_run (info, SRT_ABI_X86_64));
+  g_object_unref (info);
 }
 
 static void

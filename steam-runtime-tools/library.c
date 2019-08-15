@@ -421,13 +421,25 @@ srt_library_get_misversioned_symbols (SrtLibrary *self)
  * Returns: A bitfield containing problems, or %SRT_LIBRARY_ISSUES_NONE
  *  if no problems were found.
  */
-
 SrtLibraryIssues
 srt_check_library_presence (const char *soname,
                             const char *multiarch,
                             const char *symbols_path,
                             SrtLibrarySymbolsFormat symbols_format,
                             SrtLibrary **more_details_out)
+{
+  return _srt_check_library_presence (NULL, soname, multiarch,
+                                      symbols_path, symbols_format,
+                                      more_details_out);
+}
+
+SrtLibraryIssues
+_srt_check_library_presence (const char *helpers_path,
+                             const char *soname,
+                             const char *multiarch,
+                             const char *symbols_path,
+                             SrtLibrarySymbolsFormat symbols_format,
+                             SrtLibrary **more_details_out)
 {
   gchar *helper = NULL;
   gchar *output = NULL;
@@ -473,8 +485,10 @@ srt_check_library_presence (const char *soname,
   if (symbols_path == NULL)
     issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
 
-  helper = g_strdup_printf ("%s/%s-inspect-library",
-                            _srt_get_helpers_path (), multiarch);
+  if (helpers_path == NULL)
+    helpers_path = _srt_get_helpers_path ();
+
+  helper = g_strdup_printf ("%s/%s-inspect-library", helpers_path, multiarch);
   argv[0] = helper;
   g_debug ("Checking library %s integrity with %s", soname, helper);
 

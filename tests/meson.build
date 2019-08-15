@@ -54,6 +54,13 @@ install_subdir('expectations', install_dir : tests_dir)
 install_subdir('expectations_with_missings', install_dir : tests_dir)
 install_subdir('fake-steam-runtime', install_dir : tests_dir)
 
+executable(
+  'mock-true',
+  join_paths('..', 'helpers', 'true.c'),
+  install : get_option('installed_tests'),
+  install_dir : tests_dir,
+)
+
 foreach test_name : tests
   exe = executable(
     'test-' + test_name,

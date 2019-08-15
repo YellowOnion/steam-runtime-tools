@@ -40,7 +40,8 @@
  */
 
 gboolean
-_srt_architecture_can_run (const char *multiarch)
+_srt_architecture_can_run (const char *helpers_path,
+                           const char *multiarch)
 {
   gchar *helper = NULL;
   const gchar *argv[] = { "true", NULL };
@@ -48,8 +49,10 @@ _srt_architecture_can_run (const char *multiarch)
   GError *error = NULL;
   gboolean ret = FALSE;
 
-  helper = g_strdup_printf ("%s/%s-true",
-                            _srt_get_helpers_path (), multiarch);
+  if (helpers_path == NULL)
+    helpers_path = _srt_get_helpers_path ();
+
+  helper = g_strdup_printf ("%s/%s-true", helpers_path, multiarch);
   argv[0] = helper;
   g_debug ("Testing architecture %s with %s", multiarch, helper);
 
@@ -108,7 +111,7 @@ out:
 gboolean
 srt_architecture_can_run_i386 (void)
 {
-  return _srt_architecture_can_run (SRT_ABI_I386);
+  return _srt_architecture_can_run (NULL, SRT_ABI_I386);
 }
 
 /**
@@ -126,5 +129,5 @@ srt_architecture_can_run_i386 (void)
 gboolean
 srt_architecture_can_run_x86_64 (void)
 {
-  return _srt_architecture_can_run (SRT_ABI_X86_64);
+  return _srt_architecture_can_run (NULL, SRT_ABI_X86_64);
 }

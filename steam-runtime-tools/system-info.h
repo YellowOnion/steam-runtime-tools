@@ -63,6 +63,9 @@ SrtLibraryIssues srt_system_info_check_library (SrtSystemInfo *self,
 
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);
+void srt_system_info_set_helpers_path (SrtSystemInfo *self,
+                                       const gchar *path);
+
 void srt_system_info_set_expected_runtime_version (SrtSystemInfo *self,
                                                    const char *version);
 gchar *srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self);

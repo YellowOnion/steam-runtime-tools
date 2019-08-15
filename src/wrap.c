@@ -1612,7 +1612,7 @@ int
 main (int argc,
       char *argv[])
 {
-  g_autoptr(GOptionContext) context;
+  g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   int ret = 2;

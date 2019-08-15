@@ -1,0 +1,53 @@
+Source: pressure-vessel
+Section: games
+Priority: optional
+Maintainer: Simon McVittie <smcv@collabora.com>
+Standards-Version: 4.4.0
+Build-Depends:
+ debhelper (>= 9),
+ libglib2.0-dev,
+ libxau-dev,
+ meson,
+ python3,
+ python3 (>= 3.5) | python3.5,
+ zlib1g <!nocheck>,
+Vcs-Git: https://gitlab.steamos.cloud/steam/pressure-vessel.git
+Vcs-Browser: https://gitlab.steamos.cloud/steam/pressure-vessel
+
+Package: pressure-vessel-relocatable
+Architecture: amd64 i386
+Multi-Arch: foreign
+Depends:
+ bubblewrap,
+ pressure-vessel-libs-amd64,
+ pressure-vessel-libs-i386,
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam container launcher
+ pressure-vessel puts Steam games in containers.
+ .
+ This package contains the launcher.
+
+Package: pressure-vessel-libs-amd64
+Architecture: amd64
+Multi-Arch: foreign
+Depends:
+ libcapsule-tools-relocatable,
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam container launcher - cross-architecture dependencies
+ pressure-vessel puts Steam games in containers.
+ .
+ This package encapsulates the i386 cross-architecture dependencies.
+
+Package: pressure-vessel-libs-i386
+Architecture: i386
+Multi-Arch: foreign
+Depends:
+ libcapsule-tools-relocatable,
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam container launcher - cross-architecture dependencies
+ pressure-vessel puts Steam games in containers.
+ .
+ This package encapsulates the i386 cross-architecture dependencies.

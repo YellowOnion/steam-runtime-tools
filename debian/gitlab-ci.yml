@@ -1,0 +1,14 @@
+include:
+    - project: 'steam/steam-ci-pipeline'
+      file: '/steam-gitlab-ci-common.yml'
+
+    - project: 'steam/steam-ci-pipeline'
+      file: '/steam-gitlab-ci-pipeline.yml'
+
+variables:
+    BUILD_IMAGE: docker.internal.steamos.cloud/steamrt/sdk:scout-latest
+    STEAM_CI_USE_BINARIES_FROM: autopkgtest
+
+build:
+    variables:
+        BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster

@@ -1,0 +1,42 @@
+#!/usr/bin/make -f
+# Copyright © 2019 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+# (see debian/copyright)
+
+export LC_ALL=C.UTF-8
+
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@
+
+# We open-code the Meson clean, configure, build, test, install steps
+# because the debhelper in SteamRT 1 'scout' is too old to have built-in
+# knowledge of Meson.
+
+override_dh_auto_clean:
+	rm -fr _build
+
+override_dh_auto_configure:
+	if python3 -c 'if __import__("sys").version_info < (3, 5): raise SystemExit(1)'; then \
+		python=python3; \
+	else \
+		python=python3.5; \
+	fi; \
+	meson _build \
+		--prefix=/usr/lib/pressure-vessel/relocatable \
+		-Dpython=/usr/bin/$$python \
+		-Dversion=$(DEB_VERSION) \
+		$(NULL)
+
+override_dh_auto_build:
+	ninja -C _build
+
+override_dh_auto_test:
+	meson test -C _build --verbose
+
+override_dh_auto_install:
+	DESTDIR=$(CURDIR)/debian/tmp ninja -C _build install
+
+override_dh_missing:
+	dh_missing --fail-missing

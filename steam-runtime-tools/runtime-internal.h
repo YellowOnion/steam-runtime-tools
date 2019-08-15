@@ -1,3 +1,4 @@
+/*<private_header>*/
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -25,44 +26,14 @@
 
 #pragma once
 
-/*
- * Simplified implementations of some of the GLib test assertion macros,
- * for use with older GLib versions.
- */
+#include "steam-runtime-tools/runtime.h"
 
 #include <glib.h>
+#include <glib-object.h>
 
-#ifndef g_assert_true
-#define g_assert_true(x) g_assert ((x))
-#endif
-
-#ifndef g_assert_false
-#define g_assert_false(x) g_assert (!(x))
-#endif
-
-#ifndef g_assert_cmpint
-#define g_assert_cmpint(a, op, b) g_assert ((a) op (b))
-#endif
-
-#ifndef g_assert_cmpmem
-#define g_assert_cmpmem(m1, l1, m2, l2) \
-    g_assert (l1 == l2 && memcmp (m1, m2, l1) == 0)
-#endif
-
-#ifndef g_assert_cmpstr
-#define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
-#endif
-
-#ifndef g_assert_nonnull
-#define g_assert_nonnull(x) g_assert ((x) != NULL)
-#endif
-
-#ifndef g_assert_null
-#define g_assert_null(x) g_assert ((x) == NULL)
-#endif
-
-#if !GLIB_CHECK_VERSION(2, 38, 0)
-#define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
-#endif
-
-gboolean rm_rf (char *directory);
+G_GNUC_INTERNAL
+SrtRuntimeIssues _srt_runtime_check (const char *bin32,
+                                     const char *expected_version,
+                                     const GStrv custom_environ,
+                                     gchar **version_out,
+                                     gchar **path_out);

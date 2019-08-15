@@ -23,46 +23,39 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#include "test-utils.h"
 
-/*
- * Simplified implementations of some of the GLib test assertion macros,
- * for use with older GLib versions.
- */
-
+#include <ftw.h>
 #include <glib.h>
+#include <stdio.h>
 
-#ifndef g_assert_true
-#define g_assert_true(x) g_assert ((x))
-#endif
+static gint
+ftw_remove (const gchar *path,
+            const struct stat *sb,
+            gint typeflags,
+            struct FTW *ftwbuf)
+{
+  if (remove (path) < 0)
+    return -1;
 
-#ifndef g_assert_false
-#define g_assert_false(x) g_assert (!(x))
-#endif
+  return 0;
+}
 
-#ifndef g_assert_cmpint
-#define g_assert_cmpint(a, op, b) g_assert ((a) op (b))
-#endif
+/**
+ * rm_rf:
+ * @directory: (type filename): The folder to remove.
+ *
+ * Recursively delete @directory within the same file system and
+ * without following symbolic links.
+ *
+ * Returns: %TRUE if the removal was successful
+ */
+gboolean rm_rf (char *directory)
+{
+  g_return_val_if_fail (directory != NULL, FALSE);
 
-#ifndef g_assert_cmpmem
-#define g_assert_cmpmem(m1, l1, m2, l2) \
-    g_assert (l1 == l2 && memcmp (m1, m2, l1) == 0)
-#endif
+  if (nftw (directory, ftw_remove, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS) < 0)
+    return FALSE;
 
-#ifndef g_assert_cmpstr
-#define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
-#endif
-
-#ifndef g_assert_nonnull
-#define g_assert_nonnull(x) g_assert ((x) != NULL)
-#endif
-
-#ifndef g_assert_null
-#define g_assert_null(x) g_assert ((x) == NULL)
-#endif
-
-#if !GLIB_CHECK_VERSION(2, 38, 0)
-#define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
-#endif
-
-gboolean rm_rf (char *directory);
+  return TRUE;
+}

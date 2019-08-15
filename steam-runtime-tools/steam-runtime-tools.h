@@ -30,6 +30,8 @@
 #include <steam-runtime-tools/architecture.h>
 #include <steam-runtime-tools/enums.h>
 #include <steam-runtime-tools/library.h>
+#include <steam-runtime-tools/runtime.h>
+#include <steam-runtime-tools/steam.h>
 #include <steam-runtime-tools/system-info.h>
 
 #undef _SRT_IN_SINGLE_HEADER

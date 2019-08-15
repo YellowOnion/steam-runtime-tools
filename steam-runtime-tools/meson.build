@@ -26,6 +26,10 @@ libsteamrt_sources = [
     'architecture.c',
     'library-internal.h',
     'library.c',
+    'runtime-internal.h',
+    'runtime.c',
+    'steam-internal.h',
+    'steam.c',
     'system-info.c',
     'utils-internal.h',
     'utils.c',
@@ -34,7 +38,9 @@ libsteamrt_sources = [
 libsteamrt_public_headers = [
     'architecture.h',
     'library.h',
+    'runtime.h',
     'steam-runtime-tools.h',
+    'steam.h',
     'system-info.h',
 ]
 

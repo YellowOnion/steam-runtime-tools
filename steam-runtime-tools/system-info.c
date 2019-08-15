@@ -28,6 +28,8 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 #include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/runtime-internal.h"
+#include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <errno.h>
@@ -79,6 +81,23 @@ struct _SrtSystemInfo
   gchar *expectations;
   /* Fake environment variables, or %NULL to use the real environment */
   gchar **env;
+  struct
+  {
+    /* path != NULL or issues != NONE indicates we have already checked
+     * the Steam installation */
+    gchar *path;
+    gchar *bin32;
+    SrtSteamIssues issues;
+  } steam;
+  struct
+  {
+    /* path != NULL or issues != NONE indicates we have already checked
+     * the Steam Runtime */
+    gchar *path;
+    gchar *expected_version;
+    gchar *version;
+    SrtRuntimeIssues issues;
+  } runtime;
   Tristate can_write_uinput;
   /* (element-type Abi) */
   GPtrArray *abis;
@@ -195,10 +214,37 @@ srt_system_info_set_property (GObject *object,
     }
 }
 
+/*
+ * Forget any cached information about the Steam Runtime.
+ */
+static void
+forget_runtime (SrtSystemInfo *self)
+{
+  g_clear_pointer (&self->runtime.path, g_free);
+  g_clear_pointer (&self->runtime.version, g_free);
+  g_clear_pointer (&self->runtime.expected_version, g_free);
+  self->runtime.issues = SRT_RUNTIME_ISSUES_NONE;
+}
+
+/*
+ * Forget any cached information about the Steam installation.
+ */
+static void
+forget_steam (SrtSystemInfo *self)
+{
+  forget_runtime (self);
+  self->steam.issues = SRT_STEAM_ISSUES_NONE;
+  g_clear_pointer (&self->steam.path, g_free);
+  g_clear_pointer (&self->steam.bin32, g_free);
+}
+
 static void
 srt_system_info_finalize (GObject *object)
 {
   SrtSystemInfo *self = SRT_SYSTEM_INFO (object);
+
+  forget_runtime (self);
+  forget_steam (self);
 
   g_clear_pointer (&self->abis, g_ptr_array_unref);
   g_free (self->expectations);
@@ -708,4 +754,187 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_libraries (self);
   g_strfreev (self->env);
   self->env = g_strdupv ((gchar **) env);
+
+  /* Forget what we know about Steam because it is bounded to the environment. */
+  forget_steam (self);
+}
+
+static void
+ensure_steam_cached (SrtSystemInfo *self)
+{
+  if (self->steam.issues == SRT_STEAM_ISSUES_NONE &&
+      self->steam.path == NULL)
+    self->steam.issues = _srt_steam_check (self->env,
+                                           &self->steam.path,
+                                           &self->steam.bin32);
+}
+
+/**
+ * srt_system_info_get_steam_issues:
+ * @self: The #SrtSystemInfo object
+ *
+ * Detect and return any problems encountered with the Steam installation.
+ *
+ * Returns: Any problems detected with the Steam installation,
+ *  or %SRT_RUNTIME_ISSUES_NONE if no problems were detected
+ */
+SrtSteamIssues
+srt_system_info_get_steam_issues (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
+                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+
+  ensure_steam_cached (self);
+  return self->steam.issues;
+}
+
+/**
+ * srt_system_info_dup_steam_installation_path:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the absolute path to the Steam installation in use (the
+ * directory containing `steam.sh` and `ubuntu12_32/` among other
+ * files and directories, analogous to `C:\Program Files\Steam` in a
+ * typical Windows installation of Steam). This is typically of the form
+ * `/home/me/.local/share/Steam`.
+ *
+ * If the Steam installation could not be found, at least one flag will
+ * be set in the result of srt_system_info_get_steam_issues() to indicate
+ * why.
+ *
+ * Returns: (transfer full) (type filename) (nullable): The absolute path
+ *  to the Steam installation, or %NULL if it could not be determined.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_steam_installation_path (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_steam_cached (self);
+  return g_strdup (self->steam.path);
+}
+
+/**
+ * srt_system_info_set_expected_runtime_version:
+ * @self: The #SrtSystemInfo object
+ * @version (nullable): The expected version number, such as `0.20190711.3`,
+ *  or %NULL if there is no particular expectation
+ *
+ * Set the expected version number of the Steam Runtime. Invalidate any
+ * cached information about the Steam Runtime if it differs from the
+ * previous expectation.
+ */
+void
+srt_system_info_set_expected_runtime_version (SrtSystemInfo *self,
+                                              const char *version)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  if (g_strcmp0 (version, self->runtime.expected_version) != 0)
+    {
+      forget_runtime (self);
+      g_clear_pointer (&self->runtime.expected_version, g_free);
+      self->runtime.expected_version = g_strdup (version);
+    }
+}
+
+/**
+ * srt_system_info_dup_expected_runtime_version:
+ * @self: The #SrtSystemInfo object
+ *
+ * Returns: (transfer full) (type utf8): The expected version number of
+ *  the Steam Runtime, or %NULL if no particular version is expected.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  return g_strdup (self->runtime.expected_version);
+}
+
+static void
+ensure_runtime_cached (SrtSystemInfo *self)
+{
+  ensure_steam_cached (self);
+
+  if (self->runtime.issues == SRT_RUNTIME_ISSUES_NONE &&
+      self->runtime.path == NULL)
+    self->runtime.issues = _srt_runtime_check (self->steam.bin32,
+                                               self->runtime.expected_version,
+                                               self->env,
+                                               &self->runtime.version,
+                                               &self->runtime.path);
+}
+
+/**
+ * srt_system_info_get_runtime_issues:
+ * @self: The #SrtSystemInfo object
+ *
+ * Detect and return any problems encountered with the
+ * `LD_LIBRARY_PATH`-based Steam Runtime.
+ *
+ * Returns: Any problems detected with the Steam Runtime,
+ *  or %SRT_RUNTIME_ISSUES_NONE if no problems were detected
+ */
+SrtRuntimeIssues
+srt_system_info_get_runtime_issues (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
+                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+
+  ensure_runtime_cached (self);
+  return self->runtime.issues;
+}
+
+/**
+ * srt_system_info_dup_runtime_path:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the absolute path to the `LD_LIBRARY_PATH`-based Steam Runtime
+ * in use (the directory containing `run.sh`, `version.txt` and
+ * similar files).
+ *
+ * If the Steam Runtime has been disabled or could not be found, at
+ * least one flag will be set in the result of
+ * srt_system_info_get_runtime_issues() to indicate why.
+ *
+ * Returns: (transfer full) (type filename) (nullable): The absolute path
+ *  to the Steam Runtime, or %NULL if it could not be determined.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_runtime_path (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_runtime_cached (self);
+  return g_strdup (self->runtime.path);
+}
+
+/**
+ * srt_system_info_dup_runtime_version:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the version number of the `LD_LIBRARY_PATH`-based Steam Runtime
+ * in use, for example `0.20190711.3`, or %NULL if it could not be
+ * determined.
+ *
+ * If the Steam Runtime has been disabled or could not be found, or its
+ * version number could not be read, then at least one flag will be set
+ * in the result of srt_system_info_get_runtime_issues() to indicate why.
+ *
+ * Returns: (transfer full) (type utf8) (nullable): The version number of
+ *  the Steam Runtime, or %NULL if it could not be determined.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_runtime_version (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_runtime_cached (self);
+  return g_strdup (self->runtime.version);
 }

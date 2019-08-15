@@ -25,44 +25,38 @@
 
 #pragma once
 
-/*
- * Simplified implementations of some of the GLib test assertion macros,
- * for use with older GLib versions.
- */
-
 #include <glib.h>
+#include <glib-object.h>
 
-#ifndef g_assert_true
-#define g_assert_true(x) g_assert ((x))
-#endif
+typedef struct
+{
+  gboolean create_pinning_libs;
+  gboolean create_i386_folders;
+  gboolean create_amd64_folders;
+  gboolean create_steam_symlink;
+  gboolean create_steamrt_files;
+  gboolean add_environments;
+  gboolean has_debian_bug_916303;
 
-#ifndef g_assert_false
-#define g_assert_false(x) g_assert (!(x))
-#endif
+  gchar *home;
+  gchar *steam_base_folder;
+  gchar *runtime;
+  gchar *pinned_32;
+  gchar *pinned_64;
+  gchar *i386_lib_i386;
+  gchar *i386_lib;
+  gchar *i386_usr_lib_i386;
+  gchar *i386_usr_lib;
+  gchar *i386_usr_bin;
+  gchar *amd64_lib_64;
+  gchar *amd64_lib;
+  gchar *amd64_usr_lib_64;
+  gchar *amd64_usr_lib;
+  gchar *amd64_bin;
+  gchar *amd64_usr_bin;
+  GStrv env;
+} FakeHome;
 
-#ifndef g_assert_cmpint
-#define g_assert_cmpint(a, op, b) g_assert ((a) op (b))
-#endif
-
-#ifndef g_assert_cmpmem
-#define g_assert_cmpmem(m1, l1, m2, l2) \
-    g_assert (l1 == l2 && memcmp (m1, m2, l1) == 0)
-#endif
-
-#ifndef g_assert_cmpstr
-#define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
-#endif
-
-#ifndef g_assert_nonnull
-#define g_assert_nonnull(x) g_assert ((x) != NULL)
-#endif
-
-#ifndef g_assert_null
-#define g_assert_null(x) g_assert ((x) == NULL)
-#endif
-
-#if !GLIB_CHECK_VERSION(2, 38, 0)
-#define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
-#endif
-
-gboolean rm_rf (char *directory);
+FakeHome * fake_home_new (void);
+gboolean fake_home_create_structure (FakeHome *fake_home);
+void fake_home_clean_up (FakeHome *f);

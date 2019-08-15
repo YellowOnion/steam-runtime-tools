@@ -217,6 +217,7 @@ def main():
             )
 
             if not os.path.exists(path):
+                package = 'libcapsule-tools-relocatable'
                 v_check_call([
                     'apt-get',
                     'download',

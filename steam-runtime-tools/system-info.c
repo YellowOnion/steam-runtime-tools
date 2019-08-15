@@ -28,6 +28,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 #include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -81,6 +82,9 @@ struct _SrtSystemInfo
   gchar *expectations;
   /* Fake environment variables, or %NULL to use the real environment */
   gchar **env;
+  /* Path to find helper executables, or %NULL to use $SRT_HELPERS_PATH
+   * or the installed helpers */
+  gchar *helpers_path;
   struct
   {
     /* path != NULL or issues != NONE indicates we have already checked
@@ -248,6 +252,7 @@ srt_system_info_finalize (GObject *object)
 
   g_clear_pointer (&self->abis, g_ptr_array_unref);
   g_free (self->expectations);
+  g_free (self->helpers_path);
   g_strfreev (self->env);
 
   G_OBJECT_CLASS (srt_system_info_parent_class)->finalize (object);
@@ -345,7 +350,7 @@ srt_system_info_can_run (SrtSystemInfo *self,
 
   if (abi->can_run == TRI_MAYBE)
     {
-      if (_srt_architecture_can_run (multiarch_tuple))
+      if (_srt_architecture_can_run (self->helpers_path, multiarch_tuple))
         abi->can_run = TRI_YES;
       else
         abi->can_run = TRI_NO;
@@ -531,15 +536,16 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
           if (line[0] != '#' && line[0] != '*' && line[0] != '|' && line[0] != ' ')
             {
               /* This line introduces a new SONAME. We extract it and call
-                * `srt_check_library_presence` with the symbols file where we
+                * `_srt_check_library_presence` with the symbols file where we
                 * found it, as an argument. */
               SrtLibrary *library = NULL;
               char *soname = g_strdup (strsep (&pointer_into_line, " \t"));
-              abi->cached_combined_issues |= srt_check_library_presence (soname,
-                                                                         multiarch_tuple,
-                                                                         symbols_file,
-                                                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
-                                                                         &library);
+              abi->cached_combined_issues |= _srt_check_library_presence (self->helpers_path,
+                                                                          soname,
+                                                                          multiarch_tuple,
+                                                                          symbols_file,
+                                                                          SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
+                                                                          &library);
               g_hash_table_insert (abi->cached_results, soname, library);
             }
         }
@@ -668,11 +674,12 @@ srt_system_info_check_library (SrtSystemInfo *self,
               char *soname_found = g_strdup (strsep (&pointer_into_line, " \t"));
               if (g_strcmp0 (soname_found, soname) == 0)
                 {
-                  issues = srt_check_library_presence (soname_found,
-                                                       multiarch_tuple,
-                                                       symbols_file,
-                                                       SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
-                                                       &library);
+                  issues = _srt_check_library_presence (self->helpers_path,
+                                                        soname_found,
+                                                        multiarch_tuple,
+                                                        symbols_file,
+                                                        SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
+                                                        &library);
                   g_hash_table_insert (abi->cached_results, soname_found, library);
                   abi->cached_combined_issues |= issues;
                   if (more_details_out != NULL)
@@ -691,11 +698,12 @@ srt_system_info_check_library (SrtSystemInfo *self,
 
   /* The SONAME's symbols file is not available.
    * We do instead a simple absence/presence check. */
-  issues = srt_check_library_presence (soname,
-                                       multiarch_tuple,
-                                       NULL,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
-                                       &library);
+  issues = _srt_check_library_presence (self->helpers_path,
+                                        soname,
+                                        multiarch_tuple,
+                                        NULL,
+                                        SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
+                                        &library);
   g_hash_table_insert (abi->cached_results, g_strdup (soname), library);
   abi->cached_combined_issues |= issues;
   if (more_details_out != NULL)
@@ -937,4 +945,25 @@ srt_system_info_dup_runtime_version (SrtSystemInfo *self)
 
   ensure_runtime_cached (self);
   return g_strdup (self->runtime.version);
+}
+
+/**
+ * srt_system_info_set_helpers_path:
+ * @self: The #SrtSystemInfo
+ * @path: (nullable) (type filename) (transfer none): An absolute path
+ *
+ * Look for helper executables used to inspect the system state in @path,
+ * instead of the normal installed location.
+ *
+ * If @path is %NULL, go back to using the installed location.
+ */
+void
+srt_system_info_set_helpers_path (SrtSystemInfo *self,
+                                  const gchar *path)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  forget_libraries (self);
+  free (self->helpers_path);
+  self->helpers_path = g_strdup (path);
 }

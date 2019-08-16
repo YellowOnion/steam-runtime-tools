@@ -273,4 +273,5 @@ class Gui:
 
 
 if __name__ == '__main__':
-    Gui().run()
+    if '--check-gui-dependencies' not in sys.argv:
+        Gui().run()

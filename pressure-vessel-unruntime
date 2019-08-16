@@ -36,6 +36,7 @@ here="${me%/*}"
 me="${me##*/}"
 
 default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
+steam_runtime="${STEAM_RUNTIME-}"
 
 # Undo any weird environment before we start running external
 # executables. We put it back before running the actual app/game.
@@ -97,6 +98,24 @@ done
 IFS="$old_IFS"
 
 if [ -n "${PRESSURE_VESSEL_WRAP_GUI+set}" ]; then
+    if ! result="$("${here}/pressure-vessel-test-ui" --check-gui-dependencies 2>&1)"; then
+        result="$(printf '%s' "$result" | sed -e 's/&/\&amp;/' -e 's/</\&lt;/' -e 's/>/\&gt;/')"
+        run="env"
+
+        case "$steam_runtime" in
+            (/*)
+                # Re-enter the Steam Runtime, because STEAM_ZENITY might
+                # not work otherwise
+                run="$steam_runtime/run.sh"
+                ;;
+        esac
+
+        exec "$run" "${STEAM_ZENITY:-zenity}" --error --width 500 --text \
+            "The pressure-vessel developer/debugging options menu requires Python 3, PyGI, GTK 3, and GTK 3 GObject-Introspection data.
+
+<small>$result</small>"
+    fi
+
     exec "${here}/pressure-vessel-test-ui" ${options+"${options[@]}"} "$@"
 fi
 

@@ -141,6 +141,11 @@ def main():
     parser.add_argument('--archive', default=None)
     parser.add_argument('--apt-get-source', action='store_true')
     parser.add_argument('--set-version', dest='version', default=None)
+    parser.add_argument(
+        '--archive-versions', action='store_true', default=True)
+    parser.add_argument(
+        '--no-archive-versions', dest='archive_versions',
+        action='store_false', default=True)
     args = parser.parse_args()
 
     if args.srcdir is None:
@@ -468,19 +473,24 @@ def main():
                 writer.write('{}\n'.format(args.version))
 
         if args.archive:
+            if args.archive_versions:
+                tail = '-' + args.version
+            else:
+                tail = ''
+
             bin_tar = os.path.join(
                 args.archive,
-                'pressure-vessel-{}-bin.tar.gz'.format(args.version),
+                'pressure-vessel{}-bin.tar.gz'.format(tail),
             )
             src_tar = os.path.join(
                 args.archive,
-                'pressure-vessel-{}-bin+src.tar.gz'.format(args.version),
+                'pressure-vessel{}-bin+src.tar.gz'.format(tail),
             )
 
             subprocess.check_call([
                 'tar',
-                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
-                    args.version,
+                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
+                    tail,
                 ),
                 '--exclude=metadata',   # this is all duplicated in sources/
                 '-zcvf', src_tar + '.tmp',
@@ -489,8 +499,8 @@ def main():
             ])
             subprocess.check_call([
                 'tar',
-                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
-                    args.version,
+                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
+                    tail,
                 ),
                 '--exclude=sources',
                 '-zcvf', bin_tar + '.tmp',

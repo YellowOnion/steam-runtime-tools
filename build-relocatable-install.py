@@ -139,6 +139,7 @@ def main():
     parser.add_argument('--srcdir', default=None)
     parser.add_argument('--output', '-o', default=None)
     parser.add_argument('--archive', default=None)
+    parser.add_argument('--apt-get-source', action='store_true')
     parser.add_argument('--set-version', dest='version', default=None)
     args = parser.parse_args()
 
@@ -335,10 +336,17 @@ def main():
         source_to_download = set()      # type: typing.Set[str]
         installed_binaries = set()      # type: typing.Set[str]
 
-        for package, source in (
+        get_source = (
             list(DEPENDENCIES.items())
             + list(PRIMARY_ARCH_DEPENDENCIES.items())
-        ):
+        )
+
+        if args.apt_get_source:
+            get_source.append(
+                ('pressure-vessel-relocatable', 'pressure-vessel'),
+            )
+
+        for package, source in get_source:
             if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
                 installed_binaries.add(package)
 
@@ -410,49 +418,50 @@ def main():
             cwd=os.path.join(installation, 'sources'),
         )
 
-        os.makedirs(
-            os.path.join(installation, 'sources', 'pressure-vessel'),
-            exist_ok=True,
-        )
-
-        tar = subprocess.Popen([
-            'tar',
-            '-C', args.srcdir,
-            '--exclude=.*.sw?',
-            '--exclude=./.git',
-            '--exclude=./.mypy_cache',
-            '--exclude=./_build',
-            '--exclude=./debian',
-            '--exclude=./relocatable-install',
-            '-cf-',
-            '.',
-        ], stdout=subprocess.PIPE)
-        subprocess.check_call([
-            'tar',
-            '-C', os.path.join(
-                installation,
-                'sources',
-                'pressure-vessel',
-            ),
-            '-xvf-',
-        ], stdin=tar.stdout)
-
-        if tar.wait() != 0:
-            raise subprocess.CalledProcessError(
-                returncode=tar.returncode,
-                cmd=tar.args,
+        if not args.apt_get_source:
+            os.makedirs(
+                os.path.join(installation, 'sources', 'pressure-vessel'),
+                exist_ok=True,
             )
 
-        with open(
-            os.path.join(
-                installation,
-                'sources',
-                'pressure-vessel',
-                '.tarball-version',
-            ),
-            'w',
-        ) as writer:
-            writer.write('{}\n'.format(args.version))
+            tar = subprocess.Popen([
+                'tar',
+                '-C', args.srcdir,
+                '--exclude=.*.sw?',
+                '--exclude=./.git',
+                '--exclude=./.mypy_cache',
+                '--exclude=./_build',
+                '--exclude=./debian',
+                '--exclude=./relocatable-install',
+                '-cf-',
+                '.',
+            ], stdout=subprocess.PIPE)
+            subprocess.check_call([
+                'tar',
+                '-C', os.path.join(
+                    installation,
+                    'sources',
+                    'pressure-vessel',
+                ),
+                '-xvf-',
+            ], stdin=tar.stdout)
+
+            if tar.wait() != 0:
+                raise subprocess.CalledProcessError(
+                    returncode=tar.returncode,
+                    cmd=tar.args,
+                )
+
+            with open(
+                os.path.join(
+                    installation,
+                    'sources',
+                    'pressure-vessel',
+                    '.tarball-version',
+                ),
+                'w',
+            ) as writer:
+                writer.write('{}\n'.format(args.version))
 
         bin_tar = os.path.join(
             args.archive,

@@ -427,6 +427,15 @@ def main():
             cwd=os.path.join(installation, 'sources'),
         )
 
+        with open(
+            os.path.join(installation, 'sources', 'sources.txt'), 'w'
+        ) as writer:
+            writer.write(
+                '#Source\t#Version\n'
+            )
+            for source in sorted(source_to_download):
+                writer.write(source.replace('=', '\t') + '\n')
+
         if not args.apt_get_source:
             os.makedirs(
                 os.path.join(installation, 'sources', 'pressure-vessel'),

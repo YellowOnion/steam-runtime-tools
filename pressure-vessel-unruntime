@@ -43,7 +43,7 @@ steam_runtime="${STEAM_RUNTIME-}"
 
 declare -a options
 ld_preload=
-options=(--host-fallback)
+options=()
 
 if [ -n "${LD_LIBRARY_PATH-}" ]; then
     options+=("--env-if-host=LD_LIBRARY_PATH=$LD_LIBRARY_PATH")

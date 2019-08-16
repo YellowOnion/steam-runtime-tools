@@ -13,9 +13,20 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_library_get_type@Base 0.20190801.0
  srt_library_issues_get_type@Base 0.20190801.0
  srt_library_symbols_format_get_type@Base 0.20190801.0
+ srt_runtime_issues_get_type@Base 0.20190816.0
+ srt_steam_issues_get_type@Base 0.20190816.0
  srt_system_info_can_run@Base 0.20190801.0
  srt_system_info_can_write_to_uinput@Base 0.20190801.0
  srt_system_info_check_libraries@Base 0.20190802.0
  srt_system_info_check_library@Base 0.20190802.0
+ srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
+ srt_system_info_dup_runtime_path@Base 0.20190816.0
+ srt_system_info_dup_runtime_version@Base 0.20190816.0
+ srt_system_info_dup_steam_installation_path@Base 0.20190816.0
+ srt_system_info_get_runtime_issues@Base 0.20190816.0
+ srt_system_info_get_steam_issues@Base 0.20190816.0
  srt_system_info_get_type@Base 0.20190801.0
  srt_system_info_new@Base 0.20190801.0
+ srt_system_info_set_environ@Base 0.20190816.0
+ srt_system_info_set_expected_runtime_version@Base 0.20190816.0
+ srt_system_info_set_helpers_path@Base 0.20190816.0

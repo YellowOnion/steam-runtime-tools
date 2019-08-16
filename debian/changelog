@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20190816.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Simon McVittie ]
+  * inspect-library: Don't produce malformed JSON if the ABI is not known
+  * library: Guard against not knowing missing or misversioned symbols
+  * library: Set UNKNOWN_EXPECTATIONS issue if we lack a symbols file
+  * bin: Check for shared libraries even if we don't know what to expect
+  * system-info: Look for expectations in /usr/lib/steamrt by default
+  * Add some mechanisms to facilitate design-for-test
+
+  [ Ludovico de Nittis ]
+  * Add checks for problems with the Steam Installation and the Runtime
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 16 Aug 2019 12:38:22 +0100
+
 steam-runtime-tools (0.20190806.0-0+steamrt1.1) scout; urgency=medium
 
   [ Ludovico de Nittis ]

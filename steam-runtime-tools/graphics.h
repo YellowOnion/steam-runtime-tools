@@ -96,12 +96,11 @@ typedef enum
 
 G_STATIC_ASSERT (SRT_N_RENDERING_INTERFACES < 100);
 
-SrtGraphicsIssues srt_check_graphics (const char *multiarch_tuple, SrtWindowSystem window_system, SrtRenderingInterface rendering_interface, SrtGraphics **details_out);
-
 const char *srt_graphics_get_multiarch_tuple (SrtGraphics *self);
 SrtGraphicsIssues srt_graphics_get_issues (SrtGraphics *self);
 SrtWindowSystem srt_graphics_get_window_system (SrtGraphics *self);
 SrtRenderingInterface srt_graphics_get_rendering_interface (SrtGraphics *self);
 const char *srt_graphics_get_version_string (SrtGraphics *self);
 const char *srt_graphics_get_renderer_string (SrtGraphics *self);
+gchar *srt_graphics_dup_parameters_string (SrtGraphics *self);
 

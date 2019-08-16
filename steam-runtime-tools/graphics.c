@@ -236,7 +236,8 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
 }
 
 /**
- * srt_check_graphics:
+ * _srt_check_graphics:
+ * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
  * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
  * @winsys: The window system to check.
  * @renderer: The graphics renderer to check.
@@ -247,8 +248,9 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
  * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
  *  if no problems were found
  */
-SrtGraphicsIssues
-srt_check_graphics (const char *multiarch_tuple,
+G_GNUC_INTERNAL SrtGraphicsIssues
+_srt_check_graphics (const char *helpers_path,
+                     const char *multiarch_tuple,
                      SrtWindowSystem window_system,
                      SrtRenderingInterface rendering_interface,
                      SrtGraphics **details_out)
@@ -265,6 +267,9 @@ srt_check_graphics (const char *multiarch_tuple,
   const gchar *renderer_string = NULL;
   GError *error = NULL;
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  GStrv my_environ = NULL;
+  const gchar *ld_preload;
+  gchar *filtered_preload = NULL;
 
   g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
 
@@ -300,14 +305,28 @@ srt_check_graphics (const char *multiarch_tuple,
 
   if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
     {
-      g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", _srt_get_helpers_path (), multiarch_tuple));
+      if (helpers_path != NULL)
+        {
+          g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", helpers_path, multiarch_tuple));
+        }
+      else
+        {
+          g_ptr_array_add (argv, g_strdup_printf ("%s-wflinfo", multiarch_tuple));
+        }
       g_ptr_array_add (argv, g_strdup_printf ("--platform=%s", platformstring));
       g_ptr_array_add (argv, g_strdup ("--api=gl"));
       g_ptr_array_add (argv, g_strdup ("--format=json"));
     }
   else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
     {
-      g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", _srt_get_helpers_path (), multiarch_tuple));
+      if (helpers_path != NULL)
+        {
+          g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", helpers_path, multiarch_tuple));
+        }
+      else
+        {
+          g_ptr_array_add (argv, g_strdup_printf ("%s-wflinfo", multiarch_tuple));
+        }
       g_ptr_array_add (argv, g_strdup_printf ("--platform=%s", platformstring));
       g_ptr_array_add (argv, g_strdup ("--api=gles2"));
       g_ptr_array_add (argv, g_strdup ("--format=json"));
@@ -318,10 +337,18 @@ srt_check_graphics (const char *multiarch_tuple,
     }
   g_ptr_array_add (argv, NULL);
 
+  my_environ = g_get_environ ();
+  ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
+  if (ld_preload != NULL)
+    {
+      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
+      my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
+    }
+
   if (!g_spawn_sync (NULL,    /* working directory */
                      (gchar **) argv->pdata,
-                     NULL,    /* envp */
-                     0,       /* flags */
+                     my_environ,    /* envp */
+                     G_SPAWN_SEARCH_PATH,       /* flags */
                      NULL,    /* child setup */
                      NULL,    /* user data */
                      &output, /* stdout */
@@ -496,4 +523,25 @@ srt_graphics_get_renderer_string (SrtGraphics *self)
 {
   g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
   return self->renderer_string;
+}
+
+/**
+ * srt_graphics_dup_parameters_string:
+ * @self: a graphics object
+ *
+ * Return a string indicating which window system and rendering interface were
+ * tested, for example "glx/gl" for "desktop" OpenGL on X11 via GLX, or
+ * "egl_x11/glesv2" for OpenGLES v2 on X11 via the Khronos Native Platform
+ * Graphics Interface (EGL).
+ *
+ * Returns: (transfer full): sA string indicating which parameters were tested.
+ *  Free with g_free().
+ */
+gchar *
+srt_graphics_dup_parameters_string (SrtGraphics *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
+  return g_strdup_printf ("%s/%s",
+                          _srt_graphics_window_system_string (self->window_system),
+                          _srt_graphics_rendering_interface_string (self->rendering_interface));
 }

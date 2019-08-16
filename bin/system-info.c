@@ -73,6 +73,11 @@
  *       provided by @library but were available with a different version.
  *       This object will be available only if there are some misversioned
  *       symbols.
+ *
+ * graphics:
+ *   An object. The keys are multiarch tuples like %SRT_ABI_I386,
+ *   as used in Debian and the freedesktop.org SDK runtime.
+ *   The values are objects with more details of the graphics results:
  */
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
@@ -191,6 +196,20 @@ jsonify_library_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_graphics_issues (JsonBuilder *builder,
+                         SrtGraphicsIssues issues)
+{
+  if ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD) != 0)
+    json_builder_add_string_value (builder, "cannot-load");
+
+  if ((issues & SRT_GRAPHICS_ISSUES_INTERNAL_ERROR) != 0)
+    json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING) != 0)
+    json_builder_add_string_value (builder, "software-rendering");
+}
+
+static void
 jsonify_steam_issues (JsonBuilder *builder,
                       SrtSteamIssues issues)
 {
@@ -291,6 +310,37 @@ print_libraries_details (JsonBuilder *builder,
   json_builder_end_object (builder);
 
   return;
+}
+
+static void
+print_graphics_details(JsonBuilder *builder,
+                       GList *graphics_list)
+{
+  json_builder_set_member_name (builder, "graphics-details");
+  json_builder_begin_object (builder);
+  for (GList *g = graphics_list; g != NULL; g = g->next)
+    {
+      gchar *parameters = srt_graphics_dup_parameters_string (g->data);
+
+      json_builder_set_member_name (builder, parameters);
+      json_builder_begin_object (builder);
+
+      json_builder_set_member_name (builder, "renderer");
+      json_builder_add_string_value (builder, srt_graphics_get_renderer_string (g->data));
+      json_builder_set_member_name (builder, "version");
+      json_builder_add_string_value (builder, srt_graphics_get_version_string (g->data));
+
+      if (srt_graphics_get_issues (g->data) != SRT_GRAPHICS_ISSUES_NONE)
+        {
+          json_builder_set_member_name (builder, "issues");
+          json_builder_begin_array (builder);
+          jsonify_graphics_issues (builder, srt_graphics_get_issues (g->data));
+          json_builder_end_array (builder);
+        }
+      json_builder_end_object (builder); // End object for parameters
+      g_free (parameters);
+    }
+  json_builder_end_object (builder); // End garphics-details
 }
 
 int
@@ -414,12 +464,19 @@ main (int argc,
       if (libraries != NULL && (library_issues != SRT_LIBRARY_ISSUES_NONE || verbose))
           print_libraries_details (builder, libraries, verbose);
 
-      json_builder_end_object (builder);
+      GList *graphics_list = srt_system_info_check_all_graphics (info,
+                                                                 multiarch_tuples[i]);
+
+      print_graphics_details (builder, graphics_list);
+
+      json_builder_end_object (builder); // End multiarch_tuple object
       g_list_free_full (libraries, g_object_unref);
+      g_list_free_full (graphics_list, g_object_unref);
     }
 
   json_builder_end_object (builder);
-  json_builder_end_object (builder);
+
+  json_builder_end_object (builder); // End global object
 
   JsonNode *root = json_builder_get_root (builder);
   generator = json_generator_new ();

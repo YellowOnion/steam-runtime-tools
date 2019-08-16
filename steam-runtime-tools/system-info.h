@@ -32,6 +32,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/graphics.h>
 #include <steam-runtime-tools/library.h>
 #include <steam-runtime-tools/runtime.h>
 #include <steam-runtime-tools/steam.h>
@@ -60,6 +61,15 @@ SrtLibraryIssues srt_system_info_check_library (SrtSystemInfo *self,
                                                 const gchar *multiarch_tuple,
                                                 const gchar *soname,
                                                 SrtLibrary **more_details_out);
+
+SrtGraphicsIssues srt_system_info_check_graphics (SrtSystemInfo *self,
+                                                  const char *multiarch_tuple,
+                                                  SrtWindowSystem window_system,
+                                                  SrtRenderingInterface rendering_interface,
+                                                  SrtGraphics **details_out);
+
+GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
+                                         const char *multiarch_tuple);
 
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);

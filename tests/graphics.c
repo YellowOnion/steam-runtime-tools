@@ -33,11 +33,15 @@
 
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/graphics-test-defines.h"
+#include "steam-runtime-tools/system-info.h"
 #include "test-utils.h"
+
+static const char *argv0;
 
 typedef struct
 {
   int unused;
+  gchar *builddir;
 } Fixture;
 
 typedef struct
@@ -50,6 +54,10 @@ setup (Fixture *f,
        gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+  f->builddir = g_strdup (g_getenv ("G_TEST_BUILDDIR"));
+
+  if (f->builddir == NULL)
+    f->builddir = g_path_get_dirname (argv0);
 }
 
 static void
@@ -57,6 +65,8 @@ teardown (Fixture *f,
           gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  g_free (f->builddir);
 }
 
 /*
@@ -113,10 +123,14 @@ test_good_graphics (Fixture *f,
   gchar *renderer;
   gchar *version;
 
-  issues = srt_check_graphics ("mock-good",
-                               SRT_WINDOW_SYSTEM_GLX,
-                               SRT_RENDERING_INTERFACE_GL,
-                               &graphics);
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-good",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
                    SRT_TEST_GOOD_GRAPHICS_RENDERER);
@@ -152,10 +166,14 @@ test_bad_graphics (Fixture *f,
   gchar *renderer;
   gchar *version;
 
-  issues = srt_check_graphics ("mock-bad",
-                               SRT_WINDOW_SYSTEM_GLX,
-                               SRT_RENDERING_INTERFACE_GL,
-                               &graphics);
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-bad",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
   g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
                    NULL);
@@ -191,10 +209,14 @@ test_software_rendering (Fixture *f,
   gchar *renderer;
   gchar *version;
 
-  issues = srt_check_graphics ("mock-software",
-                               SRT_WINDOW_SYSTEM_GLX,
-                               SRT_RENDERING_INTERFACE_GL,
-                               &graphics);
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-software",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING);
   g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
                    SRT_TEST_SOFTWARE_GRAPHICS_RENDERER);
@@ -221,6 +243,8 @@ int
 main (int argc,
       char **argv)
 {
+  argv0 = argv[0];
+
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/object", Fixture, NULL,
               setup, test_object, teardown);

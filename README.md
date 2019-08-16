@@ -287,8 +287,8 @@ Instructions for testing
             itself, or to make it reload an edited `localconfig.vdf`?
 
 * Run the game. If successful, you will get a GUI launcher that lists possible
-    runtimes. Choose one, uncheck "Run in an xterm" for now, and click Run.
-    You should get a game. `pstree -pa` will look something like this:
+    runtimes. Choose one and click Run. You should get a game.
+    `pstree -pa` will look something like this:
 
         |-SteamChildMonit,13109
         |   `-sh,13110 -c...
@@ -376,10 +376,10 @@ configured.
             /opt/pressure-vessel/bin/pressure-vessel-wrap -- ./whatever-game
 
       Optionally add more options before the `--`, such as `--runtime`,
-      `--xterm` and `--interactive`.
+      `--xterm` and `--shell-instead`.
 
     In particular, if the `xterm` can't be launched and you are debugging
-    why, use the `--interactive` option to get a shell in the container.
+    why, use the `--tty` option to get a shell in the container.
 
     If `bwrap` is failing to start up and so you can't get a shell in the
     container at all, construct a simpler-but-simpler `bwrap` command-line
@@ -389,7 +389,7 @@ configured.
     system (if no runtime) contains an `xterm` binary, you can use
     something like:
 
-        /opt/pressure-vessel/bin/pressure-vessel-unruntime --xterm -- %command%
+        /opt/pressure-vessel/bin/pressure-vessel-unruntime --shell-instead -- %command%
 
     to run an xterm containing an interactive shell. The interactive
     shell's current working directory matches the game's, and you can
@@ -398,19 +398,27 @@ configured.
     When ready, run `"$@"` in the interactive shell (with the double
     quotes included!) to run the game.
 
-    Checking "Run in an xterm" in the GUI launcher is the
-    same as `--xterm` on the command-line.
+    Or, use `--shell-after` or `--shell-fail` to try running the game first,
+    and then run a shell afterwards, either unconditionally or only if
+    the command fails.
+
+    Similarly, you can use `--xterm` to make the game's output appear in
+    an xterm without having an interactive shell.
+
+    When you use any of these options, Steam will treat the xterm as part
+    of the game, so you cannot launch the game again from the Steam UI
+    until you have exited from the xterm.
 
 * For interactive testing, if you ran Steam from a shell (not normally
-    valid on SteamOS!), you can use:
+    valid on SteamOS!), you can use something like:
 
-        /opt/pressure-vessel/bin/pressure-vessel-unruntime --interactive -- %command%
+        /opt/pressure-vessel/bin/pressure-vessel-unruntime --tty --shell-instead -- %command%
 
     This is a simpler version of `--xterm`, which uses the terminal from
     which you ran Steam instead of an xterm inside the container.
 
     The interactive shell's current working directory matches the game's.
-    As with `--xterm`, run `"$@"` in the interactive shell to run the game.
+    As with the xterm, run `"$@"` in the interactive shell to run the game.
 
 ### More options
 
@@ -535,8 +543,8 @@ the same as for `flatpak run --filesystem=host` in Flatpak.
 
 ### Interactive debugging
 
-`--interactive` and `--xterm` work by wrapping an increasingly long
-"adverb" command around the command to be run.
+`--tty`, `--xterm` and the `--shell` options work by wrapping an
+increasingly long "adverb" command around the command to be run.
 
 ### Unsharing the home directory
 

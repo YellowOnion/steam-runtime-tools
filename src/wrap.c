@@ -1463,25 +1463,95 @@ wrap_in_xterm (FlatpakBwrap *wrapped_command)
 
   flatpak_bwrap_add_args (wrapped_command,
                           "xterm", "-e",
+                          /* Original command will go here and become
+                           * the argv of xterm -e */
+                          NULL);
+}
+
+typedef enum
+{
+  SHELL_NONE = 0,
+  SHELL_AFTER,
+  SHELL_FAIL,
+  SHELL_INSTEAD
+} Shell;
+
+static void
+wrap_interactive (FlatpakBwrap *wrapped_command,
+                  Shell shell)
+{
+  static const char preamble[] =
+    {
+      "prgname=\"$1\"\n"
+      "shift\n"
+    };
+  const char *script = "";
+  static const char start_shell[] =
+    {
+      "echo\n"
+      "echo\n"
+      "echo\n"
+      "echo \"$1: Starting interactive shell (original command is in "
+      "\\\"\\$@\\\")\"\n"
+      "echo\n"
+      "echo\n"
+      "echo\n"
+      "exec bash -i -s \"$@\"\n"
+    };
+  gchar *command;
+
+  g_return_if_fail (wrapped_command != NULL);
+
+  switch (shell)
+    {
+      case SHELL_NONE:
+        script =
+          "e=0\n"
+          "\"$@\" || e=$?\n"
+          "echo\n"
+          "echo \"Press Enter or ^D to continue...\"\n"
+          "read reply || true\n"
+          "exit \"$e\"\n";
+        break;
+
+      case SHELL_AFTER:
+        script =
+          "e=0\n"
+          "\"$@\" || e=$?\n";
+        break;
+
+      case SHELL_FAIL:
+        script =
+          "if \"$@\"; then exit 0; else e=\"$?\"; fi\n"
+          "echo \"$1: command exit status $e\"\n";
+        break;
+
+      case SHELL_INSTEAD:
+        break;
+
+      default:
+        g_return_if_reached ();
+    }
+
+  command = g_strdup_printf ("%s%s%s",
+                             preamble,
+                             script,
+                             shell == SHELL_NONE ? "" : start_shell);
+
+  flatpak_bwrap_add_args (wrapped_command,
                           "sh", "-euc",
-                          "echo\n"
-                          "echo \"$1: Starting interactive shell "
-                                 "(original command is in "
-                                 "\\\"\\$@\\\")\"\n"
-                          "echo\n"
-                          "shift\n"
-                          "exec \"$@\"\n",
+                          command,
                           "sh",   /* $0 for sh */
                           g_get_prgname (),   /* $1 for sh */
-                          "bash", "-i", "-s",
                           /* Original command will go here and become
+                           * the argv of command, and eventually
                            * the argv of bash -i -s */
                           NULL);
 }
 
 static gboolean
-wrap_interactive (FlatpakBwrap *wrapped_command,
-                  GError **error)
+wrap_tty (FlatpakBwrap *wrapped_command,
+          GError **error)
 {
   int fd;
 
@@ -1514,15 +1584,6 @@ wrap_interactive (FlatpakBwrap *wrapped_command,
     return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stderr");
 
   g_close (fd, NULL);
-
-  flatpak_bwrap_add_args (wrapped_command,
-                          "bash", "-i", "-s",
-                          /* Original command will go here and become
-                           * the argv of bash -i -s */
-                          NULL);
-
-  g_message ("Starting interactive shell "
-             "(original command is in \"$@\"");
   return TRUE;
 }
 
@@ -1532,12 +1593,15 @@ static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
-static gboolean opt_interactive = FALSE;
+static gboolean opt_shell_after = FALSE;
+static gboolean opt_shell_fail = FALSE;
+static gboolean opt_shell_instead = FALSE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime = NULL;
 static gboolean opt_share_home = TRUE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
+static gboolean opt_tty = FALSE;
 static gboolean opt_xterm = FALSE;
 
 static gboolean
@@ -1575,11 +1639,6 @@ static GOptionEntry options[] =
   { "host-ld-preload", 0, 0, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
     "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
     "MODULE" },
-  { "interactive", 0, 0, G_OPTION_ARG_NONE, &opt_interactive,
-    "Run an interactive shell instead of COMMAND. Executing \"$@\" in that "
-    "shell will run COMMAND [ARGS]. This process must have a controlling "
-    "terminal.",
-    NULL },
   { "runtime", 0, 0, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
     "it with the host system's graphics stack.",
@@ -1589,9 +1648,26 @@ static GOptionEntry options[] =
   { "unshare-home", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_share_home,
     "Use an app-specific home directory chosen according to --home, "
     "--freedesktop-app-id, --steam-app-id or $SteamAppId.", NULL },
+  { "shell-after", 0, 0, G_OPTION_ARG_NONE, &opt_shell_after,
+    "Run an interactive shell after COMMAND. Executing \"$@\" in that "
+    "shell will re-run COMMAND [ARGS].",
+    NULL },
+  { "shell-fail", 0, 0, G_OPTION_ARG_NONE, &opt_shell_fail,
+    "Run an interactive shell after COMMAND, but only if it fails.",
+    NULL },
+  { "shell-instead", 0, 0, G_OPTION_ARG_NONE, &opt_shell_instead,
+    "Run an interactive shell instead of COMMAND. Executing \"$@\" in that "
+    "shell will run COMMAND [ARGS].",
+    NULL },
+  { "tty", 0, 0, G_OPTION_ARG_NONE, &opt_tty,
+    "For --shell-after, --shell-fail and --shell-instead, use Steam's "
+    "controlling tty instead of running an xterm.",
+    NULL },
   { "xterm", 0, 0, G_OPTION_ARG_NONE, &opt_xterm,
-    "Same as --interactive, but run the shell in an xterm. xterm(1) "
-    "must be installed in the RUNTIME, if used.", NULL },
+    "Run an xterm which will display the log output from the game. "
+    "Implied by --shell-after, --shell-fail and --shell-instead, "
+    "unless --tty is used.",
+    NULL },
   { "verbose", 0, 0, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
   { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version,
@@ -1680,6 +1756,18 @@ main (int argc,
       goto out;
     }
 
+  if (opt_tty && opt_xterm)
+    {
+      g_printerr ("%s: --tty and --xterm are contradictory\n",
+                  g_get_prgname ());
+      goto out;
+    }
+
+  if ((opt_shell_after || opt_shell_fail || opt_shell_instead) && !opt_tty)
+    {
+      opt_xterm = TRUE;
+    }
+
   if (strcmp (argv[1], "--") == 0)
     {
       argv++;
@@ -1740,7 +1828,7 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
-  if (!opt_interactive)
+  if (!opt_tty)
     {
       int fd;
 
@@ -1808,16 +1896,37 @@ main (int argc,
 
   wrapped_command = flatpak_bwrap_new (NULL);
 
+  if (opt_tty)
+    {
+      g_debug ("Wrapping command to use tty");
+
+      if (!wrap_tty (wrapped_command, error))
+        goto out;
+    }
+
   if (opt_xterm)
     {
       g_debug ("Wrapping command with xterm");
       wrap_in_xterm (wrapped_command);
     }
-  else if (opt_interactive)
+
+  if (opt_shell_instead)
     {
-      g_debug ("Wrapping command with interactive shell");
-      if (!wrap_interactive (wrapped_command, error))
-        goto out;
+      wrap_interactive (wrapped_command, SHELL_INSTEAD);
+    }
+  else if (opt_shell_after)
+    {
+      wrap_interactive (wrapped_command, SHELL_AFTER);
+    }
+  else if (opt_shell_fail)
+    {
+      wrap_interactive (wrapped_command, SHELL_FAIL);
+    }
+  else if (opt_xterm)
+    {
+      /* Just don't let the xterm close before the user has had a chance
+       * to see the output */
+      wrap_interactive (wrapped_command, SHELL_NONE);
     }
 
   if (argv[1][0] == '-')
@@ -1903,7 +2012,7 @@ main (int argc,
   /* Protect the controlling terminal from the app/game, unless we are
    * running an interactive shell in which case that would break its
    * job control. */
-  if (!opt_interactive)
+  if (!opt_tty)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
   if (opt_runtime != NULL)

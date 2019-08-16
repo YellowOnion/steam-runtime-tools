@@ -121,8 +121,22 @@ class Gui:
         row += 1
 
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
-        self.xterm_check.set_active(True)
+        self.xterm_check.set_active(False)
         self.grid.attach(self.xterm_check, 1, row, 1, 1)
+
+        row += 1
+
+        shell_label = Gtk.Label.new('Run an interactive shell')
+        self.grid.attach(shell_label, 0, row, 1, 1)
+
+        self.shell_combo = Gtk.ComboBoxText.new()
+        self.shell_combo.append('', 'No')
+        self.shell_combo.append('--shell-after', 'After running the command')
+        self.shell_combo.append('--shell-fail', 'If the command fails')
+        self.shell_combo.append(
+            '--shell-instead', 'Instead of running the command')
+        self.shell_combo.set_active(0)
+        self.grid.attach(self.shell_combo, 1, row, 1, 1)
 
         row += 1
 
@@ -260,6 +274,11 @@ class Gui:
 
         if self.xterm_check.get_active():
             argv.append('--xterm')
+
+        id = self.shell_combo.get_active_id()
+
+        if id is not None and id != '':
+            argv.append(id)
 
         argv.append('--verbose')
         argv.extend(sys.argv[1:])

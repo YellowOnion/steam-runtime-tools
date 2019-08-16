@@ -104,14 +104,6 @@ class Gui:
 
         row += 1
 
-        self.script_check = Gtk.CheckButton.new_with_label(
-            'Use old shell script version of pressure-vessel-wrap'
-        )
-        self.script_check.set_active(False)
-        self.grid.attach(self.script_check, 1, row, 1, 1)
-
-        row += 1
-
         self.share_home_check = Gtk.CheckButton.new_with_label(
             'Share real home directory'
         )
@@ -243,17 +235,13 @@ class Gui:
     def run_cb(self, _ignored=None):
         # type: (typing.Any) -> None
 
-        if self.script_check.get_active():
-            wrap = 'pressure-vessel-wrap.sh'
-        else:
-            wrap = 'pressure-vessel-wrap'
 
         argv = [
             'env',
             'G_MESSAGES_DEBUG=all',
             os.path.join(
                 os.path.dirname(sys.argv[0]),
-                wrap,
+                'pressure-vessel-wrap'
             ),
         ]
 

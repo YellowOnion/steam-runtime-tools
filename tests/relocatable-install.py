@@ -89,7 +89,6 @@ MULTIARCH = [
 ]
 SCRIPTS = [
     'pressure-vessel-unruntime',
-    'pressure-vessel-wrap.sh',
 ]
 LD_SO = [
     ('x86_64-linux-gnu', '/lib64/ld-linux-x86-64.so.2'),

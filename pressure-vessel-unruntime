@@ -119,10 +119,6 @@ if [ -n "${PRESSURE_VESSEL_WRAP_GUI+set}" ]; then
     exec "${here}/pressure-vessel-test-ui" ${options+"${options[@]}"} "$@"
 fi
 
-if [ -n "${PRESSURE_VESSEL_WRAP_SHELL+set}" ]; then
-    exec "${here}/pressure-vessel-wrap.sh" ${options+"${options[@]}"} "$@"
-fi
-
 exec "$here/pressure-vessel-wrap" ${options+"${options[@]}"} "$@"
 
 # vim:set sw=4 sts=4 et:

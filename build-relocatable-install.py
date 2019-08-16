@@ -95,7 +95,6 @@ SCRIPTS = [
     'pressure-vessel-test-ui',
     'pressure-vessel-unruntime',
     'pressure-vessel-unruntime-test-ui',
-    'pressure-vessel-wrap.sh'
 ]
 EXECUTABLES = [
     'pressure-vessel-wrap'

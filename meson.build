@@ -107,7 +107,6 @@ supported_warning_cflags = c_compiler.get_supported_arguments(project_warning_cf
 add_project_arguments(supported_warning_cflags, language : 'c')
 
 scripts = [
-  'pressure-vessel-wrap.sh',
   'pressure-vessel-test-ui',
   'pressure-vessel-unruntime',
   'pressure-vessel-unruntime-test-ui',

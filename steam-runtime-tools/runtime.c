@@ -156,11 +156,14 @@ _srt_runtime_check (const char *bin32,
   gchar *version_txt = NULL;
   gsize len = 0;
   GError *error = NULL;
-  GStrv environ = NULL;
+  GStrv my_environ = NULL;
 
-  environ = (custom_environ == NULL) ? g_get_environ () : g_strdupv (custom_environ);
+  if (custom_environ == NULL)
+    my_environ = g_get_environ ();
+  else
+    my_environ = g_strdupv (custom_environ);
 
-  env = g_environ_getenv (environ, "STEAM_RUNTIME");
+  env = g_environ_getenv (my_environ, "STEAM_RUNTIME");
 
   if (bin32 != NULL)
     expected_path = g_build_filename (bin32, "steam-runtime", NULL);
@@ -295,12 +298,12 @@ _srt_runtime_check (const char *bin32,
   might_be_stattable (path, "amd64/usr/bin", &amd64_bin);
   might_be_stattable (path, "i386/usr/bin", &i386_bin);
 
-  env = g_environ_getenv (environ, "STEAM_RUNTIME_PREFER_HOST_LIBRARIES");
+  env = g_environ_getenv (my_environ, "STEAM_RUNTIME_PREFER_HOST_LIBRARIES");
 
   if (g_strcmp0 (env, "0") == 0)
     issues |= SRT_RUNTIME_ISSUES_NOT_USING_NEWER_HOST_LIBRARIES;
 
-  env = g_environ_getenv (environ, "LD_LIBRARY_PATH");
+  env = g_environ_getenv (my_environ, "LD_LIBRARY_PATH");
 
   if (env == NULL)
     {
@@ -389,7 +392,7 @@ _srt_runtime_check (const char *bin32,
       g_strfreev (entries);
     }
 
-  env = g_environ_getenv (environ, "PATH");
+  env = g_environ_getenv (my_environ, "PATH");
 
   if (env == NULL)
     {
@@ -452,7 +455,7 @@ out:
   g_free (path);
   g_free (version);
   g_free (version_txt);
-  g_strfreev (environ);
+  g_strfreev (my_environ);
   g_clear_error (&error);
   return issues;
 }

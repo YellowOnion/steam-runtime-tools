@@ -43,6 +43,10 @@ from gi.repository import Gtk
 logger = logging.getLogger('pressure-vessel-test-ui')
 
 
+# This doesn't fully work yet. Hack at own risk.
+CAN_UNSHARE_HOME = False
+
+
 class Gui:
     def __init__(self):
         # type: (...) -> None
@@ -104,13 +108,16 @@ class Gui:
 
         row += 1
 
-        self.share_home_check = Gtk.CheckButton.new_with_label(
-            'Share real home directory'
-        )
-        self.share_home_check.set_active(True)
-        self.grid.attach(self.share_home_check, 1, row, 1, 1)
+        if CAN_UNSHARE_HOME:
+            self.share_home_check = Gtk.CheckButton.new_with_label(
+                'Share real home directory'
+            )
+            self.share_home_check.set_active(True)
+            self.grid.attach(self.share_home_check, 1, row, 1, 1)
 
-        row += 1
+            row += 1
+        else:
+            self.share_home_check = None
 
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
         self.xterm_check.set_active(False)
@@ -255,7 +262,7 @@ class Gui:
             argv.append('--runtime')
             argv.append(os.path.join(id, 'files'))
 
-        if self.share_home_check.get_active():
+        if self.share_home_check is None or self.share_home_check.get_active():
             argv.append('--share-home')
         else:
             argv.append('--unshare-home')

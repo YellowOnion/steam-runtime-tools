@@ -76,6 +76,8 @@ newer libstdc++. This is not yet implemented.
 
 ### Protecting `$HOME`
 
+(This feature is not being actively developed right now.)
+
 If we change the meaning of `/home` for a game to be a fake
 app-specific directory, then the game can't write random files in unknown
 subdirectories of $HOME, and we can be reasonably sure that uninstalling
@@ -435,11 +437,7 @@ interactive shell).
     - `--steam-app-id=70 --unshare-home` (when running from Steam you can use
     `--steam-app-id=${SteamAppId}`, which is the default)
 
-    Unchecking "Share real home directory" in the GUI launcher is the
-    same as `--unshare-home` on the command-line. It is an error to do
-    this without telling `pressure-vessel-wrap` what to use for the home
-    directory, either via `--fake-home`, `--freedesktop-app-id`,
-    `--steam-app-id`, or having the `SteamAppId` environment variable.
+    This feature is not being actively developed right now.
 
 Steam integration
 -----------------
@@ -547,6 +545,8 @@ the same as for `flatpak run --filesystem=host` in Flatpak.
 increasingly long "adverb" command around the command to be run.
 
 ### Unsharing the home directory
+
+(This feature is not being actively developed right now.)
 
 Each game gets a private home directory in `~/.var/app`, the same as
 Flatpak apps do. The name of the private home directory follows the

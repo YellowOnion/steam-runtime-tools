@@ -156,6 +156,9 @@ def main():
         args.prefix = args.destdir + args.prefix
         args.srcdir = args.destdir + args.srcdir
 
+    if args.archive is None and args.output is None:
+        parser.error('Either --archive or --output is required')
+
     if args.version is None:
         with open(os.path.join(args.srcdir, '.tarball-version')) as reader:
             args.version = reader.read().strip()
@@ -207,16 +210,17 @@ def main():
                 v_check_call([
                     'apt-get',
                     'download',
-                    package,
+                    package + ':' + arch.name,
                 ], cwd=tmpdir)
                 v_check_call(
-                    'dpkg-deb -x {}_*.deb build-relocatable'.format(
+                    'dpkg-deb -X {}_*_{}.deb build-relocatable'.format(
                         quote(package),
+                        quote(arch.name),
                     ),
                     cwd=tmpdir,
                     shell=True,
                 )
-                path = '{}/build-relocatable/usr/bin/TOOL'.format(tmpdir)
+                path = '{}/build-relocatable/{}'.format(tmpdir, path)
 
             for tool in LIBCAPSULE_TOOLS:
                 install_exe(
@@ -463,39 +467,40 @@ def main():
             ) as writer:
                 writer.write('{}\n'.format(args.version))
 
-        bin_tar = os.path.join(
-            args.archive,
-            'pressure-vessel-{}-bin.tar.gz'.format(args.version),
-        )
-        src_tar = os.path.join(
-            args.archive,
-            'pressure-vessel-{}-bin+src.tar.gz'.format(args.version),
-        )
+        if args.archive:
+            bin_tar = os.path.join(
+                args.archive,
+                'pressure-vessel-{}-bin.tar.gz'.format(args.version),
+            )
+            src_tar = os.path.join(
+                args.archive,
+                'pressure-vessel-{}-bin+src.tar.gz'.format(args.version),
+            )
 
-        subprocess.check_call([
-            'tar',
-            r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
-                args.version,
-            ),
-            '--exclude=metadata',       # this is all duplicated in sources/
-            '-zcvf', src_tar + '.tmp',
-            '-C', installation,
-            '.',
-        ])
-        subprocess.check_call([
-            'tar',
-            r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
-                args.version,
-            ),
-            '--exclude=sources',
-            '-zcvf', bin_tar + '.tmp',
-            '-C', installation,
-            '.',
-        ])
-        os.rename(bin_tar + '.tmp', bin_tar)
-        os.rename(src_tar + '.tmp', src_tar)
-        print('Generated {}'.format(os.path.abspath(bin_tar)))
-        print('Generated {}'.format(os.path.abspath(src_tar)))
+            subprocess.check_call([
+                'tar',
+                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
+                    args.version,
+                ),
+                '--exclude=metadata',   # this is all duplicated in sources/
+                '-zcvf', src_tar + '.tmp',
+                '-C', installation,
+                '.',
+            ])
+            subprocess.check_call([
+                'tar',
+                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel-{}/,'.format(
+                    args.version,
+                ),
+                '--exclude=sources',
+                '-zcvf', bin_tar + '.tmp',
+                '-C', installation,
+                '.',
+            ])
+            os.rename(bin_tar + '.tmp', bin_tar)
+            os.rename(src_tar + '.tmp', src_tar)
+            print('Generated {}'.format(os.path.abspath(bin_tar)))
+            print('Generated {}'.format(os.path.abspath(src_tar)))
 
 
 if __name__ == '__main__':

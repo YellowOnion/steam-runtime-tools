@@ -135,6 +135,7 @@ class Gui:
         self.shell_combo.append(
             '--shell-instead', 'Instead of running the command')
         self.shell_combo.set_active(0)
+        self.shell_combo.connect('changed', self._shell_changed)
         self.grid.attach(self.shell_combo, 1, row, 1, 1)
 
         row += 1
@@ -156,6 +157,13 @@ class Gui:
         self.grid.attach(buttons_grid, 0, row, 2, 1)
 
         row += 1
+
+    def _shell_changed(self, shell_combo):
+        if shell_combo.get_active_id():
+            self.xterm_check.set_active(True)
+            self.xterm_check.set_sensitive(False)
+        else:
+            self.xterm_check.set_sensitive(True)
 
     def _describe_runtime(
         self,

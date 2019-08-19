@@ -40,7 +40,7 @@ Depends:
 Description: Steam container launcher - cross-architecture dependencies
  pressure-vessel puts Steam games in containers.
  .
- This package encapsulates the i386 cross-architecture dependencies.
+ This package encapsulates the amd64 cross-architecture dependencies.
 
 Package: pressure-vessel-libs-i386
 Architecture: i386

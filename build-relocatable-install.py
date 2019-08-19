@@ -25,6 +25,7 @@
 
 import argparse
 import glob
+import logging
 import os
 import re
 import shutil
@@ -42,6 +43,9 @@ try:
     from shlex import quote
 except ImportError:
     from pipes import quote     # noqa
+
+
+logger = logging.getLogger('pressure-vessel-build-relocatable-install')
 
 
 class Architecture:
@@ -169,6 +173,17 @@ def main():
             "Use 'apt-get source pressure-vessel=VERSION' to download "
             "pressure-vessel's own source code"
         ),
+    )
+    parser.add_argument(
+        '--check-source-directory', default=None, metavar='DIR',
+        help=(
+            'Instead of building a binary + source release tarball, check '
+            'that all required source code is available in DIR'
+        ),
+    )
+    parser.add_argument(
+        '--allow-missing-sources', action='store_true',
+        help='Missing source code is only a warning [default: error]',
     )
     parser.add_argument(
         '--set-version', dest='version', default=None,
@@ -387,7 +402,7 @@ def main():
             + list(PRIMARY_ARCH_DEPENDENCIES.items())
         )
 
-        if args.apt_get_source:
+        if args.apt_get_source or args.check_source_directory is not None:
             get_source.append(
                 ('pressure-vessel-relocatable', 'pressure-vessel'),
             )
@@ -454,16 +469,6 @@ def main():
             os.path.join(installation, 'sources'),
         )
 
-        v_check_call(
-            [
-                'apt-get',
-                '--download-only',
-                '--only-source',
-                'source',
-            ] + list(source_to_download),
-            cwd=os.path.join(installation, 'sources'),
-        )
-
         with open(
             os.path.join(installation, 'sources', 'sources.txt'), 'w'
         ) as writer:
@@ -473,50 +478,93 @@ def main():
             for source in sorted(source_to_download):
                 writer.write(source.replace('=', '\t') + '\n')
 
-        if not args.apt_get_source:
-            os.makedirs(
-                os.path.join(installation, 'sources', 'pressure-vessel'),
-                exist_ok=True,
-            )
+        if args.check_source_directory is None:
+            try:
+                v_check_call(
+                    [
+                        'apt-get',
+                        '--download-only',
+                        '--only-source',
+                        'source',
+                    ] + list(source_to_download),
+                    cwd=os.path.join(installation, 'sources'),
+                )
+            except subprocess.CalledProcessError:
+                if args.allow_missing_sources:
+                    logger.warning(
+                        'Some source packages could not be downloaded')
+                    with open(
+                        os.path.join(installation, 'sources', 'INCOMPLETE'),
+                        'w',
+                    ) as writer:
+                        # nothing to write, just create the file
+                        pass
+                else:
+                    raise
 
-            tar = subprocess.Popen([
-                'tar',
-                '-C', args.srcdir,
-                '--exclude=.*.sw?',
-                '--exclude=./.git',
-                '--exclude=./.mypy_cache',
-                '--exclude=./_build',
-                '--exclude=./debian',
-                '--exclude=./relocatable-install',
-                '-cf-',
-                '.',
-            ], stdout=subprocess.PIPE)
-            subprocess.check_call([
-                'tar',
-                '-C', os.path.join(
-                    installation,
-                    'sources',
-                    'pressure-vessel',
-                ),
-                '-xvf-',
-            ], stdin=tar.stdout)
-
-            if tar.wait() != 0:
-                raise subprocess.CalledProcessError(
-                    returncode=tar.returncode,
-                    cmd=tar.args,
+            if not args.apt_get_source:
+                os.makedirs(
+                    os.path.join(installation, 'sources', 'pressure-vessel'),
+                    exist_ok=True,
                 )
 
-            with open(
-                os.path.join(
-                    installation,
-                    'sources',
-                    'pressure-vessel',
-                    '.tarball-version',
-                ),
-                'w',
-            ) as writer:
-                writer.write('{}\n'.format(args.version))
+                tar = subprocess.Popen([
+                    'tar',
+                    '-C', args.srcdir,
+                    '--exclude=.*.sw?',
+                    '--exclude=./.git',
+                    '--exclude=./.mypy_cache',
+                    '--exclude=./_build',
+                    '--exclude=./debian',
+                    '--exclude=./relocatable-install',
+                    '-cf-',
+                    '.',
+                ], stdout=subprocess.PIPE)
+                subprocess.check_call([
+                    'tar',
+                    '-C', os.path.join(
+                        installation,
+                        'sources',
+                        'pressure-vessel',
+                    ),
+                    '-xvf-',
+                ], stdin=tar.stdout)
+
+                if tar.wait() != 0:
+                    raise subprocess.CalledProcessError(
+                        returncode=tar.returncode,
+                        cmd=tar.args,
+                    )
+
+                with open(
+                    os.path.join(
+                        installation,
+                        'sources',
+                        'pressure-vessel',
+                        '.tarball-version',
+                    ),
+                    'w',
+                ) as writer:
+                    writer.write('{}\n'.format(args.version))
+
+        else:       # args.check_source_directory is not None
+            for source in sorted(source_to_download):
+                package, version = source.split('=')
+
+                if ':' in version:
+                    version = version.split(':', 1)[1]
+
+                filename = os.path.join(
+                    args.check_source_directory,
+                    '{}_{}.dsc'.format(package, version),
+                )
+                if not os.path.exists(filename):
+                    if args.allow_missing_sources:
+                        logger.warning(
+                            'Source code not found in %s', filename)
+                    else:
+                        raise RuntimeError(
+                            'Source code not found in %s', filename)
 
         if args.archive:
             if args.archive_versions:
@@ -528,21 +576,25 @@ def main():
                 args.archive,
                 'pressure-vessel{}-bin.tar.gz'.format(tail),
             )
-            src_tar = os.path.join(
-                args.archive,
-                'pressure-vessel{}-bin+src.tar.gz'.format(tail),
-            )
 
-            subprocess.check_call([
-                'tar',
-                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
-                    tail,
-                ),
-                '--exclude=metadata',   # this is all duplicated in sources/
-                '-zcvf', src_tar + '.tmp',
-                '-C', installation,
-                '.',
-            ])
+            if args.check_source_directory is None:
+                src_tar = os.path.join(
+                    args.archive,
+                    'pressure-vessel{}-bin+src.tar.gz'.format(tail),
+                )
+                subprocess.check_call([
+                    'tar',
+                    r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
+                        tail,
+                    ),
+                    '--exclude=metadata',   # this is all duplicated in sources/
+                    '-zcvf', src_tar + '.tmp',
+                    '-C', installation,
+                    '.',
+                ])
+            else:
+                src_tar = ''
+
             subprocess.check_call([
                 'tar',
                 r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
@@ -554,12 +606,15 @@ def main():
                 '.',
             ])
             os.rename(bin_tar + '.tmp', bin_tar)
-            os.rename(src_tar + '.tmp', src_tar)
             print('Generated {}'.format(os.path.abspath(bin_tar)))
-            print('Generated {}'.format(os.path.abspath(src_tar)))
+
+            if src_tar:
+                os.rename(src_tar + '.tmp', src_tar)
+                print('Generated {}'.format(os.path.abspath(src_tar)))
 
 
 if __name__ == '__main__':
+    logging.basicConfig()
     main()
 
 # vim:set sw=4 sts=4 et:

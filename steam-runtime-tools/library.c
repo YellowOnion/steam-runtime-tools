@@ -460,6 +460,9 @@ _srt_check_library_presence (const char *helpers_path,
   GStrv misversioned_symbols = NULL;
   GStrv dependencies = NULL;
   SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
+  GStrv my_environ = NULL;
+  const gchar *ld_preload;
+  gchar *filtered_preload = NULL;
 
   g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
@@ -492,14 +495,22 @@ _srt_check_library_presence (const char *helpers_path,
   argv[0] = helper;
   g_debug ("Checking library %s integrity with %s", soname, helper);
 
-  if (!g_spawn_sync (NULL,    /* working directory */
+  my_environ = g_get_environ ();
+  ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
+  if (ld_preload != NULL)
+    {
+      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
+      my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
+    }
+
+  if (!g_spawn_sync (NULL,       /* working directory */
                      (gchar **) argv,
-                     NULL,    /* envp */
-                     0,       /* flags */
-                     NULL,    /* child setup */
-                     NULL,    /* user data */
-                     &output, /* stdout */
-                     NULL,    /* stderr */
+                     my_environ, /* envp */
+                     0,          /* flags */
+                     NULL,       /* child setup */
+                     NULL,       /* user data */
+                     &output,    /* stdout */
+                     NULL,       /* stderr */
                      &exit_status,
                      &error))
     {
@@ -595,12 +606,14 @@ out:
   if (parser != NULL)
     g_object_unref (parser);
 
+  g_strfreev (my_environ);
   g_strfreev (missing_symbols);
   g_strfreev (misversioned_symbols);
   g_strfreev (dependencies);
   g_free (absolute_path);
   g_free (helper);
   g_free (output);
+  g_free (filtered_preload);
   g_clear_error (&error);
   return issues;
 }

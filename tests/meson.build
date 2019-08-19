@@ -32,6 +32,7 @@ tests = [
   'library',
   'system-info',
   'system-info-cli',
+  'utils',
 ]
 
 tests_utils = [

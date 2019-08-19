@@ -134,18 +134,55 @@ def main():
     # type: () -> None
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--destdir', default=os.getenv('DESTDIR'))
-    parser.add_argument('--prefix', default=None)
-    parser.add_argument('--srcdir', default=None)
-    parser.add_argument('--output', '-o', default=None)
-    parser.add_argument('--archive', default=None)
-    parser.add_argument('--apt-get-source', action='store_true')
-    parser.add_argument('--set-version', dest='version', default=None)
     parser.add_argument(
-        '--archive-versions', action='store_true', default=True)
+        '--destdir', default=os.getenv('DESTDIR'),
+        help=(
+            'Assume pressure-vessel is installed in DESTDIR instead of '
+            'in the root directory'
+        ),
+    )
+    parser.add_argument(
+        '--prefix', default=None,
+        help=(
+            'Assume pressure-vessel is installed in PREFIX instead of '
+            'in /usr/lib/pressure-vessel-relocatable'
+        ),
+    )
+    parser.add_argument(
+        '--srcdir', default=None,
+        help=(
+            'Assume pressure-vessel source code is installed in SRCDIR '
+            '(relative to PREFIX) instead of finding it automatically'
+        ),
+    )
+    parser.add_argument(
+        '--output', '-o', default=None,
+        help='Write an unpacked binary tree to OUTPUT',
+    )
+    parser.add_argument(
+        '--archive', default=None,
+        help='Write packed source and binary tarballs into ARCHIVE directory',
+    )
+    parser.add_argument(
+        '--apt-get-source', action='store_true',
+        help=(
+            "Use 'apt-get source pressure-vessel=VERSION' to download "
+            "pressure-vessel's own source code"
+        ),
+    )
+    parser.add_argument(
+        '--set-version', dest='version', default=None,
+        help='Assume that pressure-vessel is version VERSION',
+    )
+    parser.add_argument(
+        '--archive-versions', action='store_true', default=True,
+        help='Embed the version of pressure-vessel in the tarballs [default]',
+    )
     parser.add_argument(
         '--no-archive-versions', dest='archive_versions',
-        action='store_false', default=True)
+        action='store_false', default=True,
+        help='Do not embed the version of pressure-vessel in the tarballs',
+    )
     args = parser.parse_args()
 
     if args.srcdir is None:

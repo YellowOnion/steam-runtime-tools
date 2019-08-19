@@ -179,7 +179,8 @@ fake_home_create_structure (FakeHome *f)
 
   if (f->create_steam_symlink)
     {
-      dot_steam_steam = g_build_filename (dot_steam, "steam", NULL);
+      if (dot_steam_steam == NULL)
+        dot_steam_steam = g_build_filename (dot_steam, "steam", NULL);
       symlink = g_file_new_for_path (dot_steam_steam);
 
       g_file_make_symbolic_link (symlink, f->steam_base_folder, NULL, &error);
@@ -248,10 +249,12 @@ fake_home_create_structure (FakeHome *f)
     g_free (run);
     g_free (setup);
     g_free (version);
+    g_free (dot_steam_bin32);
     g_free (dot_steam_steam);
     g_free (local_share);
     g_free (ld_path);
     g_free (prepended_path);
+    g_free (ubuntu12_32);
 
     if (!ret)
       g_warning ("Unable to create directories: %s", g_strerror (saved_errno));

@@ -1,3 +1,15 @@
+steam-runtime-tools (0.20190820.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Simon McVittie ]
+  * runtime: Avoid shadowing POSIX environ
+  * runtime: Fix buffer underrun if version.txt is empty
+
+  [ Ludovico de Nittis ]
+  * fake-home: Fix memory leaks
+  * Filter */gameoverlayrenderer.so from LD_PRELOAD
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 20 Aug 2019 19:19:49 +0100
+
 steam-runtime-tools (0.20190816.0-0+steamrt1.1) scout; urgency=medium
 
   [ Simon McVittie ]

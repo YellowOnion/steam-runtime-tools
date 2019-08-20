@@ -1,3 +1,10 @@
+pressure-vessel (0.20190820.0-0+steamrt1.1) scout; urgency=medium
+
+  * Move Gitlab-CI setup into debian directory
+  * Improve build-relocatable-install
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 20 Aug 2019 18:44:27 +0100
+
 pressure-vessel (0.20190819.0-0+steamrt1.1) scout; urgency=medium
 
   * Initial package

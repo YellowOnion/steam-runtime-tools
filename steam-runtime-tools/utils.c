@@ -98,6 +98,45 @@ out:
   return path;
 }
 
+/**
+ * _srt_filter_gameoverlayrenderer:
+ * @input: The environment variable value that needs to be filtered.
+ *  Usually retrieved with g_environ_getenv ()
+ *
+ * Filter the @input paths list from every path containing `gameoverlayrenderer.so`
+ *
+ * Returns: A newly-allocated string containing all the paths from @input
+ *  except for the ones with `gameoverlayrenderer.so`.
+ *  Free with g_free ().
+ */
+gchar *
+_srt_filter_gameoverlayrenderer (const gchar *input)
+{
+  gchar **entries;
+  gchar **entry;
+  gchar *ret = NULL;
+  GPtrArray *filtered;
+
+  g_return_val_if_fail (input != NULL, NULL);
+
+  entries = g_strsplit (input, ":", 0);
+  filtered = g_ptr_array_new ();
+
+  for (entry = entries; entry != NULL && *entry != NULL; entry++)
+    {
+      if (!g_str_has_suffix (*entry, "/gameoverlayrenderer.so"))
+        g_ptr_array_add (filtered, *entry);
+    }
+
+  g_ptr_array_add (filtered, NULL);
+  ret = g_strjoinv (":", (gchar **) filtered->pdata);
+
+  g_ptr_array_free (filtered, TRUE);
+  g_strfreev (entries);
+
+  return ret;
+}
+
 #if !GLIB_CHECK_VERSION(2, 36, 0)
 static void _srt_constructor (void) __attribute__((__constructor__));
 static void

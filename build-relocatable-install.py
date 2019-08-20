@@ -465,19 +465,19 @@ def main():
         ) as writer:
             writer.write('{}\n'.format(args.version))
 
-        shutil.copytree(
-            os.path.join(installation, 'metadata'),
-            os.path.join(installation, 'sources'),
-        )
-
         with open(
-            os.path.join(installation, 'sources', 'sources.txt'), 'w'
+            os.path.join(installation, 'metadata', 'sources.txt'), 'w'
         ) as writer:
             writer.write(
                 '#Source\t#Version\n'
             )
             for source in sorted(source_to_download):
                 writer.write(source.replace('=', '\t') + '\n')
+
+        shutil.copytree(
+            os.path.join(installation, 'metadata'),
+            os.path.join(installation, 'sources'),
+        )
 
         if args.check_source_directory is None:
             try:

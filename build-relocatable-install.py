@@ -450,6 +450,7 @@ def main():
             writer.write(
                 '#Package[:Architecture]\t#Version\t#Source\t#Installed-Size\n'
             )
+            writer.flush()
             v_check_call([
                 'dpkg-query',
                 '-W',

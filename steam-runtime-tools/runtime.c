@@ -234,7 +234,7 @@ _srt_runtime_check (const char *bin32,
       const char *underscore = strrchr (contents, '_');
 
       /* Remove trailing \n if any */
-      if (contents[len - 1] == '\n')
+      if (len > 0 && contents[len - 1] == '\n')
         contents[--len] = '\0';
 
       if (len != strlen (contents) ||

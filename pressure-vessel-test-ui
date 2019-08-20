@@ -250,7 +250,6 @@ class Gui:
     def run_cb(self, _ignored=None):
         # type: (typing.Any) -> None
 
-
         argv = [
             'env',
             'G_MESSAGES_DEBUG=all',

@@ -1,3 +1,9 @@
+steam-runtime-tools (0.20190820.1-0+steamrt1.1) scout; urgency=medium
+
+  * Fix version number in meson.build
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 20 Aug 2019 19:25:55 +0100
+
 steam-runtime-tools (0.20190820.0-0+steamrt1.1) scout; urgency=medium
 
   [ Simon McVittie ]

@@ -584,10 +584,12 @@ def main():
                 )
                 subprocess.check_call([
                     'tar',
-                    r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
+                    (r'--transform='
+                     r's,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,').format(
                         tail,
                     ),
-                    '--exclude=metadata',   # this is all duplicated in sources/
+                    # metadata/ is all duplicated in sources/
+                    '--exclude=metadata',
                     '-zcvf', src_tar + '.tmp',
                     '-C', installation,
                     '.',
@@ -597,7 +599,8 @@ def main():
 
             subprocess.check_call([
                 'tar',
-                r'--transform=s,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,'.format(
+                (r'--transform='
+                 r's,^\(\.\(/\|$\)\)\?,pressure-vessel{}/,').format(
                     tail,
                 ),
                 '--exclude=sources',

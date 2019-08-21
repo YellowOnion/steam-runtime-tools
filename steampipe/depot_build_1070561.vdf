@@ -15,6 +15,16 @@
 	}
 	"FileMapping"
 	{
+		"LocalPath" "../scout_sdk/Makefile"
+		"DepotPath" "scout"
+	}
+	"FileMapping"
+	{
+		"LocalPath" "../scout_sdk/README.md"
+		"DepotPath" "scout"
+	}
+	"FileMapping"
+	{
 		"LocalPath" "../com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz"
 		"DepotPath" "."
 	}

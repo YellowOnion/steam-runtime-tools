@@ -33,4 +33,9 @@
 		"LocalPath" "../toolmanifest.vdf"
 		"DepotPath" "."
 	}
+	"FileMapping"
+	{
+		"LocalPath" "../README.md"
+		"DepotPath" "."
+	}
 }

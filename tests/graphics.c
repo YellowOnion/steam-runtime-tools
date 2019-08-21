@@ -87,7 +87,7 @@ test_object (Fixture *f,
                                SRT_RENDERING_INTERFACE_GL,
                                SRT_TEST_GOOD_GRAPHICS_RENDERER,
                                SRT_TEST_GOOD_GRAPHICS_VERSION,
-                               SRT_LIBRARY_ISSUES_NONE);
+                               SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpint (srt_graphics_get_issues (graphics), ==,
                    SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (srt_graphics_get_multiarch_tuple (graphics), ==,

@@ -16,12 +16,12 @@
 	"FileMapping"
 	{
 		"LocalPath" "../scout_sdk/Makefile"
-		"DepotPath" "scout"
+		"DepotPath" "scout_sdk"
 	}
 	"FileMapping"
 	{
 		"LocalPath" "../scout_sdk/README.md"
-		"DepotPath" "scout"
+		"DepotPath" "scout_sdk"
 	}
 	"FileMapping"
 	{

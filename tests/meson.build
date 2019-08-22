@@ -29,6 +29,7 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 tests = [
   'architecture',
+  'graphics',
   'library',
   'system-info',
   'system-info-cli',
@@ -92,5 +93,26 @@ foreach test_name : tests
     test(test_name, exe, env : test_env)
   endif
 endforeach
+
+executable(
+  'mock-good-wflinfo',
+  'mock-good-wflinfo.c',
+  install: true,
+  install_dir : tests_dir
+)
+
+executable(
+  'mock-bad-wflinfo',
+  'mock-bad-wflinfo.c',
+  install: true,
+  install_dir : tests_dir
+)
+
+executable(
+  'mock-software-wflinfo',
+  'mock-software-wflinfo.c',
+  install: true,
+  install_dir : tests_dir
+)
 
 # vim:set sw=2 sts=2 et:

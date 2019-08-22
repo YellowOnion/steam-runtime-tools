@@ -23,16 +23,23 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#include <stdio.h>
 
-#define _SRT_IN_SINGLE_HEADER
+#include "../steam-runtime-tools/graphics-test-defines.h"
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/graphics.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
+int
+main (int argc,
+      char **argv)
+{
+  // Give good output
+  printf ("{\n\t\"waffle\": {\n\t\t\"platform\": \"glx\",\n\t\t\"api\": \"gl\"\n\t},\n\t\"OpenGL\": {\n\t\t\"vendor string\": \"Intel Open Source Technology Center\",\n"
+          "\t\t\"renderer string\": \""
+          SRT_TEST_GOOD_GRAPHICS_RENDERER
+          "\",\n\t\t\"version string\": \""
+          SRT_TEST_GOOD_GRAPHICS_VERSION
+          "\",\n\t\t\"shading language version string\": \"1.30\",\n"
+          "\t\t\"extensions\": [\n"
+          "\t\t]\n\t}\n}\n");
+  return 0;
+}
 
-#undef _SRT_IN_SINGLE_HEADER

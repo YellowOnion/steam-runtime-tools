@@ -28,6 +28,8 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 #include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/graphics.h"
+#include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
@@ -128,6 +130,10 @@ typedef struct
   GHashTable *cached_results;
   SrtLibraryIssues cached_combined_issues;
   gboolean libraries_cache_available;
+
+  GHashTable *cached_graphics_results;
+  SrtGraphicsIssues cached_combined_graphics_issues;
+  gboolean graphics_cache_available;
 } Abi;
 
 static Abi *
@@ -154,6 +160,9 @@ ensure_abi (SrtSystemInfo *self,
   abi->cached_results = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
   abi->cached_combined_issues = SRT_LIBRARY_ISSUES_NONE;
   abi->libraries_cache_available = FALSE;
+  abi->cached_graphics_results = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_object_unref);
+  abi->cached_combined_graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
+
   /* transfer ownership to self->abis */
   g_ptr_array_add (self->abis, abi);
   return abi;
@@ -165,6 +174,9 @@ abi_free (gpointer self)
   Abi *abi = self;
   if (abi->cached_results != NULL)
     g_hash_table_unref (abi->cached_results);
+
+  if (abi->cached_graphics_results != NULL)
+    g_hash_table_unref (abi->cached_graphics_results);
 
   g_slice_free (Abi, self);
 }
@@ -400,6 +412,16 @@ static gint
 library_compare (SrtLibrary *a, SrtLibrary *b)
 {
   return g_strcmp0 (srt_library_get_soname (a), srt_library_get_soname (b));
+}
+
+static gint
+graphics_compare (SrtGraphics *a, SrtGraphics *b)
+{
+  int aKey = _srt_graphics_hash_key (srt_graphics_get_window_system (a),
+                                     srt_graphics_get_rendering_interface (a));
+  int bKey = _srt_graphics_hash_key (srt_graphics_get_window_system (b),
+                                     srt_graphics_get_rendering_interface (b));
+  return (aKey < bKey) ? -1 : (aKey > bKey);
 }
 
 static gchar **
@@ -742,6 +764,153 @@ forget_libraries (SrtSystemInfo *self)
     }
 }
 
+/*
+ * Forget cached graphics results.
+ */
+static void
+forget_graphics_results (SrtSystemInfo *self)
+{
+  gsize i;
+
+  for (i = 0; i < self->abis->len; i++)
+    {
+      Abi *abi = g_ptr_array_index (self->abis, i);
+
+      g_hash_table_remove_all (abi->cached_graphics_results);
+      abi->cached_combined_graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
+      abi->graphics_cache_available = FALSE;
+    }
+}
+
+/**
+ * srt_system_info_check_graphics:
+ * @self: The #SrtSystemInfo object to use.
+ * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
+ * @window_system: The window system to check.
+ * @rendering_interface: The graphics renderng interface to check.
+ * @details_out: (out) (optional) (transfer full): Used to return an
+ *  #SrtGraphics object representing the items tested and results.
+ *  Free with `g_object_unref()`.
+ *
+ * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
+ *  if no problems were found.
+ */
+SrtGraphicsIssues
+srt_system_info_check_graphics (SrtSystemInfo *self,
+        const char *multiarch_tuple,
+        SrtWindowSystem window_system,
+        SrtRenderingInterface rendering_interface,
+        SrtGraphics **details_out)
+{
+  Abi *abi = NULL;
+  SrtGraphicsIssues issues;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (multiarch_tuple != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (details_out == NULL || *details_out == NULL,
+                        SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  abi = ensure_abi (self, multiarch_tuple);
+
+  /* If we have the result already in cache, we return it */
+  int hash_key = _srt_graphics_hash_key (window_system, rendering_interface);
+  SrtGraphics *graphics = g_hash_table_lookup (abi->cached_graphics_results, GINT_TO_POINTER(hash_key));
+  if (graphics != NULL)
+    {
+      if (details_out != NULL)
+        *details_out = g_object_ref (graphics);
+      return srt_graphics_get_issues (graphics);
+    }
+
+  graphics = NULL;
+  issues = _srt_check_graphics (self->helpers_path,
+                                multiarch_tuple,
+                                window_system,
+                                rendering_interface,
+                                &graphics);
+  g_hash_table_insert (abi->cached_graphics_results, GINT_TO_POINTER(hash_key), graphics);
+  abi->cached_combined_graphics_issues |= issues;
+  if (details_out != NULL)
+    *details_out = g_object_ref (graphics);
+
+  return issues;
+}
+
+/**
+ * srt_system_info_check_all_graphics:
+ * @self: The #SrtSystemInfo object to use.
+ * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
+*
+ * Check whether various combinations of rendering interface and windowing
+ * system are available. The specific combinations of rendering interface and
+ * windowing system that are returned are not guaranteed, but will include at
+ * least %SRT_RENDERER_GL on %SRT_WINDOW_SYSTEM_GLX. Additional combinations
+ * will be added in future versions of this library.
+ *
+ * Returns: (transfer full): A list of #SrtGraphics objects representing the
+ * items tested and results. Free with 'glist_free_full(list, g_object_unref)`.
+ */
+GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
+    const char *multiarch_tuple)
+{
+  Abi *abi = NULL;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  abi = ensure_abi (self, multiarch_tuple);
+  GList *list = NULL;
+
+  /* If we cached already the result, we return it */
+  if (abi->graphics_cache_available)
+    {
+      list = g_list_sort (g_hash_table_get_values (abi->cached_graphics_results),
+                                    (GCompareFunc) graphics_compare);
+      g_list_foreach (list, (GFunc) G_CALLBACK (g_object_ref), NULL);
+
+      return list;
+    }
+
+  // Try each of glx and gles
+  // Try each window system
+
+  abi->cached_combined_issues |=
+    srt_system_info_check_graphics (self,
+                                    multiarch_tuple,
+                                    SRT_WINDOW_SYSTEM_GLX,
+                                    SRT_RENDERING_INTERFACE_GL,
+                                    NULL);
+
+  abi->cached_combined_issues |=
+    srt_system_info_check_graphics (self,
+                                    multiarch_tuple,
+                                    SRT_WINDOW_SYSTEM_EGL_X11,
+                                    SRT_RENDERING_INTERFACE_GL,
+                                    NULL);
+
+  abi->cached_combined_issues |=
+    srt_system_info_check_graphics (self,
+                                    multiarch_tuple,
+                                    SRT_WINDOW_SYSTEM_GLX,
+                                    SRT_RENDERING_INTERFACE_GLESV2,
+                                    NULL);
+
+  abi->cached_combined_issues |=
+    srt_system_info_check_graphics (self,
+                                    multiarch_tuple,
+                                    SRT_WINDOW_SYSTEM_EGL_X11,
+                                    SRT_RENDERING_INTERFACE_GLESV2,
+                                    NULL);
+
+  abi->graphics_cache_available = TRUE;
+
+  list = g_list_sort (g_hash_table_get_values (abi->cached_graphics_results),
+                      (GCompareFunc) graphics_compare);
+  g_list_foreach (list, (GFunc) G_CALLBACK (g_object_ref), NULL);
+
+  return list;
+}
+
 /**
  * srt_system_info_set_environ:
  * @self: The #SrtSystemInfo
@@ -760,6 +929,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
   forget_libraries (self);
+  forget_graphics_results (self);
   g_strfreev (self->env);
   self->env = g_strdupv ((gchar **) env);
 
@@ -964,6 +1134,7 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
   forget_libraries (self);
+  forget_graphics_results (self);
   free (self->helpers_path);
   self->helpers_path = g_strdup (path);
 }

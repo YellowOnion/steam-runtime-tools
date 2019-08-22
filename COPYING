@@ -24,7 +24,3 @@ The shared library is under the MIT/X11 license:
     CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
     TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
     SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Separate helper executables in the helpers/ directory are under various
-licenses including MIT/X11 and GPL-2.0-or-later. See COPYING.GPL-2 for
-the complete text of the GNU General Public License.

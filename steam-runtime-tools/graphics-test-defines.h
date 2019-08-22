@@ -1,3 +1,4 @@
+/*< internal_header >*/
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -25,14 +26,9 @@
 
 #pragma once
 
-#define _SRT_IN_SINGLE_HEADER
+// Test strings for use in mock and graphics test
+#define SRT_TEST_GOOD_GRAPHICS_RENDERER "Mesa DRI Intel(R) Haswell Desktop "
+#define SRT_TEST_SOFTWARE_GRAPHICS_RENDERER "llvmpipe (LLVM 8.0, 256 bits)"
+#define SRT_TEST_GOOD_GRAPHICS_VERSION "3.0 Mesa 19.1.3"
+#define SRT_TEST_SOFTWARE_GRAPHICS_VERSION "3.1 Mesa 19.1.3"
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/graphics.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
-
-#undef _SRT_IN_SINGLE_HEADER

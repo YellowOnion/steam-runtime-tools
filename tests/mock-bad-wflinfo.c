@@ -23,16 +23,14 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#include <stdio.h>
 
-#define _SRT_IN_SINGLE_HEADER
+int
+main (int argc,
+      char **argv)
+{
+  // Give bad output
+  fprintf (stderr, "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+  return 1;
+}
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/graphics.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
-
-#undef _SRT_IN_SINGLE_HEADER

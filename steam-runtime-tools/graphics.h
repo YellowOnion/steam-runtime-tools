@@ -94,8 +94,6 @@ typedef enum
 
 #define SRT_N_RENDERING_INTERFACES (SRT_RENDERING_INTERFACE_GLESV2 + 1)
 
-G_STATIC_ASSERT (SRT_N_RENDERING_INTERFACES < 100);
-
 const char *srt_graphics_get_multiarch_tuple (SrtGraphics *self);
 SrtGraphicsIssues srt_graphics_get_issues (SrtGraphics *self);
 SrtWindowSystem srt_graphics_get_window_system (SrtGraphics *self);

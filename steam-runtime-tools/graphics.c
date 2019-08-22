@@ -427,6 +427,9 @@ out:
   g_ptr_array_unref (argv);
   g_free (output);
   g_clear_error (&error);
+  g_free (platformstring);
+  g_free (filtered_preload);
+  g_strfreev (my_environ);
   return issues;
 }
 

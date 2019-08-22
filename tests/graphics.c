@@ -107,6 +107,8 @@ test_object (Fixture *f,
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
   g_free (tuple);
+  g_free (renderer);
+  g_free (version);
   g_object_unref (graphics);
 }
 
@@ -151,6 +153,7 @@ test_good_graphics (Fixture *f,
   g_free (version);
 
   g_object_unref (graphics);
+  g_object_unref (info);
 }
 
 /*
@@ -194,6 +197,7 @@ test_bad_graphics (Fixture *f,
   g_free (version);
 
   g_object_unref (graphics);
+  g_object_unref (info);
 }
 
 /*
@@ -237,6 +241,7 @@ test_software_rendering (Fixture *f,
   g_free (version);
 
   g_object_unref (graphics);
+  g_object_unref (info);
 }
 
 int

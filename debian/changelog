@@ -1,3 +1,16 @@
+steam-runtime-tools (0.20190822.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Jeremy Whiting ]
+  * Add SrtGraphics wrapper to check for GL, GLES support
+  * Remove check-gl and check-gles since we changed to using wflinfo
+
+  [ Simon McVittie ]
+  * Minor bug fixes in SrtGraphics
+  * helpers: Depend on waffle-utils-multiarch
+  * CI: Add a build that uses clang, scan-build, ASan and UBSan
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 22 Aug 2019 18:50:26 +0100
+
 steam-runtime-tools (0.20190820.1-0+steamrt1.1) scout; urgency=medium
 
   * Fix version number in meson.build

@@ -1,8 +1,18 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
+ _srt_filter_gameoverlayrenderer@Base 0.20190822.0
  srt_architecture_can_run_i386@Base 0.20190717.0
  srt_architecture_can_run_x86_64@Base 0.20190717.0
  srt_check_library_presence@Base 0.20190801.0
+ srt_graphics_dup_parameters_string@Base 0.20190822.0
+ srt_graphics_get_issues@Base 0.20190822.0
+ srt_graphics_get_multiarch_tuple@Base 0.20190822.0
+ srt_graphics_get_renderer_string@Base 0.20190822.0
+ srt_graphics_get_rendering_interface@Base 0.20190822.0
+ srt_graphics_get_type@Base 0.20190822.0
+ srt_graphics_get_version_string@Base 0.20190822.0
+ srt_graphics_get_window_system@Base 0.20190822.0
+ srt_graphics_issues_get_type@Base 0.20190822.0
  srt_library_get_absolute_path@Base 0.20190801.0
  srt_library_get_dependencies@Base 0.20190801.0
  srt_library_get_issues@Base 0.20190801.0
@@ -13,10 +23,13 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_library_get_type@Base 0.20190801.0
  srt_library_issues_get_type@Base 0.20190801.0
  srt_library_symbols_format_get_type@Base 0.20190801.0
+ srt_rendering_interface_get_type@Base 0.20190822.0
  srt_runtime_issues_get_type@Base 0.20190816.0
  srt_steam_issues_get_type@Base 0.20190816.0
  srt_system_info_can_run@Base 0.20190801.0
  srt_system_info_can_write_to_uinput@Base 0.20190801.0
+ srt_system_info_check_all_graphics@Base 0.20190822.0
+ srt_system_info_check_graphics@Base 0.20190822.0
  srt_system_info_check_libraries@Base 0.20190802.0
  srt_system_info_check_library@Base 0.20190802.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
@@ -30,3 +43,4 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_set_environ@Base 0.20190816.0
  srt_system_info_set_expected_runtime_version@Base 0.20190816.0
  srt_system_info_set_helpers_path@Base 0.20190816.0
+ srt_window_system_get_type@Base 0.20190822.0

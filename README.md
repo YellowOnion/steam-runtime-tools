@@ -310,16 +310,38 @@ Instructions for testing
 * For a more production-ready version without the test UI, set the launch
     options to:
 
+        "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-scout -- %command%"
+
+    This mode does not require Python 3, PyGI, GTK or a normal
+    window manager, and is probably more suitable for Big Picture mode.
+    It assumes this directory layout:
+
+    ```
+    SteamLinuxRuntime
+    \- pressure-vessel
+        \- bin
+            \- pressure-vessel-unruntime-scout (etc.)
+    \- scout
+        \- files
+        \- metadata
+    ```
+
+    Or for more flexibility, use
+
         "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
 
     and then add more options just before the `--` as desired.
     This mode does not require Python 3, PyGI, GTK or a normal
     window manager, and is probably more suitable for Big Picture mode.
 
-* When not using the test UI, the default runtime is the host system,
+* The default runtime for `pressure-vessel-unruntime` is the host system,
     with the `LD_LIBRARY_PATH` Steam Runtime overlaid onto it.
-    You can specify a runtime with the `--runtime` option. It can be
-    any of these:
+    You can specify a runtime with the `--runtime` option:
+    `pressure-vessel-unruntime-scout` is just a shortcut for using
+    `pressure-vessel-unruntime --runtime DIR/../../scout/files` where *DIR*
+    is the directory containing `pressure-vessel-unruntime-scout` itself.
+
+    The runtime can be any of these:
 
     - The `files` subdirectory of a Flatpak-style runtime such as
         `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout` or

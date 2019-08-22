@@ -38,6 +38,7 @@ n=0
 for shell_script in \
         *.sh \
         pressure-vessel-unruntime \
+        pressure-vessel-unruntime-scout \
         pressure-vessel-unruntime-test-ui \
         tests/*.sh \
         ; do

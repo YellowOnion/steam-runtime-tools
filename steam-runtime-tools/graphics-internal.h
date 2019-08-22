@@ -117,6 +117,8 @@ _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interf
     return "gl";
   else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
     return "glesv2";
+  else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
+    return "vulkan";
   return "unknown rendering interface";
 }
 

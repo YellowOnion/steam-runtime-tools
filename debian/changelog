@@ -1,3 +1,10 @@
+pressure-vessel (0.20190822.0-0+steamrt1.1) scout; urgency=medium
+
+  * pressure-vessel-unruntime-scout: Add a shortcut way to select the
+    scout runtime
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 22 Aug 2019 15:46:36 +0100
+
 pressure-vessel (0.20190820.0-0+steamrt1.1) scout; urgency=medium
 
   * Move Gitlab-CI setup into debian directory

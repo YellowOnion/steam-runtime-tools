@@ -847,8 +847,9 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
  * least %SRT_RENDERER_GL on %SRT_WINDOW_SYSTEM_GLX. Additional combinations
  * will be added in future versions of this library.
  *
- * Returns: (transfer full): A list of #SrtGraphics objects representing the
- * items tested and results. Free with 'glist_free_full(list, g_object_unref)`.
+ * Returns: (transfer full) (type SrtGraphics): A list of #SrtGraphics objects
+ * representing the items tested and results.
+ * Free with 'glist_free_full(list, g_object_unref)`.
  */
 GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
     const char *multiarch_tuple)

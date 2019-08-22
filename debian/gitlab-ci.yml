@@ -20,6 +20,35 @@ variables:
         libxcomposite-dev
         meson
 
+stages:
+    - build
+    - test
+
 autopkgtest:
+    stage: test
     variables:
         BUILD_IMAGE: docker.internal.steamos.cloud/steamrt/sdk:scout-latest
+
+ubsan:
+    stage: test
+    image: "${BUILD_IMAGE}"
+    script:
+        - |
+            set -eux
+            export DEBIAN_FRONTEND=noninteractive
+
+            apt-get install -y --no-install-recommends \
+                ccache \
+                clang \
+                clang-tools \
+                ${NULL+}
+
+            export CC=clang
+
+            rm -fr builddir
+            meson \
+                -Db_lundef=false \
+                -Db_sanitize=address,undefined \
+                builddir
+            ninja -C builddir scan-build
+            meson test -C builddir -v

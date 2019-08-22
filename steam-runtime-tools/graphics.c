@@ -30,6 +30,8 @@
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
+#include <string.h>
+
 #include <json-glib/json-glib.h>
 
 /**

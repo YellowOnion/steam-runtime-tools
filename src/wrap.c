@@ -1757,13 +1757,15 @@ static GOptionEntry options[] =
     "but not if it is run with /usr from RUNTIME.", "VAR=VAL" },
   { "freedesktop-app-id", 0, 0, G_OPTION_ARG_STRING, &opt_freedesktop_app_id,
     "Make --unshare-home use ~/.var/app/ID as home directory, where ID "
-    "is com.example.MyApp or similar. This interoperates with Flatpak.",
+    "is com.example.MyApp or similar. This interoperates with Flatpak. "
+    "[Default: $PRESSURE_VESSEL_FDO_APP_ID if set]",
     "ID" },
   { "steam-app-id", 0, 0, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $SteamAppId]", "N" },
   { "home", 0, 0, G_OPTION_ARG_FILENAME, &opt_home,
-    "Use HOME as home directory. Implies --unshare-home.", "HOME" },
+    "Use HOME as home directory. Implies --unshare-home. "
+    "[Default: $PRESSURE_VESSEL_HOME if set]", "HOME" },
   { "host-fallback", 0, 0, G_OPTION_ARG_NONE, &opt_host_fallback,
     "Run COMMAND on the host system if we cannot run it in a container.", NULL },
   { "host-ld-preload", 0, 0, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
@@ -1779,10 +1781,16 @@ static GOptionEntry options[] =
     "[Default: $PRESSURE_VESSEL_RUNTIME_BASE or '.']",
     "BASE" },
   { "share-home", 0, 0, G_OPTION_ARG_NONE, &opt_share_home,
-    "Use the real home directory. [Default]", NULL },
+    "Use the real home directory. "
+    "[Default unless $PRESSURE_VESSEL_HOME is set or "
+    "$PRESSURE_VESSEL_SHARE_HOME is 0]",
+    NULL },
   { "unshare-home", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_share_home,
     "Use an app-specific home directory chosen according to --home, "
-    "--freedesktop-app-id, --steam-app-id or $SteamAppId.", NULL },
+    "--freedesktop-app-id, --steam-app-id or $SteamAppId. "
+    "[Default if $PRESSURE_VESSEL_HOME is set or "
+    "$PRESSURE_VESSEL_SHARE_HOME is 0]",
+    NULL },
   { "shell", 0, 0, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "--shell=after is equivalent to --shell-after, and so on. "
     "[Default: $PRESSURE_VESSEL_SHELL or 'none']",
@@ -1816,6 +1824,24 @@ static GOptionEntry options[] =
     "Print version number and exit.", NULL },
   { NULL }
 };
+
+static gboolean
+boolean_environment (const gchar *name,
+                     gboolean def)
+{
+  const gchar *value = g_getenv (name);
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRUE;
+
+  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
+    return FALSE;
+
+  if (value != NULL)
+    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
+
+  return def;
+}
 
 static void
 cli_log_func (const gchar *log_domain,
@@ -1877,6 +1903,19 @@ main (int argc,
     }
 
   /* Set defaults */
+  opt_freedesktop_app_id = g_strdup (g_getenv ("PRESSURE_VESSEL_FDO_APP_ID"));
+
+  if (opt_freedesktop_app_id != NULL && opt_freedesktop_app_id[0] == '\0')
+    g_clear_pointer (&opt_freedesktop_app_id, g_free);
+
+  opt_home = g_strdup (g_getenv ("PRESSURE_VESSEL_HOME"));
+
+  if (opt_home != NULL && opt_home[0] == '\0')
+    g_clear_pointer (&opt_home, g_free);
+
+  opt_share_home = boolean_environment ("PRESSURE_VESSEL_SHARE_HOME", TRUE);
+  opt_verbose = boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
+
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
                      g_getenv ("PRESSURE_VESSEL_SHELL"), NULL, error))
     goto out;

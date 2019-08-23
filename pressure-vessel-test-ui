@@ -262,9 +262,9 @@ class Gui:
         id = self.runtime_combo.get_active_id()
 
         if id is None:
-            pass
+            argv.append('--runtime=')
         elif id == '/':
-            pass
+            argv.append('--runtime=')
         else:
             argv.append('--runtime')
             argv.append(os.path.join(id, 'files'))

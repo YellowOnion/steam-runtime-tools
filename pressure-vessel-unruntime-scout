@@ -29,12 +29,12 @@
 set -e
 set -o pipefail
 set -u
-shopt -s nullglob
 
 me="$(readlink -f "$0")"
 here="${me%/*}"
 me="${me##*/}"
 
-exec "$here/pressure-vessel-unruntime" --runtime "${here}/../../scout/files" "$@"
+export PRESSURE_VESSEL_RUNTIME="${here}/../../scout/files"
+exec "$here/pressure-vessel-unruntime" "$@"
 
 # vim:set sw=4 sts=4 et:

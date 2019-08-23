@@ -1641,7 +1641,8 @@ static GOptionEntry options[] =
     "MODULE" },
   { "runtime", 0, 0, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
-    "it with the host system's graphics stack.",
+    "it with the host system's graphics stack. The empty string "
+    "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
   { "share-home", 0, 0, G_OPTION_ARG_NONE, &opt_share_home,
     "Use the real home directory. [Default]", NULL },
@@ -1741,6 +1742,9 @@ main (int argc,
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
+
+  if (opt_runtime == NULL)
+    opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
 
   if (opt_version)
     {
@@ -2015,7 +2019,7 @@ main (int argc,
   if (!opt_tty)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
-  if (opt_runtime != NULL)
+  if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       g_debug ("Configuring runtime...");
 
@@ -2110,6 +2114,7 @@ main (int argc,
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
               if (opt_runtime != NULL
+                  && opt_runtime[0] != '\0'
                   && (g_str_has_prefix (preload, "/usr/")
                       || g_str_has_prefix (preload, "/lib")))
                 {
@@ -2178,7 +2183,7 @@ main (int argc,
 
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
-  if (opt_runtime == NULL)
+  if (opt_runtime == NULL && opt_runtime[0] != '\0')
     {
       g_debug ("Making Steam Runtime available...");
 

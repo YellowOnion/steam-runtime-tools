@@ -1593,9 +1593,7 @@ static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
-static gboolean opt_shell_after = FALSE;
-static gboolean opt_shell_fail = FALSE;
-static gboolean opt_shell_instead = FALSE;
+static Shell opt_shell = SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
@@ -1619,6 +1617,69 @@ opt_host_ld_preload_cb (const gchar *option_name,
   g_ptr_array_add (opt_ld_preload, g_steal_pointer (&preload));
 
   return TRUE;
+}
+
+static gboolean
+opt_shell_cb (const gchar *option_name,
+              const gchar *value,
+              gpointer data,
+              GError **error)
+{
+  if (g_strcmp0 (option_name, "--shell-after") == 0)
+    value = "after";
+  else if (g_strcmp0 (option_name, "--shell-fail") == 0)
+    value = "fail";
+  else if (g_strcmp0 (option_name, "--shell-instead") == 0)
+    value = "instead";
+
+  if (value == NULL || *value == '\0')
+    {
+      opt_shell = SHELL_NONE;
+      return TRUE;
+    }
+
+  switch (value[0])
+    {
+      case 'a':
+        if (g_strcmp0 (value, "after") == 0)
+          {
+            opt_shell = SHELL_AFTER;
+            return TRUE;
+          }
+        break;
+
+      case 'f':
+        if (g_strcmp0 (value, "fail") == 0)
+          {
+            opt_shell = SHELL_FAIL;
+            return TRUE;
+          }
+        break;
+
+      case 'i':
+        if (g_strcmp0 (value, "instead") == 0)
+          {
+            opt_shell = SHELL_INSTEAD;
+            return TRUE;
+          }
+        break;
+
+      case 'n':
+        if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
+          {
+            opt_shell = SHELL_NONE;
+            return TRUE;
+          }
+        break;
+
+      default:
+        /* fall through to error */
+        break;
+    }
+
+  g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+               "Unknown choice \"%s\" for %s", value, option_name);
+  return FALSE;
 }
 
 static GOptionEntry options[] =
@@ -1654,14 +1715,18 @@ static GOptionEntry options[] =
   { "unshare-home", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_share_home,
     "Use an app-specific home directory chosen according to --home, "
     "--freedesktop-app-id, --steam-app-id or $SteamAppId.", NULL },
-  { "shell-after", 0, 0, G_OPTION_ARG_NONE, &opt_shell_after,
+  { "shell", 0, 0, G_OPTION_ARG_CALLBACK, opt_shell_cb,
+    "--shell=after is equivalent to --shell-after, and so on. "
+    "[Default: $PRESSURE_VESSEL_SHELL or 'none']",
+    "{none|after|fail|instead}" },
+  { "shell-after", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "Run an interactive shell after COMMAND. Executing \"$@\" in that "
     "shell will re-run COMMAND [ARGS].",
     NULL },
-  { "shell-fail", 0, 0, G_OPTION_ARG_NONE, &opt_shell_fail,
+  { "shell-fail", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "Run an interactive shell after COMMAND, but only if it fails.",
     NULL },
-  { "shell-instead", 0, 0, G_OPTION_ARG_NONE, &opt_shell_instead,
+  { "shell-instead", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "Run an interactive shell instead of COMMAND. Executing \"$@\" in that "
     "shell will run COMMAND [ARGS].",
     NULL },
@@ -1740,6 +1805,11 @@ main (int argc,
       goto out;
     }
 
+  /* Set defaults */
+  if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
+                     g_getenv ("PRESSURE_VESSEL_SHELL"), NULL, error))
+    goto out;
+
   context = g_option_context_new ("[--] COMMAND [ARGS]\n"
                                   "Run COMMAND [ARGS] in a container.\n");
 
@@ -1786,7 +1856,7 @@ main (int argc,
       goto out;
     }
 
-  if ((opt_shell_after || opt_shell_fail || opt_shell_instead) && !opt_tty)
+  if (opt_shell != SHELL_NONE && !opt_tty)
     {
       opt_xterm = TRUE;
     }
@@ -1933,23 +2003,11 @@ main (int argc,
       wrap_in_xterm (wrapped_command);
     }
 
-  if (opt_shell_instead)
+  if (opt_shell != SHELL_NONE || opt_xterm)
     {
-      wrap_interactive (wrapped_command, SHELL_INSTEAD);
-    }
-  else if (opt_shell_after)
-    {
-      wrap_interactive (wrapped_command, SHELL_AFTER);
-    }
-  else if (opt_shell_fail)
-    {
-      wrap_interactive (wrapped_command, SHELL_FAIL);
-    }
-  else if (opt_xterm)
-    {
-      /* Just don't let the xterm close before the user has had a chance
-       * to see the output */
-      wrap_interactive (wrapped_command, SHELL_NONE);
+      /* In the SHELL_NONE case, if opt_xterm, just don't let the xterm
+       * close before the user has had a chance to see the output */
+      wrap_interactive (wrapped_command, opt_shell);
     }
 
   if (argv[1][0] == '-')

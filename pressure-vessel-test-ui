@@ -289,6 +289,8 @@ class Gui:
 
         if id is not None and id != '':
             argv.append(id)
+        else:
+            argv.append('--shell=none')
 
         argv.append('--verbose')
         argv.extend(sys.argv[1:])

@@ -263,10 +263,6 @@ Instructions for testing
         $ ln -s /var/chroots/steamrt_scout_amd64 \
             ~/.steam/root/common/SteamLinuxRuntime/scout-chroot/files
 
-    Note that to use a `chroot` in this way, it must have at least
-    `libc6:amd64` and `libc6:i386` installed. `pressure-vessel` does not
-    currently support containers that do not have both word-sizes.
-
 * Launch a game once without pressure-vessel
 
 * Configure the launch options for the chosen game. Either use the Steam

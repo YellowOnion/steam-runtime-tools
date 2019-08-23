@@ -1172,7 +1172,7 @@ bind_runtime (FlatpakBwrap *bwrap,
       argv[0] = tool_path;
 
       /* This has the side-effect of testing whether we can run binaries
-       * for this architecture */
+       * for this architecture on the host system. */
       ld_so = capture_output (argv, NULL);
 
       if (ld_so != NULL)
@@ -1192,7 +1192,35 @@ bind_runtime (FlatpakBwrap *bwrap,
           g_autofree gchar *this_dri_path_in_container = g_build_filename (libdir_in_container,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
+          g_autofree gchar *ld_so_in_runtime = NULL;
           const gchar *libqual = NULL;
+
+          temp_bwrap = flatpak_bwrap_new (NULL);
+          flatpak_bwrap_add_args (temp_bwrap,
+                                  bwrap->argv->pdata[0],
+                                  NULL);
+
+          if (!bind_usr (temp_bwrap, runtime, "/", error))
+            return FALSE;
+
+          flatpak_bwrap_add_args (temp_bwrap,
+                                  "readlink", "-e", ld_so,
+                                  NULL);
+          flatpak_bwrap_finish (temp_bwrap);
+
+          ld_so_in_runtime = capture_output ((const char * const *) temp_bwrap->argv->pdata,
+                                             NULL);
+
+          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+          if (ld_so_in_runtime == NULL)
+            {
+              g_debug ("Container does not have %s so it cannot run "
+                       "%s binaries", ld_so, multiarch_tuples[i]);
+              continue;
+            }
+
+          g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
 
           search_path_append (dri_path, this_dri_path_in_container);
 
@@ -1225,19 +1253,20 @@ bind_runtime (FlatpakBwrap *bwrap,
           if (!run_bwrap (temp_bwrap, error))
             return FALSE;
 
+          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
           libc = g_build_filename (libdir_on_host, "libc.so.6", NULL);
 
           /* If we are going to use the host system's libc6 (likely)
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autofree gchar *real_path_in_host = NULL;
-              g_autofree gchar *real_path_in_runtime = NULL;
+              g_autofree gchar *ld_so_in_host = NULL;
 
               g_debug ("Making host ld.so visible in container");
 
-              real_path_in_host = flatpak_canonicalize_filename (ld_so);
-              g_debug ("Host path: %s -> %s", ld_so, real_path_in_host);
+              ld_so_in_host = flatpak_canonicalize_filename (ld_so);
+              g_debug ("Host path: %s -> %s", ld_so, ld_so_in_host);
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
@@ -1254,16 +1283,10 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);
 
-              real_path_in_runtime = capture_output ((const char * const *) temp_bwrap->argv->pdata,
-                                                     error);
-
-              if (real_path_in_runtime == NULL)
-                return FALSE;
-
-              g_debug ("Container path: %s -> %s", ld_so, real_path_in_runtime);
+              g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
               flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", real_path_in_host,
-                                      real_path_in_runtime,
+                                      "--ro-bind", ld_so_in_host,
+                                      ld_so_in_runtime,
                                       NULL);
 
               g_debug ("Making host locale data visible in container");

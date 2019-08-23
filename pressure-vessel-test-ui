@@ -283,7 +283,9 @@ class Gui:
             argv.append('--unshare-home')
 
         if self.xterm_check.get_active():
-            argv.append('--xterm')
+            argv.append('--terminal=xterm')
+        else:
+            argv.append('--terminal=none')
 
         id = self.shell_combo.get_active_id()
 

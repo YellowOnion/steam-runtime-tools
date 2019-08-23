@@ -1587,6 +1587,14 @@ wrap_tty (FlatpakBwrap *wrapped_command,
   return TRUE;
 }
 
+typedef enum
+{
+  TERMINAL_NONE = 0,
+  TERMINAL_AUTO,
+  TERMINAL_TTY,
+  TERMINAL_XTERM,
+} Terminal;
+
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
@@ -1600,8 +1608,7 @@ static char *opt_runtime = NULL;
 static gboolean opt_share_home = TRUE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
-static gboolean opt_tty = FALSE;
-static gboolean opt_xterm = FALSE;
+static Terminal opt_terminal = TERMINAL_AUTO;
 
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
@@ -1682,6 +1689,67 @@ opt_shell_cb (const gchar *option_name,
   return FALSE;
 }
 
+static gboolean
+opt_terminal_cb (const gchar *option_name,
+                 const gchar *value,
+                 gpointer data,
+                 GError **error)
+{
+  if (g_strcmp0 (option_name, "--tty") == 0)
+    value = "tty";
+  else if (g_strcmp0 (option_name, "--xterm") == 0)
+    value = "xterm";
+
+  if (value == NULL || *value == '\0')
+    {
+      opt_terminal = TERMINAL_AUTO;
+      return TRUE;
+    }
+
+  switch (value[0])
+    {
+      case 'a':
+        if (g_strcmp0 (value, "auto") == 0)
+          {
+            opt_terminal = TERMINAL_AUTO;
+            return TRUE;
+          }
+        break;
+
+      case 'n':
+        if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
+          {
+            opt_terminal = TERMINAL_NONE;
+            return TRUE;
+          }
+        break;
+
+      case 't':
+        if (g_strcmp0 (value, "tty") == 0)
+          {
+            opt_terminal = TERMINAL_TTY;
+            return TRUE;
+          }
+        break;
+
+      case 'x':
+        if (g_strcmp0 (value, "xterm") == 0)
+          {
+            opt_terminal = TERMINAL_XTERM;
+            return TRUE;
+          }
+        break;
+
+      default:
+        /* fall through to error */
+        break;
+    }
+
+  g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+               "Unknown choice \"%s\" for %s", value, option_name);
+  return FALSE;
+}
+
 static GOptionEntry options[] =
 {
   { "env-if-host", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
@@ -1730,15 +1798,18 @@ static GOptionEntry options[] =
     "Run an interactive shell instead of COMMAND. Executing \"$@\" in that "
     "shell will run COMMAND [ARGS].",
     NULL },
-  { "tty", 0, 0, G_OPTION_ARG_NONE, &opt_tty,
-    "For --shell-after, --shell-fail and --shell-instead, use Steam's "
-    "controlling tty instead of running an xterm.",
-    NULL },
-  { "xterm", 0, 0, G_OPTION_ARG_NONE, &opt_xterm,
-    "Run an xterm which will display the log output from the game. "
-    "Implied by --shell-after, --shell-fail and --shell-instead, "
-    "unless --tty is used.",
-    NULL },
+  { "terminal", 0, 0, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+    "none: disable features that would use a terminal; "
+    "auto: equivalent to xterm if a --shell option is used, or none; "
+    "xterm: put game output (and --shell if used) in an xterm; "
+    "tty: put game output (and --shell if used) on Steam's "
+    "controlling tty "
+    "[Default: $PRESSURE_VESSEL_TERMINAL or 'auto']",
+    "{none|auto|xterm|tty}" },
+  { "tty", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+    "Equivalent to --terminal=tty", NULL },
+  { "xterm", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+    "Equivalent to --terminal=xterm", NULL },
   { "verbose", 0, 0, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
   { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version,
@@ -1810,6 +1881,10 @@ main (int argc,
                      g_getenv ("PRESSURE_VESSEL_SHELL"), NULL, error))
     goto out;
 
+  if (!opt_terminal_cb ("$PRESSURE_VESSEL_TERMINAL",
+                        g_getenv ("PRESSURE_VESSEL_TERMINAL"), NULL, error))
+    goto out;
+
   context = g_option_context_new ("[--] COMMAND [ARGS]\n"
                                   "Run COMMAND [ARGS] in a container.\n");
 
@@ -1849,16 +1924,19 @@ main (int argc,
       goto out;
     }
 
-  if (opt_tty && opt_xterm)
+  if (opt_terminal == TERMINAL_AUTO)
     {
-      g_printerr ("%s: --tty and --xterm are contradictory\n",
-                  g_get_prgname ());
-      goto out;
+      if (opt_shell != SHELL_NONE)
+        opt_terminal = TERMINAL_XTERM;
+      else
+        opt_terminal = TERMINAL_NONE;
     }
 
-  if (opt_shell != SHELL_NONE && !opt_tty)
+  if (opt_terminal == TERMINAL_NONE && opt_shell != SHELL_NONE)
     {
-      opt_xterm = TRUE;
+      g_printerr ("%s: --terminal=none is incompatible with --shell\n",
+                  g_get_prgname ());
+      goto out;
     }
 
   if (strcmp (argv[1], "--") == 0)
@@ -1921,7 +1999,7 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
-  if (!opt_tty)
+  if (opt_terminal != TERMINAL_TTY)
     {
       int fd;
 
@@ -1989,23 +2067,31 @@ main (int argc,
 
   wrapped_command = flatpak_bwrap_new (NULL);
 
-  if (opt_tty)
+  switch (opt_terminal)
     {
-      g_debug ("Wrapping command to use tty");
+      case TERMINAL_TTY:
+        g_debug ("Wrapping command to use tty");
 
-      if (!wrap_tty (wrapped_command, error))
-        goto out;
+        if (!wrap_tty (wrapped_command, error))
+          goto out;
+
+        break;
+
+      case TERMINAL_XTERM:
+        g_debug ("Wrapping command with xterm");
+        wrap_in_xterm (wrapped_command);
+        break;
+
+      case TERMINAL_AUTO:
+      case TERMINAL_NONE:
+      default:
+        /* do nothing */
+        break;
     }
 
-  if (opt_xterm)
+  if (opt_shell != SHELL_NONE || opt_terminal == TERMINAL_XTERM)
     {
-      g_debug ("Wrapping command with xterm");
-      wrap_in_xterm (wrapped_command);
-    }
-
-  if (opt_shell != SHELL_NONE || opt_xterm)
-    {
-      /* In the SHELL_NONE case, if opt_xterm, just don't let the xterm
+      /* In the (SHELL_NONE, TERMINAL_XTERM) case, just don't let the xterm
        * close before the user has had a chance to see the output */
       wrap_interactive (wrapped_command, opt_shell);
     }
@@ -2093,7 +2179,7 @@ main (int argc,
   /* Protect the controlling terminal from the app/game, unless we are
    * running an interactive shell in which case that would break its
    * job control. */
-  if (!opt_tty)
+  if (opt_terminal != TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')

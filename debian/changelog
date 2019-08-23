@@ -1,4 +1,4 @@
-pressure-vessel (0.20190823.0) UNRELEASED; urgency=medium
+pressure-vessel (0.20190823.0) scout; urgency=medium
 
   * Switch to "native" packaging format
   * wrap: Add PRESSURE_VESSEL_RUNTIME, which can force use of a runtime
@@ -12,7 +12,7 @@ pressure-vessel (0.20190823.0) UNRELEASED; urgency=medium
   * wrap: Skip architecture setup for architectures the runtime can't run.
     This means we can use amd64-only or i386-only runtimes.
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 23 Aug 2019 16:39:29 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 23 Aug 2019 16:44:05 +0100
 
 pressure-vessel (0.20190822.0-0+steamrt1.1) scout; urgency=medium
 

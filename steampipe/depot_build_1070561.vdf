@@ -35,6 +35,11 @@
 	}
 	"FileMapping"
 	{
+		"LocalPath" "../run-in-scout"
+		"DepotPath" "."
+	}
+	"FileMapping"
+	{
 		"LocalPath" "../README.md"
 		"DepotPath" "."
 	}

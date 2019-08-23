@@ -823,7 +823,7 @@ run_bwrap (FlatpakBwrap *bwrap,
 
 static gboolean
 try_bind_dri (FlatpakBwrap *bwrap,
-              FlatpakBwrap *run_in_container,
+              FlatpakBwrap *mount_runtime_on_scratch,
               const char *overrides,
               const char *scratch,
               const char *tool_path,
@@ -845,7 +845,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               libdir);
 
       temp_bwrap = flatpak_bwrap_new (NULL);
-      flatpak_bwrap_append_bwrap (temp_bwrap, run_in_container);
+      flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
                               "--container", scratch,
@@ -889,7 +889,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
 
       expr = g_strdup_printf ("path-match:%s", s2tc);
       temp_bwrap = flatpak_bwrap_new (NULL);
-      flatpak_bwrap_append_bwrap (temp_bwrap, run_in_container);
+      flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
                               "--container", scratch,
@@ -1178,7 +1178,7 @@ bind_runtime (FlatpakBwrap *bwrap,
       if (ld_so != NULL)
         {
           g_auto(GStrv) dirs = NULL;
-          g_autoptr(FlatpakBwrap) run_in_container = NULL;
+          g_autoptr(FlatpakBwrap) mount_runtime_on_scratch = NULL;
           g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
           g_autofree gchar *libdir_in_container = g_build_filename ("/overrides",
                                                                     "lib",
@@ -1199,18 +1199,19 @@ bind_runtime (FlatpakBwrap *bwrap,
           g_mkdir_with_parents (libdir_on_host, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
 
-          run_in_container = flatpak_bwrap_new (NULL);
-          flatpak_bwrap_add_args (run_in_container,
+          mount_runtime_on_scratch = flatpak_bwrap_new (NULL);
+          flatpak_bwrap_add_args (mount_runtime_on_scratch,
                                   bwrap->argv->pdata[0],
                                   "--ro-bind", "/", "/",
                                   "--bind", overrides, overrides,
                                   "--tmpfs", scratch,
                                   NULL);
-          if (!bind_usr (run_in_container, runtime, scratch, error))
+          if (!bind_usr (mount_runtime_on_scratch, runtime, scratch,
+                         error))
             return FALSE;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
-          flatpak_bwrap_append_bwrap (temp_bwrap, run_in_container);
+          flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
                                   "--container", scratch,
@@ -1293,8 +1294,9 @@ bind_runtime (FlatpakBwrap *bwrap,
 
           for (j = 0; j < 6; j++)
             {
-              if (!try_bind_dri (bwrap, run_in_container, overrides, scratch,
-                                 tool_path, dirs[j], libdir_on_host, error))
+              if (!try_bind_dri (bwrap, mount_runtime_on_scratch,
+                                 overrides, scratch, tool_path, dirs[j],
+                                 libdir_on_host, error))
                 return FALSE;
             }
         }

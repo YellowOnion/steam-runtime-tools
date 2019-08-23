@@ -34,7 +34,8 @@ me="$(readlink -f "$0")"
 here="${me%/*}"
 me="${me##*/}"
 
-export PRESSURE_VESSEL_RUNTIME="${here}/../../scout/files"
+export PRESSURE_VESSEL_RUNTIME_BASE="${here}/../.."
+export PRESSURE_VESSEL_RUNTIME="scout/files"
 exec "$here/pressure-vessel-unruntime" "$@"
 
 # vim:set sw=4 sts=4 et:

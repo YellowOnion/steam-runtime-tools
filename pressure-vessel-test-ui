@@ -56,13 +56,21 @@ class Gui:
         self.runtimes = {}      # type: typing.Dict[str, str]
 
         for search in (
+            os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
             '..',
             '../..',
         ):
+            if search is None:
+                continue
+
             source_of_runtimes = os.path.join(
                 os.path.dirname(sys.argv[0]),
                 search,
             )
+
+            if not os.path.isdir(source_of_runtimes):
+                continue
+
             for member in os.listdir(source_of_runtimes):
                 path = os.path.realpath(
                     os.path.join(source_of_runtimes, member)

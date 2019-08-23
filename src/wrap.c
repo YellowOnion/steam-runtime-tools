@@ -1597,6 +1597,7 @@ static gboolean opt_shell_after = FALSE;
 static gboolean opt_shell_fail = FALSE;
 static gboolean opt_shell_instead = FALSE;
 static GPtrArray *opt_ld_preload = NULL;
+static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static gboolean opt_share_home = TRUE;
 static gboolean opt_verbose = FALSE;
@@ -1644,6 +1645,10 @@ static GOptionEntry options[] =
     "it with the host system's graphics stack. The empty string "
     "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
+  { "runtime-base", 0, 0, G_OPTION_ARG_FILENAME, &opt_runtime_base,
+    "If a --runtime is a relative path, look for it relative to BASE. "
+    "[Default: $PRESSURE_VESSEL_RUNTIME_BASE or '.']",
+    "BASE" },
   { "share-home", 0, 0, G_OPTION_ARG_NONE, &opt_share_home,
     "Use the real home directory. [Default]", NULL },
   { "unshare-home", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_share_home,
@@ -1745,6 +1750,20 @@ main (int argc,
 
   if (opt_runtime == NULL)
     opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
+
+  if (opt_runtime_base == NULL)
+    opt_runtime_base = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_BASE"));
+
+  if (opt_runtime != NULL
+      && opt_runtime[0] != '\0'
+      && !g_path_is_absolute (opt_runtime)
+      && opt_runtime_base != NULL
+      && opt_runtime_base[0] != '\0')
+    {
+      g_autofree gchar *tmp = g_steal_pointer (&opt_runtime);
+
+      opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
+    }
 
   if (opt_version)
     {
@@ -2303,6 +2322,7 @@ out:
   g_clear_pointer (&opt_steam_app_id, g_free);
   g_clear_pointer (&opt_home, g_free);
   g_clear_pointer (&opt_fake_home, g_free);
+  g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
 
   return ret;

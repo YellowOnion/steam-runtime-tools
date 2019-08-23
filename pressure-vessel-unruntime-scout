@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # pressure-vessel-scout — undo the Steam Runtime's environment and use
 # scout, assuming the layout of the SteamLinuxRuntime depot.
@@ -26,9 +26,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-set -e
-set -o pipefail
-set -u
+set -eu
 
 me="$(readlink -f "$0")"
 here="${me%/*}"

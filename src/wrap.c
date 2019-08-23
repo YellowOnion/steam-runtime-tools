@@ -1609,6 +1609,13 @@ typedef enum
   TERMINAL_XTERM,
 } Terminal;
 
+typedef enum
+{
+  TRISTATE_NO = 0,
+  TRISTATE_YES,
+  TRISTATE_MAYBE
+} Tristate;
+
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
@@ -1619,7 +1626,7 @@ static Shell opt_shell = SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
-static gboolean opt_share_home = TRUE;
+static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static Terminal opt_terminal = TERMINAL_AUTO;
@@ -1764,6 +1771,22 @@ opt_terminal_cb (const gchar *option_name,
   return FALSE;
 }
 
+static gboolean
+opt_share_home_cb (const gchar *option_name,
+                   const gchar *value,
+                   gpointer data,
+                   GError **error)
+{
+  if (g_strcmp0 (option_name, "--share-home") == 0)
+    opt_share_home = TRISTATE_YES;
+  else if (g_strcmp0 (option_name, "--unshare-home") == 0)
+    opt_share_home = TRISTATE_NO;
+  else
+    g_return_val_if_reached (FALSE);
+
+  return TRUE;
+}
+
 static GOptionEntry options[] =
 {
   { "env-if-host", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
@@ -1794,12 +1817,12 @@ static GOptionEntry options[] =
     "If a --runtime is a relative path, look for it relative to BASE. "
     "[Default: $PRESSURE_VESSEL_RUNTIME_BASE or '.']",
     "BASE" },
-  { "share-home", 0, 0, G_OPTION_ARG_NONE, &opt_share_home,
+  { "share-home", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use the real home directory. "
     "[Default unless $PRESSURE_VESSEL_HOME is set or "
     "$PRESSURE_VESSEL_SHARE_HOME is 0]",
     NULL },
-  { "unshare-home", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_share_home,
+  { "unshare-home", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use an app-specific home directory chosen according to --home, "
     "--freedesktop-app-id, --steam-app-id or $SteamAppId. "
     "[Default if $PRESSURE_VESSEL_HOME is set or "
@@ -1855,6 +1878,23 @@ boolean_environment (const gchar *name,
     g_warning ("Unrecognised value \"%s\" for $%s", value, name);
 
   return def;
+}
+
+static Tristate
+tristate_environment (const gchar *name)
+{
+  const gchar *value = g_getenv (name);
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRISTATE_YES;
+
+  if (g_strcmp0 (value, "0") == 0)
+    return TRISTATE_NO;
+
+  if (value != NULL && value[0] != '\0')
+    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
+
+  return TRISTATE_MAYBE;
 }
 
 static void
@@ -1927,7 +1967,7 @@ main (int argc,
   if (opt_home != NULL && opt_home[0] == '\0')
     g_clear_pointer (&opt_home, g_free);
 
-  opt_share_home = boolean_environment ("PRESSURE_VESSEL_SHARE_HOME", TRUE);
+  opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
   opt_verbose = boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
@@ -2000,11 +2040,15 @@ main (int argc,
 
   home = g_get_home_dir ();
 
-  if (opt_home)
+  if (opt_share_home == TRISTATE_YES)
+    {
+      opt_fake_home = NULL;
+    }
+  else if (opt_home)
     {
       opt_fake_home = g_strdup (opt_home);
     }
-  else if (opt_share_home)
+  else if (opt_share_home == TRISTATE_MAYBE)
     {
       opt_fake_home = NULL;
     }

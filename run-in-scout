@@ -32,6 +32,10 @@ me="$(readlink -f "$0")"
 here="${me%/*}"
 me="${me##*/}"
 
+if [ "x${STEAM_RUNTIME_CONTAINER_TEST-}" = x1 ]; then
+    export PRESSURE_VESSEL_WRAP_GUI=1
+fi
+
 export PRESSURE_VESSEL_RUNTIME_BASE="${here}"
 export PRESSURE_VESSEL_RUNTIME="scout/files"
 exec "$here/pressure-vessel/bin/pressure-vessel-unruntime" "$@"

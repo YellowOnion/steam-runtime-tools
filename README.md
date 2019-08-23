@@ -1,9 +1,30 @@
 Container based Steam Runtime
 =============================
 
-This experimental container-based release of the 'scout' Steam Runtime is enabled on a per-title basis by forcing it's use in the title's Properties dialog.
+This experimental container-based release of the 'scout' Steam Runtime
+is enabled on a per-title basis by forcing its use in the title's
+Properties dialog.
 
-The Steam Client will understand the following environment variables:
+Its behaviour can be changed by running the Steam client with environment
+variables set:
 
-STEAM_RUNTIME_CONTAINER_TEST=1 will spawn a 'test mode' dialog allowing you to select a different runtime and set various options.
-STEAM_RUNTIME_CONTAINER_ALL=1 will force the container runtime on all titles.
+* `PRESSURE_VESSEL_WRAP_GUI=1` or `STEAM_RUNTIME_CONTAINER_TEST=1` will
+    spawn a 'test mode' dialog allowing you to select a different runtime
+    and set various options. This developer tool requires Python 3, PyGI,
+    GTK 3 and the GTK 3 GObject-Introspection bindings
+    (`apt install python3-gi gir1.2-gtk-3.0` on Debian-derived
+    distributions like Ubuntu and SteamOS).
+
+* `STEAM_RUNTIME_CONTAINER_ALWAYS=1` will force the container runtime to
+    be used for all titles.
+
+Some more advanced environment variables (subject to change):
+
+* `PRESSURE_VESSEL_RUNTIME=scout_sdk/files` uses a SDK version of the
+    runtime with extra debugging tools. This needs some setup to be done
+    first: see scout_sdk/README.md for details.
+
+* `PRESSURE_VESSEL_SHELL=instead` runs an interactive shell in the
+    container instead of running the game.
+
+* See the pressure-vessel source code for more.

@@ -1321,12 +1321,12 @@ bind_runtime (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
-/* Order matters here: root is a symlink to the root of the Steam
- * installation, so we want to bind-mount its target before we deal
- * with the rest. */
+/* Order matters here: root, steam and steambeta are or might be symlinks
+ * to the root of the Steam installation, so we want to bind-mount their
+ * targets before we deal with the rest. */
 static const char * const steam_api_subdirs[] =
 {
-  "root", "bin", "bin32", "bin64", "sdk32", "sdk64", "steam", "steambeta"
+  "root", "steam", "steambeta", "bin", "bin32", "bin64", "sdk32", "sdk64",
 };
 
 static gboolean
@@ -1413,15 +1413,29 @@ use_fake_home (FlatpakBwrap *bwrap,
     {
       g_autofree gchar *dir = g_build_filename (real_home, ".steam",
                                                 steam_api_subdirs[i], NULL);
+      g_autofree gchar *mount_point = g_build_filename (fake_home, ".steam",
+                                                        steam_api_subdirs[i],
+                                                        NULL);
       g_autofree gchar *target = NULL;
 
       target = glnx_readlinkat_malloc (-1, dir, NULL, NULL);
 
       if (target != NULL)
         {
+          /* We used to bind-mount these directories, so transition them
+           * to symbolic links if we can. */
+          if (rmdir (mount_point) != 0 && errno != ENOENT && errno != ENOTDIR)
+            g_debug ("rmdir %s: %s", mount_point, g_strerror (errno));
+
+          /* Remove any symlinks that might have already been there. */
+          if (unlink (mount_point) != 0 && errno != ENOENT)
+            g_debug ("unlink %s: %s", mount_point, g_strerror (errno));
+
           flatpak_bwrap_add_args (bwrap, "--symlink", target, dir, NULL);
 
-          if (strcmp (steam_api_subdirs[i], "root") == 0)
+          if (strcmp (steam_api_subdirs[i], "root") == 0
+              || strcmp (steam_api_subdirs[i], "steam") == 0
+              || strcmp (steam_api_subdirs[i], "steambeta") == 0)
             {
               flatpak_bwrap_add_args (bwrap,
                                       "--ro-bind", target, target,

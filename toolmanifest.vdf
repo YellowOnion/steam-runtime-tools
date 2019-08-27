@@ -1,5 +1,4 @@
 "manifest"
 {
-  "commandline_runtime_default" "/pressure-vessel/bin/pressure-vessel-unruntime -- "
-  "commandline_runtime_test" "/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- "
+  "commandline" "/run-in-scout -- "
 }

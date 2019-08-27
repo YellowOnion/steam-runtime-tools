@@ -78,6 +78,35 @@
  *   An object. The keys are multiarch tuples like %SRT_ABI_I386,
  *   as used in Debian and the freedesktop.org SDK runtime.
  *   The values are objects with more details of the graphics results:
+ *
+ * locale-issues:
+ *  A string array listing locale-related issues.
+ *
+ * locales:
+ *  An object. The keys are either `<default>` (representing passing
+ *  the empty string to `setlocale()`), or locale names that can be
+ *  requested with `setlocale()`. They will include at least `C`,
+ *  `C.UTF-8`, `en_US.UTF-8` and `<default>`, and may include more
+ *  in future versions of steam-runtime-tools. The values are objects
+ *  containing either:
+ *
+ *    error:
+ *      A string: The error that was encountered when trying to
+ *      set this locale
+ *    error-domain:
+ *      A string: The GError domain
+ *    error-code:
+ *      An integer: The GError code
+ *
+ *  or:
+ *
+ *    resulting-name:
+ *      A string: the locale name as returned by setlocale(), if
+ *      different
+ *    charset:
+ *      A string: the character set
+ *    is_utf8:
+ *      A boolean: whether the character set is UTF-8
  */
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
@@ -259,6 +288,26 @@ jsonify_runtime_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_locale_issues (JsonBuilder *builder,
+                       SrtLocaleIssues issues)
+{
+  if ((issues & SRT_LOCALE_ISSUES_INTERNAL_ERROR) != 0)
+    json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_LOCALE_ISSUES_DEFAULT_MISSING) != 0)
+    json_builder_add_string_value (builder, "default-missing");
+
+  if ((issues & SRT_LOCALE_ISSUES_DEFAULT_NOT_UTF8) != 0)
+    json_builder_add_string_value (builder, "default-not-utf8");
+
+  if ((issues & SRT_LOCALE_ISSUES_C_UTF8_MISSING) != 0)
+    json_builder_add_string_value (builder, "c-utf8-missing");
+
+  if ((issues & SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING) != 0)
+    json_builder_add_string_value (builder, "en-us-utf8-missing");
+}
+
+static void
 print_libraries_details (JsonBuilder *builder,
                          GList *libraries,
                          gboolean verbose)
@@ -343,6 +392,14 @@ print_graphics_details(JsonBuilder *builder,
   json_builder_end_object (builder); // End garphics-details
 }
 
+static const char * const locales[] =
+{
+  "",
+  "C",
+  "C.UTF-8",
+  "en_US.UTF-8",
+};
+
 int
 main (int argc,
       char **argv)
@@ -353,6 +410,7 @@ main (int argc,
   SrtLibraryIssues library_issues = SRT_LIBRARY_ISSUES_NONE;
   SrtSteamIssues steam_issues = SRT_STEAM_ISSUES_NONE;
   SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
+  SrtLocaleIssues locale_issues = SRT_LOCALE_ISSUES_NONE;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
@@ -472,6 +530,57 @@ main (int argc,
       json_builder_end_object (builder); // End multiarch_tuple object
       g_list_free_full (libraries, g_object_unref);
       g_list_free_full (graphics_list, g_object_unref);
+    }
+
+  json_builder_end_object (builder);
+
+  json_builder_set_member_name (builder, "locale-issues");
+  json_builder_begin_array (builder);
+  locale_issues = srt_system_info_get_locale_issues (info);
+  jsonify_locale_issues (builder, locale_issues);
+  json_builder_end_array (builder);
+
+  json_builder_set_member_name (builder, "locales");
+  json_builder_begin_object (builder);
+
+  for (gsize i = 0; i < G_N_ELEMENTS (locales); i++)
+    {
+      SrtLocale *locale = srt_system_info_check_locale (info, locales[i],
+                                                        &error);
+
+      if (locales[i][0] == '\0')
+        json_builder_set_member_name (builder, "<default>");
+      else
+        json_builder_set_member_name (builder, locales[i]);
+
+      json_builder_begin_object (builder);
+
+      if (locale != NULL)
+        {
+          json_builder_set_member_name (builder, "resulting-name");
+          json_builder_add_string_value (builder,
+                                         srt_locale_get_resulting_name (locale));
+          json_builder_set_member_name (builder, "charset");
+          json_builder_add_string_value (builder,
+                                         srt_locale_get_charset (locale));
+          json_builder_set_member_name (builder, "is_utf8");
+          json_builder_add_boolean_value (builder,
+                                          srt_locale_is_utf8 (locale));
+        }
+      else
+        {
+          json_builder_set_member_name (builder, "error-domain");
+          json_builder_add_string_value (builder,
+                                         g_quark_to_string (error->domain));
+          json_builder_set_member_name (builder, "error-code");
+          json_builder_add_int_value (builder, error->code);
+          json_builder_set_member_name (builder, "error");
+          json_builder_add_string_value (builder, error->message);
+        }
+
+      json_builder_end_object (builder);
+      g_clear_object (&locale);
+      g_clear_error (&error);
     }
 
   json_builder_end_object (builder);

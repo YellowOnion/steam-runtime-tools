@@ -31,6 +31,7 @@ tests = [
   'architecture',
   'graphics',
   'library',
+  'locale',
   'system-info',
   'system-info-cli',
   'utils',
@@ -93,6 +94,49 @@ foreach test_name : tests
     test(test_name, exe, env : test_env)
   endif
 endforeach
+
+# A mock implementation of check-locale that offers lots of locales
+executable(
+  'mock-check-locale',
+  join_paths('..', 'helpers', 'check-locale.c'),
+  c_args : [
+    '-DMOCK_CHECK_LOCALE',
+    '-DMOCK_CHECK_LOCALE_HAVE_C_UTF8',
+    '-DMOCK_CHECK_LOCALE_HAVE_EN_US',
+  ],
+  dependencies : [glib, json_glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir : tests_dir
+)
+
+# A mock implementation of check-locale that emulates a system where
+# the current locale is not UTF-8 and the C.UTF-8 locale is missing
+executable(
+  'mock-legacy-check-locale',
+  join_paths('..', 'helpers', 'check-locale.c'),
+  c_args : [
+    '-DMOCK_CHECK_LOCALE',
+    '-DMOCK_CHECK_LOCALE_HAVE_EN_US',
+    '-DMOCK_CHECK_LOCALE_LEGACY',
+  ],
+  dependencies : [glib, json_glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir : tests_dir
+)
+
+# A mock implementation of check-locale that emulates a system where
+# the en_US.UTF-8 and en_US locales are not available
+executable(
+  'mock-unamerican-check-locale',
+  join_paths('..', 'helpers', 'check-locale.c'),
+  c_args : ['-DMOCK_CHECK_LOCALE', '-DMOCK_CHECK_LOCALE_HAVE_C_UTF8'],
+  dependencies : [glib, json_glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir : tests_dir
+)
 
 executable(
   'mock-good-wflinfo',

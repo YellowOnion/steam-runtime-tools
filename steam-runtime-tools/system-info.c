@@ -31,6 +31,7 @@
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/library-internal.h"
+#include "steam-runtime-tools/locale-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -87,6 +88,16 @@ struct _SrtSystemInfo
   /* Path to find helper executables, or %NULL to use $SRT_HELPERS_PATH
    * or the installed helpers */
   gchar *helpers_path;
+  /* Multiarch tuple to use for helper executables in cases where it
+   * shouldn't matter, or %NULL to use the compiled-in default */
+  GQuark primary_multiarch_tuple;
+  struct
+  {
+    /* GQuark => MaybeLocale */
+    GHashTable *cached_locales;
+    SrtLocaleIssues issues;
+    gboolean have_issues;
+  } locales;
   struct
   {
     /* path != NULL or issues != NONE indicates we have already checked
@@ -122,6 +133,46 @@ enum {
 };
 
 G_DEFINE_TYPE (SrtSystemInfo, srt_system_info, G_TYPE_OBJECT)
+
+typedef struct
+{
+  SrtLocale *locale;
+  GError *error;
+} MaybeLocale;
+
+static MaybeLocale *
+maybe_locale_new_positive (SrtLocale *locale)
+{
+  MaybeLocale *self;
+
+  g_return_val_if_fail (SRT_IS_LOCALE (locale), NULL);
+
+  self = g_slice_new0 (MaybeLocale);
+  self->locale = g_object_ref (locale);
+  return self;
+}
+
+static MaybeLocale *
+maybe_locale_new_negative (GError *error)
+{
+  MaybeLocale *self;
+  
+  g_return_val_if_fail (error != NULL, NULL);
+
+  self = g_slice_new0 (MaybeLocale);
+  self->error = g_error_copy (error);
+  return self;
+}
+
+static void
+maybe_locale_free (gpointer p)
+{
+  MaybeLocale *self = p;
+
+  g_clear_object (&self->locale);
+  g_clear_error (&self->error);
+  g_slice_free (MaybeLocale, self);
+}
 
 typedef struct
 {
@@ -231,6 +282,17 @@ srt_system_info_set_property (GObject *object,
 }
 
 /*
+ * Forget any cached information about locales.
+ */
+static void
+forget_locales (SrtSystemInfo *self)
+{
+  g_clear_pointer (&self->locales.cached_locales, g_hash_table_unref);
+  self->locales.issues = SRT_LOCALE_ISSUES_NONE;
+  self->locales.have_issues = FALSE;
+}
+
+/*
  * Forget any cached information about the Steam Runtime.
  */
 static void
@@ -259,6 +321,7 @@ srt_system_info_finalize (GObject *object)
 {
   SrtSystemInfo *self = SRT_SYSTEM_INFO (object);
 
+  forget_locales (self);
   forget_runtime (self);
   forget_steam (self);
 
@@ -931,6 +994,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 
   forget_libraries (self);
   forget_graphics_results (self);
+  forget_locales (self);
   g_strfreev (self->env);
   self->env = g_strdupv ((gchar **) env);
 
@@ -1136,6 +1200,187 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
 
   forget_libraries (self);
   forget_graphics_results (self);
+  forget_locales (self);
   free (self->helpers_path);
   self->helpers_path = g_strdup (path);
+}
+
+/**
+ * srt_system_info_get_primary_multiarch_tuple:
+ * @self: The #SrtSystemInfo
+ *
+ * Return the multiarch tuple set by
+ * srt_system_info_set_primary_multiarch_tuple() if any,
+ * or the multiarch tuple corresponding to the steam-runtime-tools
+ * library itself.
+ *
+ * Returns: (type filename) (transfer none): a Debian-style multiarch
+ *  tuple such as %SRT_ABI_I386 or %SRT_ABI_X86_64
+ */
+const char *
+srt_system_info_get_primary_multiarch_tuple (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (self->primary_multiarch_tuple != 0)
+    return g_quark_to_string (self->primary_multiarch_tuple);
+
+  if (strcmp (_SRT_MULTIARCH, "") == 0)
+    /* This won't *work* but at least it's non-empty... */
+    return "UNKNOWN";
+
+  return _SRT_MULTIARCH;
+}
+
+/**
+ * srt_system_info_set_primary_multiarch_tuple:
+ * @self: The #SrtSystemInfo
+ * @tuple: (nullable) (type filename) (transfer none): A Debian-style
+ *  multiarch tuple
+ *
+ * Use helper executables prefixed with the given string in situations
+ * where the architecture does not matter, such as checking locales.
+ * This is mostly useful as a way to substitute a mock implementation
+ * during regression tests.
+ *
+ * If @path is %NULL, go back to using the compiled-in default.
+ */
+void
+srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
+                                             const gchar *tuple)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  forget_locales (self);
+  self->primary_multiarch_tuple = g_quark_from_string (tuple);
+}
+
+/**
+ * srt_system_info_get_locale_issues:
+ * @self: The #SrtSystemInfo
+ *
+ * Check that the locale specified by environment variables, and some
+ * other commonly-assumed locales, are available and suitable.
+ *
+ * Returns: A summary of issues found, or %SRT_LOCALE_ISSUES_NONE
+ *  if no problems are detected
+ */
+SrtLocaleIssues
+srt_system_info_get_locale_issues (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
+                        SRT_LOCALE_ISSUES_INTERNAL_ERROR);
+
+  if (!self->locales.have_issues)
+    {
+      SrtLocale *locale = NULL;
+
+      self->locales.issues = SRT_LOCALE_ISSUES_NONE;
+
+      locale = srt_system_info_check_locale (self, "", NULL);
+
+      if (locale == NULL)
+        self->locales.issues |= SRT_LOCALE_ISSUES_DEFAULT_MISSING;
+      else if (!srt_locale_is_utf8 (locale))
+        self->locales.issues |= SRT_LOCALE_ISSUES_DEFAULT_NOT_UTF8;
+
+      g_clear_object (&locale);
+
+      locale = srt_system_info_check_locale (self, "C.UTF-8", NULL);
+
+      if (locale == NULL || !srt_locale_is_utf8 (locale))
+        self->locales.issues |= SRT_LOCALE_ISSUES_C_UTF8_MISSING;
+
+      g_clear_object (&locale);
+
+      locale = srt_system_info_check_locale (self, "en_US.UTF-8", NULL);
+
+      if (locale == NULL || !srt_locale_is_utf8 (locale))
+        self->locales.issues |= SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING;
+
+      g_clear_object (&locale);
+
+      self->locales.have_issues = TRUE;
+    }
+
+  return self->locales.issues;
+}
+
+/**
+ * srt_system_info_check_locale:
+ * @self: The #SrtSystemInfo
+ * @requested_name: The locale to request, for example `en_US.UTF-8`.
+ *  This may be the empty string or %NULL to request the empty string
+ *  as a locale, which uses environment variables like `$LC_ALL`.
+ * @error: Used to return an error on failure
+ *
+ * Check whether the given locale can be set successfully.
+ *
+ * Returns: (transfer full) (nullable): A #SrtLocale object, or %NULL
+ *  if the requested locale could not be set.
+ *  Free with g_object_unref() if non-%NULL.
+ */
+SrtLocale *
+srt_system_info_check_locale (SrtSystemInfo *self,
+                              const char *requested_name,
+                              GError **error)
+{
+  GQuark quark = 0;
+  gpointer value = NULL;
+  MaybeLocale *maybe;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (requested_name == NULL)
+    quark = g_quark_from_string ("");
+  else
+    quark = g_quark_from_string (requested_name);
+
+  if (self->locales.cached_locales == NULL)
+    self->locales.cached_locales = g_hash_table_new_full (NULL, NULL, NULL,
+                                                          maybe_locale_free);
+
+  if (g_hash_table_lookup_extended (self->locales.cached_locales,
+                                    GUINT_TO_POINTER (quark),
+                                    NULL,
+                                    &value))
+    {
+      maybe = value;
+    }
+  else
+    {
+      GError *local_error = NULL;
+      SrtLocale *locale = NULL;
+
+      locale = _srt_check_locale (self->helpers_path,
+                                  srt_system_info_get_primary_multiarch_tuple (self),
+                                  g_quark_to_string (quark),
+                                  &local_error);
+
+      if (locale != NULL)
+        maybe = maybe_locale_new_positive (locale);
+      else
+        maybe = maybe_locale_new_negative (local_error);
+
+      g_hash_table_replace (self->locales.cached_locales,
+                            GUINT_TO_POINTER (quark),
+                            maybe);
+      g_clear_error (&local_error);
+    }
+
+  if (maybe->locale != NULL)
+    {
+      g_assert (SRT_IS_LOCALE (maybe->locale));
+      g_assert (maybe->error == NULL);
+      return g_object_ref (maybe->locale);
+    }
+  else
+    {
+      g_assert (maybe->error != NULL);
+      g_set_error_literal (error,
+                           maybe->error->domain,
+                           maybe->error->code,
+                           maybe->error->message);
+      return NULL;
+    }
 }

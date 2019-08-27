@@ -120,7 +120,8 @@ libraries_presence (Fixture *f,
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 

@@ -34,6 +34,7 @@
 
 #include <steam-runtime-tools/graphics.h>
 #include <steam-runtime-tools/library.h>
+#include <steam-runtime-tools/locale.h>
 #include <steam-runtime-tools/runtime.h>
 #include <steam-runtime-tools/steam.h>
 
@@ -75,6 +76,9 @@ void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);
 void srt_system_info_set_helpers_path (SrtSystemInfo *self,
                                        const gchar *path);
+const char *srt_system_info_get_primary_multiarch_tuple (SrtSystemInfo *self);
+void srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
+                                                  const gchar *tuple);
 
 void srt_system_info_set_expected_runtime_version (SrtSystemInfo *self,
                                                    const char *version);
@@ -85,3 +89,8 @@ gchar *srt_system_info_dup_runtime_version (SrtSystemInfo *self);
 
 SrtSteamIssues srt_system_info_get_steam_issues (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_installation_path (SrtSystemInfo *self);
+
+SrtLocaleIssues srt_system_info_get_locale_issues (SrtSystemInfo *self);
+SrtLocale *srt_system_info_check_locale (SrtSystemInfo *self,
+                                         const char *requested_name,
+                                         GError **error);

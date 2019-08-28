@@ -27,6 +27,14 @@
 
 #include <glib.h>
 
+#if !GLIB_CHECK_VERSION (2, 42, 0)
+# define G_OPTION_FLAG_NONE (0)
+#endif
+
+#if !GLIB_CHECK_VERSION (2, 38, 0)
+# define G_SPAWN_DEFAULT (0)
+#endif
+
 #if !GLIB_CHECK_VERSION(2, 44, 0)
 #define g_steal_pointer(x) _srt_steal_pointer (x)
 /* A simplified version of g_steal_pointer without type-safety. */

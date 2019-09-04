@@ -155,6 +155,8 @@ configure_file(
 executable(
   'pressure-vessel-wrap',
   sources : [
+    'src/bwrap.c',
+    'src/bwrap.h',
     'src/glib-backports.c',
     'src/glib-backports.h',
     'src/flatpak-bwrap.c',

@@ -38,6 +38,7 @@
 
 #include "libglnx.h"
 
+#include "bwrap.h"
 #include "glib-backports.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-private.h"
@@ -193,117 +194,6 @@ check_bwrap (const char *tools_dir)
     }
 
   return NULL;
-}
-
-static gboolean
-bind_usr (FlatpakBwrap *bwrap,
-          const char *host_path,
-          const char *mount_point,
-          GError **error)
-{
-  g_autofree gchar *usr = NULL;
-  g_autofree gchar *dest = NULL;
-  gboolean host_path_is_usr = FALSE;
-  g_autoptr(GDir) dir = NULL;
-  const gchar *member = NULL;
-  static const char * const bind_etc[] =
-  {
-    "alternatives",
-    "ld.so.cache"
-  };
-  gsize i;
-
-  g_return_val_if_fail (host_path != NULL, FALSE);
-  g_return_val_if_fail (host_path[0] == '/', FALSE);
-  g_return_val_if_fail (mount_point != NULL, FALSE);
-  g_return_val_if_fail (mount_point[0] == '/', FALSE);
-
-  usr = g_build_filename (host_path, "usr", NULL);
-  dest = g_build_filename (mount_point, "usr", NULL);
-
-  if (g_file_test (usr, G_FILE_TEST_IS_DIR))
-    {
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", usr, dest,
-                              NULL);
-    }
-  else
-    {
-      /* host_path is assumed to be a merged /usr */
-      host_path_is_usr = TRUE;
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", host_path, dest,
-                              NULL);
-    }
-
-  g_clear_pointer (&dest, g_free);
-
-  dir = g_dir_open (host_path, 0, error);
-
-  if (dir == NULL)
-    return FALSE;
-
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
-    {
-      if (g_str_has_prefix (member, "lib")
-          || g_str_equal (member, "bin")
-          || g_str_equal (member, "sbin"))
-        {
-          dest = g_build_filename (mount_point, member, NULL);
-
-          if (host_path_is_usr)
-            {
-              g_autofree gchar *target = g_build_filename ("usr",
-                                                           member, NULL);
-
-              flatpak_bwrap_add_args (bwrap,
-                                      "--symlink", target, dest,
-                                      NULL);
-            }
-          else
-            {
-              g_autofree gchar *path = g_build_filename (host_path,
-                                                         member, NULL);
-              g_autofree gchar *target = glnx_readlinkat_malloc (-1, path, NULL, NULL);
-
-              if (target != NULL)
-                {
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--symlink", target, dest,
-                                          NULL);
-                }
-              else
-                {
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", path, dest,
-                                          NULL);
-                }
-            }
-
-          g_clear_pointer (&dest, g_free);
-        }
-    }
-
-  for (i = 0; i < G_N_ELEMENTS (bind_etc); i++)
-    {
-      g_autofree gchar *path = g_build_filename (host_path, "etc",
-                                                 bind_etc[i], NULL);
-
-      if (g_file_test (path, G_FILE_TEST_EXISTS))
-        {
-          dest = g_build_filename (mount_point, "etc", bind_etc[i], NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", path, dest,
-                                  NULL);
-
-          g_clear_pointer (&dest, g_free);
-        }
-    }
-
-  return TRUE;
 }
 
 /* From Flatpak */
@@ -779,50 +669,6 @@ capture_output (const char * const * argv,
 }
 
 static gboolean
-run_bwrap (FlatpakBwrap *bwrap,
-           GError **error)
-{
-  gint exit_status;
-  g_autofree gchar *output = NULL;
-  g_autofree gchar *errors = NULL;
-  guint i;
-  g_autoptr(GString) command = g_string_new ("");
-
-  for (i = 0; i < bwrap->argv->len; i++)
-    {
-      g_autofree gchar *quoted = NULL;
-      char *unquoted = g_ptr_array_index (bwrap->argv, i);
-
-      if (unquoted == NULL)
-        break;
-
-      quoted = g_shell_quote (unquoted);
-      g_string_append_printf (command, " %s", quoted);
-    }
-
-  g_debug ("run:%s", command->str);
-
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (char **) bwrap->argv->pdata,
-                     NULL,  /* env */
-                     G_SPAWN_SEARCH_PATH,
-                     NULL, NULL,    /* child setup */
-                     &output,
-                     &errors,
-                     &exit_status,
-                     error))
-    return FALSE;
-
-  g_print ("%s", output);
-  g_printerr ("%s", errors);
-
-  if (!g_spawn_check_exit_status (exit_status, error))
-    return FALSE;
-
-  return TRUE;
-}
-
-static gboolean
 try_bind_dri (FlatpakBwrap *bwrap,
               FlatpakBwrap *mount_runtime_on_scratch,
               const char *overrides,
@@ -857,7 +703,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!run_bwrap (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, error))
         return FALSE;
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
@@ -879,7 +725,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!run_bwrap (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, error))
         return FALSE;
     }
 
@@ -901,7 +747,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!run_bwrap (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, error))
         return FALSE;
     }
 
@@ -1021,7 +867,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   usr = g_build_filename (runtime, "usr", NULL);
 
-  if (!bind_usr (bwrap, runtime, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, runtime, "/", error))
     return FALSE;
 
   flatpak_bwrap_add_args (bwrap,
@@ -1201,7 +1047,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   bwrap->argv->pdata[0],
                                   NULL);
 
-          if (!bind_usr (temp_bwrap, runtime, "/", error))
+          if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
             return FALSE;
 
           flatpak_bwrap_add_args (temp_bwrap,
@@ -1235,7 +1081,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   "--bind", overrides, overrides,
                                   "--tmpfs", scratch,
                                   NULL);
-          if (!bind_usr (mount_runtime_on_scratch, runtime, scratch,
+          if (!pv_bwrap_bind_usr (mount_runtime_on_scratch, runtime, scratch,
                          error))
             return FALSE;
 
@@ -1251,7 +1097,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
 
-          if (!run_bwrap (temp_bwrap, error))
+          if (!pv_bwrap_run_sync (temp_bwrap, error))
             return FALSE;
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
@@ -1276,7 +1122,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       bwrap->argv->pdata[0],
                                       NULL);
 
-              if (!bind_usr (temp_bwrap, runtime, "/", error))
+              if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
                 return FALSE;
 
               flatpak_bwrap_add_args (temp_bwrap,
@@ -1341,7 +1187,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   add_symlink_farm (bwrap, overrides, "/overrides");
 
-  if (!bind_usr (bwrap, "/", "/run/host", error))
+  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;
 
   return TRUE;
@@ -2406,8 +2252,6 @@ main (int argc,
         }
     }
 
-  flatpak_bwrap_finish (bwrap);
-
   /* Clean up temporary directory before running our long-running process */
   if (tmpdir != NULL &&
       !glnx_shutil_rm_rf_at (-1, tmpdir, NULL, error))
@@ -2419,18 +2263,8 @@ main (int argc,
 
   g_clear_pointer (&tmpdir, g_free);
 
-  /* flatpak_bwrap_finish did this */
-  g_assert (g_ptr_array_index (bwrap->argv, bwrap->argv->len - 1) == NULL);
-
-  g_debug ("Replacing self with bwrap...");
-
-  flatpak_bwrap_child_setup_cb (bwrap->fds);
-  execve (bwrap->argv->pdata[0],
-          (char * const *) bwrap->argv->pdata,
-          bwrap->envp);
-
-  /* If we are still here then execve failed */
-  g_warning ("execve failed: %s", g_strerror (errno));
+  flatpak_bwrap_finish (bwrap);
+  pv_bwrap_execve (bwrap, error);
 
 out:
   if (local_error != NULL)

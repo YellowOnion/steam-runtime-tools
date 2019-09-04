@@ -31,6 +31,7 @@
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <string.h>
+#include <sys/wait.h>
 
 #include <json-glib/json-glib.h>
 
@@ -305,6 +306,14 @@ _srt_check_graphics (const char *helpers_path,
       g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
     }
 
+  // Use timeout command to limit how long the helper can run
+  g_ptr_array_add (argv, g_strdup ("timeout"));
+  g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
+  // Kill the helper after 3 seconds
+  g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
+  // Send TERM signal after 1 second
+  g_ptr_array_add (argv, g_strdup ("10"));
+
   if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
     {
       if (helpers_path != NULL)
@@ -367,6 +376,14 @@ _srt_check_graphics (const char *helpers_path,
     {
       g_debug ("... wait status %d", exit_status);
       issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+
+      // TERM signal gives us 124 from timeout man page
+      if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+        {
+          g_debug ("helper killed by timeout command");
+          issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
+        }
+
       goto out;
     }
 

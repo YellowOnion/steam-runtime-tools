@@ -146,6 +146,13 @@ executable(
 )
 
 executable(
+  'mock-hanging-wflinfo',
+  'mock-hanging-wflinfo.c',
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
   'mock-bad-wflinfo',
   'mock-bad-wflinfo.c',
   install: true,

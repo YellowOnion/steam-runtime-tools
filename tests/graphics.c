@@ -201,6 +201,53 @@ test_bad_graphics (Fixture *f,
 }
 
 /*
+ * Test a mock system with timeout
+ */
+static void
+test_timeout_graphics (Fixture *f,
+                   gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-hanging",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
+  g_debug ("issues is %d", issues);
+  g_assert ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD) == SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT) == SRT_GRAPHICS_ISSUES_TIMEOUT);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
+                   NULL);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
+                   NULL);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                NULL);
+  g_assert ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD) == SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT) == SRT_GRAPHICS_ISSUES_TIMEOUT);
+  g_assert_cmpstr (tuple, ==, "mock-hanging");
+  g_assert_cmpstr (renderer, ==, NULL);
+  g_assert_cmpstr (version, ==, NULL);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+/*
  * Test a mock system with software rendering
  */
 static void
@@ -257,6 +304,8 @@ main (int argc,
               setup, test_good_graphics, teardown);
   g_test_add ("/bad", Fixture, NULL,
               setup, test_bad_graphics, teardown);
+  g_test_add ("/hanging", Fixture, NULL,
+              setup, test_timeout_graphics, teardown);
   g_test_add ("/software", Fixture, NULL,
               setup, test_software_rendering, teardown);
 

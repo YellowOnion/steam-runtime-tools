@@ -788,6 +788,8 @@ bind_runtime (FlatpakBwrap *bwrap,
   const gchar *member;
   g_autoptr(GString) dri_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
+  gboolean any_libc_from_host = FALSE;
+  gboolean all_libc_from_host = TRUE;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -1067,19 +1069,11 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       ld_so_in_runtime,
                                       NULL);
 
-              g_debug ("Making host locale data visible in container");
-
-              if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
-                flatpak_bwrap_add_args (bwrap,
-                                        "--ro-bind", "/usr/lib/locale",
-                                        "/usr/lib/locale",
-                                        NULL);
-
-              if (g_file_test ("/usr/share/i18n", G_FILE_TEST_EXISTS))
-                flatpak_bwrap_add_args (bwrap,
-                                        "--ro-bind", "/usr/share/i18n",
-                                        "/usr/share/i18n",
-                                        NULL);
+              any_libc_from_host = TRUE;
+            }
+          else
+            {
+              all_libc_from_host = FALSE;
             }
 
           /* /lib32 or /lib64 */
@@ -1125,6 +1119,45 @@ bind_runtime (FlatpakBwrap *bwrap,
                    archs->str);
       g_string_free (archs, TRUE);
       return FALSE;
+    }
+
+  if (any_libc_from_host && !all_libc_from_host)
+    {
+      /*
+       * This shouldn't happen. It would mean that there exist at least
+       * two architectures (let's say aaa and bbb) for which we have:
+       * host libc6:aaa < container libc6 < host libc6:bbb
+       * (we know that the container's libc6:aaa and libc6:bbb are
+       * constrained to be the same version because that's how multiarch
+       * works).
+       *
+       * If the host system locales work OK with both the aaa and bbb
+       * versions, let's assume they will also work with the intermediate
+       * version from the container...
+       */
+      g_warning ("Using glibc from host system for some but not all "
+                 "architectures! Arbitrarily using host locales.");
+    }
+
+  if (any_libc_from_host)
+    {
+      g_debug ("Making host locale data visible in container");
+
+      if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
+        flatpak_bwrap_add_args (bwrap,
+                                "--ro-bind", "/usr/lib/locale",
+                                "/usr/lib/locale",
+                                NULL);
+
+      if (g_file_test ("/usr/share/i18n", G_FILE_TEST_EXISTS))
+        flatpak_bwrap_add_args (bwrap,
+                                "--ro-bind", "/usr/share/i18n",
+                                "/usr/share/i18n",
+                                NULL);
+    }
+  else
+    {
+      g_debug ("Using included locale data from container");
     }
 
   if (dri_path->len != 0)

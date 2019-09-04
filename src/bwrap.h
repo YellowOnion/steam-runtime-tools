@@ -35,6 +35,9 @@ gboolean pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
                             const char *host_path,
                             const char *mount_point,
                             GError **error);
+void pv_bwrap_copy_tree (FlatpakBwrap *bwrap,
+                         const char *source,
+                         const char *dest);
 
 static inline gboolean
 pv_bwrap_was_finished (FlatpakBwrap *bwrap)

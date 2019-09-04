@@ -291,6 +291,94 @@ test_software_rendering (Fixture *f,
   g_object_unref (info);
 }
 
+/*
+ * Test a mock system with good vulkan drivers
+ */
+static void
+test_good_vulkan (Fixture *f,
+                  gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-good",
+                                           SRT_WINDOW_SYSTEM_X11,
+                                           SRT_RENDERING_INTERFACE_VULKAN,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
+                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
+                   SRT_TEST_GOOD_VULKAN_VERSION);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpstr (tuple, ==, "mock-good");
+  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
+  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_VULKAN_VERSION);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+/*
+ * Test a mock system with no vulkan graphics driver
+ */
+static void
+test_bad_vulkan (Fixture *f,
+                 gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-bad",
+                                           SRT_WINDOW_SYSTEM_X11,
+                                           SRT_RENDERING_INTERFACE_VULKAN,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
+                   NULL);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
+                   NULL);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmpstr (tuple, ==, "mock-bad");
+  g_assert_cmpstr (renderer, ==, NULL);
+  g_assert_cmpstr (version, ==, NULL);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
 int
 main (int argc,
       char **argv)
@@ -308,6 +396,11 @@ main (int argc,
               setup, test_timeout_graphics, teardown);
   g_test_add ("/software", Fixture, NULL,
               setup, test_software_rendering, teardown);
+
+  g_test_add ("/vulkan", Fixture, NULL,
+              setup, test_good_vulkan, teardown);
+  g_test_add ("/vulkan-bad", Fixture, NULL,
+              setup, test_bad_vulkan, teardown);
 
   return g_test_run ();
 }

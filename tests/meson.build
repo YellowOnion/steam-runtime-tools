@@ -142,7 +142,7 @@ executable(
   'mock-good-wflinfo',
   'mock-good-wflinfo.c',
   install: true,
-  install_dir : tests_dir
+  install_dir: tests_dir
 )
 
 executable(
@@ -156,14 +156,29 @@ executable(
   'mock-bad-wflinfo',
   'mock-bad-wflinfo.c',
   install: true,
-  install_dir : tests_dir
+  install_dir: tests_dir
 )
 
 executable(
   'mock-software-wflinfo',
   'mock-software-wflinfo.c',
   install: true,
-  install_dir : tests_dir
+  install_dir: tests_dir
 )
+
+executable(
+  'mock-good-vulkaninfo',
+  'mock-good-vulkaninfo.c',
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-bad-vulkaninfo',
+  'mock-bad-vulkaninfo.c',
+  install: true,
+  install_dir: tests_dir
+)
+
 
 # vim:set sw=2 sts=2 et:

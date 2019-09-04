@@ -787,6 +787,7 @@ bind_runtime (FlatpakBwrap *bwrap,
   gsize i, j;
   const gchar *member;
   g_autoptr(GString) dri_path = g_string_new ("");
+  gboolean any_architecture_works = FALSE;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -996,6 +997,7 @@ bind_runtime (FlatpakBwrap *bwrap,
               continue;
             }
 
+          any_architecture_works = TRUE;
           g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
 
           search_path_append (dri_path, this_dri_path_in_container);
@@ -1103,6 +1105,26 @@ bind_runtime (FlatpakBwrap *bwrap,
         {
           g_debug ("Cannot determine ld.so for %s", multiarch_tuples[i]);
         }
+    }
+
+  if (!any_architecture_works)
+    {
+      GString *archs = g_string_new ("");
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+        {
+          if (archs->len > 0)
+            g_string_append (archs, ", ");
+
+          g_string_append (archs, multiarch_tuples[i]);
+        }
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "None of the supported CPU architectures are common to "
+                   "the host system and the container (tried: %s)",
+                   archs->str);
+      g_string_free (archs, TRUE);
+      return FALSE;
     }
 
   if (dri_path->len != 0)

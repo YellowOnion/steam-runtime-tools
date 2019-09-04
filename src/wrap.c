@@ -759,24 +759,26 @@ try_bind_dri (FlatpakBwrap *bwrap,
 static struct
 {
   FlatpakBwrap *bwrap;
-  const char *symlink_farm;
+  const char *source;
   const char *dest;
 } nftw_data;
 
 static int
-add_symlinks_to_bwrap (const char *fpath,
-                       const struct stat *sb,
-                       int typeflag,
-                       struct FTW *ftwbuf)
+copy_tree_helper (const char *fpath,
+                  const struct stat *sb,
+                  int typeflag,
+                  struct FTW *ftwbuf)
 {
   const char *path_in_container;
   g_autofree gchar *target = NULL;
   gsize prefix_len;
+  int fd = -1;
+  GError *error = NULL;
 
-  g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.symlink_farm), 1);
-  g_return_val_if_fail (g_str_has_suffix (nftw_data.symlink_farm, nftw_data.dest), 1);
+  g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.source), 1);
+  g_return_val_if_fail (g_str_has_suffix (nftw_data.source, nftw_data.dest), 1);
 
-  prefix_len = strlen (nftw_data.symlink_farm) - strlen (nftw_data.dest);
+  prefix_len = strlen (nftw_data.source) - strlen (nftw_data.dest);
   path_in_container = fpath + prefix_len;
 
   switch (typeflag)
@@ -794,6 +796,19 @@ add_symlinks_to_bwrap (const char *fpath,
                                 NULL);
         break;
 
+      case FTW_F:
+        if (!glnx_openat_rdonly (AT_FDCWD, fpath, FALSE, &fd, &error))
+          {
+            g_warning ("Unable to copy file into container: %s",
+                       error->message);
+            g_clear_error (&error);
+          }
+
+        flatpak_bwrap_add_args_data_fd (nftw_data.bwrap,
+                                        "--ro-bind-data", glnx_steal_fd (&fd),
+                                        path_in_container);
+        break;
+
       default:
         g_warning ("Don't know how to handle ftw type flag %d at %s",
                    typeflag, fpath);
@@ -802,25 +817,34 @@ add_symlinks_to_bwrap (const char *fpath,
   return 0;
 }
 
-/*
- * For every symbolic link in @farm, add a corresponding symbolic link
- * via the bwrap command-line.
+/**
+ * pv_bwrap_copy_tree:
+ * @bwrap: The #FlatpakBwrap
+ * @source: A copy of the desired @dest in a temporary directory,
+ *  for example `/tmp/tmp12345678/overrides/lib`. The path must end
+ *  with @dest.
+ * @dest: The destination path in the container, which must be absolute.
+ *
+ * For every file, directory or symbolic link in @source, add a
+ * corresponding read-only file, directory or symbolic link via the bwrap
+ * command-line, so that the files, directories and symbolic links in the
+ * container will persist even after @source has been deleted.
  */
 static void
-add_symlink_farm (FlatpakBwrap *bwrap,
-                  const char *farm,
-                  const char *dest)
+pv_bwrap_copy_tree (FlatpakBwrap *bwrap,
+                    const char *source,
+                    const char *dest)
 {
   g_return_if_fail (nftw_data.bwrap == NULL);
   g_return_if_fail (dest[0] == '/');
-  g_return_if_fail (g_str_has_suffix (farm, dest));
+  g_return_if_fail (g_str_has_suffix (source, dest));
 
   nftw_data.bwrap = bwrap;
-  nftw_data.symlink_farm = farm;
+  nftw_data.source = source;
   nftw_data.dest = dest;
-  nftw (farm, add_symlinks_to_bwrap, 100, FTW_PHYS);
+  nftw (source, copy_tree_helper, 100, FTW_PHYS);
   nftw_data.bwrap = NULL;
-  nftw_data.symlink_farm = NULL;
+  nftw_data.source = NULL;
   nftw_data.dest = NULL;
 }
 
@@ -1185,7 +1209,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                               "--unsetenv", "LIBGL_DRIVERS_PATH",
                               NULL);
 
-  add_symlink_farm (bwrap, overrides, "/overrides");
+  pv_bwrap_copy_tree (bwrap, overrides, "/overrides");
 
   if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;

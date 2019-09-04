@@ -164,6 +164,8 @@ executable(
     'src/utils.c',
     'src/utils.h',
     'src/wrap.c',
+    'src/wrap-interactive.c',
+    'src/wrap-interactive.h',
   ],
   c_args : [
     '-Wno-unused-local-typedefs',

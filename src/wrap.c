@@ -42,6 +42,7 @@
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-private.h"
 #include "utils.h"
+#include "wrap-interactive.h"
 
 /*
  * Supported Debian-style multiarch tuples
@@ -1495,145 +1496,6 @@ use_fake_home (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
-static void
-wrap_in_xterm (FlatpakBwrap *wrapped_command)
-{
-  g_return_if_fail (wrapped_command != NULL);
-
-  flatpak_bwrap_add_args (wrapped_command,
-                          "xterm", "-e",
-                          /* Original command will go here and become
-                           * the argv of xterm -e */
-                          NULL);
-}
-
-typedef enum
-{
-  SHELL_NONE = 0,
-  SHELL_AFTER,
-  SHELL_FAIL,
-  SHELL_INSTEAD
-} Shell;
-
-static void
-wrap_interactive (FlatpakBwrap *wrapped_command,
-                  Shell shell)
-{
-  static const char preamble[] =
-    {
-      "prgname=\"$1\"\n"
-      "shift\n"
-    };
-  const char *script = "";
-  static const char start_shell[] =
-    {
-      "echo\n"
-      "echo\n"
-      "echo\n"
-      "echo \"$1: Starting interactive shell (original command is in "
-      "\\\"\\$@\\\")\"\n"
-      "echo\n"
-      "echo\n"
-      "echo\n"
-      "exec bash -i -s \"$@\"\n"
-    };
-  gchar *command;
-
-  g_return_if_fail (wrapped_command != NULL);
-
-  switch (shell)
-    {
-      case SHELL_NONE:
-        script =
-          "e=0\n"
-          "\"$@\" || e=$?\n"
-          "echo\n"
-          "echo \"Press Enter or ^D to continue...\"\n"
-          "read reply || true\n"
-          "exit \"$e\"\n";
-        break;
-
-      case SHELL_AFTER:
-        script =
-          "e=0\n"
-          "\"$@\" || e=$?\n";
-        break;
-
-      case SHELL_FAIL:
-        script =
-          "if \"$@\"; then exit 0; else e=\"$?\"; fi\n"
-          "echo \"$1: command exit status $e\"\n";
-        break;
-
-      case SHELL_INSTEAD:
-        break;
-
-      default:
-        g_return_if_reached ();
-    }
-
-  command = g_strdup_printf ("%s%s%s",
-                             preamble,
-                             script,
-                             shell == SHELL_NONE ? "" : start_shell);
-
-  flatpak_bwrap_add_args (wrapped_command,
-                          "sh", "-euc",
-                          command,
-                          "sh",   /* $0 for sh */
-                          g_get_prgname (),   /* $1 for sh */
-                          /* Original command will go here and become
-                           * the argv of command, and eventually
-                           * the argv of bash -i -s */
-                          NULL);
-}
-
-static gboolean
-wrap_tty (FlatpakBwrap *wrapped_command,
-          GError **error)
-{
-  int fd;
-
-  g_return_val_if_fail (wrapped_command != NULL, FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  fflush (stdout);
-  fflush (stderr);
-
-  fd = open ("/dev/tty", O_RDONLY);
-
-  if (fd < 0)
-    return glnx_throw_errno_prefix (error,
-                                    "Cannot open /dev/tty for reading");
-
-  if (dup2 (fd, 0) < 0)
-    return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stdin");
-
-  g_close (fd, NULL);
-
-  fd = open ("/dev/tty", O_WRONLY);
-
-  if (fd < 0)
-    return glnx_throw_errno_prefix (error, "Cannot open /dev/tty for writing");
-
-  if (dup2 (fd, 1) < 0)
-    return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stdout");
-
-  if (dup2 (fd, 2) < 0)
-    return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stderr");
-
-  g_close (fd, NULL);
-  return TRUE;
-}
-
-typedef enum
-{
-  TERMINAL_NONE = 0,
-  TERMINAL_AUTO,
-  TERMINAL_TTY,
-  TERMINAL_XTERM,
-} Terminal;
-
 typedef enum
 {
   TRISTATE_NO = 0,
@@ -1647,14 +1509,14 @@ static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
-static Shell opt_shell = SHELL_NONE;
+static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
-static Terminal opt_terminal = TERMINAL_AUTO;
+static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
@@ -1687,7 +1549,7 @@ opt_shell_cb (const gchar *option_name,
 
   if (value == NULL || *value == '\0')
     {
-      opt_shell = SHELL_NONE;
+      opt_shell = PV_SHELL_NONE;
       return TRUE;
     }
 
@@ -1696,7 +1558,7 @@ opt_shell_cb (const gchar *option_name,
       case 'a':
         if (g_strcmp0 (value, "after") == 0)
           {
-            opt_shell = SHELL_AFTER;
+            opt_shell = PV_SHELL_AFTER;
             return TRUE;
           }
         break;
@@ -1704,7 +1566,7 @@ opt_shell_cb (const gchar *option_name,
       case 'f':
         if (g_strcmp0 (value, "fail") == 0)
           {
-            opt_shell = SHELL_FAIL;
+            opt_shell = PV_SHELL_FAIL;
             return TRUE;
           }
         break;
@@ -1712,7 +1574,7 @@ opt_shell_cb (const gchar *option_name,
       case 'i':
         if (g_strcmp0 (value, "instead") == 0)
           {
-            opt_shell = SHELL_INSTEAD;
+            opt_shell = PV_SHELL_INSTEAD;
             return TRUE;
           }
         break;
@@ -1720,7 +1582,7 @@ opt_shell_cb (const gchar *option_name,
       case 'n':
         if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
           {
-            opt_shell = SHELL_NONE;
+            opt_shell = PV_SHELL_NONE;
             return TRUE;
           }
         break;
@@ -1748,7 +1610,7 @@ opt_terminal_cb (const gchar *option_name,
 
   if (value == NULL || *value == '\0')
     {
-      opt_terminal = TERMINAL_AUTO;
+      opt_terminal = PV_TERMINAL_AUTO;
       return TRUE;
     }
 
@@ -1757,7 +1619,7 @@ opt_terminal_cb (const gchar *option_name,
       case 'a':
         if (g_strcmp0 (value, "auto") == 0)
           {
-            opt_terminal = TERMINAL_AUTO;
+            opt_terminal = PV_TERMINAL_AUTO;
             return TRUE;
           }
         break;
@@ -1765,7 +1627,7 @@ opt_terminal_cb (const gchar *option_name,
       case 'n':
         if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
           {
-            opt_terminal = TERMINAL_NONE;
+            opt_terminal = PV_TERMINAL_NONE;
             return TRUE;
           }
         break;
@@ -1773,7 +1635,7 @@ opt_terminal_cb (const gchar *option_name,
       case 't':
         if (g_strcmp0 (value, "tty") == 0)
           {
-            opt_terminal = TERMINAL_TTY;
+            opt_terminal = PV_TERMINAL_TTY;
             return TRUE;
           }
         break;
@@ -1781,7 +1643,7 @@ opt_terminal_cb (const gchar *option_name,
       case 'x':
         if (g_strcmp0 (value, "xterm") == 0)
           {
-            opt_terminal = TERMINAL_XTERM;
+            opt_terminal = PV_TERMINAL_XTERM;
             return TRUE;
           }
         break;
@@ -2042,15 +1904,15 @@ main (int argc,
       goto out;
     }
 
-  if (opt_terminal == TERMINAL_AUTO)
+  if (opt_terminal == PV_TERMINAL_AUTO)
     {
-      if (opt_shell != SHELL_NONE)
-        opt_terminal = TERMINAL_XTERM;
+      if (opt_shell != PV_SHELL_NONE)
+        opt_terminal = PV_TERMINAL_XTERM;
       else
-        opt_terminal = TERMINAL_NONE;
+        opt_terminal = PV_TERMINAL_NONE;
     }
 
-  if (opt_terminal == TERMINAL_NONE && opt_shell != SHELL_NONE)
+  if (opt_terminal == PV_TERMINAL_NONE && opt_shell != PV_SHELL_NONE)
     {
       g_printerr ("%s: --terminal=none is incompatible with --shell\n",
                   g_get_prgname ());
@@ -2121,7 +1983,7 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
-  if (opt_terminal != TERMINAL_TTY)
+  if (opt_terminal != PV_TERMINAL_TTY)
     {
       int fd;
 
@@ -2191,31 +2053,31 @@ main (int argc,
 
   switch (opt_terminal)
     {
-      case TERMINAL_TTY:
+      case PV_TERMINAL_TTY:
         g_debug ("Wrapping command to use tty");
 
-        if (!wrap_tty (wrapped_command, error))
+        if (!pv_bwrap_wrap_tty (wrapped_command, error))
           goto out;
 
         break;
 
-      case TERMINAL_XTERM:
+      case PV_TERMINAL_XTERM:
         g_debug ("Wrapping command with xterm");
-        wrap_in_xterm (wrapped_command);
+        pv_bwrap_wrap_in_xterm (wrapped_command);
         break;
 
-      case TERMINAL_AUTO:
-      case TERMINAL_NONE:
+      case PV_TERMINAL_AUTO:
+      case PV_TERMINAL_NONE:
       default:
         /* do nothing */
         break;
     }
 
-  if (opt_shell != SHELL_NONE || opt_terminal == TERMINAL_XTERM)
+  if (opt_shell != PV_SHELL_NONE || opt_terminal == PV_TERMINAL_XTERM)
     {
-      /* In the (SHELL_NONE, TERMINAL_XTERM) case, just don't let the xterm
-       * close before the user has had a chance to see the output */
-      wrap_interactive (wrapped_command, opt_shell);
+      /* In the (PV_SHELL_NONE, PV_TERMINAL_XTERM) case, just don't let the
+       * xterm close before the user has had a chance to see the output */
+      pv_bwrap_wrap_interactive (wrapped_command, opt_shell);
     }
 
   if (argv[1][0] == '-')
@@ -2301,7 +2163,7 @@ main (int argc,
   /* Protect the controlling terminal from the app/game, unless we are
    * running an interactive shell in which case that would break its
    * job control. */
-  if (opt_terminal != TERMINAL_TTY)
+  if (opt_terminal != PV_TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')

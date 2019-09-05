@@ -161,6 +161,8 @@ executable(
     'src/glib-backports.h',
     'src/flatpak-bwrap.c',
     'src/flatpak-bwrap-private.h',
+    'src/flatpak-run.c',
+    'src/flatpak-run-private.h',
     'src/flatpak-utils.c',
     'src/flatpak-utils-private.h',
     'src/utils.c',

@@ -275,6 +275,10 @@ _srt_check_graphics (const char *helpers_path,
   gchar *filtered_preload = NULL;
 
   g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (window_system >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (window_system < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (rendering_interface >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (rendering_interface < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
 
   gchar *platformstring = NULL;
 
@@ -282,7 +286,17 @@ _srt_check_graphics (const char *helpers_path,
 
   if (window_system == SRT_WINDOW_SYSTEM_GLX)
     {
-      platformstring = g_strdup ("glx");
+      if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
+        {
+          platformstring = g_strdup ("glx");
+        }
+      else
+        {
+          g_critical ("GLX window system only makes sense with GL "
+                      "rendering interface, not %d",
+                      rendering_interface);
+          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_X11)
     {
@@ -291,18 +305,38 @@ _srt_check_graphics (const char *helpers_path,
            platformstring = g_strdup ("glx");
            window_system = SRT_WINDOW_SYSTEM_GLX;
         }
-      else
+      else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
         {
            platformstring = g_strdup ("x11_egl");
            window_system = SRT_WINDOW_SYSTEM_EGL_X11;
         }
+      else
+        {
+          /* should not be reached because the precondition checks
+           * should have caught this */
+          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
     {
-      platformstring = g_strdup ("x11_egl");
+      if (rendering_interface == SRT_RENDERING_INTERFACE_GL
+          || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
+        {
+          platformstring = g_strdup ("x11_egl");
+        }
+      else
+        {
+          /* e.g. Vulkan (when implemented) */
+          g_critical ("EGL window system only makes sense with a GL-based "
+                      "rendering interface, not %d",
+                      rendering_interface);
+          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        }
     }
   else
     {
+      /* should not be reached because the precondition checks should
+       * have caught this */
       g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
     }
 

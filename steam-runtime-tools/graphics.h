@@ -50,6 +50,9 @@ GType srt_graphics_get_type (void);
  * @SRT_GRAPHICS_ISSUES_INTERNAL_ERROR: An internal error of some kind has occurred
  * @SRT_GRAPHICS_ISSUES_CANNOT_LOAD: Unable to load the necessary libraries and create rendering context
  * @SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING: The graphics renderer is software based
+ * @SRT_GRAPHICS_ISSUES_TIMEOUT: The check for this graphics stack took
+ *  too long to run and was terminated. This is likely to indicate that
+ *  the graphics stack causes the process using it to hang.
  *
  * A bitfield with flags representing problems with the graphics stack, or
  * %SRT_GRAPHICS_ISSUES_NONE (which is numerically zero) if no problems
@@ -63,6 +66,7 @@ typedef enum
   SRT_GRAPHICS_ISSUES_INTERNAL_ERROR = (1 << 0),
   SRT_GRAPHICS_ISSUES_CANNOT_LOAD = (1 << 1),
   SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING = (1 << 2),
+  SRT_GRAPHICS_ISSUES_TIMEOUT = (1 << 3),
 } SrtGraphicsIssues;
 
 /**

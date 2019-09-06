@@ -29,6 +29,8 @@
 /**
  * pv_bwrap_run_sync:
  * @bwrap: A #FlatpakBwrap on which flatpak_bwrap_finish() has been called
+ * @exit_status_out: (out) (optional): Used to return the exit status,
+ *  or -1 if it could not be launched or was killed by a signal
  * @error: Used to raise an error on failure
  *
  * Try to run a command. Its standard output and standard error go to
@@ -38,6 +40,7 @@
  */
 gboolean
 pv_bwrap_run_sync (FlatpakBwrap *bwrap,
+                   int *exit_status_out,
                    GError **error)
 {
   gint exit_status;
@@ -52,6 +55,9 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
   g_return_val_if_fail (bwrap->argv->len >= 2, FALSE);
   g_return_val_if_fail (pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (exit_status_out != NULL)
+    *exit_status_out = -1;
 
   for (i = 0; i < bwrap->argv->len; i++)
     {
@@ -86,6 +92,12 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
 
   g_print ("%s", output);
   g_printerr ("%s", errors);
+
+  if (exit_status_out != NULL)
+    {
+      if (WIFEXITED (exit_status))
+        *exit_status_out = WEXITSTATUS (exit_status);
+    }
 
   if (!g_spawn_check_exit_status (exit_status, error))
     return FALSE;

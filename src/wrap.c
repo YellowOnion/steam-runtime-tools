@@ -272,7 +272,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!pv_bwrap_run_sync (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
         return FALSE;
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
@@ -294,7 +294,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!pv_bwrap_run_sync (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
         return FALSE;
     }
 
@@ -316,7 +316,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!pv_bwrap_run_sync (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
         return FALSE;
     }
 
@@ -600,7 +600,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
 
-          if (!pv_bwrap_run_sync (temp_bwrap, error))
+          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
             return FALSE;
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
@@ -655,7 +655,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);
 
-              if (!pv_bwrap_run_sync (temp_bwrap, NULL, NULL, error))
+              if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
                 return FALSE;
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);

@@ -88,15 +88,17 @@ typedef enum
  * SrtRenderingInterface:
  * @SRT_RENDERING_INTERFACE_GL: GL rendering interface
  * @SRT_RENDERING_INTERFACE_GLESV2: GLESv2 rendering interfaces
+ * @SRT_RENDERING_INTERFACE_VULKAN: Vulkan rendering interface
  */
 typedef enum
 {
   SRT_RENDERING_INTERFACE_GL,
   SRT_RENDERING_INTERFACE_GLESV2,
+  SRT_RENDERING_INTERFACE_VULKAN,
   /* ... possible future additions: GLESV1, GLESV3? */
 } SrtRenderingInterface;
 
-#define SRT_N_RENDERING_INTERFACES (SRT_RENDERING_INTERFACE_GLESV2 + 1)
+#define SRT_N_RENDERING_INTERFACES (SRT_RENDERING_INTERFACE_VULKAN + 1)
 
 const char *srt_graphics_get_multiarch_tuple (SrtGraphics *self);
 SrtGraphicsIssues srt_graphics_get_issues (SrtGraphics *self);

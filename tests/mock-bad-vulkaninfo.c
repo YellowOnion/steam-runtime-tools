@@ -1,4 +1,3 @@
-/*< internal_header >*/
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -24,13 +23,14 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#include <stdio.h>
 
-// Test strings for use in mock and graphics test
-#define SRT_TEST_GOOD_GRAPHICS_RENDERER "Mesa DRI Intel(R) Haswell Desktop "
-#define SRT_TEST_SOFTWARE_GRAPHICS_RENDERER "llvmpipe (LLVM 8.0, 256 bits)"
-#define SRT_TEST_GOOD_GRAPHICS_VERSION "3.0 Mesa 19.1.3"
-#define SRT_TEST_SOFTWARE_GRAPHICS_VERSION "3.1 Mesa 19.1.3"
-#define SRT_TEST_GOOD_VULKAN_DRIVER_VERSION "79695877"
-#define SRT_TEST_GOOD_VULKAN_VERSION "1.1.102 (device 8086:0412) (driver 19.1.5)"
+int
+main (int argc,
+      char **argv)
+{
+  // Give bad output
+  fprintf (stderr, "/build/vulkan-tools/src/Vulkan-Tools-1.1.114/vulkaninfo/vulkaninfo.c:5884: failed with VK_ERROR_INITIALIZATION_FAILED\n");
+  return 1;
+}
 

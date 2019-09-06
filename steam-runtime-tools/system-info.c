@@ -963,6 +963,13 @@ GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
                                     SRT_RENDERING_INTERFACE_GLESV2,
                                     NULL);
 
+  abi->cached_combined_issues |=
+    srt_system_info_check_graphics (self,
+                                    multiarch_tuple,
+                                    SRT_WINDOW_SYSTEM_X11,
+                                    SRT_RENDERING_INTERFACE_VULKAN,
+                                    NULL);
+
   abi->graphics_cache_available = TRUE;
 
   list = g_list_sort (g_hash_table_get_values (abi->cached_graphics_results),

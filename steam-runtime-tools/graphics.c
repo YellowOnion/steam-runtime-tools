@@ -308,7 +308,19 @@ _srt_check_graphics (const char *helpers_path,
     }
   else if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
     {
-      platformstring = g_strdup ("x11_egl");
+      if (rendering_interface == SRT_RENDERING_INTERFACE_GL
+          || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
+        {
+          platformstring = g_strdup ("x11_egl");
+        }
+      else
+        {
+          /* e.g. Vulkan (when implemented) */
+          g_critical ("EGL window system only makes sense with a GL-based "
+                      "rendering interface, not %d",
+                      rendering_interface);
+          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        }
     }
   else
     {

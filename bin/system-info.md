@@ -252,6 +252,21 @@ keys:
     :   The `en_US.UTF-8` locale is not available. This may cause
         problems in games and frameworks that assume it is always present.
 
+    **i18n-supported-missing**
+    :   The **SUPPORTED** file listing supported locales was not found
+        in the expected location.
+        This indicates that either locale data is not installed, or this
+        operating system does not put it in the expected location.
+        The Steam Runtime might be unable to generate extra locales if needed.
+
+    **i18n-locales-en-us-missing**
+    :   The **locales/en_US** file describing the USA English locale was
+        not found in the expected location. This indicates that either
+        locale data is not installed, or this operating system does not
+        put it in the expected location, or only a partial set of locale
+        source data is available. The Steam Runtime will be unable to
+        generate extra locales if needed.
+
 **locales**
 :   An object describing locales. The keys are either **<default>** or
     a locale name. The values are objects containing either details of

@@ -84,6 +84,18 @@ GQuark srt_locale_error_quark (void);
  *  does not succeed, or succeeds but results in a non-UTF-8 locale.
  *  This locale is not generally guaranteed to exist on Linux systems,
  *  but some games and software packages assume that it does.
+ * @SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING: The `SUPPORTED` file
+ *  listing supported locales was not found in the expected location.
+ *  This indicates that either locale data is not installed, or this
+ *  operating system does not put it in the expected location.
+ *  The Steam Runtime might be unable to generate extra locales if needed.
+ * @SRT_LOCALE_ISSUES_I18N_LOCALES_EN_US_MISSING: The `locales/en_US` file
+ *  describing the USA English locale was not found in the expected
+ *  location.
+ *  This indicates that either locale data is not installed, or this
+ *  operating system does not put it in the expected location, or only
+ *  a partial set of locale source data is available.
+ *  The Steam Runtime will be unable to generate extra locales if needed.
  *
  * A bitfield with flags representing potential problems with locales, or
  * %SRT_LOCALE_ISSUES_NONE (which is numerically zero) if no problems
@@ -99,6 +111,8 @@ typedef enum
   SRT_LOCALE_ISSUES_DEFAULT_NOT_UTF8 = (1 << 2),
   SRT_LOCALE_ISSUES_C_UTF8_MISSING = (1 << 3),
   SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING = (1 << 4),
+  SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING = (1 << 5),
+  SRT_LOCALE_ISSUES_I18N_LOCALES_EN_US_MISSING = (1 << 6),
 } SrtLocaleIssues;
 
 const char *srt_locale_get_requested_name (SrtLocale *self);

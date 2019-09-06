@@ -310,6 +310,12 @@ jsonify_locale_issues (JsonBuilder *builder,
 
   if ((issues & SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING) != 0)
     json_builder_add_string_value (builder, "en-us-utf8-missing");
+
+  if ((issues & SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING) != 0)
+    json_builder_add_string_value (builder, "i18n-supported-missing");
+
+  if ((issues & SRT_LOCALE_ISSUES_I18N_LOCALES_EN_US_MISSING) != 0)
+    json_builder_add_string_value (builder, "i18n-locales-en-us-missing");
 }
 
 static void

@@ -28,6 +28,7 @@ endif
 
 override_dh_auto_clean:
 	rm -fr builddir
+	rm -fr debian/locales
 
 override_dh_auto_configure:
 	meson builddir \
@@ -41,7 +42,12 @@ override_dh_auto_build:
 	ninja -C builddir
 
 override_dh_auto_test:
+ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
+	mkdir debian/locales
+	localedef -f UTF-8 -i en_US --no-archive debian/locales/en_US.UTF-8
+	env LOCPATH=$(CURDIR)/debian/locales LC_ALL=en_US.UTF-8 \
 	meson test -C builddir --verbose
+endif
 
 override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/tmp ninja -C builddir install

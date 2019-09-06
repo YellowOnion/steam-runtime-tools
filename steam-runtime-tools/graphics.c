@@ -285,7 +285,17 @@ _srt_check_graphics (const char *helpers_path,
 
   if (window_system == SRT_WINDOW_SYSTEM_GLX)
     {
-      platformstring = g_strdup ("glx");
+      if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
+        {
+          platformstring = g_strdup ("glx");
+        }
+      else
+        {
+          g_critical ("GLX window system only makes sense with GL "
+                      "rendering interface, not %d",
+                      rendering_interface);
+          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_X11)
     {

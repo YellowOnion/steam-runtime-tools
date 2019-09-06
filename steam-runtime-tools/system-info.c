@@ -959,13 +959,6 @@ GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
   abi->cached_combined_issues |=
     srt_system_info_check_graphics (self,
                                     multiarch_tuple,
-                                    SRT_WINDOW_SYSTEM_GLX,
-                                    SRT_RENDERING_INTERFACE_GLESV2,
-                                    NULL);
-
-  abi->cached_combined_issues |=
-    srt_system_info_check_graphics (self,
-                                    multiarch_tuple,
                                     SRT_WINDOW_SYSTEM_EGL_X11,
                                     SRT_RENDERING_INTERFACE_GLESV2,
                                     NULL);

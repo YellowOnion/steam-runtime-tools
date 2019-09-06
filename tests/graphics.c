@@ -221,9 +221,9 @@ test_timeout_graphics (Fixture *f,
                                            SRT_WINDOW_SYSTEM_GLX,
                                            SRT_RENDERING_INTERFACE_GL,
                                            &graphics);
-  g_debug ("issues is %d", issues);
-  g_assert ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD) == SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT) == SRT_GRAPHICS_ISSUES_TIMEOUT);
+  g_debug ("issues is 0x%x", issues);
+  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD), ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT), ==, SRT_GRAPHICS_ISSUES_TIMEOUT);
   g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
@@ -234,8 +234,8 @@ test_timeout_graphics (Fixture *f,
                 "renderer-string", &renderer,
                 "version-string", &version,
                 NULL);
-  g_assert ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD) == SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT) == SRT_GRAPHICS_ISSUES_TIMEOUT);
+  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD), ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT), ==, SRT_GRAPHICS_ISSUES_TIMEOUT);
   g_assert_cmpstr (tuple, ==, "mock-hanging");
   g_assert_cmpstr (renderer, ==, NULL);
   g_assert_cmpstr (version, ==, NULL);

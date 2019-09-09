@@ -1,3 +1,32 @@
+steam-runtime-tools (0.20190909.0-0+steamrt1.2) scout; urgency=medium
+
+  [ Simon McVittie ]
+  * Add checks for locales and locale-related issues
+
+  [ Jeremy Whiting ]
+  * When executing graphics helpers use timeout command to kill if needed.
+
+  [ Simon McVittie ]
+  * graphics: Add precondition checks on enum arguments
+  * graphics: Diagnose impossible window system, rendering interface
+  * graphics: Only allow EGL_X11 with a GL-based rendering interface
+  * graphics: Diagnose combination of GLX with non-GL as programming error
+  * Fix numeric values in comments
+  * Document SRT_GRAPHICS_ISSUES_TIMEOUT
+  * Improve diagnostics if graphics timeout tests fail
+
+  [ Jeremy Whiting ]
+  * Add calling vulkaninfo to get vulkan device and version.
+  * Add mock-good-vulkaninfo and mock-bad-vulkaninfo.
+
+  [ Simon McVittie ]
+  * d/.gitignore: Update for addition of steam-runtime-tools-bin
+  * Speed up tests by telling the graphics check to time out sooner
+  * graphics: Don't free a const version_string
+  * Add a man page documenting steam-runtime-system-info
+
+ -- Jeremy Whiting <jeremy.whiting@collabora.com>  Mon, 09 Sep 2019 11:17:49 -0600
+
 steam-runtime-tools (0.20190822.0-0+steamrt1.1) scout; urgency=medium
 
   [ Jeremy Whiting ]

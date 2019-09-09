@@ -23,6 +23,14 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_library_get_type@Base 0.20190801.0
  srt_library_issues_get_type@Base 0.20190801.0
  srt_library_symbols_format_get_type@Base 0.20190801.0
+ srt_locale_error_get_type@Base 0.20190909.0
+ srt_locale_error_quark@Base 0.20190909.0
+ srt_locale_get_charset@Base 0.20190909.0
+ srt_locale_get_requested_name@Base 0.20190909.0
+ srt_locale_get_resulting_name@Base 0.20190909.0
+ srt_locale_get_type@Base 0.20190909.0
+ srt_locale_is_utf8@Base 0.20190909.0
+ srt_locale_issues_get_type@Base 0.20190909.0
  srt_rendering_interface_get_type@Base 0.20190822.0
  srt_runtime_issues_get_type@Base 0.20190816.0
  srt_steam_issues_get_type@Base 0.20190816.0
@@ -32,10 +40,13 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_check_graphics@Base 0.20190822.0
  srt_system_info_check_libraries@Base 0.20190802.0
  srt_system_info_check_library@Base 0.20190802.0
+ srt_system_info_check_locale@Base 0.20190909.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
  srt_system_info_dup_runtime_path@Base 0.20190816.0
  srt_system_info_dup_runtime_version@Base 0.20190816.0
  srt_system_info_dup_steam_installation_path@Base 0.20190816.0
+ srt_system_info_get_locale_issues@Base 0.20190909.0
+ srt_system_info_get_primary_multiarch_tuple@Base 0.20190909.0
  srt_system_info_get_runtime_issues@Base 0.20190816.0
  srt_system_info_get_steam_issues@Base 0.20190816.0
  srt_system_info_get_type@Base 0.20190801.0
@@ -43,4 +54,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_set_environ@Base 0.20190816.0
  srt_system_info_set_expected_runtime_version@Base 0.20190816.0
  srt_system_info_set_helpers_path@Base 0.20190816.0
+ srt_system_info_set_primary_multiarch_tuple@Base 0.20190909.0
+ srt_system_info_set_test_flags@Base 0.20190909.0
+ srt_test_flags_get_type@Base 0.20190909.0
  srt_window_system_get_type@Base 0.20190822.0

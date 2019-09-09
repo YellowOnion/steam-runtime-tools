@@ -246,6 +246,7 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
 /**
  * _srt_check_graphics:
  * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
+ * @test_flags: Flags used during automated testing
  * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
  * @winsys: The window system to check.
  * @renderer: The graphics renderer to check.
@@ -258,6 +259,7 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
  */
 G_GNUC_INTERNAL SrtGraphicsIssues
 _srt_check_graphics (const char *helpers_path,
+                     SrtTestFlags test_flags,
                      const char *multiarch_tuple,
                      SrtWindowSystem window_system,
                      SrtRenderingInterface rendering_interface,
@@ -354,10 +356,20 @@ _srt_check_graphics (const char *helpers_path,
   // Use timeout command to limit how long the helper can run
   g_ptr_array_add (argv, g_strdup ("timeout"));
   g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
-  // Kill the helper (if still running) 3 seconds after the TERM signal
-  g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
-  // Send TERM signal after 10 seconds
-  g_ptr_array_add (argv, g_strdup ("10"));
+
+  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
+    {
+      // Speed up the failing case in automated testing
+      g_ptr_array_add (argv, g_strdup ("--kill-after=1"));
+      g_ptr_array_add (argv, g_strdup ("1"));
+    }
+  else
+    {
+      // Kill the helper (if still running) 3 seconds after the TERM signal
+      g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
+      // Send TERM signal after 10 seconds
+      g_ptr_array_add (argv, g_strdup ("10"));
+    }
 
   if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
     {

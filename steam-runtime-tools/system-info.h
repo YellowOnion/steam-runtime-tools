@@ -38,6 +38,21 @@
 #include <steam-runtime-tools/runtime.h>
 #include <steam-runtime-tools/steam.h>
 
+/**
+ * SrtTestFlags:
+ * @SRT_TEST_FLAGS_NONE: Behave normally
+ * @SRT_TEST_FLAGS_TIME_OUT_SOONER: Reduce arbitrary timeouts
+ *
+ * A bitfield with flags representing behaviour changes used in automated
+ * tests, or %SRT_TEST_FLAGS_NONE (which is numerically zero) for normal
+ * production behaviour.
+ */
+typedef enum
+{
+  SRT_TEST_FLAGS_TIME_OUT_SOONER = (1 << 0),
+  SRT_TEST_FLAGS_NONE = 0
+} SrtTestFlags;
+
 typedef struct _SrtSystemInfo SrtSystemInfo;
 typedef struct _SrtSystemInfoClass SrtSystemInfoClass;
 
@@ -79,6 +94,8 @@ void srt_system_info_set_helpers_path (SrtSystemInfo *self,
 const char *srt_system_info_get_primary_multiarch_tuple (SrtSystemInfo *self);
 void srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
                                                   const gchar *tuple);
+void srt_system_info_set_test_flags (SrtSystemInfo *self,
+                                     SrtTestFlags flags);
 
 void srt_system_info_set_expected_runtime_version (SrtSystemInfo *self,
                                                    const char *version);

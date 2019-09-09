@@ -115,6 +115,7 @@ struct _SrtSystemInfo
     gchar *version;
     SrtRuntimeIssues issues;
   } runtime;
+  SrtTestFlags test_flags;
   Tristate can_write_uinput;
   /* (element-type Abi) */
   GPtrArray *abis;
@@ -891,6 +892,7 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
 
   graphics = NULL;
   issues = _srt_check_graphics (self->helpers_path,
+                                self->test_flags,
                                 multiarch_tuple,
                                 window_system,
                                 rendering_interface,
@@ -1387,4 +1389,22 @@ srt_system_info_check_locale (SrtSystemInfo *self,
                            maybe->error->message);
       return NULL;
     }
+}
+
+/**
+ * srt_system_info_set_test_flags:
+ * @self: The #SrtSystemInfo
+ * @flags: Flags altering behaviour, for use in automated tests
+ *
+ * Alter the behaviour of the #SrtSystemInfo to make automated tests
+ * quicker or give better test coverage.
+ *
+ * This function should not be called in production code.
+ */
+void
+srt_system_info_set_test_flags (SrtSystemInfo *self,
+                                SrtTestFlags flags)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  self->test_flags = flags;
 }

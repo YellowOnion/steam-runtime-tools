@@ -19,3 +19,9 @@ option(
   description : 'enable GObject-Introspection',
 )
 
+option(
+  'man',
+  type : 'boolean',
+  value : true,
+  description : 'enable man pages',
+)

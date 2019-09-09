@@ -28,4 +28,23 @@ executable(
   install : true,
 )
 
+if get_option('man')
+  custom_target(
+    'steam-runtime-system-info.1',
+    build_by_default : true,
+    command : [
+      pandoc,
+      '-s',
+      '-o', '@OUTPUT@',
+      '-f', pandoc_markdown_nosmart,
+      '-t', 'man',
+      '@INPUT@',
+    ],
+    input : 'system-info.md',
+    output : 'steam-runtime-system-info.1',
+    install : true,
+    install_dir : join_paths(get_option('prefix'), get_option('mandir'), 'man1'),
+  )
+endif
+
 # vim:set sw=2 sts=2 et:

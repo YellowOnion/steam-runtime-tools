@@ -19,6 +19,7 @@ variables:
         libx11-dev
         libxcomposite-dev
         meson
+        pandoc
 
 stages:
     - build

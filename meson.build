@@ -30,6 +30,20 @@ abi_minor = '20190822.0'
 pkg = import('pkgconfig')
 gnome = import('gnome')
 
+if get_option('man')
+  pandoc = find_program('pandoc', required : true)
+
+  if run_command(pandoc, [
+    '-f', 'markdown-smart',
+    '-t', 'man',
+    '/dev/null',
+  ]).returncode() == 0
+    pandoc_markdown_nosmart = 'markdown-smart'
+  else
+    pandoc_markdown_nosmart = 'markdown'
+  endif
+endif
+
 warning_cflags = [
     '-Wall',
     '-Wextra',

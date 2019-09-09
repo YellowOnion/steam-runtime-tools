@@ -274,7 +274,7 @@ _srt_check_graphics (const char *helpers_path,
   JsonNode *sub_node = NULL;
   JsonObject *sub_object = NULL;
   const gchar *version_string = NULL;
-  gboolean free_version_string = FALSE;
+  gchar *new_version_string = NULL;
   const gchar *renderer_string = NULL;
   GError *error = NULL;
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
@@ -540,17 +540,17 @@ _srt_check_graphics (const char *helpers_path,
       driver_version = json_object_get_int_member (sub_object, "driverVersion");
       hw_device = json_object_get_int_member (sub_object, "deviceID");
 
-      version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
-                                        VK_VERSION_MAJOR (api_version),
-                                        VK_VERSION_MINOR (api_version),
-                                        VK_VERSION_PATCH (api_version),
-                                        hw_vendor,
-                                        hw_device,
-                                        VK_VERSION_MAJOR (driver_version),
-                                        VK_VERSION_MINOR (driver_version),
-                                        VK_VERSION_PATCH (driver_version));
+      new_version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
+                                            VK_VERSION_MAJOR (api_version),
+                                            VK_VERSION_MINOR (api_version),
+                                            VK_VERSION_PATCH (api_version),
+                                            hw_vendor,
+                                            hw_device,
+                                            VK_VERSION_MAJOR (driver_version),
+                                            VK_VERSION_MINOR (driver_version),
+                                            VK_VERSION_PATCH (driver_version));
+      version_string = new_version_string;
 
-      free_version_string = TRUE;
       renderer_string = json_object_get_string_member (sub_object, "deviceName");
 
       /* NOTE: No need to check for software rendering with vulkan yet */
@@ -568,9 +568,7 @@ out:
   if (parser != NULL)
     g_object_unref (parser);
 
-  if (free_version_string)
-    g_free (version_string);
-
+  g_free (new_version_string);
   g_ptr_array_unref (argv);
   g_free (output);
   g_clear_error (&error);

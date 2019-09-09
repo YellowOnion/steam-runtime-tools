@@ -215,6 +215,7 @@ test_timeout_graphics (Fixture *f,
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
+  srt_system_info_set_test_flags (info, SRT_TEST_FLAGS_TIME_OUT_SOONER);
 
   issues = srt_system_info_check_graphics (info,
                                            "mock-hanging",

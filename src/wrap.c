@@ -639,6 +639,27 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       ld_so_in_runtime,
                                       NULL);
 
+              /* Collect miscellaneous libraries that libc might dlopen.
+               * At the moment this is just libidn2. */
+              temp_bwrap = flatpak_bwrap_new (NULL);
+              g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                              || mount_runtime_on_scratch->fds->len == 0);
+              flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      tool_path,
+                                      "--container", scratch,
+                                      "--link-target", "/run/host",
+                                      "--dest", libdir_on_host,
+                                      "--provider", "/",
+                                      "if-exists:libidn2.so.0",
+                                      NULL);
+              flatpak_bwrap_finish (temp_bwrap);
+
+              if (!pv_bwrap_run_sync (temp_bwrap, NULL, NULL, error))
+                return FALSE;
+
+              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
               any_libc_from_host = TRUE;
             }
           else

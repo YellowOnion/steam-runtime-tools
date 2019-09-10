@@ -57,6 +57,11 @@
  *       @library has been found. The value is `null` if the library is
  *       not available in the system.
  *
+ *     messages:
+ *       If present, the value is a string containing diagnostic messages
+ *       that were encountered when attempting to load the library.
+ *       This member will only be available if there were some messages.
+ *
  *     issues:
  *       A string array listing all the @library problems that has been
  *       found in the running system. For possible values check
@@ -318,10 +323,20 @@ print_libraries_details (JsonBuilder *builder,
     {
       if (verbose || srt_library_get_issues (l->data) != SRT_LIBRARY_ISSUES_NONE)
         {
+          const char *messages;
           const char * const *missing_symbols;
           const char * const *misversioned_symbols;
           json_builder_set_member_name (builder, srt_library_get_soname (l->data));
           json_builder_begin_object (builder);
+
+          messages = srt_library_get_messages (l->data);
+
+          if (messages != NULL)
+            {
+              json_builder_set_member_name (builder, "messages");
+              json_builder_add_string_value (builder, messages);
+            }
+
           json_builder_set_member_name (builder, "path");
           json_builder_add_string_value (builder, srt_library_get_absolute_path (l->data));
 
@@ -370,9 +385,18 @@ print_graphics_details(JsonBuilder *builder,
   for (GList *g = graphics_list; g != NULL; g = g->next)
     {
       gchar *parameters = srt_graphics_dup_parameters_string (g->data);
+      const char *messages;
 
       json_builder_set_member_name (builder, parameters);
       json_builder_begin_object (builder);
+
+      messages = srt_graphics_get_messages (g->data);
+
+      if (messages != NULL)
+        {
+          json_builder_set_member_name (builder, "messages");
+          json_builder_add_string_value (builder, messages);
+        }
 
       json_builder_set_member_name (builder, "renderer");
       json_builder_add_string_value (builder, srt_graphics_get_renderer_string (g->data));

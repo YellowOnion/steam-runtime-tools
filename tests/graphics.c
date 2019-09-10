@@ -78,6 +78,7 @@ test_object (Fixture *f,
 {
   SrtGraphics *graphics;
   SrtGraphicsIssues issues;
+  gchar *messages;
   gchar *tuple;
   gchar *renderer;
   gchar *version;
@@ -87,7 +88,8 @@ test_object (Fixture *f,
                                SRT_RENDERING_INTERFACE_GL,
                                SRT_TEST_GOOD_GRAPHICS_RENDERER,
                                SRT_TEST_GOOD_GRAPHICS_VERSION,
-                               SRT_GRAPHICS_ISSUES_NONE);
+                               SRT_GRAPHICS_ISSUES_NONE,
+                               "");
   g_assert_cmpint (srt_graphics_get_issues (graphics), ==,
                    SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (srt_graphics_get_multiarch_tuple (graphics), ==,
@@ -96,16 +98,20 @@ test_object (Fixture *f,
                    SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, NULL);
   g_object_get (graphics,
+                "messages", &messages,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpstr (messages, ==, NULL);
   g_assert_cmpstr (tuple, ==, "mock-good");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_free (messages);
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -165,6 +171,7 @@ test_bad_graphics (Fixture *f,
 {
   SrtGraphics *graphics = NULL;
   SrtGraphicsIssues issues;
+  gchar *messages;
   gchar *tuple;
   gchar *renderer;
   gchar *version;
@@ -182,16 +189,22 @@ test_bad_graphics (Fixture *f,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    NULL);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
   g_object_get (graphics,
+                "messages", &messages,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmpstr (messages, ==,
+                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
   g_assert_cmpstr (tuple, ==, "mock-bad");
   g_assert_cmpstr (renderer, ==, NULL);
   g_assert_cmpstr (version, ==, NULL);
+  g_free (messages);
   g_free (tuple);
   g_free (renderer);
   g_free (version);

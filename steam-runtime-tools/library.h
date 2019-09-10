@@ -89,6 +89,7 @@ typedef enum
 
 const char *srt_library_get_absolute_path (SrtLibrary *self);
 const char *srt_library_get_soname (SrtLibrary *self);
+const char *srt_library_get_messages (SrtLibrary *self);
 const char *srt_library_get_multiarch_tuple (SrtLibrary *self);
 SrtLibraryIssues srt_library_get_issues (SrtLibrary *self);
 const char * const *srt_library_get_missing_symbols (SrtLibrary *self);

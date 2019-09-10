@@ -47,7 +47,8 @@ static inline SrtGraphics *_srt_graphics_new (const char *multiarch_tuple,
                                               SrtRenderingInterface rendering_interface,
                                               const gchar *renderer_string,
                                               const gchar *version_string,
-                                              SrtGraphicsIssues issues);
+                                              SrtGraphicsIssues issues,
+                                              const gchar *messages);
 
 /*
  * _srt_graphics_hash_key:
@@ -77,7 +78,8 @@ _srt_graphics_new (const char *multiarch_tuple,
                    SrtRenderingInterface rendering_interface,
                    const gchar *renderer_string,
                    const gchar *version_string,
-                   SrtGraphicsIssues issues)
+                   SrtGraphicsIssues issues,
+                   const gchar *messages)
 {
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
   return g_object_new (SRT_TYPE_GRAPHICS,
@@ -87,6 +89,7 @@ _srt_graphics_new (const char *multiarch_tuple,
                        "rendering-interface", rendering_interface,
                        "renderer-string", renderer_string,
                        "version-string", version_string,
+                       "messages", messages,
                        NULL);
 }
 

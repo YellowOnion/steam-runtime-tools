@@ -174,6 +174,8 @@ check_libraries_missing (JsonObject *json_arch)
       g_assert_true (json_object_has_member (json_details, "libgio-MISSING-2.0.so.0"));
       json_lib = json_object_get_object_member (json_details, "libgio-MISSING-2.0.so.0");
       g_assert_true (json_object_has_member (json_lib, "path"));
+      /* We don't assert about the exact contents of stderr, just that there was some */
+      g_assert_true (json_object_has_member (json_lib, "messages"));
       g_assert_cmpstr (json_object_get_string_member (json_lib, "path"), ==, NULL);
       g_assert_true (json_object_has_member (json_lib, "issues"));
       array = json_object_get_array_member (json_lib, "issues");
@@ -277,6 +279,7 @@ check_library_no_errors (JsonObject *json_details,
   g_assert_true (json_object_has_member (json_details, library_soname));
   json_lib = json_object_get_object_member (json_details, library_soname);
   g_assert_true (json_object_has_member (json_lib, "path"));
+  g_assert_false (json_object_has_member (json_lib, "messages"));
   g_assert_cmpstr (json_object_get_string_member (json_lib, "path"), !=, NULL);
   g_assert_false (json_object_has_member (json_lib, "issues"));
   g_assert_false (json_object_has_member (json_lib, "missing-symbols"));
@@ -322,6 +325,9 @@ libraries_presence_verbose (Fixture *f,
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
     {
+      /* We assert that there was nothing on stderr, so don't let
+       * g_debug() break that assumption */
+      "env", "G_MESSAGES_DEBUG=",
       "steam-runtime-system-info", "--expectations", expectations_in, "--verbose", NULL
     };
 

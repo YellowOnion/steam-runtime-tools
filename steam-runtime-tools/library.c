@@ -48,6 +48,7 @@ struct _SrtLibrary
   /*< private >*/
   GObject parent;
   gchar *absolute_path;
+  gchar *messages;
   gchar *soname;
   GStrv dependencies;
   GStrv missing_symbols;
@@ -67,6 +68,7 @@ enum {
   PROP_ABSOLUTE_PATH,
   PROP_DEPENDENCIES,
   PROP_ISSUES,
+  PROP_MESSAGES,
   PROP_MISSING_SYMBOLS,
   PROP_MULTIARCH_TUPLE,
   PROP_SONAME,
@@ -103,6 +105,10 @@ srt_library_get_property (GObject *object,
         g_value_set_flags (value, self->issues);
         break;
 
+      case PROP_MESSAGES:
+        g_value_set_string (value, self->messages);
+        break;
+
       case PROP_MISSING_SYMBOLS:
         g_value_set_boxed (value, self->missing_symbols);
         break;
@@ -131,6 +137,7 @@ srt_library_set_property (GObject *object,
                           GParamSpec *pspec)
 {
   SrtLibrary *self = SRT_LIBRARY (object);
+  const char *tmp;
 
   switch (prop_id)
     {
@@ -155,6 +162,18 @@ srt_library_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->issues == 0);
         self->issues = g_value_get_flags (value);
+        break;
+
+      case PROP_MESSAGES:
+        /* Construct-only */
+        g_return_if_fail (self->messages == NULL);
+        tmp = g_value_get_string (value);
+
+        /* Normalize the empty string (expected to be common) to NULL */
+        if (tmp != NULL && tmp[0] == '\0')
+          tmp = NULL;
+
+        self->messages = g_strdup (tmp);
         break;
 
       case PROP_MISSING_SYMBOLS:
@@ -203,6 +222,7 @@ srt_library_finalize (GObject *object)
   SrtLibrary *self = SRT_LIBRARY (object);
 
   g_free (self->absolute_path);
+  g_free (self->messages);
   g_free (self->soname);
   g_strfreev (self->dependencies);
   g_strfreev (self->missing_symbols);
@@ -235,6 +255,13 @@ srt_library_class_init (SrtLibraryClass *cls)
                         G_TYPE_STRV,
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
+  properties[PROP_MESSAGES] =
+    g_param_spec_string ("messages", "Messages",
+                         "Diagnostic messages produced while checking this "
+                         "library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
   properties[PROP_ISSUES] =
     g_param_spec_flags ("issues", "Issues", "Problems with this library",
                         SRT_TYPE_LIBRARY_ISSUES, SRT_LIBRARY_ISSUES_NONE,
@@ -286,6 +313,23 @@ srt_library_get_absolute_path (SrtLibrary *self)
 {
   g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
   return self->absolute_path;
+}
+
+/**
+ * srt_library_get_messages:
+ * @self: a library object
+ *
+ * Return the diagnostic messages produced while checking this library,
+ * if any.
+ *
+ * Returns: (nullable) (transfer none): A string, which must not be freed,
+ *  or %NULL if there were no diagnostic messages.
+ */
+const char *
+srt_library_get_messages (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return self->messages;
 }
 
 /**
@@ -443,6 +487,7 @@ _srt_check_library_presence (const char *helpers_path,
 {
   gchar *helper = NULL;
   gchar *output = NULL;
+  gchar *child_stderr = NULL;
   gchar *absolute_path = NULL;
   const gchar *argv[] =
     {
@@ -510,7 +555,7 @@ _srt_check_library_presence (const char *helpers_path,
                      NULL,       /* child setup */
                      NULL,       /* user data */
                      &output,    /* stdout */
-                     NULL,       /* stderr */
+                     &child_stderr,
                      &exit_status,
                      &error))
     {
@@ -599,6 +644,7 @@ out:
                                           absolute_path,
                                           soname,
                                           issues,
+                                          child_stderr,
                                           (const char **) missing_symbols,
                                           (const char **) misversioned_symbols,
                                           (const char **) dependencies);
@@ -611,6 +657,7 @@ out:
   g_strfreev (misversioned_symbols);
   g_strfreev (dependencies);
   g_free (absolute_path);
+  g_free (child_stderr);
   g_free (helper);
   g_free (output);
   g_free (filtered_preload);

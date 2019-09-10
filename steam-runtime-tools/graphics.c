@@ -59,6 +59,7 @@ struct _SrtGraphics
   SrtWindowSystem window_system;
   SrtRenderingInterface rendering_interface;
   SrtGraphicsIssues issues;
+  gchar *messages;
   gchar *renderer_string;
   gchar *version_string;
 };
@@ -72,6 +73,7 @@ struct _SrtGraphicsClass
 enum {
   PROP_0,
   PROP_ISSUES,
+  PROP_MESSAGES,
   PROP_MULTIARCH_TUPLE,
   PROP_WINDOW_SYSTEM,
   PROP_RENDERING_INTERFACE,
@@ -99,6 +101,10 @@ srt_graphics_get_property (GObject *object,
     {
       case PROP_ISSUES:
         g_value_set_flags (value, self->issues);
+        break;
+
+      case PROP_MESSAGES:
+        g_value_set_string (value, self->messages);
         break;
 
       case PROP_MULTIARCH_TUPLE:
@@ -133,6 +139,7 @@ srt_graphics_set_property (GObject *object,
                           GParamSpec *pspec)
 {
   SrtGraphics *self = SRT_GRAPHICS (object);
+  const char *tmp;
 
   switch (prop_id)
     {
@@ -140,6 +147,18 @@ srt_graphics_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->issues == 0);
         self->issues = g_value_get_flags (value);
+        break;
+
+      case PROP_MESSAGES:
+        /* Construct-only */
+        g_return_if_fail (self->messages == NULL);
+        tmp = g_value_get_string (value);
+
+        /* Normalize the empty string (expected to be common) to NULL */
+        if (tmp != NULL && tmp[0] == '\0')
+          tmp = NULL;
+
+        self->messages = g_strdup (tmp);
         break;
 
       case PROP_MULTIARCH_TUPLE:
@@ -185,6 +204,7 @@ srt_graphics_finalize (GObject *object)
 {
   SrtGraphics *self = SRT_GRAPHICS (object);
 
+  g_free (self->messages);
   g_free (self->renderer_string);
   g_free (self->version_string);
 
@@ -207,6 +227,14 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
                         SRT_TYPE_GRAPHICS_ISSUES, SRT_GRAPHICS_ISSUES_NONE,
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_MESSAGES] =
+    g_param_spec_string ("messages", "Messages",
+                         "Diagnostic messages produced while checking this "
+                         "graphics stack",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
 
   properties[PROP_MULTIARCH_TUPLE] =
     g_param_spec_string ("multiarch-tuple", "Multiarch tuple",
@@ -267,6 +295,7 @@ _srt_check_graphics (const char *helpers_path,
 {
   GPtrArray *argv = NULL;
   gchar *output = NULL;
+  gchar *child_stderr = NULL;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -436,7 +465,7 @@ _srt_check_graphics (const char *helpers_path,
                      NULL,    /* child setup */
                      NULL,    /* user data */
                      &output, /* stdout */
-                     NULL,    /* stderr */
+                     &child_stderr,
                      &exit_status,
                      &error))
     {
@@ -563,7 +592,8 @@ out:
                                       rendering_interface,
                                       renderer_string,
                                       version_string,
-                                      issues);
+                                      issues,
+                                      child_stderr);
 
   if (parser != NULL)
     g_object_unref (parser);
@@ -571,6 +601,7 @@ out:
   g_free (new_version_string);
   g_ptr_array_unref (argv);
   g_free (output);
+  g_free (child_stderr);
   g_clear_error (&error);
   g_free (platformstring);
   g_free (filtered_preload);
@@ -692,4 +723,21 @@ srt_graphics_dup_parameters_string (SrtGraphics *self)
   return g_strdup_printf ("%s/%s",
                           _srt_graphics_window_system_string (self->window_system),
                           _srt_graphics_rendering_interface_string (self->rendering_interface));
+}
+
+/**
+ * srt_graphics_get_messages:
+ * @self: a graphics object
+ *
+ * Return the diagnostic messages produced while checking this graphics
+ * stack, if any.
+ *
+ * Returns: (nullable) (transfer none): A string, which must not be freed,
+ *  or %NULL if there were no diagnostic messages.
+ */
+const char *
+srt_graphics_get_messages (SrtGraphics *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
+  return self->messages;
 }

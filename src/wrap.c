@@ -250,6 +250,12 @@ try_bind_dri (FlatpakBwrap *bwrap,
   g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
   g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
 
+  /* mount_runtime_on_scratch can't own any fds, because if it did,
+   * flatpak_bwrap_append_bwrap() would steal them. */
+  g_return_val_if_fail (mount_runtime_on_scratch->fds == NULL
+                        || mount_runtime_on_scratch->fds->len == 0,
+                        FALSE);
+
   if (g_file_test (dri, G_FILE_TEST_IS_DIR))
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
@@ -261,6 +267,8 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               libdir);
 
       temp_bwrap = flatpak_bwrap_new (NULL);
+      g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                      || mount_runtime_on_scratch->fds->len == 0);
       flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
@@ -305,6 +313,8 @@ try_bind_dri (FlatpakBwrap *bwrap,
 
       expr = g_strdup_printf ("path-match:%s", s2tc);
       temp_bwrap = flatpak_bwrap_new (NULL);
+      g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                      || mount_runtime_on_scratch->fds->len == 0);
       flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
@@ -374,8 +384,6 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
-                          "--proc", "/proc",
-                          "--ro-bind", "/sys", "/sys",
                           "--tmpfs", "/run",
                           "--tmpfs", "/tmp",
                           "--tmpfs", "/var",
@@ -433,50 +441,6 @@ bind_runtime (FlatpakBwrap *bwrap,
                               NULL);
     }
 
-  /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
-   * non-existing targets), in which case we don't want to attempt to create
-   * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
-   */
-  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
-    {
-      g_autofree char *localtime = NULL;
-      gboolean is_reachable = FALSE;
-      g_autofree char *timezone = flatpak_get_timezone ();
-      g_autofree char *timezone_content = g_strdup_printf ("%s\n", timezone);
-
-      localtime = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
-
-      if (localtime != NULL)
-        {
-          g_autoptr(GFile) base_file = NULL;
-          g_autoptr(GFile) target_file = NULL;
-          g_autofree char *target_canonical = NULL;
-
-          base_file = g_file_new_for_path ("/etc");
-          target_file = g_file_resolve_relative_path (base_file, localtime);
-          target_canonical = g_file_get_path (target_file);
-
-          is_reachable = g_str_has_prefix (target_canonical, "/usr/");
-        }
-
-      if (is_reachable)
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", localtime, "/etc/localtime",
-                                  NULL);
-        }
-      else
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", "/etc/localtime", "/etc/localtime",
-                                  NULL);
-        }
-
-      flatpak_bwrap_add_args_data (bwrap, "timezone",
-                                   timezone_content, -1, "/etc/timezone",
-                                   NULL);
-    }
-
   if (g_file_test ("/etc/resolv.conf", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
@@ -500,12 +464,6 @@ bind_runtime (FlatpakBwrap *bwrap,
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
-
-  flatpak_run_add_wayland_args (bwrap);
-  flatpak_run_add_x11_args (bwrap, TRUE);
-  flatpak_run_add_pulseaudio_args (bwrap);
-  flatpak_run_add_session_dbus_args (bwrap);
-  flatpak_run_add_system_dbus_args (bwrap);
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
     {
@@ -589,6 +547,10 @@ bind_runtime (FlatpakBwrap *bwrap,
             return FALSE;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
+          /* mount_runtime_on_scratch can't own any fds, because if it did,
+           * flatpak_bwrap_append_bwrap() would steal them. */
+          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                          || mount_runtime_on_scratch->fds->len == 0);
           flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
@@ -751,6 +713,9 @@ bind_runtime (FlatpakBwrap *bwrap,
       g_debug ("Using included locale data from container");
     }
 
+  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
+    return FALSE;
+
   if (dri_path->len != 0)
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LIBGL_DRIVERS_PATH", dri_path->str,
@@ -760,10 +725,63 @@ bind_runtime (FlatpakBwrap *bwrap,
                               "--unsetenv", "LIBGL_DRIVERS_PATH",
                               NULL);
 
+  /* These can add data fds to @bwrap, so they must come last - after
+   * other functions stop using @bwrap as a basis for their own bwrap
+   * invocations with flatpak_bwrap_append_bwrap().
+   * Otherwise, when flatpak_bwrap_append_bwrap() calls
+   * flatpak_bwrap_steal_fds(), it will make the original FlatpakBwrap
+   * unusable. */
+
+  flatpak_run_add_wayland_args (bwrap);
+  flatpak_run_add_x11_args (bwrap, TRUE);
+  flatpak_run_add_pulseaudio_args (bwrap);
+  flatpak_run_add_session_dbus_args (bwrap);
+  flatpak_run_add_system_dbus_args (bwrap);
   pv_bwrap_copy_tree (bwrap, overrides, "/overrides");
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
-    return FALSE;
+  /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
+   * non-existing targets), in which case we don't want to attempt to create
+   * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
+   */
+  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
+    {
+      g_autofree char *localtime = NULL;
+      gboolean is_reachable = FALSE;
+      g_autofree char *timezone = flatpak_get_timezone ();
+      g_autofree char *timezone_content = g_strdup_printf ("%s\n", timezone);
+
+      localtime = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
+
+      if (localtime != NULL)
+        {
+          g_autoptr(GFile) base_file = NULL;
+          g_autoptr(GFile) target_file = NULL;
+          g_autofree char *target_canonical = NULL;
+
+          base_file = g_file_new_for_path ("/etc");
+          target_file = g_file_resolve_relative_path (base_file, localtime);
+          target_canonical = g_file_get_path (target_file);
+
+          is_reachable = g_str_has_prefix (target_canonical, "/usr/");
+        }
+
+      if (is_reachable)
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", localtime, "/etc/localtime",
+                                  NULL);
+        }
+      else
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", "/etc/localtime", "/etc/localtime",
+                                  NULL);
+        }
+
+      flatpak_bwrap_add_args_data (bwrap, "timezone",
+                                   timezone_content, -1, "/etc/timezone",
+                                   NULL);
+    }
 
   return TRUE;
 }
@@ -1587,6 +1605,23 @@ main (int argc,
   if (opt_terminal != PV_TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
+  /* Make basic API filesystems available */
+  flatpak_bwrap_add_args (bwrap,
+                          "--dev-bind", "/dev", "/dev",
+                          "--proc", "/proc",
+                          "--ro-bind", "/sys", "/sys",
+                          NULL);
+
+  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--dev-bind", "/dev/pts", "/dev/pts",
+                            NULL);
+
+  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--dev-bind", "/dev/shm", "/dev/shm",
+                            NULL);
+
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       g_debug ("Configuring runtime...");
@@ -1622,21 +1657,6 @@ main (int argc,
                               "--bind", "/", "/",
                               NULL);
     }
-
-  /* Make /dev available */
-  flatpak_bwrap_add_args (bwrap,
-                          "--dev-bind", "/dev", "/dev",
-                          NULL);
-
-  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/pts", "/dev/pts",
-                            NULL);
-
-  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/shm", "/dev/shm",
-                            NULL);
 
   /* Protect other users' homes (but guard against the unlikely
    * situation that they don't exist) */

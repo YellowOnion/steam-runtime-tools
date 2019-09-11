@@ -18,6 +18,8 @@ apt-get -y install \
     libpcre3 \
     libselinux1 \
     libxau6 \
+    locales \
+    pandoc \
     zlib1g:amd64 \
     zlib1g:i386 \
     ${NULL+}

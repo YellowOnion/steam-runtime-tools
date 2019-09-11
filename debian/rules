@@ -16,6 +16,7 @@ include /usr/share/dpkg/default.mk
 
 override_dh_auto_clean:
 	rm -fr _build
+	rm -fr debian/locales
 
 override_dh_auto_configure:
 	if python3 -c 'if __import__("sys").version_info < (3, 5): raise SystemExit(1)'; then \
@@ -25,6 +26,7 @@ override_dh_auto_configure:
 	fi; \
 	meson _build \
 		--prefix=/usr/lib/pressure-vessel/relocatable \
+		-Dman=true \
 		-Dpython=/usr/bin/$$python \
 		-Dsrcdir=src \
 		-Dversion=$(DEB_VERSION) \
@@ -34,7 +36,12 @@ override_dh_auto_build:
 	ninja -C _build
 
 override_dh_auto_test:
+ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
+	mkdir debian/locales
+	localedef -f UTF-8 -i en_US --no-archive debian/locales/en_US.UTF-8
+	env LOCPATH=$(CURDIR)/debian/locales \
 	meson test -C _build --verbose
+endif
 
 override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/tmp ninja -C _build install

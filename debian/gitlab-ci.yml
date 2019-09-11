@@ -12,7 +12,9 @@ variables:
         debhelper
         libglib2.0-dev
         libxau-dev
+        locales
         meson
+        pandoc
         python3
         python3.5
         zlib1g

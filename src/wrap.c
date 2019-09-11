@@ -31,6 +31,7 @@
 
 #include <locale.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "libglnx.h"
 
@@ -77,6 +78,9 @@ static void
 search_path_append (GString *search_path,
                     const gchar *item)
 {
+  if (item == NULL || item[0] == '\0')
+    return;
+
   if (search_path->len != 0)
     g_string_append (search_path, ":");
 
@@ -333,6 +337,118 @@ try_bind_dri (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
+/*
+ * Try to make sure we have all the locales we need, by running
+ * the helper from steam-runtime-tools in the container. If this
+ * fails, it isn't fatal - carry on anyway.
+ *
+ * @bwrap must be set up to have the same libc that we will be using
+ * for the container.
+ */
+static void
+ensure_locales (gboolean on_host,
+                const char *tools_dir,
+                FlatpakBwrap *bwrap,
+                const char *overrides)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(FlatpakBwrap) run_locale_gen = NULL;
+  g_autofree gchar *locale_gen = NULL;
+  g_autofree gchar *locales = g_build_filename (overrides, "locales", NULL);
+  g_autoptr(GDir) dir = NULL;
+  int exit_status;
+
+  /* bwrap can't own any fds yet, because if it did,
+   * flatpak_bwrap_append_bwrap() would steal them. */
+  g_return_if_fail (bwrap->fds == NULL || bwrap->fds->len == 0);
+
+  g_mkdir (locales, 0700);
+
+  run_locale_gen = flatpak_bwrap_new (NULL);
+
+  if (on_host)
+    {
+      locale_gen = g_build_filename (tools_dir,
+                                     "pressure-vessel-locale-gen",
+                                     NULL);
+
+      flatpak_bwrap_add_args (run_locale_gen,
+                              bwrap->argv->pdata[0],
+                              "--ro-bind", "/", "/",
+                              NULL);
+      pv_bwrap_add_api_filesystems (run_locale_gen);
+      flatpak_bwrap_add_args (run_locale_gen,
+                              "--bind", locales, locales,
+                              "--chdir", locales,
+                              locale_gen,
+                              "--verbose",
+                              NULL);
+    }
+  else
+    {
+      locale_gen = g_build_filename ("/run/host/tools",
+                                     "pressure-vessel-locale-gen",
+                                     NULL);
+
+      flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
+      pv_bwrap_copy_tree (run_locale_gen, overrides, "/overrides");
+
+      if (!flatpak_bwrap_bundle_args (run_locale_gen, 1, -1, FALSE,
+                                      &local_error))
+        {
+          g_warning ("Unable to set up locale-gen command: %s",
+                     local_error->message);
+          g_clear_error (&local_error);
+        }
+
+      flatpak_bwrap_add_args (run_locale_gen,
+                              "--ro-bind", tools_dir, "/run/host/tools",
+                              "--bind", locales, "/overrides/locales",
+                              "--chdir", "/overrides/locales",
+                              locale_gen,
+                              "--verbose",
+                              NULL);
+    }
+
+  flatpak_bwrap_finish (run_locale_gen);
+
+  /* locale-gen exits 72 (EX_OSFILE) if it had to correct for
+   * missing locales at OS level. This is not an error. */
+  if (!pv_bwrap_run_sync (run_locale_gen, &exit_status, &local_error))
+    {
+      if (exit_status == EX_OSFILE)
+        g_debug ("pressure-vessel-locale-gen created missing locales");
+      else
+        g_warning ("Unable to generate locales: %s", local_error->message);
+
+      g_clear_error (&local_error);
+    }
+  else
+    {
+      g_debug ("No locales generated");
+    }
+
+  dir = g_dir_open (locales, 0, NULL);
+
+  /* If the directory is not empty, make it the container's LOCPATH */
+  if (dir != NULL && g_dir_read_name (dir) != NULL)
+    {
+      g_autoptr(GString) locpath = NULL;
+
+      g_debug ("%s is non-empty", locales);
+
+      locpath = g_string_new ("/overrides/locales");
+      search_path_append (locpath, g_getenv ("LOCPATH"));
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", "LOCPATH", locpath->str,
+                              NULL);
+    }
+  else
+    {
+      g_debug ("%s is empty", locales);
+    }
+}
+
 static gboolean
 bind_runtime (FlatpakBwrap *bwrap,
               const char *tools_dir,
@@ -370,6 +486,7 @@ bind_runtime (FlatpakBwrap *bwrap,
   gboolean any_architecture_works = FALSE;
   gboolean any_libc_from_host = FALSE;
   gboolean all_libc_from_host = TRUE;
+  g_autofree gchar *localedef = NULL;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -707,6 +824,23 @@ bind_runtime (FlatpakBwrap *bwrap,
                                 "--ro-bind", "/usr/share/i18n",
                                 "/usr/share/i18n",
                                 NULL);
+
+      localedef = g_find_program_in_path ("localedef");
+
+      if (localedef == NULL)
+        {
+          g_warning ("Cannot find localedef in PATH");
+        }
+      else
+        {
+          g_autofree gchar *target = g_build_filename ("/run/host",
+                                                       localedef, NULL);
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", target,
+                                      "/overrides/bin/localedef",
+                                  NULL);
+        }
     }
   else
     {
@@ -715,6 +849,8 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;
+
+  ensure_locales (any_libc_from_host, tools_dir, bwrap, overrides);
 
   if (dri_path->len != 0)
       flatpak_bwrap_add_args (bwrap,
@@ -1248,8 +1384,10 @@ main (int argc,
   g_autofree gchar *tmpdir = NULL;
   g_autofree gchar *scratch = NULL;
   g_autofree gchar *overrides = NULL;
+  g_autofree gchar *overrides_bin = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) ld_library_path = g_string_new ("");
+  g_autoptr(GString) bin_path = g_string_new ("");
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
@@ -1595,6 +1733,8 @@ main (int argc,
   g_mkdir (scratch, 0700);
   overrides = g_build_filename (tmpdir, "overrides", NULL);
   g_mkdir (overrides, 0700);
+  overrides_bin = g_build_filename (overrides, "bin", NULL);
+  g_mkdir (overrides_bin, 0700);
 
   bwrap = flatpak_bwrap_new (NULL);
   flatpak_bwrap_add_arg (bwrap, bwrap_executable);
@@ -1610,6 +1750,13 @@ main (int argc,
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       g_debug ("Configuring runtime...");
+
+      search_path_append (bin_path, "/overrides/bin");
+      search_path_append (bin_path, g_getenv ("PATH"));
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", "PATH",
+                              bin_path->str,
+                              NULL);
 
       /* TODO: Adapt the use_ld_so_cache code from Flatpak instead
        * of setting LD_LIBRARY_PATH, for better robustness against

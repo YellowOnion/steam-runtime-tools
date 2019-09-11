@@ -19,6 +19,12 @@ Copyright:
 License: LGPL-2.1+
 
 Files:
+ src/try-setlocale.*
+Copyright:
+ 2019 Collabora Ltd.
+License: Expat
+
+Files:
  build-aux/git-version-gen
 Copyright:
  2007-2018 Free Software Foundation, Inc.

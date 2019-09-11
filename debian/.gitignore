@@ -3,6 +3,7 @@
 /*.log
 /*.substvars
 /files
+/locales/
 /pressure-vessel-libs-*/
 /pressure-vessel-relocatable/
 /tmp/

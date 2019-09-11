@@ -96,13 +96,15 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libselinux1': 'libselinux',
 }
 SCRIPTS = [
+    'pressure-vessel-locale-gen',
     'pressure-vessel-test-ui',
     'pressure-vessel-unruntime',
     'pressure-vessel-unruntime-scout',
     'pressure-vessel-unruntime-test-ui',
 ]
 EXECUTABLES = [
-    'pressure-vessel-wrap'
+    'pressure-vessel-try-setlocale',
+    'pressure-vessel-wrap',
 ]
 LIBCAPSULE_TOOLS = [
     'capsule-capture-libs',

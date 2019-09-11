@@ -38,7 +38,6 @@ if version == 'auto'
   version = git_version_gen.stdout().strip()
 endif
 
-
 warning_cflags = [
     '-Wall',
     '-Wextra',
@@ -107,6 +106,7 @@ supported_warning_cflags = c_compiler.get_supported_arguments(project_warning_cf
 add_project_arguments(supported_warning_cflags, language : 'c')
 
 scripts = [
+  'pressure-vessel-locale-gen',
   'pressure-vessel-test-ui',
   'pressure-vessel-unruntime',
   'pressure-vessel-unruntime-scout',
@@ -118,11 +118,13 @@ tests = [
   'pycodestyle.sh',
   'pyflakes.sh',
   'shellcheck.sh',
+  'test-locale-gen.sh',
 ]
 
 test_env = environment()
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
+test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 foreach test_name : tests
   if prove.found()
@@ -184,6 +186,52 @@ executable(
   build_rpath : '${ORIGIN}/../' + get_option('libdir'),
   install_rpath : '${ORIGIN}/../' + get_option('libdir'),
 )
+
+executable(
+  'pressure-vessel-try-setlocale',
+  sources : [
+    'src/try-setlocale.c',
+  ],
+  install : true,
+  install_dir : get_option('bindir'),
+)
+
+if get_option('man')
+  pandoc = find_program('pandoc', required : true)
+
+  if run_command(pandoc, [
+    '-f', 'markdown-smart',
+    '-t', 'man',
+    '/dev/null',
+  ]).returncode() == 0
+    pandoc_markdown_nosmart = 'markdown-smart'
+  else
+    pandoc_markdown_nosmart = 'markdown'
+  endif
+
+  foreach tool : ['locale-gen', 'try-setlocale']
+    custom_target(
+      tool + '.1',
+      build_by_default : true,
+      command : [
+        pandoc,
+        '-s',
+        '-o', '@OUTPUT@',
+        '-f', pandoc_markdown_nosmart,
+        '-t', 'man',
+        '@INPUT@',
+      ],
+      input : join_paths('man', tool + '.1.md'),
+      output : 'pressure-vessel-' + tool + '.1',
+      install : true,
+      install_dir : join_paths(
+        get_option('prefix'),
+        get_option('mandir'),
+        'man1',
+      ),
+    )
+  endforeach
+endif
 
 if get_option('srcdir') != ''
   conf_data = configuration_data()

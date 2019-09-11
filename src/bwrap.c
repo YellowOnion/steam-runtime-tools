@@ -379,3 +379,29 @@ pv_bwrap_copy_tree (FlatpakBwrap *bwrap,
   nftw_data.source = NULL;
   nftw_data.dest = NULL;
 }
+
+/**
+ * pv_bwrap_add_api_filesystems:
+ * @bwrap: The #FlatpakBwrap
+ *
+ * Make basic API filesystems available.
+ */
+void
+pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap)
+{
+  flatpak_bwrap_add_args (bwrap,
+                          "--dev-bind", "/dev", "/dev",
+                          "--proc", "/proc",
+                          "--ro-bind", "/sys", "/sys",
+                          NULL);
+
+  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--dev-bind", "/dev/pts", "/dev/pts",
+                            NULL);
+
+  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--dev-bind", "/dev/shm", "/dev/shm",
+                            NULL);
+}

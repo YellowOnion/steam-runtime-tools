@@ -1605,22 +1605,7 @@ main (int argc,
   if (opt_terminal != PV_TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
-  /* Make basic API filesystems available */
-  flatpak_bwrap_add_args (bwrap,
-                          "--dev-bind", "/dev", "/dev",
-                          "--proc", "/proc",
-                          "--ro-bind", "/sys", "/sys",
-                          NULL);
-
-  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/pts", "/dev/pts",
-                            NULL);
-
-  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/shm", "/dev/shm",
-                            NULL);
+  pv_bwrap_add_api_filesystems (bwrap);
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {

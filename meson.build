@@ -155,15 +155,21 @@ configure_file(
 executable(
   'pressure-vessel-wrap',
   sources : [
+    'src/bwrap.c',
+    'src/bwrap.h',
     'src/glib-backports.c',
     'src/glib-backports.h',
     'src/flatpak-bwrap.c',
     'src/flatpak-bwrap-private.h',
+    'src/flatpak-run.c',
+    'src/flatpak-run-private.h',
     'src/flatpak-utils.c',
     'src/flatpak-utils-private.h',
     'src/utils.c',
     'src/utils.h',
     'src/wrap.c',
+    'src/wrap-interactive.c',
+    'src/wrap-interactive.h',
   ],
   c_args : [
     '-Wno-unused-local-typedefs',

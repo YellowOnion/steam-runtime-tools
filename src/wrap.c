@@ -29,19 +29,18 @@
 #include <glib/gstdio.h>
 #include <gio/gio.h>
 
-#include <X11/Xauth.h>
-
-#include <ftw.h>
 #include <locale.h>
 #include <stdlib.h>
-#include <sys/utsname.h>
 
 #include "libglnx.h"
 
+#include "bwrap.h"
 #include "glib-backports.h"
 #include "flatpak-bwrap-private.h"
+#include "flatpak-run-private.h"
 #include "flatpak-utils-private.h"
 #include "utils.h"
+#include "wrap-interactive.h"
 
 /*
  * Supported Debian-style multiarch tuples
@@ -61,9 +60,6 @@ static const char * const libquals[] =
   "lib64",
   "lib32"
 };
-
-/* In Flatpak this is optional, in pressure-vessel not so much */
-#define ENABLE_XAUTH
 
 static gchar *
 find_executable_dir (GError **error)
@@ -194,542 +190,6 @@ check_bwrap (const char *tools_dir)
   return NULL;
 }
 
-static gboolean
-bind_usr (FlatpakBwrap *bwrap,
-          const char *host_path,
-          const char *mount_point,
-          GError **error)
-{
-  g_autofree gchar *usr = NULL;
-  g_autofree gchar *dest = NULL;
-  gboolean host_path_is_usr = FALSE;
-  g_autoptr(GDir) dir = NULL;
-  const gchar *member = NULL;
-  static const char * const bind_etc[] =
-  {
-    "alternatives",
-    "ld.so.cache"
-  };
-  gsize i;
-
-  g_return_val_if_fail (host_path != NULL, FALSE);
-  g_return_val_if_fail (host_path[0] == '/', FALSE);
-  g_return_val_if_fail (mount_point != NULL, FALSE);
-  g_return_val_if_fail (mount_point[0] == '/', FALSE);
-
-  usr = g_build_filename (host_path, "usr", NULL);
-  dest = g_build_filename (mount_point, "usr", NULL);
-
-  if (g_file_test (usr, G_FILE_TEST_IS_DIR))
-    {
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", usr, dest,
-                              NULL);
-    }
-  else
-    {
-      /* host_path is assumed to be a merged /usr */
-      host_path_is_usr = TRUE;
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", host_path, dest,
-                              NULL);
-    }
-
-  g_clear_pointer (&dest, g_free);
-
-  dir = g_dir_open (host_path, 0, error);
-
-  if (dir == NULL)
-    return FALSE;
-
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
-    {
-      if (g_str_has_prefix (member, "lib")
-          || g_str_equal (member, "bin")
-          || g_str_equal (member, "sbin"))
-        {
-          dest = g_build_filename (mount_point, member, NULL);
-
-          if (host_path_is_usr)
-            {
-              g_autofree gchar *target = g_build_filename ("usr",
-                                                           member, NULL);
-
-              flatpak_bwrap_add_args (bwrap,
-                                      "--symlink", target, dest,
-                                      NULL);
-            }
-          else
-            {
-              g_autofree gchar *path = g_build_filename (host_path,
-                                                         member, NULL);
-              g_autofree gchar *target = glnx_readlinkat_malloc (-1, path, NULL, NULL);
-
-              if (target != NULL)
-                {
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--symlink", target, dest,
-                                          NULL);
-                }
-              else
-                {
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", path, dest,
-                                          NULL);
-                }
-            }
-
-          g_clear_pointer (&dest, g_free);
-        }
-    }
-
-  for (i = 0; i < G_N_ELEMENTS (bind_etc); i++)
-    {
-      g_autofree gchar *path = g_build_filename (host_path, "etc",
-                                                 bind_etc[i], NULL);
-
-      if (g_file_test (path, G_FILE_TEST_EXISTS))
-        {
-          dest = g_build_filename (mount_point, "etc", bind_etc[i], NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", path, dest,
-                                  NULL);
-
-          g_clear_pointer (&dest, g_free);
-        }
-    }
-
-  return TRUE;
-}
-
-/* From Flatpak */
-static char *
-extract_unix_path_from_dbus_address (const char *address)
-{
-  const char *path, *path_end;
-
-  if (address == NULL)
-    return NULL;
-
-  if (!g_str_has_prefix (address, "unix:"))
-    return NULL;
-
-  path = strstr (address, "path=");
-  if (path == NULL)
-    return NULL;
-  path += strlen ("path=");
-  path_end = path;
-  while (*path_end != 0 && *path_end != ',')
-    path_end++;
-
-  return g_strndup (path, path_end - path);
-}
-
-/* From Flatpak */
-#ifdef ENABLE_XAUTH
-static gboolean
-auth_streq (char *str,
-            char *au_str,
-            int   au_len)
-{
-  return au_len == strlen (str) && memcmp (str, au_str, au_len) == 0;
-}
-
-static gboolean
-xauth_entry_should_propagate (Xauth *xa,
-                              char  *hostname,
-                              char  *number)
-{
-  /* ensure entry isn't for remote access */
-  if (xa->family != FamilyLocal && xa->family != FamilyWild)
-    return FALSE;
-
-  /* ensure entry is for this machine */
-  if (xa->family == FamilyLocal && !auth_streq (hostname, xa->address, xa->address_length))
-    return FALSE;
-
-  /* ensure entry is for this session */
-  if (xa->number != NULL && !auth_streq (number, xa->number, xa->number_length))
-    return FALSE;
-
-  return TRUE;
-}
-
-static void
-write_xauth (char *number, FILE *output)
-{
-  Xauth *xa, local_xa;
-  char *filename;
-  FILE *f;
-  struct utsname unames;
-
-  if (uname (&unames))
-    {
-      g_warning ("uname failed");
-      return;
-    }
-
-  filename = XauFileName ();
-  f = fopen (filename, "rb");
-  if (f == NULL)
-    return;
-
-  while (TRUE)
-    {
-      xa = XauReadAuth (f);
-      if (xa == NULL)
-        break;
-      if (xauth_entry_should_propagate (xa, unames.nodename, number))
-        {
-          local_xa = *xa;
-          if (local_xa.number)
-            {
-              local_xa.number = (char *) "99";
-              local_xa.number_length = 2;
-            }
-
-          if (!XauWriteAuth (output, &local_xa))
-            g_warning ("xauth write error");
-        }
-
-      XauDisposeAuth (xa);
-    }
-
-  fclose (f);
-}
-#endif
-
-/* Adapted from Flatpak */
-static void
-flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
-                          gboolean      allowed)
-{
-  g_autofree char *x11_socket = NULL;
-  const char *display;
-
-  /* Always cover /tmp/.X11-unix, that way we never see the host one in case
-   * we have access to the host /tmp. If you request X access we'll put the right
-   * thing in this anyway.
-   */
-  flatpak_bwrap_add_args (bwrap,
-                          "--tmpfs", "/tmp/.X11-unix",
-                          NULL);
-
-  if (!allowed)
-    {
-      flatpak_bwrap_unset_env (bwrap, "DISPLAY");
-      return;
-    }
-
-  g_debug ("Allowing x11 access");
-
-  display = g_getenv ("DISPLAY");
-  if (display && display[0] == ':' && g_ascii_isdigit (display[1]))
-    {
-      const char *display_nr = &display[1];
-      const char *display_nr_end = display_nr;
-      g_autofree char *d = NULL;
-
-      while (g_ascii_isdigit (*display_nr_end))
-        display_nr_end++;
-
-      d = g_strndup (display_nr, display_nr_end - display_nr);
-      x11_socket = g_strdup_printf ("/tmp/.X11-unix/X%s", d);
-
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", x11_socket, "/tmp/.X11-unix/X99",
-                              NULL);
-      flatpak_bwrap_set_env (bwrap, "DISPLAY", ":99.0", TRUE);
-
-#ifdef ENABLE_XAUTH
-      g_auto(GLnxTmpfile) xauth_tmpf  = { 0, };
-
-      if (glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &xauth_tmpf, NULL))
-        {
-          FILE *output = fdopen (xauth_tmpf.fd, "wb");
-          if (output != NULL)
-            {
-              /* fd is now owned by output, steal it from the tmpfile */
-              int tmp_fd = dup (glnx_steal_fd (&xauth_tmpf.fd));
-              if (tmp_fd != -1)
-                {
-                  g_autofree char *dest = g_strdup_printf ("/run/user/%d/Xauthority", getuid ());
-
-                  write_xauth (d, output);
-                  flatpak_bwrap_add_args_data_fd (bwrap, "--ro-bind-data", tmp_fd, dest);
-
-                  flatpak_bwrap_set_env (bwrap, "XAUTHORITY", dest, TRUE);
-                }
-
-              fclose (output);
-
-              if (tmp_fd != -1)
-                lseek (tmp_fd, 0, SEEK_SET);
-            }
-        }
-#endif
-    }
-  else
-    {
-      flatpak_bwrap_unset_env (bwrap, "DISPLAY");
-    }
-}
-
-static gboolean
-flatpak_run_add_wayland_args (FlatpakBwrap *bwrap)
-{
-  const char *wayland_display;
-  g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
-  g_autofree char *wayland_socket = NULL;
-  g_autofree char *sandbox_wayland_socket = NULL;
-  gboolean res = FALSE;
-  struct stat statbuf;
-
-  wayland_display = g_getenv ("WAYLAND_DISPLAY");
-  if (!wayland_display)
-    wayland_display = "wayland-0";
-
-  wayland_socket = g_build_filename (user_runtime_dir, wayland_display, NULL);
-  sandbox_wayland_socket = g_strdup_printf ("/run/user/%d/%s", getuid (), wayland_display);
-
-  if (stat (wayland_socket, &statbuf) == 0 &&
-      (statbuf.st_mode & S_IFMT) == S_IFSOCK)
-    {
-      res = TRUE;
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", wayland_socket, sandbox_wayland_socket,
-                              NULL);
-    }
-  return res;
-}
-
-/* Try to find a default server from a pulseaudio confguration file */
-static char *
-flatpak_run_get_pulseaudio_server_user_config (const char *path)
-{
-  g_autoptr(GFile) file = g_file_new_for_path (path);
-  g_autoptr(GError) my_error = NULL;
-  g_autoptr(GFileInputStream) input_stream = NULL;
-  g_autoptr(GDataInputStream) data_stream = NULL;
-  size_t len;
-
-  input_stream = g_file_read (file, NULL, &my_error);
-  if (my_error)
-    {
-      g_debug ("Pulseaudio user configuration file '%s': %s", path, my_error->message);
-      return NULL;
-    }
-
-  data_stream = g_data_input_stream_new (G_INPUT_STREAM (input_stream));
-
-  while (TRUE)
-    {
-      g_autofree char *line = g_data_input_stream_read_line (data_stream, &len, NULL, NULL);
-      if (line == NULL)
-        break;
-
-      g_strchug (line);
-
-      if ((*line  == '\0') || (*line == ';') || (*line == '#'))
-        continue;
-
-      if (g_str_has_prefix (line, ".include "))
-        {
-          g_autofree char *rec_path = g_strdup (line + 9);
-          g_strstrip (rec_path);
-          char *found = flatpak_run_get_pulseaudio_server_user_config (rec_path);
-          if (found)
-            return found;
-        }
-      else if (g_str_has_prefix (line, "["))
-        {
-          return NULL;
-        }
-      else
-        {
-          g_auto(GStrv) tokens = g_strsplit (line, "=", 2);
-
-          if ((tokens[0] != NULL) && (tokens[1] != NULL))
-            {
-              g_strchomp (tokens[0]);
-              if (strcmp ("default-server", tokens[0]) == 0)
-                {
-                  g_strstrip (tokens[1]);
-                  g_debug ("Found pulseaudio socket from configuration file '%s': %s", path, tokens[1]);
-                  return g_strdup (tokens[1]);
-                }
-            }
-        }
-    }
-
-  return NULL;
-}
-
-static char *
-flatpak_run_get_pulseaudio_server (void)
-{
-  const char * pulse_clientconfig;
-  char *pulse_server;
-  g_autofree char *pulse_user_config = NULL;
-
-  pulse_server = g_strdup (g_getenv ("PULSE_SERVER"));
-  if (pulse_server)
-    return pulse_server;
-
-  pulse_clientconfig = g_getenv ("PULSE_CLIENTCONFIG");
-  if (pulse_clientconfig)
-    return flatpak_run_get_pulseaudio_server_user_config (pulse_clientconfig);
-
-  pulse_user_config = g_build_filename (g_get_user_config_dir (), "pulse/client.conf", NULL);
-  pulse_server = flatpak_run_get_pulseaudio_server_user_config (pulse_user_config);
-  if (pulse_server)
-    return pulse_server;
-
-  pulse_server = flatpak_run_get_pulseaudio_server_user_config ("/etc/pulse/client.conf");
-  if (pulse_server)
-    return pulse_server;
-
-  return NULL;
-}
-
-static char *
-flatpak_run_parse_pulse_server (const char *value)
-{
-  g_auto(GStrv) servers = g_strsplit (value, " ", 0);
-  gsize i;
-
-  for (i = 0; servers[i] != NULL; i++)
-    {
-      const char *server = servers[i];
-      if (g_str_has_prefix (server, "{"))
-        {
-          const char * closing = strstr (server, "}");
-          if (closing == NULL)
-            continue;
-          server = closing + 1;
-        }
-      if (g_str_has_prefix (server, "unix:"))
-        return g_strdup (server + 5);
-    }
-
-  return NULL;
-}
-
-static void
-flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap)
-{
-  g_autofree char *pulseaudio_server = flatpak_run_get_pulseaudio_server ();
-  g_autofree char *pulseaudio_socket = NULL;
-  g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
-
-  if (pulseaudio_server)
-    pulseaudio_socket = flatpak_run_parse_pulse_server (pulseaudio_server);
-
-  if (!pulseaudio_socket)
-    pulseaudio_socket = g_build_filename (user_runtime_dir, "pulse/native", NULL);
-
-  flatpak_bwrap_unset_env (bwrap, "PULSE_SERVER");
-
-  /* SteamOS system-wide PulseAudio instance */
-  if (!g_file_test (pulseaudio_socket, G_FILE_TEST_EXISTS))
-    {
-      g_clear_pointer (&pulseaudio_socket, g_free);
-      pulseaudio_socket = g_strdup ("/var/run/pulse/native");
-    }
-
-  if (g_file_test (pulseaudio_socket, G_FILE_TEST_EXISTS))
-    {
-      gboolean share_shm = FALSE; /* TODO: When do we add this? */
-      g_autofree char *client_config = g_strdup_printf ("enable-shm=%s\n", share_shm ? "yes" : "no");
-      g_autofree char *sandbox_socket_path = g_strdup_printf ("/run/user/%d/pulse/native", getuid ());
-      g_autofree char *pulse_server = g_strdup_printf ("unix:/run/user/%d/pulse/native", getuid ());
-      g_autofree char *config_path = g_strdup_printf ("/run/user/%d/pulse/config", getuid ());
-
-      /* FIXME - error handling */
-      if (!flatpak_bwrap_add_args_data (bwrap, "pulseaudio", client_config, -1, config_path, NULL))
-        return;
-
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", pulseaudio_socket, sandbox_socket_path,
-                              NULL);
-
-      flatpak_bwrap_set_env (bwrap, "PULSE_SERVER", pulse_server, TRUE);
-      flatpak_bwrap_set_env (bwrap, "PULSE_CLIENTCONFIG", config_path, TRUE);
-    }
-  else
-    g_debug ("Could not find pulseaudio socket");
-}
-
-/* Simplified from Flatpak: we never restrict access to the D-Bus system bus */
-static gboolean
-flatpak_run_add_system_dbus_args (FlatpakBwrap   *app_bwrap)
-{
-  const char *dbus_address = g_getenv ("DBUS_SYSTEM_BUS_ADDRESS");
-  g_autofree char *real_dbus_address = NULL;
-  g_autofree char *dbus_system_socket = NULL;
-
-  if (dbus_address != NULL)
-    dbus_system_socket = extract_unix_path_from_dbus_address (dbus_address);
-  else if (g_file_test ("/var/run/dbus/system_bus_socket", G_FILE_TEST_EXISTS))
-    dbus_system_socket = g_strdup ("/var/run/dbus/system_bus_socket");
-
-  if (dbus_system_socket != NULL)
-    {
-      flatpak_bwrap_add_args (app_bwrap,
-                              "--ro-bind", dbus_system_socket, "/run/dbus/system_bus_socket",
-                              NULL);
-      flatpak_bwrap_set_env (app_bwrap, "DBUS_SYSTEM_BUS_ADDRESS", "unix:path=/run/dbus/system_bus_socket", TRUE);
-
-      return TRUE;
-    }
-
-  return FALSE;
-}
-
-/* Simplified from Flatpak: we never restrict access to the D-Bus session bus */
-static gboolean
-flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
-{
-  const char *dbus_address = g_getenv ("DBUS_SESSION_BUS_ADDRESS");
-  char *dbus_session_socket = NULL;
-  g_autofree char *sandbox_socket_path = g_strdup_printf ("/run/user/%d/bus", getuid ());
-  g_autofree char *sandbox_dbus_address = g_strdup_printf ("unix:path=/run/user/%d/bus", getuid ());
-  g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
-
-  /* FIXME: upstream the use of user_runtime_dir to Flatpak */
-
-  if (dbus_address != NULL)
-    {
-      dbus_session_socket = extract_unix_path_from_dbus_address (dbus_address);
-    }
-  else
-    {
-      struct stat statbuf;
-
-      dbus_session_socket = g_build_filename (user_runtime_dir, "bus", NULL);
-
-      if (stat (dbus_session_socket, &statbuf) < 0
-          || (statbuf.st_mode & S_IFMT) != S_IFSOCK
-          || statbuf.st_uid != getuid ())
-        return FALSE;
-    }
-
-  if (dbus_session_socket != NULL)
-    {
-      flatpak_bwrap_add_args (app_bwrap,
-                              "--ro-bind", dbus_session_socket, sandbox_socket_path,
-                              NULL);
-      flatpak_bwrap_set_env (app_bwrap, "DBUS_SESSION_BUS_ADDRESS", sandbox_dbus_address, TRUE);
-
-      return TRUE;
-    }
-
-  return FALSE;
-}
-
 static gchar *
 capture_output (const char * const * argv,
                 GError **error)
@@ -778,50 +238,6 @@ capture_output (const char * const * argv,
 }
 
 static gboolean
-run_bwrap (FlatpakBwrap *bwrap,
-           GError **error)
-{
-  gint exit_status;
-  g_autofree gchar *output = NULL;
-  g_autofree gchar *errors = NULL;
-  guint i;
-  g_autoptr(GString) command = g_string_new ("");
-
-  for (i = 0; i < bwrap->argv->len; i++)
-    {
-      g_autofree gchar *quoted = NULL;
-      char *unquoted = g_ptr_array_index (bwrap->argv, i);
-
-      if (unquoted == NULL)
-        break;
-
-      quoted = g_shell_quote (unquoted);
-      g_string_append_printf (command, " %s", quoted);
-    }
-
-  g_debug ("run:%s", command->str);
-
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (char **) bwrap->argv->pdata,
-                     NULL,  /* env */
-                     G_SPAWN_SEARCH_PATH,
-                     NULL, NULL,    /* child setup */
-                     &output,
-                     &errors,
-                     &exit_status,
-                     error))
-    return FALSE;
-
-  g_print ("%s", output);
-  g_printerr ("%s", errors);
-
-  if (!g_spawn_check_exit_status (exit_status, error))
-    return FALSE;
-
-  return TRUE;
-}
-
-static gboolean
 try_bind_dri (FlatpakBwrap *bwrap,
               FlatpakBwrap *mount_runtime_on_scratch,
               const char *overrides,
@@ -834,6 +250,12 @@ try_bind_dri (FlatpakBwrap *bwrap,
   g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
   g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
 
+  /* mount_runtime_on_scratch can't own any fds, because if it did,
+   * flatpak_bwrap_append_bwrap() would steal them. */
+  g_return_val_if_fail (mount_runtime_on_scratch->fds == NULL
+                        || mount_runtime_on_scratch->fds->len == 0,
+                        FALSE);
+
   if (g_file_test (dri, G_FILE_TEST_IS_DIR))
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
@@ -845,6 +267,8 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               libdir);
 
       temp_bwrap = flatpak_bwrap_new (NULL);
+      g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                      || mount_runtime_on_scratch->fds->len == 0);
       flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
@@ -856,7 +280,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!run_bwrap (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
         return FALSE;
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
@@ -878,7 +302,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!run_bwrap (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
         return FALSE;
     }
 
@@ -889,6 +313,8 @@ try_bind_dri (FlatpakBwrap *bwrap,
 
       expr = g_strdup_printf ("path-match:%s", s2tc);
       temp_bwrap = flatpak_bwrap_new (NULL);
+      g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                      || mount_runtime_on_scratch->fds->len == 0);
       flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
@@ -900,81 +326,11 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      if (!run_bwrap (temp_bwrap, error))
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
         return FALSE;
     }
 
   return TRUE;
-}
-
-/* nftw() doesn't have a user_data argument so we need to use a global
- * variable :-( */
-static struct
-{
-  FlatpakBwrap *bwrap;
-  const char *symlink_farm;
-  const char *dest;
-} nftw_data;
-
-static int
-add_symlinks_to_bwrap (const char *fpath,
-                       const struct stat *sb,
-                       int typeflag,
-                       struct FTW *ftwbuf)
-{
-  const char *path_in_container;
-  g_autofree gchar *target = NULL;
-  gsize prefix_len;
-
-  g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.symlink_farm), 1);
-  g_return_val_if_fail (g_str_has_suffix (nftw_data.symlink_farm, nftw_data.dest), 1);
-
-  prefix_len = strlen (nftw_data.symlink_farm) - strlen (nftw_data.dest);
-  path_in_container = fpath + prefix_len;
-
-  switch (typeflag)
-    {
-      case FTW_D:
-        flatpak_bwrap_add_args (nftw_data.bwrap,
-                                "--dir", path_in_container,
-                                NULL);
-        break;
-
-      case FTW_SL:
-        target = glnx_readlinkat_malloc (-1, fpath, NULL, NULL);
-        flatpak_bwrap_add_args (nftw_data.bwrap,
-                                "--symlink", target, path_in_container,
-                                NULL);
-        break;
-
-      default:
-        g_warning ("Don't know how to handle ftw type flag %d at %s",
-                   typeflag, fpath);
-    }
-
-  return 0;
-}
-
-/*
- * For every symbolic link in @farm, add a corresponding symbolic link
- * via the bwrap command-line.
- */
-static void
-add_symlink_farm (FlatpakBwrap *bwrap,
-                  const char *farm,
-                  const char *dest)
-{
-  g_return_if_fail (nftw_data.bwrap == NULL);
-  g_return_if_fail (dest[0] == '/');
-  g_return_if_fail (g_str_has_suffix (farm, dest));
-
-  nftw_data.bwrap = bwrap;
-  nftw_data.symlink_farm = farm;
-  nftw_data.dest = dest;
-  nftw (farm, add_symlinks_to_bwrap, 100, FTW_PHYS);
-  nftw_data.bwrap = NULL;
-  nftw_data.symlink_farm = NULL;
-  nftw_data.dest = NULL;
 }
 
 static gboolean
@@ -1011,6 +367,9 @@ bind_runtime (FlatpakBwrap *bwrap,
   gsize i, j;
   const gchar *member;
   g_autoptr(GString) dri_path = g_string_new ("");
+  gboolean any_architecture_works = FALSE;
+  gboolean any_libc_from_host = FALSE;
+  gboolean all_libc_from_host = TRUE;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -1020,13 +379,11 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   usr = g_build_filename (runtime, "usr", NULL);
 
-  if (!bind_usr (bwrap, runtime, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, runtime, "/", error))
     return FALSE;
 
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
-                          "--proc", "/proc",
-                          "--ro-bind", "/sys", "/sys",
                           "--tmpfs", "/run",
                           "--tmpfs", "/tmp",
                           "--tmpfs", "/var",
@@ -1084,50 +441,6 @@ bind_runtime (FlatpakBwrap *bwrap,
                               NULL);
     }
 
-  /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
-   * non-existing targets), in which case we don't want to attempt to create
-   * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
-   */
-  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
-    {
-      g_autofree char *localtime = NULL;
-      gboolean is_reachable = FALSE;
-      g_autofree char *timezone = flatpak_get_timezone ();
-      g_autofree char *timezone_content = g_strdup_printf ("%s\n", timezone);
-
-      localtime = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
-
-      if (localtime != NULL)
-        {
-          g_autoptr(GFile) base_file = NULL;
-          g_autoptr(GFile) target_file = NULL;
-          g_autofree char *target_canonical = NULL;
-
-          base_file = g_file_new_for_path ("/etc");
-          target_file = g_file_resolve_relative_path (base_file, localtime);
-          target_canonical = g_file_get_path (target_file);
-
-          is_reachable = g_str_has_prefix (target_canonical, "/usr/");
-        }
-
-      if (is_reachable)
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", localtime, "/etc/localtime",
-                                  NULL);
-        }
-      else
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", "/etc/localtime", "/etc/localtime",
-                                  NULL);
-        }
-
-      flatpak_bwrap_add_args_data (bwrap, "timezone",
-                                   timezone_content, -1, "/etc/timezone",
-                                   NULL);
-    }
-
   if (g_file_test ("/etc/resolv.conf", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
@@ -1151,12 +464,6 @@ bind_runtime (FlatpakBwrap *bwrap,
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
-
-  flatpak_run_add_wayland_args (bwrap);
-  flatpak_run_add_x11_args (bwrap, TRUE);
-  flatpak_run_add_pulseaudio_args (bwrap);
-  flatpak_run_add_session_dbus_args (bwrap);
-  flatpak_run_add_system_dbus_args (bwrap);
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
     {
@@ -1200,7 +507,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   bwrap->argv->pdata[0],
                                   NULL);
 
-          if (!bind_usr (temp_bwrap, runtime, "/", error))
+          if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
             return FALSE;
 
           flatpak_bwrap_add_args (temp_bwrap,
@@ -1220,6 +527,7 @@ bind_runtime (FlatpakBwrap *bwrap,
               continue;
             }
 
+          any_architecture_works = TRUE;
           g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
 
           search_path_append (dri_path, this_dri_path_in_container);
@@ -1234,11 +542,15 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   "--bind", overrides, overrides,
                                   "--tmpfs", scratch,
                                   NULL);
-          if (!bind_usr (mount_runtime_on_scratch, runtime, scratch,
+          if (!pv_bwrap_bind_usr (mount_runtime_on_scratch, runtime, scratch,
                          error))
             return FALSE;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
+          /* mount_runtime_on_scratch can't own any fds, because if it did,
+           * flatpak_bwrap_append_bwrap() would steal them. */
+          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                          || mount_runtime_on_scratch->fds->len == 0);
           flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
@@ -1250,7 +562,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
 
-          if (!run_bwrap (temp_bwrap, error))
+          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
             return FALSE;
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
@@ -1275,7 +587,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       bwrap->argv->pdata[0],
                                       NULL);
 
-              if (!bind_usr (temp_bwrap, runtime, "/", error))
+              if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
                 return FALSE;
 
               flatpak_bwrap_add_args (temp_bwrap,
@@ -1289,19 +601,32 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       ld_so_in_runtime,
                                       NULL);
 
-              g_debug ("Making host locale data visible in container");
+              /* Collect miscellaneous libraries that libc might dlopen.
+               * At the moment this is just libidn2. */
+              temp_bwrap = flatpak_bwrap_new (NULL);
+              g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                              || mount_runtime_on_scratch->fds->len == 0);
+              flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      tool_path,
+                                      "--container", scratch,
+                                      "--link-target", "/run/host",
+                                      "--dest", libdir_on_host,
+                                      "--provider", "/",
+                                      "if-exists:libidn2.so.0",
+                                      NULL);
+              flatpak_bwrap_finish (temp_bwrap);
 
-              if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
-                flatpak_bwrap_add_args (bwrap,
-                                        "--ro-bind", "/usr/lib/locale",
-                                        "/usr/lib/locale",
-                                        NULL);
+              if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+                return FALSE;
 
-              if (g_file_test ("/usr/share/i18n", G_FILE_TEST_EXISTS))
-                flatpak_bwrap_add_args (bwrap,
-                                        "--ro-bind", "/usr/share/i18n",
-                                        "/usr/share/i18n",
-                                        NULL);
+              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+              any_libc_from_host = TRUE;
+            }
+          else
+            {
+              all_libc_from_host = FALSE;
             }
 
           /* /lib32 or /lib64 */
@@ -1329,6 +654,68 @@ bind_runtime (FlatpakBwrap *bwrap,
         }
     }
 
+  if (!any_architecture_works)
+    {
+      GString *archs = g_string_new ("");
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+        {
+          if (archs->len > 0)
+            g_string_append (archs, ", ");
+
+          g_string_append (archs, multiarch_tuples[i]);
+        }
+
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "None of the supported CPU architectures are common to "
+                   "the host system and the container (tried: %s)",
+                   archs->str);
+      g_string_free (archs, TRUE);
+      return FALSE;
+    }
+
+  if (any_libc_from_host && !all_libc_from_host)
+    {
+      /*
+       * This shouldn't happen. It would mean that there exist at least
+       * two architectures (let's say aaa and bbb) for which we have:
+       * host libc6:aaa < container libc6 < host libc6:bbb
+       * (we know that the container's libc6:aaa and libc6:bbb are
+       * constrained to be the same version because that's how multiarch
+       * works).
+       *
+       * If the host system locales work OK with both the aaa and bbb
+       * versions, let's assume they will also work with the intermediate
+       * version from the container...
+       */
+      g_warning ("Using glibc from host system for some but not all "
+                 "architectures! Arbitrarily using host locales.");
+    }
+
+  if (any_libc_from_host)
+    {
+      g_debug ("Making host locale data visible in container");
+
+      if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
+        flatpak_bwrap_add_args (bwrap,
+                                "--ro-bind", "/usr/lib/locale",
+                                "/usr/lib/locale",
+                                NULL);
+
+      if (g_file_test ("/usr/share/i18n", G_FILE_TEST_EXISTS))
+        flatpak_bwrap_add_args (bwrap,
+                                "--ro-bind", "/usr/share/i18n",
+                                "/usr/share/i18n",
+                                NULL);
+    }
+  else
+    {
+      g_debug ("Using included locale data from container");
+    }
+
+  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
+    return FALSE;
+
   if (dri_path->len != 0)
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LIBGL_DRIVERS_PATH", dri_path->str,
@@ -1338,10 +725,63 @@ bind_runtime (FlatpakBwrap *bwrap,
                               "--unsetenv", "LIBGL_DRIVERS_PATH",
                               NULL);
 
-  add_symlink_farm (bwrap, overrides, "/overrides");
+  /* These can add data fds to @bwrap, so they must come last - after
+   * other functions stop using @bwrap as a basis for their own bwrap
+   * invocations with flatpak_bwrap_append_bwrap().
+   * Otherwise, when flatpak_bwrap_append_bwrap() calls
+   * flatpak_bwrap_steal_fds(), it will make the original FlatpakBwrap
+   * unusable. */
 
-  if (!bind_usr (bwrap, "/", "/run/host", error))
-    return FALSE;
+  flatpak_run_add_wayland_args (bwrap);
+  flatpak_run_add_x11_args (bwrap, TRUE);
+  flatpak_run_add_pulseaudio_args (bwrap);
+  flatpak_run_add_session_dbus_args (bwrap);
+  flatpak_run_add_system_dbus_args (bwrap);
+  pv_bwrap_copy_tree (bwrap, overrides, "/overrides");
+
+  /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
+   * non-existing targets), in which case we don't want to attempt to create
+   * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
+   */
+  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
+    {
+      g_autofree char *localtime = NULL;
+      gboolean is_reachable = FALSE;
+      g_autofree char *timezone = flatpak_get_timezone ();
+      g_autofree char *timezone_content = g_strdup_printf ("%s\n", timezone);
+
+      localtime = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
+
+      if (localtime != NULL)
+        {
+          g_autoptr(GFile) base_file = NULL;
+          g_autoptr(GFile) target_file = NULL;
+          g_autofree char *target_canonical = NULL;
+
+          base_file = g_file_new_for_path ("/etc");
+          target_file = g_file_resolve_relative_path (base_file, localtime);
+          target_canonical = g_file_get_path (target_file);
+
+          is_reachable = g_str_has_prefix (target_canonical, "/usr/");
+        }
+
+      if (is_reachable)
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", localtime, "/etc/localtime",
+                                  NULL);
+        }
+      else
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", "/etc/localtime", "/etc/localtime",
+                                  NULL);
+        }
+
+      flatpak_bwrap_add_args_data (bwrap, "timezone",
+                                   timezone_content, -1, "/etc/timezone",
+                                   NULL);
+    }
 
   return TRUE;
 }
@@ -1495,145 +935,6 @@ use_fake_home (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
-static void
-wrap_in_xterm (FlatpakBwrap *wrapped_command)
-{
-  g_return_if_fail (wrapped_command != NULL);
-
-  flatpak_bwrap_add_args (wrapped_command,
-                          "xterm", "-e",
-                          /* Original command will go here and become
-                           * the argv of xterm -e */
-                          NULL);
-}
-
-typedef enum
-{
-  SHELL_NONE = 0,
-  SHELL_AFTER,
-  SHELL_FAIL,
-  SHELL_INSTEAD
-} Shell;
-
-static void
-wrap_interactive (FlatpakBwrap *wrapped_command,
-                  Shell shell)
-{
-  static const char preamble[] =
-    {
-      "prgname=\"$1\"\n"
-      "shift\n"
-    };
-  const char *script = "";
-  static const char start_shell[] =
-    {
-      "echo\n"
-      "echo\n"
-      "echo\n"
-      "echo \"$1: Starting interactive shell (original command is in "
-      "\\\"\\$@\\\")\"\n"
-      "echo\n"
-      "echo\n"
-      "echo\n"
-      "exec bash -i -s \"$@\"\n"
-    };
-  gchar *command;
-
-  g_return_if_fail (wrapped_command != NULL);
-
-  switch (shell)
-    {
-      case SHELL_NONE:
-        script =
-          "e=0\n"
-          "\"$@\" || e=$?\n"
-          "echo\n"
-          "echo \"Press Enter or ^D to continue...\"\n"
-          "read reply || true\n"
-          "exit \"$e\"\n";
-        break;
-
-      case SHELL_AFTER:
-        script =
-          "e=0\n"
-          "\"$@\" || e=$?\n";
-        break;
-
-      case SHELL_FAIL:
-        script =
-          "if \"$@\"; then exit 0; else e=\"$?\"; fi\n"
-          "echo \"$1: command exit status $e\"\n";
-        break;
-
-      case SHELL_INSTEAD:
-        break;
-
-      default:
-        g_return_if_reached ();
-    }
-
-  command = g_strdup_printf ("%s%s%s",
-                             preamble,
-                             script,
-                             shell == SHELL_NONE ? "" : start_shell);
-
-  flatpak_bwrap_add_args (wrapped_command,
-                          "sh", "-euc",
-                          command,
-                          "sh",   /* $0 for sh */
-                          g_get_prgname (),   /* $1 for sh */
-                          /* Original command will go here and become
-                           * the argv of command, and eventually
-                           * the argv of bash -i -s */
-                          NULL);
-}
-
-static gboolean
-wrap_tty (FlatpakBwrap *wrapped_command,
-          GError **error)
-{
-  int fd;
-
-  g_return_val_if_fail (wrapped_command != NULL, FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  fflush (stdout);
-  fflush (stderr);
-
-  fd = open ("/dev/tty", O_RDONLY);
-
-  if (fd < 0)
-    return glnx_throw_errno_prefix (error,
-                                    "Cannot open /dev/tty for reading");
-
-  if (dup2 (fd, 0) < 0)
-    return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stdin");
-
-  g_close (fd, NULL);
-
-  fd = open ("/dev/tty", O_WRONLY);
-
-  if (fd < 0)
-    return glnx_throw_errno_prefix (error, "Cannot open /dev/tty for writing");
-
-  if (dup2 (fd, 1) < 0)
-    return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stdout");
-
-  if (dup2 (fd, 2) < 0)
-    return glnx_throw_errno_prefix (error, "Cannot use /dev/tty as stderr");
-
-  g_close (fd, NULL);
-  return TRUE;
-}
-
-typedef enum
-{
-  TERMINAL_NONE = 0,
-  TERMINAL_AUTO,
-  TERMINAL_TTY,
-  TERMINAL_XTERM,
-} Terminal;
-
 typedef enum
 {
   TRISTATE_NO = 0,
@@ -1647,14 +948,14 @@ static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
-static Shell opt_shell = SHELL_NONE;
+static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
-static Terminal opt_terminal = TERMINAL_AUTO;
+static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
@@ -1687,7 +988,7 @@ opt_shell_cb (const gchar *option_name,
 
   if (value == NULL || *value == '\0')
     {
-      opt_shell = SHELL_NONE;
+      opt_shell = PV_SHELL_NONE;
       return TRUE;
     }
 
@@ -1696,7 +997,7 @@ opt_shell_cb (const gchar *option_name,
       case 'a':
         if (g_strcmp0 (value, "after") == 0)
           {
-            opt_shell = SHELL_AFTER;
+            opt_shell = PV_SHELL_AFTER;
             return TRUE;
           }
         break;
@@ -1704,7 +1005,7 @@ opt_shell_cb (const gchar *option_name,
       case 'f':
         if (g_strcmp0 (value, "fail") == 0)
           {
-            opt_shell = SHELL_FAIL;
+            opt_shell = PV_SHELL_FAIL;
             return TRUE;
           }
         break;
@@ -1712,7 +1013,7 @@ opt_shell_cb (const gchar *option_name,
       case 'i':
         if (g_strcmp0 (value, "instead") == 0)
           {
-            opt_shell = SHELL_INSTEAD;
+            opt_shell = PV_SHELL_INSTEAD;
             return TRUE;
           }
         break;
@@ -1720,7 +1021,7 @@ opt_shell_cb (const gchar *option_name,
       case 'n':
         if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
           {
-            opt_shell = SHELL_NONE;
+            opt_shell = PV_SHELL_NONE;
             return TRUE;
           }
         break;
@@ -1748,7 +1049,7 @@ opt_terminal_cb (const gchar *option_name,
 
   if (value == NULL || *value == '\0')
     {
-      opt_terminal = TERMINAL_AUTO;
+      opt_terminal = PV_TERMINAL_AUTO;
       return TRUE;
     }
 
@@ -1757,7 +1058,7 @@ opt_terminal_cb (const gchar *option_name,
       case 'a':
         if (g_strcmp0 (value, "auto") == 0)
           {
-            opt_terminal = TERMINAL_AUTO;
+            opt_terminal = PV_TERMINAL_AUTO;
             return TRUE;
           }
         break;
@@ -1765,7 +1066,7 @@ opt_terminal_cb (const gchar *option_name,
       case 'n':
         if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
           {
-            opt_terminal = TERMINAL_NONE;
+            opt_terminal = PV_TERMINAL_NONE;
             return TRUE;
           }
         break;
@@ -1773,7 +1074,7 @@ opt_terminal_cb (const gchar *option_name,
       case 't':
         if (g_strcmp0 (value, "tty") == 0)
           {
-            opt_terminal = TERMINAL_TTY;
+            opt_terminal = PV_TERMINAL_TTY;
             return TRUE;
           }
         break;
@@ -1781,7 +1082,7 @@ opt_terminal_cb (const gchar *option_name,
       case 'x':
         if (g_strcmp0 (value, "xterm") == 0)
           {
-            opt_terminal = TERMINAL_XTERM;
+            opt_terminal = PV_TERMINAL_XTERM;
             return TRUE;
           }
         break;
@@ -2042,15 +1343,15 @@ main (int argc,
       goto out;
     }
 
-  if (opt_terminal == TERMINAL_AUTO)
+  if (opt_terminal == PV_TERMINAL_AUTO)
     {
-      if (opt_shell != SHELL_NONE)
-        opt_terminal = TERMINAL_XTERM;
+      if (opt_shell != PV_SHELL_NONE)
+        opt_terminal = PV_TERMINAL_XTERM;
       else
-        opt_terminal = TERMINAL_NONE;
+        opt_terminal = PV_TERMINAL_NONE;
     }
 
-  if (opt_terminal == TERMINAL_NONE && opt_shell != SHELL_NONE)
+  if (opt_terminal == PV_TERMINAL_NONE && opt_shell != PV_SHELL_NONE)
     {
       g_printerr ("%s: --terminal=none is incompatible with --shell\n",
                   g_get_prgname ());
@@ -2121,7 +1422,7 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
-  if (opt_terminal != TERMINAL_TTY)
+  if (opt_terminal != PV_TERMINAL_TTY)
     {
       int fd;
 
@@ -2191,31 +1492,31 @@ main (int argc,
 
   switch (opt_terminal)
     {
-      case TERMINAL_TTY:
+      case PV_TERMINAL_TTY:
         g_debug ("Wrapping command to use tty");
 
-        if (!wrap_tty (wrapped_command, error))
+        if (!pv_bwrap_wrap_tty (wrapped_command, error))
           goto out;
 
         break;
 
-      case TERMINAL_XTERM:
+      case PV_TERMINAL_XTERM:
         g_debug ("Wrapping command with xterm");
-        wrap_in_xterm (wrapped_command);
+        pv_bwrap_wrap_in_xterm (wrapped_command);
         break;
 
-      case TERMINAL_AUTO:
-      case TERMINAL_NONE:
+      case PV_TERMINAL_AUTO:
+      case PV_TERMINAL_NONE:
       default:
         /* do nothing */
         break;
     }
 
-  if (opt_shell != SHELL_NONE || opt_terminal == TERMINAL_XTERM)
+  if (opt_shell != PV_SHELL_NONE || opt_terminal == PV_TERMINAL_XTERM)
     {
-      /* In the (SHELL_NONE, TERMINAL_XTERM) case, just don't let the xterm
-       * close before the user has had a chance to see the output */
-      wrap_interactive (wrapped_command, opt_shell);
+      /* In the (PV_SHELL_NONE, PV_TERMINAL_XTERM) case, just don't let the
+       * xterm close before the user has had a chance to see the output */
+      pv_bwrap_wrap_interactive (wrapped_command, opt_shell);
     }
 
   if (argv[1][0] == '-')
@@ -2301,8 +1602,10 @@ main (int argc,
   /* Protect the controlling terminal from the app/game, unless we are
    * running an interactive shell in which case that would break its
    * job control. */
-  if (opt_terminal != TERMINAL_TTY)
+  if (opt_terminal != PV_TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
+
+  pv_bwrap_add_api_filesystems (bwrap);
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
@@ -2339,21 +1642,6 @@ main (int argc,
                               "--bind", "/", "/",
                               NULL);
     }
-
-  /* Make /dev available */
-  flatpak_bwrap_add_args (bwrap,
-                          "--dev-bind", "/dev", "/dev",
-                          NULL);
-
-  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/pts", "/dev/pts",
-                            NULL);
-
-  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/shm", "/dev/shm",
-                            NULL);
 
   /* Protect other users' homes (but guard against the unlikely
    * situation that they don't exist) */
@@ -2544,8 +1832,6 @@ main (int argc,
         }
     }
 
-  flatpak_bwrap_finish (bwrap);
-
   /* Clean up temporary directory before running our long-running process */
   if (tmpdir != NULL &&
       !glnx_shutil_rm_rf_at (-1, tmpdir, NULL, error))
@@ -2557,18 +1843,8 @@ main (int argc,
 
   g_clear_pointer (&tmpdir, g_free);
 
-  /* flatpak_bwrap_finish did this */
-  g_assert (g_ptr_array_index (bwrap->argv, bwrap->argv->len - 1) == NULL);
-
-  g_debug ("Replacing self with bwrap...");
-
-  flatpak_bwrap_child_setup_cb (bwrap->fds);
-  execve (bwrap->argv->pdata[0],
-          (char * const *) bwrap->argv->pdata,
-          bwrap->envp);
-
-  /* If we are still here then execve failed */
-  g_warning ("execve failed: %s", g_strerror (errno));
+  flatpak_bwrap_finish (bwrap);
+  pv_bwrap_execve (bwrap, error);
 
 out:
   if (local_error != NULL)

@@ -19,14 +19,6 @@ Copyright:
 License: LGPL-2.1+
 
 Files:
- src/*
- tests/shellcheck.sh
-Copyright:
- 2014-2019 Red Hat, Inc
- 2017-2019 Collabora Ltd.
-License: LGPL-2.1+
-
-Files:
  build-aux/git-version-gen
 Copyright:
  2007-2018 Free Software Foundation, Inc.

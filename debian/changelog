@@ -1,3 +1,14 @@
+pressure-vessel (0.20190912.0) scout; urgency=medium
+
+  * Refactor pressure-vessel-wrap
+  * wrap: Fail with an error if no architectures work
+  * wrap: Only bind-mount host /usr/lib/locale once
+  * wrap: If using host libc.so.6, also pick up host libidn2.so.0
+  * wrap: Use a new pressure-vessel-locale-gen to set up locales
+  * d/copyright: Remove duplication
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 12 Sep 2019 14:54:47 +0100
+
 pressure-vessel (0.20190823.0) scout; urgency=medium
 
   * Switch to "native" packaging format

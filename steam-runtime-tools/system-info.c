@@ -1307,6 +1307,20 @@ srt_system_info_get_locale_issues (SrtSystemInfo *self)
       g_clear_object (&locale);
 
       self->locales.have_issues = TRUE;
+
+      /* We currently only look for I18NDIR data in /usr/share/i18n (the
+       * glibc default path), so these checks only look there too.
+       *
+       * If we discover that some distros use a different default, then
+       * we should enhance this check to iterate through a search path.
+       *
+       * Please keep this in sync with pressure-vessel-locale-gen. */
+
+      if (!g_file_test ("/usr/share/i18n/SUPPORTED", G_FILE_TEST_IS_REGULAR))
+        self->locales.issues |= SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING;
+
+      if (!g_file_test ("/usr/share/i18n/locales/en_US", G_FILE_TEST_IS_REGULAR))
+        self->locales.issues |= SRT_LOCALE_ISSUES_I18N_LOCALES_EN_US_MISSING;
     }
 
   return self->locales.issues;

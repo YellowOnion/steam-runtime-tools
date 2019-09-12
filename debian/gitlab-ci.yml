@@ -18,6 +18,7 @@ variables:
         libjson-glib-dev
         libx11-dev
         libxcomposite-dev
+        locales
         meson
         pandoc
 

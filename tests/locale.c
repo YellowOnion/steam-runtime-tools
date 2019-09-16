@@ -115,6 +115,7 @@ test_object (Fixture *f,
   g_free (req);
   g_free (res);
   g_free (charset);
+  g_object_unref (locale);
 
   locale = _srt_locale_new ("en_US",
                             "en_US",
@@ -124,6 +125,7 @@ test_object (Fixture *f,
   g_assert_cmpstr (srt_locale_get_resulting_name (locale), ==, "en_US");
   g_assert_cmpstr (srt_locale_get_charset (locale), ==, "ISO-8859-1");
   g_assert_cmpint (srt_locale_is_utf8 (locale), ==, FALSE);
+  g_object_unref (locale);
 }
 
 static void

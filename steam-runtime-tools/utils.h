@@ -1,3 +1,4 @@
+
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -25,16 +26,22 @@
 
 #pragma once
 
-#define _SRT_IN_SINGLE_HEADER
+#if !defined(_SRT_IN_SINGLE_HEADER) && !defined(_SRT_COMPILATION)
+#error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
+#endif
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/graphics.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/locale.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
-#include <steam-runtime-tools/utils.h>
+#include <glib.h>
+#include <glib-object.h>
 
-#undef _SRT_IN_SINGLE_HEADER
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+
+static inline void
+_srt_free_object_list (GList *l)
+{
+  g_list_free_full (l, g_object_unref);
+}
+
+typedef GList SrtObjectList;
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtObjectList, _srt_free_object_list)
+
+#endif

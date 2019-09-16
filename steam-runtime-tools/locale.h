@@ -119,3 +119,7 @@ const char *srt_locale_get_requested_name (SrtLocale *self);
 const char *srt_locale_get_resulting_name (SrtLocale *self);
 const char *srt_locale_get_charset (SrtLocale *self);
 gboolean srt_locale_is_utf8 (SrtLocale *self);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtLocale, g_object_unref)
+#endif

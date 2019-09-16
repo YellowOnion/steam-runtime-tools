@@ -108,3 +108,7 @@ const char *srt_graphics_get_version_string (SrtGraphics *self);
 const char *srt_graphics_get_renderer_string (SrtGraphics *self);
 const char *srt_graphics_get_messages (SrtGraphics *self);
 gchar *srt_graphics_dup_parameters_string (SrtGraphics *self);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphics, g_object_unref)
+#endif

@@ -1378,9 +1378,14 @@ srt_system_info_check_locale (SrtSystemInfo *self,
                                   &local_error);
 
       if (locale != NULL)
-        maybe = maybe_locale_new_positive (locale);
+        {
+          maybe = maybe_locale_new_positive (locale);
+          g_object_unref (locale);
+        }
       else
-        maybe = maybe_locale_new_negative (local_error);
+        {
+          maybe = maybe_locale_new_negative (local_error);
+        }
 
       g_hash_table_replace (self->locales.cached_locales,
                             GUINT_TO_POINTER (quark),

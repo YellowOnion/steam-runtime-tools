@@ -78,11 +78,13 @@ ARCHS = [
 DEPENDENCIES = {
     'libcapsule-tools-relocatable': 'libcapsule',
     'libelf1': 'elfutils',
+    'libsteam-runtime-tools-0-helpers': 'steam-runtime-tools',
     'zlib1g': 'zlib',
 }
 # program to install => binary package
 WRAPPED_PROGRAMS = {
     'bwrap': 'bubblewrap',
+    'steam-runtime-system-info': 'steam-runtime-tools-bin',
 }
 PRIMARY_ARCH_DEPENDENCIES = {
     'bubblewrap': 'bubblewrap',
@@ -90,10 +92,12 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libcap2': 'libcap2',
     'libffi6': 'libffi',
     'libglib2.0-0': 'glib2.0',
+    'libjson-glib-1.0-0': 'json-glib',
     'libmount1': 'util-linux',
     'libpcre3': 'pcre3',
-    'libxau6': 'libxau',
     'libselinux1': 'libselinux',
+    'libsteam-runtime-tools-0-0': 'steam-runtime-tools',
+    'libxau6': 'libxau',
 }
 SCRIPTS = [
     'pressure-vessel-locale-gen',
@@ -233,6 +237,7 @@ def main():
             raise RuntimeError('--output directory must not already exist')
 
         os.makedirs(os.path.join(installation, 'bin'), exist_ok=True)
+        os.makedirs(os.path.join(installation, 'libexec'), exist_ok=True)
         os.makedirs(os.path.join(installation, 'metadata'), exist_ok=True)
 
         for arch in ARCHS:
@@ -291,6 +296,35 @@ def main():
                     os.path.join(installation, 'bin'),
                 )
 
+            path = '/usr/libexec/steam-runtime-tools-0'
+
+            if not os.path.exists(path):
+                package = 'libsteam-runtime-tools-0-helpers'
+                v_check_call([
+                    'apt-get',
+                    'download',
+                    package + ':' + arch.name,
+                ], cwd=tmpdir)
+                v_check_call(
+                    'dpkg-deb -X {}_*_{}.deb build-relocatable'.format(
+                        quote(package),
+                        quote(arch.name),
+                    ),
+                    cwd=tmpdir,
+                    shell=True,
+                )
+                path = '{}/build-relocatable/{}'.format(tmpdir, path)
+
+            for tool in glob.glob(os.path.join(path, arch.multiarch + '-*')):
+                install_exe(
+                    tool,
+                    os.path.join(
+                        installation,
+                        'libexec',
+                        'steam-runtime-tools-0',
+                    ),
+                )
+
         primary_architecture = subprocess.check_output([
             'dpkg', '--print-architecture',
         ]).decode('utf-8').strip()
@@ -329,8 +363,10 @@ def main():
                     'soname:libXau.so.6',
                     'soname:libcap.so.2',
                     'soname:libgio-2.0.so.0',
+                    'soname:libjson-glib-1.0.so.0',
                     'soname:libpcre.so.3',
                     'soname:libselinux.so.1',
+                    'soname:libsteam-runtime-tools-0.so.0',
                 ])
 
             for so in glob.glob(

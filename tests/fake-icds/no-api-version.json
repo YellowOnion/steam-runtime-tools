@@ -1,0 +1,6 @@
+{
+    "ICD": {
+        "library_path": "libfoo.so"
+    },
+    "file_format_version": "1.0.0"
+}

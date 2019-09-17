@@ -115,6 +115,13 @@ struct _SrtSystemInfo
     gchar *version;
     SrtRuntimeIssues issues;
   } runtime;
+  struct
+  {
+    GList *egl;
+    GList *vulkan;
+    gboolean have_egl;
+    gboolean have_vulkan;
+  } icds;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
   /* (element-type Abi) */
@@ -317,11 +324,26 @@ forget_steam (SrtSystemInfo *self)
   g_clear_pointer (&self->steam.bin32, g_free);
 }
 
+/*
+ * Forget any cached information about ICDs.
+ */
+static void
+forget_icds (SrtSystemInfo *self)
+{
+  self->icds.have_egl = FALSE;
+  g_list_free_full (self->icds.egl, g_object_unref);
+  self->icds.egl = NULL;
+  self->icds.have_vulkan = FALSE;
+  g_list_free_full (self->icds.vulkan, g_object_unref);
+  self->icds.vulkan = NULL;
+}
+
 static void
 srt_system_info_finalize (GObject *object)
 {
   SrtSystemInfo *self = SRT_SYSTEM_INFO (object);
 
+  forget_icds (self);
   forget_locales (self);
   forget_runtime (self);
   forget_steam (self);
@@ -1429,4 +1451,102 @@ srt_system_info_set_test_flags (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   self->test_flags = flags;
+}
+
+/**
+ * srt_system_info_list_egl_icds:
+ *
+ * List the available EGL ICDs, using the same search paths as GLVND.
+ *
+ * This function is not architecture-specific and may return a mixture
+ * of ICDs for more than one architecture or ABI, because the way the
+ * GLVND EGL loader works is to read a single search path for metadata
+ * describing ICDs, then filter out the ones that are for the wrong
+ * architecture at load time.
+ *
+ * Some of the entries in the result might describe a bare SONAME in the
+ * standard library search path, which might exist for any or all
+ * architectures simultaneously (this is the most common approach for EGL).
+ * Other entries might describe the relative or absolute path to a
+ * specific library, which will only be usable for the architecture for
+ * which it was compiled.
+ *
+ * @multiarch_tuples is used if running in a Flatpak environment, to
+ * match the search paths used by the freedesktop.org runtime's patched
+ * GLVND.
+ *
+ * Returns: (transfer full) (element-type SrtEglIcd): A list of
+ *  opaque #SrtEglIcd objects. Free with
+ *  `g_list_free_full(icds, srt_egl_icd_unref)`.
+ */
+GList *
+srt_system_info_list_egl_icds (SrtSystemInfo *self,
+                               const char * const *multiarch_tuples)
+{
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->icds.have_egl)
+    {
+      g_assert (self->icds.egl == NULL);
+      self->icds.egl = _srt_load_egl_icds (self->env, multiarch_tuples);
+      self->icds.have_egl = TRUE;
+    }
+
+  for (iter = self->icds.egl; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_vulkan_icds:
+ *
+ * List the available Vulkan ICDs, using the same search paths as the
+ * reference vulkan-loader.
+ *
+ * This function is not architecture-specific and may return a mixture
+ * of ICDs for more than one architecture or ABI, because the way the
+ * reference vulkan-loader works is to read a single search path for
+ * metadata describing ICDs, then filter out the ones that are for the
+ * wrong architecture at load time.
+ *
+ * Some of the entries in the result might describe a bare SONAME in the
+ * standard library search path, which might exist for any or all
+ * architectures simultaneously (for example, this approach is used for
+ * the NVIDIA binary driver on Debian systems). Other entries might
+ * describe the relative or absolute path to a specific library, which
+ * will only be usable for the architecture for which it was compiled
+ * (for example, this approach is used in Mesa).
+ *
+ * @multiarch_tuples is used if running in a Flatpak environment, to
+ * match the search paths used by the freedesktop.org runtime's patched
+ * vulkan-loader.
+ *
+ * Returns: (transfer full) (element-type SrtVulkanIcd): A list of
+ *  opaque #SrtVulkanIcd objects. Free with
+ *  `g_list_free_full(icds, srt_vulkan_icd_unref)`.
+ */
+GList *
+srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
+                                  const char * const *multiarch_tuples)
+{
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->icds.have_vulkan)
+    {
+      g_assert (self->icds.vulkan == NULL);
+      self->icds.vulkan = _srt_load_vulkan_icds (self->env, multiarch_tuples);
+      self->icds.have_vulkan = TRUE;
+    }
+
+  for (iter = self->icds.vulkan; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
 }

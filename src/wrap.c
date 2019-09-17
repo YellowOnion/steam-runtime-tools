@@ -488,6 +488,7 @@ bind_runtime (FlatpakBwrap *bwrap,
   gboolean any_libc_from_host = FALSE;
   gboolean all_libc_from_host = TRUE;
   g_autofree gchar *localedef = NULL;
+  gboolean ret = FALSE;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -498,7 +499,7 @@ bind_runtime (FlatpakBwrap *bwrap,
   usr = g_build_filename (runtime, "usr", NULL);
 
   if (!pv_bwrap_bind_usr (bwrap, runtime, "/", error))
-    return FALSE;
+    goto out;
 
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
@@ -628,7 +629,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   NULL);
 
           if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
-            return FALSE;
+            goto out;
 
           flatpak_bwrap_add_args (temp_bwrap,
                                   "readlink", "-e", ld_so,
@@ -664,7 +665,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   NULL);
           if (!pv_bwrap_bind_usr (mount_runtime_on_scratch, runtime, scratch,
                          error))
-            return FALSE;
+            goto out;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
           /* mount_runtime_on_scratch can't own any fds, because if it did,
@@ -683,7 +684,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_finish (temp_bwrap);
 
           if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-            return FALSE;
+            goto out;
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
@@ -708,7 +709,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       NULL);
 
               if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
-                return FALSE;
+                goto out;
 
               flatpak_bwrap_add_args (temp_bwrap,
                                       "readlink", "-f", ld_so,
@@ -738,7 +739,7 @@ bind_runtime (FlatpakBwrap *bwrap,
               flatpak_bwrap_finish (temp_bwrap);
 
               if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-                return FALSE;
+                goto out;
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
@@ -766,7 +767,7 @@ bind_runtime (FlatpakBwrap *bwrap,
               if (!try_bind_dri (bwrap, mount_runtime_on_scratch,
                                  overrides, scratch, tool_path, dirs[j],
                                  libdir_on_host, error))
-                return FALSE;
+                goto out;
             }
         }
       else
@@ -794,7 +795,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                    "the host system and the container (tried: %s)",
                    archs->str);
       g_string_free (archs, TRUE);
-      return FALSE;
+      goto out;
     }
 
   if (any_libc_from_host && !all_libc_from_host)
@@ -854,7 +855,7 @@ bind_runtime (FlatpakBwrap *bwrap,
     }
 
   if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
-    return FALSE;
+    goto out;
 
   ensure_locales (any_libc_from_host, tools_dir, bwrap, overrides);
 
@@ -925,7 +926,10 @@ bind_runtime (FlatpakBwrap *bwrap,
                                    NULL);
     }
 
-  return TRUE;
+  ret = TRUE;
+
+out:
+  return ret;
 }
 
 /* Order matters here: root, steam and steambeta are or might be symlinks

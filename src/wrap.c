@@ -49,7 +49,8 @@
 static const char * const multiarch_tuples[] =
 {
   "x86_64-linux-gnu",
-  "i386-linux-gnu"
+  "i386-linux-gnu",
+  NULL
 };
 
 /*
@@ -582,7 +583,9 @@ bind_runtime (FlatpakBwrap *bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
 
-  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+  g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+
+  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
       g_autofree gchar *tool = g_strdup_printf ("%s-capsule-capture-libs",
                                                 multiarch_tuples[i]);
@@ -747,6 +750,7 @@ bind_runtime (FlatpakBwrap *bwrap,
             }
 
           /* /lib32 or /lib64 */
+          g_assert (i < G_N_ELEMENTS (libquals));
           libqual = libquals[i];
 
           dirs = g_new0 (gchar *, 7);
@@ -775,7 +779,9 @@ bind_runtime (FlatpakBwrap *bwrap,
     {
       GString *archs = g_string_new ("");
 
-      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+      g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
         {
           if (archs->len > 0)
             g_string_append (archs, ", ");
@@ -1762,7 +1768,9 @@ main (int argc,
        * of setting LD_LIBRARY_PATH, for better robustness against
        * games that set their own LD_LIBRARY_PATH ignoring what they
        * got from the environment */
-      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+      g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
         {
           g_autofree gchar *ld_path = NULL;
 

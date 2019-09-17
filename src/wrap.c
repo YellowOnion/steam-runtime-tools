@@ -454,6 +454,193 @@ ensure_locales (gboolean on_host,
     }
 }
 
+typedef enum
+{
+  ICD_KIND_NONEXISTENT,
+  ICD_KIND_ABSOLUTE,
+  ICD_KIND_SONAME
+} IcdKind;
+
+typedef struct
+{
+  /* (type SrtEglIcd) or (type SrtVulkanIcd) */
+  gpointer icd;
+  gchar *resolved_library;
+  /* Last entry is always NONEXISTENT */
+  IcdKind kinds[G_N_ELEMENTS (multiarch_tuples)];
+  /* Last entry is always NULL */
+  gchar *paths_in_container[G_N_ELEMENTS (multiarch_tuples)];
+} IcdDetails;
+
+static IcdDetails *
+icd_details_new (gpointer icd)
+{
+  IcdDetails *self;
+  gsize i;
+
+  g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
+  g_return_val_if_fail (SRT_IS_EGL_ICD (icd) || SRT_IS_VULKAN_ICD (icd),
+                        NULL);
+
+  self = g_slice_new0 (IcdDetails);
+  self->icd = g_object_ref (icd);
+  self->resolved_library = NULL;
+
+  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+    {
+      self->kinds[i] = ICD_KIND_NONEXISTENT;
+      self->paths_in_container[i] = NULL;
+    }
+
+  return self;
+}
+
+static void
+icd_details_free (IcdDetails *self)
+{
+  gsize i;
+
+  g_object_unref (self->icd);
+  g_free (self->resolved_library);
+
+  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+    g_free (self->paths_in_container[i]);
+
+  g_slice_free (IcdDetails, self);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
+
+static gboolean
+bind_icd (gsize multiarch_index,
+          gsize sequence_number,
+          const char *tool_path,
+          FlatpakBwrap *mount_runtime_on_scratch,
+          const char *scratch,
+          const char *libdir_on_host,
+          const char *libdir_in_container,
+          const char *subdir,
+          IcdDetails *details,
+          GError **error)
+{
+  static const char options[] = "if-exists:if-same-abi";
+  g_autofree gchar *on_host = NULL;
+  g_autofree gchar *pattern = NULL;
+  g_autofree gchar *dependency_pattern = NULL;
+  g_autofree gchar *seq_str = NULL;
+  const char *mode;
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+
+  g_return_val_if_fail (tool_path != NULL, FALSE);
+  g_return_val_if_fail (mount_runtime_on_scratch != NULL, FALSE);
+  g_return_val_if_fail (mount_runtime_on_scratch->fds == NULL
+                        || mount_runtime_on_scratch->fds->len == 0,
+                        FALSE);
+  g_return_val_if_fail (scratch != NULL, FALSE);
+  g_return_val_if_fail (libdir_on_host != NULL, FALSE);
+  g_return_val_if_fail (subdir != NULL, FALSE);
+  g_return_val_if_fail (multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
+                        FALSE);
+  g_return_val_if_fail (details != NULL, FALSE);
+  g_return_val_if_fail (details->resolved_library != NULL, FALSE);
+  g_return_val_if_fail (details->kinds[multiarch_index] == ICD_KIND_NONEXISTENT,
+                        FALSE);
+  g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
+                        FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (g_path_is_absolute (details->resolved_library))
+    {
+      details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
+      mode = "path";
+
+      /* Because the ICDs might have collisions among their
+       * basenames (might differ only by directory), we put each
+       * in its own numbered directory. */
+      seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
+      on_host = g_build_filename (libdir_on_host, subdir, seq_str, NULL);
+
+      g_debug ("Ensuring %s exists", on_host);
+
+      if (g_mkdir_with_parents (on_host, 0700) != 0)
+        return glnx_throw_errno_prefix (error, "Unable to create %s", on_host);
+    }
+  else
+    {
+      /* ICDs in the default search path by definition can't collide:
+       * one of them is the first one we find, and we use that one. */
+      details->kinds[multiarch_index] = ICD_KIND_SONAME;
+      mode = "soname";
+    }
+
+  pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
+                             options, mode, details->resolved_library);
+  dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
+                                        options, mode, details->resolved_library);
+
+  temp_bwrap = flatpak_bwrap_new (NULL);
+  flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          tool_path,
+                          "--container", scratch,
+                          "--link-target", "/run/host",
+                          "--dest", on_host == NULL ? libdir_on_host : on_host,
+                          "--provider", "/",
+                          pattern,
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+  if (on_host != NULL)
+    {
+      /* Try to remove the directory we created. If it succeeds, then we
+       * can optimize slightly by not capturing the dependencies: there's
+       * no point, because we know we didn't create a symlink to the ICD
+       * itself. (It must have been nonexistent or for a different ABI.) */
+      if (g_rmdir (on_host) == 0)
+        {
+          details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
+          return TRUE;
+        }
+    }
+
+  temp_bwrap = flatpak_bwrap_new (NULL);
+  g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                  || mount_runtime_on_scratch->fds->len == 0);
+  flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          tool_path,
+                          "--container", scratch,
+                          "--link-target", "/run/host",
+                          "--dest", libdir_on_host,
+                          "--provider", "/",
+                          dependency_pattern,
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+  if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
+    {
+      g_assert (seq_str != NULL);
+      g_assert (on_host != NULL);
+      details->paths_in_container[multiarch_index] = g_build_filename (libdir_in_container,
+                                                                       subdir,
+                                                                       seq_str,
+                                                                       glnx_basename (details->resolved_library),
+                                                                       NULL);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 bind_runtime (FlatpakBwrap *bwrap,
               const char *tools_dir,
@@ -488,10 +675,21 @@ bind_runtime (FlatpakBwrap *bwrap,
   gsize i, j;
   const gchar *member;
   g_autoptr(GString) dri_path = g_string_new ("");
+  g_autoptr(GString) egl_path = g_string_new ("");
+  g_autoptr(GString) vulkan_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   gboolean any_libc_from_host = FALSE;
   gboolean all_libc_from_host = TRUE;
   g_autofree gchar *localedef = NULL;
+  g_autofree gchar *dir_on_host = NULL;
+  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) egl_icds = NULL;
+  g_autoptr(SrtObjectList) vulkan_icds = NULL;
+  g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
+  g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
+  guint n_egl_icds;
+  guint n_vulkan_icds;
+  const GList *icd_iter;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
@@ -587,6 +785,65 @@ bind_runtime (FlatpakBwrap *bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
 
+  g_debug ("Enumerating EGL ICDs on host system...");
+  egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+  n_egl_icds = g_list_length (egl_icds);
+
+  egl_icd_details = g_ptr_array_new_full (n_egl_icds,
+                                          (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = egl_icds, j = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, j++)
+    {
+      SrtEglIcd *icd = icd_iter->data;
+      const gchar *path = srt_egl_icd_get_json_path (icd);
+      GError *local_error = NULL;
+
+      if (!srt_egl_icd_check_error (icd, &local_error))
+        {
+          g_debug ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
+                   j, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_debug ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
+               j, path, srt_egl_icd_get_library_path (icd));
+
+      g_ptr_array_add (egl_icd_details, icd_details_new (icd));
+    }
+
+  g_debug ("Enumerating Vulkan ICDs on host system...");
+  vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
+                                                  multiarch_tuples);
+  n_vulkan_icds = g_list_length (vulkan_icds);
+
+  vulkan_icd_details = g_ptr_array_new_full (n_vulkan_icds,
+                                             (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = vulkan_icds, j = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, j++)
+    {
+      SrtVulkanIcd *icd = icd_iter->data;
+      const gchar *path = srt_vulkan_icd_get_json_path (icd);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_icd_check_error (icd, &local_error))
+        {
+          g_debug ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
+                   j, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_debug ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
+               j, path, srt_vulkan_icd_get_library_path (icd));
+
+      g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
+    }
+
   g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
@@ -670,6 +927,8 @@ bind_runtime (FlatpakBwrap *bwrap,
                          error))
             return FALSE;
 
+          g_debug ("Collecting GLX drivers from host system...");
+
           temp_bwrap = flatpak_bwrap_new (NULL);
           /* mount_runtime_on_scratch can't own any fds, because if it did,
            * flatpak_bwrap_append_bwrap() would steal them. */
@@ -690,6 +949,79 @@ bind_runtime (FlatpakBwrap *bwrap,
             return FALSE;
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+          g_debug ("Collecting %s EGL drivers from host system...",
+                   multiarch_tuples[i]);
+
+          for (j = 0; j < egl_icd_details->len; j++)
+            {
+              IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
+              SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
+
+              if (!srt_egl_icd_check_error (icd, NULL))
+                continue;
+
+              details->resolved_library = srt_egl_icd_resolve_library_path (icd);
+              g_assert (details->resolved_library != NULL);
+
+              if (!bind_icd (i,
+                             j,
+                             tool_path,
+                             mount_runtime_on_scratch,
+                             scratch,
+                             libdir_on_host,
+                             libdir_in_container,
+                             "glvnd",
+                             details,
+                             error))
+                return FALSE;
+            }
+
+          g_debug ("Collecting %s Vulkan drivers from host system...",
+                   multiarch_tuples[i]);
+
+          temp_bwrap = flatpak_bwrap_new (NULL);
+          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                          || mount_runtime_on_scratch->fds->len == 0);
+          flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+          flatpak_bwrap_add_args (temp_bwrap,
+                                  tool_path,
+                                  "--container", scratch,
+                                  "--link-target", "/run/host",
+                                  "--dest", libdir_on_host,
+                                  "--provider", "/",
+                                  "if-exists:if-same-abi:soname:libvulkan.so.1",
+                                  NULL);
+          flatpak_bwrap_finish (temp_bwrap);
+
+          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+            return FALSE;
+
+          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+          for (j = 0; j < vulkan_icd_details->len; j++)
+            {
+              IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
+              SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
+
+              if (!srt_vulkan_icd_check_error (icd, NULL))
+                continue;
+
+              details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
+              g_assert (details->resolved_library != NULL);
+
+              if (!bind_icd (i,
+                             j,
+                             tool_path,
+                             mount_runtime_on_scratch,
+                             scratch,
+                             libdir_on_host,
+                             libdir_in_container,
+                             "vulkan",
+                             details,
+                             error))
+                return FALSE;
+            }
 
           libc = g_build_filename (libdir_on_host, "libc.so.6", NULL);
 
@@ -857,6 +1189,154 @@ bind_runtime (FlatpakBwrap *bwrap,
       g_debug ("Using included locale data from container");
     }
 
+  g_debug ("Setting up EGL ICD JSON...");
+
+  dir_on_host = g_build_filename (overrides,
+                                  "share", "glvnd", "egl_vendor.d", NULL);
+
+  if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
+    {
+      glnx_throw_errno_prefix (error, "Unable to create %s", dir_on_host);
+      return FALSE;
+    }
+
+  for (j = 0; j < egl_icd_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
+      SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
+      gboolean need_host_json = FALSE;
+
+      if (!srt_egl_icd_check_error (icd, NULL))
+        continue;
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+        {
+          g_assert (i < G_N_ELEMENTS (details->kinds));
+          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
+
+          if (details->kinds[i] == ICD_KIND_ABSOLUTE)
+            {
+              g_autoptr(SrtEglIcd) replacement = NULL;
+              g_autofree gchar *json_on_host = NULL;
+              g_autofree gchar *json_in_container = NULL;
+              g_autofree gchar *json_base = NULL;
+
+              g_assert (details->paths_in_container[i] != NULL);
+
+              json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
+                                           j, multiarch_tuples[i]);
+              json_on_host = g_build_filename (dir_on_host, json_base, NULL);
+              json_in_container = g_build_filename ("/overrides", "share",
+                                                    "glvnd", "egl_vendor.d",
+                                                    json_base, NULL);
+
+              replacement = srt_egl_icd_new_replace_library_path (icd,
+                                                                  details->paths_in_container[i]);
+
+              if (!srt_egl_icd_write_to_file (replacement, json_on_host,
+                                                 error))
+                return FALSE;
+
+              search_path_append (egl_path, json_in_container);
+            }
+          else if (details->kinds[i] == ICD_KIND_SONAME)
+            {
+              need_host_json = TRUE;
+            }
+        }
+
+      if (need_host_json)
+        {
+          g_autofree gchar *json_in_container = NULL;
+          g_autofree gchar *json_base = NULL;
+          const char *json_on_host = srt_egl_icd_get_json_path (icd);
+
+          json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
+          json_in_container = g_build_filename ("/overrides", "share",
+                                                "glvnd", "egl_vendor.d",
+                                                json_base, NULL);
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", json_on_host, json_in_container,
+                                  NULL);
+          search_path_append (egl_path, json_in_container);
+        }
+    }
+
+  g_debug ("Setting up Vulkan ICD JSON...");
+
+  dir_on_host = g_build_filename (overrides,
+                                  "share", "vulkan", "icd.d", NULL);
+
+  if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
+    {
+      glnx_throw_errno_prefix (error, "Unable to create %s", dir_on_host);
+      return FALSE;
+    }
+
+  for (j = 0; j < vulkan_icd_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
+      SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
+      gboolean need_host_json = FALSE;
+
+      if (!srt_vulkan_icd_check_error (icd, NULL))
+        continue;
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+        {
+          g_assert (i < G_N_ELEMENTS (details->kinds));
+          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
+
+          if (details->kinds[i] == ICD_KIND_ABSOLUTE)
+            {
+              g_autoptr(SrtVulkanIcd) replacement = NULL;
+              g_autofree gchar *json_on_host = NULL;
+              g_autofree gchar *json_in_container = NULL;
+              g_autofree gchar *json_base = NULL;
+
+              g_assert (details->paths_in_container[i] != NULL);
+
+              json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
+                                           j, multiarch_tuples[i]);
+              json_on_host = g_build_filename (dir_on_host, json_base, NULL);
+              json_in_container = g_build_filename ("/overrides", "share",
+                                                    "vulkan", "icd.d",
+                                                    json_base, NULL);
+
+              replacement = srt_vulkan_icd_new_replace_library_path (icd,
+                                                                     details->paths_in_container[i]);
+
+              if (!srt_vulkan_icd_write_to_file (replacement, json_on_host,
+                                                 error))
+                return FALSE;
+
+              search_path_append (vulkan_path, json_in_container);
+            }
+          else if (details->kinds[i] == ICD_KIND_SONAME)
+            {
+              need_host_json = TRUE;
+            }
+        }
+
+      if (need_host_json)
+        {
+          g_autofree gchar *json_in_container = NULL;
+          g_autofree gchar *json_base = NULL;
+          const char *json_on_host = srt_vulkan_icd_get_json_path (icd);
+
+          json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
+          json_in_container = g_build_filename ("/overrides", "share",
+                                                "vulkan", "icd.d",
+                                                json_base, NULL);
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", json_on_host, json_in_container,
+                                  NULL);
+          search_path_append (vulkan_path, json_in_container);
+        }
+    }
+
   if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;
 
@@ -869,6 +1349,28 @@ bind_runtime (FlatpakBwrap *bwrap,
   else
       flatpak_bwrap_add_args (bwrap,
                               "--unsetenv", "LIBGL_DRIVERS_PATH",
+                              NULL);
+
+  if (egl_path->len != 0)
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", "__EGL_VENDOR_LIBRARY_FILENAMES",
+                              egl_path->str, NULL);
+  else
+      flatpak_bwrap_add_args (bwrap,
+                              "--unsetenv", "__EGL_VENDOR_LIBRARY_FILENAMES",
+                              NULL);
+
+  flatpak_bwrap_add_args (bwrap,
+                          "--unsetenv", "__EGL_VENDOR_LIBRARY_DIRS",
+                          NULL);
+
+  if (vulkan_path->len != 0)
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", "VK_ICD_FILENAMES",
+                              vulkan_path->str, NULL);
+  else
+      flatpak_bwrap_add_args (bwrap,
+                              "--unsetenv", "VK_ICD_FILENAMES",
                               NULL);
 
   /* These can add data fds to @bwrap, so they must come last - after

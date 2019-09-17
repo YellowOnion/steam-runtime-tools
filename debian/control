@@ -6,7 +6,7 @@ Standards-Version: 4.4.0
 Build-Depends:
  debhelper (>= 9),
  libglib2.0-dev,
- libsteam-runtime-tools-0-dev,
+ libsteam-runtime-tools-0-dev (>= 0.20190926.0~),
  libxau-dev,
  locales <!nocheck> | locales-all <!nocheck>,
  meson,

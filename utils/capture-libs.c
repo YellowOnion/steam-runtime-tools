@@ -354,9 +354,11 @@ capture_one( const char *soname, capture_flags flags,
     {
         _capsule_autofree char *target = NULL;
         struct stat statbuf;
-        const char *its_basename;
+        const char *needed_name = provider.needed[i].name;
+        const char *needed_path_in_provider = provider.needed[i].path;
+        const char *needed_basename;
 
-        if( !provider.needed[i].name )
+        if( !needed_name )
         {
             continue;
         }
@@ -364,7 +366,7 @@ capture_one( const char *soname, capture_flags flags,
         if( i == 0 && !( flags & CAPTURE_FLAG_LIBRARY_ITSELF ) )
         {
             DEBUG( DEBUG_TOOL, "Not capturing \"%s\" itself as requested",
-                   provider.needed[i].name );
+                   needed_name );
             continue;
         }
 
@@ -372,11 +374,11 @@ capture_one( const char *soname, capture_flags flags,
         {
             DEBUG( DEBUG_TOOL,
                    "Not capturing dependencies of \"%s\" as requested",
-                   provider.needed[0].name );
+                   soname );
             break;
         }
 
-        its_basename = my_basename( provider.needed[i].name );
+        needed_basename = my_basename( needed_name );
 
         if( !option_glibc )
         {
@@ -391,11 +393,11 @@ capture_one( const char *soname, capture_flags flags,
                 assert( strstarts( libc_patterns[j], "soname:" ) );
 
                 if( strcmp( libc_patterns[j] + strlen( "soname:" ),
-                            its_basename ) == 0 )
+                            needed_basename ) == 0 )
                 {
                     DEBUG( DEBUG_TOOL,
                            "Not capturing \"%s\" because it is part of glibc",
-                           provider.needed[i].name );
+                           needed_name );
                     capture = false;
                     break;
                 }
@@ -405,14 +407,14 @@ capture_one( const char *soname, capture_flags flags,
                 continue;
         }
 
-        if( fstatat( dest_fd, its_basename, &statbuf,
+        if( fstatat( dest_fd, needed_basename, &statbuf,
                      AT_SYMLINK_NOFOLLOW ) == 0 )
         {
             /* We already created a symlink for this library. No further
              * action required (but keep going through its dependencies
              * in case we need to symlink those into place) */
             DEBUG( DEBUG_TOOL, "We already have a symlink for %s",
-                   provider.needed[i].name );
+                   needed_name );
             continue;
         }
 
@@ -424,22 +426,23 @@ capture_one( const char *soname, capture_flags flags,
             DEBUG( DEBUG_TOOL,
                    "Container unknown, cannot compare version with "
                    "\"%s\": assuming provider version is newer",
-                   provider.needed[i].path );
+                   needed_path_in_provider );
         }
         else if( i == 0 && ( flags & CAPTURE_FLAG_EVEN_IF_OLDER ) )
         {
             DEBUG( DEBUG_TOOL,
                    "Explicitly requested %s from %s even if older: \"%s\"",
-                   provider.needed[i].name, option_provider,
-                   provider.needed[i].path );
+                   needed_name, option_provider,
+                   needed_path_in_provider );
         }
         else
         {
             _capsule_cleanup(ld_libs_finish) ld_libs container = {};
             if( init_with_target( &container, option_container,
-                                  provider.needed[i].name,
+                                  needed_name,
                                   &local_code, &local_message ) )
             {
+                const char *needed_path_in_container = container.needed[0].path;
                 _capsule_autofree char *p_realpath = NULL;
                 _capsule_autofree char *c_realpath = NULL;
                 const char *p_basename;
@@ -447,15 +450,15 @@ capture_one( const char *soname, capture_flags flags,
 
                 // This might look redundant, but resolve_symlink_prefixed()
                 // doesn't chase symlinks if the prefix is '/' or empty.
-                p_realpath = realpath( provider.needed[i].path, NULL );
-                c_realpath = realpath( container.needed[0].path, NULL );
+                p_realpath = realpath( needed_path_in_provider, NULL );
+                c_realpath = realpath( needed_path_in_container, NULL );
                 p_basename = my_basename( p_realpath );
                 c_basename = my_basename( c_realpath );
 
                 DEBUG( DEBUG_TOOL,
                        "Comparing %s \"%s\" from \"%s\" with "
                        "\"%s\" from \"%s\"",
-                       provider.needed[i].name, p_basename, option_provider,
+                       needed_name, p_basename, option_provider,
                        c_basename, option_container );
 
                 /* If equal, we prefer the provider over the container */
@@ -465,14 +468,14 @@ capture_one( const char *soname, capture_flags flags,
                      * symlink in the one from the provider */
                     DEBUG( DEBUG_TOOL,
                            "%s is strictly newer in the container",
-                           provider.needed[i].name );
+                           needed_name );
                     continue;
                 }
                 else
                 {
                     DEBUG( DEBUG_TOOL,
                            "%s is newer or equal in the provider",
-                           provider.needed[i].name );
+                           needed_name );
                 }
             }
             else if( local_code == ENOENT )
@@ -480,7 +483,7 @@ capture_one( const char *soname, capture_flags flags,
                 /* else assume it's absent from the container, which is
                  * just like it being newer in the provider */
                 DEBUG( DEBUG_TOOL, "%s is not in the container",
-                       provider.needed[i].name );
+                       needed_name );
                 _capsule_clear( &local_message );
             }
             else
@@ -496,7 +499,7 @@ capture_one( const char *soname, capture_flags flags,
 
         if( option_link_target == NULL )
         {
-            target = xstrdup( provider.needed[i].path );
+            target = xstrdup( needed_path_in_provider );
         }
         else
         {
@@ -509,7 +512,7 @@ capture_one( const char *soname, capture_flags flags,
             // $libdir/libGL.so.1 -> /etc/alternatives/whatever -> ...
             // within that prefix.
 
-            safe_strncpy( path, provider.needed[i].path, sizeof(path) );
+            safe_strncpy( path, needed_path_in_provider, sizeof(path) );
 
             DEBUG( DEBUG_TOOL, "Link target initially: \"%s\"", path );
 
@@ -539,21 +542,21 @@ capture_one( const char *soname, capture_flags flags,
         assert( target != NULL );
 
         DEBUG( DEBUG_TOOL, "Creating symlink %s/%s -> %s",
-               option_dest, its_basename, target );
+               option_dest, needed_basename, target );
 
-        if( symlinkat( target, dest_fd, its_basename ) < 0 )
+        if( symlinkat( target, dest_fd, needed_basename ) < 0 )
         {
             warn( "warning: cannot create symlink %s/%s",
-                  option_dest, its_basename );
+                  option_dest, needed_basename );
         }
 
-        if( strcmp( its_basename, "libc.so.6" ) == 0 )
+        if( strcmp( needed_basename, "libc.so.6" ) == 0 )
         {
             /* Having captured libc, we need to capture the rest of
              * the related libraries from the same place */
             DEBUG( DEBUG_TOOL,
                    "Capturing the rest of glibc to go with %s",
-                   provider.needed[i].name );
+                   needed_name );
 
             if( !capture_patterns( libc_patterns,
                                   ( flags | CAPTURE_FLAG_IF_EXISTS |

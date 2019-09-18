@@ -356,6 +356,41 @@ library_cmp_by_name( const char *soname,
          "\"%s\" from \"%s\"",
          soname, left_basename, left_from, right_basename, right_from );
 
+  if( strcmp( left_basename, right_basename ) == 0 )
+  {
+    DEBUG( DEBUG_TOOL,
+           "Name of %s \"%s\" from \"%s\" compares the same as "
+           "\"%s\" from \"%s\"",
+           soname, left_basename, left_from, right_basename, right_from );
+    return 0;
+  }
+
+  if( strcmp( soname, left_basename ) == 0 )
+  {
+    /* In some distributions (Debian, Ubuntu, Manjaro)
+     * libgcc_s.so.1 is a plain file, not a symlink to a
+     * version-suffixed version. We cannot know just from the name
+     * whether that's older or newer, so assume equal. The caller is
+     * responsible for figuring out which one to prefer. */
+    DEBUG( DEBUG_TOOL,
+           "Unversioned %s \"%s\" from \"%s\" cannot be compared with "
+           "\"%s\" from \"%s\"",
+           soname, left_basename, left_from,
+           right_basename, right_from );
+    return 0;
+  }
+
+  if( strcmp( soname, right_basename ) == 0 )
+  {
+    /* The same, but the other way round */
+    DEBUG( DEBUG_TOOL,
+           "%s \"%s\" from \"%s\" cannot be compared with "
+           "unversioned \"%s\" from \"%s\"",
+           soname, left_basename, left_from,
+           right_basename, right_from );
+    return 0;
+  }
+
   return ( strverscmp( left_basename, right_basename ) );
 }
 
@@ -488,6 +523,12 @@ capture_one( const char *soname, capture_flags flags,
                                   &local_code, &local_message ) )
             {
                 const char *needed_path_in_container = container.needed[0].path;
+
+                /* TODO: Ideally we would actually dlopen the libraries and
+                 * inspect their symbol tables, either in ambiguous cases
+                 * or always - but that's easier said than done, because
+                 * private symbols exist. For now we just use
+                 * library_cmp_by_name(). */
 
                 /* If equal, we prefer the provider over the container */
                 if( library_cmp_by_name( needed_name,

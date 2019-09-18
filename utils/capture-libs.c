@@ -314,6 +314,51 @@ static bool capture_patterns( const char * const *patterns,
                               capture_flags flags,
                               int *code, char **message );
 
+/*
+ * library_cmp_by_name:
+ * @soname: The library we are interested in, used in debug logging
+ * @left_path: The path to the "left" instance of the library
+ * @left_from: Arbitrary description of the container/provider/sysroot
+ *  where we found @left_path, used in debug logging
+ * @right_path: The path to the "right" instance of the library
+ * @right_from: Arbitrary description of the container/provider/sysroot
+ *  where we found @right_path, used in debug logging
+ *
+ * Attempt to determine whether @left_path is older than, newer than or
+ * the same as than @right_path by inspecting their filenames.
+ *
+ * Return a strcmp-style result: negative if left < right,
+ * positive if left > right, zero if left == right or if left and right
+ * are non-comparable.
+ */
+static int
+library_cmp_by_name( const char *soname,
+                     const char *left_path,
+                     const char *left_from,
+                     const char *right_path,
+                     const char *right_from )
+{
+  _capsule_autofree char *left_realpath = NULL;
+  _capsule_autofree char *right_realpath = NULL;
+  const char *left_basename;
+  const char *right_basename;
+
+  // This might look redundant when our arguments come from the ld_libs,
+  // but resolve_symlink_prefixed() doesn't chase symlinks if the
+  // prefix is '/' or empty.
+  left_realpath = realpath( left_path, NULL );
+  right_realpath = realpath( right_path, NULL );
+  left_basename = my_basename( left_realpath );
+  right_basename = my_basename( right_realpath );
+
+  DEBUG( DEBUG_TOOL,
+         "Comparing %s \"%s\" from \"%s\" with "
+         "\"%s\" from \"%s\"",
+         soname, left_basename, left_from, right_basename, right_from );
+
+  return ( strverscmp( left_basename, right_basename ) );
+}
+
 static bool
 capture_one( const char *soname, capture_flags flags,
              int *code, char **message )
@@ -443,26 +488,13 @@ capture_one( const char *soname, capture_flags flags,
                                   &local_code, &local_message ) )
             {
                 const char *needed_path_in_container = container.needed[0].path;
-                _capsule_autofree char *p_realpath = NULL;
-                _capsule_autofree char *c_realpath = NULL;
-                const char *p_basename;
-                const char *c_basename;
-
-                // This might look redundant, but resolve_symlink_prefixed()
-                // doesn't chase symlinks if the prefix is '/' or empty.
-                p_realpath = realpath( needed_path_in_provider, NULL );
-                c_realpath = realpath( needed_path_in_container, NULL );
-                p_basename = my_basename( p_realpath );
-                c_basename = my_basename( c_realpath );
-
-                DEBUG( DEBUG_TOOL,
-                       "Comparing %s \"%s\" from \"%s\" with "
-                       "\"%s\" from \"%s\"",
-                       needed_name, p_basename, option_provider,
-                       c_basename, option_container );
 
                 /* If equal, we prefer the provider over the container */
-                if( strverscmp( c_basename, p_basename ) > 0 )
+                if( library_cmp_by_name( needed_name,
+                                         needed_path_in_container,
+                                         option_container,
+                                         needed_path_in_provider,
+                                         option_provider) > 0 )
                 {
                     /* Version in container is strictly newer: don't
                      * symlink in the one from the provider */

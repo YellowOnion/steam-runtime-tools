@@ -44,7 +44,7 @@ logger = logging.getLogger('pressure-vessel-test-ui')
 
 
 # This doesn't fully work yet. Hack at own risk.
-CAN_UNSHARE_HOME = False
+CAN_UNSHARE_HOME = (os.getenv('PRESSURE_VESSEL_SHARE_HOME') is not None)
 
 
 class Gui:
@@ -120,7 +120,8 @@ class Gui:
             self.share_home_check = Gtk.CheckButton.new_with_label(
                 'Share real home directory'
             )
-            self.share_home_check.set_active(True)
+            self.share_home_check.set_active(
+                bool(os.getenv('PRESSURE_VESSEL_SHARE_HOME')))
             self.grid.attach(self.share_home_check, 1, row, 1, 1)
 
             row += 1
@@ -130,6 +131,12 @@ class Gui:
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
         self.xterm_check.set_active(False)
         self.grid.attach(self.xterm_check, 1, row, 1, 1)
+
+        env = os.getenv('PRESSURE_VESSEL_TERMINAL')
+
+        if env is not None:
+            if env == 'xterm':
+                self.xterm_check.set_active(True)
 
         row += 1
 
@@ -143,6 +150,18 @@ class Gui:
         self.shell_combo.append(
             '--shell-instead', 'Instead of running the command')
         self.shell_combo.set_active(0)
+
+        env = os.getenv('PRESSURE_VESSEL_SHELL')
+
+        if env is not None:
+            if env == 'after':
+                self.shell_combo.set_active(1)
+            elif env == 'fail':
+                self.shell_combo.set_active(2)
+            elif env == 'instead':
+                self.shell_combo.set_active(3)
+
+        self._shell_changed(self.shell_combo)
         self.shell_combo.connect('changed', self._shell_changed)
         self.grid.attach(self.shell_combo, 1, row, 1, 1)
 

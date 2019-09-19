@@ -17,7 +17,9 @@ variables:
         libglib2.0-dev
         libjson-glib-dev
         libx11-dev
+        libxcb1-dev
         libxcomposite-dev
+        libvulkan-dev
         locales
         meson
         pandoc

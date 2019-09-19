@@ -21,7 +21,10 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-project('steam-runtime-tools', 'c', version : '0.20191024.0')
+project('steam-runtime-tools', 'c', 
+        version : '0.20191024.0',
+        default_options: ['cpp_std=c++11'])
+add_languages('cpp')
 
 api_major = '0'
 abi_major = '0'
@@ -123,6 +126,13 @@ gobject = dependency(
 json_glib = dependency(
   'json-glib-1.0',
   version : '>= 1.0',
+)
+vulkan = dependency(
+  'vulkan',
+)
+
+xcb = dependency(
+  'xcb',
 )
 
 libdl = c_compiler.find_library('dl', required : false)

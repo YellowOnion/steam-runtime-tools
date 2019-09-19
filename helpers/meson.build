@@ -54,4 +54,25 @@ executable(
   )
 )
 
+executable(
+  multiarch + '-check-vulkan',
+  'check-vulkan.cpp',
+  dependencies : [vulkan, xcb],
+  install : true,
+  install_dir : join_paths(
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+  )
+) 
+
+install_subdir('shaders',
+  install_dir: join_paths(
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+  )
+)
+
+configure_file(copy: true, input: 'shaders/frag.spv', output: 'frag.spv')
+configure_file(copy: true, input: 'shaders/vert.spv', output: 'vert.spv')
+
 # vim:set sw=2 sts=2 et:

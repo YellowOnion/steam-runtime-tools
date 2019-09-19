@@ -28,7 +28,7 @@ Then use the developer mode to select the SDK runtime instead of the
 default Platform runtime.
 
 Beta versions of the container might be available from
-<http://repo.steampowered.com/steamrt/steamrt-scout/snapshots/>.
+<http://repo.steampowered.com/steamrt-images-scout/snapshots/>.
 You can download any recent version of
 `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
 or `com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz`
@@ -43,7 +43,7 @@ host operating system with the `schroot` tool:
 * Download one of the
   `com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-sysroot.tar.gz`
   files from
-  <http://repo.steampowered.com/steamrt/steamrt-scout/snapshots/>
+  <http://repo.steampowered.com/steamrt-images-scout/snapshots/>
 
 * Clone https://github.com/ValveSoftware/steam-runtime somewhere convenient
 

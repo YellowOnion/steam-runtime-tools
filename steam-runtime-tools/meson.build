@@ -48,6 +48,7 @@ libsteamrt_public_headers = [
     'steam-runtime-tools.h',
     'steam.h',
     'system-info.h',
+    'utils.h',
 ]
 
 enums = gnome.mkenums_simple(

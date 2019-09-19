@@ -100,3 +100,7 @@ SrtLibraryIssues srt_check_library_presence (const char *soname,
                                              const char *symbols_path,
                                              SrtLibrarySymbolsFormat symbols_format,
                                              SrtLibrary **more_details_out);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtLibrary, g_object_unref)
+#endif

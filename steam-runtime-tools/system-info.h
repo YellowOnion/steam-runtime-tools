@@ -111,3 +111,7 @@ SrtLocaleIssues srt_system_info_get_locale_issues (SrtSystemInfo *self);
 SrtLocale *srt_system_info_check_locale (SrtSystemInfo *self,
                                          const char *requested_name,
                                          GError **error);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)
+#endif

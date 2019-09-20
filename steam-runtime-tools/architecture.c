@@ -54,6 +54,8 @@ _srt_architecture_can_run (const char *helpers_path,
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
 
+  g_return_val_if_fail (multiarch != NULL, FALSE);
+
   if (helpers_path == NULL)
     helpers_path = _srt_get_helpers_path ();
 

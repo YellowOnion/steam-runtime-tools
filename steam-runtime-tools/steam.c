@@ -34,6 +34,7 @@
 #include <glib.h>
 
 #include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/utils.h"
 
 /**
  * SECTION:steam
@@ -69,6 +70,8 @@ _srt_steam_check (const GStrv environ,
   const char *user_data = NULL;
   GStrv env = NULL;
 
+  g_return_val_if_fail (_srt_check_not_setuid (),
+                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (path_out == NULL || *path_out == NULL,
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (bin32_out == NULL || *bin32_out == NULL,

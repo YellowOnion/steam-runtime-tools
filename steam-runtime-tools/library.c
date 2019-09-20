@@ -28,6 +28,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/library-internal.h"
+#include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <json-glib/json-glib.h>
@@ -513,6 +514,7 @@ _srt_check_library_presence (const char *helpers_path,
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
                         SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
 
   switch (symbols_format)
     {

@@ -379,6 +379,7 @@ srt_system_info_class_init (SrtSystemInfoClass *cls)
 SrtSystemInfo *
 srt_system_info_new (const char *expectations)
 {
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail ((expectations == NULL ||
                          g_file_test (expectations, G_FILE_TEST_IS_DIR)),
                         NULL);
@@ -500,6 +501,8 @@ get_environ (SrtSystemInfo *self)
 static gboolean
 ensure_expectations (SrtSystemInfo *self)
 {
+  g_return_val_if_fail (_srt_check_not_setuid (), FALSE);
+
   if (self->expectations == NULL)
     {
       const char *runtime;

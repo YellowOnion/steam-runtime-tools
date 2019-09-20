@@ -26,6 +26,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 
+#include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <glib-object.h>
@@ -55,6 +56,7 @@ _srt_architecture_can_run (const char *helpers_path,
   gchar *filtered_preload = NULL;
 
   g_return_val_if_fail (multiarch != NULL, FALSE);
+  g_return_val_if_fail (_srt_check_not_setuid (), FALSE);
 
   if (helpers_path == NULL)
     helpers_path = _srt_get_helpers_path ();

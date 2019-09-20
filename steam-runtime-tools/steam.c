@@ -69,6 +69,11 @@ _srt_steam_check (const GStrv environ,
   const char *user_data = NULL;
   GStrv env = NULL;
 
+  g_return_val_if_fail (path_out == NULL || *path_out == NULL,
+                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (bin32_out == NULL || *bin32_out == NULL,
+                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+
   env = (environ == NULL) ? g_get_environ () : g_strdupv (environ);
 
   home = g_environ_getenv (env, "HOME");
@@ -86,11 +91,6 @@ _srt_steam_check (const GStrv environ,
   dot_steam_bin32 = g_build_filename (home, ".steam", "bin32", NULL);
   dot_steam_steam = g_build_filename (home, ".steam", "steam", NULL);
   dot_steam_root = g_build_filename (home, ".steam", "root", NULL);
-
-  g_return_val_if_fail (path_out == NULL || *path_out == NULL,
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (bin32_out == NULL || *bin32_out == NULL,
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
 
   /* Canonically, ~/.steam/steam is a symlink to the Steam installation.
    * (This is ignoring the Valve-internal "beta universe", which uses

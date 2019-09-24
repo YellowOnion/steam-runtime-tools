@@ -58,6 +58,7 @@ build:scout:
 
             if [ -n "${SCOUT_APT_SOURCES_FILE}" ]; then
                 cp "${SCOUT_APT_SOURCES_FILE}" /etc/apt/sources.list
+                echo >> /etc/apt/sources.list
 
                 if [ -n "${CI_EXTRA_APT_SOURCES-}" ]; then
                   echo "${CI_EXTRA_APT_SOURCES}" | while read -r first rest; do

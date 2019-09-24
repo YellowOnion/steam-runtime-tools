@@ -35,6 +35,7 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/utils.h"
 
 /**
 * SECTION:runtime
@@ -161,6 +162,8 @@ _srt_runtime_check (const char *bin32,
   g_return_val_if_fail (version_out == NULL || *version_out == NULL,
                         SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (path_out == NULL || *path_out == NULL,
+                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (_srt_check_not_setuid (),
                         SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
 
   if (custom_environ == NULL)

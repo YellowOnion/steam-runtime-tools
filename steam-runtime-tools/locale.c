@@ -223,6 +223,7 @@ _srt_check_locale (const char *helpers_path,
 
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
   g_return_val_if_fail (requested_name != NULL, NULL);
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");

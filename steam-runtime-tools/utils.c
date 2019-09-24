@@ -23,13 +23,126 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <dlfcn.h>
+#include <elf.h>
+#include <errno.h>
 #include <link.h>
+#include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+
+#ifdef HAVE_SYS_AUXV_H
+#include <sys/auxv.h>
+#endif
 
 #include <glib-object.h>
+
+#ifdef HAVE_GETAUXVAL
+#define getauxval_AT_SECURE() getauxval (AT_SECURE)
+#else
+/*
+ * This implementation assumes that auxv entries are pointer-sized on
+ * all architectures.
+ *
+ * Note that this implementation doesn't special-case AT_HWCAP and
+ * AT_HWCAP like glibc does, so it is only suitable for other types
+ * (but in practice we only need AT_SECURE here).
+ */
+static long
+getauxval_AT_SECURE (void)
+{
+  uintptr_t buf[2] = { 0 /* type */, 0 /* value */ };
+  FILE *auxv;
+  gboolean found = FALSE;
+
+  if ((auxv = fopen("/proc/self/auxv", "r")) == NULL)
+    return 0;
+
+  while ((fread (buf, sizeof (buf), 1, auxv)) == 1)
+    {
+      if (buf[0] == AT_SECURE)
+        {
+          found = TRUE;
+          break;
+        }
+      else
+        {
+          buf[0] = buf[1] = 0;
+        }
+    }
+
+  fclose(auxv);
+
+  if (!found)
+    errno = ENOENT;
+
+  return (long) buf[1];
+}
+#endif
+
+/* Return TRUE if setuid, setgid, setcap or otherwise running with
+ * elevated privileges. "setuid" in the name is shorthand for this. */
+static gboolean
+check_for_setuid_once (void)
+{
+  errno = 0;
+
+  /* If the kernel says we are running with elevated privileges,
+   * believe it */
+  if (getauxval_AT_SECURE ())
+    return TRUE;
+
+  /* If the kernel specifically told us we are not running with
+   * elevated privileges, believe it (as opposed to the kernel not
+   * having told us either way, which sets errno to ENOENT) */
+  if (errno == 0)
+    return FALSE;
+
+  /* Otherwise resort to comparing (e)uid and (e)gid */
+  if (geteuid () != getuid ())
+    return TRUE;
+
+  if (getegid () != getgid ())
+    return TRUE;
+
+  return FALSE;
+}
+
+static int is_setuid = -1;
+
+/*
+ * _srt_check_not_setuid:
+ *
+ * Check that the process containing this library is not setuid, setgid,
+ * setcap or otherwise running with elevated privileges. The word
+ * "setuid" in the function name is not completely accurate, but is used
+ * as a shorthand term since it is the most common way for a process
+ * to be more privileged than its parent.
+ *
+ * This library trusts environment variables and other aspects of the
+ * execution environment, and is not designed to be used with elevated
+ * privileges, so this should normally be done as a precondition check:
+ *
+ * |[<!-- language="C" -->
+ * g_return_if_fail (_srt_check_not_setuid ());
+ * // or in functions that return a value
+ * g_return_val_if_fail (_srt_check_not_setuid (), SOME_ERROR_CONSTANT);
+ * ]|
+ *
+ * Returns: %TRUE under normal circumstances
+ */
+G_GNUC_INTERNAL gboolean
+_srt_check_not_setuid (void)
+{
+  if (is_setuid >= 0)
+    return !is_setuid;
+
+  is_setuid = check_for_setuid_once ();
+  return !is_setuid;
+}
 
 static gchar *helpers_path = NULL;
 
@@ -40,6 +153,8 @@ _srt_get_helpers_path (void)
   Dl_info ignored;
   struct link_map *map = NULL;
   gchar *dir;
+
+  g_return_val_if_fail (_srt_check_not_setuid (), "/");
 
   path = helpers_path;
 
@@ -143,5 +258,6 @@ static void
 _srt_constructor (void)
 {
   g_type_init ();
+  g_return_if_fail (_srt_check_not_setuid ());
 }
 #endif

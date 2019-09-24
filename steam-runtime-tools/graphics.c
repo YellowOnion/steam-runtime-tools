@@ -28,6 +28,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <stdint.h>
@@ -317,6 +318,7 @@ _srt_check_graphics (const char *helpers_path,
   g_return_val_if_fail (window_system < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (rendering_interface >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (rendering_interface < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
 
   gchar *platformstring = NULL;
 

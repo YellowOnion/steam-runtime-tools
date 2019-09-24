@@ -58,6 +58,18 @@ build:scout:
 
             if [ -n "${SCOUT_APT_SOURCES_FILE}" ]; then
                 cp "${SCOUT_APT_SOURCES_FILE}" /etc/apt/sources.list
+
+                if [ -n "${CI_EXTRA_APT_SOURCES-}" ]; then
+                  echo "${CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
+                    if [ "x$first" = xboth ]; then
+                      echo "deb $rest" >> /etc/apt/sources.list
+                      echo "deb-src $rest" >> /etc/apt/sources.list
+                    else
+                      echo "$first $rest" >> /etc/apt/sources.list
+                    fi
+                  done
+                fi
+
                 apt-get -y update
             fi
 

@@ -73,6 +73,10 @@ pipeline {
             env.CI_APT_SOURCES_FILE = ''
           }
 
+          if (!env.CI_EXTRA_APT_SOURCES) {
+            env.CI_EXTRA_APT_SOURCES = ''
+          }
+
           checkout changelog: true, poll: true, scm: [
             $class: 'GitSCM',
             branches: [[name: "origin/${env.CI_PRESSURE_VESSEL_GIT_BRANCH}"]],
@@ -94,14 +98,26 @@ pipeline {
           '''
         }
 
-        sh """
-        sed -e 's!@BASE_IMAGE@!${env.CI_DOCKER_REGISTRY}/${env.CI_DOCKER_IMAGE}!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
-        if [ -n "${env.CI_APT_SOURCES_FILE}" ]; then
-          cp "${env.CI_APT_SOURCES_FILE}" src/ci/sources.list
+        sh '''
+        set -eu
+
+        sed -e 's!@BASE_IMAGE@!'"${CI_DOCKER_REGISTRY}/${CI_DOCKER_IMAGE}"'!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
+
+        if [ -n "${CI_APT_SOURCES_FILE}" ]; then
+          cp "${CI_APT_SOURCES_FILE}" src/ci/sources.list
         else
           touch src/ci/sources.list
         fi
-        """
+
+        echo "${CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
+          if [ "x$first" = xboth ]; then
+            echo "deb $rest" >> src/ci/sources.list
+            echo "deb-src $rest" >> src/ci/sources.list
+          else
+            echo "$first $rest" >> src/ci/sources.list
+          fi
+        done
+        '''
 
         script {
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {

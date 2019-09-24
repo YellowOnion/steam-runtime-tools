@@ -158,6 +158,11 @@ _srt_runtime_check (const char *bin32,
   GError *error = NULL;
   GStrv my_environ = NULL;
 
+  g_return_val_if_fail (version_out == NULL || *version_out == NULL,
+                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (path_out == NULL || *path_out == NULL,
+                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+
   if (custom_environ == NULL)
     my_environ = g_get_environ ();
   else

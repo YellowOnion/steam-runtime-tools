@@ -73,6 +73,10 @@ pipeline {
             env.CI_APT_SOURCES_FILE = ''
           }
 
+          if (env.CI_ALLOW_MISSING_SOURCES != 'true') {
+            env.CI_ALLOW_MISSING_SOURCES = ''
+          }
+
           if (!env.CI_EXTRA_APT_SOURCES) {
             env.CI_EXTRA_APT_SOURCES = ''
           }
@@ -137,6 +141,7 @@ pipeline {
               _build/prefix/bin/pressure-vessel-build-relocatable-install \
                 --output "${WORKSPACE}/relocatable-install" \
                 --archive "${WORKSPACE}" \
+                ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
                 ${NULL+}
               prove -v ./tests/relocatable-install.py :: \
                 "${WORKSPACE}/relocatable-install"

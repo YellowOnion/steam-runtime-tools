@@ -10,6 +10,7 @@ apt-get -y install \
     ${NULL+}
 
 /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+    ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
     --output "${AUTOPKGTEST_TMP}/relocatable-install" \
     --archive "${AUTOPKGTEST_TMP}"
 

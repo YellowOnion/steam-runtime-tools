@@ -26,6 +26,8 @@ variables:
     SCOUT_APT_SOURCES_FILE: ''
     DEVEL_DOCKER_REGISTRY: docker.steamos.cloud
     DEVEL_DOCKER_IMAGE: steamos/package-builder:buster
+    # Set non-empty to allow
+    CI_ALLOW_MISSING_SOURCES: ''
 
 build:
     variables:
@@ -96,6 +98,7 @@ build:scout:
             _build/prefix/bin/pressure-vessel-build-relocatable-install \
               --output _build/relocatable-install \
               --archive "$(pwd)/_build" \
+              ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
             prove -v ./tests/relocatable-install.py :: \
               "$(pwd)/_build/relocatable-install"

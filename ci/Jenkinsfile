@@ -109,7 +109,7 @@ pipeline {
           touch src/ci/sources.list
         fi
 
-        echo "${CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
+        echo "${CI_EXTRA_APT_SOURCES-}" | while read -r first rest; do
           if [ "x$first" = xboth ]; then
             echo "deb $rest" >> src/ci/sources.list
             echo "deb-src $rest" >> src/ci/sources.list

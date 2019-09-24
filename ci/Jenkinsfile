@@ -121,7 +121,7 @@ pipeline {
 
         script {
           docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
-            docker.build("${env.CI_DOCKER_REGISTRY}/pressure-vessel", '-f src/ci/Dockerfile src/ci').inside("${env.CI_DOCKER_OPTIONS}") {
+            docker.build("${env.CI_DOCKER_REGISTRY}/pressure-vessel", '--no-cache --pull -f src/ci/Dockerfile src/ci').inside("${env.CI_DOCKER_OPTIONS}") {
               sh '''
               set -eu
               cd src

@@ -236,6 +236,9 @@ fake_home_create_structure (FakeHome *f)
   f->env = g_get_environ ();
   f->env = g_environ_setenv (f->env, "HOME", f->home, TRUE);
   f->env = g_environ_setenv (f->env, "XDG_DATA_HOME", local_share, TRUE);
+  /* Make sure we don't find /etc/os-release or /usr/lib/os-release
+   * if we happen to be in a Steam Runtime container */
+  f->env = g_environ_setenv (f->env, "SRT_TEST_SYSROOT", f->home, TRUE);
 
   if (f->add_environments)
     {

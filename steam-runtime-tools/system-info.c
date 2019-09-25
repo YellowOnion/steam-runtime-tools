@@ -1477,23 +1477,54 @@ srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self)
 static void
 ensure_runtime_cached (SrtSystemInfo *self)
 {
+  ensure_os_cached (self);
   ensure_steam_cached (self);
 
   if (self->runtime.issues == SRT_RUNTIME_ISSUES_NONE &&
       self->runtime.path == NULL)
-    self->runtime.issues = _srt_runtime_check (self->steam.bin32,
-                                               self->runtime.expected_version,
-                                               self->env,
-                                               &self->runtime.version,
-                                               &self->runtime.path);
+    {
+      if (g_strcmp0 (self->os_release.id, "steamrt") == 0)
+        {
+          self->runtime.path = g_strdup ("/");
+          self->runtime.version = g_strdup (self->os_release.build_id);
+
+          if (self->runtime.expected_version != NULL
+              && g_strcmp0 (self->runtime.expected_version, self->runtime.version) != 0)
+            {
+              self->runtime.issues |= SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION;
+            }
+
+          if (self->runtime.version == NULL)
+            {
+              self->runtime.issues |= SRT_RUNTIME_ISSUES_NOT_RUNTIME;
+            }
+          else
+            {
+              const char *p;
+
+              for (p = self->runtime.version; *p != '\0'; p++)
+                {
+                  if (!g_ascii_isdigit (*p) && *p != '.')
+                    self->runtime.issues |= SRT_RUNTIME_ISSUES_UNOFFICIAL;
+                }
+            }
+        }
+      else
+        {
+          self->runtime.issues = _srt_runtime_check (self->steam.bin32,
+                                                     self->runtime.expected_version,
+                                                     self->env,
+                                                     &self->runtime.version,
+                                                     &self->runtime.path);
+        }
+    }
 }
 
 /**
  * srt_system_info_get_runtime_issues:
  * @self: The #SrtSystemInfo object
  *
- * Detect and return any problems encountered with the
- * `LD_LIBRARY_PATH`-based Steam Runtime.
+ * Detect and return any problems encountered with the Steam Runtime.
  *
  * Returns: Any problems detected with the Steam Runtime,
  *  or %SRT_RUNTIME_ISSUES_NONE if no problems were detected
@@ -1512,9 +1543,13 @@ srt_system_info_get_runtime_issues (SrtSystemInfo *self)
  * srt_system_info_dup_runtime_path:
  * @self: The #SrtSystemInfo object
  *
- * Return the absolute path to the `LD_LIBRARY_PATH`-based Steam Runtime
- * in use (the directory containing `run.sh`, `version.txt` and
- * similar files).
+ * Return the absolute path to the Steam Runtime in use.
+ *
+ * For the `LD_LIBRARY_PATH`-based Steam Runtime, this is the directory
+ * containing `run.sh`, `version.txt` and similar files.
+ *
+ * If running in a Steam Runtime container or chroot, this function
+ * returns `/` to indicate that the entire container is the Steam Runtime.
  *
  * This will typically be below
  * srt_system_info_dup_steam_installation_path(), unless overridden.
@@ -1540,9 +1575,10 @@ srt_system_info_dup_runtime_path (SrtSystemInfo *self)
  * srt_system_info_dup_runtime_version:
  * @self: The #SrtSystemInfo object
  *
- * Return the version number of the `LD_LIBRARY_PATH`-based Steam Runtime
+ * Return the version number of the Steam Runtime
  * in use, for example `0.20190711.3`, or %NULL if it could not be
- * determined.
+ * determined. This could either be the `LD_LIBRARY_PATH`-based Steam
+ * Runtime, or a Steam Runtime container or chroot.
  *
  * If the Steam Runtime has been disabled or could not be found, or its
  * version number could not be read, then at least one flag will be set

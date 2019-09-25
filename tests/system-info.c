@@ -1362,6 +1362,7 @@ os_steamrt (Fixture *f,
   gchar **strv;
   gchar *sysroot;
   gchar *s;
+  SrtRuntimeIssues runtime_issues;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
   envp = g_get_environ ();
@@ -1419,6 +1420,17 @@ os_steamrt (Fixture *f,
   g_assert_cmpstr (s, ==, "1");
   g_free (s);
 
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  g_assert_cmpint (runtime_issues, ==, SRT_RUNTIME_ISSUES_NONE);
+
+  s = srt_system_info_dup_runtime_path (info);
+  g_assert_cmpstr (s, ==, "/");
+  g_free (s);
+
+  s = srt_system_info_dup_runtime_version (info);
+  g_assert_cmpstr (s, ==, "0.20190924.0");
+  g_free (s);
+
   g_object_unref (info);
   g_free (sysroot);
   g_strfreev (envp);
@@ -1433,6 +1445,7 @@ os_steamrt_unofficial (Fixture *f,
   gchar **strv;
   gchar *sysroot;
   gchar *s;
+  SrtRuntimeIssues runtime_issues;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-unofficial", NULL);
   envp = g_get_environ ();
@@ -1491,6 +1504,19 @@ os_steamrt_unofficial (Fixture *f,
   g_assert_cmpstr (s, ==, "1");
   g_free (s);
 
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  g_assert_cmpint (runtime_issues, ==,
+                   (SRT_RUNTIME_ISSUES_UNOFFICIAL
+                    | SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION));
+
+  s = srt_system_info_dup_runtime_path (info);
+  g_assert_cmpstr (s, ==, "/");
+  g_free (s);
+
+  s = srt_system_info_dup_runtime_version (info);
+  g_assert_cmpstr (s, ==, "unofficial-0.20190924.0");
+  g_free (s);
+
   g_object_unref (info);
   g_free (sysroot);
   g_strfreev (envp);
@@ -1505,6 +1531,7 @@ os_invalid_os_release (Fixture *f,
   gchar **strv;
   gchar *sysroot;
   gchar *s;
+  SrtRuntimeIssues runtime_issues;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "invalid-os-release", NULL);
   envp = g_get_environ ();
@@ -1554,6 +1581,19 @@ os_invalid_os_release (Fixture *f,
   g_free (s);
 
   s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  g_assert_cmpint (runtime_issues, ==,
+                   (SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION
+                    | SRT_RUNTIME_ISSUES_NOT_RUNTIME));
+
+  s = srt_system_info_dup_runtime_path (info);
+  g_assert_cmpstr (s, ==, "/");
+  g_free (s);
+
+  s = srt_system_info_dup_runtime_version (info);
   g_assert_cmpstr (s, ==, NULL);
   g_free (s);
 

@@ -60,8 +60,8 @@ build:scout:
                 cp "${SCOUT_APT_SOURCES_FILE}" /etc/apt/sources.list
                 echo >> /etc/apt/sources.list
 
-                if [ -n "${CI_EXTRA_APT_SOURCES-}" ]; then
-                  echo "${CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
+                if [ -n "${STEAM_CI_EXTRA_APT_SOURCES-}" ]; then
+                  echo "${STEAM_CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
                     if [ "x$first" = xboth ]; then
                       echo "deb $rest" >> /etc/apt/sources.list
                       echo "deb-src $rest" >> /etc/apt/sources.list

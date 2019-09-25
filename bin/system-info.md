@@ -138,6 +138,99 @@ keys:
             likely to break the use of libraries from the host system,
             in particular the Mesa graphics drivers.
 
+**os-release**
+:   An object describing the operating system or container in which
+    **steam-runtime-system-info** was run. The keys and values are
+    strings, and any field that is not known is omitted.
+
+    **id**
+    :   A short lower-case string identifying the operating system,
+        for example **debian** or **arch**. In a Steam Runtime
+        chroot or container this will be **steamrt**.
+
+        This is the **ID** from **os-release**(5).
+        If **os-release**(5) is not available, future versions of this
+        library might derive a similar ID from **lsb_release**(1).
+
+    **name**
+    :   A human-readable name for the operating system without its
+        version, for example **Debian GNU/Linux** or **Arch Linux**.
+
+        This is the **NAME** from **os-release**(5).
+        If **os-release**(5) is not available, future versions of this
+        library might derive a similar name from **lsb_release**(1).
+
+    **pretty_name**
+    :   A human-readable name for the operating system, including its
+        version if applicable, for example
+        **Debian GNU/Linux 10 (buster)** or **Arch Linux**. For rolling
+        releases like Debian testing/unstable and Arch Linux, this
+        might be the same as **name**.
+
+        This is the **PRETTY_NAME** from **os-release**(5).
+        If **os-release**(5) is not available, future versions of this
+        library might derive a similar name from **lsb_release**(1).
+
+    **version_id**
+    :   A short machine-readable string identifying the operating system,
+        for example **10** for Debian 10 'buster'. In a
+        Steam Runtime 1 'scout' chroot or container this will be **1**.
+        In rolling releases like Debian testing/unstable and Arch Linux,
+        this is likely to be omitted. It is not guaranteed to be numeric.
+
+        This is the **VERSION_ID** from **os-release**(5).
+        If **os-release**(5) is not available, future versions of this
+        library might derive a similar ID from **lsb_release**(1).
+
+    **version_codename**
+    :   A short string identifying the operating system release codename,
+        for example **buster** for Debian 10 'buster'. In a
+        Steam Runtime 1 'scout' chroot or container this will be **scout**
+        if present.
+
+        In rolling releases like Debian testing/unstable and Arch Linux,
+        and in operating systems like Fedora that have codenames but do
+        not use them in a machine-readable context, this is likely to be
+        omitted.
+
+        This is the **VERSION_CODENAME** from **os-release**(5).
+        If **os-release**(5) is not available, future versions of this
+        library might derive a similar ID from **lsb_release**(1).
+
+    **build_id**
+    :   A short machine-readable string identifying the image from which
+        the operating system was installed (depending on the operating
+        system, it might have been upgraded since then). In operating
+        systems with only non-image-based installation methods this will
+        usually be omitted.
+
+        In a Steam Runtime 1 'scout' chroot or container, if present this
+        identifies the Steam Runtime build on which the chroot or container
+        is based, such as **0.20190926.0** for an official build or
+        **tools-test-0.20190926.0** for an unofficial build (but, again, it
+        might have been upgraded since then).
+
+        This is the **BUILD_ID** from **os-release**(5).
+
+    **variant_id**
+    :   A short machine-readable string identifying the variant or edition
+        of the operating system, such as **workstation**.
+
+        In a Steam Runtime 1 'scout' chroot or container built from a
+        Flatpak-style runtime, this will currently be something like
+        **com.valvesoftware.steamruntime.platform-amd64_i386-scout**.
+
+        This is the **VARIANT_ID** from **os-release**(5).
+
+    **variant**
+    :   A human-readable string identifying the variant or edition
+        of the operating system, such as **Workstation Edition**.
+
+        In a Steam Runtime 1 'scout' chroot or container built from a
+        Flatpak-style runtime, this will usually be **Platform** or **SDK**.
+
+        This is the **VARIANT** from **os-release**(5).
+
 **architectures**
 :   An object with architecture-specific information. The keys are
     Debian-style *multiarch tuples* describing ABIs, as returned by

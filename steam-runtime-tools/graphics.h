@@ -109,6 +109,53 @@ const char *srt_graphics_get_renderer_string (SrtGraphics *self);
 const char *srt_graphics_get_messages (SrtGraphics *self);
 gchar *srt_graphics_dup_parameters_string (SrtGraphics *self);
 
+typedef struct _SrtEglIcd SrtEglIcd;
+typedef struct _SrtEglIcdClass SrtEglIcdClass;
+
+#define SRT_TYPE_EGL_ICD (srt_egl_icd_get_type ())
+#define SRT_EGL_ICD(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_EGL_ICD, SrtEglIcd))
+#define SRT_EGL_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_EGL_ICD, SrtEglIcdClass))
+#define SRT_IS_EGL_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_EGL_ICD))
+#define SRT_IS_EGL_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_EGL_ICD))
+#define SRT_EGL_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_EGL_ICD, SrtEglIcdClass)
+GType srt_egl_icd_get_type (void);
+
+gboolean srt_egl_icd_check_error (SrtEglIcd *self,
+                                  GError **error);
+const gchar *srt_egl_icd_get_json_path (SrtEglIcd *self);
+const gchar *srt_egl_icd_get_library_path (SrtEglIcd *self);
+gchar *srt_egl_icd_resolve_library_path (SrtEglIcd *self);
+SrtEglIcd *srt_egl_icd_new_replace_library_path (SrtEglIcd *self,
+                                                 const char *path);
+gboolean srt_egl_icd_write_to_file (SrtEglIcd *self,
+                                    const char *path,
+                                    GError **error);
+
+typedef struct _SrtVulkanIcd SrtVulkanIcd;
+typedef struct _SrtVulkanIcdClass SrtVulkanIcdClass;
+
+#define SRT_TYPE_VULKAN_ICD (srt_vulkan_icd_get_type ())
+#define SRT_VULKAN_ICD(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_VULKAN_ICD, SrtVulkanIcd))
+#define SRT_VULKAN_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_VULKAN_ICD, SrtVulkanIcdClass))
+#define SRT_IS_VULKAN_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VULKAN_ICD))
+#define SRT_IS_VULKAN_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VULKAN_ICD))
+#define SRT_VULKAN_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VULKAN_ICD, SrtVulkanIcdClass)
+GType srt_vulkan_icd_get_type (void);
+
+gboolean srt_vulkan_icd_check_error (SrtVulkanIcd *self,
+                                     GError **error);
+const gchar *srt_vulkan_icd_get_api_version (SrtVulkanIcd *self);
+const gchar *srt_vulkan_icd_get_json_path (SrtVulkanIcd *self);
+const gchar *srt_vulkan_icd_get_library_path (SrtVulkanIcd *self);
+gchar *srt_vulkan_icd_resolve_library_path (SrtVulkanIcd *self);
+SrtVulkanIcd *srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
+                                                       const char *path);
+gboolean srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
+                                       const char *path,
+                                       GError **error);
+
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphics, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglIcd, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVulkanIcd, g_object_unref)
 #endif

@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20190925.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * locale: fix leaked SrtLocale
+
+  [ Simon McVittie ]
+  * graphics, library: Capture stderr from the checks
+  * locale: Check for the necessary files to generate more locales
+  * Generate autocleanup functions if GLib (or libglnx) supports it
+  * Add some missing precondition checks
+  * Assert we are not setuid before looking at the environment
+  * graphics: Add EGL and Vulkan ICD enumeration
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 25 Sep 2019 17:45:24 +0100
+
 steam-runtime-tools (0.20190909.0-0+steamrt1.2) scout; urgency=medium
 
   [ Simon McVittie ]

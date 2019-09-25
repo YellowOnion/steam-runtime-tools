@@ -294,6 +294,53 @@ keys:
     **error**
     :   A human-readable error message.
 
+**egl**
+:   An object describing EGL support. Currently the only key is
+    **icds**. Its value is an array of objects describing ICDs,
+    with the following keys and values if the metadata was loaded
+    successfully:
+
+    **json_path**
+    :   Absolute path to the JSON file describing the ICD
+
+    **library_path**
+    :   The library as described in the JSON file: either an absolute
+        path, a path relative to the JSON file containing at least one **/**,
+        or a bare library name to be loaded from the system default library
+        search path.
+
+    **dlopen**
+    :   The name to pass to **dlopen**(3), if it differs from
+        **library_path**. This key/value pair is omitted if it would
+        be the same as **library_path**. Currently, it is only shown
+        if the **library_path** is relative, in which case **dlopen**
+        is an absolute path formed by prefixing the directory part
+        of **json_path** to **library_path**.
+
+    or the following keys and values if the metadata failed to load:
+
+    **json_path**
+    :   Absolute path to the JSON file describing the ICD
+
+    **error-domain**
+    :   A machine-readable string indicating a category of errors.
+
+    **error-code**
+    :   A small integer indicating a specific error. Its meaning depends
+        on the **error-domain**.
+
+    **error**
+    :   A human-readable error message.
+
+**vulkan**
+:   An object describing Vulkan support. Currently the only key is
+    **icds**. Its value is an array of objects describing ICDs,
+    with the same keys and values as for EGL ICDs, plus one extra key:
+
+    **api_version**
+    :   Vulkan API version implemented by this ICD as a dotted-decimal
+        string, for example **1.1.90**
+
 # EXIT STATUS
 
 0

@@ -451,7 +451,9 @@ main (int argc,
   gchar *inst_path = NULL;
   gchar *rt_path = NULL;
   int opt;
-  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
+  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
+  GList *icds;
+  const GList *icd_iter;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
@@ -528,7 +530,9 @@ main (int argc,
   json_builder_set_member_name (builder, "architectures");
   json_builder_begin_object (builder);
 
-  for (gsize i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+  g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+
+  for (gsize i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
       GList *libraries = NULL;
 
@@ -614,6 +618,111 @@ main (int argc,
     }
 
   json_builder_end_object (builder);
+
+  json_builder_set_member_name (builder, "egl");
+  json_builder_begin_object (builder);
+  json_builder_set_member_name (builder, "icds");
+  json_builder_begin_array (builder);
+  icds = srt_system_info_list_egl_icds (info, multiarch_tuples);
+
+  for (icd_iter = icds; icd_iter != NULL; icd_iter = icd_iter->next)
+    {
+      json_builder_begin_object (builder);
+      json_builder_set_member_name (builder, "json_path");
+      json_builder_add_string_value (builder,
+                                     srt_egl_icd_get_json_path (icd_iter->data));
+
+      if (srt_egl_icd_check_error (icd_iter->data, &error))
+        {
+          const gchar *library;
+          gchar *tmp;
+
+          library = srt_egl_icd_get_library_path (icd_iter->data);
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, library);
+
+          tmp = srt_egl_icd_resolve_library_path (icd_iter->data);
+
+          if (g_strcmp0 (library, tmp) != 0)
+            {
+              json_builder_set_member_name (builder, "dlopen");
+              json_builder_add_string_value (builder, tmp);
+            }
+
+          g_free (tmp);
+        }
+      else
+        {
+          json_builder_set_member_name (builder, "error-domain");
+          json_builder_add_string_value (builder,
+                                         g_quark_to_string (error->domain));
+          json_builder_set_member_name (builder, "error-code");
+          json_builder_add_int_value (builder, error->code);
+          json_builder_set_member_name (builder, "error");
+          json_builder_add_string_value (builder, error->message);
+          g_clear_error (&error);
+        }
+
+      json_builder_end_object (builder);
+    }
+
+  g_list_free_full (icds, g_object_unref);
+  json_builder_end_array (builder);   // egl.icds
+  json_builder_end_object (builder);  // egl
+
+  json_builder_set_member_name (builder, "vulkan");
+  json_builder_begin_object (builder);
+  json_builder_set_member_name (builder, "icds");
+  json_builder_begin_array (builder);
+  icds = srt_system_info_list_vulkan_icds (info, multiarch_tuples);
+
+  for (icd_iter = icds; icd_iter != NULL; icd_iter = icd_iter->next)
+    {
+      json_builder_begin_object (builder);
+      json_builder_set_member_name (builder, "json_path");
+      json_builder_add_string_value (builder,
+                                     srt_vulkan_icd_get_json_path (icd_iter->data));
+
+      if (srt_vulkan_icd_check_error (icd_iter->data, &error))
+        {
+          const gchar *library;
+          gchar *tmp;
+
+          library = srt_vulkan_icd_get_library_path (icd_iter->data);
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, library);
+          json_builder_set_member_name (builder, "api_version");
+          json_builder_add_string_value (builder,
+                                         srt_vulkan_icd_get_api_version (icd_iter->data));
+
+          tmp = srt_vulkan_icd_resolve_library_path (icd_iter->data);
+
+          if (g_strcmp0 (library, tmp) != 0)
+            {
+              json_builder_set_member_name (builder, "dlopen");
+              json_builder_add_string_value (builder, tmp);
+            }
+
+          g_free (tmp);
+        }
+      else
+        {
+          json_builder_set_member_name (builder, "error-domain");
+          json_builder_add_string_value (builder,
+                                         g_quark_to_string (error->domain));
+          json_builder_set_member_name (builder, "error-code");
+          json_builder_add_int_value (builder, error->code);
+          json_builder_set_member_name (builder, "error");
+          json_builder_add_string_value (builder, error->message);
+          g_clear_error (&error);
+        }
+
+      json_builder_end_object (builder);
+    }
+
+  g_list_free_full (icds, g_object_unref);
+  json_builder_end_array (builder);   // vulkan.icds
+  json_builder_end_object (builder);  // vulkan
 
   json_builder_end_object (builder); // End global object
 

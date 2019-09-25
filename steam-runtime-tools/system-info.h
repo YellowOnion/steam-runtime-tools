@@ -87,6 +87,11 @@ SrtGraphicsIssues srt_system_info_check_graphics (SrtSystemInfo *self,
 GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
                                          const char *multiarch_tuple);
 
+GList *srt_system_info_list_egl_icds (SrtSystemInfo *self,
+                                      const char * const *multiarch_tuples);
+GList *srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
+                                         const char * const *multiarch_tuples);
+
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);
 void srt_system_info_set_helpers_path (SrtSystemInfo *self,

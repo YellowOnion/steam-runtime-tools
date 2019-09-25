@@ -55,6 +55,10 @@ tests_metadir = join_paths(
 
 install_subdir('expectations', install_dir : tests_dir)
 install_subdir('expectations_with_missings', install_dir : tests_dir)
+# To avoid being dependent on readdir() order, don't include more
+# than one *.json file in any directory that we are going to scan for
+# Vulkan *.json files. (The order of EGL *.json files is well-defined.)
+install_subdir('fake-icds', install_dir : tests_dir)
 install_subdir('fake-steam-runtime', install_dir : tests_dir)
 
 executable(

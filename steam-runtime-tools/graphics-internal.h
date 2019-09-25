@@ -128,3 +128,7 @@ _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interf
 
 #endif
 
+GList *_srt_load_egl_icds (gchar **envp,
+                           const char * const *multiarch_tuples);
+GList *_srt_load_vulkan_icds (gchar **envp,
+                              const char * const *multiarch_tuples);

@@ -27,6 +27,7 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
+#include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -48,6 +49,16 @@
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *
  * #SrtGraphics is an opaque object representing a graphics capabilities.
+ * This is a reference-counted object: use g_object_ref() and
+ * g_object_unref() to manage its lifecycle.
+ *
+ * #SrtEglIcd is an opaque object representing the metadata describing
+ * an EGL ICD.
+ * This is a reference-counted object: use g_object_ref() and
+ * g_object_unref() to manage its lifecycle.
+ *
+ * #SrtVulkanIcd is an opaque object representing the metadata describing
+ * a Vulkan ICD.
  * This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
  */
@@ -742,4 +753,1654 @@ srt_graphics_get_messages (SrtGraphics *self)
 {
   g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
   return self->messages;
+}
+
+/* EGL and Vulkan ICDs are actually basically the same, but we don't
+ * hard-code that in the API. */
+typedef struct
+{
+  GError *error;
+  gchar *api_version;   /* Always NULL when found in a SrtEglIcd */
+  gchar *json_path;
+  gchar *library_path;
+} SrtIcd;
+
+static void
+srt_icd_clear (SrtIcd *self)
+{
+  g_clear_error (&self->error);
+  g_clear_pointer (&self->api_version, g_free);
+  g_clear_pointer (&self->json_path, g_free);
+  g_clear_pointer (&self->library_path, g_free);
+}
+
+/*
+ * See srt_egl_icd_resolve_library_path(),
+ * srt_vulkan_icd_resolve_library_path()
+ */
+static gchar *
+srt_icd_resolve_library_path (const SrtIcd *self)
+{
+  gchar *dir;
+  gchar *ret;
+
+  /*
+   * In Vulkan, this function behaves according to the specification:
+   *
+   * The "library_path" specifies either a filename, a relative pathname,
+   * or a full pathname to an ICD shared library file. If "library_path"
+   * specifies a relative pathname, it is relative to the path of the
+   * JSON manifest file. If "library_path" specifies a filename, the
+   * library must live in the system's shared object search path.
+   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
+   *
+   * In GLVND, EGL ICDs with relative pathnames are currently passed
+   * directly to dlopen(), which will interpret them as relative to
+   * the current working directory - but upstream acknowledge in
+   * https://github.com/NVIDIA/libglvnd/issues/187 that this is not
+   * actually very useful, and have indicated that they would consider
+   * a patch to give it the same behaviour as Vulkan instead.
+   */
+
+  if (self->library_path == NULL)
+    return NULL;
+
+  if (self->library_path[0] == '/')
+    return g_strdup (self->library_path);
+
+  if (strchr (self->library_path, '/') == NULL)
+    return g_strdup (self->library_path);
+
+  dir = g_path_get_dirname (self->json_path);
+  ret = g_build_filename (dir, self->library_path, NULL);
+  g_free (dir);
+  g_return_val_if_fail (g_path_is_absolute (ret), ret);
+  return ret;
+}
+
+/* See srt_egl_icd_check_error(), srt_vulkan_icd_check_error() */
+static gboolean
+srt_icd_check_error (const SrtIcd *self,
+                     GError **error)
+{
+  if (self->error != NULL && error != NULL)
+    *error = g_error_copy (self->error);
+
+  return (self->error == NULL);
+}
+
+/* See srt_egl_icd_write_to_file(), srt_vulkan_icd_write_to_file() */
+static gboolean
+srt_icd_write_to_file (const SrtIcd *self,
+                       const char *path,
+                       GError **error)
+{
+  JsonBuilder *builder;
+  JsonGenerator *generator;
+  JsonNode *root;
+  gchar *json_output;
+  gboolean ret = FALSE;
+
+  if (!srt_icd_check_error (self, error))
+    {
+      g_prefix_error (error,
+                      "Cannot save ICD metadata to file because it is invalid: ");
+      return FALSE;
+    }
+
+  builder = json_builder_new ();
+  json_builder_begin_object (builder);
+  {
+    json_builder_set_member_name (builder, "file_format_version");
+    /* We parse and store all the information defined in file format
+     * version 1.0.0, but nothing beyond that, so we use this version
+     * in our output instead of quoting whatever was in the input.
+     *
+     * We don't currently need to distinguish between EGL and Vulkan here
+     * because the file format version we understand happens to be the
+     * same for both. */
+    json_builder_add_string_value (builder, "1.0.0");
+
+    json_builder_set_member_name (builder, "ICD");
+    json_builder_begin_object (builder);
+    {
+      json_builder_set_member_name (builder, "library_path");
+      json_builder_add_string_value (builder, self->library_path);
+
+      /* In the EGL case this will be NULL. In the Vulkan case it will
+       * be non-NULL, because if the API version was missing, we would
+       * have set the error indicator, so we wouldn't get here. */
+      if (self->api_version != NULL)
+        {
+          json_builder_set_member_name (builder, "api_version");
+          json_builder_add_string_value (builder, self->api_version);
+        }
+    }
+    json_builder_end_object (builder);
+  }
+  json_builder_end_object (builder);
+
+  root = json_builder_get_root (builder);
+  generator = json_generator_new ();
+  json_generator_set_root (generator, root);
+  json_generator_set_pretty (generator, TRUE);
+  json_output = json_generator_to_data (generator, NULL);
+
+  ret = g_file_set_contents (path, json_output, -1, error);
+
+  if (!ret)
+    g_prefix_error (error,
+                    "Cannot save ICD metadata to file :");
+
+  g_free (json_output);
+  g_object_unref (generator);
+  json_node_free (root);
+  g_object_unref (builder);
+  return ret;
+}
+
+/*
+ * indirect_strcmp0:
+ * @left: A non-%NULL pointer to a (possibly %NULL) `const char *`
+ * @right: A non-%NULL pointer to a (possibly %NULL) `const char *`
+ *
+ * A #GCompareFunc to sort pointers to strings in lexicographic
+ * (g_strcmp0()) order.
+ *
+ * Returns: An integer < 0 if left < right, > 0 if left > right,
+ *  or 0 if left == right or if they are not comparable
+ */
+static int
+indirect_strcmp0 (gconstpointer left,
+                  gconstpointer right)
+{
+  const gchar * const *l = left;
+  const gchar * const *r = right;
+
+  g_return_val_if_fail (l != NULL, 0);
+  g_return_val_if_fail (r != NULL, 0);
+  return g_strcmp0 (*l, *r);
+}
+
+/*
+ * A #GCompareFunc that does not sort the members of the directory.
+ */
+#define READDIR_ORDER ((GCompareFunc) NULL)
+
+/*
+ * load_json_dir:
+ * @sysroot: (nullable): Interpret directory names as being inside this
+ *  sysroot, mainly for unit testing
+ * @dir: A directory to search
+ * @suffix: (nullable): A path to append to @dir, such as `"vulkan/icd.d"`
+ * @sort: (nullable): If not %NULL, load ICDs sorted by filename in this order
+ * @load_json_cb: Called for each potential ICD found
+ * @user_data: Passed to @load_json_cb
+ */
+static void
+load_json_dir (const char *sysroot,
+               const char *dir,
+               const char *suffix,
+               GCompareFunc sort,
+               void (*load_json_cb) (const char *, const char *, void *),
+               void *user_data)
+{
+  GError *error = NULL;
+  GDir *dir_iter = NULL;
+  gchar *sysrooted_dir = NULL;
+  gchar *suffixed_dir = NULL;
+  const char *iter_dir;
+  const char *member;
+  GPtrArray *members;
+  gsize i;
+
+  g_return_if_fail (load_json_cb != NULL);
+
+  if (dir == NULL)
+    return;
+
+  if (suffix != NULL)
+    {
+      suffixed_dir = g_build_filename (dir, suffix, NULL);
+      dir = suffixed_dir;
+    }
+
+  iter_dir = dir;
+
+  if (sysroot != NULL)
+    {
+      sysrooted_dir = g_build_filename (sysroot, dir, NULL);
+      iter_dir = sysrooted_dir;
+    }
+
+  g_debug ("Looking for ICDs in %s...", dir);
+
+  dir_iter = g_dir_open (iter_dir, 0, &error);
+
+  if (dir_iter == NULL)
+    {
+      g_debug ("Failed to open \"%s\": %s", iter_dir, error->message);
+      goto out;
+    }
+
+  members = g_ptr_array_new_with_free_func (g_free);
+
+  while ((member = g_dir_read_name (dir_iter)) != NULL)
+    {
+      if (!g_str_has_suffix (member, ".json"))
+        continue;
+
+      g_ptr_array_add (members, g_strdup (member));
+    }
+
+  if (sort != READDIR_ORDER)
+    g_ptr_array_sort (members, sort);
+
+  for (i = 0; i < members->len; i++)
+    {
+      gchar *path;
+
+      member = g_ptr_array_index (members, i);
+      path = g_build_filename (dir, member, NULL);
+      load_json_cb (sysroot, path, user_data);
+      g_free (path);
+    }
+
+out:
+  if (dir_iter != NULL)
+    g_dir_close (dir_iter);
+
+  g_free (suffixed_dir);
+  g_free (sysrooted_dir);
+  g_clear_error (&error);
+}
+
+/*
+ * load_json_dir:
+ * @sysroot: (nullable): Interpret directory names as being inside this
+ *  sysroot, mainly for unit testing
+ * @search_paths: Directories to search
+ * @suffix: (nullable): A path to append to @dir, such as `"vulkan/icd.d"`
+ * @sort: (nullable): If not %NULL, load ICDs sorted by filename in this order
+ * @load_json_cb: Called for each potential ICD found
+ * @user_data: Passed to @load_json_cb
+ */
+static void
+load_json_dirs (const char *sysroot,
+                GStrv search_paths,
+                const char *suffix,
+                GCompareFunc sort,
+                void (*load_json_cb) (const char *, const char *, void *),
+                void *user_data)
+{
+  gchar **iter;
+
+  g_return_if_fail (load_json_cb != NULL);
+
+  for (iter = search_paths;
+       iter != NULL && *iter != NULL;
+       iter++)
+    load_json_dir (sysroot, *iter, suffix, sort, load_json_cb, user_data);
+}
+
+/*
+ * load_json:
+ * @type: %SRT_TYPE_EGL_ICD or %SRT_TYPE_VULKAN_ICD
+ * @path: (type filename) (transfer none): Path of JSON file
+ * @api_version_out: (out) (type utf8) (transfer full): Used to return
+ *  API version for %SRT_TYPE_VULKAN_ICD
+ * @library_path_out: (out) (type utf8) (transfer full): Used to return
+ *  shared library path
+ * @error: Used to raise an error on failure
+ *
+ * Try to load an EGL or Vulkan ICD from a JSON file.
+ *
+ * Returns: %TRUE if the JSON file was loaded successfully
+ */
+static gboolean
+load_json (GType type,
+           const char *path,
+           gchar **api_version_out,
+           gchar **library_path_out,
+           GError **error)
+{
+  JsonParser *parser = NULL;
+  gboolean ret = FALSE;
+  /* These are all borrowed from the parser */
+  JsonNode *node;
+  JsonObject *object;
+  JsonNode *subnode;
+  JsonObject *icd_object;
+  const char *file_format_version;
+  const char *api_version = NULL;
+  const char *library_path;
+
+  g_return_val_if_fail (type == SRT_TYPE_VULKAN_ICD
+                        || type == SRT_TYPE_EGL_ICD,
+                        FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
+  g_return_val_if_fail (api_version_out == NULL || *api_version_out == NULL,
+                        FALSE);
+  g_return_val_if_fail (library_path_out == NULL || *library_path_out == NULL,
+                        FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  g_debug ("Attempting to load %s from %s", g_type_name (type), path);
+
+  parser = json_parser_new ();
+
+  if (!json_parser_load_from_file (parser, path, error))
+    goto out;
+
+  node = json_parser_get_root (parser);
+
+  if (node == NULL || !JSON_NODE_HOLDS_OBJECT (node))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Expected to find a JSON object in \"%s\"", path);
+      goto out;
+    }
+
+  object = json_node_get_object (node);
+
+  subnode = json_object_get_member (object, "file_format_version");
+
+  if (subnode == NULL
+      || !JSON_NODE_HOLDS_VALUE (subnode))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "file_format_version in \"%s\" missing or not a value",
+                   path);
+      goto out;
+    }
+
+  file_format_version = json_node_get_string (subnode);
+
+  if (file_format_version == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "file_format_version in \"%s\" not a string", path);
+      goto out;
+    }
+
+  if (type == SRT_TYPE_VULKAN_ICD)
+    {
+      /*
+       * The compatibility rules for Vulkan ICDs are not clear.
+       * See https://github.com/KhronosGroup/Vulkan-Loader/issues/248
+       *
+       * The reference loader currently logs a warning, but carries on
+       * anyway, if the file format version is not 1.0.0 or 1.0.1.
+       * However, on #248 there's a suggestion that all the format versions
+       * that are valid for layer JSON (1.0.x up to 1.0.1 and 1.1.x up
+       * to 1.1.2) should also be considered valid for ICD JSON. For now
+       * we assume that the rule is the same as for EGL, below.
+       */
+      if (!g_str_has_prefix (file_format_version, "1.0."))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Vulkan file_format_version in \"%s\" is not 1.0.x",
+                       path);
+          goto out;
+        }
+    }
+  else
+    {
+      g_assert (type == SRT_TYPE_EGL_ICD);
+      /*
+       * For EGL, all 1.0.x versions are officially backwards compatible
+       * with 1.0.0.
+       * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+       */
+      if (!g_str_has_prefix (file_format_version, "1.0."))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "EGL file_format_version in \"%s\" is not 1.0.x",
+                       path);
+          goto out;
+        }
+    }
+
+  subnode = json_object_get_member (object, "ICD");
+
+  if (subnode == NULL
+      || !JSON_NODE_HOLDS_OBJECT (subnode))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No \"ICD\" object in \"%s\"", path);
+      goto out;
+    }
+
+  icd_object = json_node_get_object (subnode);
+
+  if (type == SRT_TYPE_VULKAN_ICD)
+    {
+      subnode = json_object_get_member (icd_object, "api_version");
+
+      if (subnode == NULL
+          || !JSON_NODE_HOLDS_VALUE (subnode))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "ICD.api_version in \"%s\" missing or not a value",
+                       path);
+          goto out;
+        }
+
+      api_version = json_node_get_string (subnode);
+
+      if (api_version == NULL)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "ICD.api_version in \"%s\" not a string", path);
+          goto out;
+        }
+    }
+
+  subnode = json_object_get_member (icd_object, "library_path");
+
+  if (subnode == NULL
+      || !JSON_NODE_HOLDS_VALUE (subnode))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "ICD.library_path in \"%s\" missing or not a value",
+                   path);
+      goto out;
+    }
+
+  library_path = json_node_get_string (subnode);
+
+  if (library_path == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "ICD.library_path in \"%s\" not a string", path);
+      goto out;
+    }
+
+  if (api_version_out != NULL)
+    *api_version_out = g_strdup (api_version);
+
+  if (library_path_out != NULL)
+    *library_path_out = g_strdup (library_path);
+
+  ret = TRUE;
+
+out:
+  g_clear_object (&parser);
+  return ret;
+}
+
+/**
+ * SrtEglIcd:
+ *
+ * Opaque object representing an EGL ICD.
+ */
+
+struct _SrtEglIcd
+{
+  /*< private >*/
+  GObject parent;
+  SrtIcd icd;
+};
+
+struct _SrtEglIcdClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  EGL_ICD_PROP_0,
+  EGL_ICD_PROP_ERROR,
+  EGL_ICD_PROP_JSON_PATH,
+  EGL_ICD_PROP_LIBRARY_PATH,
+  EGL_ICD_PROP_RESOLVED_LIBRARY_PATH,
+  N_EGL_ICD_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtEglIcd, srt_egl_icd, G_TYPE_OBJECT)
+
+static void
+srt_egl_icd_init (SrtEglIcd *self)
+{
+}
+
+static void
+srt_egl_icd_get_property (GObject *object,
+                          guint prop_id,
+                          GValue *value,
+                          GParamSpec *pspec)
+{
+  SrtEglIcd *self = SRT_EGL_ICD (object);
+
+  switch (prop_id)
+    {
+      case EGL_ICD_PROP_ERROR:
+        g_value_set_boxed (value, self->icd.error);
+        break;
+
+      case EGL_ICD_PROP_JSON_PATH:
+        g_value_set_string (value, self->icd.json_path);
+        break;
+
+      case EGL_ICD_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->icd.library_path);
+        break;
+
+      case EGL_ICD_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_egl_icd_resolve_library_path (self));
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_egl_icd_set_property (GObject *object,
+                          guint prop_id,
+                          const GValue *value,
+                          GParamSpec *pspec)
+{
+  SrtEglIcd *self = SRT_EGL_ICD (object);
+  const char *tmp;
+
+  switch (prop_id)
+    {
+      case EGL_ICD_PROP_ERROR:
+        g_return_if_fail (self->icd.error == NULL);
+        self->icd.error = g_value_dup_boxed (value);
+        break;
+
+      case EGL_ICD_PROP_JSON_PATH:
+        g_return_if_fail (self->icd.json_path == NULL);
+        tmp = g_value_get_string (value);
+
+        if (g_path_is_absolute (tmp))
+          {
+            self->icd.json_path = g_strdup (tmp);
+          }
+        else
+          {
+            gchar *cwd = g_get_current_dir ();
+
+            self->icd.json_path = g_build_filename (cwd, tmp, NULL);
+            g_free (cwd);
+          }
+        break;
+
+      case EGL_ICD_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->icd.library_path == NULL);
+        self->icd.library_path = g_value_dup_string (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_egl_icd_constructed (GObject *object)
+{
+  SrtEglIcd *self = SRT_EGL_ICD (object);
+
+  g_return_if_fail (self->icd.json_path != NULL);
+  g_return_if_fail (g_path_is_absolute (self->icd.json_path));
+  g_return_if_fail (self->icd.api_version == NULL);
+
+  if (self->icd.error != NULL)
+    g_return_if_fail (self->icd.library_path == NULL);
+  else
+    g_return_if_fail (self->icd.library_path != NULL);
+}
+
+static void
+srt_egl_icd_finalize (GObject *object)
+{
+  SrtEglIcd *self = SRT_EGL_ICD (object);
+
+  srt_icd_clear (&self->icd);
+
+  G_OBJECT_CLASS (srt_egl_icd_parent_class)->finalize (object);
+}
+
+static GParamSpec *egl_icd_properties[N_EGL_ICD_PROPERTIES] = { NULL };
+
+static void
+srt_egl_icd_class_init (SrtEglIcdClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_egl_icd_get_property;
+  object_class->set_property = srt_egl_icd_set_property;
+  object_class->constructed = srt_egl_icd_constructed;
+  object_class->finalize = srt_egl_icd_finalize;
+
+  egl_icd_properties[EGL_ICD_PROP_ERROR] =
+    g_param_spec_boxed ("error", "Error",
+                        "GError describing how this ICD failed to load, or NULL",
+                        G_TYPE_ERROR,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  egl_icd_properties[EGL_ICD_PROP_JSON_PATH] =
+    g_param_spec_string ("json-path", "JSON path",
+                         "Absolute path to JSON file describing this ICD. "
+                         "When constructing the object, a relative path can "
+                         "be given: it will be converted to an absolute path.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  egl_icd_properties[EGL_ICD_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Library implementing this ICD, expressed as a "
+                         "basename to be searched for in the default "
+                         "library search path (e.g. libEGL_mesa.so.0), "
+                         "a relative path containing '/' to be resolved "
+                         "relative to #SrtEglIcd:json-path (e.g. "
+                         "./libEGL_myvendor.so), or an absolute path "
+                         "(e.g. /opt/EGL/libEGL_myvendor.so)",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  egl_icd_properties[EGL_ICD_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Library implementing this ICD, expressed as a "
+                         "basename to be searched for in the default "
+                         "library search path (e.g. libEGL_mesa.so.0) "
+                         "or an absolute path (e.g. "
+                         "/opt/EGL/libEGL_myvendor.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_EGL_ICD_PROPERTIES,
+                                     egl_icd_properties);
+}
+
+/**
+ * srt_egl_icd_new:
+ * @json_path: (transfer none): the absolute path to the JSON file
+ * @library_path: (transfer none): the path to the library
+ *
+ * Returns: (transfer full): a new ICD
+ */
+static SrtEglIcd *
+srt_egl_icd_new (const gchar *json_path,
+                 const gchar *library_path)
+{
+  g_return_val_if_fail (json_path != NULL, NULL);
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_EGL_ICD,
+                       "json-path", json_path,
+                       "library-path", library_path,
+                       NULL);
+}
+
+/**
+ * srt_egl_icd_new_error:
+ * @error: (transfer none): Error that occurred when loading the ICD
+ *
+ * Returns: (transfer full): a new ICD
+ */
+static SrtEglIcd *
+srt_egl_icd_new_error (const gchar *json_path,
+                       const GError *error)
+{
+  g_return_val_if_fail (json_path != NULL, NULL);
+  g_return_val_if_fail (error != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_EGL_ICD,
+                       "error", error,
+                       "json-path", json_path,
+                       NULL);
+}
+
+/**
+ * srt_egl_icd_check_error:
+ * @self: The ICD
+ * @error: Used to return #SrtEglIcd:error if the ICD description could
+ *  not be loaded
+ *
+ * Check whether we failed to load the JSON describing this EGL ICD.
+ * Note that this does not actually `dlopen()` the ICD itself.
+ *
+ * Returns: %TRUE if the JSON was loaded successfully
+ */
+gboolean
+srt_egl_icd_check_error (SrtEglIcd *self,
+                         GError **error)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  return srt_icd_check_error (&self->icd, error);
+}
+
+/**
+ * srt_egl_icd_get_json_path:
+ * @self: The ICD
+ *
+ * Return the absolute path to the JSON file representing this ICD.
+ *
+ * Returns: (type filename) (transfer none): #SrtEglIcd:json-path
+ */
+const gchar *
+srt_egl_icd_get_json_path (SrtEglIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), NULL);
+  return self->icd.json_path;
+}
+
+/**
+ * srt_egl_icd_get_library_path:
+ * @self: The ICD
+ *
+ * Return the library path for this ICD. It is either an absolute path,
+ * a path relative to srt_egl_icd_get_json_path() containing at least one
+ * directory separator (slash), or a basename to be loaded from the
+ * shared library search path.
+ *
+ * If the JSON description for this ICD could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtEglIcd:library-path
+ */
+const gchar *
+srt_egl_icd_get_library_path (SrtEglIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), NULL);
+  return self->icd.library_path;
+}
+
+/*
+ * egl_icd_load_json:
+ * @sysroot: Interpret the filename as being inside this sysroot,
+ *  mainly for unit testing
+ * @filename: The filename of the metadata
+ * @list: (element-type SrtEglIcd) (inout): Prepend the
+ *  resulting #SrtEglIcd to this list
+ *
+ * Load a single ICD metadata file.
+ */
+static void
+egl_icd_load_json (const char *sysroot,
+                   const char *filename,
+                   GList **list)
+{
+  GError *error = NULL;
+  gchar *in_sysroot = NULL;
+  gchar *library_path = NULL;
+
+  g_return_if_fail (list != NULL);
+
+  if (sysroot != NULL)
+    in_sysroot = g_build_filename (sysroot, filename, NULL);
+
+  if (load_json (SRT_TYPE_EGL_ICD,
+                 in_sysroot == NULL ? filename : in_sysroot,
+                 NULL, &library_path, &error))
+    {
+      g_assert (library_path != NULL);
+      g_assert (error == NULL);
+      *list = g_list_prepend (*list,
+                              srt_egl_icd_new (filename, library_path));
+    }
+  else
+    {
+      g_assert (library_path == NULL);
+      g_assert (error != NULL);
+      *list = g_list_prepend (*list,
+                              srt_egl_icd_new_error (filename, error));
+    }
+
+  g_free (in_sysroot);
+  g_free (library_path);
+  g_clear_error (&error);
+}
+
+/**
+ * srt_egl_icd_resolve_library_path:
+ * @self: An ICD
+ *
+ * Return the path that can be passed to `dlopen()` for this ICD.
+ *
+ * If srt_egl_icd_get_library_path() is a relative path, return the
+ * absolute path that is the result of interpreting it relative to
+ * an appropriate location (the exact interpretation is subject to change,
+ * depending on upstream decisions).
+ *
+ * Otherwise return a copy of srt_egl_icd_get_library_path().
+ *
+ * The result is either the basename of a shared library (to be found
+ * relative to some directory listed in `$LD_LIBRARY_PATH`, `/etc/ld.so.conf`,
+ * `/etc/ld.so.conf.d` or the hard-coded library search path), or an
+ * absolute path.
+ *
+ * Returns: (transfer full) (type filename) (nullable): A copy
+ *  of #SrtEglIcd:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_egl_icd_resolve_library_path (SrtEglIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), NULL);
+  return srt_icd_resolve_library_path (&self->icd);
+}
+
+/**
+ * srt_egl_icd_new_replace_library_path:
+ * @self: An ICD
+ * @path: (type filename) (transfer none): A path
+ *
+ * Return a copy of @self with the srt_egl_icd_get_library_path()
+ * changed to @path. For example, this is useful when setting up a
+ * container where the underlying shared object will be made available
+ * at a different absolute path.
+ *
+ * If @self is in an error state, this returns a new reference to @self.
+ *
+ * Returns: (transfer full): A new reference to a #SrtEglIcd. Free with
+ *  g_object_unref().
+ */
+SrtEglIcd *
+srt_egl_icd_new_replace_library_path (SrtEglIcd *self,
+                                      const char *path)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), NULL);
+
+  if (self->icd.error != NULL)
+    return g_object_ref (self);
+
+  return srt_egl_icd_new (self->icd.json_path, path);
+}
+
+/**
+ * srt_egl_icd_write_to_file:
+ * @self: An ICD
+ * @path: (type filename): A filename
+ * @error: Used to describe the error on failure
+ *
+ * Serialize @self to the given JSON file.
+ *
+ * Returns: %TRUE on success
+ */
+gboolean
+srt_egl_icd_write_to_file (SrtEglIcd *self,
+                           const char *path,
+                           GError **error)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  return srt_icd_write_to_file (&self->icd, path, error);
+}
+
+static void
+egl_icd_load_json_cb (const char *sysroot,
+                      const char *filename,
+                      void *user_data)
+{
+  egl_icd_load_json (sysroot, filename, user_data);
+}
+
+#define EGL_VENDOR_SUFFIX "glvnd/egl_vendor.d"
+
+/*
+ * Return the ${sysconfdir} that we assume GLVND has.
+ *
+ * steam-runtime-tools is typically installed in the Steam Runtime,
+ * which is not part of the operating system, so we cannot assume
+ * that our own prefix is the same as GLVND. Assume a conventional
+ * OS-wide installation of GLVND.
+ */
+static const char *
+get_glvnd_sysconfdir (void)
+{
+  return "/etc";
+}
+
+/*
+ * Return the ${datadir} that we assume GLVND has. See above.
+ */
+static const char *
+get_glvnd_datadir (void)
+{
+  return "/usr/share";
+}
+
+/*
+ * _srt_load_egl_icds:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this
+ *  array
+ * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
+ *  is detected, assume a freedesktop-sdk-based runtime and look for
+ *  GL extensions for these multiarch tuples
+ *
+ * Implementation of srt_system_info_list_egl_icds().
+ *
+ * Returns: (transfer full) (element-type SrtEglIcd): A list of ICDs,
+ *  most-important first
+ */
+GList *
+_srt_load_egl_icds (gchar **envp,
+                    const char * const *multiarch_tuples)
+{
+  gchar **environ_copy = NULL;
+  const gchar *sysroot;
+  const gchar *value;
+  gsize i;
+  /* To avoid O(n**2) performance, we build this list in reverse order,
+   * then reverse it at the end. */
+  GList *ret = NULL;
+
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
+
+  if (envp == NULL)
+    {
+      environ_copy = g_get_environ ();
+      envp = environ_copy;
+    }
+
+  /* See
+   * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+   * for details of the search order. */
+
+  sysroot = g_environ_getenv (envp, "SRT_TEST_ICD_SYSROOT");
+  value = g_environ_getenv (envp, "__EGL_VENDOR_LIBRARY_FILENAMES");
+
+  if (value != NULL)
+    {
+      gchar **filenames = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+
+      for (i = 0; filenames[i] != NULL; i++)
+        egl_icd_load_json (sysroot, filenames[i], &ret);
+
+      g_strfreev (filenames);
+    }
+  else
+    {
+      gchar **dirs;
+      gchar *flatpak_info = NULL;
+
+      value = g_environ_getenv (envp, "__EGL_VENDOR_LIBRARY_DIRS");
+
+      flatpak_info = g_build_filename (sysroot != NULL ? sysroot : "/",
+                                       ".flatpak-info", NULL);
+
+      if (value != NULL)
+        {
+          dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+          load_json_dirs (sysroot, dirs, NULL, indirect_strcmp0,
+                          egl_icd_load_json_cb, &ret);
+          g_strfreev (dirs);
+        }
+      else if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
+               && multiarch_tuples != NULL)
+        {
+          g_debug ("Flatpak detected: assuming freedesktop-based runtime");
+
+          for (i = 0; multiarch_tuples[i] != NULL; i++)
+            {
+              gchar *tmp;
+
+              /* freedesktop-sdk reconfigures the EGL loader to look here. */
+              tmp = g_strdup_printf ("/usr/lib/%s/GL/" EGL_VENDOR_SUFFIX,
+                                     multiarch_tuples[i]);
+              load_json_dir (sysroot, tmp, NULL, indirect_strcmp0,
+                             egl_icd_load_json_cb, &ret);
+              g_free (tmp);
+            }
+        }
+      else
+        {
+          load_json_dir (sysroot, get_glvnd_sysconfdir (), EGL_VENDOR_SUFFIX,
+                         indirect_strcmp0, egl_icd_load_json_cb, &ret);
+          load_json_dir (sysroot, get_glvnd_datadir (), EGL_VENDOR_SUFFIX,
+                         indirect_strcmp0, egl_icd_load_json_cb, &ret);
+        }
+
+      g_free (flatpak_info);
+    }
+
+  g_strfreev (environ_copy);
+  return g_list_reverse (ret);
+}
+
+/**
+ * SrtVulkanIcd:
+ *
+ * Opaque object representing a Vulkan ICD.
+ */
+
+struct _SrtVulkanIcd
+{
+  /*< private >*/
+  GObject parent;
+  SrtIcd icd;
+};
+
+struct _SrtVulkanIcdClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  VULKAN_ICD_PROP_0,
+  VULKAN_ICD_PROP_API_VERSION,
+  VULKAN_ICD_PROP_ERROR,
+  VULKAN_ICD_PROP_JSON_PATH,
+  VULKAN_ICD_PROP_LIBRARY_PATH,
+  VULKAN_ICD_PROP_RESOLVED_LIBRARY_PATH,
+  N_VULKAN_ICD_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtVulkanIcd, srt_vulkan_icd, G_TYPE_OBJECT)
+
+static void
+srt_vulkan_icd_init (SrtVulkanIcd *self)
+{
+}
+
+static void
+srt_vulkan_icd_get_property (GObject *object,
+                             guint prop_id,
+                             GValue *value,
+                             GParamSpec *pspec)
+{
+  SrtVulkanIcd *self = SRT_VULKAN_ICD (object);
+
+  switch (prop_id)
+    {
+      case VULKAN_ICD_PROP_API_VERSION:
+        g_value_set_string (value, self->icd.api_version);
+        break;
+
+      case VULKAN_ICD_PROP_ERROR:
+        g_value_set_boxed (value, self->icd.error);
+        break;
+
+      case VULKAN_ICD_PROP_JSON_PATH:
+        g_value_set_string (value, self->icd.json_path);
+        break;
+
+      case VULKAN_ICD_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->icd.library_path);
+        break;
+
+      case VULKAN_ICD_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_vulkan_icd_resolve_library_path (self));
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_vulkan_icd_set_property (GObject *object,
+                             guint prop_id,
+                             const GValue *value,
+                             GParamSpec *pspec)
+{
+  SrtVulkanIcd *self = SRT_VULKAN_ICD (object);
+  const char *tmp;
+
+  switch (prop_id)
+    {
+      case VULKAN_ICD_PROP_API_VERSION:
+        g_return_if_fail (self->icd.api_version == NULL);
+        self->icd.api_version = g_value_dup_string (value);
+        break;
+
+      case VULKAN_ICD_PROP_ERROR:
+        g_return_if_fail (self->icd.error == NULL);
+        self->icd.error = g_value_dup_boxed (value);
+        break;
+
+      case VULKAN_ICD_PROP_JSON_PATH:
+        g_return_if_fail (self->icd.json_path == NULL);
+        tmp = g_value_get_string (value);
+
+        if (g_path_is_absolute (tmp))
+          {
+            self->icd.json_path = g_strdup (tmp);
+          }
+        else
+          {
+            gchar *cwd = g_get_current_dir ();
+
+            self->icd.json_path = g_build_filename (cwd, tmp, NULL);
+            g_free (cwd);
+          }
+        break;
+
+      case VULKAN_ICD_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->icd.library_path == NULL);
+        self->icd.library_path = g_value_dup_string (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_vulkan_icd_constructed (GObject *object)
+{
+  SrtVulkanIcd *self = SRT_VULKAN_ICD (object);
+
+  g_return_if_fail (self->icd.json_path != NULL);
+  g_return_if_fail (g_path_is_absolute (self->icd.json_path));
+
+  if (self->icd.error != NULL)
+    {
+      g_return_if_fail (self->icd.api_version == NULL);
+      g_return_if_fail (self->icd.library_path == NULL);
+    }
+  else
+    {
+      g_return_if_fail (self->icd.api_version != NULL);
+      g_return_if_fail (self->icd.library_path != NULL);
+    }
+}
+
+static void
+srt_vulkan_icd_finalize (GObject *object)
+{
+  SrtVulkanIcd *self = SRT_VULKAN_ICD (object);
+
+  srt_icd_clear (&self->icd);
+
+  G_OBJECT_CLASS (srt_vulkan_icd_parent_class)->finalize (object);
+}
+
+static GParamSpec *vulkan_icd_properties[N_VULKAN_ICD_PROPERTIES] = { NULL };
+
+static void
+srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_vulkan_icd_get_property;
+  object_class->set_property = srt_vulkan_icd_set_property;
+  object_class->constructed = srt_vulkan_icd_constructed;
+  object_class->finalize = srt_vulkan_icd_finalize;
+
+  vulkan_icd_properties[VULKAN_ICD_PROP_API_VERSION] =
+    g_param_spec_string ("api-version", "API version",
+                         "Vulkan API version implemented by this ICD",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_icd_properties[VULKAN_ICD_PROP_ERROR] =
+    g_param_spec_boxed ("error", "Error",
+                        "GError describing how this ICD failed to load, or NULL",
+                        G_TYPE_ERROR,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  vulkan_icd_properties[VULKAN_ICD_PROP_JSON_PATH] =
+    g_param_spec_string ("json-path", "JSON path",
+                         "Absolute path to JSON file describing this ICD. "
+                         "When constructing the object, a relative path can "
+                         "be given: it will be converted to an absolute path.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_icd_properties[VULKAN_ICD_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Library implementing this ICD, expressed as a "
+                         "basename to be searched for in the default "
+                         "library search path (e.g. libvulkan_myvendor.so), "
+                         "a relative path containing '/' to be resolved "
+                         "relative to #SrtVulkanIcd:json-path (e.g. "
+                         "./libvulkan_myvendor.so), or an absolute path "
+                         "(e.g. /opt/vulkan/libvulkan_myvendor.so)",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_icd_properties[VULKAN_ICD_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Library implementing this ICD, expressed as a "
+                         "basename to be searched for in the default "
+                         "library search path (e.g. libvulkan_myvendor.so) "
+                         "or an absolute path "
+                         "(e.g. /opt/vulkan/libvulkan_myvendor.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_VULKAN_ICD_PROPERTIES,
+                                     vulkan_icd_properties);
+}
+
+/**
+ * srt_vulkan_icd_new:
+ * @json_path: (transfer none): the absolute path to the JSON file
+ * @api_version: (transfer none): the API version
+ * @library_path: (transfer none): the path to the library
+ *
+ * Returns: (transfer full): a new ICD
+ */
+static SrtVulkanIcd *
+srt_vulkan_icd_new (const gchar *json_path,
+                    const gchar *api_version,
+                    const gchar *library_path)
+{
+  g_return_val_if_fail (json_path != NULL, NULL);
+  g_return_val_if_fail (api_version != NULL, NULL);
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_VULKAN_ICD,
+                       "api-version", api_version,
+                       "json-path", json_path,
+                       "library-path", library_path,
+                       NULL);
+}
+
+/**
+ * srt_vulkan_icd_new_error:
+ * @error: (transfer none): Error that occurred when loading the ICD
+ *
+ * Returns: (transfer full): a new ICD
+ */
+static SrtVulkanIcd *
+srt_vulkan_icd_new_error (const gchar *json_path,
+                          const GError *error)
+{
+  g_return_val_if_fail (json_path != NULL, NULL);
+  g_return_val_if_fail (error != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_VULKAN_ICD,
+                       "error", error,
+                       "json-path", json_path,
+                       NULL);
+}
+
+/**
+ * srt_vulkan_icd_check_error:
+ * @self: The ICD
+ * @error: Used to return details if the ICD description could not be loaded
+ *
+ * Check whether we failed to load the JSON describing this Vulkan ICD.
+ * Note that this does not actually `dlopen()` the ICD itself.
+ *
+ * Returns: %TRUE if the JSON was loaded successfully
+ */
+gboolean
+srt_vulkan_icd_check_error (SrtVulkanIcd *self,
+                            GError **error)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  return srt_icd_check_error (&self->icd, error);
+}
+
+/**
+ * srt_vulkan_icd_get_api_version:
+ * @self: The ICD
+ *
+ * Return the Vulkan API version of this ICD.
+ *
+ * If the JSON description for this ICD could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type utf8) (transfer none) (nullable): The API version as a string
+ */
+const gchar *
+srt_vulkan_icd_get_api_version (SrtVulkanIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), NULL);
+  return self->icd.api_version;
+}
+
+/**
+ * srt_vulkan_icd_get_json_path:
+ * @self: The ICD
+ *
+ * Return the absolute path to the JSON file representing this ICD.
+ *
+ * Returns: (type filename) (transfer none): #SrtVulkanIcd:json-path
+ */
+const gchar *
+srt_vulkan_icd_get_json_path (SrtVulkanIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), NULL);
+  return self->icd.json_path;
+}
+
+/**
+ * srt_vulkan_icd_get_library_path:
+ * @self: The ICD
+ *
+ * Return the library path for this ICD. It is either an absolute path,
+ * a path relative to srt_vulkan_icd_get_json_path() containing at least one
+ * directory separator (slash), or a basename to be loaded from the
+ * shared library search path.
+ *
+ * If the JSON description for this ICD could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtVulkanIcd:library-path
+ */
+const gchar *
+srt_vulkan_icd_get_library_path (SrtVulkanIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), NULL);
+  return self->icd.library_path;
+}
+
+/**
+ * srt_vulkan_icd_resolve_library_path:
+ * @self: An ICD
+ *
+ * Return the path that can be passed to `dlopen()` for this ICD.
+ *
+ * If srt_vulkan_icd_get_library_path() is a relative path, return the
+ * absolute path that is the result of interpreting it relative to
+ * srt_vulkan_icd_get_json_path(). Otherwise return a copy of
+ * srt_vulkan_icd_get_library_path().
+ *
+ * The result is either the basename of a shared library (to be found
+ * relative to some directory listed in `$LD_LIBRARY_PATH`, `/etc/ld.so.conf`,
+ * `/etc/ld.so.conf.d` or the hard-coded library search path), or an
+ * absolute path.
+ *
+ * Returns: (transfer full) (type filename) (nullable): A copy
+ *  of #SrtVulkanIcd:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_vulkan_icd_resolve_library_path (SrtVulkanIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), NULL);
+  return srt_icd_resolve_library_path (&self->icd);
+}
+
+/**
+ * srt_vulkan_icd_write_to_file:
+ * @self: An ICD
+ * @path: (type filename): A filename
+ * @error: Used to describe the error on failure
+ *
+ * Serialize @self to the given JSON file.
+ *
+ * Returns: %TRUE on success
+ */
+gboolean
+srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
+                              const char *path,
+                              GError **error)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  return srt_icd_write_to_file (&self->icd, path, error);
+}
+
+/**
+ * srt_vulkan_icd_new_replace_library_path:
+ * @self: An ICD
+ * @path: (type filename) (transfer none): A path
+ *
+ * Return a copy of @self with the srt_vulkan_icd_get_library_path()
+ * changed to @path. For example, this is useful when setting up a
+ * container where the underlying shared object will be made available
+ * at a different absolute path.
+ *
+ * If @self is in an error state, this returns a new reference to @self.
+ *
+ * Returns: (transfer full): A new reference to a #SrtVulkanIcd. Free with
+ *  g_object_unref().
+ */
+SrtVulkanIcd *
+srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
+                                         const char *path)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), NULL);
+
+  if (self->icd.error != NULL)
+    return g_object_ref (self);
+
+  return srt_vulkan_icd_new (self->icd.json_path,
+                             self->icd.api_version,
+                             path);
+}
+
+/*
+ * vulkan_icd_load_json:
+ * @sysroot: Interpret the filename as being inside this sysroot,
+ *  mainly for unit testing
+ * @filename: The filename of the metadata
+ * @list: (element-type SrtVulkanIcd) (inout): Prepend the
+ *  resulting #SrtVulkanIcd to this list
+ *
+ * Load a single ICD metadata file.
+ */
+static void
+vulkan_icd_load_json (const char *sysroot,
+                      const char *filename,
+                      GList **list)
+{
+  GError *error = NULL;
+  gchar *in_sysroot = NULL;
+  gchar *api_version = NULL;
+  gchar *library_path = NULL;
+
+  g_return_if_fail (list != NULL);
+
+  if (sysroot != NULL)
+    in_sysroot = g_build_filename (sysroot, filename, NULL);
+
+  if (load_json (SRT_TYPE_VULKAN_ICD,
+                 in_sysroot == NULL ? filename : in_sysroot,
+                 &api_version, &library_path, &error))
+    {
+      g_assert (api_version != NULL);
+      g_assert (library_path != NULL);
+      g_assert (error == NULL);
+      *list = g_list_prepend (*list,
+                              srt_vulkan_icd_new (filename,
+                                                  api_version,
+                                                  library_path));
+    }
+  else
+    {
+      g_assert (api_version == NULL);
+      g_assert (library_path == NULL);
+      g_assert (error != NULL);
+      *list = g_list_prepend (*list,
+                              srt_vulkan_icd_new_error (filename, error));
+    }
+
+  g_free (in_sysroot);
+  g_free (api_version);
+  g_free (library_path);
+  g_clear_error (&error);
+}
+
+static void
+vulkan_icd_load_json_cb (const char *sysroot,
+                         const char *filename,
+                         void *user_data)
+{
+  vulkan_icd_load_json (sysroot, filename, user_data);
+}
+
+#define VULKAN_ICD_SUFFIX "vulkan/icd.d"
+
+/*
+ * Return the ${sysconfdir} that we assume the Vulkan loader has.
+ * See get_glvnd_sysconfdir().
+ */
+static const char *
+get_vulkan_sysconfdir (void)
+{
+  return "/etc";
+}
+
+/*
+ * _srt_load_vulkan_icds:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this
+ *  array
+ * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
+ *  is detected, assume a freedesktop-sdk-based runtime and look for
+ *  GL extensions for these multiarch tuples
+ *
+ * Implementation of srt_system_info_list_vulkan_icds().
+ *
+ * Returns: (transfer full) (element-type SrtVulkanIcd): A list of ICDs,
+ *  most-important first
+ */
+GList *
+_srt_load_vulkan_icds (gchar **envp,
+                       const char * const *multiarch_tuples)
+{
+  gchar **environ_copy = NULL;
+  const gchar *sysroot;
+  const gchar *value;
+  gsize i;
+  /* To avoid O(n**2) performance, we build this list in reverse order,
+   * then reverse it at the end. */
+  GList *ret = NULL;
+
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
+
+  if (envp == NULL)
+    {
+      environ_copy = g_get_environ ();
+      envp = environ_copy;
+    }
+
+  /* See
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
+   * for more details of the search order - but beware that the
+   * documentation is not completely up to date (as of September 2019)
+   * so you should also look at the reference implementation. */
+
+  sysroot = g_environ_getenv (envp, "SRT_TEST_ICD_SYSROOT");
+  value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
+
+  if (value != NULL)
+    {
+      gchar **filenames = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+
+      for (i = 0; filenames[i] != NULL; i++)
+        vulkan_icd_load_json (sysroot, filenames[i], &ret);
+
+      g_strfreev (filenames);
+    }
+  else
+    {
+      gchar **dirs;
+      gchar *tmp = NULL;
+      gchar *flatpak_info = NULL;
+
+      /* The reference Vulkan loader doesn't entirely follow
+       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
+       * it skips XDG_CONFIG_HOME and goes directly to XDG_CONFIG_DIRS.
+       * https://github.com/KhronosGroup/Vulkan-Loader/issues/246 */
+
+      value = g_environ_getenv (envp, "XDG_CONFIG_DIRS");
+
+      /* Constant and non-configurable fallback, as per
+       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+      if (value == NULL)
+        value = "/etc/xdg";
+
+      dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+      load_json_dirs (sysroot, dirs, VULKAN_ICD_SUFFIX, READDIR_ORDER,
+                      vulkan_icd_load_json_cb, &ret);
+      g_strfreev (dirs);
+
+      value = get_vulkan_sysconfdir ();
+      load_json_dir (sysroot, value, VULKAN_ICD_SUFFIX,
+                     READDIR_ORDER, vulkan_icd_load_json_cb, &ret);
+
+      /* This is hard-coded in the reference loader: if its own sysconfdir
+       * is not /etc, it searches /etc afterwards. (In practice this
+       * won't trigger at the moment, because we assume the Vulkan
+       * loader's sysconfdir *is* /etc.) */
+      if (g_strcmp0 (value, "/etc") != 0)
+        load_json_dir (sysroot, "/etc", VULKAN_ICD_SUFFIX,
+                       READDIR_ORDER, vulkan_icd_load_json_cb, &ret);
+
+      flatpak_info = g_build_filename (sysroot != NULL ? sysroot : "/",
+                                       ".flatpak-info", NULL);
+
+      /* freedesktop-sdk patches the Vulkan loader to look here. */
+      if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
+          && multiarch_tuples != NULL)
+        {
+          g_debug ("Flatpak detected: assuming freedesktop-based runtime");
+
+          for (i = 0; multiarch_tuples[i] != NULL; i++)
+            {
+              /* GL extensions */
+              tmp = g_build_filename ("/usr/lib",
+                                      multiarch_tuples[i],
+                                      "GL",
+                                      VULKAN_ICD_SUFFIX,
+                                      NULL);
+              load_json_dir (sysroot, tmp, NULL, READDIR_ORDER,
+                             vulkan_icd_load_json_cb, &ret);
+              g_free (tmp);
+
+              /* Built-in Mesa stack */
+              tmp = g_build_filename ("/usr/lib",
+                                      multiarch_tuples[i],
+                                      VULKAN_ICD_SUFFIX,
+                                      NULL);
+              load_json_dir (sysroot, tmp, NULL, READDIR_ORDER,
+                             vulkan_icd_load_json_cb, &ret);
+              g_free (tmp);
+            }
+        }
+
+      g_free (flatpak_info);
+
+      /* The reference Vulkan loader doesn't entirely follow
+       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
+       * it searches XDG_DATA_HOME *after* XDG_DATA_DIRS, and it still
+       * searches ~/.local/share even if XDG_DATA_HOME is set.
+       * https://github.com/KhronosGroup/Vulkan-Loader/issues/245 */
+
+      value = g_environ_getenv (envp, "XDG_DATA_DIRS");
+
+      /* Constant and non-configurable fallback, as per
+       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+      if (value == NULL)
+        value = "/usr/local/share" G_SEARCHPATH_SEPARATOR_S "/usr/share";
+
+      dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+      load_json_dirs (sysroot, dirs, VULKAN_ICD_SUFFIX, READDIR_ORDER,
+                      vulkan_icd_load_json_cb, &ret);
+      g_strfreev (dirs);
+
+      /* I don't know why this is searched *after* XDG_DATA_DIRS in the
+       * reference loader, but we match that behaviour. */
+      value = g_environ_getenv (envp, "XDG_DATA_HOME");
+      load_json_dir (sysroot, value, VULKAN_ICD_SUFFIX, READDIR_ORDER,
+                     vulkan_icd_load_json_cb, &ret);
+
+      /* libvulkan searches this unconditionally, even if XDG_DATA_HOME
+       * is set. */
+      value = g_environ_getenv (envp, "HOME");
+
+      if (value == NULL)
+        value = g_get_home_dir ();
+
+      tmp = g_build_filename (value, ".local", "share",
+                              VULKAN_ICD_SUFFIX, NULL);
+      load_json_dir (sysroot, tmp, NULL, READDIR_ORDER,
+                     vulkan_icd_load_json_cb, &ret);
+      g_free (tmp);
+    }
+
+  g_strfreev (environ_copy);
+  return g_list_reverse (ret);
 }

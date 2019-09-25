@@ -33,5 +33,6 @@
 
 G_GNUC_INTERNAL
 SrtSteamIssues _srt_steam_check (const GStrv env,
-                                 gchar **path_out,
+                                 gchar **install_path_out,
+                                 gchar **data_path_out,
                                  gchar **bin32_out);

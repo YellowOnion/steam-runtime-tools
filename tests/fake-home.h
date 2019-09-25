@@ -33,13 +33,16 @@ typedef struct
   gboolean create_pinning_libs;
   gboolean create_i386_folders;
   gboolean create_amd64_folders;
+  gboolean create_root_symlink;
   gboolean create_steam_symlink;
   gboolean create_steamrt_files;
   gboolean add_environments;
   gboolean has_debian_bug_916303;
+  gboolean testing_beta_client;
 
   gchar *home;
-  gchar *steam_base_folder;
+  gchar *steam_install;
+  gchar *steam_data;
   gchar *runtime;
   gchar *pinned_32;
   gchar *pinned_64;

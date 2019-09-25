@@ -255,6 +255,18 @@ jsonify_steam_issues (JsonBuilder *builder,
 
   if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK) != 0)
     json_builder_add_string_value (builder, "dot-steam-steam-not-symlink");
+
+  if ((issues & SRT_STEAM_ISSUES_CANNOT_FIND_DATA) != 0)
+    json_builder_add_string_value (builder, "cannot-find-data");
+
+  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY) != 0)
+    json_builder_add_string_value (builder, "dot-steam-steam-not-directory");
+
+  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK) != 0)
+    json_builder_add_string_value (builder, "dot-steam-root-not-symlink");
+
+  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY) != 0)
+    json_builder_add_string_value (builder, "dot-steam-root-not-directory");
 }
 
 static void
@@ -449,6 +461,7 @@ main (int argc,
   gchar *json_output;
   gchar *version = NULL;
   gchar *inst_path = NULL;
+  gchar *data_path = NULL;
   gchar *rt_path = NULL;
   int opt;
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
@@ -503,6 +516,9 @@ main (int argc,
   json_builder_set_member_name (builder, "path");
   inst_path = srt_system_info_dup_steam_installation_path (info);
   json_builder_add_string_value (builder, inst_path);
+  json_builder_set_member_name (builder, "data_path");
+  data_path = srt_system_info_dup_steam_data_path (info);
+  json_builder_add_string_value (builder, data_path);
   json_builder_set_member_name (builder, "issues");
   json_builder_begin_array (builder);
   steam_issues = srt_system_info_get_steam_issues (info);
@@ -638,6 +654,7 @@ main (int argc,
   g_object_unref (builder);
   g_object_unref (info);
   g_free (rt_path);
+  g_free (data_path);
   g_free (inst_path);
   g_free (version);
 

@@ -49,14 +49,19 @@
 /*
  * _srt_steam_check:
  * @environ: (nullable): The list of environment variables to use.
- * @path_out: (out) (optional) (nullable) (type filename):
+ * @install_path_out: (out) (optional) (nullable) (type filename):
  *  Used to return the absolute path to the Steam installation
+ * @data_path_out: (out) (optional) (nullable) (type filename):
+ *  Used to return the absolute path to the Steam data directory,
+ *  which is usually the same as @install_path_out, but may be different
+ *  while testing a new Steam release
  * @bin32_out: (out) (optional) (nullable) (type filename):
  *  Used to return the absolute path to `ubuntu12_32`
  */
 SrtSteamIssues
 _srt_steam_check (const GStrv environ,
-                  gchar **path_out,
+                  gchar **install_path_out,
+                  gchar **data_path_out,
                   gchar **bin32_out)
 {
   SrtSteamIssues issues = SRT_STEAM_ISSUES_NONE;
@@ -64,7 +69,8 @@ _srt_steam_check (const GStrv environ,
   gchar *dot_steam_steam = NULL;
   gchar *dot_steam_root = NULL;
   gchar *default_steam_path = NULL;
-  char *path = NULL;
+  char *install_path = NULL;
+  char *data_path = NULL;
   char *bin32 = NULL;
   const char *home = NULL;
   const char *user_data = NULL;
@@ -72,7 +78,9 @@ _srt_steam_check (const GStrv environ,
 
   g_return_val_if_fail (_srt_check_not_setuid (),
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (path_out == NULL || *path_out == NULL,
+  g_return_val_if_fail (install_path_out == NULL || *install_path_out == NULL,
+                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (data_path_out == NULL || *data_path_out == NULL,
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (bin32_out == NULL || *bin32_out == NULL,
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
@@ -95,14 +103,27 @@ _srt_steam_check (const GStrv environ,
   dot_steam_steam = g_build_filename (home, ".steam", "steam", NULL);
   dot_steam_root = g_build_filename (home, ".steam", "root", NULL);
 
-  /* Canonically, ~/.steam/steam is a symlink to the Steam installation.
+  /* Canonically, ~/.steam/steam is a symlink to the Steam data directory.
+   * This is used to install games, for example. It is *not* used to
+   * install the Steam client itself.
+   *
    * (This is ignoring the Valve-internal "beta universe", which uses
-   * ~/.steam/steambeta instead.) */
+   * ~/.steam/steambeta instead, and is not open to the public.) */
   if (g_file_test (dot_steam_steam, G_FILE_TEST_IS_SYMLINK))
     {
-      path = realpath (dot_steam_steam, NULL);
+      data_path = realpath (dot_steam_steam, NULL);
 
-      if (path == NULL)
+      if (data_path == NULL)
+        g_debug ("realpath(%s): %s", dot_steam_steam, g_strerror (errno));
+    }
+  else if (g_file_test (dot_steam_steam, G_FILE_TEST_IS_DIR))
+    {
+      /* e.g. https://bugs.debian.org/916303 */
+      issues |= SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK;
+
+      data_path = realpath (dot_steam_steam, NULL);
+
+      if (data_path == NULL)
         g_debug ("realpath(%s): %s", dot_steam_steam, g_strerror (errno));
     }
   else
@@ -111,20 +132,32 @@ _srt_steam_check (const GStrv environ,
       issues |= SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK;
     }
 
-  /* If that doesn't work, try ~/.steam/root, which points to whichever
-   * one of the public or beta universe was run most recently. */
-  if (path == NULL &&
-      g_file_test (dot_steam_root, G_FILE_TEST_IS_SYMLINK))
-    {
-      path = realpath (dot_steam_root, NULL);
+  if (data_path == NULL
+      || !g_file_test (data_path, G_FILE_TEST_IS_DIR))
+    issues |= SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY;
 
-      if (path == NULL)
+  /* Canonically, ~/.steam/root is a symlink to the Steam installation.
+   * This is *usually* the same thing as the Steam data directory, but
+   * it can be different when testing a new Steam client build. */
+  if (g_file_test (dot_steam_root, G_FILE_TEST_IS_SYMLINK))
+    {
+      install_path = realpath (dot_steam_root, NULL);
+
+      if (install_path == NULL)
         g_debug ("realpath(%s): %s", dot_steam_root, g_strerror (errno));
     }
+  else
+    {
+      issues |= SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK;
+    }
 
-  /* If *that* doesn't work, try going up one level from ubuntu12_32,
-   * to which ~/.steam/bin32 is a symlink */
-  if (path == NULL &&
+  if (install_path == NULL
+      || !g_file_test (install_path, G_FILE_TEST_IS_DIR))
+    issues |= SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY;
+
+  /* If ~/.steam/root doesn't work, try going up one level from
+   * ubuntu12_32, to which ~/.steam/bin32 is a symlink */
+  if (install_path == NULL &&
       g_file_test (dot_steam_bin32, G_FILE_TEST_IS_SYMLINK))
     {
       bin32 = realpath (dot_steam_bin32, NULL);
@@ -140,61 +173,103 @@ _srt_steam_check (const GStrv environ,
         }
       else
         {
-          path = strndup (bin32, strlen (bin32) - strlen ("/ubuntu12_32"));
+          install_path = strndup (bin32, strlen (bin32) - strlen ("/ubuntu12_32"));
 
           /* We don't try to survive out-of-memory */
-          if (path == NULL)
+          if (install_path == NULL)
             g_error ("strndup: %s", g_strerror (errno));
         }
     }
 
-  /* If *that* doesn't work, try the default installation location. */
-  if (path == NULL)
+  /* If we have an installation path but no data path, or vice versa,
+   * assume they match. */
+  if (install_path == NULL && data_path != NULL)
     {
-      path = realpath (default_steam_path, NULL);
+      install_path = strdup (data_path);
 
-      if (path == NULL)
+      /* We don't try to survive out-of-memory */
+      if (install_path == NULL)
+        g_error ("strdup: %s", g_strerror (errno));
+    }
+
+  if (data_path == NULL && install_path != NULL)
+    {
+      data_path = strdup (install_path);
+
+      /* We don't try to survive out-of-memory */
+      if (data_path == NULL)
+        g_error ("strdup: %s", g_strerror (errno));
+    }
+
+  /* If *that* doesn't work, try the default installation location. */
+  if (install_path == NULL)
+    {
+      install_path = realpath (default_steam_path, NULL);
+
+      if (install_path == NULL)
         g_debug ("realpath(%s): %s", default_steam_path, g_strerror (errno));
     }
 
-  if (path == NULL)
+  if (data_path == NULL)
+    {
+      data_path = realpath (default_steam_path, NULL);
+
+      if (data_path == NULL)
+        g_debug ("realpath(%s): %s", default_steam_path, g_strerror (errno));
+    }
+
+  if (install_path == NULL)
     {
       g_debug ("Unable to find Steam installation");
       issues |= SRT_STEAM_ISSUES_CANNOT_FIND;
-      goto out;
-    }
-
-  g_debug ("Found Steam installation at %s", path);
-
-  /* If we haven't found ubuntu12_32 yet, it's a subdirectory of the
-   * Steam installation */
-  if (bin32 == NULL)
-    {
-      /* We don't try to survive out-of-memory */
-      if (asprintf (&bin32, "%s/ubuntu12_32", path) < 0)
-        g_error ("asprintf: %s", g_strerror (errno));
-    }
-
-  if (bin32 != NULL)
-    {
-      g_debug ("Found ubuntu12_32 directory at %s", bin32);
     }
   else
     {
-      g_debug ("Unable to find ubuntu12_32 directory");
+      g_debug ("Found Steam installation at %s", install_path);
+
+      /* If we haven't found ubuntu12_32 yet, it's a subdirectory of the
+       * Steam installation */
+      if (bin32 == NULL)
+        {
+          /* We don't try to survive out-of-memory */
+          if (asprintf (&bin32, "%s/ubuntu12_32", install_path) < 0)
+            g_error ("asprintf: %s", g_strerror (errno));
+        }
+
+      if (bin32 != NULL)
+        {
+          g_debug ("Found ubuntu12_32 directory at %s", bin32);
+        }
+      else
+        {
+          g_debug ("Unable to find ubuntu12_32 directory");
+        }
+    }
+
+  if (data_path == NULL)
+    {
+      g_debug ("Unable to find Steam data");
+      issues |= SRT_STEAM_ISSUES_CANNOT_FIND_DATA;
+    }
+  else
+    {
+      g_debug ("Found Steam data at %s", data_path);
     }
 
   /* We can't just transfer ownership here, because in the older GLib
    * that we're targeting, g_free() and free() are not guaranteed to be
    * associated with the same memory pool. */
-  if (path_out != NULL)
-    *path_out = g_strdup (path);
+  if (install_path_out != NULL)
+    *install_path_out = g_strdup (install_path);
+
+  if (data_path_out != NULL)
+    *data_path_out = g_strdup (data_path);
 
   if (bin32_out != NULL)
     *bin32_out = g_strdup (bin32);
 
-out:
-  free (path);
+  free (install_path);
+  free (data_path);
   free (bin32);
   g_free (dot_steam_bin32);
   g_free (dot_steam_steam);

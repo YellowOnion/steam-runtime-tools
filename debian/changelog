@@ -1,17 +1,25 @@
-steam-runtime-tools (0.20190925.0-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20190926.0-0+steamrt1.1) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * locale: fix leaked SrtLocale
 
   [ Simon McVittie ]
   * graphics, library: Capture stderr from the checks
-  * locale: Check for the necessary files to generate more locales
-  * Generate autocleanup functions if GLib (or libglnx) supports it
+    and include it in their JSON output
+  * locale: Check for the necessary files to generate more locales.
+    This issue flag is known to appear on Arch Linux and its derivatives,
+    which don't normally install /usr/share/i18n/SUPPORTED.
+  * Generate autocleanup functions if GLib (or libglnx) supports it.
+    This is not directly useful in steam-runtime-tools because we only
+    require an older GLib, but is useful when reused in pressure-vessel.
   * Add some missing precondition checks
   * Assert we are not setuid before looking at the environment
   * graphics: Add EGL and Vulkan ICD enumeration
+  * Distinguish between the Steam installation (root) and data paths.
+    We had previously mixed these up: it isn't particularly obvious since
+    they are usually the same. See the documentation for details.
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 25 Sep 2019 17:45:24 +0100
+ -- Simon McVittie <smcv@collabora.com>  Thu, 26 Sep 2019 13:34:01 +0100
 
 steam-runtime-tools (0.20190909.0-0+steamrt1.2) scout; urgency=medium
 

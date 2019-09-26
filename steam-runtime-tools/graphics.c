@@ -283,6 +283,119 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
+/*
+ * @parser: The JsonParser to process the wflinfo results from.
+ * @version_string: (out) (transfer none) (not optional):
+ * @renderer_string: (out) (transfer none) (not optional):
+ */
+static SrtGraphicsIssues
+_srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gchar **renderer_string)
+{
+  g_return_val_if_fail (version_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+
+  JsonNode *node = json_parser_get_root (parser);
+  JsonObject *object = json_node_get_object (node);
+  JsonNode *sub_node = NULL;
+  JsonObject *sub_object = NULL;
+
+  if (!json_object_has_member (object, "OpenGL"))
+    {
+      g_debug ("The json output doesn't contain an OpenGL object");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  sub_node = json_object_get_member (object, "OpenGL");
+  sub_object = json_node_get_object (sub_node);
+
+  if (!json_object_has_member (sub_object, "version string") ||
+      !json_object_has_member (sub_object, "renderer string"))
+    {
+      g_debug ("Json output is missing version or renderer");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  *version_string = json_object_get_string_member (sub_object, "version string");
+  *renderer_string = json_object_get_string_member (sub_object, "renderer string");
+
+  /* Check renderer to see if we are using software rendering */
+  if (strstr (*renderer_string, "llvmpipe") != NULL ||
+      strstr (*renderer_string, "software rasterizer") != NULL ||
+      strstr (*renderer_string, "softpipe") != NULL)
+    {
+      issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
+    }
+  return issues;
+}
+
+/*
+ * @parser: The JsonParser to process the vulkaninfo results from.
+ * @new_version_string: (out) (transfer full) (not optional):
+ * @renderer_string: (out) (transfer none) (not optional):
+ */
+static SrtGraphicsIssues
+_srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const gchar **renderer_string)
+{
+  g_return_val_if_fail (new_version_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  JsonNode *node = json_parser_get_root (parser);
+  JsonObject *object = json_node_get_object (node);
+  JsonNode *sub_node = NULL;
+  JsonObject *sub_object = NULL;
+
+  // Parse vulkaninfo output
+  unsigned int api_version = 0;
+  unsigned int hw_vendor = 0;
+  unsigned int hw_device = 0;
+  unsigned int driver_version = 0;
+
+  if (!json_object_has_member (object, "VkPhysicalDeviceProperties"))
+    {
+      g_debug ("The json output doesn't contain VkPhysicalDeviceProperties");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  sub_node = json_object_get_member (object, "VkPhysicalDeviceProperties");
+  sub_object = json_node_get_object (sub_node);
+
+  if (!json_object_has_member (sub_object, "deviceName") ||
+      !json_object_has_member (sub_object, "driverVersion") ||
+      !json_object_has_member (sub_object, "apiVersion") ||
+      !json_object_has_member (sub_object, "deviceID") ||
+      !json_object_has_member (sub_object, "vendorID"))
+    {
+      g_debug ("Json output is missing deviceName or driverVersion");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  api_version = json_object_get_int_member (sub_object, "apiVersion");
+  hw_vendor = json_object_get_int_member (sub_object, "vendorID");
+  driver_version = json_object_get_int_member (sub_object, "driverVersion");
+  hw_device = json_object_get_int_member (sub_object, "deviceID");
+
+  *new_version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
+                                        VK_VERSION_MAJOR (api_version),
+                                        VK_VERSION_MINOR (api_version),
+                                        VK_VERSION_PATCH (api_version),
+                                        hw_vendor,
+                                        hw_device,
+                                        VK_VERSION_MAJOR (driver_version),
+                                        VK_VERSION_MINOR (driver_version),
+                                        VK_VERSION_PATCH (driver_version));
+  *renderer_string = json_object_get_string_member (sub_object, "deviceName");
+
+  /* NOTE: No need to check for software rendering with vulkan yet */
+  return issues;
+}
+
 /**
  * _srt_check_graphics:
  * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
@@ -310,10 +423,6 @@ _srt_check_graphics (const char *helpers_path,
   gchar *child_stderr = NULL;
   int exit_status = -1;
   JsonParser *parser = NULL;
-  JsonNode *node = NULL;
-  JsonObject *object = NULL;
-  JsonNode *sub_node = NULL;
-  JsonObject *sub_object = NULL;
   const gchar *version_string = NULL;
   gchar *new_version_string = NULL;
   const gchar *renderer_string = NULL;
@@ -513,89 +622,20 @@ _srt_check_graphics (const char *helpers_path,
       goto out;
     }
 
-  node = json_parser_get_root (parser);
-  object = json_node_get_object (node);
-
   /* Process json output */
   if (parse_wflinfo)
     {
-      if (!json_object_has_member (object, "OpenGL"))
-        {
-          g_debug ("The json output doesn't contain an OpenGL object");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
-
-      sub_node = json_object_get_member (object, "OpenGL");
-      sub_object = json_node_get_object (sub_node);
-
-      if (!json_object_has_member (sub_object, "version string") ||
-          !json_object_has_member (sub_object, "renderer string"))
-        {
-          g_debug ("Json output is missing version or renderer");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
-
-      version_string = json_object_get_string_member (sub_object, "version string");
-      renderer_string = json_object_get_string_member (sub_object, "renderer string");
-
-      /* Check renderer to see if we are using software rendering */
-      if (strstr (renderer_string, "llvmpipe") != NULL ||
-          strstr (renderer_string, "software rasterizer") != NULL ||
-          strstr (renderer_string, "softpipe") != NULL)
-        {
-          issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
-        }
+      issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
     }
   else
     {
-      // Parse vulkaninfo output
-      unsigned int api_version = 0;
-      unsigned int hw_vendor = 0;
-      unsigned int hw_device = 0;
-      unsigned int driver_version = 0;
-
-      if (!json_object_has_member (object, "VkPhysicalDeviceProperties"))
+      issues |= _srt_process_vulkaninfo (parser, &new_version_string, &renderer_string);
+      if (new_version_string != NULL)
         {
-          g_debug ("The json output doesn't contain VkPhysicalDeviceProperties");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
+          version_string = new_version_string;
         }
 
-      sub_node = json_object_get_member (object, "VkPhysicalDeviceProperties");
-      sub_object = json_node_get_object (sub_node);
-
-      if (!json_object_has_member (sub_object, "deviceName") ||
-          !json_object_has_member (sub_object, "driverVersion") ||
-          !json_object_has_member (sub_object, "apiVersion") ||
-          !json_object_has_member (sub_object, "deviceID") ||
-          !json_object_has_member (sub_object, "vendorID"))
-        {
-          g_debug ("Json output is missing deviceName or driverVersion");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
-
-      api_version = json_object_get_int_member (sub_object, "apiVersion");
-      hw_vendor = json_object_get_int_member (sub_object, "vendorID");
-      driver_version = json_object_get_int_member (sub_object, "driverVersion");
-      hw_device = json_object_get_int_member (sub_object, "deviceID");
-
-      new_version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
-                                            VK_VERSION_MAJOR (api_version),
-                                            VK_VERSION_MINOR (api_version),
-                                            VK_VERSION_PATCH (api_version),
-                                            hw_vendor,
-                                            hw_device,
-                                            VK_VERSION_MAJOR (driver_version),
-                                            VK_VERSION_MINOR (driver_version),
-                                            VK_VERSION_PATCH (driver_version));
-      version_string = new_version_string;
-
-      renderer_string = json_object_get_string_member (sub_object, "deviceName");
-
-      /* NOTE: No need to check for software rendering with vulkan yet */
+      /* Now perform *-check-vulkan drawing test */
     }
 
 out:

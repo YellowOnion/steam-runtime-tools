@@ -24,16 +24,19 @@ override_dh_auto_configure:
 	else \
 		python=python3.5; \
 	fi; \
-	meson _build \
+	if ! meson _build \
 		--prefix=/usr/lib/pressure-vessel/relocatable \
 		-Dman=true \
 		-Dpython=/usr/bin/$$python \
 		-Dsrcdir=src \
 		-Dversion=$(DEB_VERSION) \
-		$(NULL)
+	; then \
+		cat _build/meson-logs/meson-log.txt; \
+		exit 1; \
+	fi
 
 override_dh_auto_build:
-	ninja -C _build
+	ninja -v -C _build
 
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)

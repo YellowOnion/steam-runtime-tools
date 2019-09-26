@@ -128,7 +128,9 @@ _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interf
 
 #endif
 
+G_GNUC_INTERNAL
 GList *_srt_load_egl_icds (gchar **envp,
                            const char * const *multiarch_tuples);
+G_GNUC_INTERNAL
 GList *_srt_load_vulkan_icds (gchar **envp,
                               const char * const *multiarch_tuples);

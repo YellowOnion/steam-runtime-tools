@@ -1,3 +1,12 @@
+steam-runtime-tools (0.20190926.1-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  * tests: Replace SRT_TEST_ICD_SYSROOT with SRT_TEST_SYSROOT
+  * Add minimal OS information from os-release(5)
+  * Add support for ID_LIKE os-release(5) field
+  * runtime: Use os-release(5) to detect Steam Runtime container/chroot
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 26 Sep 2019 15:52:32 +0100
+
 steam-runtime-tools (0.20190926.0-0+steamrt1.2) scout; urgency=medium
 
   * d/control: Add missing -dev dependency on libjson-glib-dev

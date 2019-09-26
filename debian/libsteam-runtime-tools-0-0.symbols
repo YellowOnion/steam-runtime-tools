@@ -51,6 +51,15 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_check_library@Base 0.20190802.0
  srt_system_info_check_locale@Base 0.20190909.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
+ srt_system_info_dup_os_build_id@Base 0.20190926.1
+ srt_system_info_dup_os_id@Base 0.20190926.1
+ srt_system_info_dup_os_id_like@Base 0.20190926.1
+ srt_system_info_dup_os_name@Base 0.20190926.1
+ srt_system_info_dup_os_pretty_name@Base 0.20190926.1
+ srt_system_info_dup_os_variant@Base 0.20190926.1
+ srt_system_info_dup_os_variant_id@Base 0.20190926.1
+ srt_system_info_dup_os_version_codename@Base 0.20190926.1
+ srt_system_info_dup_os_version_id@Base 0.20190926.1
  srt_system_info_dup_runtime_path@Base 0.20190816.0
  srt_system_info_dup_runtime_version@Base 0.20190816.0
  srt_system_info_dup_steam_data_path@Base 0.20190926.0

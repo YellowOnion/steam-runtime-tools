@@ -39,6 +39,7 @@ Section: libdevel
 Depends:
  libc6-dev,
  libglib2.0-dev,
+ libjson-glib-dev (>= 1.0),
  libsteam-runtime-tools-0-0 (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},

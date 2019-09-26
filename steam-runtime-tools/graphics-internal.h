@@ -36,6 +36,7 @@
  * @rendering_interface: The renderint interface to check,
  * @issues: Problems found when checking @multiarch_tuple with
  *  the given @winsys and @renderer.
+ * @messages: Any debug messages found when checking graphics.
  *
  * Inline convenience function to create a new SrtGraphics.
  * This is not part of the public API.

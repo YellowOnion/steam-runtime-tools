@@ -32,6 +32,7 @@
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/locale-internal.h"
+#include "steam-runtime-tools/os-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -123,6 +124,7 @@ struct _SrtSystemInfo
     gboolean have_egl;
     gboolean have_vulkan;
   } icds;
+  SrtOsRelease os_release;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
   /* (element-type Abi) */
@@ -248,6 +250,8 @@ srt_system_info_init (SrtSystemInfo *self)
 
   /* Assume that in practice we will usually add two ABIs: amd64 and i386 */
   self->abis = g_ptr_array_new_full (2, abi_free);
+
+  _srt_os_release_init (&self->os_release);
 }
 
 static void
@@ -314,6 +318,16 @@ forget_runtime (SrtSystemInfo *self)
 }
 
 /*
+ * Forget any cached information about the OS.
+ */
+static void
+forget_os (SrtSystemInfo *self)
+{
+  _srt_os_release_clear (&self->os_release);
+  forget_runtime (self);
+}
+
+/*
  * Forget any cached information about the Steam installation.
  */
 static void
@@ -347,6 +361,7 @@ srt_system_info_finalize (GObject *object)
 
   forget_icds (self);
   forget_locales (self);
+  forget_os (self);
   forget_runtime (self);
   forget_steam (self);
 
@@ -1028,6 +1043,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
+  forget_os (self);
   g_strfreev (self->env);
   self->env = g_strdupv ((gchar **) env);
 
@@ -1150,6 +1166,274 @@ srt_system_info_dup_steam_data_path (SrtSystemInfo *self)
   return g_strdup (self->steam.data_path);
 }
 
+static void
+ensure_os_cached (SrtSystemInfo *self)
+{
+  if (!self->os_release.populated)
+    _srt_os_release_populate (&self->os_release, self->env);
+}
+
+/**
+ * srt_system_info_dup_os_build_id:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a machine-readable identifier for the system image used as the
+ * origin for a distribution, for example `0.20190925.0`. If called
+ * from inside a Steam Runtime container, return the Steam Runtime build
+ * ID, which currently looks like `0.20190925.0`.
+ *
+ * In operating systems that do not use image-based installation, such
+ * as Debian, this will be %NULL.
+ *
+ * This is the `BUILD_ID` from os-release(5).
+ *
+ * Returns: (transfer full) (type utf8): The build ID, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_build_id (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.build_id);
+}
+
+/**
+ * srt_system_info_dup_os_id:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a lower-case machine-readable operating system identifier,
+ * for example `debian` or `arch`. If called from inside a Steam Runtime
+ * container, return `steamrt`.
+ *
+ * This is the `ID` in os-release(5). If os-release(5) is not available,
+ * future versions of this library might derive a similar ID from
+ * lsb_release(1).
+ *
+ * Returns: (transfer full) (type utf8): The OS ID, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_id (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.id);
+}
+
+static const char WHITESPACE[] = " \t\n\r";
+
+/**
+ * srt_system_info_dup_os_id_like:
+ * @self: The #SrtSystemInfo object
+ * @include_self: If %TRUE, include srt_system_info_dup_os_id() in the
+ *  returned array (if known)
+ *
+ * Return an array of lower-case machine-readable operating system
+ * identifiers similar to srt_system_info_dup_os_id() describing OSs
+ * that this one resembles or is derived from.
+ *
+ * For example, the Steam Runtime 1 'scout' is derived from Ubuntu,
+ * which is itself derived from Debian, so srt_system_info_dup_os_id_like()
+ * would return `{ "debian", "ubuntu", NULL }` if @include_self is false,
+ * `{ "steamrt", "debian", "ubuntu", NULL }` otherwise.
+ *
+ * This is the `ID_LIKE` field from os-release(5), possibly combined
+ * with the `ID` field.
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable): An
+ *  array of OS IDs, or %NULL if nothing is known.
+ *  Free with g_strfreev().
+ */
+gchar **
+srt_system_info_dup_os_id_like (SrtSystemInfo *self,
+                                gboolean include_self)
+{
+  GPtrArray *builder;
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+
+  builder = g_ptr_array_new_with_free_func (g_free);
+
+  if (self->os_release.id != NULL && include_self)
+    g_ptr_array_add (builder, g_strdup (self->os_release.id));
+
+  if (self->os_release.id_like != NULL)
+    {
+      GStrv split;
+      gsize i;
+
+      split = g_strsplit_set (self->os_release.id_like, WHITESPACE, -1);
+
+      for (i = 0; split != NULL && split[i] != NULL; i++)
+        g_ptr_array_add (builder, g_steal_pointer (&split[i]));
+
+      /* We already transferred ownership of the contents */
+      g_free (split);
+    }
+
+  if (builder->len > 0)
+    {
+      g_ptr_array_add (builder, NULL);
+      return (gchar **) g_ptr_array_free (builder, FALSE);
+    }
+  else
+    {
+      g_ptr_array_free (builder, TRUE);
+      return NULL;
+    }
+}
+
+/**
+ * srt_system_info_dup_os_name:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a human-readable identifier for the operating system without
+ * its version, for example `Debian GNU/Linux` or `Arch Linux`.
+ *
+ * This is the `NAME` in os-release(5). If os-release(5) is not
+ * available, future versions of this library might derive a similar
+ * name from lsb_release(1).
+ *
+ * Returns: (transfer full) (type utf8): The name, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_name (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.name);
+}
+
+/**
+ * srt_system_info_dup_os_pretty_name:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a human-readable identifier for the operating system,
+ * including its version if any, for example `Debian GNU/Linux 10 (buster)`
+ * or `Arch Linux`.
+ *
+ * If the OS uses rolling releases, this will probably be the same as
+ * or similar to srt_system_info_dup_os_name().
+ *
+ * This is the `PRETTY_NAME` in os-release(5). If os-release(5) is not
+ * available, future versions of this library might derive a similar
+ * name from lsb_release(1).
+ *
+ * Returns: (transfer full) (type utf8): The name, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_pretty_name (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.pretty_name);
+}
+
+/**
+ * srt_system_info_dup_os_variant:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a human-readable identifier for the operating system variant,
+ * for example `Workstation Edition`, `Server Edition` or
+ * `Raspberry Pi Edition`. In operating systems that do not have
+ * formal variants this will usually be %NULL.
+ *
+ * This is the `VARIANT` in os-release(5).
+ *
+ * Returns: (transfer full) (type utf8): The name, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_variant (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.variant);
+}
+
+/**
+ * srt_system_info_dup_os_variant_id:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a lower-case machine-readable identifier for the operating system
+ * variant in a form suitable for use in filenames, for example
+ * `workstation`, `server` or `rpi`. In operating systems that do not
+ * have formal variants this will usually be %NULL.
+ *
+ * This is the `VARIANT_ID` in os-release(5).
+ *
+ * Returns: (transfer full) (type utf8): The variant ID, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_variant_id (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.variant_id);
+}
+
+/**
+ * srt_system_info_dup_os_version_codename:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a lower-case machine-readable identifier for the operating
+ * system version codename, for example `buster` for Debian 10 "buster".
+ * In operating systems that do not use codenames in machine-readable
+ * contexts, this will usually be %NULL.
+ *
+ * This is the `VERSION_CODENAME` in os-release(5). If os-release(5) is not
+ * available, future versions of this library might derive a similar
+ * codename from lsb_release(1).
+ *
+ * Returns: (transfer full) (type utf8): The codename, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_version_codename (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.version_codename);
+}
+
+/**
+ * srt_system_info_dup_os_version_id:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a machine-readable identifier for the operating system version,
+ * for example `10` for Debian 10 "buster". In operating systems that
+ * only have rolling releases, such as Arch Linux, or in OS branches
+ * that behave like rolling releases, such as Debian unstable, this
+ * will usually be %NULL.
+ *
+ * This is the `VERSION_ID` in os-release(5). If os-release(5) is not
+ * available, future versions of this library might derive a similar
+ * identifier from lsb_release(1).
+ *
+ * Returns: (transfer full) (type utf8): The ID, or %NULL if not known.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_os_version_id (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+  return g_strdup (self->os_release.version_id);
+}
+
 /**
  * srt_system_info_set_expected_runtime_version:
  * @self: The #SrtSystemInfo object
@@ -1193,23 +1477,54 @@ srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self)
 static void
 ensure_runtime_cached (SrtSystemInfo *self)
 {
+  ensure_os_cached (self);
   ensure_steam_cached (self);
 
   if (self->runtime.issues == SRT_RUNTIME_ISSUES_NONE &&
       self->runtime.path == NULL)
-    self->runtime.issues = _srt_runtime_check (self->steam.bin32,
-                                               self->runtime.expected_version,
-                                               self->env,
-                                               &self->runtime.version,
-                                               &self->runtime.path);
+    {
+      if (g_strcmp0 (self->os_release.id, "steamrt") == 0)
+        {
+          self->runtime.path = g_strdup ("/");
+          self->runtime.version = g_strdup (self->os_release.build_id);
+
+          if (self->runtime.expected_version != NULL
+              && g_strcmp0 (self->runtime.expected_version, self->runtime.version) != 0)
+            {
+              self->runtime.issues |= SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION;
+            }
+
+          if (self->runtime.version == NULL)
+            {
+              self->runtime.issues |= SRT_RUNTIME_ISSUES_NOT_RUNTIME;
+            }
+          else
+            {
+              const char *p;
+
+              for (p = self->runtime.version; *p != '\0'; p++)
+                {
+                  if (!g_ascii_isdigit (*p) && *p != '.')
+                    self->runtime.issues |= SRT_RUNTIME_ISSUES_UNOFFICIAL;
+                }
+            }
+        }
+      else
+        {
+          self->runtime.issues = _srt_runtime_check (self->steam.bin32,
+                                                     self->runtime.expected_version,
+                                                     self->env,
+                                                     &self->runtime.version,
+                                                     &self->runtime.path);
+        }
+    }
 }
 
 /**
  * srt_system_info_get_runtime_issues:
  * @self: The #SrtSystemInfo object
  *
- * Detect and return any problems encountered with the
- * `LD_LIBRARY_PATH`-based Steam Runtime.
+ * Detect and return any problems encountered with the Steam Runtime.
  *
  * Returns: Any problems detected with the Steam Runtime,
  *  or %SRT_RUNTIME_ISSUES_NONE if no problems were detected
@@ -1228,9 +1543,13 @@ srt_system_info_get_runtime_issues (SrtSystemInfo *self)
  * srt_system_info_dup_runtime_path:
  * @self: The #SrtSystemInfo object
  *
- * Return the absolute path to the `LD_LIBRARY_PATH`-based Steam Runtime
- * in use (the directory containing `run.sh`, `version.txt` and
- * similar files).
+ * Return the absolute path to the Steam Runtime in use.
+ *
+ * For the `LD_LIBRARY_PATH`-based Steam Runtime, this is the directory
+ * containing `run.sh`, `version.txt` and similar files.
+ *
+ * If running in a Steam Runtime container or chroot, this function
+ * returns `/` to indicate that the entire container is the Steam Runtime.
  *
  * This will typically be below
  * srt_system_info_dup_steam_installation_path(), unless overridden.
@@ -1256,9 +1575,10 @@ srt_system_info_dup_runtime_path (SrtSystemInfo *self)
  * srt_system_info_dup_runtime_version:
  * @self: The #SrtSystemInfo object
  *
- * Return the version number of the `LD_LIBRARY_PATH`-based Steam Runtime
+ * Return the version number of the Steam Runtime
  * in use, for example `0.20190711.3`, or %NULL if it could not be
- * determined.
+ * determined. This could either be the `LD_LIBRARY_PATH`-based Steam
+ * Runtime, or a Steam Runtime container or chroot.
  *
  * If the Steam Runtime has been disabled or could not be found, or its
  * version number could not be read, then at least one flag will be set

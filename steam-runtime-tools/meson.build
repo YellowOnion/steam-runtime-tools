@@ -30,6 +30,8 @@ libsteamrt_sources = [
     'library.c',
     'locale-internal.h',
     'locale.c',
+    'os-internal.h',
+    'os.c',
     'runtime-internal.h',
     'runtime.c',
     'steam-internal.h',

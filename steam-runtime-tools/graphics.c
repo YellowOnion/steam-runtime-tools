@@ -396,49 +396,14 @@ _srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const g
   return issues;
 }
 
-/**
- * _srt_check_graphics:
- * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
- * @test_flags: Flags used during automated testing
- * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
- * @winsys: The window system to check.
- * @renderer: The graphics renderer to check.
- * @details_out: The SrtGraphics object containing the details of the check.
- *
- * Return the problems found when checking the graphics stack given.
- *
- * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
- *  if no problems were found
- */
-G_GNUC_INTERNAL SrtGraphicsIssues
-_srt_check_graphics (const char *helpers_path,
-                     SrtTestFlags test_flags,
-                     const char *multiarch_tuple,
-                     SrtWindowSystem window_system,
-                     SrtRenderingInterface rendering_interface,
-                     SrtGraphics **details_out)
+static GPtrArray *
+_argv_for_graphics_test (const char *helpers_path,
+                         SrtTestFlags test_flags,
+                         const char *multiarch_tuple,
+                         SrtWindowSystem window_system,
+                         SrtRenderingInterface rendering_interface)
 {
   GPtrArray *argv = NULL;
-  gchar *output = NULL;
-  gchar *child_stderr = NULL;
-  int exit_status = -1;
-  JsonParser *parser = NULL;
-  const gchar *version_string = NULL;
-  gchar *new_version_string = NULL;
-  const gchar *renderer_string = NULL;
-  GError *error = NULL;
-  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
-  GStrv my_environ = NULL;
-  const gchar *ld_preload;
-  gchar *filtered_preload = NULL;
-  gboolean parse_wflinfo = TRUE;
-
-  g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (window_system >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (window_system < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (rendering_interface >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (rendering_interface < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
 
   gchar *platformstring = NULL;
 
@@ -455,20 +420,20 @@ _srt_check_graphics (const char *helpers_path,
           g_critical ("GLX window system only makes sense with GL "
                       "rendering interface, not %d",
                       rendering_interface);
-          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+          g_return_val_if_reached (NULL);
         }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_X11)
     {
       if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
         {
-           platformstring = g_strdup ("glx");
-           window_system = SRT_WINDOW_SYSTEM_GLX;
+          platformstring = g_strdup ("glx");
+          window_system = SRT_WINDOW_SYSTEM_GLX;
         }
       else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
         {
-           platformstring = g_strdup ("x11_egl");
-           window_system = SRT_WINDOW_SYSTEM_EGL_X11;
+          platformstring = g_strdup ("x11_egl");
+          window_system = SRT_WINDOW_SYSTEM_EGL_X11;
         }
       else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
         {
@@ -478,7 +443,7 @@ _srt_check_graphics (const char *helpers_path,
         {
           /* should not be reached because the precondition checks
            * should have caught this */
-          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+          g_return_val_if_reached (NULL);
         }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
@@ -494,14 +459,14 @@ _srt_check_graphics (const char *helpers_path,
           g_critical ("EGL window system only makes sense with a GL-based "
                       "rendering interface, not %d",
                       rendering_interface);
-          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+          g_return_val_if_reached (NULL);
         }
     }
   else
     {
       /* should not be reached because the precondition checks should
        * have caught this */
-      g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+      g_return_val_if_reached (NULL);
     }
 
   // Use timeout command to limit how long the helper can run
@@ -552,7 +517,6 @@ _srt_check_graphics (const char *helpers_path,
     }
   else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
     {
-      parse_wflinfo = FALSE;
       if (helpers_path != NULL)
         {
           g_ptr_array_add (argv, g_strdup_printf ("%s/%s-vulkaninfo", helpers_path, multiarch_tuple));
@@ -567,10 +531,67 @@ _srt_check_graphics (const char *helpers_path,
     {
       /* should not be reached because the precondition checks should
        * have caught this */
-      g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+      g_return_val_if_reached (NULL);
     }
 
   g_ptr_array_add (argv, NULL);
+
+  g_free (platformstring);
+
+  return argv;
+}
+
+/**
+ * _srt_check_graphics:
+ * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
+ * @test_flags: Flags used during automated testing
+ * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
+ * @winsys: The window system to check.
+ * @renderer: The graphics renderer to check.
+ * @details_out: The SrtGraphics object containing the details of the check.
+ *
+ * Return the problems found when checking the graphics stack given.
+ *
+ * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
+ *  if no problems were found
+ */
+G_GNUC_INTERNAL SrtGraphicsIssues
+_srt_check_graphics (const char *helpers_path,
+                     SrtTestFlags test_flags,
+                     const char *multiarch_tuple,
+                     SrtWindowSystem window_system,
+                     SrtRenderingInterface rendering_interface,
+                     SrtGraphics **details_out)
+{
+  gchar *output = NULL;
+  gchar *child_stderr = NULL;
+  int exit_status = -1;
+  JsonParser *parser = NULL;
+  const gchar *version_string = NULL;
+  gchar *new_version_string = NULL;
+  const gchar *renderer_string = NULL;
+  GError *error = NULL;
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  GStrv my_environ = NULL;
+  const gchar *ld_preload;
+  gchar *filtered_preload = NULL;
+  gboolean parse_wflinfo = (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN);
+
+  g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (window_system >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (window_system < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (rendering_interface >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (rendering_interface < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  GPtrArray *argv = _argv_for_graphics_test (helpers_path,
+                                             test_flags,
+                                             multiarch_tuple,
+                                             window_system,
+                                             rendering_interface);
+
+  if (argv == NULL)
+    return SRT_GRAPHICS_ISSUES_INTERNAL_ERROR;
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
@@ -656,7 +677,6 @@ out:
   g_free (output);
   g_free (child_stderr);
   g_clear_error (&error);
-  g_free (platformstring);
   g_free (filtered_preload);
   g_strfreev (my_environ);
   return issues;

@@ -177,6 +177,12 @@ executable(
     '-Wno-unused-local-typedefs',
   ],
   dependencies : [
+    dependency(
+      'steam-runtime-tools-0',
+      required : true,
+      fallback : ['steam-runtime-tools', 'libsteamrt_dep'],
+      default_options : ['gtk_doc=false'],
+    ),
     dependency('gio-unix-2.0', required : true),
     dependency('xau', required : true),
     subproject('libglnx').get_variable('libglnx_dep'),

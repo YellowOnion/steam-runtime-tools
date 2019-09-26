@@ -17,9 +17,13 @@ apt-get -y install \
     libmount1 \
     libpcre3 \
     libselinux1 \
+    libsteam-runtime-tools-0-dev \
+    libsteam-runtime-tools-0-helpers:amd64 \
+    libsteam-runtime-tools-0-helpers:i386 \
     libxau6 \
     locales \
     pandoc \
+    steam-runtime-tools-bin \
     zlib1g:amd64 \
     zlib1g:i386 \
     ${NULL+}

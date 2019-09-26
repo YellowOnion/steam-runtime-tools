@@ -10,11 +10,17 @@ same place as pressure-vessel, or from
 pressure-vessel incorporates code from GNOME libglnx, variously licensed
 under [LGPL-2.0-or-later][] and [LGPL-2.1-or-later][].
 Complete source code can be obtained from the same place as
-pressure-vessel.
+pressure-vessel, or from <http://repo.steampowered.com/steamrt/>.
 
 pressure-vessel incorporates code from Flatpak, licensed under
 [LGPL-2.1-or-later][]. Complete source code can be obtained from the
-same place as pressure-vessel.
+same place as pressure-vessel, or from
+<http://repo.steampowered.com/steamrt/>.
+
+pressure-vessel includes the steam-runtime-tools library and utilities,
+which are licensed under the [MIT][] license. See steam-runtime-tools.txt.
+Complete source code can be obtained from the same place as pressure-vessel,
+or from <http://repo.steampowered.com/steamrt/>.
 
 Binary releases of pressure-vessel include the following third-party
 programs and libraries:
@@ -46,6 +52,9 @@ programs and libraries:
 - libpcre.so.3 from PCRE: [BSD-3-Clause][]. See pcre3.txt.
 
 - libz.so.1 from zlib: [Zlib][] license. See zlib.txt.
+
+- libjson-glib-1.0.so.0 from json-glib: [LGPL-2.0-or-later][]. See
+  json-glib.txt.
 
 Complete source code can be obtained from the same place as
 pressure-vessel, or from <http://repo.steampowered.com/steamrt/>.

@@ -29,6 +29,9 @@ variables:
     # Set non-empty to allow
     CI_ALLOW_MISSING_SOURCES: ''
 
+    STEAM_RUNTIME_TOOLS_GIT_REPO: https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/steam/steam-runtime-tools.git
+    STEAM_RUNTIME_TOOLS_GIT_BRANCH: master
+
 build:
     variables:
         BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
@@ -40,11 +43,10 @@ build:devel:
         - |
             set -eux
 
-            apt-get -y --no-install-recommends install \
-            libglib2.0-dev \
-            libxau-dev \
-            meson \
-            ${NULL+}
+            git clone \
+            -b${STEAM_RUNTIME_TOOLS_GIT_BRANCH} \
+            ${STEAM_RUNTIME_TOOLS_GIT_REPO} \
+            subprojects/steam-runtime-tools
 
             meson _build
             ninja -C _build
@@ -81,9 +83,13 @@ build:scout:
             libcapsule0 \
             libcapsule-tools-relocatable:amd64 \
             libcapsule-tools-relocatable:i386 \
+            libsteam-runtime-tools-0-dev \
+            libsteam-runtime-tools-0-helpers:amd64 \
+            libsteam-runtime-tools-0-helpers:i386 \
             libglib2.0-dev \
             libxau-dev \
             meson \
+            steam-runtime-tools-bin
             ${NULL+}
 
             meson \

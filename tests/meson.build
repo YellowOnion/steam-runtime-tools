@@ -185,5 +185,32 @@ executable(
   install_dir: tests_dir
 )
 
+executable(
+  'mock-good-check-vulkan',
+  join_paths('..', 'helpers', 'true.c'),
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-bad-check-vulkan',
+  'mock-bad-check-vulkan.c',
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-mixed-vulkaninfo',
+  'mock-good-vulkaninfo.c',
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-mixed-check-vulkan',
+  'mock-bad-check-vulkan.c',
+  install: true,
+  install_dir: tests_dir
+)
 
 # vim:set sw=2 sts=2 et:

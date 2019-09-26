@@ -541,6 +541,46 @@ _argv_for_graphics_test (const char *helpers_path,
   return argv;
 }
 
+
+static GPtrArray *
+_argv_for_check_vulkan (const char *helpers_path,
+                        SrtTestFlags test_flags,
+                        const char *multiarch_tuple)
+{
+  GPtrArray *argv = g_ptr_array_new_with_free_func (g_free);
+
+  // Use timeout command to limit how long the helper can run
+  g_ptr_array_add (argv, g_strdup ("timeout"));
+  g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
+
+  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
+    {
+      // Speed up the failing case in automated testing
+      g_ptr_array_add (argv, g_strdup ("--kill-after=1"));
+      g_ptr_array_add (argv, g_strdup ("1"));
+    }
+  else
+    {
+      // Kill the helper (if still running) 3 seconds after the TERM signal
+      g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
+      // Send TERM signal after 10 seconds
+      g_ptr_array_add (argv, g_strdup ("10"));
+    }
+
+  if (helpers_path != NULL)
+    {
+      g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-vulkan", helpers_path, multiarch_tuple));
+    }
+  else
+    {
+      g_ptr_array_add (argv, g_strdup_printf ("%s-check-vulkan", multiarch_tuple));
+    }
+
+  g_ptr_array_add (argv, NULL);
+
+  return argv;
+}
+
 /**
  * _srt_check_graphics:
  * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
@@ -565,6 +605,7 @@ _srt_check_graphics (const char *helpers_path,
 {
   gchar *output = NULL;
   gchar *child_stderr = NULL;
+  gchar *child_stderr2 = NULL;
   int exit_status = -1;
   JsonParser *parser = NULL;
   const gchar *version_string = NULL;
@@ -657,6 +698,53 @@ _srt_check_graphics (const char *helpers_path,
         }
 
       /* Now perform *-check-vulkan drawing test */
+      g_ptr_array_unref (argv);
+      g_clear_pointer (&output, g_free);
+
+      argv = _argv_for_check_vulkan (helpers_path,
+                                     test_flags,
+                                     multiarch_tuple);
+
+      g_return_val_if_fail (argv != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+      /* Now run and report exit code/messages if failure */
+      if (!g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv->pdata,
+                         my_environ,    /* envp */
+                         G_SPAWN_SEARCH_PATH,       /* flags */
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         &child_stderr2,
+                         &exit_status,
+                         &error))
+        {
+          g_debug ("An error occurred calling the helper: %s", error->message);
+          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+          goto out;
+        }
+
+      if (child_stderr2 != NULL && child_stderr2[0] != '\0')
+        {
+          gchar *tmp = g_strconcat (child_stderr, child_stderr2, NULL);
+
+          g_free (child_stderr);
+          child_stderr = tmp;
+        }
+      g_free (child_stderr2);
+
+      if (exit_status != 0)
+        {
+          g_debug ("... wait status %d", exit_status);
+          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+
+          // TERM signal gives us 124 from timeout man page
+          if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+            {
+              g_debug ("helper killed by timeout command");
+              issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
+            }
+        }
     }
 
 out:

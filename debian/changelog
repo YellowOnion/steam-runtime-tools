@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20190926.1-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20190926.1-0+steamrt1.1) scout; urgency=medium
 
   * tests: Replace SRT_TEST_ICD_SYSROOT with SRT_TEST_SYSROOT
   * Add minimal OS information from os-release(5)

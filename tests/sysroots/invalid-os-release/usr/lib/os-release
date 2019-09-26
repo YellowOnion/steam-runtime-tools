@@ -1,0 +1,6 @@
+ID=steamrt
+PRETTY_NAME="The first name"
+VERSION_CODENAME
+VERSION_ID="foo
+PRETTY_NAME="The second name"
+NAME="This file does not end with a newline"

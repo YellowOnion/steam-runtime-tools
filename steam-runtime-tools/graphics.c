@@ -1706,7 +1706,7 @@ _srt_load_egl_icds (gchar **envp,
    * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
    * for details of the search order. */
 
-  sysroot = g_environ_getenv (envp, "SRT_TEST_ICD_SYSROOT");
+  sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
   value = g_environ_getenv (envp, "__EGL_VENDOR_LIBRARY_FILENAMES");
 
   if (value != NULL)
@@ -2282,7 +2282,7 @@ _srt_load_vulkan_icds (gchar **envp,
    * documentation is not completely up to date (as of September 2019)
    * so you should also look at the reference implementation. */
 
-  sysroot = g_environ_getenv (envp, "SRT_TEST_ICD_SYSROOT");
+  sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
   value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
 
   if (value != NULL)

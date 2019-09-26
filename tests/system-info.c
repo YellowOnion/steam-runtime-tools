@@ -1225,6 +1225,445 @@ testing_beta_client (Fixture *f,
   g_free (data_path);
 }
 
+static void
+os_debian10 (Fixture *f,
+             gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **strv;
+  gchar *sysroot;
+  gchar *s;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  s = srt_system_info_dup_os_build_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, "debian");
+  g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "debian");
+  g_assert_cmpstr (strv[1], ==, NULL);
+  g_strfreev (strv);
+
+  s = srt_system_info_dup_os_name (info);
+  g_assert_cmpstr (s, ==, "Debian GNU/Linux");
+  g_free (s);
+
+  s = srt_system_info_dup_os_pretty_name (info);
+  g_assert_cmpstr (s, ==, "Debian GNU/Linux 10 (buster)");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_codename (info);
+  g_assert_cmpstr (s, ==, "buster");
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, "10");
+  g_free (s);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+os_debian_unstable (Fixture *f,
+                    gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **strv;
+  gchar *sysroot;
+  gchar *s;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "debian-unstable", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  s = srt_system_info_dup_os_build_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, "debian");
+  g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "debian");
+  g_assert_cmpstr (strv[1], ==, NULL);
+  g_strfreev (strv);
+
+  s = srt_system_info_dup_os_name (info);
+  g_assert_cmpstr (s, ==, "Debian GNU/Linux");
+  g_free (s);
+
+  s = srt_system_info_dup_os_pretty_name (info);
+  g_assert_cmpstr (s, ==, "Debian GNU/Linux bullseye/sid");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_codename (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+os_steamrt (Fixture *f,
+            gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **strv;
+  gchar *sysroot;
+  gchar *s;
+  SrtRuntimeIssues runtime_issues;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_unsetenv (envp, "STEAM_RUNTIME");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  s = srt_system_info_dup_os_build_id (info);
+  g_assert_cmpstr (s, ==, "0.20190924.0");
+  g_free (s);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, "steamrt");
+  g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "ubuntu");
+  g_assert_cmpstr (strv[1], ==, "debian");
+  g_assert_cmpstr (strv[2], ==, NULL);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "steamrt");
+  g_assert_cmpstr (strv[1], ==, "ubuntu");
+  g_assert_cmpstr (strv[2], ==, "debian");
+  g_assert_cmpstr (strv[3], ==, NULL);
+  g_strfreev (strv);
+
+  s = srt_system_info_dup_os_name (info);
+  g_assert_cmpstr (s, ==, "Steam Runtime");
+  g_free (s);
+
+  s = srt_system_info_dup_os_pretty_name (info);
+  g_assert_cmpstr (s, ==, "Steam Runtime 1 (scout)");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant (info);
+  g_assert_cmpstr (s, ==, "Platform");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant_id (info);
+  g_assert_cmpstr (s, ==, "com.valvesoftware.steamruntime.platform-amd64_i386-scout");
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_codename (info);
+  /* It isn't in os-release(5), but we infer it from the ID and VERSION_ID */
+  g_assert_cmpstr (s, ==, "scout");
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, "1");
+  g_free (s);
+
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  g_assert_cmpint (runtime_issues, ==, SRT_RUNTIME_ISSUES_NONE);
+
+  s = srt_system_info_dup_runtime_path (info);
+  g_assert_cmpstr (s, ==, "/");
+  g_free (s);
+
+  s = srt_system_info_dup_runtime_version (info);
+  g_assert_cmpstr (s, ==, "0.20190924.0");
+  g_free (s);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+os_steamrt_unofficial (Fixture *f,
+                       gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **strv;
+  gchar *sysroot;
+  gchar *s;
+  SrtRuntimeIssues runtime_issues;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-unofficial", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_unsetenv (envp, "STEAM_RUNTIME");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_expected_runtime_version (info, "0.20190711.3");
+
+  s = srt_system_info_dup_os_build_id (info);
+  g_assert_cmpstr (s, ==, "unofficial-0.20190924.0");
+  g_free (s);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, "steamrt");
+  g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "ubuntu");
+  g_assert_cmpstr (strv[1], ==, "debian");
+  g_assert_cmpstr (strv[2], ==, NULL);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "steamrt");
+  g_assert_cmpstr (strv[1], ==, "ubuntu");
+  g_assert_cmpstr (strv[2], ==, "debian");
+  g_assert_cmpstr (strv[3], ==, NULL);
+  g_strfreev (strv);
+
+  s = srt_system_info_dup_os_name (info);
+  g_assert_cmpstr (s, ==, "Steam Runtime");
+  g_free (s);
+
+  s = srt_system_info_dup_os_pretty_name (info);
+  g_assert_cmpstr (s, ==, "Steam Runtime 1 (scout)");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant (info);
+  g_assert_cmpstr (s, ==, "Platform");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant_id (info);
+  g_assert_cmpstr (s, ==, "com.valvesoftware.steamruntime.platform-amd64_i386-scout");
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_codename (info);
+  /* It isn't in os-release(5), but we infer it from the ID and VERSION_ID */
+  g_assert_cmpstr (s, ==, "scout");
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, "1");
+  g_free (s);
+
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  g_assert_cmpint (runtime_issues, ==,
+                   (SRT_RUNTIME_ISSUES_UNOFFICIAL
+                    | SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION));
+
+  s = srt_system_info_dup_runtime_path (info);
+  g_assert_cmpstr (s, ==, "/");
+  g_free (s);
+
+  s = srt_system_info_dup_runtime_version (info);
+  g_assert_cmpstr (s, ==, "unofficial-0.20190924.0");
+  g_free (s);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+os_invalid_os_release (Fixture *f,
+                       gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **strv;
+  gchar *sysroot;
+  gchar *s;
+  SrtRuntimeIssues runtime_issues;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "invalid-os-release", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_unsetenv (envp, "STEAM_RUNTIME");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_expected_runtime_version (info, "0.20190711.3");
+
+  s = srt_system_info_dup_os_build_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, "steamrt");
+  g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "steamrt");
+  g_assert_cmpstr (strv[1], ==, NULL);
+  g_strfreev (strv);
+
+  s = srt_system_info_dup_os_name (info);
+  g_assert_cmpstr (s, ==, "This file does not end with a newline");
+  g_free (s);
+
+  s = srt_system_info_dup_os_pretty_name (info);
+  g_assert_cmpstr (s, ==, "The second name");
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_codename (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  runtime_issues = srt_system_info_get_runtime_issues (info);
+  g_assert_cmpint (runtime_issues, ==,
+                   (SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION
+                    | SRT_RUNTIME_ISSUES_NOT_RUNTIME));
+
+  s = srt_system_info_dup_runtime_path (info);
+  g_assert_cmpstr (s, ==, "/");
+  g_free (s);
+
+  s = srt_system_info_dup_runtime_version (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+os_no_os_release (Fixture *f,
+                  gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **strv;
+  gchar *sysroot;
+  gchar *s;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "no-os-release", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  s = srt_system_info_dup_os_build_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  s = srt_system_info_dup_os_name (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_pretty_name (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_variant_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_codename (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  s = srt_system_info_dup_os_version_id (info);
+  g_assert_cmpstr (s, ==, NULL);
+  g_free (s);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
 int
 main (int argc,
       char **argv)
@@ -1265,6 +1704,19 @@ main (int argc,
               setup, debian_bug_916303, teardown);
   g_test_add ("/system-info/testing_beta_client", Fixture, NULL,
               setup, testing_beta_client, teardown);
+
+  g_test_add ("/system-info/os/debian10", Fixture, NULL,
+              setup, os_debian10, teardown);
+  g_test_add ("/system-info/os/debian-unstable", Fixture, NULL,
+              setup, os_debian_unstable, teardown);
+  g_test_add ("/system-info/os/steamrt", Fixture, NULL,
+              setup, os_steamrt, teardown);
+  g_test_add ("/system-info/os/steamrt-unofficial", Fixture, NULL,
+              setup, os_steamrt_unofficial, teardown);
+  g_test_add ("/system-info/os/invalid-os-release", Fixture, NULL,
+              setup, os_invalid_os_release, teardown);
+  g_test_add ("/system-info/os/no-os-release", Fixture, NULL,
+              setup, os_no_os_release, teardown);
 
   return g_test_run ();
 }

@@ -84,7 +84,7 @@ setup (Fixture *f,
     {
       tmp = g_build_filename (f->srcdir, "fake-icds", NULL);
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
-                                            "SRT_TEST_ICD_SYSROOT", tmp, TRUE);
+                                            "SRT_TEST_SYSROOT", tmp, TRUE);
       g_free (tmp);
     }
 

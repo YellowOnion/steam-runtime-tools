@@ -60,6 +60,7 @@ install_subdir('expectations_with_missings', install_dir : tests_dir)
 # Vulkan *.json files. (The order of EGL *.json files is well-defined.)
 install_subdir('fake-icds', install_dir : tests_dir)
 install_subdir('fake-steam-runtime', install_dir : tests_dir)
+install_subdir('sysroots', install_dir : tests_dir)
 
 executable(
   'mock-true',

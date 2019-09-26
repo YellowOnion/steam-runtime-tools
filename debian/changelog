@@ -1,3 +1,15 @@
+libcapsule (0.20190926.0-0co1) upstream; urgency=medium
+
+  * utils: Add --help, --version and GNU argument parsing to all tools
+  * capture-libs: Clarify by introducing more temporaries
+  * capture-libs: Factor out library_cmp_by_name()
+  * capture-libs: Treat unversioned libraries as in indeterminate order.
+    This avoids always choosing the container version of libgcc_s.so.1
+    when using a Debian-derived container on Fedora, even if the host
+    version is newer.
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 26 Sep 2019 16:45:42 +0100
+
 libcapsule (0.20190724.0-0co1) upstream; urgency=medium
 
   * process_pt_dynamic: Add missing 'break' to DT_JMPREL case

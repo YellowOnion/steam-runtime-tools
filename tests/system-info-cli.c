@@ -586,9 +586,11 @@ steam_issues (Fixture *f,
 
   g_assert_true (json_object_has_member (json_sub_object, "issues"));
   array = json_object_get_array_member (json_sub_object, "issues");
-  g_assert_cmpint (json_array_get_length (array), ==, 1);
+  g_assert_cmpint (json_array_get_length (array), ==, 2);
   g_assert_cmpstr (json_array_get_string_element (array, 0), ==,
                    "dot-steam-steam-not-symlink");
+  g_assert_cmpstr (json_array_get_string_element (array, 1), ==,
+                   "dot-steam-steam-not-directory");
 
   g_assert_true (json_object_has_member (json, "runtime"));
   json_sub_object = json_object_get_object_member (json, "runtime");

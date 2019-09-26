@@ -111,6 +111,7 @@ gchar *srt_system_info_dup_runtime_version (SrtSystemInfo *self);
 
 SrtSteamIssues srt_system_info_get_steam_issues (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_installation_path (SrtSystemInfo *self);
+gchar *srt_system_info_dup_steam_data_path (SrtSystemInfo *self);
 
 SrtLocaleIssues srt_system_info_get_locale_issues (SrtSystemInfo *self);
 SrtLocale *srt_system_info_check_locale (SrtSystemInfo *self,

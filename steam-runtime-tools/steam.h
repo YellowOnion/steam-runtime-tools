@@ -34,10 +34,28 @@
  * @SRT_STEAM_ISSUES_NONE: There are no problems
  * @SRT_STEAM_ISSUES_INTERNAL_ERROR: Unable to detect the status of the
  *  Steam installation
- * @SRT_STEAM_ISSUES_CANNOT_FIND: Unable to find the Steam installation
+ * @SRT_STEAM_ISSUES_CANNOT_FIND: Unable to find the Steam installation,
+ *  either via its canonical symlink `~/.steam/root` or various fallback
+ *  methods. See srt_system_info_dup_steam_installation_path().
  * @SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK: `~/.steam/steam` is not
- *  a symbolic link to a Steam installation, which for example can happen
- *  if Steam was installed on a system with https://bugs.debian.org/916303
+ *  a symbolic link to Steam data, which for example can happen
+ *  if Steam was installed on a system with <https://bugs.debian.org/916303>.
+ *  See srt_system_info_dup_steam_data_path().
+ * @SRT_STEAM_ISSUES_CANNOT_FIND_DATA: Unable to find the Steam data,
+ *  either via its canonical symlink `~/.steam/steam` or various fallback
+ *  methods. Steam is unlikely to work in this situation.
+ *  See srt_system_info_dup_steam_data_path().
+ * @SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY: `~/.steam/steam` is
+ *  neither a directory nor a symbolic link to a directory.
+ *  Steam is unlikely to work in this situation.
+ *  See srt_system_info_dup_steam_data_path().
+ * @SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK: `~/.steam/root` is not
+ *  a symbolic link to the Steam installation.
+ *  See srt_system_info_dup_steam_installation_path().
+ * @SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY: `~/.steam/root` is
+ *  neither a directory nor a symbolic link to a directory.
+ *  Steam is unlikely to work in this situation.
+ *  See srt_system_info_dup_steam_installation_path().
  *
  * A bitfield with flags representing problems with the Steam
  * installation, or %SRT_STEAM_ISSUES_NONE (which is numerically zero)
@@ -50,5 +68,9 @@ typedef enum
   SRT_STEAM_ISSUES_INTERNAL_ERROR = (1 << 0),
   SRT_STEAM_ISSUES_CANNOT_FIND = (1 << 1),
   SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK = (1 << 2),
+  SRT_STEAM_ISSUES_CANNOT_FIND_DATA = (1 << 3),
+  SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY = (1 << 4),
+  SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK = (1 << 5),
+  SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY = (1 << 6),
   SRT_STEAM_ISSUES_NONE = 0
 } SrtSteamIssues;

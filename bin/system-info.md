@@ -40,7 +40,16 @@ keys:
 :   An object describing the Steam installation. The keys are strings:
 
     **path**
-    :   A string: the absolute path to the Steam installation.
+    :   A string: the absolute path to the Steam installation, typically
+        containing **steam.sh** and **ubuntu12_32** among others.
+        This is usually the same as **data_path** but can differ under some
+        circumstances.
+
+    **data_path**
+    :   A string: the absolute path to the Steam data directory, typically
+        containing **appcache**, **steamapps** and **userdata** among others.
+        This is usually the same as **path** but can differ under some
+        circumstances.
 
     **issues**
     :   An array of strings representing problems with the Steam
@@ -52,9 +61,25 @@ keys:
         **cannot-find**
         :   The Steam installation could not be found.
 
+        **cannot-find-data**
+        :   The Steam data directory could not be found.
+
+        **dot-steam-root-not-directory**
+        :   **~/.steam/root** is not a (symbolic link to a) directory.
+            Steam will probably not work.
+
+        **dot-steam-root-not-symlink**
+        :   **~/.steam/root** is not a symbolic link to the installation
+            directory. Steam will probably not work.
+
+        **dot-steam-steam-not-directory**
+        :   **~/.steam/steam** is not a (symbolic link to a) directory.
+            Steam will probably not work.
+
         **dot-steam-steam-not-symlink**
-        :   **~/.steam/steam** is not a symbolic link, for example
-            due to [Debian bug #916303](https://bugs.debian.org/916303).
+        :   **~/.steam/steam** is not a symbolic link to the data directory,
+            for example due to
+            [Debian bug #916303](https://bugs.debian.org/916303).
 
 **runtime**
 :   An object describing the `LD_LIBRARY_PATH`-based Steam Runtime.

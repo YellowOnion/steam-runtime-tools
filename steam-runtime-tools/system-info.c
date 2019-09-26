@@ -100,9 +100,10 @@ struct _SrtSystemInfo
   } locales;
   struct
   {
-    /* path != NULL or issues != NONE indicates we have already checked
-     * the Steam installation */
-    gchar *path;
+    /* install_path != NULL or issues != NONE indicates we have already
+     * checked the Steam installation */
+    gchar *install_path;
+    gchar *data_path;
     gchar *bin32;
     SrtSteamIssues issues;
   } steam;
@@ -320,7 +321,8 @@ forget_steam (SrtSystemInfo *self)
 {
   forget_runtime (self);
   self->steam.issues = SRT_STEAM_ISSUES_NONE;
-  g_clear_pointer (&self->steam.path, g_free);
+  g_clear_pointer (&self->steam.install_path, g_free);
+  g_clear_pointer (&self->steam.data_path, g_free);
   g_clear_pointer (&self->steam.bin32, g_free);
 }
 
@@ -1037,9 +1039,11 @@ static void
 ensure_steam_cached (SrtSystemInfo *self)
 {
   if (self->steam.issues == SRT_STEAM_ISSUES_NONE &&
-      self->steam.path == NULL)
+      self->steam.install_path == NULL &&
+      self->steam.data_path == NULL)
     self->steam.issues = _srt_steam_check (self->env,
-                                           &self->steam.path,
+                                           &self->steam.install_path,
+                                           &self->steam.data_path,
                                            &self->steam.bin32);
 }
 
@@ -1068,13 +1072,28 @@ srt_system_info_get_steam_issues (SrtSystemInfo *self)
  *
  * Return the absolute path to the Steam installation in use (the
  * directory containing `steam.sh` and `ubuntu12_32/` among other
- * files and directories, analogous to `C:\Program Files\Steam` in a
- * typical Windows installation of Steam). This is typically of the form
- * `/home/me/.local/share/Steam`.
+ * files and directories).
  *
- * If the Steam installation could not be found, at least one flag will
+ * This directory is analogous to `C:\Program Files\Steam` in a
+ * typical Windows installation of Steam, and is typically of the form
+ * `/home/me/.local/share/Steam`. It is also known as the "Steam root",
+ * and is canonically accessed via the symbolic link `~/.steam/root`
+ * (known as the "Steam root link").
+ *
+ * Under normal circumstances, this is the same directory as
+ * srt_system_info_dup_steam_data_path(). However, it is possible to
+ * construct situations where they are different, for example when a
+ * Steam developer tests a new client build in its own installation
+ * directory in conjunction with an existing data directory from the
+ * production client, or when Steam was first installed using a Debian
+ * package that suffered from
+ * [#916303](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=916303)
+ * (which resulted in `~/.steam/steam` being a plain directory, not a
+ * symbolic link).
+ *
+ * If the Steam installation could not be found, flags will
  * be set in the result of srt_system_info_get_steam_issues() to indicate
- * why.
+ * why: at least %SRT_STEAM_ISSUES_CANNOT_FIND, and possibly others.
  *
  * Returns: (transfer full) (type filename) (nullable): The absolute path
  *  to the Steam installation, or %NULL if it could not be determined.
@@ -1086,7 +1105,49 @@ srt_system_info_dup_steam_installation_path (SrtSystemInfo *self)
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
   ensure_steam_cached (self);
-  return g_strdup (self->steam.path);
+  return g_strdup (self->steam.install_path);
+}
+
+/**
+ * srt_system_info_dup_steam_data_path:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the absolute path to the Steam data directory in use (the
+ * directory containing `appcache/`, `userdata/` and the default
+ * `steamapps/` or `SteamApps/` installation path for games, among other
+ * files and directories).
+ *
+ * This directory is analogous to `C:\Program Files\Steam` in a
+ * typical Windows installation of Steam, and is typically of the form
+ * `/home/me/.local/share/Steam`. It is canonically accessed via the
+ * symbolic link `~/.steam/steam` (known as the "Steam data link").
+ *
+ * Under normal circumstances, this is the same directory as
+ * srt_system_info_dup_steam_installation_path(). However, it is possible
+ * to construct situations where they are different, for example when a
+ * Steam developer tests a new client build in its own installation
+ * directory in conjunction with an existing data directory from the
+ * production client, or when Steam was first installed using a Debian
+ * package that suffered from
+ * [#916303](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=916303)
+ * (which resulted in `~/.steam/steam` being a plain directory, not a
+ * symbolic link).
+ *
+ * If the Steam data could not be found, flags will
+ * be set in the result of srt_system_info_get_steam_issues() to indicate
+ * why: at least %SRT_STEAM_ISSUES_CANNOT_FIND_DATA, and possibly others.
+ *
+ * Returns: (transfer full) (type filename) (nullable): The absolute path
+ *  to the Steam installation, or %NULL if it could not be determined.
+ *  Free with g_free().
+ */
+gchar *
+srt_system_info_dup_steam_data_path (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_steam_cached (self);
+  return g_strdup (self->steam.data_path);
 }
 
 /**
@@ -1170,6 +1231,9 @@ srt_system_info_get_runtime_issues (SrtSystemInfo *self)
  * Return the absolute path to the `LD_LIBRARY_PATH`-based Steam Runtime
  * in use (the directory containing `run.sh`, `version.txt` and
  * similar files).
+ *
+ * This will typically be below
+ * srt_system_info_dup_steam_installation_path(), unless overridden.
  *
  * If the Steam Runtime has been disabled or could not be found, at
  * least one flag will be set in the result of

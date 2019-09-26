@@ -52,10 +52,12 @@ fake_home_new (void)
   fake_home->create_pinning_libs = TRUE;
   fake_home->create_i386_folders = TRUE;
   fake_home->create_amd64_folders = TRUE;
+  fake_home->create_root_symlink = TRUE;
   fake_home->create_steam_symlink = TRUE;
   fake_home->create_steamrt_files = TRUE;
   fake_home->add_environments = TRUE;
   fake_home->has_debian_bug_916303 = FALSE;
+  fake_home->testing_beta_client = FALSE;
   
   return fake_home;
 }
@@ -81,6 +83,7 @@ fake_home_create_structure (FakeHome *f)
   gchar *setup = NULL;
   gchar *version = NULL;
   gchar *dot_steam_bin32 = NULL;
+  gchar *dot_steam_root = NULL;
   gchar *dot_steam_steam = NULL;
   gchar *local_share = NULL;
   gchar *ld_path = NULL;
@@ -94,19 +97,33 @@ fake_home_create_structure (FakeHome *f)
   dot_steam = g_build_filename (f->home, ".steam", NULL);
 
   if (f->has_debian_bug_916303)
-    f->steam_base_folder = g_strdup (dot_steam);
+    {
+      f->steam_install = g_strdup (dot_steam);
+      f->steam_data = g_build_filename (dot_steam, "steam", NULL);
+    }
+  else if (f->testing_beta_client)
+    {
+      f->steam_install = g_build_filename (f->home, "beta-client", NULL);
+      f->steam_data = g_build_filename (f->home, ".local", "share",
+                                        "Steam", NULL);
+    }
   else
-    f->steam_base_folder = g_build_filename (f->home, ".local", "share",
-                                             "Steam", NULL);
+    {
+      f->steam_install = g_build_filename (f->home, ".local", "share",
+                                           "Steam", NULL);
+      f->steam_data = g_strdup (f->steam_install);
+    }
 
-  f->runtime = g_build_filename (f->steam_base_folder, "ubuntu12_32",
+  f->runtime = g_build_filename (f->steam_install, "ubuntu12_32",
                                  "steam-runtime", NULL);
 
   scripts = g_build_filename (f->runtime, "scripts", NULL);
 
   if (g_mkdir_with_parents (dot_steam, 0755) != 0)
     goto out;
-  if (g_mkdir_with_parents (f->steam_base_folder, 0755) != 0)
+  if (g_mkdir_with_parents (f->steam_data, 0755) != 0)
+    goto out;
+  if (g_mkdir_with_parents (f->steam_install, 0755) != 0)
     goto out;
   if (g_mkdir_with_parents (scripts, 0755) != 0)
     goto out;
@@ -177,13 +194,32 @@ fake_home_create_structure (FakeHome *f)
         goto out;
     }
 
+  if (f->create_root_symlink)
+    {
+      if (dot_steam_root == NULL)
+        dot_steam_root = g_build_filename (dot_steam, "root", NULL);
+      symlink = g_file_new_for_path (dot_steam_root);
+
+      g_file_make_symbolic_link (symlink, f->steam_install, NULL, &error);
+      g_object_unref (symlink);
+      g_assert_no_error (error);
+
+      dot_steam_bin32 = g_build_filename (dot_steam, "bin32", NULL);
+      symlink = g_file_new_for_path (dot_steam_bin32);
+
+      ubuntu12_32 = g_build_filename (f->steam_install, "ubuntu12_32", NULL);
+      g_file_make_symbolic_link (symlink, ubuntu12_32, NULL, &error);
+      g_object_unref (symlink);
+      g_assert_no_error (error);
+    }
+
   if (f->create_steam_symlink)
     {
       if (dot_steam_steam == NULL)
         dot_steam_steam = g_build_filename (dot_steam, "steam", NULL);
       symlink = g_file_new_for_path (dot_steam_steam);
 
-      g_file_make_symbolic_link (symlink, f->steam_base_folder, NULL, &error);
+      g_file_make_symbolic_link (symlink, f->steam_data, NULL, &error);
       g_object_unref (symlink);
       if (f->has_debian_bug_916303)
         {
@@ -194,14 +230,6 @@ fake_home_create_structure (FakeHome *f)
         {
           g_assert_no_error (error);
         }
-
-      dot_steam_bin32 = g_build_filename (dot_steam, "bin32", NULL);
-      symlink = g_file_new_for_path (dot_steam_bin32);
-
-      ubuntu12_32 = g_build_filename (f->steam_base_folder, "ubuntu12_32", NULL);
-      g_file_make_symbolic_link (symlink, ubuntu12_32, NULL, &error);
-      g_object_unref (symlink);
-      g_assert_no_error (error);
     }
 
   local_share = g_build_filename (f->home, ".local", "share", NULL);
@@ -250,6 +278,7 @@ fake_home_create_structure (FakeHome *f)
     g_free (setup);
     g_free (version);
     g_free (dot_steam_bin32);
+    g_free (dot_steam_root);
     g_free (dot_steam_steam);
     g_free (local_share);
     g_free (ld_path);
@@ -277,7 +306,8 @@ fake_home_clean_up (FakeHome *f)
     g_debug ("Unable to remove the fake home directory: %s", f->home);
 
   g_free (f->home);
-  g_free (f->steam_base_folder);
+  g_free (f->steam_data);
+  g_free (f->steam_install);
   g_free (f->runtime);
   g_free (f->pinned_32);
   g_free (f->pinned_64);

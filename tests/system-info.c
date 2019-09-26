@@ -714,7 +714,7 @@ steam_runtime (Fixture *f,
   runtime_path = srt_system_info_dup_runtime_path (info);
   g_assert_cmpstr (runtime_path, ==, fake_home->runtime);
   installation_path = srt_system_info_dup_steam_installation_path (info);
-  g_assert_cmpstr (installation_path, ==, fake_home->steam_base_folder);
+  g_assert_cmpstr (installation_path, ==, fake_home->steam_install);
   g_free (runtime_path);
   g_free (installation_path);
 
@@ -724,7 +724,7 @@ steam_runtime (Fixture *f,
   runtime_path = srt_system_info_dup_runtime_path (info);
   g_assert_cmpstr (runtime_path, ==, fake_home->runtime);
   installation_path = srt_system_info_dup_steam_installation_path (info);
-  g_assert_cmpstr (installation_path, ==, fake_home->steam_base_folder);
+  g_assert_cmpstr (installation_path, ==, fake_home->steam_install);
 
   /* Check for Steam issues */
   steam_issues = srt_system_info_get_steam_issues (info);
@@ -1019,7 +1019,7 @@ runtime_unexpected_location (Fixture *f,
 {
   SrtSystemInfo *info;
   SrtRuntimeIssues issues;
-  gchar *dot_steam_steam = NULL;
+  gchar *dot_steam_root = NULL;
   gchar *my_runtime = NULL;
   gchar *ld_path = NULL;
   gchar *env_path = NULL;
@@ -1029,19 +1029,19 @@ runtime_unexpected_location (Fixture *f,
   FakeHome *fake_home;
 
   fake_home = fake_home_new ();
-  fake_home->create_steam_symlink = FALSE;
+  fake_home->create_root_symlink = FALSE;
   fake_home_create_structure (fake_home);
 
   info = srt_system_info_new (NULL);
-  dot_steam_steam = g_build_filename (fake_home->home, ".steam", "steam", NULL);
+  dot_steam_root = g_build_filename (fake_home->home, ".steam", "root", NULL);
 
-  my_runtime = g_build_filename (fake_home->steam_base_folder, "ubuntu12_32",
+  my_runtime = g_build_filename (fake_home->steam_install, "ubuntu12_32",
                                  "my-runtime", NULL);
 
 
   /* Create a new homedir/.steam/steam symlink that doesn't point to
    * the expected steam runtime path. */
-  symlink = g_file_new_for_path (dot_steam_steam);
+  symlink = g_file_new_for_path (dot_steam_root);
   g_file_make_symbolic_link (symlink, fake_home->pinned_64, NULL, &error);
   g_assert_no_error (error);
   srt_system_info_set_environ (info, fake_home->env);
@@ -1063,8 +1063,8 @@ runtime_unexpected_location (Fixture *f,
   env_path = g_strjoinv ("my-runtime", parts);
 
   g_rename (fake_home->runtime, my_runtime);
-  g_remove (dot_steam_steam);
-  symlink = g_file_new_for_path (dot_steam_steam);
+  g_remove (dot_steam_root);
+  symlink = g_file_new_for_path (dot_steam_root);
   g_file_make_symbolic_link (symlink, my_runtime, NULL, &error);
   g_assert_no_error (error);
   fake_home->env = g_environ_setenv (fake_home->env, "LD_LIBRARY_PATH", ld_path, TRUE);
@@ -1078,7 +1078,7 @@ runtime_unexpected_location (Fixture *f,
   fake_home_clean_up (fake_home);
   g_object_unref (symlink);
   g_object_unref (info);
-  g_free (dot_steam_steam);
+  g_free (dot_steam_root);
   g_free (my_runtime);
   g_free (ld_path);
   g_free (env_path);
@@ -1109,30 +1109,26 @@ steam_symlink (Fixture *f,
   dot_steam_steam = g_build_filename (fake_home->home, ".steam", "steam", NULL);
   dot_steam_root = g_build_filename (fake_home->home, ".steam", "root", NULL);
   dot_steam_bin32 = g_build_filename (fake_home->home, ".steam", "bin32", NULL);
-  ubuntu12_32 = g_build_filename (fake_home->steam_base_folder, "ubuntu12_32", NULL);
+  ubuntu12_32 = g_build_filename (fake_home->steam_install, "ubuntu12_32", NULL);
 
   /* We don't have a homedir/.steam/steam symlink. */
   srt_system_info_set_environ (info, fake_home->env);
   issues = srt_system_info_get_steam_issues (info);
-  g_assert_cmpint (SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK, ==, issues);
-
-  /* Create the homedir/.steam/root symlink. */
-  symlink = g_file_new_for_path (dot_steam_root);
-  g_file_make_symbolic_link (symlink, fake_home->steam_base_folder, NULL, &error);
-  g_assert_no_error (error);
-  srt_system_info_set_environ (info, fake_home->env);
-  issues = srt_system_info_get_steam_issues (info);
-  g_assert_cmpint (SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK, ==, issues);
-  g_object_unref (symlink);
+  g_assert_cmpint ((SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK
+                   | SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY), ==, issues);
 
   /* Remove homedir/.steam/root symlink and create homedir/.steam/bin32 symlink. */
   g_remove (dot_steam_root);
+  g_remove (dot_steam_bin32);
   symlink = g_file_new_for_path (dot_steam_bin32);
   g_file_make_symbolic_link (symlink, ubuntu12_32, NULL, &error);
   g_assert_no_error (error);
   srt_system_info_set_environ (info, fake_home->env);
   issues = srt_system_info_get_steam_issues (info);
-  g_assert_cmpint (SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK, ==, issues);
+  g_assert_cmpint ((SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK
+                   | SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY
+                   | SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK
+                   | SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY), ==, issues);
 
   /* Remove the homedir/.steam/bin32 symlink and set XDG_DATA_HOME env to a
    * folder that is not the expected homedir/.local/share */
@@ -1141,8 +1137,12 @@ steam_symlink (Fixture *f,
   fake_home->env = g_environ_setenv (fake_home->env, "XDG_DATA_HOME", data_home, TRUE);
   srt_system_info_set_environ (info, fake_home->env);
   issues = srt_system_info_get_steam_issues (info);
-  g_assert_cmpint (SRT_STEAM_ISSUES_CANNOT_FIND |
-                   SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK, ==, issues);
+  g_assert_cmpint ((SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK
+                   | SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY
+                   | SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK
+                   | SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY
+                   | SRT_STEAM_ISSUES_CANNOT_FIND
+                   | SRT_STEAM_ISSUES_CANNOT_FIND_DATA), ==, issues);
   installation_path = srt_system_info_dup_steam_installation_path (info);
   g_assert_cmpstr (installation_path, ==, NULL);
 
@@ -1167,6 +1167,8 @@ debian_bug_916303 (Fixture *f,
   SrtSystemInfo *info;
   SrtSteamIssues issues;
   FakeHome *fake_home;
+  gchar *installation_path;
+  gchar *data_path;
 
   fake_home = fake_home_new ();
   fake_home->has_debian_bug_916303 = TRUE;
@@ -1177,9 +1179,50 @@ debian_bug_916303 (Fixture *f,
 
   issues = srt_system_info_get_steam_issues (info);
   g_assert_cmpint (issues, ==, SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK);
+  installation_path = srt_system_info_dup_steam_installation_path (info);
+  g_assert_cmpstr (installation_path, ==, fake_home->steam_install);
+  g_assert_true (g_str_has_suffix (installation_path, "/.steam"));
+  data_path = srt_system_info_dup_steam_data_path (info);
+  g_assert_cmpstr (data_path, ==, fake_home->steam_data);
+  g_assert_true (g_str_has_suffix (data_path, "/.steam/steam"));
 
   fake_home_clean_up (fake_home);
   g_object_unref (info);
+  g_free (installation_path);
+  g_free (data_path);
+}
+
+/* Behave as though we're testing a beta client. */
+static void
+testing_beta_client (Fixture *f,
+                     gconstpointer context)
+{
+  SrtSystemInfo *info;
+  SrtSteamIssues issues;
+  FakeHome *fake_home;
+  gchar *installation_path;
+  gchar *data_path;
+
+  fake_home = fake_home_new ();
+  fake_home->testing_beta_client = TRUE;
+  fake_home_create_structure (fake_home);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, fake_home->env);
+
+  issues = srt_system_info_get_steam_issues (info);
+  g_assert_cmpint (issues, ==, 0);
+  installation_path = srt_system_info_dup_steam_installation_path (info);
+  g_assert_cmpstr (installation_path, ==, fake_home->steam_install);
+  g_assert_true (g_str_has_suffix (installation_path, "/beta-client"));
+  data_path = srt_system_info_dup_steam_data_path (info);
+  g_assert_cmpstr (data_path, ==, fake_home->steam_data);
+  g_assert_true (g_str_has_suffix (data_path, "/.local/share/Steam"));
+
+  fake_home_clean_up (fake_home);
+  g_object_unref (info);
+  g_free (installation_path);
+  g_free (data_path);
 }
 
 int
@@ -1220,6 +1263,8 @@ main (int argc,
               setup, steam_symlink, teardown);
   g_test_add ("/system-info/debian_bug_916303", Fixture, NULL,
               setup, debian_bug_916303, teardown);
+  g_test_add ("/system-info/testing_beta_client", Fixture, NULL,
+              setup, testing_beta_client, teardown);
 
   return g_test_run ();
 }

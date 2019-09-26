@@ -33,6 +33,7 @@ typedef struct
 {
   gchar *build_id;
   gchar *id;
+  gchar *id_like;
   gchar *name;
   gchar *pretty_name;
   gchar *variant;

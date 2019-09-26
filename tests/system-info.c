@@ -1231,6 +1231,7 @@ os_debian10 (Fixture *f,
 {
   SrtSystemInfo *info;
   gchar **envp;
+  gchar **strv;
   gchar *sysroot;
   gchar *s;
 
@@ -1248,6 +1249,16 @@ os_debian10 (Fixture *f,
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, "debian");
   g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "debian");
+  g_assert_cmpstr (strv[1], ==, NULL);
+  g_strfreev (strv);
 
   s = srt_system_info_dup_os_name (info);
   g_assert_cmpstr (s, ==, "Debian GNU/Linux");
@@ -1284,6 +1295,7 @@ os_debian_unstable (Fixture *f,
 {
   SrtSystemInfo *info;
   gchar **envp;
+  gchar **strv;
   gchar *sysroot;
   gchar *s;
 
@@ -1301,6 +1313,16 @@ os_debian_unstable (Fixture *f,
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, "debian");
   g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "debian");
+  g_assert_cmpstr (strv[1], ==, NULL);
+  g_strfreev (strv);
 
   s = srt_system_info_dup_os_name (info);
   g_assert_cmpstr (s, ==, "Debian GNU/Linux");
@@ -1337,6 +1359,7 @@ os_steamrt (Fixture *f,
 {
   SrtSystemInfo *info;
   gchar **envp;
+  gchar **strv;
   gchar *sysroot;
   gchar *s;
 
@@ -1355,6 +1378,21 @@ os_steamrt (Fixture *f,
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, "steamrt");
   g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "ubuntu");
+  g_assert_cmpstr (strv[1], ==, "debian");
+  g_assert_cmpstr (strv[2], ==, NULL);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "steamrt");
+  g_assert_cmpstr (strv[1], ==, "ubuntu");
+  g_assert_cmpstr (strv[2], ==, "debian");
+  g_assert_cmpstr (strv[3], ==, NULL);
+  g_strfreev (strv);
 
   s = srt_system_info_dup_os_name (info);
   g_assert_cmpstr (s, ==, "Steam Runtime");
@@ -1392,6 +1430,7 @@ os_steamrt_unofficial (Fixture *f,
 {
   SrtSystemInfo *info;
   gchar **envp;
+  gchar **strv;
   gchar *sysroot;
   gchar *s;
 
@@ -1411,6 +1450,21 @@ os_steamrt_unofficial (Fixture *f,
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, "steamrt");
   g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "ubuntu");
+  g_assert_cmpstr (strv[1], ==, "debian");
+  g_assert_cmpstr (strv[2], ==, NULL);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "steamrt");
+  g_assert_cmpstr (strv[1], ==, "ubuntu");
+  g_assert_cmpstr (strv[2], ==, "debian");
+  g_assert_cmpstr (strv[3], ==, NULL);
+  g_strfreev (strv);
 
   s = srt_system_info_dup_os_name (info);
   g_assert_cmpstr (s, ==, "Steam Runtime");
@@ -1448,6 +1502,7 @@ os_invalid_os_release (Fixture *f,
 {
   SrtSystemInfo *info;
   gchar **envp;
+  gchar **strv;
   gchar *sysroot;
   gchar *s;
 
@@ -1467,6 +1522,16 @@ os_invalid_os_release (Fixture *f,
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, "steamrt");
   g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_nonnull (strv);
+  g_assert_cmpstr (strv[0], ==, "steamrt");
+  g_assert_cmpstr (strv[1], ==, NULL);
+  g_strfreev (strv);
 
   s = srt_system_info_dup_os_name (info);
   g_assert_cmpstr (s, ==, "This file does not end with a newline");
@@ -1503,6 +1568,7 @@ os_no_os_release (Fixture *f,
 {
   SrtSystemInfo *info;
   gchar **envp;
+  gchar **strv;
   gchar *sysroot;
   gchar *s;
 
@@ -1520,6 +1586,14 @@ os_no_os_release (Fixture *f,
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, NULL);
   g_free (s);
+
+  strv = srt_system_info_dup_os_id_like (info, FALSE);
+  g_assert_null (strv);
+  g_strfreev (strv);
+
+  strv = srt_system_info_dup_os_id_like (info, TRUE);
+  g_assert_null (strv);
+  g_strfreev (strv);
 
   s = srt_system_info_dup_os_name (info);
   g_assert_cmpstr (s, ==, NULL);

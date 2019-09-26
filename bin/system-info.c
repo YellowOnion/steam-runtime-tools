@@ -546,6 +546,8 @@ main (int argc,
   json_builder_set_member_name (builder, "os-release");
   json_builder_begin_object (builder);
     {
+      GStrv strv;
+      gsize i;
       gchar *tmp;
 
       tmp = srt_system_info_dup_os_id (info);
@@ -555,6 +557,20 @@ main (int argc,
           json_builder_set_member_name (builder, "id");
           json_builder_add_string_value (builder, tmp);
           g_free (tmp);
+        }
+
+      strv = srt_system_info_dup_os_id_like (info, FALSE);
+
+      if (strv != NULL)
+        {
+          json_builder_set_member_name (builder, "id_like");
+          json_builder_begin_array (builder);
+            {
+              for (i = 0; strv[i] != NULL; i++)
+                json_builder_add_string_value (builder, strv[i]);
+            }
+          json_builder_end_array (builder);
+          g_strfreev (strv);
         }
 
       tmp = srt_system_info_dup_os_name (info);

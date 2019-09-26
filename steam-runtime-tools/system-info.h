@@ -120,6 +120,8 @@ SrtLocale *srt_system_info_check_locale (SrtSystemInfo *self,
 
 gchar *srt_system_info_dup_os_build_id (SrtSystemInfo *self);
 gchar *srt_system_info_dup_os_id (SrtSystemInfo *self);
+gchar **srt_system_info_dup_os_id_like (SrtSystemInfo *self,
+                                        gboolean include_self);
 gchar *srt_system_info_dup_os_name (SrtSystemInfo *self);
 gchar *srt_system_info_dup_os_pretty_name (SrtSystemInfo *self);
 gchar *srt_system_info_dup_os_variant (SrtSystemInfo *self);

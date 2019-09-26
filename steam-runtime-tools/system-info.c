@@ -1187,7 +1187,8 @@ ensure_os_cached (SrtSystemInfo *self)
  *
  * This is the `BUILD_ID` from os-release(5).
  *
- * Returns: (transfer full) (type utf8): The build ID, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The build ID, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_build_id (SrtSystemInfo *self)
@@ -1210,7 +1211,8 @@ srt_system_info_dup_os_build_id (SrtSystemInfo *self)
  * future versions of this library might derive a similar ID from
  * lsb_release(1).
  *
- * Returns: (transfer full) (type utf8): The OS ID, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The OS ID, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_id (SrtSystemInfo *self)
@@ -1219,6 +1221,70 @@ srt_system_info_dup_os_id (SrtSystemInfo *self)
 
   ensure_os_cached (self);
   return g_strdup (self->os_release.id);
+}
+
+static const char WHITESPACE[] = " \t\n\r";
+
+/**
+ * srt_system_info_dup_os_id_like:
+ * @self: The #SrtSystemInfo object
+ * @include_self: If %TRUE, include srt_system_info_dup_os_id() in the
+ *  returned array (if known)
+ *
+ * Return an array of lower-case machine-readable operating system
+ * identifiers similar to srt_system_info_dup_os_id() describing OSs
+ * that this one resembles or is derived from.
+ *
+ * For example, the Steam Runtime 1 'scout' is derived from Ubuntu,
+ * which is itself derived from Debian, so srt_system_info_dup_os_id_like()
+ * would return `{ "debian", "ubuntu", NULL }` if @include_self is false,
+ * `{ "steamrt", "debian", "ubuntu", NULL }` otherwise.
+ *
+ * This is the `ID_LIKE` field from os-release(5), possibly combined
+ * with the `ID` field.
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable): An
+ *  array of OS IDs, or %NULL if nothing is known.
+ *  Free with g_strfreev().
+ */
+gchar **
+srt_system_info_dup_os_id_like (SrtSystemInfo *self,
+                                gboolean include_self)
+{
+  GPtrArray *builder;
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_os_cached (self);
+
+  builder = g_ptr_array_new_with_free_func (g_free);
+
+  if (self->os_release.id != NULL && include_self)
+    g_ptr_array_add (builder, g_strdup (self->os_release.id));
+
+  if (self->os_release.id_like != NULL)
+    {
+      GStrv split;
+      gsize i;
+
+      split = g_strsplit_set (self->os_release.id_like, WHITESPACE, -1);
+
+      for (i = 0; split != NULL && split[i] != NULL; i++)
+        g_ptr_array_add (builder, g_steal_pointer (&split[i]));
+
+      /* We already transferred ownership of the contents */
+      g_free (split);
+    }
+
+  if (builder->len > 0)
+    {
+      g_ptr_array_add (builder, NULL);
+      return (gchar **) g_ptr_array_free (builder, FALSE);
+    }
+  else
+    {
+      g_ptr_array_free (builder, TRUE);
+      return NULL;
+    }
 }
 
 /**
@@ -1232,7 +1298,8 @@ srt_system_info_dup_os_id (SrtSystemInfo *self)
  * available, future versions of this library might derive a similar
  * name from lsb_release(1).
  *
- * Returns: (transfer full) (type utf8): The name, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The name, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_name (SrtSystemInfo *self)
@@ -1258,7 +1325,8 @@ srt_system_info_dup_os_name (SrtSystemInfo *self)
  * available, future versions of this library might derive a similar
  * name from lsb_release(1).
  *
- * Returns: (transfer full) (type utf8): The name, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The name, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_pretty_name (SrtSystemInfo *self)
@@ -1280,7 +1348,8 @@ srt_system_info_dup_os_pretty_name (SrtSystemInfo *self)
  *
  * This is the `VARIANT` in os-release(5).
  *
- * Returns: (transfer full) (type utf8): The name, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The name, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_variant (SrtSystemInfo *self)
@@ -1302,7 +1371,8 @@ srt_system_info_dup_os_variant (SrtSystemInfo *self)
  *
  * This is the `VARIANT_ID` in os-release(5).
  *
- * Returns: (transfer full) (type utf8): The name, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The variant ID, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_variant_id (SrtSystemInfo *self)
@@ -1326,7 +1396,8 @@ srt_system_info_dup_os_variant_id (SrtSystemInfo *self)
  * available, future versions of this library might derive a similar
  * codename from lsb_release(1).
  *
- * Returns: (transfer full) (type utf8): The name, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The codename, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_version_codename (SrtSystemInfo *self)
@@ -1351,7 +1422,8 @@ srt_system_info_dup_os_version_codename (SrtSystemInfo *self)
  * available, future versions of this library might derive a similar
  * identifier from lsb_release(1).
  *
- * Returns: (transfer full) (type utf8): The name, or %NULL if not known
+ * Returns: (transfer full) (type utf8): The ID, or %NULL if not known.
+ *  Free with g_free().
  */
 gchar *
 srt_system_info_dup_os_version_id (SrtSystemInfo *self)

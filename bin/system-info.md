@@ -152,6 +152,19 @@ keys:
         If **os-release**(5) is not available, future versions of this
         library might derive a similar ID from **lsb_release**(1).
 
+    **id_like**
+    :   An array of short lower-case strings identifying operating systems
+        that this one was derived from. For example, Steam Runtime 1 'scout'
+        is derived from Ubuntu, which is itself derived from Debian, so
+        in a scout chroot or container this will be **["ubuntu", "debian"]**.
+
+        This is the **ID_LIKE** field from **os-release**(5), split
+        at whitespace. It does not include the **id**.
+
+        If **os-release**(5) is not available, future versions of this
+        library might derive a similar array from **lsb_release**(1)
+        or from hard-coded knowledge of particular operating systems.
+
     **name**
     :   A human-readable name for the operating system without its
         version, for example **Debian GNU/Linux** or **Arch Linux**.

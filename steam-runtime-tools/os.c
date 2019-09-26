@@ -38,6 +38,7 @@ _srt_os_release_init (SrtOsRelease *self)
 {
   self->build_id = NULL;
   self->id = NULL;
+  self->id_like = NULL;
   self->name = NULL;
   self->pretty_name = NULL;
   self->variant = NULL;
@@ -96,6 +97,8 @@ do_line (SrtOsRelease *self,
     dest = &self->build_id;
   else if (strcmp (line, "ID") == 0)
     dest = &self->id;
+  else if (strcmp (line, "ID_LIKE") == 0)
+    dest = &self->id_like;
   else if (strcmp (line, "NAME") == 0)
     dest = &self->name;
   else if (strcmp (line, "PRETTY_NAME") == 0)
@@ -209,6 +212,13 @@ _srt_os_release_populate (SrtOsRelease *self,
       && g_strcmp0 (self->version_id, "1") == 0)
     self->version_codename = g_strdup ("scout");
 
+  /* Special case for the Steam Runtime: we got this wrong in the past. */
+  if (g_strcmp0 (self->id_like, "ubuntu") == 0)
+    {
+      g_free (self->id_like);
+      self->id_like = g_strdup ("ubuntu debian");
+    }
+
   self->populated = TRUE;
 }
 
@@ -217,6 +227,7 @@ _srt_os_release_clear (SrtOsRelease *self)
 {
   g_clear_pointer (&self->build_id, g_free);
   g_clear_pointer (&self->id, g_free);
+  g_clear_pointer (&self->id_like, g_free);
   g_clear_pointer (&self->name, g_free);
   g_clear_pointer (&self->pretty_name, g_free);
   g_clear_pointer (&self->variant, g_free);

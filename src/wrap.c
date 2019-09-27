@@ -950,6 +950,58 @@ bind_runtime (FlatpakBwrap *bwrap,
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
+          temp_bwrap = flatpak_bwrap_new (NULL);
+          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
+                          || mount_runtime_on_scratch->fds->len == 0);
+          flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+          flatpak_bwrap_add_args (temp_bwrap,
+                                  tool_path,
+                                  "--container", scratch,
+                                  "--link-target", "/run/host",
+                                  "--dest", libdir_on_host,
+                                  "--provider", "/",
+                                  "if-exists:even-if-older:soname-match:libEGL.so.*",
+                                  "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
+                                  "if-exists:even-if-older:soname-match:libGL.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLESv1_CM.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLESv2.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLX.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLX_nvidia.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLX_indirect.so.*",
+                                  "if-exists:even-if-older:soname-match:libGLdispatch.so.*",
+                                  "if-exists:even-if-older:soname-match:libOpenGL.so.*",
+                                  "if-exists:even-if-older:soname-match:libcuda.so.*",
+                                  "if-exists:even-if-older:soname-match:libglx.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-cbl.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-cfg.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-compiler.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-encode.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-fbc.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-glcore.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-glsi.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-ifr.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-ml.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-opencl.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*",
+                                  "if-exists:even-if-older:soname-match:libnvidia-tls.so.*",
+                                  "if-exists:even-if-older:soname-match:libOpenCL.so.*",
+                                  "if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*",
+                                  NULL);
+          flatpak_bwrap_finish (temp_bwrap);
+
+          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+            return FALSE;
+
+          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
           g_debug ("Collecting %s EGL drivers from host system...",
                    multiarch_tuples[i]);
 

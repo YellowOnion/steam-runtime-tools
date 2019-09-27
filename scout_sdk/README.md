@@ -4,11 +4,16 @@ Steam Runtime debugging (SDK) environment
 SDK container
 -------------
 
-To get a debug version of the Steam Runtime container, unpack
-`../com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz`
-  into this directory, so that you have this layout:
+The default `scout/` directory is a version of
+`com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
+from <http://repo.steampowered.com/steamrt-images-scout/snapshots/>
+(see the build ID in its `metadata` file to find out which one).
 
-    ```
+To get a debug version of the Steam Runtime container, download the
+corresponding
+`com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz`
+and unpack it into this directory, so that you have this layout:
+
     pressure-vessel/
         ...
     scout/
@@ -22,17 +27,42 @@ To get a debug version of the Steam Runtime container, unpack
             lib/
                 ...
             ...
-    ```
 
 Then use the developer mode to select the SDK runtime instead of the
 default Platform runtime.
 
-Beta versions of the container might be available from
-<http://repo.steampowered.com/steamrt-images-scout/snapshots/>.
-You can download any recent version of
+Older and newer containers
+--------------------------
+
+To test beta versions or debug regressions,
+you can download any recent version of
 `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
 or `com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz`
-and unpack it into a similar layout.
+from <http://repo.steampowered.com/steamrt-images-scout/snapshots/>
+and unpack it into a similar layout, for example:
+
+    pressure-vessel/
+        ...
+    scout/
+        ...
+    scout_sdk/
+        ...
+    scout_platform_0.20190926.0/
+        metadata
+        files/
+            bin/
+                ...
+            lib/
+                ...
+            ...
+    scout_sdk_0.20190927.0/
+        metadata
+        files/
+            bin/
+                ...
+            lib/
+                ...
+            ...
 
 Steam Runtime schroot
 ---------------------

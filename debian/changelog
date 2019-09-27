@@ -1,3 +1,9 @@
+pressure-vessel (0.20190927.0) scout; urgency=medium
+
+  * wrap: Include all known NVIDIA libraries, except for libnvidia-gtk*
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 27 Sep 2019 18:40:56 +0100
+
 pressure-vessel (0.20190926.0) scout; urgency=medium
 
   * test-ui: Respect a few of the same environment variables as -wrap

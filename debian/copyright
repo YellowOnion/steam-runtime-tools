@@ -25,9 +25,10 @@ License: GPL-3+
 
 Files:
  m4/ax_is_release.m4
+ m4/capsule_matching_abi.m4
 Copyright:
  © 2015 Philip Withnall
- © 2016 Collabora Ltd.
+ © 2016-2019 Collabora Ltd.
 License: Autoconf-permissive
 
 License: LGPL-2.1+

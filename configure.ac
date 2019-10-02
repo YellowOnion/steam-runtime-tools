@@ -38,6 +38,9 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_SYS_LARGEFILE
 # So we can install x86_64-linux-gnu-capsule-symbols etc.
 AC_CANONICAL_HOST
+# Make sure we are not mixing up --host=i686-linux-gnu with a 64-bit compiler
+# or vice versa
+CAPSULE_MATCHING_ABI
 
 LT_INIT
 

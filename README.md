@@ -161,6 +161,12 @@ Then you can do:
         --archive .
     ./tests/relocatable-install.py _build/relocatable-install  # optional
 
+When building a development version of `pressure-vessel` using a 'scout'
+SDK Docker image, if the `pressure-vessel-build-relocatable-install`
+script is unable to find some of the required dependencies, it might be
+necessary to add apt repositories containing development versions of
+those dependencies to `/etc/apt/sources.list`, and run `apt-get update`.
+
 For more convenient use on a development system, if you have a
 SteamRT 1 'scout' SDK tarball or an unpacked sysroot, you can place a
 tarball at `_build/sysroot.tar.gz` or unpack a sysroot into

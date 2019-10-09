@@ -1437,7 +1437,7 @@ srt_system_info_dup_os_version_id (SrtSystemInfo *self)
 /**
  * srt_system_info_set_expected_runtime_version:
  * @self: The #SrtSystemInfo object
- * @version (nullable): The expected version number, such as `0.20190711.3`,
+ * @version: (nullable): The expected version number, such as `0.20190711.3`,
  *  or %NULL if there is no particular expectation
  *
  * Set the expected version number of the Steam Runtime. Invalidate any
@@ -1839,6 +1839,11 @@ srt_system_info_set_test_flags (SrtSystemInfo *self,
 
 /**
  * srt_system_info_list_egl_icds:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
+ *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL
+ *  to not look in any ABI-specific locations. This is currently only used if
+ *  running in a Flatpak environment.
  *
  * List the available EGL ICDs, using the same search paths as GLVND.
  *
@@ -1887,6 +1892,11 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
 
 /**
  * srt_system_info_list_vulkan_icds:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
+ *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL
+ *  to not look in any ABI-specific locations. This is currently only used if
+ *  running in a Flatpak environment.
  *
  * List the available Vulkan ICDs, using the same search paths as the
  * reference vulkan-loader.

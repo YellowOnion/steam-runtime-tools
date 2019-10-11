@@ -113,6 +113,14 @@ SrtSteamIssues srt_system_info_get_steam_issues (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_installation_path (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_data_path (SrtSystemInfo *self);
 
+gchar ** srt_system_info_list_pressure_vessel_overrides (SrtSystemInfo *self,
+                                                         gchar ***messages);
+
+gchar ** srt_system_info_list_pinned_libs_32 (SrtSystemInfo *self,
+                                              gchar ***messages);
+gchar ** srt_system_info_list_pinned_libs_64 (SrtSystemInfo *self,
+                                              gchar ***messages);
+
 SrtLocaleIssues srt_system_info_get_locale_issues (SrtSystemInfo *self);
 SrtLocale *srt_system_info_check_locale (SrtSystemInfo *self,
                                          const char *requested_name,

@@ -1664,6 +1664,456 @@ os_no_os_release (Fixture *f,
   g_strfreev (envp);
 }
 
+static void
+overrides (Fixture *f,
+           gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **output;
+  gchar **issues;
+  gchar *sysroot;
+  gchar *s;
+  gsize i;
+  gboolean seen_link;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  s = srt_system_info_dup_os_id (info);
+  g_assert_cmpstr (s, ==, "steamrt");
+  g_free (s);
+
+  output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
+
+  /* In the steamrt test overrides folder we expect to have a symbolic
+   * link to "/run/host/usr/lib/libgcc_s.so.1" */
+  seen_link = FALSE;
+  /* The output is not guaranteed to be ordered */
+  g_debug ("overrides content:");
+  for (i = 0; output[i] != NULL; i++)
+    {
+      g_debug ("%s", output[i]);
+
+      if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
+        seen_link = TRUE;
+    }
+  /* The overrides folder contains 4 folders plus the root folder, plus one symlink,
+   * plus 2 ".keep" files */
+  g_assert_cmpint (i, ==, 8);
+  g_assert_true (seen_link);
+  g_strfreev (output);
+
+  g_assert_nonnull (issues);
+  g_assert_cmpstr (issues[0], ==, NULL);
+  g_strfreev (issues);
+
+  /* Repeat the same check, this time using the cached result */
+  output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
+
+  seen_link = FALSE;
+  for (i = 0; output[i] != NULL; i++)
+    {
+      if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
+        seen_link = TRUE;
+    }
+  g_assert_cmpint (i, ==, 8);
+  g_assert_true (seen_link);
+  g_strfreev (output);
+
+  g_assert_nonnull (issues);
+  g_assert_cmpstr (issues[0], ==, NULL);
+  g_strfreev (issues);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+overrides_issues (Fixture *f,
+                  gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **output;
+  gchar **issues;
+  gchar *sysroot;
+  gchar *lib_folder;
+  gsize i;
+  gboolean seen_link;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-overrides-issues", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  lib_folder = g_build_filename (sysroot, "overrides", "lib", NULL);
+
+  /* Remove the read permission for the "lib" folder */
+  g_assert_cmpint (g_chmod (lib_folder, 0200), ==, 0);
+
+  if (g_access (lib_folder, R_OK) == 0)
+    {
+      g_test_skip ("This test can't be executed with elevated privileges");
+      goto out;
+    }
+
+  output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
+
+  /* In the steamrt test overrides folder we expect to have a symbolic
+   * link to "/run/host/usr/lib/libgcc_s.so.1" */
+  seen_link = FALSE;
+  /* The output is not guaranteed to be ordered */
+  g_debug ("overrides content:");
+  for (i = 0; output[i] != NULL; i++)
+    {
+      g_debug ("%s", output[i]);
+
+      if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
+        seen_link = TRUE;
+    }
+  /* The overrides folder contains 4 folders plus the root folder, plus one symlink,
+   * plus 2 ".keep" files.
+   * We expect to not be able to open the "lib" folder, so we should have 4 less items than
+   * a "normal" scenario */
+  g_assert_cmpint (i, ==, 4);
+  /* We expect not to be able to reach the symlink */
+  g_assert_false (seen_link);
+  g_strfreev (output);
+
+  g_assert_nonnull (issues);
+  g_assert_cmpstr (strstr (issues[0], "overrides/lib"), !=, NULL);
+  g_strfreev (issues);
+
+  out:
+    /* Re set the permissions for "lib" to the default 755 */
+    g_chmod (lib_folder, 0755);
+    g_object_unref (info);
+    g_free (sysroot);
+    g_free (lib_folder);
+    g_strfreev (envp);
+}
+
+static void
+overrides_not_available (Fixture *f,
+                         gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **output;
+  gchar **issues;
+  gchar *sysroot;
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
+
+  g_assert_null (output);
+
+  g_assert_null (issues);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+pinned_libraries (Fixture *f,
+                  gconstpointer context)
+{
+  SrtSystemInfo *info;
+  FakeHome *fake_home;
+  gchar *target1 = NULL;
+  gchar *target2 = NULL;
+  gchar *start = NULL;
+  gchar *has_pins = NULL;
+  gchar **values = NULL;
+  gchar **messages = NULL;
+  GFile *symlink = NULL;
+  gboolean seen_pins;
+  gsize i;
+  GError *error = NULL;
+
+  fake_home = fake_home_new ();
+  fake_home_create_structure (fake_home);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, fake_home->env);
+
+  start = g_build_filename (fake_home->pinned_32, "libcurl.so.3", NULL);
+  target1 = g_build_filename (fake_home->pinned_32, "libcurl.so.4", NULL);
+  symlink = g_file_new_for_path (start);
+
+  g_file_make_symbolic_link (symlink, target1, NULL, &error);
+  g_object_unref (symlink);
+  g_assert_no_error (error);
+
+  target2 = g_build_filename (fake_home->i386_usr_lib_i386, "libcurl.so.4.2.0", NULL);
+  g_assert_cmpint (g_creat (target2, 0755), >, -1);
+  symlink = g_file_new_for_path (target1);
+
+  g_file_make_symbolic_link (symlink, target2, NULL, &error);
+  g_object_unref (symlink);
+  g_assert_no_error (error);
+
+  has_pins = g_build_filename (fake_home->pinned_32, "has_pins", NULL);
+  g_assert_cmpint (g_creat (has_pins, 0755), >, -1);
+
+  values = srt_system_info_list_pinned_libs_32 (info, &messages);
+  g_assert_nonnull (values);
+  seen_pins = FALSE;
+  /* The output is not guaranteed to be ordered */
+  g_debug ("pinned_libs_32 content:");
+  for (i = 0; values[i] != NULL; i++)
+    {
+      g_debug ("%s", values[i]);
+
+      if (strstr (values[i], "has_pins") != NULL)
+        seen_pins = TRUE;
+    }
+  /* We placed 3 files in `pinned_libs_32`. We expect to have 3 files plus the folder
+   * itself */
+  g_assert_cmpint (i, ==, 4);
+  g_assert_true (seen_pins);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (messages[0], ==, NULL);
+  g_strfreev (messages);
+
+  /* Repeat the same check, this time using the cached values */
+  values = srt_system_info_list_pinned_libs_32 (info, &messages);
+  g_assert_nonnull (values);
+  seen_pins = FALSE;
+  for (i = 0; values[i] != NULL; i++)
+    {
+      if (strstr (values[i], "has_pins") != NULL)
+        seen_pins = TRUE;
+    }
+  g_assert_cmpint (i, ==, 4);
+  g_assert_true (seen_pins);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (messages[0], ==, NULL);
+  g_strfreev (messages);
+
+  g_free (target1);
+  g_free (target2);
+  g_free (start);
+  g_free (has_pins);
+
+  /* Check pinned_libs_64.
+   * Set again the environ to flush the cached values */
+  srt_system_info_set_environ (info, fake_home->env);
+  start = g_build_filename (fake_home->pinned_64, "libcurl.so.3", NULL);
+  target1 = g_build_filename (fake_home->pinned_64, "libcurl.so.4", NULL);
+  symlink = g_file_new_for_path (start);
+
+  g_file_make_symbolic_link (symlink, target1, NULL, &error);
+  g_object_unref (symlink);
+  g_assert_no_error (error);
+
+  target2 = g_build_filename (fake_home->amd64_usr_lib_64, "libcurl.so.4.2.0", NULL);
+  g_assert_cmpint (g_creat (target2, 0755), >, -1);
+  symlink = g_file_new_for_path (target1);
+
+  g_file_make_symbolic_link (symlink, target2, NULL, &error);
+  g_object_unref (symlink);
+  g_assert_no_error (error);
+
+  has_pins = g_build_filename (fake_home->pinned_64, "has_pins", NULL);
+  g_assert_cmpint (g_creat (has_pins, 0755), >, -1);
+
+  values = srt_system_info_list_pinned_libs_64 (info, &messages);
+  g_assert_nonnull (values);
+  seen_pins = FALSE;
+  g_debug ("pinned_libs_64 content:");
+  for (i = 0; values[i] != NULL; i++)
+    {
+      g_debug ("%s", values[i]);
+
+      if (strstr (values[i], "has_pins") != NULL)
+        seen_pins = TRUE;
+    }
+  g_assert_cmpint (i, ==, 4);
+  g_assert_true (seen_pins);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (messages[0], ==, NULL);
+  g_strfreev (messages);
+
+  /* Repeat the same check, this time using the cached values */
+  values = srt_system_info_list_pinned_libs_64 (info, &messages);
+  g_assert_nonnull (values);
+  seen_pins = FALSE;
+  for (i = 0; values[i] != NULL; i++)
+    {
+      if (strstr (values[i], "has_pins") != NULL)
+        seen_pins = TRUE;
+    }
+  g_assert_cmpint (i, ==, 4);
+  g_assert_true (seen_pins);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (messages[0], ==, NULL);
+  g_strfreev (messages);
+
+  g_free (target1);
+  g_free (target2);
+  g_free (start);
+  g_free (has_pins);
+
+  fake_home_clean_up (fake_home);
+  g_object_unref (info);
+}
+
+static void
+pinned_libraries_permission (Fixture *f,
+                             gconstpointer context)
+{
+  SrtSystemInfo *info;
+  FakeHome *fake_home;
+  gchar *no_access = NULL;
+  gchar **values = NULL;
+  gchar **messages = NULL;
+  gboolean seen_no_access;
+  gsize i;
+
+  fake_home = fake_home_new ();
+  fake_home_create_structure (fake_home);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, fake_home->env);
+
+  no_access = g_build_filename (fake_home->pinned_32, "no_access", NULL);
+  /* Creates a folder without read permissions */
+  g_assert_cmpint (g_mkdir_with_parents (no_access, 0200), ==, 0);
+
+  if (g_access (no_access, R_OK) == 0)
+    {
+      g_test_skip ("This test can't be executed with elevated privileges");
+      goto out;
+    }
+
+  values = srt_system_info_list_pinned_libs_32 (info, &messages);
+  g_assert_nonnull (values);
+  seen_no_access = FALSE;
+  /* The output is not guaranteed to be ordered */
+  g_debug ("pinned_libs_32 content:");
+  for (i = 0; values[i] != NULL; i++)
+    {
+      g_debug ("%s", values[i]);
+
+      if (strstr (values[i], "no_access") != NULL)
+        seen_no_access = TRUE;
+    }
+  /* We placed 1 folder in `pinned_libs_32`. We expect to have 1 folder plus the
+   * parent folder itself */
+  g_assert_cmpint (i, ==, 2);
+  g_assert_true (seen_no_access);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (strstr (messages[0], "no_access"), !=, NULL);
+  g_strfreev (messages);
+
+  g_free (no_access);
+
+  /* Check pinned_libs_64.
+   * Set again the environ to flush the cached values */
+  srt_system_info_set_environ (info, fake_home->env);
+
+  no_access = g_build_filename (fake_home->pinned_64, "no_access", NULL);
+  g_assert_cmpint (g_mkdir_with_parents (no_access, 0311), ==, 0);
+
+  values = srt_system_info_list_pinned_libs_64 (info, &messages);
+  g_assert_nonnull (values);
+  seen_no_access = FALSE;
+  /* The output is not guaranteed to be ordered */
+  g_debug ("pinned_libs_64 content:");
+  for (i = 0; values[i] != NULL; i++)
+    {
+      g_debug ("%s", values[i]);
+
+      if (strstr (values[i], "no_access") != NULL)
+        seen_no_access = TRUE;
+    }
+  /* We placed 1 folder in `pinned_libs_32`. We expect to have 1 folder plus the
+   * parent folder itself */
+  g_assert_cmpint (i, ==, 2);
+  g_assert_true (seen_no_access);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (strstr (messages[0], "no_access"), !=, NULL);
+  g_strfreev (messages);
+
+  out:
+    g_free (no_access);
+    fake_home_clean_up (fake_home);
+    g_object_unref (info);
+}
+
+static void
+pinned_libraries_missing (Fixture *f,
+                          gconstpointer context)
+{
+  SrtSystemInfo *info;
+  FakeHome *fake_home;
+  gchar **values = NULL;
+  gchar **messages = NULL;
+
+  fake_home = fake_home_new ();
+  fake_home_create_structure (fake_home);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, fake_home->env);
+
+  g_assert_cmpint (g_rmdir (fake_home->pinned_32), ==, 0);
+
+  values = srt_system_info_list_pinned_libs_32 (info, &messages);
+  g_assert_nonnull (values);
+  g_assert_cmpstr (values[0], ==, NULL);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (strstr (messages[0], "pinned_libs_32"), !=, NULL);
+  g_strfreev (messages);
+
+  /* Check pinned_libs_64.
+   * Set again the environ to flush the cached values */
+  srt_system_info_set_environ (info, fake_home->env);
+
+  g_assert_cmpint (g_rmdir (fake_home->pinned_64), ==, 0);
+
+  values = srt_system_info_list_pinned_libs_64 (info, &messages);
+  g_assert_nonnull (values);
+  g_assert_cmpstr (values[0], ==, NULL);
+  g_strfreev (values);
+
+  g_assert_nonnull (messages);
+  g_assert_cmpstr (strstr (messages[0], "pinned_libs_64"), !=, NULL);
+  g_strfreev (messages);
+
+  fake_home_clean_up (fake_home);
+  g_object_unref (info);
+}
+
 int
 main (int argc,
       char **argv)
@@ -1717,6 +2167,19 @@ main (int argc,
               setup, os_invalid_os_release, teardown);
   g_test_add ("/system-info/os/no-os-release", Fixture, NULL,
               setup, os_no_os_release, teardown);
+
+  g_test_add ("/system-info/libs/overrides", Fixture, NULL,
+              setup, overrides, teardown);
+  g_test_add ("/system-info/libs/overrides_issues", Fixture, NULL,
+              setup, overrides_issues, teardown);
+  g_test_add ("/system-info/libs/overrides_not_available", Fixture, NULL,
+              setup, overrides_not_available, teardown);
+  g_test_add ("/system-info/libs/pinned_libraries", Fixture, NULL,
+              setup, pinned_libraries, teardown);
+  g_test_add ("/system-info/libs/pinned_libraries_permission", Fixture, NULL,
+              setup, pinned_libraries_permission, teardown);
+  g_test_add ("/system-info/libs/pinned_libraries_missing", Fixture, NULL,
+              setup, pinned_libraries_missing, teardown);
 
   return g_test_run ();
 }

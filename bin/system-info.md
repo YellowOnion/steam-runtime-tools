@@ -138,6 +138,54 @@ keys:
             likely to break the use of libraries from the host system,
             in particular the Mesa graphics drivers.
 
+    **overrides**
+    :   An object representing the libraries that have been
+        overridden when the Steam Runtime is running in a
+        `pressure-vessel` container.
+        These libraries are taken from the host system, instead of being
+        taken from the container like all other libraries.
+
+        **list**
+        :   A human-readable array of overridden libraries.
+            It is currently in `find -ls` format.
+
+        **messages**
+        :   A human-readable array of errors and warning messages about
+            the overridden libraries.
+            It is currently the output on standard error of `find -ls`.
+
+    **pinned_libs_32**
+    :   An object representing the %SRT_ABI_I386 libraries that have been
+        "pinned" when the Steam Runtime is running in an
+        `LD_LIBRARY_PATH`-based environment.
+        These libraries are taken from the Steam Runtime, even if a library
+        of the same SONAME exists on the host system.
+
+        **list**
+        :   A human-readable array of %SRT_ABI_I386 "pinned" libraries.
+            It is currently in `find -ls` format.
+
+        **messages**
+        :   A human-readable array of errors and warning messages about the
+            %SRT_ABI_I386 "pinned" libraries.
+            It is currently the output on standard error of `find -ls`.
+
+    **pinned_libs_64**
+    :   An object representing the %SRT_ABI_X86_64 libraries that have been
+        "pinned" when the Steam Runtime is running in an
+        `LD_LIBRARY_PATH`-based environment.
+        These libraries are taken from the Steam Runtime, even if a library
+        of the same SONAME exists on the host system.
+
+        **list**
+        :   A human-readable array of "pinned" %SRT_ABI_X86_64 libraries.
+            It is currently in `find -ls` format.
+
+        **messages**
+        :   A human-readable array of errors and warning messages about the
+            %SRT_ABI_X86_64 "pinned" libraries.
+            It is currently the output on standard error of `find -ls`.
+
 **os-release**
 :   An object describing the operating system or container in which
     **steam-runtime-system-info** was run. The keys and values are

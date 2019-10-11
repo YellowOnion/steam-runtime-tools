@@ -463,6 +463,9 @@ main (int argc,
   gchar *inst_path = NULL;
   gchar *data_path = NULL;
   gchar *rt_path = NULL;
+  gchar **overrides = NULL;
+  gchar **messages = NULL;
+  gchar **values = NULL;
   int opt;
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
   GList *icds;
@@ -530,17 +533,99 @@ main (int argc,
 
   json_builder_set_member_name (builder, "runtime");
   json_builder_begin_object (builder);
-  json_builder_set_member_name (builder, "path");
-  rt_path = srt_system_info_dup_runtime_path (info);
-  json_builder_add_string_value (builder, rt_path);
-  json_builder_set_member_name (builder, "version");
-  version = srt_system_info_dup_runtime_version (info);
-  json_builder_add_string_value (builder, version);
-  json_builder_set_member_name (builder, "issues");
-  json_builder_begin_array (builder);
-  runtime_issues = srt_system_info_get_runtime_issues (info);
-  jsonify_runtime_issues (builder, runtime_issues);
-  json_builder_end_array (builder);
+    {
+      json_builder_set_member_name (builder, "path");
+      rt_path = srt_system_info_dup_runtime_path (info);
+      json_builder_add_string_value (builder, rt_path);
+      json_builder_set_member_name (builder, "version");
+      version = srt_system_info_dup_runtime_version (info);
+      json_builder_add_string_value (builder, version);
+      json_builder_set_member_name (builder, "issues");
+      json_builder_begin_array (builder);
+      runtime_issues = srt_system_info_get_runtime_issues (info);
+      jsonify_runtime_issues (builder, runtime_issues);
+      json_builder_end_array (builder);
+
+      if (g_strcmp0 (rt_path, "/") == 0)
+        {
+          overrides = srt_system_info_list_pressure_vessel_overrides (info, &messages);
+
+          json_builder_set_member_name (builder, "overrides");
+          json_builder_begin_object (builder);
+          if (overrides != NULL && overrides[0] != NULL)
+            {
+              json_builder_set_member_name (builder, "list");
+              json_builder_begin_array (builder);
+              for (gsize i = 0; overrides[i] != NULL; i++)
+                json_builder_add_string_value (builder, overrides[i]);
+              json_builder_end_array (builder);
+            }
+          if (messages != NULL && messages[0] != NULL)
+            {
+              json_builder_set_member_name (builder, "messages");
+              json_builder_begin_array (builder);
+              for (gsize i = 0; messages[i] != NULL; i++)
+                json_builder_add_string_value (builder, messages[i]);
+              json_builder_end_array (builder);
+            }
+          json_builder_end_object (builder);
+
+          g_strfreev (overrides);
+          g_strfreev (messages);
+        }
+
+      if (rt_path != NULL && g_strcmp0 (rt_path, "/") != 0)
+      {
+        values = srt_system_info_list_pinned_libs_32 (info, &messages);
+
+        json_builder_set_member_name (builder, "pinned_libs_32");
+        json_builder_begin_object (builder);
+        if (values != NULL && values[0] != NULL)
+          {
+            json_builder_set_member_name (builder, "list");
+            json_builder_begin_array (builder);
+            for (gsize i = 0; values[i] != NULL; i++)
+              json_builder_add_string_value (builder, values[i]);
+            json_builder_end_array (builder);
+          }
+        if (messages != NULL && messages[0] != NULL)
+          {
+            json_builder_set_member_name (builder, "messages");
+            json_builder_begin_array (builder);
+            for (gsize i = 0; messages[i] != NULL; i++)
+              json_builder_add_string_value (builder, messages[i]);
+            json_builder_end_array (builder);
+          }
+        json_builder_end_object (builder);
+
+        g_strfreev (values);
+        g_strfreev (messages);
+        values = srt_system_info_list_pinned_libs_64 (info, &messages);
+
+        json_builder_set_member_name (builder, "pinned_libs_64");
+        json_builder_begin_object (builder);
+        if (values != NULL && values[0] != NULL)
+          {
+            json_builder_set_member_name (builder, "list");
+            json_builder_begin_array (builder);
+            for (gsize i = 0; values[i] != NULL; i++)
+              json_builder_add_string_value (builder, values[i]);
+            json_builder_end_array (builder);
+          }
+        if (messages != NULL && messages[0] != NULL)
+          {
+            json_builder_set_member_name (builder, "messages");
+            json_builder_begin_array (builder);
+            for (gsize i = 0; messages[i] != NULL; i++)
+              json_builder_add_string_value (builder, messages[i]);
+            json_builder_end_array (builder);
+          }
+        json_builder_end_object (builder);
+
+        g_strfreev (values);
+        g_strfreev (messages);
+      }
+    }
   json_builder_end_object (builder);
 
   json_builder_set_member_name (builder, "os-release");

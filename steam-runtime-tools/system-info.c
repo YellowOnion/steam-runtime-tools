@@ -124,6 +124,20 @@ struct _SrtSystemInfo
     gboolean have_egl;
     gboolean have_vulkan;
   } icds;
+  struct
+  {
+    gchar **values;
+    gchar **messages;
+    gboolean have_data;
+  } overrides;
+  struct
+  {
+    gchar **values_32;
+    gchar **messages_32;
+    gchar **values_64;
+    gchar **messages_64;
+    gboolean have_data;
+  } pinned_libs;
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
@@ -354,6 +368,30 @@ forget_icds (SrtSystemInfo *self)
   self->icds.vulkan = NULL;
 }
 
+/*
+ * Forget any cached information about overrides.
+ */
+static void
+forget_overrides (SrtSystemInfo *self)
+{
+  g_clear_pointer (&self->overrides.values, g_strfreev);
+  g_clear_pointer (&self->overrides.messages, g_strfreev);
+  self->overrides.have_data = FALSE;
+}
+
+/*
+ * Forget any cached information about pinned libraries.
+ */
+static void
+forget_pinned_libs (SrtSystemInfo *self)
+{
+  g_clear_pointer (&self->pinned_libs.values_32, g_strfreev);
+  g_clear_pointer (&self->pinned_libs.messages_32, g_strfreev);
+  g_clear_pointer (&self->pinned_libs.values_64, g_strfreev);
+  g_clear_pointer (&self->pinned_libs.messages_64, g_strfreev);
+  self->pinned_libs.have_data = FALSE;
+}
+
 static void
 srt_system_info_finalize (GObject *object)
 {
@@ -362,6 +400,8 @@ srt_system_info_finalize (GObject *object)
   forget_icds (self);
   forget_locales (self);
   forget_os (self);
+  forget_overrides (self);
+  forget_pinned_libs (self);
   forget_runtime (self);
   forget_steam (self);
 
@@ -565,6 +605,305 @@ ensure_expectations (SrtSystemInfo *self)
     }
 
   return self->expectations[0] != '\0';
+}
+
+static void
+ensure_overrides_cached (SrtSystemInfo *self)
+{
+  const gchar *argv[] = {"find", "overrides", "-ls", NULL};
+  const char *sysroot = NULL;
+  gchar *output = NULL;
+  gchar *messages = NULL;
+  gchar *overrides_path = NULL;
+  gchar *runtime = NULL;
+  int exit_status = -1;
+  GError *error = NULL;
+
+  if (!self->overrides.have_data)
+    {
+      if (self->env != NULL)
+        sysroot = g_environ_getenv (self->env, "SRT_TEST_SYSROOT");
+      else
+        sysroot = g_getenv ("SRT_TEST_SYSROOT");
+
+      self->overrides.have_data = TRUE;
+
+      runtime = srt_system_info_dup_runtime_path (self);
+      /* Skip checking the overridden folder if we are not in a pressure-vessel
+       * Steam Runtime container */
+      if (g_strcmp0 (runtime, "/") != 0)
+        goto out;
+
+      if (!g_spawn_sync (sysroot == NULL ? "/" : sysroot, /* working directory */
+                        (gchar **) argv,
+                        get_environ (self),
+                        G_SPAWN_SEARCH_PATH,
+                        NULL,    /* child setup */
+                        NULL,    /* user data */
+                        &output, /* stdout */
+                        &messages, /* stderr */
+                        &exit_status,
+                        &error))
+        {
+          g_debug ("An error occurred calling the \"find\" binary: %s", error->message);
+          self->overrides.messages = g_new0 (gchar *, 2);
+          self->overrides.messages[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
+          self->overrides.messages[1] = NULL;
+          goto out;
+        }
+
+      if (exit_status != 0)
+        g_debug ("... wait status %d", exit_status);
+
+      if (output != NULL)
+        {
+          g_strchomp (output);
+          self->overrides.values = g_strsplit (output, "\n", -1);
+        }
+
+      if (messages != NULL)
+        {
+          g_strchomp (messages);
+          self->overrides.messages = g_strsplit (messages, "\n", -1);
+        }
+    }
+
+  out:
+    g_free (output);
+    g_free (messages);
+    g_free (overrides_path);
+    g_free (runtime);
+    g_clear_error (&error);
+}
+
+/**
+ * srt_system_info_list_pressure_vessel_overrides:
+ * @self: The #SrtSystemInfo object
+ * @messages: (optional) (out) (array zero-terminated=1) (transfer full): If
+ *  not %NULL, used to return a %NULL-terminated array of diagnostic
+ *  messages. Free with g_strfreev().
+ *
+ * If running in a Steam Runtime container using `pressure-vessel`,
+ * list the libraries from the container that have been overridden
+ * with libraries from the host system.
+ *
+ * The output is intended to be human-readable debugging information,
+ * rather than something to use programmatically, and its format is
+ * not guaranteed. It is currently in `find -ls` format.
+ *
+ * Similarly, @messages is intended to be human-readable debugging
+ * information. It is currently whatever was output on standard error
+ * by `find -ls`.
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (nullable): A
+ *  %NULL-terminated array of libraries that have been overridden,
+ *  or %NULL if this process does not appear to be in a pressure-vessel
+ *  container. Free with g_strfreev().
+ */
+gchar **
+srt_system_info_list_pressure_vessel_overrides (SrtSystemInfo *self,
+                                                gchar ***messages)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_overrides_cached (self);
+
+  if (messages != NULL)
+    *messages = g_strdupv (self->overrides.messages);
+
+  return g_strdupv (self->overrides.values);
+}
+
+static void
+ensure_pinned_libs_cached (SrtSystemInfo *self)
+{
+  gchar *output = NULL;
+  gchar *messages = NULL;
+  gchar *runtime = NULL;
+  int exit_status = -1;
+  GError *error = NULL;
+
+  if (!self->pinned_libs.have_data)
+    {
+      runtime = srt_system_info_dup_runtime_path (self);
+
+      self->pinned_libs.have_data = TRUE;
+
+      if (runtime == NULL || g_strcmp0 (runtime, "/") == 0)
+        return;
+
+      const gchar *argv[] = {"find", "pinned_libs_32", "-ls", NULL};
+
+      if (!g_spawn_sync (runtime, /* working directory */
+                        (gchar **) argv,
+                        get_environ (self),
+                        G_SPAWN_SEARCH_PATH,
+                        NULL,    /* child setup */
+                        NULL,    /* user data */
+                        &output, /* stdout */
+                        &messages, /* stderr */
+                        &exit_status,
+                        &error))
+        {
+          g_debug ("An error occurred calling the \"find\" binary: %s", error->message);
+          self->pinned_libs.messages_32 = g_new0 (gchar *, 2);
+          self->pinned_libs.messages_32[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
+          self->pinned_libs.messages_32[1] = NULL;
+          goto out;
+        }
+
+      if (exit_status != 0)
+        g_debug ("... wait status %d", exit_status);
+
+      if (output != NULL)
+        {
+          g_strchomp (output);
+          self->pinned_libs.values_32 = g_strsplit (output, "\n", -1);
+        }
+
+      if (messages != NULL)
+        {
+          g_strchomp (messages);
+          self->pinned_libs.messages_32 = g_strsplit (messages, "\n", -1);
+        }
+
+      g_free (output);
+      g_free (messages);
+
+      /* Do the same check for `pinned_libs_64` */
+      argv[1] = "pinned_libs_64";
+
+      if (!g_spawn_sync (runtime,    /* working directory */
+                        (gchar **) argv,
+                        get_environ (self),
+                        G_SPAWN_SEARCH_PATH,
+                        NULL,    /* child setup */
+                        NULL,    /* user data */
+                        &output, /* stdout */
+                        &messages, /* stderr */
+                        &exit_status,
+                        &error))
+        {
+          g_debug ("An error occurred calling the \"find\" binary: %s", error->message);
+          self->pinned_libs.messages_64 = g_new0 (gchar *, 2);
+          self->pinned_libs.messages_64[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
+          self->pinned_libs.messages_64[1] = NULL;
+          goto out;
+        }
+
+      if (exit_status != 0)
+        g_debug ("... wait status %d", exit_status);
+
+      if (output != NULL)
+        {
+          g_strchomp (output);
+          self->pinned_libs.values_64 = g_strsplit (output, "\n", -1);
+        }
+
+      if (messages != NULL)
+        {
+          g_strchomp (messages);
+          self->pinned_libs.messages_64 = g_strsplit (messages, "\n", -1);
+        }
+    }
+
+  out:
+    g_clear_error (&error);
+    g_free (output);
+    g_free (messages);
+    g_free (runtime);
+}
+
+/**
+ * srt_system_info_list_pinned_libs_32:
+ * @self: The #SrtSystemInfo object
+ * @messages: (optional) (out) (array zero-terminated=1) (transfer full): If
+ *  not %NULL, used to return a %NULL-terminated array of diagnostic
+ *  messages. Free with g_strfreev().
+ *
+ * If running in an `LD_LIBRARY_PATH`-based Steam Runtime, return
+ * information about %SRT_ABI_I386 libraries that have been "pinned".
+ * Normally, the Steam Runtime infrastructure prefers to use shared
+ * libraries from the host OS, if available, rather than the
+ * library of the same `SONAME` from the Steam Runtime. However, if
+ * a library in the Steam Runtime is newer then the version in the
+ * host OS, or if it is known to be incompatible with newer
+ * libraries with the same `SONAME`, then the library from the
+ * Steam Runtime is said to have been "pinned": it is used with a
+ * higher precedence than libraries from the host OS.
+ *
+ * If not in an `LD_LIBRARY_PATH`-based Steam Runtime, return %NULL.
+ *
+ * The output is intended to be human-readable debugging information,
+ * rather than something to use programmatically, and its format is
+ * not guaranteed. It is currently in `find -ls` format.
+ *
+ * Similarly, @messages is intended to be human-readable debugging
+ * information. It is currently whatever was output on standard error
+ * by `find -ls`.
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable):
+ *  An array of strings, or %NULL if we were unable to call "find".
+ *  Free with g_strfreev().
+ */
+gchar **
+srt_system_info_list_pinned_libs_32 (SrtSystemInfo *self,
+                                     gchar ***messages)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_pinned_libs_cached (self);
+
+  if (messages != NULL)
+    *messages = g_strdupv (self->pinned_libs.messages_32);
+
+  return g_strdupv (self->pinned_libs.values_32);
+}
+
+/**
+ * srt_system_info_list_pinned_libs_64:
+ * @self: The #SrtSystemInfo object
+ * @messages: (optional) (out) (array zero-terminated=1) (transfer full): If
+ *  not %NULL, used to return a %NULL-terminated array of diagnostic
+ *  messages. Free with g_strfreev().
+ *
+ * If running in an `LD_LIBRARY_PATH`-based Steam Runtime, return
+ * information about %SRT_ABI_X86_64 libraries that have been "pinned".
+ * Normally, the Steam Runtime infrastructure prefers to use shared
+ * libraries from the host OS, if available, rather than the
+ * library of the same `SONAME` from the Steam Runtime. However, if
+ * a library in the Steam Runtime is newer then the version in the
+ * host OS, or if it is known to be incompatible with newer
+ * libraries with the same `SONAME`, then the library from the
+ * Steam Runtime is said to have been "pinned": it is used with a
+ * higher precedence than libraries from the host OS.
+ *
+ * If not in an `LD_LIBRARY_PATH`-based Steam Runtime, return %NULL.
+ *
+ * The output is intended to be human-readable debugging information,
+ * rather than something to use programmatically, and its format is
+ * not guaranteed. It is currently in `find -ls` format.
+ *
+ * Similarly, @messages is intended to be human-readable debugging
+ * information. It is currently whatever was output on standard error
+ * by `find -ls`.
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable):
+ *  An array of strings, or %NULL if we were unable to call "find".
+ *  Free with g_strfreev().
+ */
+gchar **
+srt_system_info_list_pinned_libs_64 (SrtSystemInfo *self,
+                                     gchar ***messages)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_pinned_libs_cached (self);
+
+  if (messages != NULL)
+    *messages = g_strdupv (self->pinned_libs.messages_64);
+
+  return g_strdupv (self->pinned_libs.values_64);
 }
 
 /**
@@ -1044,6 +1383,8 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_graphics_results (self);
   forget_locales (self);
   forget_os (self);
+  forget_overrides (self);
+  forget_pinned_libs (self);
   g_strfreev (self->env);
   self->env = g_strdupv ((gchar **) env);
 

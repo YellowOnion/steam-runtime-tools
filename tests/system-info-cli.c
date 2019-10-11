@@ -514,6 +514,10 @@ steam_presence (Fixture *f,
   array = json_object_get_array_member (json_sub_object, "issues");
   g_assert_cmpint (json_array_get_length (array), ==, 0);
 
+  g_assert_false (json_object_has_member (json_sub_object, "overrides"));
+  g_assert_true (json_object_has_member (json_sub_object, "pinned_libs_32"));
+  g_assert_true (json_object_has_member (json_sub_object, "pinned_libs_64"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   
   fake_home_clean_up (fake_home);

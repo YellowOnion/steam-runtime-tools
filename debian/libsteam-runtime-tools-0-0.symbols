@@ -70,6 +70,9 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_get_steam_issues@Base 0.20190816.0
  srt_system_info_get_type@Base 0.20190801.0
  srt_system_info_list_egl_icds@Base 0.20190926.0
+ srt_system_info_list_pinned_libs_32@Base 0.20191024.0
+ srt_system_info_list_pinned_libs_64@Base 0.20191024.0
+ srt_system_info_list_pressure_vessel_overrides@Base 0.20191024.0
  srt_system_info_list_vulkan_icds@Base 0.20190926.0
  srt_system_info_new@Base 0.20190801.0
  srt_system_info_set_environ@Base 0.20190816.0

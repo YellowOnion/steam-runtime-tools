@@ -1,3 +1,15 @@
+steam-runtime-tools (0.20191024.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Fix gtk-doc warnings about missing parameters
+  * Add runtime content check for "overrides" and pinned libraries
+
+  [ Simon McVittie ]
+  * COPYING: Remove obsolete reference to GPL code, which was removed
+    a while ago
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 24 Oct 2019 16:05:21 +0100
+
 steam-runtime-tools (0.20190926.1-0+steamrt1.1) scout; urgency=medium
 
   * tests: Replace SRT_TEST_ICD_SYSROOT with SRT_TEST_SYSROOT

@@ -53,6 +53,7 @@ GType srt_graphics_get_type (void);
  * @SRT_GRAPHICS_ISSUES_TIMEOUT: The check for this graphics stack took
  *  too long to run and was terminated. This is likely to indicate that
  *  the graphics stack causes the process using it to hang.
+ * @SRT_GRAPHICS_ISSUES_CANNOT_DRAW: The drawing test failed
  *
  * A bitfield with flags representing problems with the graphics stack, or
  * %SRT_GRAPHICS_ISSUES_NONE (which is numerically zero) if no problems
@@ -67,6 +68,7 @@ typedef enum
   SRT_GRAPHICS_ISSUES_CANNOT_LOAD = (1 << 1),
   SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING = (1 << 2),
   SRT_GRAPHICS_ISSUES_TIMEOUT = (1 << 3),
+  SRT_GRAPHICS_ISSUES_CANNOT_DRAW = (1 << 4)
 } SrtGraphicsIssues;
 
 /**

@@ -283,53 +283,127 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
-/**
- * _srt_check_graphics:
- * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
- * @test_flags: Flags used during automated testing
- * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
- * @winsys: The window system to check.
- * @renderer: The graphics renderer to check.
- * @details_out: The SrtGraphics object containing the details of the check.
- *
- * Return the problems found when checking the graphics stack given.
- *
- * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
- *  if no problems were found
+/*
+ * @parser: The JsonParser to process the wflinfo results from.
+ * @version_string: (out) (transfer none) (not optional):
+ * @renderer_string: (out) (transfer none) (not optional):
  */
-G_GNUC_INTERNAL SrtGraphicsIssues
-_srt_check_graphics (const char *helpers_path,
-                     SrtTestFlags test_flags,
-                     const char *multiarch_tuple,
-                     SrtWindowSystem window_system,
-                     SrtRenderingInterface rendering_interface,
-                     SrtGraphics **details_out)
+static SrtGraphicsIssues
+_srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gchar **renderer_string)
 {
-  GPtrArray *argv = NULL;
-  gchar *output = NULL;
-  gchar *child_stderr = NULL;
-  int exit_status = -1;
-  JsonParser *parser = NULL;
-  JsonNode *node = NULL;
-  JsonObject *object = NULL;
+  g_return_val_if_fail (version_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+
+  JsonNode *node = json_parser_get_root (parser);
+  JsonObject *object = json_node_get_object (node);
   JsonNode *sub_node = NULL;
   JsonObject *sub_object = NULL;
-  const gchar *version_string = NULL;
-  gchar *new_version_string = NULL;
-  const gchar *renderer_string = NULL;
-  GError *error = NULL;
-  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
-  GStrv my_environ = NULL;
-  const gchar *ld_preload;
-  gchar *filtered_preload = NULL;
-  gboolean parse_wflinfo = TRUE;
 
-  g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (window_system >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (window_system < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (rendering_interface >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (rendering_interface < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  if (!json_object_has_member (object, "OpenGL"))
+    {
+      g_debug ("The json output doesn't contain an OpenGL object");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  sub_node = json_object_get_member (object, "OpenGL");
+  sub_object = json_node_get_object (sub_node);
+
+  if (!json_object_has_member (sub_object, "version string") ||
+      !json_object_has_member (sub_object, "renderer string"))
+    {
+      g_debug ("Json output is missing version or renderer");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  *version_string = json_object_get_string_member (sub_object, "version string");
+  *renderer_string = json_object_get_string_member (sub_object, "renderer string");
+
+  /* Check renderer to see if we are using software rendering */
+  if (strstr (*renderer_string, "llvmpipe") != NULL ||
+      strstr (*renderer_string, "software rasterizer") != NULL ||
+      strstr (*renderer_string, "softpipe") != NULL)
+    {
+      issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
+    }
+  return issues;
+}
+
+/*
+ * @parser: The JsonParser to process the vulkaninfo results from.
+ * @new_version_string: (out) (transfer full) (not optional):
+ * @renderer_string: (out) (transfer none) (not optional):
+ */
+static SrtGraphicsIssues
+_srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const gchar **renderer_string)
+{
+  g_return_val_if_fail (new_version_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  JsonNode *node = json_parser_get_root (parser);
+  JsonObject *object = json_node_get_object (node);
+  JsonNode *sub_node = NULL;
+  JsonObject *sub_object = NULL;
+
+  // Parse vulkaninfo output
+  unsigned int api_version = 0;
+  unsigned int hw_vendor = 0;
+  unsigned int hw_device = 0;
+  unsigned int driver_version = 0;
+
+  if (!json_object_has_member (object, "VkPhysicalDeviceProperties"))
+    {
+      g_debug ("The json output doesn't contain VkPhysicalDeviceProperties");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  sub_node = json_object_get_member (object, "VkPhysicalDeviceProperties");
+  sub_object = json_node_get_object (sub_node);
+
+  if (!json_object_has_member (sub_object, "deviceName") ||
+      !json_object_has_member (sub_object, "driverVersion") ||
+      !json_object_has_member (sub_object, "apiVersion") ||
+      !json_object_has_member (sub_object, "deviceID") ||
+      !json_object_has_member (sub_object, "vendorID"))
+    {
+      g_debug ("Json output is missing deviceName or driverVersion");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
+  api_version = json_object_get_int_member (sub_object, "apiVersion");
+  hw_vendor = json_object_get_int_member (sub_object, "vendorID");
+  driver_version = json_object_get_int_member (sub_object, "driverVersion");
+  hw_device = json_object_get_int_member (sub_object, "deviceID");
+
+  *new_version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
+                                        VK_VERSION_MAJOR (api_version),
+                                        VK_VERSION_MINOR (api_version),
+                                        VK_VERSION_PATCH (api_version),
+                                        hw_vendor,
+                                        hw_device,
+                                        VK_VERSION_MAJOR (driver_version),
+                                        VK_VERSION_MINOR (driver_version),
+                                        VK_VERSION_PATCH (driver_version));
+  *renderer_string = json_object_get_string_member (sub_object, "deviceName");
+
+  /* NOTE: No need to check for software rendering with vulkan yet */
+  return issues;
+}
+
+static GPtrArray *
+_argv_for_graphics_test (const char *helpers_path,
+                         SrtTestFlags test_flags,
+                         const char *multiarch_tuple,
+                         SrtWindowSystem window_system,
+                         SrtRenderingInterface rendering_interface)
+{
+  GPtrArray *argv = NULL;
 
   gchar *platformstring = NULL;
 
@@ -346,20 +420,20 @@ _srt_check_graphics (const char *helpers_path,
           g_critical ("GLX window system only makes sense with GL "
                       "rendering interface, not %d",
                       rendering_interface);
-          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+          g_return_val_if_reached (NULL);
         }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_X11)
     {
       if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
         {
-           platformstring = g_strdup ("glx");
-           window_system = SRT_WINDOW_SYSTEM_GLX;
+          platformstring = g_strdup ("glx");
+          window_system = SRT_WINDOW_SYSTEM_GLX;
         }
       else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
         {
-           platformstring = g_strdup ("x11_egl");
-           window_system = SRT_WINDOW_SYSTEM_EGL_X11;
+          platformstring = g_strdup ("x11_egl");
+          window_system = SRT_WINDOW_SYSTEM_EGL_X11;
         }
       else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
         {
@@ -369,7 +443,7 @@ _srt_check_graphics (const char *helpers_path,
         {
           /* should not be reached because the precondition checks
            * should have caught this */
-          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+          g_return_val_if_reached (NULL);
         }
     }
   else if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
@@ -385,14 +459,14 @@ _srt_check_graphics (const char *helpers_path,
           g_critical ("EGL window system only makes sense with a GL-based "
                       "rendering interface, not %d",
                       rendering_interface);
-          g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+          g_return_val_if_reached (NULL);
         }
     }
   else
     {
       /* should not be reached because the precondition checks should
        * have caught this */
-      g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+      g_return_val_if_reached (NULL);
     }
 
   // Use timeout command to limit how long the helper can run
@@ -443,7 +517,6 @@ _srt_check_graphics (const char *helpers_path,
     }
   else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
     {
-      parse_wflinfo = FALSE;
       if (helpers_path != NULL)
         {
           g_ptr_array_add (argv, g_strdup_printf ("%s/%s-vulkaninfo", helpers_path, multiarch_tuple));
@@ -458,10 +531,108 @@ _srt_check_graphics (const char *helpers_path,
     {
       /* should not be reached because the precondition checks should
        * have caught this */
-      g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+      g_return_val_if_reached (NULL);
     }
 
   g_ptr_array_add (argv, NULL);
+
+  g_free (platformstring);
+
+  return argv;
+}
+
+
+static GPtrArray *
+_argv_for_check_vulkan (const char *helpers_path,
+                        SrtTestFlags test_flags,
+                        const char *multiarch_tuple)
+{
+  GPtrArray *argv = g_ptr_array_new_with_free_func (g_free);
+
+  // Use timeout command to limit how long the helper can run
+  g_ptr_array_add (argv, g_strdup ("timeout"));
+  g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
+
+  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
+    {
+      // Speed up the failing case in automated testing
+      g_ptr_array_add (argv, g_strdup ("--kill-after=1"));
+      g_ptr_array_add (argv, g_strdup ("1"));
+    }
+  else
+    {
+      // Kill the helper (if still running) 3 seconds after the TERM signal
+      g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
+      // Send TERM signal after 10 seconds
+      g_ptr_array_add (argv, g_strdup ("10"));
+    }
+
+  if (helpers_path != NULL)
+    {
+      g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-vulkan", helpers_path, multiarch_tuple));
+    }
+  else
+    {
+      g_ptr_array_add (argv, g_strdup_printf ("%s-check-vulkan", multiarch_tuple));
+    }
+
+  g_ptr_array_add (argv, NULL);
+
+  return argv;
+}
+
+/**
+ * _srt_check_graphics:
+ * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
+ * @test_flags: Flags used during automated testing
+ * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
+ * @winsys: The window system to check.
+ * @renderer: The graphics renderer to check.
+ * @details_out: The SrtGraphics object containing the details of the check.
+ *
+ * Return the problems found when checking the graphics stack given.
+ *
+ * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
+ *  if no problems were found
+ */
+G_GNUC_INTERNAL SrtGraphicsIssues
+_srt_check_graphics (const char *helpers_path,
+                     SrtTestFlags test_flags,
+                     const char *multiarch_tuple,
+                     SrtWindowSystem window_system,
+                     SrtRenderingInterface rendering_interface,
+                     SrtGraphics **details_out)
+{
+  gchar *output = NULL;
+  gchar *child_stderr = NULL;
+  gchar *child_stderr2 = NULL;
+  int exit_status = -1;
+  JsonParser *parser = NULL;
+  const gchar *version_string = NULL;
+  gchar *new_version_string = NULL;
+  const gchar *renderer_string = NULL;
+  GError *error = NULL;
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  GStrv my_environ = NULL;
+  const gchar *ld_preload;
+  gchar *filtered_preload = NULL;
+  gboolean parse_wflinfo = (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN);
+
+  g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (window_system >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (window_system < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (rendering_interface >= 0, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (rendering_interface < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  GPtrArray *argv = _argv_for_graphics_test (helpers_path,
+                                             test_flags,
+                                             multiarch_tuple,
+                                             window_system,
+                                             rendering_interface);
+
+  if (argv == NULL)
+    return SRT_GRAPHICS_ISSUES_INTERNAL_ERROR;
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
@@ -513,89 +684,67 @@ _srt_check_graphics (const char *helpers_path,
       goto out;
     }
 
-  node = json_parser_get_root (parser);
-  object = json_node_get_object (node);
-
   /* Process json output */
   if (parse_wflinfo)
     {
-      if (!json_object_has_member (object, "OpenGL"))
-        {
-          g_debug ("The json output doesn't contain an OpenGL object");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
-
-      sub_node = json_object_get_member (object, "OpenGL");
-      sub_object = json_node_get_object (sub_node);
-
-      if (!json_object_has_member (sub_object, "version string") ||
-          !json_object_has_member (sub_object, "renderer string"))
-        {
-          g_debug ("Json output is missing version or renderer");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
-
-      version_string = json_object_get_string_member (sub_object, "version string");
-      renderer_string = json_object_get_string_member (sub_object, "renderer string");
-
-      /* Check renderer to see if we are using software rendering */
-      if (strstr (renderer_string, "llvmpipe") != NULL ||
-          strstr (renderer_string, "software rasterizer") != NULL ||
-          strstr (renderer_string, "softpipe") != NULL)
-        {
-          issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
-        }
+      issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
     }
   else
     {
-      // Parse vulkaninfo output
-      unsigned int api_version = 0;
-      unsigned int hw_vendor = 0;
-      unsigned int hw_device = 0;
-      unsigned int driver_version = 0;
-
-      if (!json_object_has_member (object, "VkPhysicalDeviceProperties"))
+      issues |= _srt_process_vulkaninfo (parser, &new_version_string, &renderer_string);
+      if (new_version_string != NULL)
         {
-          g_debug ("The json output doesn't contain VkPhysicalDeviceProperties");
+          version_string = new_version_string;
+        }
+
+      /* Now perform *-check-vulkan drawing test */
+      g_ptr_array_unref (argv);
+      g_clear_pointer (&output, g_free);
+
+      argv = _argv_for_check_vulkan (helpers_path,
+                                     test_flags,
+                                     multiarch_tuple);
+
+      g_return_val_if_fail (argv != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+      /* Now run and report exit code/messages if failure */
+      if (!g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv->pdata,
+                         my_environ,    /* envp */
+                         G_SPAWN_SEARCH_PATH,       /* flags */
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         &child_stderr2,
+                         &exit_status,
+                         &error))
+        {
+          g_debug ("An error occurred calling the helper: %s", error->message);
           issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
           goto out;
         }
 
-      sub_node = json_object_get_member (object, "VkPhysicalDeviceProperties");
-      sub_object = json_node_get_object (sub_node);
-
-      if (!json_object_has_member (sub_object, "deviceName") ||
-          !json_object_has_member (sub_object, "driverVersion") ||
-          !json_object_has_member (sub_object, "apiVersion") ||
-          !json_object_has_member (sub_object, "deviceID") ||
-          !json_object_has_member (sub_object, "vendorID"))
+      if (child_stderr2 != NULL && child_stderr2[0] != '\0')
         {
-          g_debug ("Json output is missing deviceName or driverVersion");
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-          goto out;
+          gchar *tmp = g_strconcat (child_stderr, child_stderr2, NULL);
+
+          g_free (child_stderr);
+          child_stderr = tmp;
         }
+      g_free (child_stderr2);
 
-      api_version = json_object_get_int_member (sub_object, "apiVersion");
-      hw_vendor = json_object_get_int_member (sub_object, "vendorID");
-      driver_version = json_object_get_int_member (sub_object, "driverVersion");
-      hw_device = json_object_get_int_member (sub_object, "deviceID");
+      if (exit_status != 0)
+        {
+          g_debug ("... wait status %d", exit_status);
+          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
 
-      new_version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
-                                            VK_VERSION_MAJOR (api_version),
-                                            VK_VERSION_MINOR (api_version),
-                                            VK_VERSION_PATCH (api_version),
-                                            hw_vendor,
-                                            hw_device,
-                                            VK_VERSION_MAJOR (driver_version),
-                                            VK_VERSION_MINOR (driver_version),
-                                            VK_VERSION_PATCH (driver_version));
-      version_string = new_version_string;
-
-      renderer_string = json_object_get_string_member (sub_object, "deviceName");
-
-      /* NOTE: No need to check for software rendering with vulkan yet */
+          // TERM signal gives us 124 from timeout man page
+          if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+            {
+              g_debug ("helper killed by timeout command");
+              issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
+            }
+        }
     }
 
 out:
@@ -616,7 +765,6 @@ out:
   g_free (output);
   g_free (child_stderr);
   g_clear_error (&error);
-  g_free (platformstring);
   g_free (filtered_preload);
   g_strfreev (my_environ);
   return issues;

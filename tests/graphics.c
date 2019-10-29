@@ -510,6 +510,50 @@ test_bad_vulkan (Fixture *f,
 }
 
 /*
+ * Test a mock system with vulkan driver but check-vulkan failure
+ */
+static void
+test_mixed_vulkan (Fixture *f,
+                 gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-mixed",
+                                           SRT_WINDOW_SYSTEM_X11,
+                                           SRT_RENDERING_INTERFACE_VULKAN,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
+                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
+                   SRT_TEST_GOOD_VULKAN_VERSION);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+  g_assert_cmpstr (tuple, ==, "mock-mixed");
+  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
+  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_VULKAN_VERSION);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+/*
  * Assert that @icd is internally consistent.
  */
 static void
@@ -1350,6 +1394,8 @@ main (int argc,
               setup, test_good_vulkan, teardown);
   g_test_add ("/vulkan-bad", Fixture, NULL,
               setup, test_bad_vulkan, teardown);
+  g_test_add ("/vulkan-mixed", Fixture, NULL,
+              setup, test_mixed_vulkan, teardown);
 
   g_test_add ("/icd/egl/basic", Fixture, NULL,
               setup, test_icd_egl, teardown);

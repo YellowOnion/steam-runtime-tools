@@ -37,6 +37,10 @@
 #include <cstdint>
 #include <set>
 
+extern "C" {
+#include <getopt.h>
+};
+
 const int WIDTH = 200;
 const int HEIGHT = 200;
 
@@ -919,10 +923,43 @@ private:
     }
 };
 
-int main(__attribute__((__unused__)) int argc, char** argv) {
+enum {
+    OPTION_HELP = 1,
+};
+
+static struct option long_options[] = {
+    { "help", no_argument, NULL, OPTION_HELP },
+    { NULL, 0, NULL, 0 }
+};
+
+static void usage(int code) __attribute__((__noreturn__));
+static void usage(int code) {
+    std::ostream& stream = (code == EXIT_SUCCESS ? std::cout : std::cerr);
+
+    stream << "Usage: " << argv0 << " [OPTIONS]" << std::endl;
+    stream << "Options:" << std::endl;
+    stream << "--help\t\tShow this help and exit" << std::endl;
+    std::exit(code);
+}
+
+int main(int argc, char** argv) {
+    int opt;
     HelloTriangleApplication app;
 
     argv0 = argv[0];
+
+    while ((opt = getopt_long(argc, argv, "", long_options, NULL)) != -1) {
+        switch (opt) {
+            case OPTION_HELP:
+                usage(0);
+                break;  // not reached
+
+            case '?':
+            default:
+                usage(2);
+                break;  // not reached
+        }
+    }
 
     try {
         app.run();

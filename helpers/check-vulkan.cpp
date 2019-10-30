@@ -925,10 +925,12 @@ private:
 
 enum {
     OPTION_HELP = 1,
+    OPTION_VERSION,
 };
 
 static struct option long_options[] = {
     { "help", no_argument, NULL, OPTION_HELP },
+    { "version", no_argument, NULL, OPTION_VERSION },
     { NULL, 0, NULL, 0 }
 };
 
@@ -939,6 +941,7 @@ static void usage(int code) {
     stream << "Usage: " << argv0 << " [OPTIONS]" << std::endl;
     stream << "Options:" << std::endl;
     stream << "--help\t\tShow this help and exit" << std::endl;
+    stream << "--version\tShow version and exit" << std::endl;
     std::exit(code);
 }
 
@@ -953,6 +956,14 @@ int main(int argc, char** argv) {
             case OPTION_HELP:
                 usage(0);
                 break;  // not reached
+
+            case OPTION_VERSION:
+                /* Output version number as YAML for machine-readability,
+                 * inspired by `ostree --version` and `docker version` */
+                std::cout << argv[0] << ":" << std::endl
+                    << " Package: steam-runtime-tools" << std::endl
+                    << " Version: " << VERSION << std::endl;
+                return EXIT_SUCCESS;
 
             case '?':
             default:

@@ -106,9 +106,18 @@ foreach flag : no_warning_cflags
   add_project_arguments(supported_no_warning_cflags, language : 'c')
 endforeach
 
-add_project_arguments(['-std=c99'], language : 'c')
+conf_data = configuration_data()
+conf_data.set_quoted('VERSION', meson.project_version())
 
+configure_file(
+  output : 'config.h',
+  configuration : conf_data,
+)
+
+add_project_arguments(['-std=c99'], language : 'c')
 add_project_arguments(['-D_GNU_SOURCE'], language : 'c')
+add_project_arguments(['-include', 'config.h'], language : 'c')
+add_project_arguments(['-include', 'config.h'], language : 'cpp')
 
 glib = dependency(
   'glib-2.0',

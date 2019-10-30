@@ -129,6 +129,7 @@ enum
   OPTION_HELP = 1,
   OPTION_EXPECTATION,
   OPTION_VERBOSE,
+  OPTION_VERSION,
 };
 
 struct option long_options[] =
@@ -482,6 +483,16 @@ main (int argc,
           case OPTION_VERBOSE:
             verbose = TRUE;
             break;
+
+          case OPTION_VERSION:
+            /* Output version number as YAML for machine-readability,
+             * inspired by `ostree --version` and `docker version` */
+            printf (
+                "%s:\n"
+                " Package: steam-runtime-tools\n"
+                " Version: %s\n",
+                argv[0], VERSION);
+            return 0;
 
           case OPTION_HELP:
             usage (0);

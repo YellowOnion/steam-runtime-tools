@@ -105,6 +105,11 @@ get_atom(struct xcb_connection_t *conn, const char *name)
 
 class HelloTriangleApplication {
 public:
+    HelloTriangleApplication(bool is_visible)
+        : visible(is_visible)
+    {
+    }
+
     void run() {
         initVulkan();
         mainLoop();
@@ -139,6 +144,7 @@ private:
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
     size_t currentFrame = 0;
+    bool visible;
 
     void initVulkan() {
         createInstance();
@@ -156,7 +162,7 @@ private:
     }
 
     void mainLoop() {
-      for (int i = 0; i < 10; ++i) {
+      for (int i = 0; i < (visible ? 10000 : 10); ++i) {
             drawFrame();
         }
 
@@ -275,9 +281,10 @@ private:
                             8,
                             strlen(title), title);
 
-        //xcb_map_window(xcb_connection, xcb_window);
-        // deliberately not calling xcb_map_window() because
-        // we don't want this test to be visible to the user
+        // we don't normally want this test to be visible to the user
+        if (visible) {
+            xcb_map_window(xcb_connection, xcb_window);
+        }
 
         xcb_flush(xcb_connection);
 
@@ -926,11 +933,13 @@ private:
 enum {
     OPTION_HELP = 1,
     OPTION_VERSION,
+    OPTION_VISIBLE,
 };
 
 static struct option long_options[] = {
     { "help", no_argument, NULL, OPTION_HELP },
     { "version", no_argument, NULL, OPTION_VERSION },
+    { "visible", no_argument, NULL, OPTION_VISIBLE },
     { NULL, 0, NULL, 0 }
 };
 
@@ -941,13 +950,14 @@ static void usage(int code) {
     stream << "Usage: " << argv0 << " [OPTIONS]" << std::endl;
     stream << "Options:" << std::endl;
     stream << "--help\t\tShow this help and exit" << std::endl;
+    stream << "--visible\tMake test window visible" << std::endl;
     stream << "--version\tShow version and exit" << std::endl;
     std::exit(code);
 }
 
 int main(int argc, char** argv) {
     int opt;
-    HelloTriangleApplication app;
+    bool visible = false;
 
     argv0 = argv[0];
 
@@ -965,12 +975,18 @@ int main(int argc, char** argv) {
                     << " Version: " << VERSION << std::endl;
                 return EXIT_SUCCESS;
 
+            case OPTION_VISIBLE:
+                visible = true;
+                break;
+
             case '?':
             default:
                 usage(2);
                 break;  // not reached
         }
     }
+
+    HelloTriangleApplication app(visible);
 
     try {
         app.run();

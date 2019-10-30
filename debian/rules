@@ -7,6 +7,10 @@ export LC_ALL=C.UTF-8
 
 include /usr/share/dpkg/default.mk
 
+ifeq ($(shell dpkg --compare-versions `c++ -dumpversion || echo 0` ge 4.8 || echo old),old)
+export CXX = g++-4.8
+endif
+
 gtk_doc_has_cflags := $(shell \
 	if gtkdoc-scangobj --help 2>&1 | grep '[-]-cflags' >/dev/null; then \
 		echo true; \

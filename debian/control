@@ -5,6 +5,7 @@ Maintainer: Simon McVittie <smcv@collabora.com>
 Standards-Version: 4.3.0
 Build-Depends:
  debhelper,
+ g++ (>= 4:4.8) | g++-4.8,
  gtk-doc-tools <!nodoc>,
  libglib2.0-dev,
  libjson-glib-dev (>= 1.0),

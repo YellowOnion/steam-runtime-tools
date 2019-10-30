@@ -912,14 +912,14 @@ private:
         return buffer;
     }
 
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(__attribute__((__unused__)) VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, __attribute__((__unused__)) VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, __attribute__((__unused__)) void* pUserData) {
         std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
         return VK_FALSE;
     }
 };
 
-int main(int argc, char** argv) {
+int main(__attribute__((__unused__)) int argc, char** argv) {
     HelloTriangleApplication app;
 
     argv0 = argv[0];

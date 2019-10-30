@@ -47,6 +47,8 @@ if get_option('man')
   endif
 endif
 
+glslang_validator = find_program('glslangValidator', required : true)
+
 warning_cflags = [
     '-Wall',
     '-Wextra',

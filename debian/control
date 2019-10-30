@@ -8,6 +8,8 @@ Build-Depends:
  gtk-doc-tools <!nodoc>,
  libglib2.0-dev,
  libjson-glib-dev (>= 1.0),
+ libvulkan-dev,
+ libxcb1-dev,
  locales <!nocheck> | locales-all <!nocheck>,
  meson,
  pandoc,

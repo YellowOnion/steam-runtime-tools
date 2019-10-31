@@ -65,14 +65,44 @@ executable(
   )
 ) 
 
-install_subdir('shaders',
-  install_dir: join_paths(
+custom_target(
+  'frag.spv',
+  build_by_default : true,
+  command : [
+    glslang_validator,
+    '--target-env', 'vulkan1.0',
+    '-o', '@OUTPUT@',
+    '@INPUT@',
+  ],
+  input : 'shader.frag',
+  output : 'frag.spv',
+  install : true,
+  install_dir : join_paths(
+    get_option('prefix'),
     get_option('libexecdir'),
     'steam-runtime-tools-' + api_major,
+    'shaders',
   )
 )
 
-configure_file(copy: true, input: 'shaders/frag.spv', output: 'frag.spv')
-configure_file(copy: true, input: 'shaders/vert.spv', output: 'vert.spv')
+custom_target(
+  'vert.spv',
+  build_by_default : true,
+  command : [
+    glslang_validator,
+    '--target-env', 'vulkan1.0',
+    '-o', '@OUTPUT@',
+    '@INPUT@',
+  ],
+  input : 'shader.vert',
+  output : 'vert.spv',
+  install : true,
+  install_dir : join_paths(
+    get_option('prefix'),
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+    'shaders',
+  )
+)
 
 # vim:set sw=2 sts=2 et:

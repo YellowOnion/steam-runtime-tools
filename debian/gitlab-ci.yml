@@ -10,6 +10,7 @@ variables:
     STEAM_CI_USE_BINARIES_FROM: autopkgtest
     STEAM_CI_DEPENDENCIES: >-
         debhelper
+        glslang-tools
         gtk-doc-tools
         libegl1-mesa-dev
         libgl1-mesa-dev

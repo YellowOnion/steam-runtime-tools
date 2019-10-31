@@ -443,7 +443,7 @@ srt_library_get_misversioned_symbols (SrtLibrary *self)
  * srt_check_library_presence:
  * @soname: (type filename): The `SONAME` of a shared library, for example `libjpeg.so.62`
  * @multiarch: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
- * @symbols_path: (nullable): (type filename): The filename of a file listing
+ * @symbols_path: (nullable) (type filename): The filename of a file listing
  *  symbols, or %NULL if we do not know which symbols the library is meant to
  *  contain.
  * @symbols_format: The format of @symbols_path.

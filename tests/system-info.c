@@ -225,6 +225,36 @@ check_libraries_result (GList *libraries)
 
   g_assert_true (seen_libc);
 
+  /* Test third library */
+  l = g_list_next (l);
+  library = l->data;
+  g_assert_nonnull (library);
+  g_assert_cmpstr (srt_library_get_soname (library), ==, "libtheoraenc.so.1");
+  missing_symbols = srt_library_get_missing_symbols (library);
+  g_assert_nonnull (missing_symbols);
+  g_assert_cmpstr (missing_symbols[0], ==, NULL);
+
+  g_assert_cmpint (srt_library_get_issues (library), ==, SRT_LIBRARY_ISSUES_NONE);
+
+  misversioned_symbols = srt_library_get_misversioned_symbols (library);
+  g_assert_nonnull (misversioned_symbols);
+  g_assert_cmpstr (misversioned_symbols[0], ==, NULL);
+
+  dependencies = srt_library_get_dependencies (library);
+  g_assert_nonnull (dependencies);
+  g_assert_cmpstr (dependencies[0], !=, NULL);
+  seen_libc = FALSE;
+
+  for (gsize i = 0; dependencies[i] != NULL; i++)
+    {
+      g_debug ("libtheoraenc.so.1 depends on %s", dependencies[i]);
+
+      if (strstr (dependencies[i], "/libc.so.") != NULL)
+        seen_libc = TRUE;
+    }
+
+  g_assert_true (seen_libc);
+
   /* Test last library */
   l = g_list_next (l);
   library = l->data;

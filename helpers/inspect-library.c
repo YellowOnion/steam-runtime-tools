@@ -76,10 +76,12 @@ enum
 {
   OPTION_HELP = 1,
   OPTION_DEB_SYMBOLS,
+  OPTION_HIDDEN_DEPENDENCY,
 };
 
 struct option long_options[] =
 {
+    { "hidden-dependency", required_argument, NULL, OPTION_HIDDEN_DEPENDENCY },
     { "deb-symbols", no_argument, NULL, OPTION_DEB_SYMBOLS },
     { "help", no_argument, NULL, OPTION_HELP },
     { NULL, 0, NULL, 0 }
@@ -126,12 +128,17 @@ main (int argc,
   ssize_t chars;
   bool first;
   bool deb_symbols = false;
+  size_t dependency_counter = 0;
   int opt;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
       switch (opt)
         {
+          case OPTION_HIDDEN_DEPENDENCY:
+            dependency_counter++;
+            break;
+
           case OPTION_DEB_SYMBOLS:
             deb_symbols = true;
             break;
@@ -152,11 +159,47 @@ main (int argc,
       usage (1);
     }
 
+  const char *hidden_deps[dependency_counter + 1];
+
+  if (dependency_counter > 0)
+    {
+      /* Reset getopt */
+      optind = 1;
+
+      size_t i = 0;
+      while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
+        {
+          switch (opt)
+            {
+              case OPTION_HIDDEN_DEPENDENCY:
+                hidden_deps[i] = optarg;
+                i++;
+                break;
+
+              default:
+                break;
+            }
+        }
+    }
+
   soname = argv[optind];
   printf ("{\n");
   printf ("  \"");
   print_json_string_content (soname);
   printf ("\": {");
+
+  for (size_t i = 0; i < dependency_counter; i++)
+    {
+      /* We don't call "dlclose" on global hidden dependencies, otherwise ubsan
+       * will report an indirect memory leak */
+      if (dlopen (hidden_deps[i], RTLD_NOW|RTLD_GLOBAL) == NULL)
+        {
+          fprintf (stderr, "Unable to find the dependency library: %s\n", dlerror ());
+          clean_exit (handle);
+          return 1;
+        }
+    }
+
   handle = dlopen (soname, RTLD_NOW);
   if (handle == NULL)
     {

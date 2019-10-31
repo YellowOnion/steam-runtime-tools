@@ -45,6 +45,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <json-glib/json-glib.h>
 
 /**
  * SECTION:system-info
@@ -92,6 +93,7 @@ struct _SrtSystemInfo
   /* Multiarch tuple to use for helper executables in cases where it
    * shouldn't matter, or %NULL to use the compiled-in default */
   GQuark primary_multiarch_tuple;
+  GHashTable *cached_hidden_deps;
   struct
   {
     /* GQuark => MaybeLocale */
@@ -409,6 +411,8 @@ srt_system_info_finalize (GObject *object)
   g_free (self->expectations);
   g_free (self->helpers_path);
   g_strfreev (self->env);
+  if (self->cached_hidden_deps)
+    g_hash_table_unref (self->cached_hidden_deps);
 
   G_OBJECT_CLASS (srt_system_info_parent_class)->finalize (object);
 }
@@ -605,6 +609,111 @@ ensure_expectations (SrtSystemInfo *self)
     }
 
   return self->expectations[0] != '\0';
+}
+
+static void
+ensure_hidden_deps (SrtSystemInfo *self)
+{
+  if (self->cached_hidden_deps == NULL)
+    {
+      JsonParser *parser = NULL;
+      JsonNode *node = NULL;
+      JsonArray *libraries_array = NULL;
+      JsonArray *hidden_libraries_array = NULL;
+      JsonObject *object;
+      gchar *soname = NULL;
+      gchar *path = NULL;
+      GPtrArray *arr = NULL;
+      GError *error = NULL;
+
+      self->cached_hidden_deps = g_hash_table_new_full (g_str_hash,
+                                                        g_str_equal,
+                                                        g_free,
+                                                        (GDestroyNotify) g_strfreev);
+
+      if (!ensure_expectations (self))
+        {
+          g_debug ("Hidden dependencies parsing skipped because of unknown expectations");
+          goto out;
+        }
+
+      path = g_build_filename (self->expectations, "steam-runtime-abi.json", NULL);
+
+      /* Currently, in a standard Steam installation, we have the abi JSON one level up
+      * from the expectations folder */
+      if (!g_file_test (path, G_FILE_TEST_EXISTS))
+        {
+          g_free (path);
+          path = g_build_filename (self->expectations, "..", "steam-runtime-abi.json", NULL);
+        }
+
+      parser = json_parser_new ();
+      if (!json_parser_load_from_file (parser, path, &error))
+        {
+          g_debug ("Error parsing the expected JSON object in \"%s\": %s", path, error->message);
+          goto out;
+        }
+
+      node = json_parser_get_root (parser);
+      object = json_node_get_object (node);
+
+      if (!json_object_has_member (object, "shared_libraries"))
+        {
+          g_debug ("No \"shared_libraries\" in the JSON object \"%s\"", path);
+          goto out;
+        }
+
+      libraries_array = json_object_get_array_member (object, "shared_libraries");
+      /* If there are no libraries in the parsed JSON file we simply return */
+      if (libraries_array == NULL || json_array_get_length (libraries_array) == 0)
+        goto out;
+
+      for (guint i = 0; i < json_array_get_length (libraries_array); i++)
+        {
+          node = json_array_get_element (libraries_array, i);
+          if (!JSON_NODE_HOLDS_OBJECT (node))
+            continue;
+
+          object = json_node_get_object (node);
+
+          GList *members = json_object_get_members (object);
+          if (members == NULL)
+            continue;
+
+          soname = g_strdup (members->data);
+          g_list_free (members);
+
+          object = json_object_get_object_member (object, soname);
+          if (!json_object_has_member (object, "hidden_dependencies"))
+            {
+              g_free (soname);
+              continue;
+            }
+
+          hidden_libraries_array = json_object_get_array_member (object, "hidden_dependencies");
+          if (hidden_libraries_array == NULL || json_array_get_length (hidden_libraries_array) == 0)
+            {
+              g_free (soname);
+              continue;
+            }
+
+          arr = g_ptr_array_new_full (json_array_get_length (hidden_libraries_array) + 1, g_free);
+
+          for (guint j = 0; j < json_array_get_length (hidden_libraries_array); j++)
+            g_ptr_array_add (arr, g_strdup (json_array_get_string_element (hidden_libraries_array, j)));
+
+          g_ptr_array_add (arr, NULL);
+
+          g_debug ("%s soname hidden dependencies have been parsed", soname);
+          g_hash_table_insert (self->cached_hidden_deps, g_steal_pointer (&soname), g_ptr_array_free (arr, FALSE));
+        }
+
+      out:
+        g_free (path);
+        g_clear_error (&error);
+        if (parser)
+          g_clear_object (&parser);
+    }
 }
 
 static void
@@ -974,6 +1083,8 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
       goto out;
     }
 
+  ensure_hidden_deps (self);
+
   while ((filename = g_dir_read_name (dir)))
     {
       char *line = NULL;
@@ -1007,10 +1118,12 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
                 * found it, as an argument. */
               SrtLibrary *library = NULL;
               char *soname = g_strdup (strsep (&pointer_into_line, " \t"));
+              gchar **hidden_deps = g_hash_table_lookup (self->cached_hidden_deps, soname);
               abi->cached_combined_issues |= _srt_check_library_presence (self->helpers_path,
                                                                           soname,
                                                                           multiarch_tuple,
                                                                           symbols_file,
+                                                                          (const gchar * const *)hidden_deps,
                                                                           SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                                                           &library);
               g_hash_table_insert (abi->cached_results, soname, library);
@@ -1042,7 +1155,6 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
       g_dir_close (dir);
 
     return ret;
-
 }
 
 /**
@@ -1110,6 +1222,8 @@ srt_system_info_check_library (SrtSystemInfo *self,
         }
     }
 
+  ensure_hidden_deps (self);
+
   while (dir != NULL && (filename = g_dir_read_name (dir)))
     {
       if (!g_str_has_suffix (filename, ".symbols"))
@@ -1141,10 +1255,12 @@ srt_system_info_check_library (SrtSystemInfo *self,
               char *soname_found = g_strdup (strsep (&pointer_into_line, " \t"));
               if (g_strcmp0 (soname_found, soname) == 0)
                 {
+                  gchar **hidden_deps = g_hash_table_lookup (self->cached_hidden_deps, soname);
                   issues = _srt_check_library_presence (self->helpers_path,
                                                         soname_found,
                                                         multiarch_tuple,
                                                         symbols_file,
+                                                        (const gchar * const *)hidden_deps,
                                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                                         &library);
                   g_hash_table_insert (abi->cached_results, soname_found, library);
@@ -1168,6 +1284,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
   issues = _srt_check_library_presence (self->helpers_path,
                                         soname,
                                         multiarch_tuple,
+                                        NULL,
                                         NULL,
                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                         &library);
@@ -1299,7 +1416,7 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
  *
  * Returns: (transfer full) (type SrtGraphics): A list of #SrtGraphics objects
  * representing the items tested and results.
- * Free with 'glist_free_full(list, g_object_unref)`.
+ * Free with 'g_list_free_full(list, g_object_unref)`.
  */
 GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
     const char *multiarch_tuple)

@@ -1,0 +1,4 @@
+# Cut-down version of libtheora0:amd64.symbols, to illustrate what we expect
+# to find here
+libtheoraenc.so.1 libtheora0 #MINVER#
+# No symbols listed here yet

@@ -151,6 +151,7 @@ mock_get_charset (const char **charset)
 #endif
 
 static gchar *opt_locale = NULL;
+static gboolean opt_print_version = FALSE;
 
 static gboolean
 opt_locale_cb (const char *name,
@@ -171,6 +172,8 @@ opt_locale_cb (const char *name,
 
 static const GOptionEntry option_entries[] =
 {
+  { "version", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_print_version,
+    "Print version number and exit", NULL },
   { G_OPTION_REMAINING, 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK,
     opt_locale_cb,
     "The locale to test [default: use environment variables]",
@@ -200,6 +203,19 @@ main (int argc,
   if (!g_option_context_parse (option_context, &argc, &argv, &local_error))
     {
       ret = 2;
+      goto out;
+    }
+
+  if (opt_print_version)
+    {
+      /* Output version number as YAML for machine-readability,
+       * inspired by `ostree --version` and `docker version` */
+      g_print (
+          "%s:\n"
+          " Package: steam-runtime-tools\n"
+          " Version: %s\n",
+          argv[0], VERSION);
+      ret = 0;
       goto out;
     }
 

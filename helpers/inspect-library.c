@@ -77,6 +77,7 @@ enum
   OPTION_HELP = 1,
   OPTION_DEB_SYMBOLS,
   OPTION_HIDDEN_DEPENDENCY,
+  OPTION_VERSION,
 };
 
 struct option long_options[] =
@@ -84,6 +85,7 @@ struct option long_options[] =
     { "hidden-dependency", required_argument, NULL, OPTION_HIDDEN_DEPENDENCY },
     { "deb-symbols", no_argument, NULL, OPTION_DEB_SYMBOLS },
     { "help", no_argument, NULL, OPTION_HELP },
+    { "version", no_argument, NULL, OPTION_VERSION },
     { NULL, 0, NULL, 0 }
 };
 
@@ -146,6 +148,16 @@ main (int argc,
           case OPTION_HELP:
             usage (0);
             break;
+
+          case OPTION_VERSION:
+            /* Output version number as YAML for machine-readability,
+             * inspired by `ostree --version` and `docker version` */
+            printf (
+                "%s:\n"
+                " Package: steam-runtime-tools\n"
+                " Version: %s\n",
+                argv[0], VERSION);
+            return 0;
 
           case '?':
           default:

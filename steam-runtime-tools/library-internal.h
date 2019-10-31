@@ -89,5 +89,6 @@ SrtLibraryIssues _srt_check_library_presence (const char *helpers_path,
                                               const char *soname,
                                               const char *multiarch,
                                               const char *symbols_path,
+                                              const char * const *hidden_deps,
                                               SrtLibrarySymbolsFormat symbols_format,
                                               SrtLibrary **more_details_out);

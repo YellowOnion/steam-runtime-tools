@@ -474,8 +474,8 @@ srt_check_library_presence (const char *soname,
                             SrtLibrary **more_details_out)
 {
   return _srt_check_library_presence (NULL, soname, multiarch,
-                                      symbols_path, symbols_format,
-                                      more_details_out);
+                                      symbols_path, NULL,
+                                      symbols_format, more_details_out);
 }
 
 SrtLibraryIssues
@@ -483,17 +483,14 @@ _srt_check_library_presence (const char *helpers_path,
                              const char *soname,
                              const char *multiarch,
                              const char *symbols_path,
+                             const char * const *hidden_deps,
                              SrtLibrarySymbolsFormat symbols_format,
                              SrtLibrary **more_details_out)
 {
-  gchar *helper = NULL;
+  GPtrArray *argv = NULL;
   gchar *output = NULL;
   gchar *child_stderr = NULL;
   gchar *absolute_path = NULL;
-  const gchar *argv[] =
-    {
-      "inspect-library", "--deb-symbols", soname, symbols_path, NULL
-    };
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -509,6 +506,7 @@ _srt_check_library_presence (const char *helpers_path,
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
+  argv = g_ptr_array_new_with_free_func (g_free);
 
   g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
@@ -516,31 +514,40 @@ _srt_check_library_presence (const char *helpers_path,
                         SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
 
+  if (helpers_path == NULL)
+    helpers_path = _srt_get_helpers_path ();
+
+  g_ptr_array_add (argv, g_strdup_printf ("%s/%s-inspect-library", helpers_path, multiarch));
+  g_debug ("Checking library %s integrity with %s", soname, (gchar *)g_ptr_array_index (argv, 0));
+
   switch (symbols_format)
     {
       case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
-        argv[1] = soname;
-        argv[2] = symbols_path;
-        argv[3] = NULL;
+        g_ptr_array_add (argv, g_strdup (soname));
+        g_ptr_array_add (argv, g_strdup (symbols_path));
         break;
 
       case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
-        /* do nothing, argv is already set up for this */
+        g_ptr_array_add (argv, g_strdup ("--deb-symbols"));
+        g_ptr_array_add (argv, g_strdup (soname));
+        g_ptr_array_add (argv, g_strdup (symbols_path));
         break;
 
       default:
         g_return_val_if_reached (SRT_LIBRARY_ISSUES_CANNOT_LOAD);
     }
 
+  for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)
+    {
+      g_ptr_array_add (argv, g_strdup ("--hidden-dependency"));
+      g_ptr_array_add (argv, g_strdup (hidden_deps[i]));
+    }
+
+  /* NULL terminate the array */
+  g_ptr_array_add (argv, NULL);
+
   if (symbols_path == NULL)
     issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
-
-  if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path ();
-
-  helper = g_strdup_printf ("%s/%s-inspect-library", helpers_path, multiarch);
-  argv[0] = helper;
-  g_debug ("Checking library %s integrity with %s", soname, helper);
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
@@ -551,7 +558,7 @@ _srt_check_library_presence (const char *helpers_path,
     }
 
   if (!g_spawn_sync (NULL,       /* working directory */
-                     (gchar **) argv,
+                     (gchar **) argv->pdata,
                      my_environ, /* envp */
                      0,          /* flags */
                      NULL,       /* child setup */
@@ -658,9 +665,9 @@ out:
   g_strfreev (missing_symbols);
   g_strfreev (misversioned_symbols);
   g_strfreev (dependencies);
+  g_ptr_array_free (argv, TRUE);
   g_free (absolute_path);
   g_free (child_stderr);
-  g_free (helper);
   g_free (output);
   g_free (filtered_preload);
   g_clear_error (&error);

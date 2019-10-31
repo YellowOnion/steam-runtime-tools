@@ -1379,45 +1379,45 @@ main (int argc,
   argv0 = argv[0];
 
   g_test_init (&argc, &argv, NULL);
-  g_test_add ("/object", Fixture, NULL,
+  g_test_add ("/graphics/object", Fixture, NULL,
               setup, test_object, teardown);
-  g_test_add ("/good", Fixture, NULL,
+  g_test_add ("/graphics/good", Fixture, NULL,
               setup, test_good_graphics, teardown);
-  g_test_add ("/bad", Fixture, NULL,
+  g_test_add ("/graphics/bad", Fixture, NULL,
               setup, test_bad_graphics, teardown);
-  g_test_add ("/hanging", Fixture, NULL,
+  g_test_add ("/graphics/hanging", Fixture, NULL,
               setup, test_timeout_graphics, teardown);
-  g_test_add ("/software", Fixture, NULL,
+  g_test_add ("/graphics/software", Fixture, NULL,
               setup, test_software_rendering, teardown);
 
-  g_test_add ("/vulkan", Fixture, NULL,
+  g_test_add ("/graphics/vulkan", Fixture, NULL,
               setup, test_good_vulkan, teardown);
-  g_test_add ("/vulkan-bad", Fixture, NULL,
+  g_test_add ("/graphics/vulkan-bad", Fixture, NULL,
               setup, test_bad_vulkan, teardown);
-  g_test_add ("/vulkan-mixed", Fixture, NULL,
+  g_test_add ("/graphics/vulkan-mixed", Fixture, NULL,
               setup, test_mixed_vulkan, teardown);
 
-  g_test_add ("/icd/egl/basic", Fixture, NULL,
+  g_test_add ("/graphics/icd/egl/basic", Fixture, NULL,
               setup, test_icd_egl, teardown);
-  g_test_add ("/icd/egl/dirs", Fixture, &dir_config,
+  g_test_add ("/graphics/icd/egl/dirs", Fixture, &dir_config,
               setup, test_icd_egl, teardown);
-  g_test_add ("/icd/egl/filenames", Fixture, &filename_config,
+  g_test_add ("/graphics/icd/egl/filenames", Fixture, &filename_config,
               setup, test_icd_egl, teardown);
-  g_test_add ("/icd/egl/flatpak", Fixture, &flatpak_config,
+  g_test_add ("/graphics/icd/egl/flatpak", Fixture, &flatpak_config,
               setup, test_icd_egl, teardown);
-  g_test_add ("/icd/egl/relative", Fixture, &relative_config,
+  g_test_add ("/graphics/icd/egl/relative", Fixture, &relative_config,
               setup, test_icd_egl, teardown);
-  g_test_add ("/icd/egl/xdg", Fixture, &xdg_config,
+  g_test_add ("/graphics/icd/egl/xdg", Fixture, &xdg_config,
               setup, test_icd_egl, teardown);
-  g_test_add ("/icd/vulkan/basic", Fixture, NULL,
+  g_test_add ("/graphics/icd/vulkan/basic", Fixture, NULL,
               setup, test_icd_vulkan, teardown);
-  g_test_add ("/icd/vulkan/filenames", Fixture, &filename_config,
+  g_test_add ("/graphics/icd/vulkan/filenames", Fixture, &filename_config,
               setup, test_icd_vulkan, teardown);
-  g_test_add ("/icd/vulkan/flatpak", Fixture, &flatpak_config,
+  g_test_add ("/graphics/icd/vulkan/flatpak", Fixture, &flatpak_config,
               setup, test_icd_vulkan, teardown);
-  g_test_add ("/icd/vulkan/relative", Fixture, &relative_config,
+  g_test_add ("/graphics/icd/vulkan/relative", Fixture, &relative_config,
               setup, test_icd_vulkan, teardown);
-  g_test_add ("/icd/vulkan/xdg", Fixture, &xdg_config,
+  g_test_add ("/graphics/icd/vulkan/xdg", Fixture, &xdg_config,
               setup, test_icd_vulkan, teardown);
 
   return g_test_run ();

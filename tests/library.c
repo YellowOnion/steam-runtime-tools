@@ -755,23 +755,23 @@ main (int argc,
       char **argv)
 {
   g_test_init (&argc, &argv, NULL);
-  g_test_add ("/object", Fixture, NULL,
+  g_test_add ("/library/object", Fixture, NULL,
               setup, test_object, teardown);
-  g_test_add ("/presence", Fixture, NULL, setup, test_presence,
+  g_test_add ("/library/presence", Fixture, NULL, setup, test_presence,
               teardown);
-  g_test_add ("/deb_symbols", Fixture, NULL, setup, test_deb_symbols,
+  g_test_add ("/library/deb_symbols", Fixture, NULL, setup, test_deb_symbols,
               teardown);
-  g_test_add ("/empty_line", Fixture, NULL, setup, test_empty_line,
+  g_test_add ("/library/empty_line", Fixture, NULL, setup, test_empty_line,
               teardown);
-  g_test_add ("/missing_symbol", Fixture, NULL, setup,
+  g_test_add ("/library/missing_symbol", Fixture, NULL, setup,
               test_missing_symbols, teardown);
-  g_test_add ("/misversioned_symbol_version", Fixture, NULL, setup,
+  g_test_add ("/library/misversioned_symbol_version", Fixture, NULL, setup,
               test_misversioned_symbols, teardown);
-  g_test_add ("/missing_symbol_and_version", Fixture, NULL, setup,
+  g_test_add ("/library/missing_symbol_and_version", Fixture, NULL, setup,
               test_missing_symbols_and_versions, teardown);
-  g_test_add ("/missing_library", Fixture, NULL, setup,
+  g_test_add ("/library/missing_library", Fixture, NULL, setup,
               test_missing_library, teardown);
-  g_test_add ("/missing_arch", Fixture, NULL, setup,
+  g_test_add ("/library/missing_arch", Fixture, NULL, setup,
               test_missing_arch, teardown);
 
   return g_test_run ();

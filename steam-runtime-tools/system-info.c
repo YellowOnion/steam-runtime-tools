@@ -1411,7 +1411,7 @@ ensure_steam_cached (SrtSystemInfo *self)
  * Detect and return any problems encountered with the Steam installation.
  *
  * Returns: Any problems detected with the Steam installation,
- *  or %SRT_RUNTIME_ISSUES_NONE if no problems were detected
+ *  or %SRT_STEAM_ISSUES_NONE if no problems were detected
  */
 SrtSteamIssues
 srt_system_info_get_steam_issues (SrtSystemInfo *self)

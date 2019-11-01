@@ -715,7 +715,7 @@ _srt_check_graphics (const char *helpers_path,
                          &error))
         {
           g_debug ("An error occurred calling the helper: %s", error->message);
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
           goto out;
         }
 

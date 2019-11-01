@@ -55,6 +55,10 @@ endif
 
 override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/tmp ninja -C builddir install
+	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-vulkaninfo \
+		debian/tmp/usr/libexec/steam-runtime-tools-0/
+	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-wflinfo \
+		debian/tmp/usr/libexec/steam-runtime-tools-0/
 	for x in debian/tmp/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \
 		if [ -f "$$x" ] \
 		&& cmp -s "$$x" \

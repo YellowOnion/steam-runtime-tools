@@ -567,15 +567,10 @@ _argv_for_check_vulkan (const char *helpers_path,
       g_ptr_array_add (argv, g_strdup ("10"));
     }
 
-  if (helpers_path != NULL)
-    {
-      g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-vulkan", helpers_path, multiarch_tuple));
-    }
-  else
-    {
-      g_ptr_array_add (argv, g_strdup_printf ("%s-check-vulkan", multiarch_tuple));
-    }
+  if (helpers_path == NULL)
+    helpers_path = _srt_get_helpers_path ();
 
+  g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-vulkan", helpers_path, multiarch_tuple));
   g_ptr_array_add (argv, NULL);
 
   return argv;

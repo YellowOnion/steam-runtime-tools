@@ -474,13 +474,13 @@ private:
               shadersPath = argv0;
               size_t lastSlash = shadersPath.rfind('/');
               if (lastSlash != std::string::npos)
-                {
-                  shadersPath.resize(lastSlash + 1);
-                }
+                shadersPath.resize(lastSlash);
+
+              shadersPath += "/shaders";
           }
 
-        auto vertShaderCode = readFile(shadersPath + "vert.spv");
-        auto fragShaderCode = readFile(shadersPath + "frag.spv");
+        auto vertShaderCode = readFile(shadersPath + "/vert.spv");
+        auto fragShaderCode = readFile(shadersPath + "/frag.spv");
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);

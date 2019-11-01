@@ -475,6 +475,8 @@ private:
               size_t lastSlash = shadersPath.rfind('/');
               if (lastSlash != std::string::npos)
                 shadersPath.resize(lastSlash);
+
+              shadersPath += "/shaders";
           }
 
         auto vertShaderCode = readFile(shadersPath + "/vert.spv");

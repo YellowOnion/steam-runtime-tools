@@ -55,6 +55,14 @@ endif
 
 override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/tmp ninja -C builddir install
+	for x in debian/tmp/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \
+		if [ -f "$$x" ] \
+		&& cmp -s "$$x" \
+			debian/tmp/usr/libexec/steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true; \
+		then \
+			ln -fns ../../steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true "$$x"; \
+		fi; \
+	done
 
 override_dh_missing:
 	dh_missing --fail-missing

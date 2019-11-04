@@ -237,6 +237,7 @@ _srt_get_helper (const char *helpers_path,
 {
   GPtrArray *argv = NULL;
   gchar *path;
+  gchar *prefixed;
 
   g_return_val_if_fail (base != NULL, NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
@@ -262,6 +263,21 @@ _srt_get_helper (const char *helpers_path,
           /* Send TERM signal after 10 seconds */
           g_ptr_array_add (argv, g_strdup ("10"));
         }
+    }
+
+  if ((flags & SRT_HELPER_FLAGS_SEARCH_PATH) != 0
+      && helpers_path == NULL)
+    {
+      /* For helpers that are not part of steam-runtime-tools, such as
+       * *-wflinfo and *-vulkaninfo, we currently only search PATH,
+       * unless helpers_path has been overridden */
+      if (multiarch == NULL)
+        prefixed = g_strdup (base);
+      else
+        prefixed = g_strdup_printf ("%s-%s", multiarch, base);
+
+      g_ptr_array_add (argv, g_steal_pointer (&prefixed));
+      return argv;
     }
 
   if (helpers_path == NULL)

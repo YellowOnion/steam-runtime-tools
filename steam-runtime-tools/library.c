@@ -534,7 +534,7 @@ _srt_check_library_presence (const char *helpers_path,
         break;
 
       default:
-        g_return_val_if_reached (SRT_LIBRARY_ISSUES_CANNOT_LOAD);
+        g_return_val_if_reached (SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
     }
 
   for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)

@@ -145,7 +145,7 @@ _srt_check_not_setuid (void)
   return !is_setuid;
 }
 
-static gchar *helpers_path = NULL;
+static gchar *global_helpers_path = NULL;
 
 G_GNUC_INTERNAL const char *
 _srt_get_helpers_path (GError **error)
@@ -158,7 +158,7 @@ _srt_get_helpers_path (GError **error)
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
-  path = helpers_path;
+  path = global_helpers_path;
 
   if (path != NULL)
     goto out;
@@ -198,10 +198,10 @@ _srt_get_helpers_path (GError **error)
     }
 
   /* deliberate one-per-process leak */
-  helpers_path = g_build_filename (
+  global_helpers_path = g_build_filename (
       dir, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,
       NULL);
-  path = helpers_path;
+  path = global_helpers_path;
 
   g_free (dir);
 

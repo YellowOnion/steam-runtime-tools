@@ -150,6 +150,11 @@ libdl = c_compiler.find_library('dl', required : false)
 
 project_include_dirs = include_directories('.')
 
+pkglibexecdir = join_paths(
+  get_option('libexecdir'),
+  'steam-runtime-tools-' + api_major,
+)
+
 if host_machine.cpu_family() == 'x86_64'
   multiarch = 'x86_64-linux-gnu'
 elif host_machine.cpu_family() == 'x86'

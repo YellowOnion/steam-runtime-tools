@@ -25,10 +25,7 @@ executable(
   multiarch + '-true',
   'true.c',
   install : true,
-  install_dir : join_paths(
-    get_option('libexecdir'),
-    'steam-runtime-tools-' + api_major,
-  )
+  install_dir : pkglibexecdir,
 )
 
 executable(
@@ -37,10 +34,7 @@ executable(
   include_directories : project_include_dirs,
   dependencies : [json_glib, glib],
   install : true,
-  install_dir : join_paths(
-    get_option('libexecdir'),
-    'steam-runtime-tools-' + api_major,
-  )
+  install_dir : pkglibexecdir,
 )
 
 executable(
@@ -48,10 +42,7 @@ executable(
   'inspect-library.c',
   dependencies : [libdl],
   install : true,
-  install_dir : join_paths(
-    get_option('libexecdir'),
-    'steam-runtime-tools-' + api_major,
-  )
+  install_dir : pkglibexecdir,
 )
 
 executable(

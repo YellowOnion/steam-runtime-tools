@@ -514,8 +514,20 @@ _srt_check_library_presence (const char *helpers_path,
                         SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
 
+  if (symbols_path == NULL)
+    issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
+
   if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path ();
+    helpers_path = _srt_get_helpers_path (&error);
+
+  if (helpers_path == NULL)
+    {
+      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+      /* Use the error message as though the child had printed it on stderr -
+       * either way, it's a useful diagnostic */
+      child_stderr = g_strdup (error->message);
+      goto out;
+    }
 
   g_ptr_array_add (argv, g_strdup_printf ("%s/%s-inspect-library", helpers_path, multiarch));
   g_debug ("Checking library %s integrity with %s", soname, (gchar *)g_ptr_array_index (argv, 0));
@@ -545,9 +557,6 @@ _srt_check_library_presence (const char *helpers_path,
 
   /* NULL terminate the array */
   g_ptr_array_add (argv, NULL);
-
-  if (symbols_path == NULL)
-    issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");

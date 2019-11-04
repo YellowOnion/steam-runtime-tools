@@ -225,6 +225,12 @@ _srt_check_locale (const char *helpers_path,
   g_return_val_if_fail (requested_name != NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
+  if (helpers_path == NULL)
+    helpers_path = _srt_get_helpers_path (error);
+
+  if (helpers_path == NULL)
+    goto out;
+
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
   if (ld_preload != NULL)
@@ -235,9 +241,6 @@ _srt_check_locale (const char *helpers_path,
     }
 
   argv = g_ptr_array_new_with_free_func (g_free);
-
-  if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path ();
 
   if (multiarch_tuple == NULL)
     multiarch_tuple = _SRT_MULTIARCH;

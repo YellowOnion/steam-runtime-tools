@@ -28,5 +28,5 @@
 
 #include <glib.h>
 
-G_GNUC_INTERNAL const char *_srt_get_helpers_path (void);
+G_GNUC_INTERNAL const char *_srt_get_helpers_path (GError **error);
 gchar *_srt_filter_gameoverlayrenderer (const gchar *input);

@@ -545,7 +545,8 @@ _argv_for_graphics_test (const char *helpers_path,
 static GPtrArray *
 _argv_for_check_vulkan (const char *helpers_path,
                         SrtTestFlags test_flags,
-                        const char *multiarch_tuple)
+                        const char *multiarch_tuple,
+                        GError **error)
 {
   GPtrArray *argv = g_ptr_array_new_with_free_func (g_free);
 
@@ -568,7 +569,13 @@ _argv_for_check_vulkan (const char *helpers_path,
     }
 
   if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path ();
+    helpers_path = _srt_get_helpers_path (error);
+
+  if (helpers_path == NULL)
+    {
+      g_ptr_array_unref (argv);
+      return NULL;
+    }
 
   g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-vulkan", helpers_path, multiarch_tuple));
   g_ptr_array_add (argv, NULL);
@@ -698,9 +705,16 @@ _srt_check_graphics (const char *helpers_path,
 
       argv = _argv_for_check_vulkan (helpers_path,
                                      test_flags,
-                                     multiarch_tuple);
+                                     multiarch_tuple,
+                                     &error);
 
-      g_return_val_if_fail (argv != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+      if (argv == NULL)
+        {
+          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+          /* Put the error message in the 'messages' */
+          child_stderr2 = g_strdup (error->message);
+          goto out;
+        }
 
       /* Now run and report exit code/messages if failure */
       if (!g_spawn_sync (NULL,    /* working directory */
@@ -719,15 +733,6 @@ _srt_check_graphics (const char *helpers_path,
           goto out;
         }
 
-      if (child_stderr2 != NULL && child_stderr2[0] != '\0')
-        {
-          gchar *tmp = g_strconcat (child_stderr, child_stderr2, NULL);
-
-          g_free (child_stderr);
-          child_stderr = tmp;
-        }
-      g_free (child_stderr2);
-
       if (exit_status != 0)
         {
           g_debug ("... wait status %d", exit_status);
@@ -743,6 +748,16 @@ _srt_check_graphics (const char *helpers_path,
     }
 
 out:
+  /* If we have stderr (or error messages) from both vulkaninfo and
+   * check-vulkan, combine them */
+  if (child_stderr2 != NULL && child_stderr2[0] != '\0')
+    {
+      gchar *tmp = g_strconcat (child_stderr, child_stderr2, NULL);
+
+      g_free (child_stderr);
+      child_stderr = tmp;
+    }
+
   if (details_out != NULL)
     *details_out = _srt_graphics_new (multiarch_tuple,
                                       window_system,
@@ -759,6 +774,7 @@ out:
   g_ptr_array_unref (argv);
   g_free (output);
   g_free (child_stderr);
+  g_free (child_stderr2);
   g_clear_error (&error);
   g_free (filtered_preload);
   g_strfreev (my_environ);

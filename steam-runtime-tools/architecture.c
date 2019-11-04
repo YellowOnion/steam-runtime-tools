@@ -59,7 +59,13 @@ _srt_architecture_can_run (const char *helpers_path,
   g_return_val_if_fail (_srt_check_not_setuid (), FALSE);
 
   if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path ();
+    helpers_path = _srt_get_helpers_path (&error);
+
+  if (helpers_path == NULL)
+    {
+      g_debug ("%s", error->message);
+      goto out;
+    }
 
   helper = g_strdup_printf ("%s/%s-true", helpers_path, multiarch);
   argv[0] = helper;

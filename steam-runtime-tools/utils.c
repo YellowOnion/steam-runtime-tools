@@ -39,6 +39,7 @@
 #endif
 
 #include <glib-object.h>
+#include <gio/gio.h>
 
 #ifdef HAVE_GETAUXVAL
 #define getauxval_AT_SECURE() getauxval (AT_SECURE)
@@ -147,14 +148,15 @@ _srt_check_not_setuid (void)
 static gchar *helpers_path = NULL;
 
 G_GNUC_INTERNAL const char *
-_srt_get_helpers_path (void)
+_srt_get_helpers_path (GError **error)
 {
   const char *path;
   Dl_info ignored;
   struct link_map *map = NULL;
   gchar *dir;
 
-  g_return_val_if_fail (_srt_check_not_setuid (), "/");
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
   path = helpers_path;
 
@@ -170,8 +172,9 @@ _srt_get_helpers_path (void)
                RTLD_DL_LINKMAP) == 0 ||
       map == NULL)
     {
-      g_warning ("Unable to locate shared library containing "
-                 "_srt_get_helpers_path()");
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Unable to locate shared library containing "
+                   "_srt_get_helpers_path()");
       goto out;
     }
 
@@ -203,13 +206,6 @@ _srt_get_helpers_path (void)
   g_free (dir);
 
 out:
-  /* We have to return *something* non-NULL */
-  if (path == NULL)
-    {
-      g_warning ("Unable to determine path to helpers");
-      path = "/";
-    }
-
   return path;
 }
 

@@ -26,6 +26,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 
+#include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -47,7 +48,7 @@ _srt_architecture_can_run (const char *helpers_path,
                            const char *multiarch)
 {
   gchar *helper = NULL;
-  const gchar *argv[] = { "true", NULL };
+  GPtrArray *argv = NULL;
   int exit_status = -1;
   GError *error = NULL;
   gboolean ret = FALSE;
@@ -58,18 +59,18 @@ _srt_architecture_can_run (const char *helpers_path,
   g_return_val_if_fail (multiarch != NULL, FALSE);
   g_return_val_if_fail (_srt_check_not_setuid (), FALSE);
 
-  if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path (&error);
-
-  if (helpers_path == NULL)
+  argv = _srt_get_helper (helpers_path, multiarch, "true",
+                          SRT_HELPER_FLAGS_NONE, &error);
+  if (argv == NULL)
     {
       g_debug ("%s", error->message);
       goto out;
     }
 
-  helper = g_strdup_printf ("%s/%s-true", helpers_path, multiarch);
-  argv[0] = helper;
-  g_debug ("Testing architecture %s with %s", multiarch, helper);
+  g_ptr_array_add (argv, NULL);
+
+  g_debug ("Testing architecture %s with %s",
+           multiarch, (const char *) g_ptr_array_index (argv, 0));
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
@@ -80,7 +81,7 @@ _srt_architecture_can_run (const char *helpers_path,
     }
 
   if (!g_spawn_sync (NULL,       /* working directory */
-                     (gchar **) argv,
+                     (gchar **) argv->pdata,
                      my_environ, /* envp */
                      0,          /* flags */
                      NULL,       /* child setup */
@@ -107,6 +108,7 @@ out:
   g_free (helper);
   g_free (filtered_preload);
   g_clear_error (&error);
+  g_clear_pointer (&argv, g_ptr_array_unref);
   return ret;
 }
 

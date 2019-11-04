@@ -487,8 +487,11 @@ _argv_for_graphics_test (const char *helpers_path,
       g_ptr_array_add (argv, g_strdup ("10"));
     }
 
-  if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
+  if (rendering_interface == SRT_RENDERING_INTERFACE_GL
+      || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
     {
+      const char *api;
+
       if (helpers_path != NULL)
         {
           g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", helpers_path, multiarch_tuple));
@@ -497,22 +500,14 @@ _argv_for_graphics_test (const char *helpers_path,
         {
           g_ptr_array_add (argv, g_strdup_printf ("%s-wflinfo", multiarch_tuple));
         }
-      g_ptr_array_add (argv, g_strdup_printf ("--platform=%s", platformstring));
-      g_ptr_array_add (argv, g_strdup ("--api=gl"));
-      g_ptr_array_add (argv, g_strdup ("--format=json"));
-    }
-  else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
-    {
-      if (helpers_path != NULL)
-        {
-          g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", helpers_path, multiarch_tuple));
-        }
+
+      if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
+        api = "gles2";
       else
-        {
-          g_ptr_array_add (argv, g_strdup_printf ("%s-wflinfo", multiarch_tuple));
-        }
+        api = "gl";
+
       g_ptr_array_add (argv, g_strdup_printf ("--platform=%s", platformstring));
-      g_ptr_array_add (argv, g_strdup ("--api=gles2"));
+      g_ptr_array_add (argv, g_strdup_printf ("--api=%s", api));
       g_ptr_array_add (argv, g_strdup ("--format=json"));
     }
   else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)

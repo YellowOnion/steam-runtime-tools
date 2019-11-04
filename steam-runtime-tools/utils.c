@@ -40,6 +40,7 @@
 
 #include <glib-object.h>
 #include <gio/gio.h>
+#include "steam-runtime-tools/glib-compat.h"
 
 #ifdef HAVE_GETAUXVAL
 #define getauxval_AT_SECURE() getauxval (AT_SECURE)
@@ -207,6 +208,73 @@ _srt_get_helpers_path (GError **error)
 
 out:
   return path;
+}
+
+/*
+ * _srt_get_helper:
+ * @helpers_path: (nullable): Directory to search for helper executables,
+ *  or %NULL for default behaviour
+ * @multiarch: (nullable): A multiarch tuple like %SRT_ABI_I386 to prefix
+ *  to the executable name, or %NULL
+ * @base: (not nullable): Base name of the executable
+ * @flags: Flags affecting how we set up the helper
+ * @error: Used to raise an error if %NULL is returned
+ *
+ * Find a helper executable. We return an array of arguments so that the
+ * helper can be wrapped by an "adverb" like `env`, `timeout` or a
+ * specific `ld.so` implementation if required.
+ *
+ * Returns: (nullable) (element-type filename) (transfer container): The
+ *  initial `argv` for the helper, with g_free() set as the free-function, and
+ *  no %NULL terminator. Free with g_ptr_array_unref() or g_ptr_array_free().
+ */
+G_GNUC_INTERNAL GPtrArray *
+_srt_get_helper (const char *helpers_path,
+                 const char *multiarch,
+                 const char *base,
+                 SrtHelperFlags flags,
+                 GError **error)
+{
+  GPtrArray *argv = NULL;
+  gchar *path;
+
+  g_return_val_if_fail (base != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  argv = g_ptr_array_new_with_free_func (g_free);
+
+  if (helpers_path == NULL)
+    {
+      helpers_path = _srt_get_helpers_path (error);
+
+      if (helpers_path == NULL)
+        {
+          g_ptr_array_unref (argv);
+          return NULL;
+        }
+    }
+
+  path = g_strdup_printf ("%s/%s%s%s",
+                          helpers_path,
+                          multiarch == NULL ? "" : multiarch,
+                          multiarch == NULL ? "" : "-",
+                          base);
+
+  g_debug ("Looking for %s", path);
+
+  if (g_file_test (path, G_FILE_TEST_IS_EXECUTABLE))
+    {
+      g_ptr_array_add (argv, g_steal_pointer (&path));
+      return argv;
+    }
+  else
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "%s not found", path);
+      g_free (path);
+      g_ptr_array_unref (argv);
+      return NULL;
+    }
 }
 
 /**

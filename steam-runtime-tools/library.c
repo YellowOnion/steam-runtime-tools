@@ -27,6 +27,7 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
+#include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -506,7 +507,6 @@ _srt_check_library_presence (const char *helpers_path,
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
-  argv = g_ptr_array_new_with_free_func (g_free);
 
   g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
@@ -517,10 +517,10 @@ _srt_check_library_presence (const char *helpers_path,
   if (symbols_path == NULL)
     issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
 
-  if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path (&error);
+  argv = _srt_get_helper (helpers_path, multiarch, "inspect-library",
+                          SRT_HELPER_FLAGS_NONE, &error);
 
-  if (helpers_path == NULL)
+  if (argv == NULL)
     {
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
       /* Use the error message as though the child had printed it on stderr -
@@ -529,7 +529,6 @@ _srt_check_library_presence (const char *helpers_path,
       goto out;
     }
 
-  g_ptr_array_add (argv, g_strdup_printf ("%s/%s-inspect-library", helpers_path, multiarch));
   g_debug ("Checking library %s integrity with %s", soname, (gchar *)g_ptr_array_index (argv, 0));
 
   switch (symbols_format)
@@ -674,7 +673,7 @@ out:
   g_strfreev (missing_symbols);
   g_strfreev (misversioned_symbols);
   g_strfreev (dependencies);
-  g_ptr_array_free (argv, TRUE);
+  g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (absolute_path);
   g_free (child_stderr);
   g_free (output);

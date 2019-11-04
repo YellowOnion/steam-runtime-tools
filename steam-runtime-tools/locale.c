@@ -225,10 +225,13 @@ _srt_check_locale (const char *helpers_path,
   g_return_val_if_fail (requested_name != NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
-  if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path (error);
+  if (multiarch_tuple == NULL)
+    multiarch_tuple = _SRT_MULTIARCH;
 
-  if (helpers_path == NULL)
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-locale",
+                          SRT_HELPER_FLAGS_NONE, error);
+
+  if (argv == NULL)
     goto out;
 
   my_environ = g_get_environ ();
@@ -240,13 +243,6 @@ _srt_check_locale (const char *helpers_path,
                                      filtered_preload, TRUE);
     }
 
-  argv = g_ptr_array_new_with_free_func (g_free);
-
-  if (multiarch_tuple == NULL)
-    multiarch_tuple = _SRT_MULTIARCH;
-
-  g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-locale",
-                                          helpers_path, multiarch_tuple));
   g_ptr_array_add (argv, g_strdup (requested_name));
 
   g_ptr_array_add (argv, NULL);
@@ -353,7 +349,7 @@ out:
     }
 
   g_clear_object (&parser);
-  g_ptr_array_unref (argv);
+  g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (output);
   g_free (filtered_preload);
   g_strfreev (my_environ);

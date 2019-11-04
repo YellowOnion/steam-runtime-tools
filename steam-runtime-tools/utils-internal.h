@@ -28,5 +28,15 @@
 
 #include <glib.h>
 
+typedef enum
+{
+  SRT_HELPER_FLAGS_NONE = 0
+} SrtHelperFlags;
+
+G_GNUC_INTERNAL GPtrArray *_srt_get_helper (const char *helpers_path,
+                                            const char *multiarch,
+                                            const char *base,
+                                            SrtHelperFlags flags,
+                                            GError **error);
 G_GNUC_INTERNAL const char *_srt_get_helpers_path (GError **error);
 gchar *_srt_filter_gameoverlayrenderer (const gchar *input);

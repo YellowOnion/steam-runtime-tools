@@ -40,6 +40,7 @@ override_dh_auto_configure:
 		--libexecdir=/usr/libexec \
 		-Dgtk_doc=$(gtk_doc_has_cflags) \
 		-Dintrospection=false \
+		-Dmultiarch_tuple=$(DEB_HOST_MULTIARCH) \
 		$(NULL)
 
 override_dh_auto_build:

@@ -25,3 +25,10 @@ option(
   value : true,
   description : 'enable man pages',
 )
+
+option(
+  'multiarch_tuple',
+  type : 'string',
+  value : '',
+  description : 'Debian-style multiarch tuple',
+)

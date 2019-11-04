@@ -155,7 +155,9 @@ pkglibexecdir = join_paths(
   'steam-runtime-tools-' + api_major,
 )
 
-if host_machine.cpu_family() == 'x86_64'
+if get_option('multiarch_tuple') != ''
+  multiarch = get_option('multiarch_tuple')
+elif host_machine.cpu_family() == 'x86_64'
   multiarch = 'x86_64-linux-gnu'
 elif host_machine.cpu_family() == 'x86'
   multiarch = 'i386-linux-gnu'

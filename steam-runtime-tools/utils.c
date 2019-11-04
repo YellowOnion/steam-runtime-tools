@@ -148,7 +148,7 @@ _srt_check_not_setuid (void)
 
 static gchar *global_helpers_path = NULL;
 
-G_GNUC_INTERNAL const char *
+static const char *
 _srt_get_helpers_path (GError **error)
 {
   const char *path;

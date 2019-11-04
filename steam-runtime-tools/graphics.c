@@ -401,13 +401,16 @@ _argv_for_graphics_test (const char *helpers_path,
                          SrtTestFlags test_flags,
                          const char *multiarch_tuple,
                          SrtWindowSystem window_system,
-                         SrtRenderingInterface rendering_interface)
+                         SrtRenderingInterface rendering_interface,
+                         GError **error)
 {
   GPtrArray *argv = NULL;
-
   gchar *platformstring = NULL;
+  SrtHelperFlags flags = (SRT_HELPER_FLAGS_TIME_OUT
+                          | SRT_HELPER_FLAGS_SEARCH_PATH);
 
-  argv = g_ptr_array_new_with_free_func (g_free);
+  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
+    flags |= SRT_HELPER_FLAGS_TIME_OUT_SOONER;
 
   if (window_system == SRT_WINDOW_SYSTEM_GLX)
     {
@@ -469,37 +472,16 @@ _argv_for_graphics_test (const char *helpers_path,
       g_return_val_if_reached (NULL);
     }
 
-  // Use timeout command to limit how long the helper can run
-  g_ptr_array_add (argv, g_strdup ("timeout"));
-  g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
-
-  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
-    {
-      // Speed up the failing case in automated testing
-      g_ptr_array_add (argv, g_strdup ("--kill-after=1"));
-      g_ptr_array_add (argv, g_strdup ("1"));
-    }
-  else
-    {
-      // Kill the helper (if still running) 3 seconds after the TERM signal
-      g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
-      // Send TERM signal after 10 seconds
-      g_ptr_array_add (argv, g_strdup ("10"));
-    }
-
   if (rendering_interface == SRT_RENDERING_INTERFACE_GL
       || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
     {
       const char *api;
 
-      if (helpers_path != NULL)
-        {
-          g_ptr_array_add (argv, g_strdup_printf ("%s/%s-wflinfo", helpers_path, multiarch_tuple));
-        }
-      else
-        {
-          g_ptr_array_add (argv, g_strdup_printf ("%s-wflinfo", multiarch_tuple));
-        }
+      argv = _srt_get_helper (helpers_path, multiarch_tuple, "wflinfo", flags,
+                              error);
+
+      if (argv == NULL)
+        goto out;
 
       if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
         api = "gles2";
@@ -512,14 +494,12 @@ _argv_for_graphics_test (const char *helpers_path,
     }
   else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
     {
-      if (helpers_path != NULL)
-        {
-          g_ptr_array_add (argv, g_strdup_printf ("%s/%s-vulkaninfo", helpers_path, multiarch_tuple));
-        }
-      else
-        {
-          g_ptr_array_add (argv, g_strdup_printf ("%s-vulkaninfo", multiarch_tuple));
-        }
+      argv = _srt_get_helper (helpers_path, multiarch_tuple, "vulkaninfo",
+                              flags, error);
+
+      if (argv == NULL)
+        goto out;
+
       g_ptr_array_add (argv, g_strdup ("-j"));
     }
   else
@@ -531,8 +511,8 @@ _argv_for_graphics_test (const char *helpers_path,
 
   g_ptr_array_add (argv, NULL);
 
+out:
   g_free (platformstring);
-
   return argv;
 }
 
@@ -543,38 +523,19 @@ _argv_for_check_vulkan (const char *helpers_path,
                         const char *multiarch_tuple,
                         GError **error)
 {
-  GPtrArray *argv = g_ptr_array_new_with_free_func (g_free);
-
-  // Use timeout command to limit how long the helper can run
-  g_ptr_array_add (argv, g_strdup ("timeout"));
-  g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
+  GPtrArray *argv;
+  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
 
   if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
-    {
-      // Speed up the failing case in automated testing
-      g_ptr_array_add (argv, g_strdup ("--kill-after=1"));
-      g_ptr_array_add (argv, g_strdup ("1"));
-    }
-  else
-    {
-      // Kill the helper (if still running) 3 seconds after the TERM signal
-      g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
-      // Send TERM signal after 10 seconds
-      g_ptr_array_add (argv, g_strdup ("10"));
-    }
+    flags |= SRT_HELPER_FLAGS_TIME_OUT_SOONER;
 
-  if (helpers_path == NULL)
-    helpers_path = _srt_get_helpers_path (error);
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-vulkan",
+                          flags, error);
 
-  if (helpers_path == NULL)
-    {
-      g_ptr_array_unref (argv);
-      return NULL;
-    }
+  if (argv == NULL)
+    return NULL;
 
-  g_ptr_array_add (argv, g_strdup_printf ("%s/%s-check-vulkan", helpers_path, multiarch_tuple));
   g_ptr_array_add (argv, NULL);
-
   return argv;
 }
 
@@ -626,10 +587,16 @@ _srt_check_graphics (const char *helpers_path,
                                              test_flags,
                                              multiarch_tuple,
                                              window_system,
-                                             rendering_interface);
+                                             rendering_interface,
+                                             &error);
 
   if (argv == NULL)
-    return SRT_GRAPHICS_ISSUES_INTERNAL_ERROR;
+    {
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      /* Put the error message in the 'messages' */
+      child_stderr = g_strdup (error->message);
+      goto out;
+    }
 
   my_environ = g_get_environ ();
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
@@ -766,7 +733,7 @@ out:
     g_object_unref (parser);
 
   g_free (new_version_string);
-  g_ptr_array_unref (argv);
+  g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (output);
   g_free (child_stderr);
   g_free (child_stderr2);

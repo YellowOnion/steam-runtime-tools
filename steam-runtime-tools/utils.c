@@ -265,21 +265,6 @@ _srt_get_helper (const char *helpers_path,
         }
     }
 
-  if ((flags & SRT_HELPER_FLAGS_SEARCH_PATH) != 0
-      && helpers_path == NULL)
-    {
-      /* For helpers that are not part of steam-runtime-tools, such as
-       * *-wflinfo and *-vulkaninfo, we currently only search PATH,
-       * unless helpers_path has been overridden */
-      if (multiarch == NULL)
-        prefixed = g_strdup (base);
-      else
-        prefixed = g_strdup_printf ("%s-%s", multiarch, base);
-
-      g_ptr_array_add (argv, g_steal_pointer (&prefixed));
-      return argv;
-    }
-
   if (helpers_path == NULL)
     {
       helpers_path = _srt_get_helpers_path (error);
@@ -291,6 +276,9 @@ _srt_get_helper (const char *helpers_path,
         }
     }
 
+  /* Prefer a helper from ${SRT_HELPERS_PATH} or
+   * ${libexecdir}/steam-runtime-tools-${_SRT_API_MAJOR}
+   * if it exists */
   path = g_strdup_printf ("%s/%s%s%s",
                           helpers_path,
                           multiarch == NULL ? "" : multiarch,
@@ -304,7 +292,8 @@ _srt_get_helper (const char *helpers_path,
       g_ptr_array_add (argv, g_steal_pointer (&path));
       return argv;
     }
-  else
+
+  if ((flags & SRT_HELPER_FLAGS_SEARCH_PATH) == 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
                    "%s not found", path);
@@ -312,6 +301,18 @@ _srt_get_helper (const char *helpers_path,
       g_ptr_array_unref (argv);
       return NULL;
     }
+
+  /* For helpers that are not part of steam-runtime-tools, such as
+   * *-wflinfo and *-vulkaninfo, we fall back to searching $PATH */
+  g_free (path);
+
+  if (multiarch == NULL)
+    prefixed = g_strdup (base);
+  else
+    prefixed = g_strdup_printf ("%s-%s", multiarch, base);
+
+  g_ptr_array_add (argv, g_steal_pointer (&prefixed));
+  return argv;
 }
 
 /**

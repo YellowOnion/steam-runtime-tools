@@ -109,4 +109,16 @@ custom_target(
   )
 )
 
+executable(
+  multiarch + '-check-gl',
+  'check-gl.cpp',
+  dependencies : [xlib, gl],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : join_paths(
+    get_option('libexecdir'),
+    'steam-runtime-tools-' + api_major,
+  )
+)
+
 # vim:set sw=2 sts=2 et:

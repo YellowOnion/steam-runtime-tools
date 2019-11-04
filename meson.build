@@ -190,6 +190,14 @@ xcb = dependency(
   'xcb',
 )
 
+gl = dependency(
+  'gl'
+)
+
+xlib = dependency(
+  'x11'
+)
+
 libdl = c_compiler.find_library('dl', required : false)
 
 project_include_dirs = include_directories('.')

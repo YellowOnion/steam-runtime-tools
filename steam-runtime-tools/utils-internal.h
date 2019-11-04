@@ -30,6 +30,8 @@
 
 typedef enum
 {
+  SRT_HELPER_FLAGS_TIME_OUT = (1 << 1),
+  SRT_HELPER_FLAGS_TIME_OUT_SOONER = (1 << 2),
   SRT_HELPER_FLAGS_NONE = 0
 } SrtHelperFlags;
 

@@ -57,11 +57,24 @@
 # define LD_SO "/lib/ld-linux.so.3"
 #elif defined(__hppa__) || defined(__m68k__) || defined(__powerpc__) || \
       defined(__s390__)
+// microblaze is also /lib/ld.so.1
+// mips classic NaN, o32 is also /lib/ld.so.1
 # define LD_SO "/lib/ld.so.1"
 #elif defined(__powerpc64__) && __BYTE_ORDER == __LITTLE_ENDIAN
 # define LD_SO "/lib/ld64.so.2"
 #elif defined(__s390x__) || defined(__powerpc64__)
 # define LD_SO "/lib/ld64.so.1"
+// Others not supported here because we don't know which predefined macros
+// can be used to detect them:
+// C-SKY hardfloat: /lib/ld-linux-cskyv2-hf.so.1
+// C-SKY softfloat: /lib/ld-linux-cskyv2.so.1
+// ia64: /lib/ld-linux-ia64.so.2
+// mips classic NaN n32: /lib32/ld.so.1
+// mips classic NaN n64: /lib64/ld.so.1
+// mips NaN2008: as for classic NaN but basename is ld-linux-mipsn8.so.1
+// nios2: /lib/ld-linux-nios2.so.1
+// riscv64 softfloat: /lib/ld-linux-riscv64-lp64.so.1
+// riscv64 hardfloat: /lib/ld-linux-riscv64-lp64d.so.1
 #else
 # error Unsupported architecture: we do not know where ld.so is
 #endif

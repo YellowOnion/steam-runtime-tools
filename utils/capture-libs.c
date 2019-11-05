@@ -55,7 +55,7 @@
 # define LD_SO "/lib/ld-linux.so.3"
 #elif defined(__hppa__) || defined(__m68k__) || defined(__powerpc__) || \
       defined(__s390__)
-# define LD_SO "/lib64/ld.so.1"
+# define LD_SO "/lib/ld.so.1"
 #elif defined(__powerpc64__) && __BYTE_ORDER == __LITTLE_ENDIAN
 # define LD_SO "/lib/ld64.so.2"
 #elif defined(__s390x__) || defined(__powerpc64__)

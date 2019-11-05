@@ -39,6 +39,8 @@
 #endif
 
 #include <glib-object.h>
+#include <gio/gio.h>
+#include "steam-runtime-tools/glib-compat.h"
 
 #ifdef HAVE_GETAUXVAL
 #define getauxval_AT_SECURE() getauxval (AT_SECURE)
@@ -144,19 +146,20 @@ _srt_check_not_setuid (void)
   return !is_setuid;
 }
 
-static gchar *helpers_path = NULL;
+static gchar *global_helpers_path = NULL;
 
-G_GNUC_INTERNAL const char *
-_srt_get_helpers_path (void)
+static const char *
+_srt_get_helpers_path (GError **error)
 {
   const char *path;
   Dl_info ignored;
   struct link_map *map = NULL;
   gchar *dir;
 
-  g_return_val_if_fail (_srt_check_not_setuid (), "/");
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
-  path = helpers_path;
+  path = global_helpers_path;
 
   if (path != NULL)
     goto out;
@@ -170,8 +173,9 @@ _srt_get_helpers_path (void)
                RTLD_DL_LINKMAP) == 0 ||
       map == NULL)
     {
-      g_warning ("Unable to locate shared library containing "
-                 "_srt_get_helpers_path()");
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Unable to locate shared library containing "
+                   "_srt_get_helpers_path()");
       goto out;
     }
 
@@ -195,22 +199,120 @@ _srt_get_helpers_path (void)
     }
 
   /* deliberate one-per-process leak */
-  helpers_path = g_build_filename (
+  global_helpers_path = g_build_filename (
       dir, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,
       NULL);
-  path = helpers_path;
+  path = global_helpers_path;
 
   g_free (dir);
 
 out:
-  /* We have to return *something* non-NULL */
-  if (path == NULL)
+  return path;
+}
+
+/*
+ * _srt_get_helper:
+ * @helpers_path: (nullable): Directory to search for helper executables,
+ *  or %NULL for default behaviour
+ * @multiarch: (nullable): A multiarch tuple like %SRT_ABI_I386 to prefix
+ *  to the executable name, or %NULL
+ * @base: (not nullable): Base name of the executable
+ * @flags: Flags affecting how we set up the helper
+ * @error: Used to raise an error if %NULL is returned
+ *
+ * Find a helper executable. We return an array of arguments so that the
+ * helper can be wrapped by an "adverb" like `env`, `timeout` or a
+ * specific `ld.so` implementation if required.
+ *
+ * Returns: (nullable) (element-type filename) (transfer container): The
+ *  initial `argv` for the helper, with g_free() set as the free-function, and
+ *  no %NULL terminator. Free with g_ptr_array_unref() or g_ptr_array_free().
+ */
+G_GNUC_INTERNAL GPtrArray *
+_srt_get_helper (const char *helpers_path,
+                 const char *multiarch,
+                 const char *base,
+                 SrtHelperFlags flags,
+                 GError **error)
+{
+  GPtrArray *argv = NULL;
+  gchar *path;
+  gchar *prefixed;
+
+  g_return_val_if_fail (base != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  argv = g_ptr_array_new_with_free_func (g_free);
+
+  if (flags & SRT_HELPER_FLAGS_TIME_OUT)
     {
-      g_warning ("Unable to determine path to helpers");
-      path = "/";
+      g_ptr_array_add (argv, g_strdup ("timeout"));
+      g_ptr_array_add (argv, g_strdup ("--signal=TERM"));
+
+      if (flags & SRT_HELPER_FLAGS_TIME_OUT_SOONER)
+        {
+          /* Speed up the failing case in automated testing */
+          g_ptr_array_add (argv, g_strdup ("--kill-after=1"));
+          g_ptr_array_add (argv, g_strdup ("1"));
+        }
+      else
+        {
+          /* Kill the helper (if still running) 3 seconds after the TERM
+           * signal */
+          g_ptr_array_add (argv, g_strdup ("--kill-after=3"));
+          /* Send TERM signal after 10 seconds */
+          g_ptr_array_add (argv, g_strdup ("10"));
+        }
     }
 
-  return path;
+  if (helpers_path == NULL)
+    {
+      helpers_path = _srt_get_helpers_path (error);
+
+      if (helpers_path == NULL)
+        {
+          g_ptr_array_unref (argv);
+          return NULL;
+        }
+    }
+
+  /* Prefer a helper from ${SRT_HELPERS_PATH} or
+   * ${libexecdir}/steam-runtime-tools-${_SRT_API_MAJOR}
+   * if it exists */
+  path = g_strdup_printf ("%s/%s%s%s",
+                          helpers_path,
+                          multiarch == NULL ? "" : multiarch,
+                          multiarch == NULL ? "" : "-",
+                          base);
+
+  g_debug ("Looking for %s", path);
+
+  if (g_file_test (path, G_FILE_TEST_IS_EXECUTABLE))
+    {
+      g_ptr_array_add (argv, g_steal_pointer (&path));
+      return argv;
+    }
+
+  if ((flags & SRT_HELPER_FLAGS_SEARCH_PATH) == 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "%s not found", path);
+      g_free (path);
+      g_ptr_array_unref (argv);
+      return NULL;
+    }
+
+  /* For helpers that are not part of steam-runtime-tools, such as
+   * *-wflinfo and *-vulkaninfo, we fall back to searching $PATH */
+  g_free (path);
+
+  if (multiarch == NULL)
+    prefixed = g_strdup (base);
+  else
+    prefixed = g_strdup_printf ("%s-%s", multiarch, base);
+
+  g_ptr_array_add (argv, g_steal_pointer (&prefixed));
+  return argv;
 }
 
 /**

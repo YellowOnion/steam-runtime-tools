@@ -38,6 +38,7 @@ override_dh_auto_configure:
 	meson builddir \
 		--prefix=/usr \
 		--libexecdir=/usr/libexec \
+		--libdir=lib/$(DEB_HOST_MULTIARCH) \
 		-Dgtk_doc=$(gtk_doc_has_cflags) \
 		-Dintrospection=false \
 		-Dmultiarch_tuple=$(DEB_HOST_MULTIARCH) \

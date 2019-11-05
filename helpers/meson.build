@@ -26,6 +26,8 @@ executable(
   'true.c',
   install : true,
   install_dir : pkglibexecdir,
+  # Deliberately no RPATH/RUNPATH here: it's unnecessary because this
+  # executable has no dependencies.
 )
 
 executable(
@@ -35,6 +37,9 @@ executable(
   dependencies : [json_glib, glib],
   install : true,
   install_dir : pkglibexecdir,
+  # Use json-glib and GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
+  build_rpath : pkglibexec_rpath,
+  install_rpath : pkglibexec_rpath,
 )
 
 executable(
@@ -43,6 +48,8 @@ executable(
   dependencies : [libdl],
   install : true,
   install_dir : pkglibexecdir,
+  # Deliberately no RPATH/RUNPATH here: we want to determine whether
+  # a game with no special linking would be able to load a library.
 )
 
 executable(
@@ -54,6 +61,9 @@ executable(
     get_option('libexecdir'),
     'steam-runtime-tools-' + api_major,
   )
+  # Deliberately no RPATH/RUNPATH here: we want to determine whether
+  # a game with no special linking would be able to use libvulkan
+  # and its associated drivers successfully.
 ) 
 
 custom_target(

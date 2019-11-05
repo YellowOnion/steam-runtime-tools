@@ -47,6 +47,8 @@
 #elif defined(__i386__) || defined(__alpha__) || defined(__sh__) || \
     defined(__sparc__)
 # define LD_SO "/lib/ld-linux.so.2"
+#elif defined(__aarch64__) && __BYTE_ORDER == __BIG_ENDIAN
+# define LD_SO "/lib/ld-linux-aarch64_be.so.1"
 #elif defined(__aarch64__)
 # define LD_SO "/lib/ld-linux-aarch64.so.1"
 #elif defined(__arm__) && defined(__ARM_EABI__) && defined(_ARM_PCS_VFP)

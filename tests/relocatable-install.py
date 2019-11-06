@@ -78,6 +78,7 @@ class TapTest:
 
 
 EXES = [
+    'pressure-vessel-with-lock',
     'pressure-vessel-wrap',
 ]
 WRAPPED = [

@@ -108,6 +108,7 @@ SCRIPTS = [
 ]
 EXECUTABLES = [
     'pressure-vessel-try-setlocale',
+    'pressure-vessel-with-lock',
     'pressure-vessel-wrap',
 ]
 LIBCAPSULE_TOOLS = [

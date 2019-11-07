@@ -245,6 +245,29 @@ jsonify_graphics_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_graphics_library_vendor (JsonBuilder *builder,
+                                 SrtGraphicsLibraryVendor vendor)
+{
+  if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN)
+    json_builder_add_string_value (builder, "unknown");
+
+  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_GLVND)
+    json_builder_add_string_value (builder, "glvnd");
+
+  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND)
+    json_builder_add_string_value (builder, "unknown-non-glvnd");
+
+  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_MESA)
+    json_builder_add_string_value (builder, "mesa");
+
+  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA)
+    json_builder_add_string_value (builder, "nvidia");
+
+  else
+    json_builder_add_string_value (builder, "unexpected-vendor");
+}
+
+static void
 jsonify_steam_issues (JsonBuilder *builder,
                       SrtSteamIssues issues)
 {
@@ -405,6 +428,7 @@ print_graphics_details(JsonBuilder *builder,
     {
       gchar *parameters = srt_graphics_dup_parameters_string (g->data);
       const char *messages;
+      SrtGraphicsLibraryVendor library_vendor;
 
       json_builder_set_member_name (builder, parameters);
       json_builder_begin_object (builder);
@@ -421,6 +445,12 @@ print_graphics_details(JsonBuilder *builder,
       json_builder_add_string_value (builder, srt_graphics_get_renderer_string (g->data));
       json_builder_set_member_name (builder, "version");
       json_builder_add_string_value (builder, srt_graphics_get_version_string (g->data));
+      if (srt_graphics_get_rendering_interface (g->data) != SRT_RENDERING_INTERFACE_VULKAN)
+        {
+          json_builder_set_member_name (builder, "library-vendor");
+          srt_graphics_library_is_vendor_neutral (g->data, &library_vendor);
+          jsonify_graphics_library_vendor (builder, library_vendor);
+        }
 
       if (srt_graphics_get_issues (g->data) != SRT_GRAPHICS_ISSUES_NONE)
         {

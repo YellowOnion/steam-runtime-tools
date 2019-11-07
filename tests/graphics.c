@@ -194,6 +194,8 @@ test_object (Fixture *f,
 {
   SrtGraphics *graphics;
   SrtGraphicsIssues issues;
+  SrtGraphicsLibraryVendor library_vendor;
+  gboolean vendor_neutral;
   gchar *messages;
   gchar *tuple;
   gchar *renderer;
@@ -202,6 +204,7 @@ test_object (Fixture *f,
   graphics = _srt_graphics_new("mock-good",
                                SRT_WINDOW_SYSTEM_GLX,
                                SRT_RENDERING_INTERFACE_GL,
+                               SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
                                SRT_TEST_GOOD_GRAPHICS_RENDERER,
                                SRT_TEST_GOOD_GRAPHICS_VERSION,
                                SRT_GRAPHICS_ISSUES_NONE,
@@ -215,14 +218,19 @@ test_object (Fixture *f,
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    SRT_TEST_GOOD_GRAPHICS_VERSION);
   g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, NULL);
+  vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
+  g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
+  g_assert_true (vendor_neutral);
   g_object_get (graphics,
                 "messages", &messages,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
+                "library-vendor", &library_vendor,
                 "renderer-string", &renderer,
                 "version-string", &version,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
   g_assert_cmpstr (messages, ==, NULL);
   g_assert_cmpstr (tuple, ==, "mock-good");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
@@ -287,6 +295,8 @@ test_bad_graphics (Fixture *f,
 {
   SrtGraphics *graphics = NULL;
   SrtGraphicsIssues issues;
+  SrtGraphicsLibraryVendor library_vendor;
+  gboolean vendor_neutral;
   gchar *messages;
   gchar *tuple;
   gchar *renderer;
@@ -307,14 +317,22 @@ test_bad_graphics (Fixture *f,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
                    "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+  /* We used "mock-bad" for the architecture so, when checking the library vendor,
+   * we will not be able to call the helper `mock-bad-check-library`.
+   * For this reason we expect %SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
+  vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
+  g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
+  g_assert_false (vendor_neutral);
   g_object_get (graphics,
                 "messages", &messages,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
+                "library-vendor", &library_vendor,
                 "renderer-string", &renderer,
                 "version-string", &version,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
   g_assert_cmpstr (messages, ==,
                    "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
   g_assert_cmpstr (tuple, ==, "mock-bad");

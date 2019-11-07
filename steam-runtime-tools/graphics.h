@@ -72,6 +72,24 @@ typedef enum
 } SrtGraphicsIssues;
 
 /**
+ * SrtGraphicsLibraryVendor:
+ * @SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN: Unable to check the graphics driver vendor
+ * @SRT_GRAPHICS_LIBRARY_VENDOR_GLVND: The graphics driver is the vendor-neutral GLVND
+ * @SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND: The graphics driver is non-GLVND,
+ *  but the exact vendor is unknown
+ * @SRT_GRAPHICS_LIBRARY_VENDOR_MESA: The graphics driver is the mesa non-GLVND
+ * @SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA: The graphics driver is the Nvidia non-GLVND
+ */
+typedef enum
+{
+  SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN,
+  SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+  SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND,
+  SRT_GRAPHICS_LIBRARY_VENDOR_MESA,
+  SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA,
+} SrtGraphicsLibraryVendor;
+
+/**
  * SrtWindowSystem:
  * @SRT_WINDOW_SYSTEM_X11: X11 window system, with GL: equivalent to GLX; with GLES: equivalent to EGL_X11; with Vulkan: use X11
  * @SRT_WINDOW_SYSTEM_GLX: GLX window system, only possible with GL
@@ -104,6 +122,8 @@ typedef enum
 
 const char *srt_graphics_get_multiarch_tuple (SrtGraphics *self);
 SrtGraphicsIssues srt_graphics_get_issues (SrtGraphics *self);
+gboolean srt_graphics_library_is_vendor_neutral (SrtGraphics *self,
+                                                 SrtGraphicsLibraryVendor *vendor_out);
 SrtWindowSystem srt_graphics_get_window_system (SrtGraphics *self);
 SrtRenderingInterface srt_graphics_get_rendering_interface (SrtGraphics *self);
 const char *srt_graphics_get_version_string (SrtGraphics *self);

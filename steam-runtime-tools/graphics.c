@@ -71,6 +71,7 @@ struct _SrtGraphics
   SrtWindowSystem window_system;
   SrtRenderingInterface rendering_interface;
   SrtGraphicsIssues issues;
+  SrtGraphicsLibraryVendor library_vendor;
   gchar *messages;
   gchar *renderer_string;
   gchar *version_string;
@@ -85,6 +86,7 @@ struct _SrtGraphicsClass
 enum {
   PROP_0,
   PROP_ISSUES,
+  PROP_LIBRARY_VENDOR,
   PROP_MESSAGES,
   PROP_MULTIARCH_TUPLE,
   PROP_WINDOW_SYSTEM,
@@ -113,6 +115,10 @@ srt_graphics_get_property (GObject *object,
     {
       case PROP_ISSUES:
         g_value_set_flags (value, self->issues);
+        break;
+
+      case PROP_LIBRARY_VENDOR:
+        g_value_set_enum (value, self->library_vendor);
         break;
 
       case PROP_MESSAGES:
@@ -159,6 +165,12 @@ srt_graphics_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->issues == 0);
         self->issues = g_value_get_flags (value);
+        break;
+
+      case PROP_LIBRARY_VENDOR:
+        /* Construct-only */
+        g_return_if_fail (self->library_vendor == 0);
+        self->library_vendor = g_value_get_enum (value);
         break;
 
       case PROP_MESSAGES:
@@ -237,6 +249,12 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
   properties[PROP_ISSUES] =
     g_param_spec_flags ("issues", "Issues", "Problems with the graphics stack",
                         SRT_TYPE_GRAPHICS_ISSUES, SRT_GRAPHICS_ISSUES_NONE,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_LIBRARY_VENDOR] =
+    g_param_spec_enum ("library-vendor", "Library vendor", "Which library vendor is currently in use.",
+                        SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN,
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
 
@@ -516,7 +534,6 @@ out:
   return argv;
 }
 
-
 static GPtrArray *
 _argv_for_check_vulkan (const char *helpers_path,
                         SrtTestFlags test_flags,
@@ -537,6 +554,94 @@ _argv_for_check_vulkan (const char *helpers_path,
 
   g_ptr_array_add (argv, NULL);
   return argv;
+}
+
+/**
+ * _srt_check_library_vendor:
+ * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
+ * @window_system: The window system to check.
+ * @rendering_interface: The graphics renderer to check.
+ *
+ * Return whether the entry-point library for this graphics stack is vendor-neutral or
+ * vendor-specific, and if vendor-specific, attempt to guess the vendor.
+ *
+ * For newer GLX and EGL graphics stacks (since 2017-2018) the entry-point library is
+ * provided by GLVND, a vendor-neutral dispatch library that loads vendor-specific ICDs.
+ * This function returns %SRT_GRAPHICS_DRIVER_VENDOR_GLVND.
+ *
+ * For older GLX and EGL graphics stacks, the entry-point library libGL.so.1 or libEGL.so.1
+ * is part of a particular vendor's graphics library, usually Mesa or NVIDIA. This function
+ * attempts to determine which one.
+ *
+ * For Vulkan the entry-point library libvulkan.so.1 is always vendor-neutral
+ * (similar to GLVND), so this function is not useful. It always returns
+ * %SRT_GRAPHICS_DRIVER_VENDOR_UNKNOWN.
+ *
+ * Returns: the graphics library vendor currently in use, or
+ *  %SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN if the rendering interface is
+ *  %SRT_RENDERING_INTERFACE_VULKAN or if there was a problem loading the library.
+ */
+static SrtGraphicsLibraryVendor
+_srt_check_library_vendor (const char *multiarch_tuple,
+                           SrtWindowSystem window_system,
+                           SrtRenderingInterface rendering_interface)
+{
+  SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
+  const gchar *soname = NULL;
+  SrtLibrary *library = NULL;
+  SrtLibraryIssues issues;
+  const char * const *dependencies;
+
+  /* Vulkan is always vendor-neutral, so it doesn't make sense to check it. We simply return
+   * SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
+  if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
+    goto out;
+
+  switch (window_system)
+    {
+      case SRT_WINDOW_SYSTEM_GLX:
+      case SRT_WINDOW_SYSTEM_X11:
+        soname = "libGL.so.1";
+        break;
+
+      case SRT_WINDOW_SYSTEM_EGL_X11:
+        soname = "libEGL.so.1";
+        break;
+
+      default:
+        g_return_val_if_reached (SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
+    }
+
+  issues = srt_check_library_presence (soname, multiarch_tuple, NULL, SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, &library);
+
+  if ((issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD) != 0)
+    goto out;
+
+  dependencies = srt_library_get_dependencies (library);
+  library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND;
+
+  for (gsize i = 0; dependencies[i] != NULL; i++)
+    {
+      if (strstr (dependencies[i], "/libGLdispatch.so.") != NULL)
+        {
+          library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND;
+          break;
+        }
+      if (strstr (dependencies[i], "/libglapi.so.") != NULL)
+        {
+          library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_MESA;
+          break;
+        }
+      if (strstr (dependencies[i], "/libnvidia-") != NULL)
+        {
+          library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA;
+          break;
+        }
+    }
+
+out:
+  g_clear_pointer (&library, g_object_unref);
+  return library_vendor;
 }
 
 /**
@@ -574,6 +679,7 @@ _srt_check_graphics (const char *helpers_path,
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
+  SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
   gboolean parse_wflinfo = (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN);
 
   g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
@@ -605,6 +711,8 @@ _srt_check_graphics (const char *helpers_path,
       filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
       my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
     }
+
+  library_vendor = _srt_check_library_vendor (multiarch_tuple, window_system, rendering_interface);
 
   if (!g_spawn_sync (NULL,    /* working directory */
                      (gchar **) argv->pdata,
@@ -724,6 +832,7 @@ out:
     *details_out = _srt_graphics_new (multiarch_tuple,
                                       window_system,
                                       rendering_interface,
+                                      library_vendor,
                                       renderer_string,
                                       version_string,
                                       issues,
@@ -757,6 +866,31 @@ srt_graphics_get_issues (SrtGraphics *self)
 {
   g_return_val_if_fail (SRT_IS_GRAPHICS (self), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
   return self->issues;
+}
+
+/**
+ * srt_graphics_library_is_vendor_neutral:
+ * @self: A #SrtGraphics object
+ * @vendor_out: (out) (optional): Used to return a #SrtGraphicsLibraryVendor object
+ *  representing whether the entry-point library for this graphics stack is vendor-neutral
+ *  or vendor-specific, and if vendor-specific, attempt to guess the vendor
+ *
+ * Return whether the entry-point library for this graphics stack is vendor-neutral or vendor-specific.
+ * Vulkan is always vendor-neutral, so this function will always return %TRUE for it.
+ *
+ * Returns: %TRUE if the graphics library is vendor-neutral, %FALSE otherwise.
+ */
+gboolean
+srt_graphics_library_is_vendor_neutral (SrtGraphics *self,
+                                        SrtGraphicsLibraryVendor *vendor_out)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), FALSE);
+
+  if (vendor_out != NULL)
+    *vendor_out = self->library_vendor;
+
+  return (self->rendering_interface == SRT_RENDERING_INTERFACE_VULKAN ||
+          self->library_vendor == SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
 }
 
 /**

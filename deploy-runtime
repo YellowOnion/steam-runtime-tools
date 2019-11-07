@@ -1,0 +1,200 @@
+#!/bin/sh
+
+# deploy-runtime — unpack and deploy a new runtime
+#
+# Copyright © 2019 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+set -eu
+
+me="$(readlink -f "$0")"
+here="${me%/*}"
+me="${me##*/}"
+
+name=com.valvesoftware.SteamRuntime.Platform
+arch=amd64,i386
+suite=scout
+verbose=
+
+log () {
+    printf '%s\n' "$me: $*" >&2
+}
+
+verbose () {
+    if [ -n "$verbose" ]; then
+        log "$@"
+    fi
+}
+
+usage () {
+    local code="$1"
+    shift
+
+    if [ "$code" -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo "Usage: $me [OPTIONS]"
+    echo
+    echo "Deploy a runtime. For concurrency, must be called with the"
+    echo "current working directory's lock held."
+    echo
+    echo "Options:"
+    echo "--suite SUITE     Use suite SUITE instead of scout"
+    exit "$code"
+}
+
+check_ok_for_filename () {
+    case "$2" in
+        (*/*)
+            log "Error: $1 cannot contain a slash"
+            return 1
+            ;;
+
+        (.*)
+            log "Error: $1 cannot start with a dot"
+            return 1
+            ;;
+    esac
+}
+
+getopt_temp="help"
+getopt_temp="${getopt_temp},architecture:,arch:"
+getopt_temp="${getopt_temp},suite:"
+getopt_temp="${getopt_temp},verbose"
+
+getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
+eval "set -- $getopt_temp"
+unset getopt_temp
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        (--help)
+            usage 0
+            # not reached
+            ;;
+
+        (--architecture | --arch)
+            arch="$2"
+            shift 2
+            ;;
+
+        (--suite)
+            suite="$2"
+            shift 2
+            ;;
+
+        (--verbose)
+            verbose=yes
+            shift
+            ;;
+
+        (--)
+            shift
+            break
+            ;;
+
+        (-*)
+            log "Unknown option: $1"
+            usage 64    # EX_USAGE from sysexits.h
+            # not reached
+            ;;
+
+        (*)
+            break
+            ;;
+    esac
+done
+
+if [ -n "$verbose" ]; then
+    tar_v=v
+else
+    tar_v=
+fi
+
+check_ok_for_filename SUITE "$suite"
+check_ok_for_filename architecture "$arch"
+
+current_build_id="$(cat "${here}/${name}-${arch}-${suite}-buildid.txt")"
+check_ok_for_filename "build ID" "$current_build_id"
+
+updated=
+
+# Ensure that current_build_id is unpacked
+if [ -d "${here}/${suite}_${current_build_id}/files" ]; then
+    verbose "${suite}_${current_build_id}/files already unpacked"
+else
+    rm -fr --one-file-system "${here}/.${suite}_${current_build_id}_unpack-temp"
+    mkdir "${here}/.${suite}_${current_build_id}_unpack-temp"
+    tar -C "${here}/.${suite}_${current_build_id}_unpack-temp" -z${tar_v}xf "${here}/${name}-${arch}-${suite}-runtime.tar.gz"
+    mv "${here}/.${suite}_${current_build_id}_unpack-temp" "${here}/${suite}_${current_build_id}"
+
+    updated=yes
+fi
+
+if [ -z "$updated" ] \
+    && [ -d "${here}/${suite}/files" ] \
+    && [ -L "${here}/${suite}" ]
+then
+    verbose "${suite} is already a symlink to some runtime"
+else
+    if [ -e "${here}/${suite}" ] && ! [ -L "${here}/${suite}" ]; then
+        mv "${here}/${suite}" "${here}/${suite}_before_${current_build_id}"
+    fi
+
+    ln -fns "${suite}_${current_build_id}" "${here}/${suite}"
+fi
+
+# GC old runtimes
+for deployment in "${here}/${suite}"_before_* "${here}/${suite}"_[0-9].* "${here}/.${suite}"_*_unpack-temp; do
+    if ! [ -d "$deployment" ]; then
+        continue
+    fi
+    if [ "x$deployment" = "x${here}/${suite}_${current_build_id}" ]; then
+        continue
+    fi
+    if ! [ -d "$deployment/files" ]; then
+        continue
+    fi
+    if [ -e "$deployment/keep" ]; then
+        continue
+    fi
+    if [ -d "$deployment/files/usr" ]; then
+        lockfile="$deployment/files/usr/.ref"
+    else
+        lockfile="$deployment/files/.ref"
+    fi
+
+    # Ignore any errors here: if we can't undeploy an old runtime
+    # (either because it's in use, or because we can't create the lock
+    # file for some reason, or because rm -fr fails) we waste a bit of
+    # disk space and continue to launch the game. The old runtime will
+    # get deleted eventually, so no harm done.
+    "$here/pressure-vessel/bin/pressure-vessel-with-lock" \
+        --create --write \
+        --lock-file "$lockfile" \
+        -- \
+        rm -fr "$deployment" || :
+done
+
+# vim:set sw=4 sts=4 et:

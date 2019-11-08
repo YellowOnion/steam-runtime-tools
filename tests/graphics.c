@@ -287,6 +287,132 @@ test_good_graphics (Fixture *f,
 }
 
 /*
+ * Test that the X11 window system is normalized correctly.
+ */
+static void
+test_normalize_window_system (Fixture *f,
+                              gconstpointer context)
+{
+  static struct TestVector
+  {
+    const char *description;
+    /* These nested structs are just to provide an obvious visual
+     * distinction between input and output. */
+    struct
+    {
+      SrtWindowSystem winsys;
+      SrtRenderingInterface iface;
+    } in;
+    struct
+    {
+      SrtWindowSystem winsys;
+      const char *parameters_string;
+    } out;
+  } test_vectors[] =
+  {
+    /*
+     * winsys  iface->   GL    |    GLESv2        |  Vulkan        |
+     * ----------+-------------+------------------+----------------+
+     * X11       |   (glx/gl)  | (egl_x11/glesv2) | x11/vulkan     |
+     * GLX       |    glx/gl   |      (!)         |    (!)         |
+     * EGL_X11   |  egl_x11/gl | egl_x11/glesv2   |    (!)         |
+     * Wayland   |  wayland/gl | wayland/glesv2   | wayland/vulkan |
+     *
+     * (We don't implement Wayland yet, but if we did, it would behave
+     * like this.)
+     *
+     * Key: (x): alias for x; (!): invalid/makes no sense
+     */
+
+    { "X11/GL is shorthand for GLX/GL",
+      { SRT_WINDOW_SYSTEM_X11, SRT_RENDERING_INTERFACE_GL },
+      { SRT_WINDOW_SYSTEM_GLX, "glx/gl" } },
+    { "X11/GLESv2 is shorthand for EGL_X11/GLESv2",
+      { SRT_WINDOW_SYSTEM_X11, SRT_RENDERING_INTERFACE_GLESV2 },
+      { SRT_WINDOW_SYSTEM_EGL_X11, "egl_x11/glesv2" } },
+    { "X11/Vulkan is neither GLX nor EGL",
+      { SRT_WINDOW_SYSTEM_X11, SRT_RENDERING_INTERFACE_VULKAN },
+      { SRT_WINDOW_SYSTEM_X11, "x11/vulkan" } },
+
+    { "GLX/GL can be selected explicitly",
+      { SRT_WINDOW_SYSTEM_GLX, SRT_RENDERING_INTERFACE_GL },
+      { SRT_WINDOW_SYSTEM_GLX, "glx/gl" } },
+    /* GLX/GLESv2 omitted: doesn't work in practice */
+    /* GLX/Vulkan omitted: makes no sense */
+
+    { "EGL_X11/GLESv2 can be selected explicitly",
+      { SRT_WINDOW_SYSTEM_EGL_X11, SRT_RENDERING_INTERFACE_GLESV2 },
+      { SRT_WINDOW_SYSTEM_EGL_X11, "egl_x11/glesv2" } },
+    { "EGL_X11/GL can be selected explicitly",
+      { SRT_WINDOW_SYSTEM_EGL_X11, SRT_RENDERING_INTERFACE_GL },
+      { SRT_WINDOW_SYSTEM_EGL_X11, "egl_x11/gl" } },
+    /* EGL_X11/Vulkan omitted: makes no sense */
+
+    /* Wayland row omitted: not implemented yet (scout's libwayland-*
+     * are too old) */
+  };
+  gsize i;
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  for (i = 0; i < G_N_ELEMENTS (test_vectors); i++)
+    {
+      const struct TestVector *test_vector = &test_vectors[i];
+      SrtGraphics *graphics = NULL;
+      SrtWindowSystem winsys;
+      SrtRenderingInterface iface;
+      gchar *tmp;
+
+      g_test_message ("%s", test_vector->description);
+
+      srt_system_info_check_graphics (info,
+                                      "mock-good",
+                                      test_vector->in.winsys,
+                                      test_vector->in.iface,
+                                      &graphics);
+      g_assert_nonnull (graphics);
+      g_assert_cmpint (srt_graphics_get_rendering_interface (graphics), ==,
+                       test_vector->in.iface);
+      g_assert_cmpint (srt_graphics_get_window_system (graphics), ==,
+                       test_vector->out.winsys);
+      tmp = srt_graphics_dup_parameters_string (graphics);
+      g_assert_cmpstr (tmp, ==, test_vector->out.parameters_string);
+      g_free (tmp);
+      g_object_get (graphics,
+                    "rendering-interface", &iface,
+                    "window-system", &winsys,
+                    NULL);
+      g_assert_cmpint (iface, ==, test_vector->in.iface);
+      g_assert_cmpint (winsys, ==, test_vector->out.winsys);
+      g_clear_object (&graphics);
+
+      srt_system_info_check_graphics (info,
+                                      "mock-bad",
+                                      test_vector->in.winsys,
+                                      test_vector->in.iface,
+                                      &graphics);
+      g_assert_nonnull (graphics);
+      g_assert_cmpint (srt_graphics_get_rendering_interface (graphics), ==,
+                       test_vector->in.iface);
+      g_assert_cmpint (srt_graphics_get_window_system (graphics), ==,
+                       test_vector->out.winsys);
+      tmp = srt_graphics_dup_parameters_string (graphics);
+      g_assert_cmpstr (tmp, ==, test_vector->out.parameters_string);
+      g_free (tmp);
+      g_object_get (graphics,
+                    "rendering-interface", &iface,
+                    "window-system", &winsys,
+                    NULL);
+      g_assert_cmpint (iface, ==, test_vector->in.iface);
+      g_assert_cmpint (winsys, ==, test_vector->out.winsys);
+      g_clear_object (&graphics);
+    }
+
+  g_object_unref (info);
+}
+
+/*
  * Test a mock system with no graphics stack
  */
 static void
@@ -1407,6 +1533,8 @@ main (int argc,
               setup, test_timeout_graphics, teardown);
   g_test_add ("/graphics/software", Fixture, NULL,
               setup, test_software_rendering, teardown);
+  g_test_add ("/graphics/normalize_window_system", Fixture, NULL,
+              setup, test_normalize_window_system, teardown);
 
   g_test_add ("/graphics/vulkan", Fixture, NULL,
               setup, test_good_vulkan, teardown);

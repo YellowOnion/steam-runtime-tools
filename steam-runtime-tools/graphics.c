@@ -414,11 +414,14 @@ _srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const g
   return issues;
 }
 
+/*
+ * @window_system: (not optional) (inout):
+ */
 static GPtrArray *
 _argv_for_graphics_test (const char *helpers_path,
                          SrtTestFlags test_flags,
                          const char *multiarch_tuple,
-                         SrtWindowSystem window_system,
+                         SrtWindowSystem *window_system,
                          SrtRenderingInterface rendering_interface,
                          GError **error)
 {
@@ -427,10 +430,12 @@ _argv_for_graphics_test (const char *helpers_path,
   SrtHelperFlags flags = (SRT_HELPER_FLAGS_TIME_OUT
                           | SRT_HELPER_FLAGS_SEARCH_PATH);
 
+  g_assert (window_system != NULL);
+
   if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
     flags |= SRT_HELPER_FLAGS_TIME_OUT_SOONER;
 
-  if (window_system == SRT_WINDOW_SYSTEM_GLX)
+  if (*window_system == SRT_WINDOW_SYSTEM_GLX)
     {
       if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
         {
@@ -444,17 +449,17 @@ _argv_for_graphics_test (const char *helpers_path,
           g_return_val_if_reached (NULL);
         }
     }
-  else if (window_system == SRT_WINDOW_SYSTEM_X11)
+  else if (*window_system == SRT_WINDOW_SYSTEM_X11)
     {
       if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
         {
           platformstring = g_strdup ("glx");
-          window_system = SRT_WINDOW_SYSTEM_GLX;
+          *window_system = SRT_WINDOW_SYSTEM_GLX;
         }
       else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
         {
           platformstring = g_strdup ("x11_egl");
-          window_system = SRT_WINDOW_SYSTEM_EGL_X11;
+          *window_system = SRT_WINDOW_SYSTEM_EGL_X11;
         }
       else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
         {
@@ -467,7 +472,7 @@ _argv_for_graphics_test (const char *helpers_path,
           g_return_val_if_reached (NULL);
         }
     }
-  else if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
+  else if (*window_system == SRT_WINDOW_SYSTEM_EGL_X11)
     {
       if (rendering_interface == SRT_RENDERING_INTERFACE_GL
           || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
@@ -692,7 +697,7 @@ _srt_check_graphics (const char *helpers_path,
   GPtrArray *argv = _argv_for_graphics_test (helpers_path,
                                              test_flags,
                                              multiarch_tuple,
-                                             window_system,
+                                             &window_system,
                                              rendering_interface,
                                              &error);
 

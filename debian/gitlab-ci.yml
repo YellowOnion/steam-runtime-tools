@@ -10,8 +10,19 @@ variables:
     STEAM_CI_USE_BINARIES_FROM: autopkgtest
     STEAM_CI_DEPENDENCIES: >-
         debhelper
+        glslang-tools
+        gtk-doc-tools
+        libegl1-mesa-dev
+        libgl1-mesa-dev
+        libgles2-mesa-dev
         libglib2.0-dev
+        libjson-glib-dev
+        libtheora-dev
+        libvulkan-dev
+        libx11-dev
         libxau-dev
+        libxcb1-dev
+        libxcomposite-dev
         locales
         meson
         pandoc

@@ -581,6 +581,9 @@ get_environ (SrtSystemInfo *self)
     return environ;
 }
 
+/* Path components from ${prefix} to steamrt expectations */
+#define STEAMRT_EXPECTATIONS "lib", "steamrt", "expectations"
+
 static gboolean
 ensure_expectations (SrtSystemInfo *self)
 {
@@ -589,16 +592,26 @@ ensure_expectations (SrtSystemInfo *self)
   if (self->expectations == NULL)
     {
       const char *runtime;
-      const char *sysroot = "/";
-      gchar *def;
+      gchar *def = NULL;
 
       runtime = g_environ_getenv (get_environ (self), "STEAM_RUNTIME");
 
       if (runtime != NULL && runtime[0] == '/')
-        sysroot = runtime;
+        {
+          def = g_build_filename (runtime, "usr", STEAMRT_EXPECTATIONS,
+                                  NULL);
+        }
 
-      def = g_build_filename (sysroot, "usr", "lib", "steamrt",
-                              "expectations", NULL);
+      if (def == NULL)
+        {
+          runtime = _srt_find_myself (NULL, NULL);
+
+          if (runtime != NULL)
+            def = g_build_filename (runtime, STEAMRT_EXPECTATIONS, NULL);
+        }
+
+      if (def == NULL)
+        def = g_build_filename ("/usr", STEAMRT_EXPECTATIONS, NULL);
 
       if (g_file_test (def, G_FILE_TEST_IS_DIR))
         self->expectations = g_steal_pointer (&def);

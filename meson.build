@@ -52,7 +52,6 @@ warning_cflags = [
     '-Wformat=2',
     '-Wimplicit-function-declaration',
     '-Winit-self',
-    '-Winline',
     '-Wjump-misses-init',
     '-Wlogical-op',
     '-Wmissing-declarations',

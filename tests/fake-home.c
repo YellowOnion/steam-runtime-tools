@@ -76,7 +76,7 @@ gboolean
 fake_home_create_structure (FakeHome *f)
 {
   gboolean ret = FALSE;
-  GFile *symlink = NULL;
+  GFile *symlink_gfile = NULL;
   gchar *dot_steam = NULL;
   gchar *scripts = NULL;
   gchar *run = NULL;
@@ -198,18 +198,18 @@ fake_home_create_structure (FakeHome *f)
     {
       if (dot_steam_root == NULL)
         dot_steam_root = g_build_filename (dot_steam, "root", NULL);
-      symlink = g_file_new_for_path (dot_steam_root);
+      symlink_gfile = g_file_new_for_path (dot_steam_root);
 
-      g_file_make_symbolic_link (symlink, f->steam_install, NULL, &error);
-      g_object_unref (symlink);
+      g_file_make_symbolic_link (symlink_gfile, f->steam_install, NULL, &error);
+      g_object_unref (symlink_gfile);
       g_assert_no_error (error);
 
       dot_steam_bin32 = g_build_filename (dot_steam, "bin32", NULL);
-      symlink = g_file_new_for_path (dot_steam_bin32);
+      symlink_gfile = g_file_new_for_path (dot_steam_bin32);
 
       ubuntu12_32 = g_build_filename (f->steam_install, "ubuntu12_32", NULL);
-      g_file_make_symbolic_link (symlink, ubuntu12_32, NULL, &error);
-      g_object_unref (symlink);
+      g_file_make_symbolic_link (symlink_gfile, ubuntu12_32, NULL, &error);
+      g_object_unref (symlink_gfile);
       g_assert_no_error (error);
     }
 
@@ -217,10 +217,10 @@ fake_home_create_structure (FakeHome *f)
     {
       if (dot_steam_steam == NULL)
         dot_steam_steam = g_build_filename (dot_steam, "steam", NULL);
-      symlink = g_file_new_for_path (dot_steam_steam);
+      symlink_gfile = g_file_new_for_path (dot_steam_steam);
 
-      g_file_make_symbolic_link (symlink, f->steam_data, NULL, &error);
-      g_object_unref (symlink);
+      g_file_make_symbolic_link (symlink_gfile, f->steam_data, NULL, &error);
+      g_object_unref (symlink_gfile);
       if (f->has_debian_bug_916303)
         {
           g_error_free (error);

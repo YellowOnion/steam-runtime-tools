@@ -1054,7 +1054,7 @@ runtime_unexpected_location (Fixture *f,
   gchar *ld_path = NULL;
   gchar *env_path = NULL;
   gchar **parts = NULL;
-  GFile *symlink = NULL;
+  GFile *symlink_gfile = NULL;
   GError *error = NULL;
   FakeHome *fake_home;
 
@@ -1071,13 +1071,13 @@ runtime_unexpected_location (Fixture *f,
 
   /* Create a new homedir/.steam/steam symlink that doesn't point to
    * the expected steam runtime path. */
-  symlink = g_file_new_for_path (dot_steam_root);
-  g_file_make_symbolic_link (symlink, fake_home->pinned_64, NULL, &error);
+  symlink_gfile = g_file_new_for_path (dot_steam_root);
+  g_file_make_symbolic_link (symlink_gfile, fake_home->pinned_64, NULL, &error);
   g_assert_no_error (error);
   srt_system_info_set_environ (info, fake_home->env);
   issues = srt_system_info_get_runtime_issues (info);
   g_assert_cmpint (issues, ==, SRT_RUNTIME_ISSUES_UNEXPECTED_LOCATION);
-  g_object_unref (symlink);
+  g_object_unref (symlink_gfile);
 
   /* Move the steam-runtime to another location called "my-runtime" and
    * adjust all the environment variables accordingly. */
@@ -1094,8 +1094,8 @@ runtime_unexpected_location (Fixture *f,
 
   g_rename (fake_home->runtime, my_runtime);
   g_remove (dot_steam_root);
-  symlink = g_file_new_for_path (dot_steam_root);
-  g_file_make_symbolic_link (symlink, my_runtime, NULL, &error);
+  symlink_gfile = g_file_new_for_path (dot_steam_root);
+  g_file_make_symbolic_link (symlink_gfile, my_runtime, NULL, &error);
   g_assert_no_error (error);
   fake_home->env = g_environ_setenv (fake_home->env, "LD_LIBRARY_PATH", ld_path, TRUE);
   fake_home->env = g_environ_setenv (fake_home->env, "STEAM_RUNTIME", my_runtime, TRUE);
@@ -1106,7 +1106,7 @@ runtime_unexpected_location (Fixture *f,
   g_assert_cmpint (issues, ==, SRT_RUNTIME_ISSUES_UNEXPECTED_LOCATION);
 
   fake_home_clean_up (fake_home);
-  g_object_unref (symlink);
+  g_object_unref (symlink_gfile);
   g_object_unref (info);
   g_free (dot_steam_root);
   g_free (my_runtime);
@@ -1127,7 +1127,7 @@ steam_symlink (Fixture *f,
   gchar *dot_steam_bin32 = NULL;
   gchar *installation_path = NULL;
   gchar *ubuntu12_32 = NULL;
-  GFile *symlink = NULL;
+  GFile *symlink_gfile = NULL;
   GError *error = NULL;
   FakeHome *fake_home;
 
@@ -1150,8 +1150,8 @@ steam_symlink (Fixture *f,
   /* Remove homedir/.steam/root symlink and create homedir/.steam/bin32 symlink. */
   g_remove (dot_steam_root);
   g_remove (dot_steam_bin32);
-  symlink = g_file_new_for_path (dot_steam_bin32);
-  g_file_make_symbolic_link (symlink, ubuntu12_32, NULL, &error);
+  symlink_gfile = g_file_new_for_path (dot_steam_bin32);
+  g_file_make_symbolic_link (symlink_gfile, ubuntu12_32, NULL, &error);
   g_assert_no_error (error);
   srt_system_info_set_environ (info, fake_home->env);
   issues = srt_system_info_get_steam_issues (info);
@@ -1177,7 +1177,7 @@ steam_symlink (Fixture *f,
   g_assert_cmpstr (installation_path, ==, NULL);
 
   fake_home_clean_up (fake_home);
-  g_object_unref (symlink);
+  g_object_unref (symlink_gfile);
   g_object_unref (info);
   g_free (data_home);
   g_free (dot_steam_steam);
@@ -1871,7 +1871,7 @@ pinned_libraries (Fixture *f,
   gchar *has_pins = NULL;
   gchar **values = NULL;
   gchar **messages = NULL;
-  GFile *symlink = NULL;
+  GFile *symlink_gfile = NULL;
   gboolean seen_pins;
   gsize i;
   GError *error = NULL;
@@ -1884,18 +1884,18 @@ pinned_libraries (Fixture *f,
 
   start = g_build_filename (fake_home->pinned_32, "libcurl.so.3", NULL);
   target1 = g_build_filename (fake_home->pinned_32, "libcurl.so.4", NULL);
-  symlink = g_file_new_for_path (start);
+  symlink_gfile = g_file_new_for_path (start);
 
-  g_file_make_symbolic_link (symlink, target1, NULL, &error);
-  g_object_unref (symlink);
+  g_file_make_symbolic_link (symlink_gfile, target1, NULL, &error);
+  g_object_unref (symlink_gfile);
   g_assert_no_error (error);
 
   target2 = g_build_filename (fake_home->i386_usr_lib_i386, "libcurl.so.4.2.0", NULL);
   g_assert_cmpint (g_creat (target2, 0755), >, -1);
-  symlink = g_file_new_for_path (target1);
+  symlink_gfile = g_file_new_for_path (target1);
 
-  g_file_make_symbolic_link (symlink, target2, NULL, &error);
-  g_object_unref (symlink);
+  g_file_make_symbolic_link (symlink_gfile, target2, NULL, &error);
+  g_object_unref (symlink_gfile);
   g_assert_no_error (error);
 
   has_pins = g_build_filename (fake_home->pinned_32, "has_pins", NULL);
@@ -1950,18 +1950,18 @@ pinned_libraries (Fixture *f,
   srt_system_info_set_environ (info, fake_home->env);
   start = g_build_filename (fake_home->pinned_64, "libcurl.so.3", NULL);
   target1 = g_build_filename (fake_home->pinned_64, "libcurl.so.4", NULL);
-  symlink = g_file_new_for_path (start);
+  symlink_gfile = g_file_new_for_path (start);
 
-  g_file_make_symbolic_link (symlink, target1, NULL, &error);
-  g_object_unref (symlink);
+  g_file_make_symbolic_link (symlink_gfile, target1, NULL, &error);
+  g_object_unref (symlink_gfile);
   g_assert_no_error (error);
 
   target2 = g_build_filename (fake_home->amd64_usr_lib_64, "libcurl.so.4.2.0", NULL);
   g_assert_cmpint (g_creat (target2, 0755), >, -1);
-  symlink = g_file_new_for_path (target1);
+  symlink_gfile = g_file_new_for_path (target1);
 
-  g_file_make_symbolic_link (symlink, target2, NULL, &error);
-  g_object_unref (symlink);
+  g_file_make_symbolic_link (symlink_gfile, target2, NULL, &error);
+  g_object_unref (symlink_gfile);
   g_assert_no_error (error);
 
   has_pins = g_build_filename (fake_home->pinned_64, "has_pins", NULL);

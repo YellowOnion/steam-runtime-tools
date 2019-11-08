@@ -103,7 +103,6 @@ find_bwrap (const char *tools_dir)
   };
   const char *tmp;
   g_autofree gchar *candidate = NULL;
-  g_autofree gchar *dirname = NULL;
   gsize i;
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
@@ -1445,21 +1444,21 @@ bind_runtime (FlatpakBwrap *bwrap,
    */
   if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
     {
-      g_autofree char *localtime = NULL;
+      g_autofree char *target = NULL;
       gboolean is_reachable = FALSE;
-      g_autofree char *timezone = flatpak_get_timezone ();
-      g_autofree char *timezone_content = g_strdup_printf ("%s\n", timezone);
+      g_autofree char *tz = flatpak_get_timezone ();
+      g_autofree char *timezone_content = g_strdup_printf ("%s\n", tz);
 
-      localtime = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
+      target = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
 
-      if (localtime != NULL)
+      if (target != NULL)
         {
           g_autoptr(GFile) base_file = NULL;
           g_autoptr(GFile) target_file = NULL;
           g_autofree char *target_canonical = NULL;
 
           base_file = g_file_new_for_path ("/etc");
-          target_file = g_file_resolve_relative_path (base_file, localtime);
+          target_file = g_file_resolve_relative_path (base_file, target);
           target_canonical = g_file_get_path (target_file);
 
           is_reachable = g_str_has_prefix (target_canonical, "/usr/");
@@ -1468,7 +1467,7 @@ bind_runtime (FlatpakBwrap *bwrap,
       if (is_reachable)
         {
           flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", localtime, "/etc/localtime",
+                                  "--symlink", target, "/etc/localtime",
                                   NULL);
         }
       else

@@ -40,6 +40,10 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
+/* To keep this more similar to the original file, we explicitly disable
+ * this warning rather than fixing it */
+#pragma GCC diagnostic ignored "-Wshadow"
+
 #define RUNNING_ON_VALGRIND 0
 
 /* Sometimes this is /var/run which is a symlink, causing weird issues when we pass

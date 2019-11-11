@@ -55,7 +55,7 @@ build:devel:
             ${STEAM_RUNTIME_TOOLS_GIT_REPO} \
             subprojects/steam-runtime-tools
 
-            meson _build
+            meson --werror _build
             ninja -C _build
             ninja -C _build install
             meson test --verbose -C _build
@@ -103,6 +103,7 @@ build:scout:
               --prefix="$(pwd)/_build/prefix" \
               -Dpython=python3.5 \
               -Dsrcdir=src \
+              --werror \
               _build
             ninja -C _build
             meson test --verbose -C _build

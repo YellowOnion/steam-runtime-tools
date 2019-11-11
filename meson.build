@@ -21,9 +21,14 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-project('steam-runtime-tools', 'c', 
-        version : '0.20191024.0',
-        default_options: ['cpp_std=c++11'])
+project(
+  'steam-runtime-tools', 'c',
+  version : '0.20191024.0',
+  default_options: [
+    'c_std=c99',
+    'cpp_std=c++11',
+  ],
+)
 add_languages('cpp')
 
 api_major = '0'
@@ -129,7 +134,6 @@ configure_file(
   configuration : conf_data,
 )
 
-add_project_arguments(['-std=c99'], language : 'c')
 add_project_arguments(['-D_GNU_SOURCE'], language : 'c')
 add_project_arguments(['-include', 'config.h'], language : 'c')
 add_project_arguments(['-include', 'config.h'], language : 'cpp')

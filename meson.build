@@ -150,8 +150,12 @@ conf_data.set_quoted('VERSION', version)
 
 configure_file(
   input : 'config.h.in',
-  output : 'config.h',
+  output : '_pressure-vessel-config.h',
   configuration : conf_data,
+)
+add_project_arguments(
+  ['-include', '_pressure-vessel-config.h'],
+  language : 'c',
 )
 
 executable(

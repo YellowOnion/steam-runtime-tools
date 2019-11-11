@@ -22,9 +22,6 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "config.h"
-#include "subprojects/libglnx/config.h"
-
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <gio/gio.h>

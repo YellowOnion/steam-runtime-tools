@@ -20,9 +20,6 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
-#include "config.h"
-#include "subprojects/libglnx/config.h"
-
 #include "flatpak-utils-private.h"
 
 #include <string.h>

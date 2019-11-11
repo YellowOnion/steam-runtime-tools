@@ -18,9 +18,6 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
-#include "config.h"
-#include "subprojects/libglnx/config.h"
-
 #include <string.h>
 #include <fcntl.h>
 #include <stdio.h>

@@ -81,6 +81,7 @@ warning_cflags = [
     '-Wwrite-strings',
 ]
 no_warning_cflags = [
+    'cast-align',
     'declaration-after-statement',
     'missing-field-initializers',
     'pedantic',

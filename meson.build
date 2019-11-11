@@ -79,6 +79,7 @@ warning_cflags = [
 no_warning_cflags = [
     'declaration-after-statement',
     'missing-field-initializers',
+    'pedantic',
     'sign-compare',
     'unused-parameter',
 ]

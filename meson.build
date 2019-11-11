@@ -134,6 +134,14 @@ foreach flag : no_warning_cflags
   add_project_arguments(supported_no_warning_cflags, language : 'c')
 endforeach
 
+foreach flag : no_warning_cxxflags
+  supported_no_warning_cxxflags = cpp_compiler.get_supported_arguments([
+    '-Wno-error=' + flag,
+    '-Wno-' + flag,
+  ])
+  add_project_arguments(supported_no_warning_cxxflags, language : 'cpp')
+endforeach
+
 conf_data = configuration_data()
 conf_data.set_quoted('VERSION', meson.project_version())
 

@@ -110,8 +110,11 @@ no_warning_cxxflags = no_warning_flags + [
 ]
 
 c_compiler = meson.get_compiler('c')
+cpp_compiler = meson.get_compiler('cpp')
 supported_warning_cflags = c_compiler.get_supported_arguments(warning_cflags)
 add_project_arguments(supported_warning_cflags, language : 'c')
+supported_warning_cxxflags = cpp_compiler.get_supported_arguments(warning_cxxflags)
+add_project_arguments(supported_warning_cxxflags, language : 'cpp')
 
 add_project_link_arguments(
   c_compiler.get_supported_link_arguments(

@@ -100,8 +100,8 @@ c_compiler = meson.get_compiler('c')
 supported_warning_cflags = c_compiler.get_supported_arguments(warning_cflags)
 add_project_arguments(supported_warning_cflags, language : 'c')
 
-add_project_arguments(
-  c_compiler.get_supported_arguments(
+add_project_link_arguments(
+  c_compiler.get_supported_link_arguments(
     '-Wl,-z,origin',
     # Generate RPATH in preference to RUNPATH, even if RUNPATH is the
     # linker's default. We want RPATH here, because it's used recursively

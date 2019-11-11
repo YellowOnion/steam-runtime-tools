@@ -21,7 +21,12 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-project('pressure-vessel', 'c')
+project(
+  'pressure-vessel', 'c',
+  default_options: [
+    'warning_level=2',
+  ],
+)
 
 prove = find_program('prove', required : false)
 python = find_program(get_option('python'), required : true)

@@ -99,6 +99,7 @@ warning_cxxflags = warning_flags + [
 
 no_warning_flags = [
     'missing-field-initializers',
+    'pedantic',
     'sign-compare',
     'unused-local-typedefs',
     'unused-parameter',

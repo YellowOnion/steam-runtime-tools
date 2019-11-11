@@ -69,7 +69,11 @@ build:devel:
             export CXX=clang++
 
             rm -fr _build
-            meson --werror _build
+            meson \
+                -Db_lundef=false \
+                -Db_sanitize=address,undefined \
+                --werror \
+                _build
             ninja -C _build
             ninja -C _build scan-build
             ninja -C _build install

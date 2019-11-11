@@ -1,3 +1,15 @@
+pressure-vessel (0.20191112.2-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  * Go back to non-native versioning.
+    Versioning pressure-vessel as a native package interacts poorly with
+    the combination of the Open Build Service pseudo-binNMU suffix and the
+    deb-build-snapshot tool used for prereleases:
+    0.20190927.0+7+g1234567+srt1 is less than 0.20190927.0+srt1, so
+    0.20190927.0 would wrongly be preferred over the prerelease at commit
+    1234567, 7 commits later than 0.20190927.0.
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 11 Nov 2019 19:46:56 +0000
+
 pressure-vessel (0.20191112.1) scout; urgency=medium
 
   * Revert inclusion of libglnx!14.

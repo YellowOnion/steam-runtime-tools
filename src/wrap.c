@@ -667,7 +667,6 @@ bind_runtime (FlatpakBwrap *bwrap,
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
-  g_autofree gchar *usr = NULL;
   gsize i, j;
   const gchar *member;
   g_autoptr(GString) dri_path = g_string_new ("");
@@ -692,8 +691,6 @@ bind_runtime (FlatpakBwrap *bwrap,
   g_return_val_if_fail (overrides != NULL, FALSE);
   g_return_val_if_fail (scratch != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  usr = g_build_filename (runtime, "usr", NULL);
 
   if (!pv_bwrap_bind_usr (bwrap, runtime, "/", error))
     return FALSE;

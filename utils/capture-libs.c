@@ -96,6 +96,24 @@ enum
   OPTION_VERSION,
 };
 
+/*
+ * string_set_diff_flags:
+ * @STRING_SET_DIFF_ONLY_IN_FIRST: At least one element is in the first set but not the second
+ * @STRING_SET_DIFF_ONLY_IN_SECOND: At least one element is in the second set but not the first
+ * @STRING_SET_DIFF_NONE: All elements are equal
+ *
+ * The result of comparing two sets of strings. If each set
+ * contains elements that the other does not, then
+ * both @STRING_SET_DIFF_ONLY_IN_FIRST
+ * and @STRING_SET_DIFF_ONLY_IN_SECOND will be set.
+ */
+typedef enum
+{
+  STRING_SET_DIFF_ONLY_IN_FIRST = (1 << 0),
+  STRING_SET_DIFF_ONLY_IN_SECOND = (1 << 1),
+  STRING_SET_DIFF_NONE = 0
+} string_set_diff_flags;
+
 static const char * const *arg_patterns = NULL;
 static const char *option_container = "/";
 static const char *option_dest = ".";
@@ -314,6 +332,558 @@ static bool capture_patterns( const char * const *patterns,
                               capture_flags flags,
                               int *code, char **message );
 
+/* Exclude empty symbols */
+static int
+symbol_excluded( const char *name )
+{
+    if( name == NULL ||
+        !strcmp(name, "") )
+        return 1;
+
+    return 0;
+}
+
+static int
+bsearch_strcmp_cb( const void *n, const void *ip )
+{
+    const char *needle = n;
+    const char * const *item_p = ip;
+    return strcmp( needle, *item_p );
+}
+
+static int
+qsort_strcmp_cb( const void* s1, const void* s2 )
+{
+    const char * const *a = (const char* const*) s1;
+    const char* const *b = (const char* const*) s2;
+    return strcmp( *a, *b );
+}
+
+/*
+ * parse_map_symbols:
+ * @base: (type filename): A `link_map` base address
+ * @dyn: (type filename): The dynamic section of the shared object
+ * @symbols_number: (out) (not optional): The number of symbols found
+ * @code: (out) (optional): Used to return an error code on
+ *  failure
+ * @message: (out) (optional) (nullable): Used to return an error message
+ *  on failure
+ *
+ * Returns: (transfer container): The list of symbols that the
+ *  shared object has, on failure %NULL.
+ */
+static const char **
+parse_map_symbols( ElfW(Addr) base,
+                   ElfW(Dyn) *dyn,
+                   size_t* symbols_number,
+                   int *code, char **message )
+{
+    size_t x = 0;
+    const char *strtab = NULL;
+    ElfW(Sym) *symtab = NULL;
+    const ElfW(Dyn) *entry = NULL;
+    const ElfW(Sym) *entry_sym = NULL;
+    /* The array is calloc'd, but the members point into the string table */
+    const char **symbols = NULL;
+
+    assert( symbols_number != NULL );
+
+    strtab = dynamic_section_find_strtab( dyn, (const void *) base, NULL );
+
+    if ( strtab == NULL )
+    {
+        _capsule_set_error( code, message, EINVAL,
+                            "String table is unexpectedly missing or inaccessible" );
+        return NULL;
+    }
+
+    for( entry = dyn; entry->d_tag != DT_NULL; entry++ )
+    {
+        switch( entry->d_tag )
+        {
+          case DT_SYMTAB:
+            symtab = (ElfW(Sym) *) entry->d_un.d_ptr;
+            break;
+
+          default:
+            break;
+        }
+    }
+
+    if ( symtab == NULL )
+    {
+        _capsule_set_error( code, message, EINVAL,
+                            "DT_SYMTAB is unexpectedly missing or inaccessible" );
+        return NULL;
+    }
+
+    x = 0;
+    /* We perform two times the for cycle in order to get the number of items.
+     * Skip all the excluded symbols. */
+    for( entry_sym = symtab;
+         ( (ELFW_ST_TYPE(entry_sym->st_info) < STT_NUM) &&
+           (ELFW_ST_BIND(entry_sym->st_info) < STB_NUM) );
+         entry_sym++ )
+    {
+        if ( !symbol_excluded( strtab + entry_sym->st_name ) )
+            x++;
+    }
+
+    *symbols_number = x;
+    symbols = calloc( *symbols_number + 1, sizeof(char *) );
+
+    x = 0;
+    for( entry_sym = symtab;
+         ( (ELFW_ST_TYPE(entry_sym->st_info) < STT_NUM) &&
+           (ELFW_ST_BIND(entry_sym->st_info) < STB_NUM) );
+         entry_sym++ )
+    {
+        if ( !symbol_excluded( strtab + entry_sym->st_name ) )
+        {
+            symbols[x] = strtab + entry_sym->st_name;
+            x++;
+        }
+    }
+
+    symbols[x] = NULL;
+    qsort( symbols, *symbols_number, sizeof(char *), qsort_strcmp_cb );
+    return symbols;
+}
+
+/*
+ * parse_map_versions:
+ * @base: (type filename): A `link_map` base address
+ * @dyn: (type filename): The dynamic section of the shared object
+ * @versions_number: (out) (optional): The number of versions found
+ * @code: (out) (optional): Used to return an error code on
+ *  failure
+ * @message: (out) (optional) (nullable): Used to return an error message
+ *  on failure
+ *
+ * Returns: (transfer container): The list of versions that the
+ *  shared object has, on failure %NULL.
+ */
+static const char **
+parse_map_versions( ElfW(Addr) base, ElfW(Dyn) *dyn,
+                    size_t* versions_number,
+                    int *code, char **message )
+{
+    size_t verdefnum = (size_t) -1;
+    void *start = NULL;
+    const ElfW(Verdef) *verdef = NULL;
+    const char *strtab = NULL;
+    const char *version = NULL;
+    ElfW(Verdaux) *aux = NULL;
+    const char *vd = NULL;
+    const char **versions = NULL;
+
+    start  = (void *) ((ElfW(Addr)) dyn - base );
+    strtab = dynamic_section_find_strtab( dyn, (const void *) base, NULL );
+    verdefnum = find_value( base, start, DT_VERDEFNUM );
+    verdef = (const ElfW(Verdef) *) find_ptr( base, start, DT_VERDEF );
+
+    /* The library doesn't have versions */
+    if( verdefnum == (size_t) -1 && verdef == NULL )
+    {
+        versions = malloc( sizeof(char *) );
+        versions[0] = NULL;
+        if( versions_number != NULL)
+            *versions_number = 0;
+
+        return versions;
+    }
+
+    if( verdefnum == (size_t) -1 || verdef == NULL )
+    {
+        _capsule_set_error( code, message, EINVAL,
+                            "Found one of DT_VERDEF or DT_VERDEFNUM, but not the other" );
+        return NULL;
+    }
+
+    vd = (const char *) verdef;
+
+    versions = calloc( verdefnum + 1, sizeof(char *) );
+
+    for( size_t x = 0; x < verdefnum; x++ )
+    {
+        ElfW(Verdef) *the_entry = (ElfW(Verdef) *) vd;
+        aux = (ElfW(Verdaux) *) ( vd + the_entry->vd_aux );
+        version = strtab + aux->vda_name;
+        versions[x] = version;
+        vd = vd + the_entry->vd_next;
+    }
+
+    versions[verdefnum] = NULL;
+    qsort( versions, verdefnum, sizeof(char *), qsort_strcmp_cb );
+    if( versions_number != NULL)
+        *versions_number = verdefnum;
+
+    return versions;
+}
+
+/*
+ * get_link_map:
+ * @soname: (type filename): The library name to load
+ * @path: (type filename): If not %NULL, load libraries as though
+ *  this base path was the root directory
+ * @ns: (inout) (not optional): The namespace that will be used
+ *  to search for @soname
+ * @code: (out) (optional): Used to return an error code on
+ *  failure
+ * @message: (out) (optional) (nullable): Used to return an error message
+ *  on failure
+ *
+ * Returns: A link_map of the loaded shared library @soname,
+ *  on failure %NULL.
+ */
+static struct link_map *
+get_link_map ( const char *soname, const char *path,
+               Lmid_t *ns, int *code, char **message )
+{
+    const char *libname;
+    ld_libs ldlibs = {};
+    void *handle;
+    int dlcode = 0;
+    struct link_map *map = NULL;
+
+    assert( ns != NULL );
+
+    if( !ld_libs_init( &ldlibs, NULL, path, 0, code, message ) )
+        return NULL;
+
+    if( !ld_libs_set_target( &ldlibs, soname, code, message ) )
+        return NULL;
+
+    if( ( handle = ld_libs_load( &ldlibs, ns, 0, code, message ) ) )
+    {
+        if( (libname = strrchr( soname, '/' ) ) )
+            libname = libname + 1;
+        else
+            libname = soname;
+
+        // dl_iterate_phdr won't work with private dlmopen namespaces:
+        if( ( dlcode = dlinfo( handle, RTLD_DI_LINKMAP, &map ) ) )
+        {
+            _capsule_set_error( code, message, EINVAL,
+                                "cannot access symbols for %s via handle %p [%d]: %s",
+                                libname, handle, dlcode, dlerror() );
+            return NULL;
+        }
+    }
+    else
+    {
+        return NULL;
+    }
+    return map;
+}
+
+/*
+ * get_symbols:
+ * @soname: (type filename): The library name to load
+ * @path: (type filename): If not %NULL, load libraries as though
+ *  this base path was the root directory
+ * @symbols_number: (out) (not optional): The number of symbols found
+ * @ns: (inout) (not optional): The namespace that will be used
+ *  to search for @soname
+ * @code: (out) (optional): Used to return an error code on
+ *  failure
+ * @message: (out) (optional) (nullable): Used to return an error message
+ *  on failure
+ *
+ * Returns: (transfer container): The list of symbols that the
+ *  shared object has, on failure %NULL.
+ */
+static const char **
+get_symbols ( const char *soname, const char *path, size_t *symbols_number,
+              Lmid_t *ns, int *code, char **message )
+{
+    struct link_map *map;
+    const char **symbols = NULL;
+
+    map = get_link_map( soname, path, ns, code, message );
+
+    // We expect to have a pointer directly to the library we are interested in.
+    if( map != NULL )
+        symbols = parse_map_symbols( map->l_addr, map->l_ld, symbols_number,
+                                     code, message );
+
+    return symbols;
+}
+
+/*
+ * get_versions:
+ * @soname: (type filename): The library name to load
+ * @path: (type filename): If not %NULL, load libraries as though
+ *  this base path was the root directory
+ * @versions_number: (out) (optional): The number of versions found
+ * @ns: (inout) (not optional): The namespace that will be used
+ *  to search for @soname
+ * @code: (out) (optional): Used to return an error code on
+ *  failure
+ * @message: (out) (optional) (nullable): Used to return an error message
+ *  on failure
+ *
+ * Returns: (transfer container): The list of versions that the
+ *  shared object has, on failure %NULL.
+ */
+static const char **
+get_versions ( const char *soname, const char *path, size_t* versions_number,
+               Lmid_t *ns, int *code, char **message )
+{
+    struct link_map *map;
+    const char **versions = NULL;
+
+    map = get_link_map( soname, path, ns, code, message );
+
+    // We expect to have a pointer directly to the library we are interested in.
+    if( map != NULL )
+        versions = parse_map_versions( map->l_addr, map->l_ld, versions_number,
+                                       code, message );
+
+    return versions;
+}
+
+/*
+ * compare_string_sets:
+ * @first: the first set to compare
+ * @first_length: number of elements in the first set
+ * @second: the second set to compare
+ * @second_length: number of elements in the second set
+ *
+ * The two sets needs to be ordered because we will use a binary search to do
+ * the comparison.
+ */
+static string_set_diff_flags
+compare_string_sets ( const char **first, size_t first_length,
+                      const char **second, size_t second_length )
+{
+    string_set_diff_flags result = STRING_SET_DIFF_NONE;
+
+    assert( first != NULL );
+    assert( second != NULL );
+
+    if( first_length > second_length )
+    {
+        result |= STRING_SET_DIFF_ONLY_IN_FIRST;
+    }
+    else
+    {
+        for( size_t i = 0; i < first_length; i++ )
+        {
+            char *found = bsearch( first[i], second, second_length, sizeof(char *), bsearch_strcmp_cb );
+            if( found == NULL )
+            {
+                result |= STRING_SET_DIFF_ONLY_IN_FIRST;
+                break;
+            }
+        }
+    }
+
+    if( first_length < second_length )
+    {
+        result |= STRING_SET_DIFF_ONLY_IN_SECOND;
+    }
+    else
+    {
+        for( size_t i = 0; i < second_length; i++ )
+        {
+            char *found = bsearch( second[i], first, first_length, sizeof(char *), bsearch_strcmp_cb );
+            if( found == NULL )
+            {
+                result |= STRING_SET_DIFF_ONLY_IN_SECOND;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+/*
+ * library_cmp_by_symbols:
+ * @soname: The library we are interested in
+ * @container_namespace: (inout): The namespace that will be used
+ *  to search @soname in the container
+ * @provider_namespace: (inout): The namespace that will be used
+ *  to search @soname in the provider
+ *
+ * Attempt to determine whether @soname is older, newer or
+ * the same in the container or the provider inspecting their
+ * symbols.
+ *
+ * Return a strcmp-style result: negative if container < provider,
+ * positive if container > provider, zero if container == provider
+ * or if container and provider are non-comparable.
+ */
+static int
+library_cmp_by_symbols( const char *soname, Lmid_t *container_namespace,
+                        Lmid_t *provider_namespace )
+{
+    const char **container_symbols = NULL;
+    const char **provider_symbols = NULL;
+    size_t container_symbols_number = 0;
+    size_t provider_symbols_number = 0;
+    string_set_diff_flags symbol_result = STRING_SET_DIFF_NONE;
+    int cmp_result = 0;
+    int code = 0;
+    char *message = NULL;
+
+    container_symbols = get_symbols( soname, option_container,
+                                     &container_symbols_number,
+                                     container_namespace, &code, &message );
+
+    if( container_symbols == NULL )
+    {
+        warnx( "failed to get container symbols for %s (%d): %s",
+               soname, code, message );
+        goto out;
+    }
+
+    provider_symbols = get_symbols( soname, option_provider,
+                                    &provider_symbols_number,
+                                    provider_namespace, &code, &message );
+
+    if( provider_symbols == NULL )
+    {
+        warnx( "failed to get provider symbols for %s (%d): %s",
+               soname, code, message );
+        goto out;
+    }
+
+    symbol_result = compare_string_sets( container_symbols, container_symbols_number,
+                                         provider_symbols, provider_symbols_number );
+
+    /* In container we have strictly more symbols: don't symlink the one
+     * from the provider */
+    if( symbol_result == STRING_SET_DIFF_ONLY_IN_FIRST )
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the container is newer because its symbols are a strict superset",
+               soname );
+        cmp_result = 1;
+    }
+    /* In provider we have strictly more symbols: create the symlink */
+    else if( symbol_result == STRING_SET_DIFF_ONLY_IN_SECOND )
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the provider is newer because its symbols are a strict superset",
+               soname );
+        cmp_result = -1;
+    }
+    /* With the following two cases we are still unsure which library is newer, so we
+     * will choose the provider */
+    else if( symbol_result == STRING_SET_DIFF_NONE )
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the container and the provider have the same symbols",
+               soname );
+    }
+    else
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the container and the provider have different symbols and neither is a superset of the other",
+               soname );
+    }
+
+    out:
+        _capsule_clear( &message );
+        free( container_symbols );
+        free( provider_symbols );
+        return cmp_result;
+}
+
+/*
+ * library_cmp_by_versions:
+ * @soname: The library we are interested in
+ * @container_namespace: (inout): The namespace that will be used
+ *  to search @soname in the container
+ * @provider_namespace: (inout): The namespace that will be used
+ *  to search @soname in the provider
+ *
+ * Attempt to determine whether @soname is older, newer or
+ * the same in the container or the provider inspecting their
+ * symbols versions.
+ *
+ * Return a strcmp-style result: negative if container < provider,
+ * positive if container > provider, zero if container == provider
+ * or if container and provider are non-comparable.
+ */
+static int
+library_cmp_by_versions( const char *soname, Lmid_t *container_namespace,
+                         Lmid_t *provider_namespace )
+{
+    const char **container_versions = NULL;
+    const char **provider_versions = NULL;
+    size_t container_versions_number = 0;
+    size_t provider_versions_number = 0;
+    string_set_diff_flags version_result = STRING_SET_DIFF_NONE;
+    int cmp_result = 0;
+    int code = 0;
+    char *message = NULL;
+
+    container_versions = get_versions( soname, option_container,
+                                       &container_versions_number,
+                                       container_namespace, &code, &message );
+
+    if( container_versions == NULL )
+    {
+        warnx( "failed to get container versions for %s (%d): %s",
+               soname, code, message );
+        goto out;
+    }
+
+    provider_versions = get_versions( soname, option_provider,
+                                      &provider_versions_number,
+                                      provider_namespace, &code, &message );
+
+    if( provider_versions == NULL )
+    {
+        warnx( "failed to get provider versions for %s (%d): %s",
+               soname, code, message );
+        goto out;
+    }
+
+    version_result = compare_string_sets( container_versions, container_versions_number,
+                                          provider_versions, provider_versions_number );
+
+    /* Version in container is strictly newer: don't symlink the one
+     * from the provider */
+    if( version_result == STRING_SET_DIFF_ONLY_IN_FIRST )
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the container is newer because its version definitions are a strict superset",
+               soname );
+        cmp_result = 1;
+    }
+    /* Version in the provider is strictly newer: create the symlink */
+    else if( version_result == STRING_SET_DIFF_ONLY_IN_SECOND )
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the provider is newer because its version definitions are a strict superset",
+               soname );
+        cmp_result = -1;
+    }
+    /* With the following two cases we are still unsure which library is newer */
+    else if( version_result == STRING_SET_DIFF_NONE )
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the container and the provider have the same symbol versions",
+               soname );
+    }
+    else
+    {
+        DEBUG( DEBUG_TOOL,
+               "%s in the container and the provider have different symbol versions and neither is a superset of the other",
+               soname );
+    }
+
+    out:
+        code = 0;
+        _capsule_clear( &message );
+        free( container_versions );
+        free( provider_versions );
+        return cmp_result;
+}
+
 /*
  * library_cmp_by_name:
  * @soname: The library we are interested in, used in debug logging
@@ -402,6 +972,8 @@ capture_one( const char *soname, capture_flags flags,
     _capsule_cleanup(ld_libs_finish) ld_libs provider = {};
     int local_code = 0;
     _capsule_autofree char *local_message = NULL;
+    Lmid_t container_namespace = LM_ID_NEWLM;
+    Lmid_t provider_namespace = LM_ID_NEWLM;
 
     if( !init_with_target( &provider, option_provider, soname,
                            &local_code, &local_message ) )
@@ -460,31 +1032,29 @@ capture_one( const char *soname, capture_flags flags,
 
         needed_basename = my_basename( needed_name );
 
-        if( !option_glibc )
+        size_t j;
+        bool libc_lib = false;
+        for( j = 0; j < N_ELEMENTS( libc_patterns ); j++ )
         {
-            unsigned int j;
-            bool capture = true;
+            if( libc_patterns[j] == NULL )
+                break;
 
-            for( j = 0; j < N_ELEMENTS( libc_patterns ); j++ )
+            assert( strstarts( libc_patterns[j], "soname:" ) );
+
+            if( strcmp( libc_patterns[j] + strlen( "soname:" ),
+                        needed_basename ) == 0 )
             {
-                if( libc_patterns[j] == NULL )
-                    break;
-
-                assert( strstarts( libc_patterns[j], "soname:" ) );
-
-                if( strcmp( libc_patterns[j] + strlen( "soname:" ),
-                            needed_basename ) == 0 )
-                {
-                    DEBUG( DEBUG_TOOL,
-                           "Not capturing \"%s\" because it is part of glibc",
-                           needed_name );
-                    capture = false;
-                    break;
-                }
+                libc_lib = true;
+                break;
             }
+        }
 
-            if( !capture )
-                continue;
+        if( !option_glibc && libc_lib )
+        {
+            DEBUG( DEBUG_TOOL,
+                   "Not capturing \"%s\" because it is part of glibc",
+                   needed_name );
+            continue;
         }
 
         if( fstatat( dest_fd, needed_basename, &statbuf,
@@ -523,33 +1093,39 @@ capture_one( const char *soname, capture_flags flags,
                                   &local_code, &local_message ) )
             {
                 const char *needed_path_in_container = container.needed[0].path;
+                int decision = 0;
 
-                /* TODO: Ideally we would actually dlopen the libraries and
-                 * inspect their symbol tables, either in ambiguous cases
-                 * or always - but that's easier said than done, because
-                 * private symbols exist. For now we just use
-                 * library_cmp_by_name(). */
-
-                /* If equal, we prefer the provider over the container */
-                if( library_cmp_by_name( needed_name,
-                                         needed_path_in_container,
-                                         option_container,
-                                         needed_path_in_provider,
-                                         option_provider) > 0 )
+                /* Compare the version definitions.
+                 * We skip all libc related libraries to avoid problems with dlmopen() */
+                if( !libc_lib )
                 {
-                    /* Version in container is strictly newer: don't
-                     * symlink in the one from the provider */
-                    DEBUG( DEBUG_TOOL,
-                           "%s is strictly newer in the container",
-                           needed_name );
+                    decision = library_cmp_by_versions( needed_name, &container_namespace,
+                                                        &provider_namespace);
+                }
+
+                /* Compare the numeric tail */
+                if( decision == 0 )
+                {
+                    decision = library_cmp_by_name( needed_name,
+                                                    needed_path_in_container,
+                                                    option_container,
+                                                    needed_path_in_provider,
+                                                    option_provider );
+                }
+
+                /* Compare the symbols.
+                 * We skip all libc related libraries to avoid problems with dlmopen() */
+                if( decision == 0 && !libc_lib )
+                {
+                    decision = library_cmp_by_symbols( needed_name, &container_namespace,
+                                                       &provider_namespace);
+                }
+
+                /* If the container library is newer (decision > 0) we skip the link creation.
+                 * In all the other cases, even if we were unable to determine which library
+                 * was newer, we use the one from the provider. */
+                if ( decision > 0 )
                     continue;
-                }
-                else
-                {
-                    DEBUG( DEBUG_TOOL,
-                           "%s is newer or equal in the provider",
-                           needed_name );
-                }
             }
             else if( local_code == ENOENT )
             {

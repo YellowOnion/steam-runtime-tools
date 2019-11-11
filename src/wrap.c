@@ -2164,7 +2164,7 @@ main (int argc,
         {
           g_autofree gchar *quoted = g_shell_quote (env[i]);
 
-          g_message ("\t%s", env[i]);
+          g_message ("\t%s", quoted);
         }
 
       g_message ("Wrapped command:");

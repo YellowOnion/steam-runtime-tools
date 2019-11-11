@@ -1608,7 +1608,8 @@ use_fake_home (FlatpakBwrap *bwrap,
               g_hash_table_add (mounted, g_steal_pointer (&target));
             }
         }
-      else if (!g_hash_table_contains (mounted, dir))
+      else if (g_file_test (dir, G_FILE_TEST_EXISTS) &&
+               !g_hash_table_contains (mounted, dir))
         {
           flatpak_bwrap_add_args (bwrap, "--ro-bind", dir, dir, NULL);
           g_hash_table_add (mounted, g_steal_pointer (&dir));

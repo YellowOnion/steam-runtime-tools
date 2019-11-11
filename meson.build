@@ -66,7 +66,6 @@ warning_flags = [
     '-Wformat-security',
     '-Wformat=2',
     '-Winit-self',
-    '-Winline',
     '-Wlogical-op',
     '-Wmissing-declarations',
     '-Wmissing-format-attribute',
@@ -98,6 +97,7 @@ warning_cxxflags = warning_flags + [
 ]
 
 no_warning_flags = [
+    'inline',
     'missing-field-initializers',
     'pedantic',
     'sign-compare',

@@ -59,7 +59,6 @@ warning_cflags = [
     '-Wextra',
     '-Warray-bounds',
     '-Wcast-align',
-    '-Wdeclaration-after-statement',
     '-Wdouble-promotion',
     '-Wduplicated-branches',
     '-Wduplicated-cond',

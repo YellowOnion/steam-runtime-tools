@@ -50,6 +50,11 @@ build:devel:
         - |
             set -eux
 
+            apt-get -y --no-install-recommends install \
+            clang \
+            clang-tools \
+            ${NULL+}
+
             git clone \
             -b${STEAM_RUNTIME_TOOLS_GIT_BRANCH} \
             ${STEAM_RUNTIME_TOOLS_GIT_REPO} \
@@ -57,6 +62,16 @@ build:devel:
 
             meson --werror _build
             ninja -C _build
+            ninja -C _build install
+            meson test --verbose -C _build
+
+            export CC=clang
+            export CXX=clang++
+
+            rm -fr _build
+            meson --werror _build
+            ninja -C _build
+            ninja -C _build scan-build
             ninja -C _build install
             meson test --verbose -C _build
 

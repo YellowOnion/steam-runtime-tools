@@ -24,6 +24,7 @@
 executable(
   multiarch + '-true',
   'true.c',
+  include_directories : project_include_dirs,
   install : true,
   install_dir : pkglibexecdir,
   # Deliberately no RPATH/RUNPATH here: it's unnecessary because this
@@ -46,6 +47,7 @@ executable(
   multiarch + '-inspect-library',
   'inspect-library.c',
   dependencies : [libdl],
+  include_directories : project_include_dirs,
   install : true,
   install_dir : pkglibexecdir,
   # Deliberately no RPATH/RUNPATH here: we want to determine whether
@@ -56,6 +58,7 @@ executable(
   multiarch + '-check-vulkan',
   'check-vulkan.cpp',
   dependencies : [vulkan, xcb],
+  include_directories : project_include_dirs,
   install : true,
   install_dir : join_paths(
     get_option('libexecdir'),

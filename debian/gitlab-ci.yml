@@ -50,6 +50,7 @@ ubsan:
                 ${NULL+}
 
             export CC=clang
+            export CXX=clang++
 
             rm -fr builddir
             meson \

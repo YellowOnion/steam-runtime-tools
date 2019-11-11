@@ -7,6 +7,12 @@ export LC_ALL=C.UTF-8
 
 include /usr/share/dpkg/default.mk
 
+meson_options =
+
+ifeq ($(DEB_DISTRIBUTION),UNRELEASED)
+meson_options += --werror
+endif
+
 %:
 	dh $@
 
@@ -30,6 +36,7 @@ override_dh_auto_configure:
 		-Dpython=/usr/bin/$$python \
 		-Dsrcdir=src \
 		-Dversion=$(DEB_VERSION) \
+		$(meson_options) \
 	; then \
 		cat _build/meson-logs/meson-log.txt; \
 		exit 1; \

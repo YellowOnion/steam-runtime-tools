@@ -54,7 +54,7 @@ endif
 
 glslang_validator = find_program('glslangValidator', required : true)
 
-warning_cflags = [
+warning_flags = [
     '-Wall',
     '-Wextra',
     '-Warray-bounds',
@@ -65,19 +65,14 @@ warning_cflags = [
     '-Wformat-nonliteral',
     '-Wformat-security',
     '-Wformat=2',
-    '-Wimplicit-function-declaration',
     '-Winit-self',
     '-Winline',
-    '-Wjump-misses-init',
     '-Wlogical-op',
     '-Wmissing-declarations',
     '-Wmissing-format-attribute',
     '-Wmissing-include-dirs',
     '-Wmissing-noreturn',
-    '-Wmissing-prototypes',
-    '-Wnested-externs',
     '-Wnull-dereference',
-    '-Wold-style-definition',
     '-Wpacked',
     '-Wpointer-arith',
     '-Wredundant-decls',
@@ -85,19 +80,33 @@ warning_cflags = [
     '-Wreturn-type',
     '-Wshadow',
     '-Wstrict-aliasing',
-    '-Wstrict-prototypes',
     '-Wswitch-default',
     '-Wswitch-enum',
     '-Wundef',
     '-Wunused-but-set-variable',
     '-Wwrite-strings',
 ]
-no_warning_cflags = [
-    'declaration-after-statement',
+warning_cflags = warning_flags + [
+    '-Wimplicit-function-declaration',
+    '-Wjump-misses-init',
+    '-Wmissing-prototypes',
+    '-Wnested-externs',
+    '-Wold-style-definition',
+    '-Wstrict-prototypes',
+]
+warning_cxxflags = warning_flags + [
+]
+
+no_warning_flags = [
     'missing-field-initializers',
     'sign-compare',
     'unused-local-typedefs',
     'unused-parameter',
+]
+no_warning_cflags = no_warning_flags + [
+    'declaration-after-statement',
+]
+no_warning_cxxflags = no_warning_flags + [
 ]
 
 c_compiler = meson.get_compiler('c')

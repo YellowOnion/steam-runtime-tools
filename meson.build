@@ -82,6 +82,7 @@ no_warning_cflags = [
     'pedantic',
     'sign-compare',
     'unused-parameter',
+    'variadic-macros',
 ]
 # This trips some warnings in the libglnx subproject but not in
 # pressure-vessel itself

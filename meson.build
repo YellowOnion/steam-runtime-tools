@@ -148,6 +148,7 @@ foreach flag : no_warning_cxxflags
 endforeach
 
 conf_data = configuration_data()
+conf_data.set('_GNU_SOURCE', '1')
 conf_data.set_quoted('VERSION', meson.project_version())
 
 configure_file(
@@ -155,7 +156,6 @@ configure_file(
   configuration : conf_data,
 )
 
-add_project_arguments(['-D_GNU_SOURCE'], language : 'c')
 add_project_arguments(
   ['-include', '_steam-runtime-tools-config.h'],
   language : 'c',

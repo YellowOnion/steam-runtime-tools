@@ -146,40 +146,35 @@ _srt_check_not_setuid (void)
   return !is_setuid;
 }
 
-static gchar *global_helpers_path = NULL;
-
-static const char *
-_srt_get_helpers_path (GError **error)
+G_GNUC_INTERNAL const char *
+_srt_find_myself (const char **helpers_path_out,
+                  GError **error)
 {
-  const char *path;
+  static gchar *saved_prefix = NULL;
+  static gchar *saved_helpers_path = NULL;
   Dl_info ignored;
   struct link_map *map = NULL;
-  gchar *dir;
+  gchar *dir = NULL;
 
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+  g_return_val_if_fail (helpers_path_out == NULL || *helpers_path_out == NULL,
+                        NULL);
 
-  path = global_helpers_path;
-
-  if (path != NULL)
+  if (saved_prefix != NULL && saved_helpers_path != NULL)
     goto out;
 
-  path = g_getenv ("SRT_HELPERS_PATH");
-
-  if (path != NULL)
-    goto out;
-
-  if (dladdr1 (_srt_get_helpers_path, &ignored, (void **) &map,
+  if (dladdr1 (_srt_find_myself, &ignored, (void **) &map,
                RTLD_DL_LINKMAP) == 0 ||
       map == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Unable to locate shared library containing "
-                   "_srt_get_helpers_path()");
+                   "_srt_find_myself()");
       goto out;
     }
 
-  g_debug ("Found _srt_get_helpers_path() in %s", map->l_name);
+  g_debug ("Found _srt_find_myself() in %s", map->l_name);
   dir = g_path_get_dirname (map->l_name);
 
   if (g_str_has_suffix (dir, "/lib/" _SRT_MULTIARCH))
@@ -198,16 +193,18 @@ _srt_get_helpers_path (GError **error)
       dir = g_strdup ("/usr");
     }
 
+  saved_prefix = g_steal_pointer (&dir);
   /* deliberate one-per-process leak */
-  global_helpers_path = g_build_filename (
-      dir, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,
+  saved_helpers_path = g_build_filename (
+      saved_prefix, "libexec", "steam-runtime-tools-" _SRT_API_MAJOR,
       NULL);
-  path = global_helpers_path;
-
-  g_free (dir);
 
 out:
-  return path;
+  if (helpers_path_out != NULL)
+    *helpers_path_out = saved_helpers_path;
+
+  g_free (dir);
+  return saved_prefix;
 }
 
 /*
@@ -266,14 +263,13 @@ _srt_get_helper (const char *helpers_path,
     }
 
   if (helpers_path == NULL)
-    {
-      helpers_path = _srt_get_helpers_path (error);
+    helpers_path = g_getenv ("SRT_HELPERS_PATH");
 
-      if (helpers_path == NULL)
-        {
-          g_ptr_array_unref (argv);
-          return NULL;
-        }
+  if (helpers_path == NULL
+      && _srt_find_myself (&helpers_path, error) == NULL)
+    {
+      g_ptr_array_unref (argv);
+      return NULL;
     }
 
   /* Prefer a helper from ${SRT_HELPERS_PATH} or

@@ -4,7 +4,7 @@
    Memcheck:Leak
    ...
    fun:g_build_filename
-   fun:_srt_get_helpers_path
+   fun:_srt_find_myself
 }
 
 # Dependencies

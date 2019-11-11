@@ -151,13 +151,19 @@ conf_data = configuration_data()
 conf_data.set_quoted('VERSION', meson.project_version())
 
 configure_file(
-  output : 'config.h',
+  output : '_steam-runtime-tools-config.h',
   configuration : conf_data,
 )
 
 add_project_arguments(['-D_GNU_SOURCE'], language : 'c')
-add_project_arguments(['-include', 'config.h'], language : 'c')
-add_project_arguments(['-include', 'config.h'], language : 'cpp')
+add_project_arguments(
+  ['-include', '_steam-runtime-tools-config.h'],
+  language : 'c',
+)
+add_project_arguments(
+  ['-include', '_steam-runtime-tools-config.h'],
+  language : 'cpp',
+)
 
 glib = dependency(
   'glib-2.0',

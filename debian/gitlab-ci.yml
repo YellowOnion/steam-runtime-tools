@@ -49,12 +49,23 @@ ubsan:
                 clang-tools \
                 ${NULL+}
 
+            rm -fr builddir
+            meson \
+                -Db_lundef=false \
+                -Db_sanitize=address,undefined \
+                --werror \
+                builddir
+            ninja -C builddir
+            meson test -C builddir -v
+
             export CC=clang
+            export CXX=clang++
 
             rm -fr builddir
             meson \
                 -Db_lundef=false \
                 -Db_sanitize=address,undefined \
+                --werror \
                 builddir
             ninja -C builddir scan-build
             meson test -C builddir -v

@@ -21,9 +21,15 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-project('steam-runtime-tools', 'c', 
-        version : '0.20191024.0',
-        default_options: ['cpp_std=c++11'])
+project(
+  'steam-runtime-tools', 'c',
+  version : '0.20191024.0',
+  default_options: [
+    'c_std=c99',
+    'cpp_std=c++11',
+    'warning_level=2',
+  ],
+)
 add_languages('cpp')
 
 api_major = '0'
@@ -49,31 +55,24 @@ endif
 
 glslang_validator = find_program('glslangValidator', required : true)
 
-warning_cflags = [
+warning_flags = [
     '-Wall',
     '-Wextra',
     '-Warray-bounds',
     '-Wcast-align',
-    '-Wdeclaration-after-statement',
     '-Wdouble-promotion',
     '-Wduplicated-branches',
     '-Wduplicated-cond',
     '-Wformat-nonliteral',
     '-Wformat-security',
     '-Wformat=2',
-    '-Wimplicit-function-declaration',
     '-Winit-self',
-    '-Winline',
-    '-Wjump-misses-init',
     '-Wlogical-op',
     '-Wmissing-declarations',
     '-Wmissing-format-attribute',
     '-Wmissing-include-dirs',
     '-Wmissing-noreturn',
-    '-Wmissing-prototypes',
-    '-Wnested-externs',
     '-Wnull-dereference',
-    '-Wold-style-definition',
     '-Wpacked',
     '-Wpointer-arith',
     '-Wredundant-decls',
@@ -81,27 +80,46 @@ warning_cflags = [
     '-Wreturn-type',
     '-Wshadow',
     '-Wstrict-aliasing',
-    '-Wstrict-prototypes',
     '-Wswitch-default',
     '-Wswitch-enum',
     '-Wundef',
     '-Wunused-but-set-variable',
     '-Wwrite-strings',
 ]
-no_warning_cflags = [
-    'declaration-after-statement',
+warning_cflags = warning_flags + [
+    '-Wimplicit-function-declaration',
+    '-Wjump-misses-init',
+    '-Wmissing-prototypes',
+    '-Wnested-externs',
+    '-Wold-style-definition',
+    '-Wstrict-prototypes',
+]
+warning_cxxflags = warning_flags + [
+]
+
+no_warning_flags = [
+    'inline',
     'missing-field-initializers',
+    'pedantic',
     'sign-compare',
     'unused-local-typedefs',
     'unused-parameter',
 ]
+no_warning_cflags = no_warning_flags + [
+    'declaration-after-statement',
+]
+no_warning_cxxflags = no_warning_flags + [
+]
 
 c_compiler = meson.get_compiler('c')
+cpp_compiler = meson.get_compiler('cpp')
 supported_warning_cflags = c_compiler.get_supported_arguments(warning_cflags)
 add_project_arguments(supported_warning_cflags, language : 'c')
+supported_warning_cxxflags = cpp_compiler.get_supported_arguments(warning_cxxflags)
+add_project_arguments(supported_warning_cxxflags, language : 'cpp')
 
-add_project_arguments(
-  c_compiler.get_supported_arguments(
+add_project_link_arguments(
+  c_compiler.get_supported_link_arguments(
     '-Wl,-z,origin',
     # Generate RPATH in preference to RUNPATH, even if RUNPATH is the
     # linker's default. We want RPATH here, because it's used recursively
@@ -121,18 +139,31 @@ foreach flag : no_warning_cflags
   add_project_arguments(supported_no_warning_cflags, language : 'c')
 endforeach
 
+foreach flag : no_warning_cxxflags
+  supported_no_warning_cxxflags = cpp_compiler.get_supported_arguments([
+    '-Wno-error=' + flag,
+    '-Wno-' + flag,
+  ])
+  add_project_arguments(supported_no_warning_cxxflags, language : 'cpp')
+endforeach
+
 conf_data = configuration_data()
+conf_data.set('_GNU_SOURCE', '1')
 conf_data.set_quoted('VERSION', meson.project_version())
 
 configure_file(
-  output : 'config.h',
+  output : '_steam-runtime-tools-config.h',
   configuration : conf_data,
 )
 
-add_project_arguments(['-std=c99'], language : 'c')
-add_project_arguments(['-D_GNU_SOURCE'], language : 'c')
-add_project_arguments(['-include', 'config.h'], language : 'c')
-add_project_arguments(['-include', 'config.h'], language : 'cpp')
+add_project_arguments(
+  ['-include', '_steam-runtime-tools-config.h'],
+  language : 'c',
+)
+add_project_arguments(
+  ['-include', '_steam-runtime-tools-config.h'],
+  language : 'cpp',
+)
 
 glib = dependency(
   'glib-2.0',

@@ -65,6 +65,7 @@ install_subdir('sysroots', install_dir : tests_dir)
 executable(
   'mock-true',
   join_paths('..', 'helpers', 'true.c'),
+  include_directories : project_include_dirs,
   install : get_option('installed_tests'),
   install_dir : tests_dir,
 )
@@ -77,6 +78,7 @@ foreach test_name : tests
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],
     dependencies : [glib, gobject, libsteamrt_dep, json_glib],
+    include_directories : project_include_dirs,
     install : get_option('installed_tests'),
     install_dir : tests_dir,
   )
@@ -146,6 +148,7 @@ executable(
 executable(
   'mock-good-wflinfo',
   'mock-good-wflinfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -153,6 +156,7 @@ executable(
 executable(
   'mock-hanging-wflinfo',
   'mock-hanging-wflinfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -160,6 +164,7 @@ executable(
 executable(
   'mock-bad-wflinfo',
   'mock-bad-wflinfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -167,6 +172,7 @@ executable(
 executable(
   'mock-software-wflinfo',
   'mock-software-wflinfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -174,6 +180,7 @@ executable(
 executable(
   'mock-good-vulkaninfo',
   'mock-good-vulkaninfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -181,6 +188,7 @@ executable(
 executable(
   'mock-bad-vulkaninfo',
   'mock-bad-vulkaninfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -188,6 +196,7 @@ executable(
 executable(
   'mock-good-check-vulkan',
   join_paths('..', 'helpers', 'true.c'),
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -195,6 +204,7 @@ executable(
 executable(
   'mock-bad-check-vulkan',
   'mock-bad-check-vulkan.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -202,6 +212,7 @@ executable(
 executable(
   'mock-mixed-vulkaninfo',
   'mock-good-vulkaninfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -209,6 +220,7 @@ executable(
 executable(
   'mock-mixed-check-vulkan',
   'mock-bad-check-vulkan.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )

@@ -1,3 +1,10 @@
+pressure-vessel (0.20191112.1) scout; urgency=medium
+
+  * Revert inclusion of libglnx!14.
+    It accidentally depended on a newer GLib version.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 12 Nov 2019 13:52:17 +0000
+
 pressure-vessel (0.20191112.0) scout; urgency=medium
 
   * ci: Add build-dependencies of steam-runtime-tools subproject

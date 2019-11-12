@@ -2469,7 +2469,7 @@ main (int argc,
 
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
-  if (opt_runtime == NULL && opt_runtime[0] != '\0')
+  if (opt_runtime == NULL || opt_runtime[0] == '\0')
     {
       g_debug ("Making Steam Runtime available...");
 

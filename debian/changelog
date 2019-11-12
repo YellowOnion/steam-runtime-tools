@@ -1,3 +1,13 @@
+pressure-vessel (0.20191112.0) UNRELEASED; urgency=medium
+
+  * ci: Add build-dependencies of steam-runtime-tools subproject
+  * wrap: Don't bind-mount ~/.steam/steambeta etc. if they don't exist
+  * wrap: Fix logic for whether Steam Runtime is passed through
+  * Update libglnx subproject, including merge requests libglnx!13 and
+    libglnx!14
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 12 Nov 2019 13:31:20 +0000
+
 pressure-vessel (0.20190927.0) scout; urgency=medium
 
   * wrap: Include all known NVIDIA libraries, except for libnvidia-gtk*

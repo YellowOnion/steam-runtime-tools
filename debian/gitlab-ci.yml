@@ -43,10 +43,6 @@ variables:
     STEAM_RUNTIME_TOOLS_GIT_REPO: https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/steam/steam-runtime-tools.git
     STEAM_RUNTIME_TOOLS_GIT_BRANCH: master
 
-build:
-    variables:
-        BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
-
 build:devel:
     stage: build
     image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"

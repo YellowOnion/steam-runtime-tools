@@ -7,6 +7,7 @@ pressure-vessel (0.20191112.2-0+steamrt1.1) UNRELEASED; urgency=medium
     0.20190927.0+7+g1234567+srt1 is less than 0.20190927.0+srt1, so
     0.20190927.0 would wrongly be preferred over the prerelease at commit
     1234567, 7 commits later than 0.20190927.0.
+  * Update libglnx, applying a fixed version of libglnx!14
 
  -- Simon McVittie <smcv@collabora.com>  Mon, 11 Nov 2019 19:46:56 +0000
 

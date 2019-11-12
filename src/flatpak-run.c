@@ -20,9 +20,6 @@
  * along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "config.h"
-#include "subprojects/libglnx/config.h"
-
 #include "flatpak-run-private.h"
 
 #include <sys/utsname.h>
@@ -395,7 +392,6 @@ gboolean
 flatpak_run_add_system_dbus_args (FlatpakBwrap   *app_bwrap)
 {
   const char *dbus_address = g_getenv ("DBUS_SYSTEM_BUS_ADDRESS");
-  g_autofree char *real_dbus_address = NULL;
   g_autofree char *dbus_system_socket = NULL;
 
   if (dbus_address != NULL)

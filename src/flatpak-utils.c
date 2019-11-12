@@ -20,9 +20,6 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
-#include "config.h"
-#include "subprojects/libglnx/config.h"
-
 #include "flatpak-utils-private.h"
 
 #include <string.h>
@@ -39,6 +36,10 @@
 #include <sys/utsname.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+
+/* To keep this more similar to the original file, we explicitly disable
+ * this warning rather than fixing it */
+#pragma GCC diagnostic ignored "-Wshadow"
 
 #define RUNNING_ON_VALGRIND 0
 

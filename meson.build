@@ -21,7 +21,12 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-project('pressure-vessel', 'c')
+project(
+  'pressure-vessel', 'c',
+  default_options: [
+    'warning_level=2',
+  ],
+)
 
 prove = find_program('prove', required : false)
 python = find_program(get_option('python'), required : true)
@@ -43,7 +48,6 @@ warning_cflags = [
     '-Wextra',
     '-Warray-bounds',
     '-Wcast-align',
-    '-Wdeclaration-after-statement',
     '-Wdouble-promotion',
     '-Wduplicated-branches',
     '-Wduplicated-cond',
@@ -52,7 +56,6 @@ warning_cflags = [
     '-Wformat=2',
     '-Wimplicit-function-declaration',
     '-Winit-self',
-    '-Winline',
     '-Wjump-misses-init',
     '-Wlogical-op',
     '-Wmissing-declarations',
@@ -78,10 +81,13 @@ warning_cflags = [
     '-Wwrite-strings',
 ]
 no_warning_cflags = [
+    'cast-align',
     'declaration-after-statement',
     'missing-field-initializers',
+    'pedantic',
     'sign-compare',
     'unused-parameter',
+    'variadic-macros',
 ]
 # This trips some warnings in the libglnx subproject but not in
 # pressure-vessel itself
@@ -150,8 +156,12 @@ conf_data.set_quoted('VERSION', version)
 
 configure_file(
   input : 'config.h.in',
-  output : 'config.h',
+  output : '_pressure-vessel-config.h',
   configuration : conf_data,
+)
+add_project_arguments(
+  ['-include', '_pressure-vessel-config.h'],
+  language : 'c',
 )
 
 executable(

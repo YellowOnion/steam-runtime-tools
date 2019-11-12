@@ -1,3 +1,5 @@
 #define _GNU_SOURCE
 #define G_LOG_DOMAIN "pressure-vessel"
 #mesondefine VERSION
+
+#include "subprojects/libglnx/config.h"

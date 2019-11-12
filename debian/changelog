@@ -1,3 +1,30 @@
+steam-runtime-tools (0.20191112.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  [ Jeremy Whiting ]
+  * Check whether Vulkan drivers can actually draw to an X11 window
+
+  [ Simon McVittie ]
+  * Build selected executables with a RPATH.
+    This allows a copy of steam-runtime-system-info bundled in the
+    LD_LIBRARY_PATH Steam Runtime to find the copies of
+    libsteam-runtime-tools and libjson-glib in the same Runtime.
+  * Look for wflinfo, vulkaninfo and libraries adjacent to
+    libsteam-runtime-tools.
+  * Use g++-4.8 if default g++ is older
+  * Build shaders using glslangValidator
+  * Fix many compiler warnings
+  * check-vulkan: Add basic command-line parsing with --help
+  * Add --version argument to most executables
+  * check-vulkan: Optionally make the window visible
+  * Look for -check-vulkan in default helpers path, not in PATH
+  * check-vulkan: Look for shaders in the correct place when installed
+
+  [ Ludovico de Nittis ]
+  * Add support for libraries with hidden dependencies
+  * Detect GLX, EGL graphics library vendor
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 12 Nov 2019 18:57:54 +0000
+
 steam-runtime-tools (0.20191024.0-0+steamrt1.1) scout; urgency=medium
 
   [ Ludovico de Nittis ]

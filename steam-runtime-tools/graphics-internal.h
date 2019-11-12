@@ -37,6 +37,8 @@
  * @issues: Problems found when checking @multiarch_tuple with
  *  the given @winsys and @renderer.
  * @messages: Any debug messages found when checking graphics.
+ * @exit_status: exit status of helper, or -1 if it did not exit normally
+ * @termination_signal: signal that terminated the helper, or 0
  *
  * Inline convenience function to create a new SrtGraphics.
  * This is not part of the public API.
@@ -50,7 +52,9 @@ static inline SrtGraphics *_srt_graphics_new (const char *multiarch_tuple,
                                               const gchar *renderer_string,
                                               const gchar *version_string,
                                               SrtGraphicsIssues issues,
-                                              const gchar *messages);
+                                              const gchar *messages,
+                                              int exit_status,
+                                              int termination_signal);
 
 /*
  * _srt_graphics_hash_key:
@@ -82,7 +86,9 @@ _srt_graphics_new (const char *multiarch_tuple,
                    const gchar *renderer_string,
                    const gchar *version_string,
                    SrtGraphicsIssues issues,
-                   const gchar *messages)
+                   const gchar *messages,
+                   int exit_status,
+                   int terminating_signal)
 {
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
   return g_object_new (SRT_TYPE_GRAPHICS,
@@ -94,6 +100,8 @@ _srt_graphics_new (const char *multiarch_tuple,
                        "renderer-string", renderer_string,
                        "version-string", version_string,
                        "messages", messages,
+                       "exit-status", exit_status,
+                       "terminating-signal", terminating_signal,
                        NULL);
 }
 

@@ -88,7 +88,9 @@ test_object (Fixture *f,
                               "",
                               NULL,
                               NULL,
-                              NULL);
+                              NULL,
+                              0,
+                              0);
   g_assert_cmpint (srt_library_get_issues (library), ==,
                    SRT_LIBRARY_ISSUES_NONE);
   g_assert_cmpstr (srt_library_get_messages (library), ==, NULL);
@@ -145,7 +147,9 @@ test_object (Fixture *f,
                               "ld.so: libjpeg.so.62: nope\n",
                               one_missing,
                               one_misversioned,
-                              two_deps);
+                              two_deps,
+                              0,
+                              0);
   g_assert_cmpint (srt_library_get_issues (library) &
                    SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
   g_assert_cmpint (srt_library_get_issues (library) &

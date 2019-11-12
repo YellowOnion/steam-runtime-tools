@@ -119,6 +119,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <getopt.h>
 #include <glib.h>
 
@@ -394,6 +395,24 @@ print_libraries_details (JsonBuilder *builder,
               json_builder_begin_array (builder);
               jsonify_library_issues (builder, srt_library_get_issues (l->data));
               json_builder_end_array (builder);
+
+              int exit_status = srt_library_get_exit_status (l->data);
+              if (exit_status != 0 && exit_status != -1)
+                {
+                  json_builder_set_member_name (builder, "exit-status");
+                  json_builder_add_int_value (builder, exit_status);
+                }
+
+              int terminating_signal = srt_library_get_terminating_signal (l->data);
+              if (terminating_signal != 0)
+                {
+                  json_builder_set_member_name (builder, "terminating-signal");
+                  json_builder_add_int_value (builder, terminating_signal);
+
+                  json_builder_set_member_name (builder, "terminating-signal-name");
+                  json_builder_add_string_value (builder, strsignal (terminating_signal));
+                }
+
             }
 
           missing_symbols = srt_library_get_missing_symbols (l->data);
@@ -464,6 +483,23 @@ print_graphics_details(JsonBuilder *builder,
           json_builder_begin_array (builder);
           jsonify_graphics_issues (builder, srt_graphics_get_issues (g->data));
           json_builder_end_array (builder);
+          int exit_status = srt_graphics_get_exit_status (g->data);
+          if (exit_status != 0 && exit_status != -1)
+            {
+              json_builder_set_member_name (builder, "exit-status");
+              json_builder_add_int_value (builder, exit_status);
+            }
+
+          int terminating_signal = srt_graphics_get_terminating_signal (g->data);
+          if (terminating_signal != 0)
+            {
+              json_builder_set_member_name (builder, "terminating-signal");
+              json_builder_add_int_value (builder, terminating_signal);
+
+              json_builder_set_member_name (builder, "terminating-signal-name");
+              json_builder_add_string_value (builder, strsignal (terminating_signal));
+            }
+
         }
       json_builder_end_object (builder); // End object for parameters
       g_free (parameters);

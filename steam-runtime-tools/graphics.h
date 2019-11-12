@@ -130,6 +130,8 @@ const char *srt_graphics_get_version_string (SrtGraphics *self);
 const char *srt_graphics_get_renderer_string (SrtGraphics *self);
 const char *srt_graphics_get_messages (SrtGraphics *self);
 gchar *srt_graphics_dup_parameters_string (SrtGraphics *self);
+int srt_graphics_get_exit_status (SrtGraphics *self);
+int srt_graphics_get_terminating_signal (SrtGraphics *self);
 
 typedef struct _SrtEglIcd SrtEglIcd;
 typedef struct _SrtEglIcdClass SrtEglIcdClass;

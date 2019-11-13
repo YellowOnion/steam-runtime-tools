@@ -38,6 +38,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include "bwrap.h"
+#include "bwrap-lock.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-run-private.h"
 #include "flatpak-utils-private.h"
@@ -1968,6 +1969,7 @@ main (int argc,
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
+  g_autoptr(PvBwrapLock) runtime_lock = NULL;
   const gchar *home;
   g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
@@ -2329,7 +2331,36 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
+      g_autofree gchar *usr = NULL;
+      g_autofree gchar *files_ref = NULL;
+
       g_debug ("Configuring runtime...");
+
+      /* Take a lock on the runtime until we're finished with setup,
+       * to make sure it doesn't get deleted. */
+      files_ref = g_build_filename (opt_runtime, ".ref", NULL);
+      runtime_lock = pv_bwrap_lock_new (files_ref,
+                                        PV_BWRAP_LOCK_FLAGS_CREATE,
+                                        error);
+
+      /* If the runtime is being deleted, ... don't use it, I suppose? */
+      if (runtime_lock == NULL)
+        goto out;
+
+      usr = g_build_filename (opt_runtime, "usr", NULL);
+
+      /* Tell bwrap to hold a reference to files/.ref until it exits.
+       * If files is a merged-/usr, it's mounted as /usr (as if for
+       * Flatpak); otherwise it's mounted at /, which we need to cope
+       * with too. */
+      if (g_file_test (usr, G_FILE_TEST_IS_DIR))
+        flatpak_bwrap_add_args (bwrap,
+                                "--lock-file", "/.ref",
+                                NULL);
+      else
+        flatpak_bwrap_add_args (bwrap,
+                                "--lock-file", "/usr/.ref",
+                                NULL);
 
       search_path_append (bin_path, "/overrides/bin");
       search_path_append (bin_path, g_getenv ("PATH"));
@@ -2571,6 +2602,18 @@ main (int argc,
     }
 
   g_clear_pointer (&tmpdir, g_free);
+
+  /* If we are using a runtime, pass the lock fd to the bwrap process.
+   * We hope it will hold the fd open for as long as it's running.
+   *
+   * This is not a complete solution - what we really want is for the
+   * bwrap process *and every one of its children, recursively* to hold
+   * this fd open. However, we can't currently use bwrap --lock-file
+   * or bwrap --sync-fd without --unshare-pid
+   * (<https://github.com/containers/bubblewrap/issues/336>), and we
+   * can't do that without breaking gameoverlayrender.so's assumptions. */
+  if (runtime_lock != NULL)
+    flatpak_bwrap_add_fd (bwrap, pv_bwrap_lock_steal_fd (runtime_lock));
 
   flatpak_bwrap_finish (bwrap);
   pv_bwrap_execve (bwrap, error);

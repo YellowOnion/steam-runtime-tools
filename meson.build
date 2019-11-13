@@ -118,19 +118,6 @@ add_project_arguments(supported_warning_cflags, language : 'c')
 supported_warning_cxxflags = cpp_compiler.get_supported_arguments(warning_cxxflags)
 add_project_arguments(supported_warning_cxxflags, language : 'cpp')
 
-add_project_link_arguments(
-  c_compiler.get_supported_link_arguments(
-    '-Wl,-z,origin',
-    # Generate RPATH in preference to RUNPATH, even if RUNPATH is the
-    # linker's default. We want RPATH here, because it's used recursively
-    # for both direct and indirect dependencies: in particular we need
-    # to pick up the whole GLib family (GLib, GObject, GIO) from the same
-    # location. (It also bypasses LD_LIBRARY_PATH.)
-    '-Wl,-z,--disable-new-dtags',
-  ),
-  language : 'c',
-)
-
 foreach flag : no_warning_cflags
   supported_no_warning_cflags = c_compiler.get_supported_arguments([
     '-Wno-error=' + flag,
@@ -194,28 +181,10 @@ libdl = c_compiler.find_library('dl', required : false)
 
 project_include_dirs = include_directories('.')
 
-# RPATH for executables installed in get_option('bindir').
-# This assumes that bindir is a single directory component (normally
-# 'bin'), so that ../ gets us from get_option('bindir') to the prefix,
-# and that libdir is relative.
-bin_rpath = '${ORIGIN}/../' + get_option('libdir')
-if get_option('prefix').endswith('/usr')
-  # Parts of the GLib family of libraries are in /lib
-  bin_rpath = bin_rpath + ':${ORIGIN}/../../' + get_option('libdir')
-endif
-
 pkglibexecdir = join_paths(
   get_option('libexecdir'),
   'steam-runtime-tools-' + api_major,
 )
-# RPATH for executables installed in pkglibexecdir.
-# This assumes that libexecdir is a single directory component (normally
-# 'libexec'), so that ../../ gets us from pkglibexecdir to the prefix,
-# and that libdir is relative
-pkglibexec_rpath = '${ORIGIN}/../../' + get_option('libdir')
-if get_option('prefix').endswith('/usr')
-  pkglibexec_rpath = pkglibexec_rpath + ':${ORIGIN}/../../../' + get_option('libdir')
-endif
 
 if get_option('multiarch_tuple') != ''
   multiarch = get_option('multiarch_tuple')

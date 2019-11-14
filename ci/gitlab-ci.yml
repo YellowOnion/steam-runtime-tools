@@ -82,12 +82,12 @@ before_script:
 build:stretch:
     extends: .build
     variables:
-        BUILD_IMAGE: 'debian:stretch'
+        BUILD_IMAGE: 'debian:stretch-slim'
 
 build:buster:
     extends: .build
     variables:
-        BUILD_IMAGE: 'debian:buster'
+        BUILD_IMAGE: 'debian:buster-slim'
 
 build:bionic:
     extends: .build

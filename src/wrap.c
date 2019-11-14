@@ -2046,7 +2046,10 @@ main (int argc,
 
   if (opt_version)
     {
-      g_print ("pressure-vessel version %s\n", VERSION);
+      g_print ("%s:\n"
+               " Package: pressure-vessel\n"
+               " Version: %s\n",
+               argv[0], VERSION);
       ret = 0;
       goto out;
     }

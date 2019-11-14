@@ -2566,6 +2566,32 @@ main (int argc,
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     goto out;
 
+  /* If we are using a runtime, pass the lock fd to the executed process,
+   * and make it act as a subreaper for the game itself.
+   *
+   * If we were using --unshare-pid then we could use bwrap --sync-fd
+   * and rely on bubblewrap's init process for this, but we currently
+   * can't do that without breaking gameoverlayrender.so's assumptions. */
+  if (runtime_lock != NULL)
+    {
+      g_autofree gchar *with_lock = NULL;
+      g_autofree gchar *fd_str = NULL;
+      int fd = pv_bwrap_lock_steal_fd (runtime_lock);
+
+      with_lock = g_build_filename (tools_dir,
+                                    "pressure-vessel-with-lock",
+                                    NULL);
+      fd_str = g_strdup_printf ("%d", fd);
+
+      flatpak_bwrap_add_fd (bwrap, fd);
+      flatpak_bwrap_add_args (bwrap,
+                              with_lock,
+                              "--subreaper",
+                              "--fd", fd_str,
+                              "--",
+                              NULL);
+    }
+
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
 
@@ -2602,18 +2628,6 @@ main (int argc,
     }
 
   g_clear_pointer (&tmpdir, g_free);
-
-  /* If we are using a runtime, pass the lock fd to the bwrap process.
-   * We hope it will hold the fd open for as long as it's running.
-   *
-   * This is not a complete solution - what we really want is for the
-   * bwrap process *and every one of its children, recursively* to hold
-   * this fd open. However, we can't currently use bwrap --lock-file
-   * or bwrap --sync-fd without --unshare-pid
-   * (<https://github.com/containers/bubblewrap/issues/336>), and we
-   * can't do that without breaking gameoverlayrender.so's assumptions. */
-  if (runtime_lock != NULL)
-    flatpak_bwrap_add_fd (bwrap, pv_bwrap_lock_steal_fd (runtime_lock));
 
   flatpak_bwrap_finish (bwrap);
   pv_bwrap_execve (bwrap, error);

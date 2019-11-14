@@ -146,6 +146,11 @@ _srt_check_not_setuid (void)
   return !is_setuid;
 }
 
+#define MULTIARCH_LIBDIR \
+  "/lib/" _SRT_MULTIARCH
+#define RELOCATABLE_PKGLIBDIR \
+  MULTIARCH_LIBDIR "/steam-runtime-tools-" _SRT_API_MAJOR
+
 G_GNUC_INTERNAL const char *
 _srt_find_myself (const char **helpers_path_out,
                   GError **error)
@@ -177,8 +182,10 @@ _srt_find_myself (const char **helpers_path_out,
   g_debug ("Found _srt_find_myself() in %s", map->l_name);
   dir = g_path_get_dirname (map->l_name);
 
-  if (g_str_has_suffix (dir, "/lib/" _SRT_MULTIARCH))
-    dir[strlen (dir) - strlen ("/lib/" _SRT_MULTIARCH)] = '\0';
+  if (g_str_has_suffix (dir, RELOCATABLE_PKGLIBDIR))
+    dir[strlen (dir) - strlen (RELOCATABLE_PKGLIBDIR)] = '\0';
+  else if (g_str_has_suffix (dir, MULTIARCH_LIBDIR))
+    dir[strlen (dir) - strlen (MULTIARCH_LIBDIR)] = '\0';
   else if (g_str_has_suffix (dir, "/lib64"))
     dir[strlen (dir) - strlen ("/lib64")] = '\0';
   else if (g_str_has_suffix (dir, "/lib"))

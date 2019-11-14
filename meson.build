@@ -169,6 +169,8 @@ executable(
   sources : [
     'src/bwrap.c',
     'src/bwrap.h',
+    'src/bwrap-lock.c',
+    'src/bwrap-lock.h',
     'src/glib-backports.c',
     'src/glib-backports.h',
     'src/flatpak-bwrap.c',

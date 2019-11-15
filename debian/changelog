@@ -1,5 +1,10 @@
-pressure-vessel (0.20191112.2-0+steamrt1.1) UNRELEASED; urgency=medium
+pressure-vessel (0.20191115.0-0+steamrt1.1) scout; urgency=medium
 
+  * wrap: Add API for a bubblewrap-compatible fcntl lock
+  * wrap: Take out a lock on the container's runtime for the duration
+  * with-lock: Add a utility to do things while holding a lock
+  * wrap: Use with-lock to hold the lock until all children have exited
+  * wrap: Print environment variables quoted as intended
   * Go back to non-native versioning.
     Versioning pressure-vessel as a native package interacts poorly with
     the combination of the Open Build Service pseudo-binNMU suffix and the
@@ -8,8 +13,13 @@ pressure-vessel (0.20191112.2-0+steamrt1.1) UNRELEASED; urgency=medium
     0.20190927.0 would wrongly be preferred over the prerelease at commit
     1234567, 7 commits later than 0.20190927.0.
   * Update libglnx, applying a fixed version of libglnx!14
+  * build: Enable and fix many compiler warnings
+  * debian: Make compiler warnings into errors for unreleased builds
+  * gitlab-ci: Make compiler warnings into errors
+  * wrap: Make GOptionEntry flags clearer
+  * wrap: Print version number as YAML
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 11 Nov 2019 19:46:56 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 15 Nov 2019 19:03:20 +0000
 
 pressure-vessel (0.20191112.1) scout; urgency=medium
 

@@ -67,3 +67,7 @@ void my_g_ptr_array_insert (GPtrArray *arr,
                             gint index_,
                             gpointer data);
 #endif
+
+#if !GLIB_CHECK_VERSION (2, 42, 0)
+#define G_OPTION_FLAG_NONE 0
+#endif

@@ -38,6 +38,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include "bwrap.h"
+#include "bwrap-lock.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-run-private.h"
 #include "flatpak-utils-private.h"
@@ -1809,61 +1810,76 @@ opt_share_home_cb (const gchar *option_name,
 
 static GOptionEntry options[] =
 {
-  { "env-if-host", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
+  { "env-if-host", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
     "but not if it is run with /usr from RUNTIME.", "VAR=VAL" },
-  { "freedesktop-app-id", 0, 0, G_OPTION_ARG_STRING, &opt_freedesktop_app_id,
+  { "freedesktop-app-id", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_freedesktop_app_id,
     "Make --unshare-home use ~/.var/app/ID as home directory, where ID "
     "is com.example.MyApp or similar. This interoperates with Flatpak. "
     "[Default: $PRESSURE_VESSEL_FDO_APP_ID if set]",
     "ID" },
-  { "steam-app-id", 0, 0, G_OPTION_ARG_STRING, &opt_steam_app_id,
+  { "steam-app-id", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $SteamAppId]", "N" },
-  { "home", 0, 0, G_OPTION_ARG_FILENAME, &opt_home,
+  { "home", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_home,
     "Use HOME as home directory. Implies --unshare-home. "
     "[Default: $PRESSURE_VESSEL_HOME if set]", "HOME" },
-  { "host-fallback", 0, 0, G_OPTION_ARG_NONE, &opt_host_fallback,
+  { "host-fallback", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_host_fallback,
     "Run COMMAND on the host system if we cannot run it in a container.", NULL },
-  { "host-ld-preload", 0, 0, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
+  { "host-ld-preload", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
     "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
     "MODULE" },
-  { "runtime", 0, 0, G_OPTION_ARG_FILENAME, &opt_runtime,
+  { "runtime", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
     "it with the host system's graphics stack. The empty string "
     "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
-  { "runtime-base", 0, 0, G_OPTION_ARG_FILENAME, &opt_runtime_base,
+  { "runtime-base", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_base,
     "If a --runtime is a relative path, look for it relative to BASE. "
     "[Default: $PRESSURE_VESSEL_RUNTIME_BASE or '.']",
     "BASE" },
-  { "share-home", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
+  { "share-home", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use the real home directory. "
     "[Default unless $PRESSURE_VESSEL_HOME is set or "
     "$PRESSURE_VESSEL_SHARE_HOME is 0]",
     NULL },
-  { "unshare-home", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
+  { "unshare-home", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use an app-specific home directory chosen according to --home, "
     "--freedesktop-app-id, --steam-app-id or $SteamAppId. "
     "[Default if $PRESSURE_VESSEL_HOME is set or "
     "$PRESSURE_VESSEL_SHARE_HOME is 0]",
     NULL },
-  { "shell", 0, 0, G_OPTION_ARG_CALLBACK, opt_shell_cb,
+  { "shell", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "--shell=after is equivalent to --shell-after, and so on. "
     "[Default: $PRESSURE_VESSEL_SHELL or 'none']",
     "{none|after|fail|instead}" },
-  { "shell-after", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
+  { "shell-after", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "Run an interactive shell after COMMAND. Executing \"$@\" in that "
     "shell will re-run COMMAND [ARGS].",
     NULL },
-  { "shell-fail", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
+  { "shell-fail", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "Run an interactive shell after COMMAND, but only if it fails.",
     NULL },
-  { "shell-instead", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
+  { "shell-instead", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_shell_cb,
     "Run an interactive shell instead of COMMAND. Executing \"$@\" in that "
     "shell will run COMMAND [ARGS].",
     NULL },
-  { "terminal", 0, 0, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+  { "terminal", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
     "none: disable features that would use a terminal; "
     "auto: equivalent to xterm if a --shell option is used, or none; "
     "xterm: put game output (and --shell if used) in an xterm; "
@@ -1871,13 +1887,17 @@ static GOptionEntry options[] =
     "controlling tty "
     "[Default: $PRESSURE_VESSEL_TERMINAL or 'auto']",
     "{none|auto|xterm|tty}" },
-  { "tty", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+  { "tty", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
     "Equivalent to --terminal=tty", NULL },
-  { "xterm", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+  { "xterm", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
     "Equivalent to --terminal=xterm", NULL },
-  { "verbose", 0, 0, G_OPTION_ARG_NONE, &opt_verbose,
+  { "verbose", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
-  { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version,
+  { "version", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_version,
     "Print version number and exit.", NULL },
   { NULL }
 };
@@ -1949,6 +1969,7 @@ main (int argc,
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
+  g_autoptr(PvBwrapLock) runtime_lock = NULL;
   const gchar *home;
   g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
@@ -2027,7 +2048,10 @@ main (int argc,
 
   if (opt_version)
     {
-      g_print ("pressure-vessel version %s\n", VERSION);
+      g_print ("%s:\n"
+               " Package: pressure-vessel\n"
+               " Version: %s\n",
+               argv[0], VERSION);
       ret = 0;
       goto out;
     }
@@ -2307,7 +2331,36 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
+      g_autofree gchar *usr = NULL;
+      g_autofree gchar *files_ref = NULL;
+
       g_debug ("Configuring runtime...");
+
+      /* Take a lock on the runtime until we're finished with setup,
+       * to make sure it doesn't get deleted. */
+      files_ref = g_build_filename (opt_runtime, ".ref", NULL);
+      runtime_lock = pv_bwrap_lock_new (files_ref,
+                                        PV_BWRAP_LOCK_FLAGS_CREATE,
+                                        error);
+
+      /* If the runtime is being deleted, ... don't use it, I suppose? */
+      if (runtime_lock == NULL)
+        goto out;
+
+      usr = g_build_filename (opt_runtime, "usr", NULL);
+
+      /* Tell bwrap to hold a reference to files/.ref until it exits.
+       * If files is a merged-/usr, it's mounted as /usr (as if for
+       * Flatpak); otherwise it's mounted at /, which we need to cope
+       * with too. */
+      if (g_file_test (usr, G_FILE_TEST_IS_DIR))
+        flatpak_bwrap_add_args (bwrap,
+                                "--lock-file", "/.ref",
+                                NULL);
+      else
+        flatpak_bwrap_add_args (bwrap,
+                                "--lock-file", "/usr/.ref",
+                                NULL);
 
       search_path_append (bin_path, "/overrides/bin");
       search_path_append (bin_path, g_getenv ("PATH"));
@@ -2512,6 +2565,32 @@ main (int argc,
 
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     goto out;
+
+  /* If we are using a runtime, pass the lock fd to the executed process,
+   * and make it act as a subreaper for the game itself.
+   *
+   * If we were using --unshare-pid then we could use bwrap --sync-fd
+   * and rely on bubblewrap's init process for this, but we currently
+   * can't do that without breaking gameoverlayrender.so's assumptions. */
+  if (runtime_lock != NULL)
+    {
+      g_autofree gchar *with_lock = NULL;
+      g_autofree gchar *fd_str = NULL;
+      int fd = pv_bwrap_lock_steal_fd (runtime_lock);
+
+      with_lock = g_build_filename (tools_dir,
+                                    "pressure-vessel-with-lock",
+                                    NULL);
+      fd_str = g_strdup_printf ("%d", fd);
+
+      flatpak_bwrap_add_fd (bwrap, fd);
+      flatpak_bwrap_add_args (bwrap,
+                              with_lock,
+                              "--subreaper",
+                              "--fd", fd_str,
+                              "--",
+                              NULL);
+    }
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);

@@ -165,10 +165,38 @@ add_project_arguments(
 )
 
 executable(
+  'pressure-vessel-with-lock',
+  sources : [
+    'src/bwrap-lock.c',
+    'src/bwrap-lock.h',
+    'src/glib-backports.c',
+    'src/glib-backports.h',
+    'src/flatpak-utils.c',
+    'src/flatpak-utils-private.h',
+    'src/utils.c',
+    'src/utils.h',
+    'src/with-lock.c',
+  ],
+  c_args : [
+    '-Wno-unused-local-typedefs',
+  ],
+  dependencies : [
+    dependency('gio-unix-2.0', required : true),
+    subproject('libglnx').get_variable('libglnx_dep'),
+  ],
+  install : true,
+  install_dir : get_option('bindir'),
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
+)
+
+executable(
   'pressure-vessel-wrap',
   sources : [
     'src/bwrap.c',
     'src/bwrap.h',
+    'src/bwrap-lock.c',
+    'src/bwrap-lock.h',
     'src/glib-backports.c',
     'src/glib-backports.h',
     'src/flatpak-bwrap.c',

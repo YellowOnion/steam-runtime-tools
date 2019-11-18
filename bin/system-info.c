@@ -242,6 +242,12 @@ jsonify_graphics_issues (JsonBuilder *builder,
 
   if ((issues & SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING) != 0)
     json_builder_add_string_value (builder, "software-rendering");
+
+  if ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT) != 0)
+    json_builder_add_string_value (builder, "timeout");
+
+  if ((issues & SRT_GRAPHICS_ISSUES_CANNOT_DRAW) != 0)
+    json_builder_add_string_value (builder, "cannot-draw");
 }
 
 static void

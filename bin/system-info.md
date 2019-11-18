@@ -406,6 +406,14 @@ keys:
             :   This graphics stack appears to be using unaccelerated
                 software rendering.
 
+            **timeout**
+            :   The test to check the given graphics mode timed out.
+
+            **cannot-draw**
+            :   The test to see if drawing works for the given graphics mode
+                had an error and was unable to draw.
+
+
 **locale-issues**
 :   An array of strings indicating locale-related issues.
     The array is empty if no problems were detected.

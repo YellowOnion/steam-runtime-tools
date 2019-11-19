@@ -8,6 +8,7 @@ Build-Depends:
  g++ (>= 4:4.8) | g++-4.8,
  glslang-tools,
  gtk-doc-tools <!nodoc>,
+ libcapsule-tools,
  libglib2.0-dev,
  libjson-glib-dev (>= 1.0),
  libtheora0 <!nocheck>,

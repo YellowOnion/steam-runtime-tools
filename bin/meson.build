@@ -26,6 +26,10 @@ executable(
   'system-info.c',
   dependencies : [glib, libsteamrt_dep, json_glib],
   install : true,
+  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
+  # LD_LIBRARY_PATH even if set
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
 )
 
 if get_option('man')

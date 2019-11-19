@@ -40,10 +40,17 @@ override_dh_auto_clean:
 	rm -fr builddir
 	rm -fr debian/locales
 
+libexecdir := libexec
+pkglibexecdir := $(libexecdir)/steam-runtime-tools-0
+libdir := lib/$(DEB_HOST_MULTIARCH)
+pkglibdir := $(libdir)/steam-runtime-tools-0
+DESTDIR := $(CURDIR)/debian/tmp
+
 override_dh_auto_configure:
 	meson builddir \
 		--prefix=/usr \
-		--libexecdir=/usr/libexec \
+		--libexecdir=$(libexecdir) \
+		--libdir=$(libdir) \
 		-Dgtk_doc=$(gtk_doc_has_cflags) \
 		-Dintrospection=false \
 		-Dmultiarch_tuple=$(DEB_HOST_MULTIARCH) \
@@ -61,18 +68,45 @@ ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
 endif
 
 override_dh_auto_install:
-	DESTDIR=$(CURDIR)/debian/tmp ninja -C builddir install
+	DESTDIR=$(DESTDIR) ninja -C builddir install
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-vulkaninfo \
-		debian/tmp/usr/libexec/steam-runtime-tools-0/
+		$(DESTDIR)/usr/$(pkglibexecdir)/
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-wflinfo \
-		debian/tmp/usr/libexec/steam-runtime-tools-0/
-	for x in debian/tmp/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \
+		$(DESTDIR)/usr/$(pkglibexecdir)/
+	set -e; for x in $(DESTDIR)/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \
 		if [ -f "$$x" ] \
 		&& cmp -s "$$x" \
-			debian/tmp/usr/libexec/steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true; \
+			$(DESTDIR)/usr/libexec/steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true; \
 		then \
-			ln -fns ../../steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true "$$x"; \
+			ln -fnsv ../../steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true "$$x"; \
 		fi; \
+	done
+	install -d $(DESTDIR)/usr/$(pkglibdir)
+	ln -fnsv ../libsteam-runtime-tools-0.so.0 $(DESTDIR)/usr/$(pkglibdir)/
+	LD_LIBRARY_PATH='$(DESTDIR)/usr/$(libdir)' \
+	$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
+		--container / \
+		--dest $(DESTDIR)/usr/$(pkglibdir) \
+		--link-target / \
+		--no-glibc \
+		--provider / \
+		only-dependencies:path:$(DESTDIR)/usr/bin/steam-runtime-system-info \
+		only-dependencies:path:$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-check-locale \
+		$(NULL)
+
+override_dh_link:
+	dh_link
+	# Make the links in $(pkglibdir) relative. This is contrary
+	# to Debian policy, but is what we need for the LD_LIBRARY_PATH
+	# Steam Runtime, where GLib is in /lib.
+	set -e; for link in debian/libsteam-runtime-tools-0-helpers/usr/$(pkglibdir)/lib*; do \
+		target="$$(readlink -v "$$link")"; \
+		echo "before: $$link -> $$target"; \
+		case "$$target" in \
+			(/*) \
+				ln -fnsv "../../../..$${target}" "$${link}"; \
+				;; \
+		esac; \
 	done
 
 override_dh_missing:

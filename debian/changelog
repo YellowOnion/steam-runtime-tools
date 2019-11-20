@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20191112.0-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20191120.0-0+steamrt1.1) scout; urgency=medium
 
   [ Jeremy Whiting ]
   * Check whether GLX drivers can actually draw to an X11 window.
@@ -29,7 +29,7 @@ steam-runtime-tools (0.20191112.0-0+steamrt1.1) UNRELEASED; urgency=medium
   * Detect GLX and EGL graphics library vendor (either GLVND,
     legacy non-GLVND Mesa, legacy non-GLVND NVIDIA, or other non-GLVND)
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 20 Nov 2019 14:40:40 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 20 Nov 2019 14:44:45 +0000
 
 steam-runtime-tools (0.20191024.0-0+steamrt1.1) scout; urgency=medium
 

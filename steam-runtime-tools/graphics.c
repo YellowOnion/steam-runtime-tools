@@ -561,6 +561,28 @@ _argv_for_check_vulkan (const char *helpers_path,
   return argv;
 }
 
+static GPtrArray *
+_argv_for_check_gl (const char *helpers_path,
+                    SrtTestFlags test_flags,
+                    const char *multiarch_tuple,
+                    GError **error)
+{
+  GPtrArray *argv;
+  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
+
+  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
+    flags |= SRT_HELPER_FLAGS_TIME_OUT_SOONER;
+
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-gl",
+                          flags, error);
+
+  if (argv == NULL)
+    return NULL;
+
+  g_ptr_array_add (argv, NULL);
+  return argv;
+}
+
 /**
  * _srt_check_library_vendor:
  * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
@@ -763,6 +785,57 @@ _srt_check_graphics (const char *helpers_path,
   if (parse_wflinfo)
     {
       issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
+
+      if (rendering_interface == SRT_RENDERING_INTERFACE_GL &&
+         window_system == SRT_WINDOW_SYSTEM_GLX)
+        {
+          /* Now perform *-check-gl drawing test */
+          g_ptr_array_unref (argv);
+          g_clear_pointer (&output, g_free);
+
+          argv = _argv_for_check_gl (helpers_path,
+                                     test_flags,
+                                     multiarch_tuple,
+                                     &error);
+
+          if (argv == NULL)
+            {
+              issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+              /* Put the error message in the 'messages' */
+              child_stderr2 = g_strdup (error->message);
+              goto out;
+            }
+
+          /* Now run and report exit code/messages if failure */
+          if (!g_spawn_sync (NULL,    /* working directory */
+                             (gchar **) argv->pdata,
+                             my_environ,    /* envp */
+                             G_SPAWN_SEARCH_PATH,       /* flags */
+                             NULL,    /* child setup */
+                             NULL,    /* user data */
+                             &output, /* stdout */
+                             &child_stderr2,
+                             &exit_status,
+                             &error))
+            {
+              g_debug ("An error occurred calling the helper: %s", error->message);
+              issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+              goto out;
+            }
+
+          if (exit_status != 0)
+            {
+              g_debug ("... wait status %d", exit_status);
+              issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+
+              // TERM signal gives us 124 from timeout man page
+              if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+                {
+                  g_debug ("helper killed by timeout command");
+                  issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
+                }
+            }
+        }
     }
   else
     {

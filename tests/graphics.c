@@ -698,6 +698,50 @@ test_mixed_vulkan (Fixture *f,
 }
 
 /*
+ * Test a mock system with gl driver but check-gl failure
+ */
+static void
+test_mixed_gl (Fixture *f,
+               gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-mixed",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
+                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
+                   SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+  g_assert_cmpstr (tuple, ==, "mock-mixed");
+  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
+  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+/*
  * Assert that @icd is internally consistent.
  */
 static void
@@ -1535,6 +1579,8 @@ main (int argc,
               setup, test_software_rendering, teardown);
   g_test_add ("/graphics/normalize_window_system", Fixture, NULL,
               setup, test_normalize_window_system, teardown);
+  g_test_add ("/graphics/gl-mixed", Fixture, NULL,
+              setup, test_mixed_gl, teardown);
 
   g_test_add ("/graphics/vulkan", Fixture, NULL,
               setup, test_good_vulkan, teardown);

@@ -1,7 +1,11 @@
 steam-runtime-tools (0.20191112.0-0+steamrt1.1) UNRELEASED; urgency=medium
 
   [ Jeremy Whiting ]
-  * Check whether Vulkan drivers can actually draw to an X11 window
+  * Check whether GLX drivers can actually draw to an X11 window.
+    This provides a more thorough test than wflinfo.
+  * Check whether Vulkan drivers can actually draw to an X11 window.
+    This provides a more thorough test than vulkaninfo.
+  * Fix reporting of timeouts in JSON
 
   [ Simon McVittie ]
   * Build selected executables with a RPATH.
@@ -9,7 +13,7 @@ steam-runtime-tools (0.20191112.0-0+steamrt1.1) UNRELEASED; urgency=medium
     LD_LIBRARY_PATH Steam Runtime to find the copies of
     libsteam-runtime-tools and libjson-glib in the same Runtime.
   * Look for wflinfo, vulkaninfo and libraries adjacent to
-    libsteam-runtime-tools.
+    libsteam-runtime-tools
   * Use g++-4.8 if default g++ is older
   * Build shaders using glslangValidator
   * Fix many compiler warnings
@@ -18,12 +22,14 @@ steam-runtime-tools (0.20191112.0-0+steamrt1.1) UNRELEASED; urgency=medium
   * check-vulkan: Optionally make the window visible
   * Look for -check-vulkan in default helpers path, not in PATH
   * check-vulkan: Look for shaders in the correct place when installed
+  * Add build-dependencies for check-gl
 
   [ Ludovico de Nittis ]
   * Add support for libraries with hidden dependencies
-  * Detect GLX, EGL graphics library vendor
+  * Detect GLX and EGL graphics library vendor (either GLVND,
+    legacy non-GLVND Mesa, legacy non-GLVND NVIDIA, or other non-GLVND)
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 12 Nov 2019 18:57:54 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 20 Nov 2019 14:40:40 +0000
 
 steam-runtime-tools (0.20191024.0-0+steamrt1.1) scout; urgency=medium
 

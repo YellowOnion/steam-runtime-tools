@@ -507,6 +507,8 @@ _srt_check_library_presence (const char *helpers_path,
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
+  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
+  GString *log_args = NULL;
 
   g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
@@ -518,7 +520,7 @@ _srt_check_library_presence (const char *helpers_path,
     issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
 
   argv = _srt_get_helper (helpers_path, multiarch, "inspect-library",
-                          SRT_HELPER_FLAGS_NONE, &error);
+                          flags, &error);
 
   if (argv == NULL)
     {
@@ -529,7 +531,19 @@ _srt_check_library_presence (const char *helpers_path,
       goto out;
     }
 
-  g_debug ("Checking library %s integrity with %s", soname, (gchar *)g_ptr_array_index (argv, 0));
+  log_args = g_string_new ("");
+
+  for (int i = 0; i < argv->len; ++i)
+    {
+      if (i > 0)
+        {
+          g_string_append_c (log_args, ' ');
+        }
+      g_string_append (log_args, g_ptr_array_index (argv, i));
+    }
+
+  g_debug ("Checking library %s integrity with %s ", soname, log_args->str);
+  g_string_free (log_args, TRUE);
 
   switch (symbols_format)
     {
@@ -568,7 +582,7 @@ _srt_check_library_presence (const char *helpers_path,
   if (!g_spawn_sync (NULL,       /* working directory */
                      (gchar **) argv->pdata,
                      my_environ, /* envp */
-                     0,          /* flags */
+                     G_SPAWN_SEARCH_PATH,          /* flags */
                      NULL,       /* child setup */
                      NULL,       /* user data */
                      &output,    /* stdout */

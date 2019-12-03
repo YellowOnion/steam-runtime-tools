@@ -260,4 +260,11 @@ executable(
   install_dir: tests_dir
 )
 
+executable(
+  'mock-sigusr-wflinfo',
+  'mock-sigusr-wflinfo.c',
+  install: true,
+  install_dir: tests_dir
+)
+
 # vim:set sw=2 sts=2 et:

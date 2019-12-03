@@ -815,6 +815,49 @@ test_mixed_gl (Fixture *f,
 }
 
 /*
+ * Test a mock system with sigusr terminating signal
+ */
+static void
+test_sigusr (Fixture *f,
+               gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  int exit_status;
+  int terminating_signal;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-sigusr",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmpstr (tuple, ==, "mock-sigusr");
+  /* Depending on the version of timeout(1), it will have either
+   * exited with status 128 + SIGUSR1, or killed itself with SIGUSR1 */
+  if (exit_status != -1)
+    {
+      g_assert_cmpint (exit_status, ==, 128 + SIGUSR1);
+    }
+  g_assert_cmpint (terminating_signal, ==, SIGUSR1);
+  g_free (tuple);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+/*
  * Assert that @icd is internally consistent.
  */
 static void
@@ -1654,6 +1697,8 @@ main (int argc,
               setup, test_normalize_window_system, teardown);
   g_test_add ("/graphics/gl-mixed", Fixture, NULL,
               setup, test_mixed_gl, teardown);
+  g_test_add ("/graphics/sigusr", Fixture, NULL,
+              setup, test_sigusr, teardown);
 
   g_test_add ("/graphics/vulkan", Fixture, NULL,
               setup, test_good_vulkan, teardown);

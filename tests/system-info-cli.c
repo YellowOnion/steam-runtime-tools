@@ -146,7 +146,7 @@ libraries_presence (Fixture *f,
           g_assert_cmpint (json_array_get_length (array), ==, 0);
         }
     }
-  
+
   g_object_unref (parser);
   g_object_unref (info);
   g_free (expectations_in);
@@ -246,7 +246,7 @@ libraries_missing (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -262,7 +262,7 @@ libraries_missing (Fixture *f,
 
       check_libraries_missing (json_arch);
     }
-  
+
   g_object_unref (parser);
   g_object_unref (info);
   g_free (expectations_in);
@@ -353,7 +353,7 @@ libraries_presence_verbose (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+
   g_assert_true (json_object_has_member (json, "steam-installation"));
 
   g_assert_true (json_object_has_member (json, "runtime"));
@@ -373,7 +373,7 @@ libraries_presence_verbose (Fixture *f,
 
       check_libraries_verbose (json_arch);
     }
-  
+
   g_object_unref (parser);
   g_object_unref (info);
   g_free (expectations_in);
@@ -420,7 +420,7 @@ no_arguments (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -432,7 +432,7 @@ no_arguments (Fixture *f,
       g_assert_cmpint (json_object_get_boolean_member (json_arch, "can-run"),
                       ==, srt_system_info_can_run (info, multiarch_tuples[i]));
     }
-  
+
   g_object_unref (parser);
   g_object_unref (info);
   g_free (output);
@@ -485,7 +485,7 @@ steam_presence (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+
   g_assert_true (json_object_has_member (json, "steam-installation"));
   json_sub_object = json_object_get_object_member (json, "steam-installation");
 
@@ -519,7 +519,7 @@ steam_presence (Fixture *f,
   g_assert_true (json_object_has_member (json_sub_object, "pinned_libs_64"));
 
   g_assert_true (json_object_has_member (json, "architectures"));
-  
+
   fake_home_clean_up (fake_home);
   g_object_unref (parser);
   g_object_unref (info);
@@ -578,7 +578,7 @@ steam_issues (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+
 
   g_assert_true (json_object_has_member (json, "steam-installation"));
   json_sub_object = json_object_get_object_member (json, "steam-installation");
@@ -617,7 +617,7 @@ steam_issues (Fixture *f,
                    "not-using-newer-host-libraries");
 
   g_assert_true (json_object_has_member (json, "architectures"));
-  
+
   fake_home_clean_up (fake_home);
   g_object_unref (parser);
   g_object_unref (info);

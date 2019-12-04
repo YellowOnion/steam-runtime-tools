@@ -183,7 +183,7 @@ executable(
   install: true,
   install_dir: tests_dir
 )
-  
+
 executable(
   'mock-good-vulkaninfo',
   'mock-good-vulkaninfo.c',

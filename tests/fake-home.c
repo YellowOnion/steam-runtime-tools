@@ -48,7 +48,7 @@ fake_home_new (void)
   FakeHome *fake_home = g_slice_new (FakeHome);
   fake_home->home = g_dir_make_tmp ("fake-home-XXXXXX", &error);
   g_assert_no_error (error);
-  
+
   fake_home->create_pinning_libs = TRUE;
   fake_home->create_i386_folders = TRUE;
   fake_home->create_amd64_folders = TRUE;
@@ -58,7 +58,7 @@ fake_home_new (void)
   fake_home->add_environments = TRUE;
   fake_home->has_debian_bug_916303 = FALSE;
   fake_home->testing_beta_client = FALSE;
-  
+
   return fake_home;
 }
 
@@ -182,7 +182,7 @@ fake_home_create_structure (FakeHome *f)
         goto out;
       if (g_creat (version, 0755) < 0)
         goto out;
-      
+
       g_file_set_contents (version, "steam-runtime_0.20190711.3", -1, &error);
       g_assert_no_error (error);
     }
@@ -290,7 +290,7 @@ fake_home_create_structure (FakeHome *f)
 
     if (!ret)
       g_warning ("Unable to create directories: %s", g_strerror (saved_errno));
-    
+
     return ret;
 
 }

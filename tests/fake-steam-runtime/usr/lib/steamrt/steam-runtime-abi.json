@@ -9,7 +9,7 @@
  },
  "extra_debs": {
   "libs": [
-   "dconf-gsettings-backend", 
+   "dconf-gsettings-backend",
    "gtk2-engines"
   ]
  },

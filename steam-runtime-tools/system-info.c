@@ -183,7 +183,7 @@ static MaybeLocale *
 maybe_locale_new_negative (GError *error)
 {
   MaybeLocale *self;
-  
+
   g_return_val_if_fail (error != NULL, NULL);
 
   self = g_slice_new0 (MaybeLocale);

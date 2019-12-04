@@ -22,6 +22,8 @@ Build-Depends:
  zlib1g <!nocheck>,
 Build-Depends-Indep:
  libglib2.0-dev,
+Build-Conflicts:
+ libsteam-runtime-tools-0-helpers,
 Vcs-Git: https://gitlab.steamos.cloud/steam/steam-runtime-tools.git
 Vcs-Browser: https://gitlab.steamos.cloud/steam/steam-runtime-tools
 

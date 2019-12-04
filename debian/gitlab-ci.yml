@@ -34,6 +34,9 @@ autopkgtest:
     stage: test
     variables:
         BUILD_IMAGE: docker.internal.steamos.cloud/steamrt/sdk:scout-latest
+        STEAM_CI_INSTALL_SCRIPT: |
+            # Workaround for the build regression described in !88
+            apt-get -y remove libsteam-runtime-tools-0-helpers
 
 ubsan:
     stage: test

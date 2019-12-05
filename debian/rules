@@ -45,6 +45,7 @@ pkglibexecdir := $(libexecdir)/steam-runtime-tools-0
 libdir := lib/$(DEB_HOST_MULTIARCH)
 pkglibdir := $(libdir)/steam-runtime-tools-0
 DESTDIR := $(CURDIR)/debian/tmp
+relocatable_pkglibdir := $(CURDIR)/debian/libsteam-runtime-tools-0-relocatable-libs/usr/$(pkglibdir)
 
 override_dh_auto_configure:
 	meson builddir \
@@ -81,25 +82,37 @@ override_dh_auto_install:
 			ln -fnsv ../../steam-runtime-tools-0/$(DEB_HOST_MULTIARCH)-true "$$x"; \
 		fi; \
 	done
-	install -d $(DESTDIR)/usr/$(pkglibdir)
-	ln -fnsv ../libsteam-runtime-tools-0.so.0 $(DESTDIR)/usr/$(pkglibdir)/
+
+override_dh_shlibdeps:
+	dh_shlibdeps \
+		-plibsteam-runtime-tools-0-relocatable-libs \
+		-- \
+		-prelocatable \
+		-e$(DESTDIR)/usr/bin/steam-runtime-system-info \
+		-e$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-check-locale \
+		$(NULL)
+	dh_shlibdeps
+
+override_dh_link:
+	dh_link
+	:
+	install -d $(relocatable_pkglibdir)
+	ln -fnsv ../libsteam-runtime-tools-0.so.0 $(relocatable_pkglibdir)
 	LD_LIBRARY_PATH='$(DESTDIR)/usr/$(libdir)' \
 	$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
 		--container / \
-		--dest $(DESTDIR)/usr/$(pkglibdir) \
+		--dest $(relocatable_pkglibdir) \
 		--link-target / \
 		--no-glibc \
 		--provider / \
 		only-dependencies:path:$(DESTDIR)/usr/bin/steam-runtime-system-info \
 		only-dependencies:path:$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-check-locale \
 		$(NULL)
-
-override_dh_link:
-	dh_link
+	:
 	# Make the links in $(pkglibdir) relative. This is contrary
 	# to Debian policy, but is what we need for the LD_LIBRARY_PATH
 	# Steam Runtime, where GLib is in /lib.
-	set -e; for link in debian/libsteam-runtime-tools-0-helpers/usr/$(pkglibdir)/lib*; do \
+	set -e; for link in $(relocatable_pkglibdir)/lib*; do \
 		target="$$(readlink -v "$$link")"; \
 		echo "before: $$link -> $$target"; \
 		case "$$target" in \

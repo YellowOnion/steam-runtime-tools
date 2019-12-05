@@ -23,7 +23,8 @@ Build-Depends:
 Build-Depends-Indep:
  libglib2.0-dev,
 Build-Conflicts:
- libsteam-runtime-tools-0-helpers,
+ libsteam-runtime-tools-0-helpers (<< 0.20191204.0~),
+ libsteam-runtime-tools-0-relocatable-libs,
 Vcs-Git: https://gitlab.steamos.cloud/steam/steam-runtime-tools.git
 Vcs-Browser: https://gitlab.steamos.cloud/steam/steam-runtime-tools
 
@@ -88,6 +89,23 @@ Description:
  .
  This package contains helper tools used to examine the library stack
  available for each architecture.
+
+Package: libsteam-runtime-tools-0-relocatable-libs
+Architecture: amd64 i386
+Multi-Arch: same
+Section: misc
+Depends:
+ ${misc:Depends},
+ ${relocatable:Depends},
+Description:
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains symbolic links to libraries depended on by the
+ steam-runtime-system-info and libsteam-runtime-tools-0-helpers packages,
+ which make it possible to run those tools from an LD_LIBRARY_PATH-style
+ Steam Runtime even if the LD_LIBRARY_PATH is not correctly set.
 
 Package: libsteam-runtime-tools-0-tests
 Architecture: any

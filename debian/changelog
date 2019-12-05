@@ -1,3 +1,9 @@
+steam-runtime-tools (0.20191204.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  * ...
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 04 Dec 2019 11:22:29 +0000
+
 steam-runtime-tools (0.20191120.0-0+steamrt1.1) scout; urgency=medium
 
   [ Jeremy Whiting ]

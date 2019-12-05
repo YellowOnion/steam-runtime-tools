@@ -409,6 +409,40 @@ _srt_filter_gameoverlayrenderer (const gchar *input)
   return ret;
 }
 
+/**
+ * srt_enum_value_to_nick
+ * @enum_type: The type of the enumeration.
+ * @value: The enumeration value to stringify.
+ *
+ * Get the #GEnumValue.value-nick of a given enumeration value.
+ * For example, `srt_enum_value_to_nick (SRT_TYPE_WINDOW_SYSTEM, SRT_WINDOW_SYSTEM_EGL_X11)`
+ * returns `"egl-x11"`.
+ *
+ * Returns: (transfer none): A string representation
+ *  of the given enumeration value.
+ */
+const char *
+srt_enum_value_to_nick (GType enum_type,
+                        int value)
+{
+  GEnumClass *class;
+  GEnumValue *enum_value;
+  const char *result;
+
+  g_return_val_if_fail (G_TYPE_IS_ENUM (enum_type), NULL);
+
+  class = g_type_class_ref (enum_type);
+  enum_value = g_enum_get_value (class, value);
+
+  if (enum_value != NULL)
+    result = enum_value->value_nick;
+  else
+    result = NULL;
+
+  g_type_class_unref (class);
+  return result;
+}
+
 #if !GLIB_CHECK_VERSION(2, 36, 0)
 static void _srt_constructor (void) __attribute__((__constructor__));
 static void

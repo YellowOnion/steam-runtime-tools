@@ -1,8 +1,14 @@
-steam-runtime-tools (0.20191204.0-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20191205.0-0+steamrt1.1) scout; urgency=medium
 
-  * ...
+  * Move symbolic links to dependencies to new
+    libsteam-runtime-tools-0-relocatable-libs, and add Build-Conflicts on it.
+    Since steam-runtime-tools was made relocatable in c3a06cce, its build
+    would fail with the Steam Runtime 1 'scout' version of dpkg if it is
+    already installed system-wide.
+  * debian: Add missing symbols file entries from 0.20191120.0
+  * Remove trailing whitespace from source code
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 04 Dec 2019 11:22:29 +0000
+ -- Simon McVittie <smcv@collabora.com>  Thu, 05 Dec 2019 14:49:22 +0000
 
 steam-runtime-tools (0.20191120.0-0+steamrt1.1) scout; urgency=medium
 

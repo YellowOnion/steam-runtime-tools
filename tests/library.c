@@ -731,6 +731,7 @@ test_missing_arch (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   const char * const *dependencies;
+  const char *messages;
 
   issues = srt_check_library_presence ("libz.so.1",
                                        "hal9000-linux-gnu",
@@ -741,8 +742,16 @@ test_missing_arch (Fixture *f,
                    (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
                     SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
+  /* Because we can't find the hal9000-linux-gnu-inspect-library helper,
+   * we never even get as far as running a command, so no exit status or
+   * terminating signal is reported. */
   g_assert_cmpint (srt_library_get_exit_status (library), ==, -1);
   g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
+  /* We mention the missing helper in the diagnostic messages. */
+  messages = srt_library_get_messages (library);
+  g_assert_nonnull (messages);
+  g_test_message ("%s", messages);
+  g_assert_nonnull (strstr (messages, "hal9000-linux-gnu-inspect-library"));
 
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);

@@ -57,6 +57,8 @@ struct _SrtLibrary
   GStrv misversioned_symbols;
   GQuark multiarch_tuple;
   SrtLibraryIssues issues;
+  int exit_status;
+  int terminating_signal;
 };
 
 struct _SrtLibraryClass
@@ -75,6 +77,8 @@ enum {
   PROP_MULTIARCH_TUPLE,
   PROP_SONAME,
   PROP_MISVERSIONED_SYMBOLS,
+  PROP_EXIT_STATUS,
+  PROP_TERMINATING_SIGNAL,
   N_PROPERTIES
 };
 
@@ -125,6 +129,14 @@ srt_library_get_property (GObject *object,
 
       case PROP_MISVERSIONED_SYMBOLS:
         g_value_set_boxed (value, self->misversioned_symbols);
+        break;
+
+      case PROP_EXIT_STATUS:
+        g_value_set_int (value, self->exit_status);
+        break;
+
+      case PROP_TERMINATING_SIGNAL:
+        g_value_set_int (value, self->terminating_signal);
         break;
 
       default:
@@ -213,6 +225,14 @@ srt_library_set_property (GObject *object,
 
         break;
 
+      case PROP_EXIT_STATUS:
+        self->exit_status = g_value_get_int (value);
+        break;
+
+      case PROP_TERMINATING_SIGNAL:
+        self->terminating_signal = g_value_get_int (value);
+        break;
+
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -297,6 +317,22 @@ srt_library_class_init (SrtLibraryClass *cls)
                         G_TYPE_STRV,
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
+  properties[PROP_EXIT_STATUS] =
+    g_param_spec_int ("exit-status", "Exit status", "Exit status of helper(s) executed. 0 on success, positive on unsuccessful exit(), -1 if killed by a signal or not run at all",
+                      -1,
+                      G_MAXINT,
+                      0,
+                      G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_TERMINATING_SIGNAL] =
+    g_param_spec_int ("terminating-signal", "Terminating signal", "Signal used to terminate helper process if any, 0 otherwise",
+                      0,
+                      G_MAXINT,
+                      0,
+                      G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_STRINGS);
+
 
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
@@ -400,6 +436,37 @@ srt_library_get_dependencies (SrtLibrary *self)
 }
 
 /**
+ * srt_library_get_exit_status:
+ * @self: a library
+ *
+ * Return the exit status of helpers when testing the given library.
+ *
+ * Returns: 0 on success, positive on unsuccessful `exit()`, or
+ *          -1 if killed by a signal or not run at all
+ */
+int srt_library_get_exit_status (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), -1);
+
+  return self->exit_status;
+}
+
+/**
+ * srt_library_get_terminating_signal:
+ * @self: a library
+ *
+ * Return the terminating signal used to terminate the helper if any.
+ *
+ * Returns: a signal number such as `SIGTERM`, or 0 if not killed by a signal or not run at all.
+ */
+int srt_library_get_terminating_signal (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), -1);
+
+  return self->terminating_signal;
+}
+
+/**
  * srt_library_get_missing_symbols:
  * @self: a library
  *
@@ -492,7 +559,9 @@ _srt_check_library_presence (const char *helpers_path,
   gchar *output = NULL;
   gchar *child_stderr = NULL;
   gchar *absolute_path = NULL;
+  int wait_status = -1;
   int exit_status = -1;
+  int terminating_signal = 0;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
@@ -507,6 +576,8 @@ _srt_check_library_presence (const char *helpers_path,
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
+  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
+  GString *log_args = NULL;
 
   g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
@@ -518,7 +589,7 @@ _srt_check_library_presence (const char *helpers_path,
     issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
 
   argv = _srt_get_helper (helpers_path, multiarch, "inspect-library",
-                          SRT_HELPER_FLAGS_NONE, &error);
+                          flags, &error);
 
   if (argv == NULL)
     {
@@ -529,7 +600,19 @@ _srt_check_library_presence (const char *helpers_path,
       goto out;
     }
 
-  g_debug ("Checking library %s integrity with %s", soname, (gchar *)g_ptr_array_index (argv, 0));
+  log_args = g_string_new ("");
+
+  for (guint i = 0; i < argv->len; ++i)
+    {
+      if (i > 0)
+        {
+          g_string_append_c (log_args, ' ');
+        }
+      g_string_append (log_args, g_ptr_array_index (argv, i));
+    }
+
+  g_debug ("Checking library %s integrity with %s ", soname, log_args->str);
+  g_string_free (log_args, TRUE);
 
   switch (symbols_format)
     {
@@ -568,24 +651,32 @@ _srt_check_library_presence (const char *helpers_path,
   if (!g_spawn_sync (NULL,       /* working directory */
                      (gchar **) argv->pdata,
                      my_environ, /* envp */
-                     0,          /* flags */
+                     G_SPAWN_SEARCH_PATH,          /* flags */
                      NULL,       /* child setup */
                      NULL,       /* user data */
                      &output,    /* stdout */
                      &child_stderr,
-                     &exit_status,
+                     &wait_status,
                      &error))
     {
       g_debug ("An error occurred calling the helper: %s", error->message);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
-      goto out;
     }
 
-  if (exit_status != 0)
+  if (wait_status != 0)
     {
-      g_debug ("... wait status %d", exit_status);
+      g_debug ("... wait status %d", wait_status);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+
+      if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
+        {
+          issues |= SRT_LIBRARY_ISSUES_TIMEOUT;
+        }
       goto out;
+    }
+  else
+    {
+      exit_status = 0;
     }
 
   /* We can't use `json_from_string()` directly because we are targeting an
@@ -664,7 +755,9 @@ out:
                                           child_stderr,
                                           (const char **) missing_symbols,
                                           (const char **) misversioned_symbols,
-                                          (const char **) dependencies);
+                                          (const char **) dependencies,
+                                          exit_status,
+                                          terminating_signal);
 
   if (parser != NULL)
     g_object_unref (parser);

@@ -200,6 +200,8 @@ test_object (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   graphics = _srt_graphics_new("mock-good",
                                SRT_WINDOW_SYSTEM_GLX,
@@ -208,7 +210,9 @@ test_object (Fixture *f,
                                SRT_TEST_GOOD_GRAPHICS_RENDERER,
                                SRT_TEST_GOOD_GRAPHICS_VERSION,
                                SRT_GRAPHICS_ISSUES_NONE,
-                               "");
+                               "",
+                               0,
+                               0);
   g_assert_cmpint (srt_graphics_get_issues (graphics), ==,
                    SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (srt_graphics_get_multiarch_tuple (graphics), ==,
@@ -220,6 +224,8 @@ test_object (Fixture *f,
   g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, NULL);
   vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
   g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
   g_assert_true (vendor_neutral);
   g_object_get (graphics,
                 "messages", &messages,
@@ -228,6 +234,8 @@ test_object (Fixture *f,
                 "library-vendor", &library_vendor,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
@@ -235,6 +243,8 @@ test_object (Fixture *f,
   g_assert_cmpstr (tuple, ==, "mock-good");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (messages);
   g_free (tuple);
   g_free (renderer);
@@ -254,6 +264,8 @@ test_good_graphics (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -268,16 +280,22 @@ test_good_graphics (Fixture *f,
                    SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
   g_object_get (graphics,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (tuple, ==, "mock-good");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -427,6 +445,8 @@ test_bad_graphics (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -443,6 +463,9 @@ test_bad_graphics (Fixture *f,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
                    "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
   /* We used "mock-bad" for the architecture so, when checking the library vendor,
    * we will not be able to call the helper `mock-bad-check-library`.
    * For this reason we expect %SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
@@ -456,6 +479,8 @@ test_bad_graphics (Fixture *f,
                 "library-vendor", &library_vendor,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
   g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
@@ -464,6 +489,8 @@ test_bad_graphics (Fixture *f,
   g_assert_cmpstr (tuple, ==, "mock-bad");
   g_assert_cmpstr (renderer, ==, NULL);
   g_assert_cmpstr (version, ==, NULL);
+  g_assert_cmpint (exit_status, ==, 1);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (messages);
   g_free (tuple);
   g_free (renderer);
@@ -485,6 +512,8 @@ test_timeout_graphics (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -502,17 +531,24 @@ test_timeout_graphics (Fixture *f,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    NULL);
+  // Timeout has exit code 124
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 124);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
   g_object_get (graphics,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD), ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
   g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT), ==, SRT_GRAPHICS_ISSUES_TIMEOUT);
   g_assert_cmpstr (tuple, ==, "mock-hanging");
   g_assert_cmpstr (renderer, ==, NULL);
   g_assert_cmpstr (version, ==, NULL);
+  g_assert_cmpint (exit_status, ==, 124);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -533,6 +569,8 @@ test_software_rendering (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -547,16 +585,23 @@ test_software_rendering (Fixture *f,
                    SRT_TEST_SOFTWARE_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    SRT_TEST_SOFTWARE_GRAPHICS_VERSION);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
   g_object_get (graphics,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING);
   g_assert_cmpstr (tuple, ==, "mock-software");
   g_assert_cmpstr (renderer, ==, SRT_TEST_SOFTWARE_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_SOFTWARE_GRAPHICS_VERSION);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -577,6 +622,8 @@ test_good_vulkan (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -591,16 +638,23 @@ test_good_vulkan (Fixture *f,
                    SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    SRT_TEST_GOOD_VULKAN_VERSION);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
   g_object_get (graphics,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (tuple, ==, "mock-good");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_VULKAN_VERSION);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -621,6 +675,8 @@ test_bad_vulkan (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -635,16 +691,23 @@ test_bad_vulkan (Fixture *f,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    NULL);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
   g_object_get (graphics,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
   g_assert_cmpstr (tuple, ==, "mock-bad");
   g_assert_cmpstr (renderer, ==, NULL);
   g_assert_cmpstr (version, ==, NULL);
+  g_assert_cmpint (exit_status, ==, 1);
+  g_assert_cmpint (terminating_signal, ==, 0);
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -665,6 +728,8 @@ test_mixed_vulkan (Fixture *f,
   gchar *tuple;
   gchar *renderer;
   gchar *version;
+  int exit_status;
+  int terminating_signal;
 
   SrtSystemInfo *info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -679,16 +744,24 @@ test_mixed_vulkan (Fixture *f,
                    SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    SRT_TEST_GOOD_VULKAN_VERSION);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
   g_object_get (graphics,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
                 "version-string", &version,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
   g_assert_cmpstr (tuple, ==, "mock-mixed");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_VULKAN_VERSION);
+  g_assert_cmpint (exit_status, ==, 1);
+  g_assert_cmpint (terminating_signal, ==, 0);
+
   g_free (tuple);
   g_free (renderer);
   g_free (version);
@@ -736,6 +809,49 @@ test_mixed_gl (Fixture *f,
   g_free (tuple);
   g_free (renderer);
   g_free (version);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+/*
+ * Test a mock system with sigusr terminating signal
+ */
+static void
+test_sigusr (Fixture *f,
+               gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  int exit_status;
+  int terminating_signal;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-sigusr",
+                                           SRT_WINDOW_SYSTEM_GLX,
+                                           SRT_RENDERING_INTERFACE_GL,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+  g_assert_cmpstr (tuple, ==, "mock-sigusr");
+  /* Depending on the version of timeout(1), it will have either
+   * exited with status 128 + SIGUSR1, or killed itself with SIGUSR1 */
+  if (exit_status != -1)
+    {
+      g_assert_cmpint (exit_status, ==, 128 + SIGUSR1);
+    }
+  g_assert_cmpint (terminating_signal, ==, SIGUSR1);
+  g_free (tuple);
 
   g_object_unref (graphics);
   g_object_unref (info);
@@ -1581,6 +1697,8 @@ main (int argc,
               setup, test_normalize_window_system, teardown);
   g_test_add ("/graphics/gl-mixed", Fixture, NULL,
               setup, test_mixed_gl, teardown);
+  g_test_add ("/graphics/sigusr", Fixture, NULL,
+              setup, test_sigusr, teardown);
 
   g_test_add ("/graphics/vulkan", Fixture, NULL,
               setup, test_good_vulkan, teardown);

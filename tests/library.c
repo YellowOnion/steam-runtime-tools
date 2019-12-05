@@ -88,7 +88,9 @@ test_object (Fixture *f,
                               "",
                               NULL,
                               NULL,
-                              NULL);
+                              NULL,
+                              0,
+                              0);
   g_assert_cmpint (srt_library_get_issues (library), ==,
                    SRT_LIBRARY_ISSUES_NONE);
   g_assert_cmpstr (srt_library_get_messages (library), ==, NULL);
@@ -145,7 +147,9 @@ test_object (Fixture *f,
                               "ld.so: libjpeg.so.62: nope\n",
                               one_missing,
                               one_misversioned,
-                              two_deps);
+                              two_deps,
+                              0,
+                              0);
   g_assert_cmpint (srt_library_get_issues (library) &
                    SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
   g_assert_cmpint (srt_library_get_issues (library) &
@@ -338,6 +342,8 @@ test_deb_symbols (Fixture *f,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                        &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISSING_SYMBOLS);
+  g_assert_cmpint (srt_library_get_exit_status (library), ==, 0);
+  g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
 
   /* If we had mistakenly parsed the sections that refer to libzextra.so.0
    * and libzmore.so.0, then we would see more missing symbols than this.
@@ -695,6 +701,8 @@ test_missing_library (Fixture *f,
                    (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
                     SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
+  g_assert_cmpint (srt_library_get_exit_status (library), ==, 1);
+  g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
 
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);
@@ -733,6 +741,8 @@ test_missing_arch (Fixture *f,
                    (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
                     SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
+  g_assert_cmpint (srt_library_get_exit_status (library), ==, -1);
+  g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
 
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);

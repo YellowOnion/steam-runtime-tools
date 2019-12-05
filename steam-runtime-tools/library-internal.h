@@ -43,6 +43,8 @@
  *  version
  * @dependencies: (nullable) (array zero-terminated=1) (element-type utf8):
  *  Dependencies of @soname
+ * @exit_status: exit status of helper, or -1 if it did not exit normally
+ * @terminating_signal: signal that terminated the helper, or 0
  *
  * Inline convenience function to create a new SrtLibrary.
  * This is not part of the public API.
@@ -56,7 +58,9 @@ static inline SrtLibrary *_srt_library_new (const char *multiarch_tuple,
                                             const char *messages,
                                             const char * const *missing_symbols,
                                             const char * const *misversioned_symbols,
-                                            const char * const *dependencies);
+                                            const char * const *dependencies,
+                                            int exit_status,
+                                            int terminating_signal);
 
 #ifndef __GTK_DOC_IGNORE__
 static inline SrtLibrary *
@@ -67,7 +71,9 @@ _srt_library_new (const char *multiarch_tuple,
                   const char *messages,
                   const char * const *missing_symbols,
                   const char * const *misversioned_symbols,
-                  const char * const *dependencies)
+                  const char * const *dependencies,
+                  int exit_status,
+                  int terminating_signal)
 {
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
   g_return_val_if_fail (soname != NULL, NULL);
@@ -80,6 +86,8 @@ _srt_library_new (const char *multiarch_tuple,
                        "multiarch-tuple", multiarch_tuple,
                        "soname", soname,
                        "misversioned-symbols", misversioned_symbols,
+                       "exit-status", exit_status,
+                       "terminating-signal", terminating_signal,
                        NULL);
 }
 #endif

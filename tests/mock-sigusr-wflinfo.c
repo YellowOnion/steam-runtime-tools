@@ -1,4 +1,3 @@
-/*<private_header>*/
 /*
  * Copyright © 2019 Collabora Ltd.
  *
@@ -24,27 +23,14 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#include <signal.h>
 
-#include <glib.h>
-
-typedef enum
+int
+main (int argc,
+      char **argv)
 {
-  SRT_HELPER_FLAGS_SEARCH_PATH = (1 << 0),
-  SRT_HELPER_FLAGS_TIME_OUT = (1 << 1),
-  SRT_HELPER_FLAGS_TIME_OUT_SOONER = (1 << 2),
-  SRT_HELPER_FLAGS_NONE = 0
-} SrtHelperFlags;
+  raise (SIGUSR1);
 
-G_GNUC_INTERNAL GPtrArray *_srt_get_helper (const char *helpers_path,
-                                            const char *multiarch,
-                                            const char *base,
-                                            SrtHelperFlags flags,
-                                            GError **error);
-gchar *_srt_filter_gameoverlayrenderer (const gchar *input);
-G_GNUC_INTERNAL const char *_srt_find_myself (const char **helpers_path_out,
-                                              GError **error);
+  return 0;
+}
 
-G_GNUC_INTERNAL gboolean _srt_process_timeout_wait_status (int wait_status,
-                                                           int *exit_status,
-                                                           int *terminating_signal);

@@ -34,7 +34,6 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <sys/wait.h>
 
 #include <json-glib/json-glib.h>
 
@@ -75,6 +74,8 @@ struct _SrtGraphics
   gchar *messages;
   gchar *renderer_string;
   gchar *version_string;
+  int exit_status;
+  int terminating_signal;
 };
 
 struct _SrtGraphicsClass
@@ -93,6 +94,8 @@ enum {
   PROP_RENDERING_INTERFACE,
   PROP_RENDERER_STRING,
   PROP_VERSION_STRING,
+  PROP_EXIT_STATUS,
+  PROP_TERMINATING_SIGNAL,
   N_PROPERTIES
 };
 
@@ -143,6 +146,14 @@ srt_graphics_get_property (GObject *object,
 
       case PROP_VERSION_STRING:
         g_value_set_string (value, self->version_string);
+        break;
+
+      case PROP_EXIT_STATUS:
+        g_value_set_int (value, self->exit_status);
+        break;
+
+      case PROP_TERMINATING_SIGNAL:
+        g_value_set_int (value, self->terminating_signal);
         break;
 
       default:
@@ -216,6 +227,14 @@ srt_graphics_set_property (GObject *object,
         g_return_if_fail (self->version_string == NULL);
 
         self->version_string = g_value_dup_string (value);
+        break;
+
+      case PROP_EXIT_STATUS:
+        self->exit_status = g_value_get_int (value);
+        break;
+
+      case PROP_TERMINATING_SIGNAL:
+        self->terminating_signal = g_value_get_int (value);
         break;
 
       default:
@@ -297,6 +316,22 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_EXIT_STATUS] =
+    g_param_spec_int ("exit-status", "Exit status", "Exit status of helper(s) executed. 0 on success, positive on unsuccessful exit(), -1 if killed by a signal or not run at all",
+                      -1,
+                      G_MAXINT,
+                      0,
+                      G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_TERMINATING_SIGNAL] =
+    g_param_spec_int ("terminating-signal", "Terminating signal", "Signal used to terminate helper process if any, 0 otherwise",
+                      0,
+                      G_MAXINT,
+                      0,
+                      G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
@@ -696,7 +731,9 @@ _srt_check_graphics (const char *helpers_path,
   gchar *output = NULL;
   gchar *child_stderr = NULL;
   gchar *child_stderr2 = NULL;
+  int wait_status = -1;
   int exit_status = -1;
+  int terminating_signal = 0;
   JsonParser *parser = NULL;
   const gchar *version_string = NULL;
   gchar *new_version_string = NULL;
@@ -747,27 +784,28 @@ _srt_check_graphics (const char *helpers_path,
                      NULL,    /* user data */
                      &output, /* stdout */
                      &child_stderr,
-                     &exit_status,
+                     &wait_status,
                      &error))
     {
       g_debug ("An error occurred calling the helper: %s", error->message);
       issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-      goto out;
     }
 
-  if (exit_status != 0)
+  if (wait_status != 0)
     {
-      g_debug ("... wait status %d", exit_status);
+      g_debug ("... wait status %d", wait_status);
       issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
 
-      // TERM signal gives us 124 from timeout man page
-      if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+      if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
         {
-          g_debug ("helper killed by timeout command");
           issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
         }
 
       goto out;
+    }
+  else
+    {
+      exit_status = 0;
     }
 
   /* We can't use `json_from_string()` directly because we are targeting an
@@ -815,25 +853,26 @@ _srt_check_graphics (const char *helpers_path,
                              NULL,    /* user data */
                              &output, /* stdout */
                              &child_stderr2,
-                             &exit_status,
+                             &wait_status,
                              &error))
             {
               g_debug ("An error occurred calling the helper: %s", error->message);
               issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-              goto out;
             }
 
-          if (exit_status != 0)
+          if (wait_status != 0)
             {
-              g_debug ("... wait status %d", exit_status);
+              g_debug ("... wait status %d", wait_status);
               issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
 
-              // TERM signal gives us 124 from timeout man page
-              if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+              if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
                 {
-                  g_debug ("helper killed by timeout command");
                   issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
                 }
+            }
+          else
+            {
+              exit_status = 0;
             }
         }
     }
@@ -871,25 +910,27 @@ _srt_check_graphics (const char *helpers_path,
                          NULL,    /* user data */
                          &output, /* stdout */
                          &child_stderr2,
-                         &exit_status,
+                         &wait_status,
                          &error))
         {
           g_debug ("An error occurred calling the helper: %s", error->message);
           issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-          goto out;
         }
 
-      if (exit_status != 0)
+      if (wait_status != 0)
         {
-          g_debug ("... wait status %d", exit_status);
+          g_debug ("... wait status %d", wait_status);
           issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
 
-          // TERM signal gives us 124 from timeout man page
-          if (WIFEXITED (exit_status) && WEXITSTATUS (exit_status) == 124) // timeout command killed the helper
+          if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
             {
-              g_debug ("helper killed by timeout command");
               issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
             }
+
+        }
+      else
+        {
+          exit_status = 0;
         }
     }
 
@@ -912,7 +953,9 @@ out:
                                       renderer_string,
                                       version_string,
                                       issues,
-                                      child_stderr);
+                                      child_stderr,
+                                      exit_status,
+                                      terminating_signal);
 
   if (parser != NULL)
     g_object_unref (parser);
@@ -1031,6 +1074,37 @@ srt_graphics_get_version_string (SrtGraphics *self)
 {
   g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
   return self->version_string;
+}
+
+/**
+ * srt_graphics_get_exit_status:
+ * @self: a graphics object
+ *
+ * Return the exit status of helpers when testing the given graphics.
+ *
+ * Returns: 0 on success, positive on unsuccessful `exit()`,
+ *          -1 if killed by a signal or not run at all
+ */
+int srt_graphics_get_exit_status (SrtGraphics *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), -1);
+
+  return self->exit_status;
+}
+
+/**
+ * srt_graphics_get_terminating_signal:
+ * @self: a graphics object
+ *
+ * Return the terminating signal used to terminate the helper if any.
+ *
+ * Returns: a signal number such as `SIGTERM`, or 0 if not killed by a signal or not run at all.
+ */
+int srt_graphics_get_terminating_signal (SrtGraphics *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), -1);
+
+  return self->terminating_signal;
 }
 
 /**

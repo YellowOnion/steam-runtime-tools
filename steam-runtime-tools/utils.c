@@ -32,6 +32,7 @@
 #include <link.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #ifdef HAVE_SYS_AUXV_H
@@ -150,6 +151,57 @@ _srt_check_not_setuid (void)
   "/lib/" _SRT_MULTIARCH
 #define RELOCATABLE_PKGLIBDIR \
   MULTIARCH_LIBDIR "/steam-runtime-tools-" _SRT_API_MAJOR
+
+/**
+ * _srt_process_timeout_wait_status:
+ *
+ * @wait_status: The wait_status from g_spawn_sync to process
+ * @exit_status: (not optional): The exit_status to populate
+ * @terminating_signal: (not optional): The terminating signal if any, 0 otherwise
+ *
+ * Check given wait_status and populate given exit_status and terminating_signal
+ *
+ * Returns: True if timeout, false otherwise
+ */
+G_GNUC_INTERNAL gboolean
+_srt_process_timeout_wait_status (int wait_status, int *exit_status, int *terminating_signal)
+{
+  gboolean timed_out = FALSE;
+
+  g_return_val_if_fail (exit_status != NULL, FALSE);
+  g_return_val_if_fail (terminating_signal != NULL, FALSE);
+
+  *exit_status = -1;
+  *terminating_signal = 0;
+
+  if (WIFEXITED (wait_status))
+    {
+      *exit_status = WEXITSTATUS (wait_status);
+
+      if (*exit_status > 128)
+        {
+          g_debug ("-> killed by signal %d", (*exit_status - 128));
+          *terminating_signal = (*exit_status - 128);
+        }
+      else if (*exit_status == 124)
+        {
+          g_debug ("-> timed out");
+          timed_out = TRUE;
+        }
+    }
+  else if (WIFSIGNALED (wait_status))
+    {
+      g_debug ("-> timeout killed by signal %d", WTERMSIG (wait_status));
+      *terminating_signal = WTERMSIG (wait_status);
+    }
+  else
+    {
+      g_critical ("Somehow got a wait_status that was neither exited nor signaled");
+      g_return_val_if_reached (FALSE);
+    }
+
+  return timed_out;
+}
 
 G_GNUC_INTERNAL const char *
 _srt_find_myself (const char **helpers_path_out,

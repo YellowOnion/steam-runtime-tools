@@ -57,6 +57,7 @@ GType srt_library_get_type (void);
  * @SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS: No directory containing
  *  expected ABIs has been set, so we cannot know which libraries we are
  *  meant to have found
+ * @SRT_LIBRARY_ISSUES_TIMEOUT: Helper timed out when executing
  *
  * A bitfield with flags representing problems with a library, or
  * %SRT_LIBRARY_ISSUES_NONE (which is numerically zero) if no problems
@@ -71,6 +72,7 @@ typedef enum
   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS = (1 << 2),
   SRT_LIBRARY_ISSUES_INTERNAL_ERROR = (1 << 3),
   SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS = (1 << 4),
+  SRT_LIBRARY_ISSUES_TIMEOUT = (1 << 5),
   SRT_LIBRARY_ISSUES_NONE = 0
 } SrtLibraryIssues;
 
@@ -100,6 +102,8 @@ SrtLibraryIssues srt_check_library_presence (const char *soname,
                                              const char *symbols_path,
                                              SrtLibrarySymbolsFormat symbols_format,
                                              SrtLibrary **more_details_out);
+int srt_library_get_exit_status (SrtLibrary *self);
+int srt_library_get_terminating_signal (SrtLibrary *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtLibrary, g_object_unref)

@@ -125,6 +125,8 @@
 
 #include <json-glib/json-glib.h>
 
+#include <steam-runtime-tools/utils-internal.h>
+
 enum
 {
   OPTION_HELP = 1,
@@ -212,153 +214,92 @@ divert_stdout_to_stderr (GError **error)
 }
 
 static void
+jsonify_flags (JsonBuilder *builder,
+               GType flags_type,
+               unsigned int values)
+{
+  GFlagsClass *class;
+  GFlagsValue *flags_value;
+
+  g_return_if_fail (G_TYPE_IS_FLAGS (flags_type));
+
+  class = g_type_class_ref (flags_type);
+
+  while (values != 0)
+    {
+      flags_value = g_flags_get_first_value (class, values);
+
+      if (flags_value == NULL)
+        break;
+
+      json_builder_add_string_value (builder, flags_value->value_nick);
+      values &= ~flags_value->value;
+    }
+
+  if (values)
+    {
+      gchar *rest = g_strdup_printf ("0x%x", values);
+
+      json_builder_add_string_value (builder, rest);
+
+      g_free (rest);
+    }
+
+  g_type_class_unref (class);
+}
+
+static void
 jsonify_library_issues (JsonBuilder *builder,
                         SrtLibraryIssues issues)
 {
-  if ((issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD) != 0)
-    json_builder_add_string_value (builder, "cannot-load");
-
-  if ((issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS) != 0)
-    json_builder_add_string_value (builder, "missing-symbols");
-
-  if ((issues & SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS) != 0)
-    json_builder_add_string_value (builder, "misversioned-symbols");
-
-  if ((issues & SRT_LIBRARY_ISSUES_INTERNAL_ERROR) != 0)
-    json_builder_add_string_value (builder, "internal-error");
-
-  if ((issues & SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS) != 0)
-    json_builder_add_string_value (builder, "unknown-expectations");
+  jsonify_flags (builder, SRT_TYPE_LIBRARY_ISSUES, issues);
 }
 
 static void
 jsonify_graphics_issues (JsonBuilder *builder,
                          SrtGraphicsIssues issues)
 {
-  if ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD) != 0)
-    json_builder_add_string_value (builder, "cannot-load");
-
-  if ((issues & SRT_GRAPHICS_ISSUES_INTERNAL_ERROR) != 0)
-    json_builder_add_string_value (builder, "internal-error");
-
-  if ((issues & SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING) != 0)
-    json_builder_add_string_value (builder, "software-rendering");
-
-  if ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT) != 0)
-    json_builder_add_string_value (builder, "timeout");
-
-  if ((issues & SRT_GRAPHICS_ISSUES_CANNOT_DRAW) != 0)
-    json_builder_add_string_value (builder, "cannot-draw");
+  jsonify_flags (builder, SRT_TYPE_GRAPHICS_ISSUES, issues);
 }
 
 static void
 jsonify_graphics_library_vendor (JsonBuilder *builder,
                                  SrtGraphicsLibraryVendor vendor)
 {
-  if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN)
-    json_builder_add_string_value (builder, "unknown");
+  const char *s = srt_enum_value_to_nick (SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, vendor);
 
-  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_GLVND)
-    json_builder_add_string_value (builder, "glvnd");
-
-  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND)
-    json_builder_add_string_value (builder, "unknown-non-glvnd");
-
-  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_MESA)
-    json_builder_add_string_value (builder, "mesa");
-
-  else if (vendor == SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA)
-    json_builder_add_string_value (builder, "nvidia");
-
+  if (s != NULL)
+    {
+      json_builder_add_string_value (builder, s);
+    }
   else
-    json_builder_add_string_value (builder, "unexpected-vendor");
+    {
+      gchar *fallback = g_strdup_printf ("(unknown value %d)", vendor);
+
+      json_builder_add_string_value (builder, fallback);
+      g_free (fallback);
+    }
 }
 
 static void
 jsonify_steam_issues (JsonBuilder *builder,
                       SrtSteamIssues issues)
 {
-  if ((issues & SRT_STEAM_ISSUES_INTERNAL_ERROR) != 0)
-    json_builder_add_string_value (builder, "internal-error");
-
-  if ((issues & SRT_STEAM_ISSUES_CANNOT_FIND) != 0)
-    json_builder_add_string_value (builder, "cannot-find");
-
-  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK) != 0)
-    json_builder_add_string_value (builder, "dot-steam-steam-not-symlink");
-
-  if ((issues & SRT_STEAM_ISSUES_CANNOT_FIND_DATA) != 0)
-    json_builder_add_string_value (builder, "cannot-find-data");
-
-  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY) != 0)
-    json_builder_add_string_value (builder, "dot-steam-steam-not-directory");
-
-  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK) != 0)
-    json_builder_add_string_value (builder, "dot-steam-root-not-symlink");
-
-  if ((issues & SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY) != 0)
-    json_builder_add_string_value (builder, "dot-steam-root-not-directory");
+  jsonify_flags (builder, SRT_TYPE_STEAM_ISSUES, issues);
 }
 
 static void
 jsonify_runtime_issues (JsonBuilder *builder,
                         SrtRuntimeIssues issues)
 {
-  if ((issues & SRT_RUNTIME_ISSUES_INTERNAL_ERROR) != 0)
-    json_builder_add_string_value (builder, "internal-error");
-
-  if ((issues & SRT_RUNTIME_ISSUES_DISABLED) != 0)
-    json_builder_add_string_value (builder, "disabled");
-
-  if ((issues & SRT_RUNTIME_ISSUES_NOT_RUNTIME) != 0)
-    json_builder_add_string_value (builder, "not-runtime");
-
-  if ((issues & SRT_RUNTIME_ISSUES_UNOFFICIAL) != 0)
-    json_builder_add_string_value (builder, "unofficial");
-
-  if ((issues & SRT_RUNTIME_ISSUES_UNEXPECTED_LOCATION) != 0)
-    json_builder_add_string_value (builder, "unexpected-location");
-
-  if ((issues & SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION) != 0)
-    json_builder_add_string_value (builder, "unexpected-version");
-
-  if ((issues & SRT_RUNTIME_ISSUES_NOT_IN_LD_PATH) != 0)
-    json_builder_add_string_value (builder, "not-in-ld-path");
-
-  if ((issues & SRT_RUNTIME_ISSUES_NOT_IN_PATH) != 0)
-    json_builder_add_string_value (builder, "not-in-path");
-
-  if ((issues & SRT_RUNTIME_ISSUES_NOT_IN_ENVIRONMENT) != 0)
-    json_builder_add_string_value (builder, "not-in-environment");
-
-  if ((issues & SRT_RUNTIME_ISSUES_NOT_USING_NEWER_HOST_LIBRARIES) != 0)
-    json_builder_add_string_value (builder, "not-using-newer-host-libraries");
+  jsonify_flags (builder, SRT_TYPE_RUNTIME_ISSUES, issues);
 }
 
 static void
 jsonify_locale_issues (JsonBuilder *builder,
                        SrtLocaleIssues issues)
 {
-  if ((issues & SRT_LOCALE_ISSUES_INTERNAL_ERROR) != 0)
-    json_builder_add_string_value (builder, "internal-error");
-
-  if ((issues & SRT_LOCALE_ISSUES_DEFAULT_MISSING) != 0)
-    json_builder_add_string_value (builder, "default-missing");
-
-  if ((issues & SRT_LOCALE_ISSUES_DEFAULT_NOT_UTF8) != 0)
-    json_builder_add_string_value (builder, "default-not-utf8");
-
-  if ((issues & SRT_LOCALE_ISSUES_C_UTF8_MISSING) != 0)
-    json_builder_add_string_value (builder, "c-utf8-missing");
-
-  if ((issues & SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING) != 0)
-    json_builder_add_string_value (builder, "en-us-utf8-missing");
-
-  if ((issues & SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING) != 0)
-    json_builder_add_string_value (builder, "i18n-supported-missing");
-
-  if ((issues & SRT_LOCALE_ISSUES_I18N_LOCALES_EN_US_MISSING) != 0)
-    json_builder_add_string_value (builder, "i18n-locales-en-us-missing");
+  jsonify_flags (builder, SRT_TYPE_LOCALE_ISSUES, issues);
 }
 
 static void

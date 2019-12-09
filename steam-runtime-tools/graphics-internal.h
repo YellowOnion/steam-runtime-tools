@@ -27,6 +27,7 @@
 #pragma once
 
 #include "steam-runtime-tools/steam-runtime-tools.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 /*
  * _srt_graphics_new:
@@ -117,24 +118,25 @@ static inline int _srt_graphics_hash_key(SrtWindowSystem window_system,
 static inline const gchar *
 _srt_graphics_window_system_string (SrtWindowSystem window_system)
 {
-  if (window_system == SRT_WINDOW_SYSTEM_X11)
-    return "x11";
-  else if (window_system == SRT_WINDOW_SYSTEM_GLX)
-    return "glx";
-  else if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
+  const gchar *result = srt_enum_value_to_nick (SRT_TYPE_WINDOW_SYSTEM, window_system);
+
+  if (window_system == SRT_WINDOW_SYSTEM_EGL_X11)
     return "egl_x11";
+
+  if (result != NULL)
+    return result;
+
   return "unknown window system";
 }
 
 static inline const gchar *
 _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interface)
 {
-  if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
-    return "gl";
-  else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
-    return "glesv2";
-  else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
-    return "vulkan";
+  const gchar *result = srt_enum_value_to_nick (SRT_TYPE_RENDERING_INTERFACE, rendering_interface);
+
+  if (result != NULL)
+    return result;
+
   return "unknown rendering interface";
 }
 

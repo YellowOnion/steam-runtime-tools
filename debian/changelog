@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20191209.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Jeremy Whiting ]
+  * Use timeout(1) when checking libraries
+  * Add exit_status and terminating_signal to SrtGraphics and SrtLibrary.
+    If helper fails, times out or is killed we now report its exit status
+    and terminating signal, if any.
+  * Add and use srt_enum_value_to_nick to make string formatting for
+    enum/flags types less repetitive
+
+  [ Simon McVittie ]
+  * tests: Assert that test_missing_arch gives a useful diagnostic
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 09 Dec 2019 15:21:20 +0000
+
 steam-runtime-tools (0.20191205.0-0+steamrt1.1) scout; urgency=medium
 
   * Move symbolic links to dependencies to new

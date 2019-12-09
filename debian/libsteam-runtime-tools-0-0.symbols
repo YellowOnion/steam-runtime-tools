@@ -11,12 +11,15 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_egl_icd_new_replace_library_path@Base 0.20190926.0
  srt_egl_icd_resolve_library_path@Base 0.20190926.0
  srt_egl_icd_write_to_file@Base 0.20190926.0
+ srt_enum_value_to_nick@Base 0.20191209.0
  srt_graphics_dup_parameters_string@Base 0.20190822.0
+ srt_graphics_get_exit_status@Base 0.20191209.0
  srt_graphics_get_issues@Base 0.20190822.0
  srt_graphics_get_messages@Base 0.20190926.0
  srt_graphics_get_multiarch_tuple@Base 0.20190822.0
  srt_graphics_get_renderer_string@Base 0.20190822.0
  srt_graphics_get_rendering_interface@Base 0.20190822.0
+ srt_graphics_get_terminating_signal@Base 0.20191209.0
  srt_graphics_get_type@Base 0.20190822.0
  srt_graphics_get_version_string@Base 0.20190822.0
  srt_graphics_get_window_system@Base 0.20190822.0
@@ -25,12 +28,14 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_graphics_library_vendor_get_type@Base 0.20191120.0
  srt_library_get_absolute_path@Base 0.20190801.0
  srt_library_get_dependencies@Base 0.20190801.0
+ srt_library_get_exit_status@Base 0.20191209.0
  srt_library_get_issues@Base 0.20190801.0
  srt_library_get_messages@Base 0.20190926.0
  srt_library_get_missing_symbols@Base 0.20190801.0
  srt_library_get_misversioned_symbols@Base 0.20190801.0
  srt_library_get_multiarch_tuple@Base 0.20190801.0
  srt_library_get_soname@Base 0.20190801.0
+ srt_library_get_terminating_signal@Base 0.20191209.0
  srt_library_get_type@Base 0.20190801.0
  srt_library_issues_get_type@Base 0.20190801.0
  srt_library_symbols_format_get_type@Base 0.20190801.0

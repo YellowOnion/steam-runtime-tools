@@ -178,7 +178,7 @@ _srt_process_timeout_wait_status (int wait_status, int *exit_status, int *termin
     {
       *exit_status = WEXITSTATUS (wait_status);
 
-      if (*exit_status > 128)
+      if (*exit_status > 128 && *exit_status <= 128 + SIGRTMAX)
         {
           g_debug ("-> killed by signal %d", (*exit_status - 128));
           *terminating_signal = (*exit_status - 128);

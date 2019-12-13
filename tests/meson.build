@@ -180,6 +180,7 @@ executable(
 executable(
   'mock-software-check-gl',
   join_paths('..', 'helpers', 'true.c'),
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -235,6 +236,7 @@ executable(
 executable(
   'mock-good-check-gl',
   join_paths('..', 'helpers', 'true.c'),
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -242,6 +244,7 @@ executable(
 executable(
   'mock-bad-check-gl',
   'mock-bad-check-vulkan.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -249,6 +252,7 @@ executable(
 executable(
   'mock-mixed-wflinfo',
   'mock-good-wflinfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -256,6 +260,7 @@ executable(
 executable(
   'mock-mixed-check-gl',
   'mock-bad-check-vulkan.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )
@@ -263,6 +268,7 @@ executable(
 executable(
   'mock-sigusr-wflinfo',
   'mock-sigusr-wflinfo.c',
+  include_directories : project_include_dirs,
   install: true,
   install_dir: tests_dir
 )

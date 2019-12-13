@@ -1960,6 +1960,7 @@ main (int argc,
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
   g_autofree gchar *tmpdir = NULL;
+  g_autofree gchar *pressure_vessel_prefix = NULL;
   g_autofree gchar *scratch = NULL;
   g_autofree gchar *overrides = NULL;
   g_autofree gchar *overrides_bin = NULL;
@@ -2208,6 +2209,8 @@ main (int argc,
 
   g_debug ("Found executable directory: %s", tools_dir);
 
+  pressure_vessel_prefix = g_path_get_dirname (tools_dir);
+
   wrapped_command = flatpak_bwrap_new (NULL);
 
   switch (opt_terminal)
@@ -2395,6 +2398,13 @@ main (int argc,
       if (!bind_runtime (bwrap, tools_dir, opt_runtime, overrides,
                          scratch, error))
         goto out;
+
+      /* Make sure pressure-vessel itself is visible there. */
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind",
+                              pressure_vessel_prefix,
+                              "/run/pressure-vessel",
+                              NULL);
     }
   else
     {
@@ -2574,18 +2584,13 @@ main (int argc,
    * can't do that without breaking gameoverlayrender.so's assumptions. */
   if (runtime_lock != NULL)
     {
-      g_autofree gchar *with_lock = NULL;
       g_autofree gchar *fd_str = NULL;
       int fd = pv_bwrap_lock_steal_fd (runtime_lock);
 
-      with_lock = g_build_filename (tools_dir,
-                                    "pressure-vessel-with-lock",
-                                    NULL);
       fd_str = g_strdup_printf ("%d", fd);
-
       flatpak_bwrap_add_fd (bwrap, fd);
       flatpak_bwrap_add_args (bwrap,
-                              with_lock,
+                              "/run/pressure-vessel/bin/pressure-vessel-with-lock",
                               "--subreaper",
                               "--fd", fd_str,
                               "--",

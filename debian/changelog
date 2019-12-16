@@ -1,3 +1,14 @@
+pressure-vessel (0.20191216.0-0+steamrt1.1) scout; urgency=medium
+
+  * wrap: Mount pressure-vessel on /run/pressure-vessel if using runtime.
+    This avoids relying on the directory containing pressure-vessel being
+    being below either the current working directory, or the default
+    Steam library in $(realpath ~/.steam/steam).
+    (Closes: ValveSoftware/steam-runtime#204)
+  * ci: Do a build with AddressSanitizer and UndefinedBehaviourSanitizer
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 16 Dec 2019 14:15:29 +0000
+
 pressure-vessel (0.20191115.0-0+steamrt1.1) scout; urgency=medium
 
   * wrap: Add API for a bubblewrap-compatible fcntl lock

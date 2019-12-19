@@ -2334,7 +2334,6 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
-      g_autofree gchar *usr = NULL;
       g_autofree gchar *files_ref = NULL;
 
       g_debug ("Configuring runtime...");
@@ -2349,21 +2348,6 @@ main (int argc,
       /* If the runtime is being deleted, ... don't use it, I suppose? */
       if (runtime_lock == NULL)
         goto out;
-
-      usr = g_build_filename (opt_runtime, "usr", NULL);
-
-      /* Tell bwrap to hold a reference to files/.ref until it exits.
-       * If files is a merged-/usr, it's mounted as /usr (as if for
-       * Flatpak); otherwise it's mounted at /, which we need to cope
-       * with too. */
-      if (g_file_test (usr, G_FILE_TEST_IS_DIR))
-        flatpak_bwrap_add_args (bwrap,
-                                "--lock-file", "/.ref",
-                                NULL);
-      else
-        flatpak_bwrap_add_args (bwrap,
-                                "--lock-file", "/usr/.ref",
-                                NULL);
 
       search_path_append (bin_path, "/overrides/bin");
       search_path_append (bin_path, g_getenv ("PATH"));

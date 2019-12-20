@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -22,7 +22,24 @@
 
 #include <gio/gio.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "bwrap-lock.h"
+
+/*
+ * These compatibility definitions let us use OFD locks in older glibc
+ * versions. This requires Linux kernel >= v3.15.
+ */
+#ifndef F_OFD_GETLK
+#define F_OFD_GETLK 36
+#endif
+#ifndef F_OFD_SETLK
+#define F_OFD_SETLK 37
+#endif
+#ifndef F_OFD_SETLKW
+#define F_OFD_SETLKW 38
+#endif
 
 /**
  * PvBwrapLock:
@@ -33,6 +50,7 @@
 struct _PvBwrapLock
 {
   int fd;
+  gboolean is_ofd;
 };
 
 /**
@@ -61,18 +79,14 @@ pv_bwrap_lock_new (const gchar *path,
                    GError **error)
 {
   glnx_autofd int fd = -1;
-  struct flock l = {
-    .l_type = F_RDLCK,
-    .l_whence = SEEK_SET,
-    .l_start = 0,
-    .l_len = 0
-  };
-  const char *type_str = "reading";
   int open_flags = O_CLOEXEC | O_NOCTTY;
-  int cmd;
+  int ofd;
 
   g_return_val_if_fail (path != NULL, NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+  g_return_val_if_fail ((flags & PV_BWRAP_LOCK_FLAGS_PROCESS_ORIENTED) == 0 ||
+                        (flags & PV_BWRAP_LOCK_FLAGS_REQUIRE_OFD) == 0,
+                        NULL);
 
   if (flags & PV_BWRAP_LOCK_FLAGS_CREATE)
     open_flags |= O_RDWR | O_CREAT;
@@ -89,20 +103,66 @@ pv_bwrap_lock_new (const gchar *path,
       return NULL;
     }
 
-  if (flags & PV_BWRAP_LOCK_FLAGS_WAIT)
-    cmd = F_SETLKW;
-  else
-    cmd = F_SETLK;
-
-  if (flags & PV_BWRAP_LOCK_FLAGS_WRITE)
+  /* If PROCESS_ORIENTED, only do ofd == 0. If not, try 1 then 0. */
+  for (ofd = (flags & PV_BWRAP_LOCK_FLAGS_PROCESS_ORIENTED) ? 0 : 1;
+       ofd >= 0;
+       ofd--)
     {
-      l.l_type = F_WRLCK;
-      type_str = "writing";
-    }
+      struct flock l = {
+        .l_type = F_RDLCK,
+        .l_whence = SEEK_SET,
+        .l_start = 0,
+        .l_len = 0
+      };
+      const char *type_str = "reading";
+      int cmd;
+      int saved_errno;
 
-  if (TEMP_FAILURE_RETRY (fcntl (fd, cmd, &l)) < 0)
-    {
-      int saved_errno = errno;
+      /*
+       * We want OFD locks because:
+       *
+       * - ordinary process-associated F_SETLK fnctl(2) locks are unlocked on
+       *   fork(), but bwrap forks before calling into user code, so by the
+       *   time we run our child process, it will have lost the lock
+       * - flock(2) locks are orthogonal to fnctl(2) locks, so we can't take
+       *   a lock that excludes the F_SETLK locks used by Flatpak/bwrap
+       *
+       * F_OFD_SETLK and F_SETLK are documented to conflict with each other,
+       * so for example by holding an OFD read-lock, we can prevent other
+       * processes from taking a process-associated write-lock, or vice versa.
+       */
+      if (ofd)
+        {
+          if (flags & PV_BWRAP_LOCK_FLAGS_WAIT)
+            cmd = F_OFD_SETLKW;
+          else
+            cmd = F_OFD_SETLK;
+        }
+      else
+        {
+          if (flags & PV_BWRAP_LOCK_FLAGS_WAIT)
+            cmd = F_SETLKW;
+          else
+            cmd = F_SETLK;
+        }
+
+      if (flags & PV_BWRAP_LOCK_FLAGS_WRITE)
+        {
+          l.l_type = F_WRLCK;
+          type_str = "writing";
+        }
+
+      if (TEMP_FAILURE_RETRY (fcntl (fd, cmd, &l)) == 0)
+        break;
+
+      saved_errno = errno;
+
+      /* If the kernel doesn't support OFD locks, fall back to
+       * process-oriented locks if allowed. */
+      if (saved_errno == EINVAL &&
+          ofd &&
+          (flags & PV_BWRAP_LOCK_FLAGS_REQUIRE_OFD) == 0)
+        continue;
 
       if (saved_errno == EACCES || saved_errno == EAGAIN)
         {
@@ -117,12 +177,14 @@ pv_bwrap_lock_new (const gchar *path,
       return NULL;
     }
 
-  return pv_bwrap_lock_new_take (glnx_steal_fd (&fd));
+  g_assert (ofd == 0 || ofd == 1);
+  return pv_bwrap_lock_new_take (glnx_steal_fd (&fd), ofd);
 }
 
 /**
  * pv_bwrap_lock_new_take:
  * @fd: A file descriptor, already locked
+ * @is_ofd: %TRUE if @fd is an open file descriptor lock
  *
  * Convert a simple file descriptor into a #PvBwrapLock.
  *
@@ -130,14 +192,17 @@ pv_bwrap_lock_new (const gchar *path,
  *  with pv_bwrap_lock_free())
  */
 PvBwrapLock *
-pv_bwrap_lock_new_take (int fd)
+pv_bwrap_lock_new_take (int fd,
+                        gboolean is_ofd)
 {
   PvBwrapLock *self = NULL;
 
   g_return_val_if_fail (fd >= 0, NULL);
+  g_return_val_if_fail (is_ofd == 0 || is_ofd == 1, NULL);
 
   self = g_slice_new0 (PvBwrapLock);
   self->fd = glnx_steal_fd (&fd);
+  self->is_ofd = is_ofd;
   return self;
 }
 
@@ -158,4 +223,11 @@ pv_bwrap_lock_steal_fd (PvBwrapLock *self)
 {
   g_return_val_if_fail (self != NULL, -1);
   return glnx_steal_fd (&self->fd);
+}
+
+gboolean
+pv_bwrap_lock_is_ofd (PvBwrapLock *self)
+{
+  g_return_val_if_fail (self != NULL, FALSE);
+  return self->is_ofd;
 }

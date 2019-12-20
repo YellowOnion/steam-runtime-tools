@@ -88,7 +88,10 @@ opt_fd_cb (const char *name,
                                     "close-on-exec",
                                     fd);
 
-  g_ptr_array_add (global_locks, pv_bwrap_lock_new_take (fd));
+  /* We don't know whether this is an OFD lock or not. Assume it is:
+   * it won't change our behaviour either way, and if it was passed
+   * to us across a fork(), it had better be an OFD. */
+  g_ptr_array_add (global_locks, pv_bwrap_lock_new_take (fd, TRUE));
   return TRUE;
 }
 

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Copyright © 2019-2020 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+
+export PYTHONUNBUFFERED=1
+
+exec xvfb-run -a -e /proc/self/fd/2 \
+tests/depot/pressure-vessel.py

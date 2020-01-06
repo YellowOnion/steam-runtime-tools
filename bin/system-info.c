@@ -139,6 +139,7 @@ struct option long_options[] =
 {
     { "expectations", required_argument, NULL, OPTION_EXPECTATION },
     { "verbose", no_argument, NULL, OPTION_VERBOSE },
+    { "version", no_argument, NULL, OPTION_VERSION },
     { "help", no_argument, NULL, OPTION_HELP },
     { NULL, 0, NULL, 0 }
 };

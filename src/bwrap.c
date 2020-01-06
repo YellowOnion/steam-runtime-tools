@@ -226,7 +226,8 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
     {
       if (g_str_has_prefix (member, "lib")
           || g_str_equal (member, "bin")
-          || g_str_equal (member, "sbin"))
+          || g_str_equal (member, "sbin")
+          || g_str_equal (member, ".ref"))
         {
           dest = g_build_filename (mount_point, member, NULL);
 

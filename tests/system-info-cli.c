@@ -625,6 +625,75 @@ steam_issues (Fixture *f,
   g_clear_error (&error);
 }
 
+/*
+ * Test `steam-runtime-system-info --help` and `--version`.
+ */
+static void
+test_help_and_version (Fixture *f,
+                       gconstpointer context)
+{
+  gboolean ret;
+  int exit_status = -1;
+  GError *error = NULL;
+  gchar *output = NULL;
+  gchar *diagnostics = NULL;
+  const gchar *argv[] = {
+      "env",
+      "LC_ALL=C",
+      "steam-runtime-system-info",
+      "--version",
+      NULL
+  };
+
+  ret = g_spawn_sync (NULL,    /* working directory */
+                      (gchar **) argv,
+                      NULL,    /* envp */
+                      G_SPAWN_SEARCH_PATH,
+                      NULL,    /* child setup */
+                      NULL,    /* user data */
+                      &output,
+                      &diagnostics,
+                      &exit_status,
+                      &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_nonnull (output);
+  g_assert_cmpstr (output, !=, "");
+  g_assert_nonnull (diagnostics);
+
+  g_assert_nonnull (strstr (output, VERSION));
+
+  g_free (output);
+  g_free (diagnostics);
+  g_clear_error (&error);
+
+  argv[3] = "--help";
+
+  ret = g_spawn_sync (NULL,    /* working directory */
+                      (gchar **) argv,
+                      NULL,    /* envp */
+                      G_SPAWN_SEARCH_PATH,
+                      NULL,    /* child setup */
+                      NULL,    /* user data */
+                      &output,
+                      &diagnostics,
+                      &exit_status,
+                      &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_nonnull (output);
+  g_assert_cmpstr (output, !=, "");
+  g_assert_nonnull (diagnostics);
+
+  g_assert_nonnull (strstr (output, "OPTIONS"));
+
+  g_free (output);
+  g_free (diagnostics);
+  g_clear_error (&error);
+}
+
 int
 main (int argc,
       char **argv)
@@ -644,6 +713,8 @@ main (int argc,
               setup, steam_presence, teardown);
   g_test_add ("/system-info-cli/steam_issues", Fixture, NULL,
               setup, steam_issues, teardown);
+  g_test_add ("/system-info-cli/help-and-version", Fixture, NULL,
+              setup, test_help_and_version, teardown);
 
   return g_test_run ();
 }

@@ -443,12 +443,12 @@ srt_enum_value_to_nick (GType enum_type,
   return result;
 }
 
-#if !GLIB_CHECK_VERSION(2, 36, 0)
 static void _srt_constructor (void) __attribute__((__constructor__));
 static void
 _srt_constructor (void)
 {
+#if !GLIB_CHECK_VERSION(2, 36, 0)
   g_type_init ();
+#endif
   g_return_if_fail (_srt_check_not_setuid ());
 }
-#endif

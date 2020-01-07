@@ -182,6 +182,9 @@ json_glib = dependency(
   'json-glib-1.0',
   version : '>= 1.0',
 )
+threads = dependency(
+  'threads',
+)
 vulkan = dependency(
   'vulkan',
 )

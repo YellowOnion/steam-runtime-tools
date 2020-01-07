@@ -768,7 +768,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
-                        NULL,    /* child setup */
+                        _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
                         &output, /* stdout */
                         &messages, /* stderr */
@@ -868,7 +868,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
-                        NULL,    /* child setup */
+                        _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
                         &output, /* stdout */
                         &messages, /* stderr */
@@ -907,7 +907,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
-                        NULL,    /* child setup */
+                        _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
                         &output, /* stdout */
                         &messages, /* stderr */

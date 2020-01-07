@@ -255,7 +255,7 @@ _srt_check_locale (const char *helpers_path,
                      (gchar **) argv->pdata,
                      my_environ,
                      G_SPAWN_DEFAULT,
-                     NULL,    /* child setup */
+                     _srt_child_setup_unblock_signals,
                      NULL,    /* user data */
                      &output, /* stdout */
                      NULL,    /* stderr */

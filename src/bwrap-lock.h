@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -33,6 +33,13 @@
  *  raises %G_IO_ERROR_BUSY immediately
  * @PV_BWRAP_LOCK_FLAGS_WRITE: Take a write-lock instead of a read-lock;
  *  by default pv_bwrap_lock_new() takes a read-lock
+ * @PV_BWRAP_LOCK_FLAGS_REQUIRE_OFD: Require an open file descriptor lock,
+ *  which is not released on fork(). By default pv_bwrap_lock_new() tries
+ *  an OFD lock first, then falls back to process-oriented locks if the
+ *  kernel is older than Linux 3.15.
+ * @PV_BWRAP_LOCK_FLAGS_PROCESS_ORIENTED: Require a process-oriented lock,
+ *  which is released on fork(). By default pv_bwrap_lock_new() uses
+ *  an OFD lock if available.
  * @PV_BWRAP_LOCK_FLAGS_NONE: None of the above
  *
  * Flags affecting how we take a lock on a runtime directory.
@@ -42,6 +49,8 @@ typedef enum
   PV_BWRAP_LOCK_FLAGS_CREATE = (1 << 0),
   PV_BWRAP_LOCK_FLAGS_WAIT = (1 << 1),
   PV_BWRAP_LOCK_FLAGS_WRITE = (1 << 2),
+  PV_BWRAP_LOCK_FLAGS_REQUIRE_OFD = (1 << 3),
+  PV_BWRAP_LOCK_FLAGS_PROCESS_ORIENTED = (1 << 4),
   PV_BWRAP_LOCK_FLAGS_NONE = 0
 } PvBwrapLockFlags;
 
@@ -50,8 +59,10 @@ typedef struct _PvBwrapLock PvBwrapLock;
 PvBwrapLock *pv_bwrap_lock_new (const gchar *path,
                                 PvBwrapLockFlags flags,
                                 GError **error);
-PvBwrapLock *pv_bwrap_lock_new_take (int fd);
+PvBwrapLock *pv_bwrap_lock_new_take (int fd,
+                                     gboolean is_ofd);
 void pv_bwrap_lock_free (PvBwrapLock *self);
 int pv_bwrap_lock_steal_fd (PvBwrapLock *self);
+gboolean pv_bwrap_lock_is_ofd (PvBwrapLock *self);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvBwrapLock, pv_bwrap_lock_free)

@@ -4,7 +4,7 @@
  * Contains code taken from Flatpak.
  *
  * Copyright © 2014-2019 Red Hat, Inc
- * Copyright © 2017-2019 Collabora Ltd.
+ * Copyright © 2017-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -2334,7 +2334,6 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
-      g_autofree gchar *usr = NULL;
       g_autofree gchar *files_ref = NULL;
 
       g_debug ("Configuring runtime...");
@@ -2349,21 +2348,6 @@ main (int argc,
       /* If the runtime is being deleted, ... don't use it, I suppose? */
       if (runtime_lock == NULL)
         goto out;
-
-      usr = g_build_filename (opt_runtime, "usr", NULL);
-
-      /* Tell bwrap to hold a reference to files/.ref until it exits.
-       * If files is a merged-/usr, it's mounted as /usr (as if for
-       * Flatpak); otherwise it's mounted at /, which we need to cope
-       * with too. */
-      if (g_file_test (usr, G_FILE_TEST_IS_DIR))
-        flatpak_bwrap_add_args (bwrap,
-                                "--lock-file", "/.ref",
-                                NULL);
-      else
-        flatpak_bwrap_add_args (bwrap,
-                                "--lock-file", "/usr/.ref",
-                                NULL);
 
       search_path_append (bin_path, "/overrides/bin");
       search_path_append (bin_path, g_getenv ("PATH"));
@@ -2584,15 +2568,46 @@ main (int argc,
    * can't do that without breaking gameoverlayrender.so's assumptions. */
   if (runtime_lock != NULL)
     {
-      g_autofree gchar *fd_str = NULL;
-      int fd = pv_bwrap_lock_steal_fd (runtime_lock);
-
-      fd_str = g_strdup_printf ("%d", fd);
-      flatpak_bwrap_add_fd (bwrap, fd);
       flatpak_bwrap_add_args (bwrap,
                               "/run/pressure-vessel/bin/pressure-vessel-with-lock",
                               "--subreaper",
-                              "--fd", fd_str,
+                              NULL);
+
+      if (pv_bwrap_lock_is_ofd (runtime_lock))
+        {
+          int fd = pv_bwrap_lock_steal_fd (runtime_lock);
+          g_autofree gchar *fd_str = NULL;
+
+          g_debug ("Passing lock fd %d down to with-lock", fd);
+          flatpak_bwrap_add_fd (bwrap, fd);
+          fd_str = g_strdup_printf ("%d", fd);
+          flatpak_bwrap_add_args (bwrap,
+                                  "--fd", fd_str,
+                                  NULL);
+        }
+      else
+        {
+          /*
+           * We were unable to take out an open file descriptor lock,
+           * so it will be released on fork(). Tell the with-lock process
+           * to take out its own compatible lock instead. There will be
+           * a short window during which we have lost our lock but the
+           * with-lock process has not taken its lock - that's unavoidable
+           * if we want to use exec() to replace ourselves with the
+           * container.
+           *
+           * pv_bwrap_bind_usr() arranges for /.ref to either be a
+           * symbolic link to /usr/.ref which is the runtime_lock
+           * (if opt_runtime is a merged /usr), or the runtime_lock
+           * itself (otherwise).
+           */
+          g_debug ("Telling process in container to lock /.ref");
+          flatpak_bwrap_add_args (bwrap,
+                                  "--lock-file", "/.ref",
+                                  NULL);
+        }
+
+      flatpak_bwrap_add_args (bwrap,
                               "--",
                               NULL);
     }

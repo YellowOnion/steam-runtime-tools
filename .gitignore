@@ -1,0 +1,13 @@
+/depot/.ref
+/depot/com.valvesoftware.SteamRuntime.*-buildid.txt
+/depot/com.valvesoftware.SteamRuntime.*-runtime.tar.gz
+/depot/pressure-vessel/
+/depot/scout
+/depot/scout_*-0.20*.*/
+/depot/scout_0.20*.*/
+/pressure-vessel-*-bin+src.tar.gz
+/pressure-vessel-*-bin.tar.gz
+/pressure-vessel-bin+src.tar.gz
+/pressure-vessel-bin.tar.gz
+/test-logs/
+__pycache__/

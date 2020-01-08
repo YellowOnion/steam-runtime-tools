@@ -1,6 +1,7 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
  _srt_filter_gameoverlayrenderer@Base 0.20190822.0
+ _srt_unblock_signals@Base 0.20200801.0
  srt_architecture_can_run_i386@Base 0.20190717.0
  srt_architecture_can_run_x86_64@Base 0.20190717.0
  srt_check_library_presence@Base 0.20190801.0

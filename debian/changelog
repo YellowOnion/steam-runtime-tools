@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20200108.0-0+steamrt1.1) scout; urgency=medium
+
+  * SrtSystemInfo: Document that we need SIGCHLD
+  * Unblock signals when spawning subprocesses, and in s-r-s-i.
+    This avoids a coreutils limitation in versions [8.27, 8.29), which
+    unfortunately includes Ubuntu 18.04: timeout(1) relied on SIGCHLD not
+    being blocked, but did not unblock it themselves.
+  * utils: Don't consider exit status 255 to be signal 127
+  * tests: Use common include directories
+  * s-r-s-i: Really add --version option
+  * utils: Always call _srt_check_not_setuid from constructor
+  * tests: Check error indicator before checking boolean result
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 08 Jan 2020 17:45:02 +0000
+
 steam-runtime-tools (0.20191209.0-0+steamrt1.1) scout; urgency=medium
 
   [ Jeremy Whiting ]

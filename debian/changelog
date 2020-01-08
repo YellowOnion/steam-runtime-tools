@@ -1,3 +1,25 @@
+pressure-vessel (0.20200108.0-0+steamrt1.1) scout; urgency=medium
+
+  * wrap: Don't pass --lock-file to bwrap.
+    This is redundant with us passing the fd to be held by
+    pressure-vessel-with-lock, and it causes bwrap to produce the wrong
+    exit status (see https://github.com/containers/bubblewrap/issues/336
+    and https://github.com/containers/bubblewrap/pull/325).
+  * bwrap-lock: Add support for OFD locks.
+    On Linux >= 3.15, this allows us to pass a lock fd to a child process
+    across bwrap's fork-and-exec the way we were already trying to, and
+    have it actually work.
+  * wrap: Tell child process to take out its own lock if necessary.
+    Non-OFD locks don't propagate across fork(), and bwrap needs to clone()
+    itself (which behaves like fork() in this respect) to separate itself
+    into a parent outside the container and a child inside the container.
+    This change adds a weak dependency on Linux 3.15. If we run on an older
+    version, everything should still *work*, but there will be a short
+    period of time during which we have already decided to use the runtime,
+    but it is not locked (and in particular not protected from deletion).
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 08 Jan 2020 15:34:14 +0000
+
 pressure-vessel (0.20191216.0-0+steamrt1.1) scout; urgency=medium
 
   * wrap: Mount pressure-vessel on /run/pressure-vessel if using runtime.

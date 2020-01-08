@@ -30,6 +30,7 @@
 #include <elf.h>
 #include <errno.h>
 #include <link.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -443,12 +444,107 @@ srt_enum_value_to_nick (GType enum_type,
   return result;
 }
 
-#if !GLIB_CHECK_VERSION(2, 36, 0)
 static void _srt_constructor (void) __attribute__((__constructor__));
 static void
 _srt_constructor (void)
 {
+#if !GLIB_CHECK_VERSION(2, 36, 0)
   g_type_init ();
+#endif
   g_return_if_fail (_srt_check_not_setuid ());
 }
-#endif
+
+static const int signals_blocked_by_steam[] =
+  {
+    SIGALRM,
+    SIGCHLD,
+    SIGPIPE,
+    SIGTRAP
+  };
+
+/*
+ * _srt_child_setup_unblock_signals:
+ * @ignored: Ignored, for compatibility with #GSpawnChildSetupFunc
+ *
+ * A child-setup function that unblocks all signals, and resets signals
+ * known to be altered by the Steam client to their default dispositions.
+ *
+ * In particular, this can be used to work around versions of `timeout(1)`
+ * that do not do configure `SIGCHLD` to make sure they receive it
+ * (GNU coreutils >= 8.27, < 8.29 as seen in Ubuntu 18.04).
+ *
+ * This function is async-signal-safe.
+ */
+void
+_srt_child_setup_unblock_signals (gpointer ignored)
+{
+  struct sigaction action = { .sa_handler = SIG_DFL };
+  sigset_t new_set;
+  gsize i;
+
+  /* We ignore errors and don't even g_debug(), to avoid being
+   * async-signal-unsafe */
+  sigemptyset (&new_set);
+  (void) pthread_sigmask (SIG_SETMASK, &new_set, NULL);
+
+  for (i = 0; i < G_N_ELEMENTS (signals_blocked_by_steam); i++)
+    (void) sigaction (signals_blocked_by_steam[i], &action, NULL);
+}
+
+/*
+ * _srt_unblock_signals:
+ *
+ * Unblock all signals, and reset signals known to be altered by the
+ * Steam client to their default dispositions.
+ *
+ * This function is not async-signal-safe.
+ */
+void
+_srt_unblock_signals (void)
+{
+  struct sigaction old_action = { .sa_handler = SIG_DFL };
+  struct sigaction new_action = { .sa_handler = SIG_DFL };
+  sigset_t old_set;
+  sigset_t new_set;
+  gsize i;
+  int sig;
+  int saved_errno;
+
+  sigemptyset (&old_set);
+  sigfillset (&new_set);
+
+  /* This returns an errno code instead of setting errno */
+  saved_errno = pthread_sigmask (SIG_UNBLOCK, &new_set, &old_set);
+
+  if (saved_errno != 0)
+    {
+      g_warning ("Unable to unblock signals: %s", g_strerror (saved_errno));
+    }
+  else
+    {
+      for (sig = 1; sig < 64; sig++)
+        {
+          /* sigismember returns -1 for non-signals, which we ignore */
+          if (sigismember (&new_set, sig) == 1 &&
+              sigismember (&old_set, sig) == 1)
+            g_debug ("Unblocked signal %d (%s)", sig, g_strsignal (sig));
+        }
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (signals_blocked_by_steam); i++)
+    {
+      sig = signals_blocked_by_steam[i];
+
+      if (sigaction (sig, &new_action, &old_action) != 0)
+        {
+          saved_errno = errno;
+          g_warning ("Unable to reset handler for signal %d (%s): %s",
+                     sig, g_strsignal (sig), g_strerror (saved_errno));
+        }
+      else if (old_action.sa_handler != SIG_DFL)
+        {
+          g_debug ("Reset signal %d (%s) from handler %p to SIG_DFL",
+                   sig, g_strsignal (sig), old_action.sa_handler);
+        }
+    }
+}

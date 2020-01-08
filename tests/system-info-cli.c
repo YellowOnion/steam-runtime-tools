@@ -715,6 +715,82 @@ test_help_and_version (Fixture *f,
   g_clear_error (&error);
 }
 
+/*
+ * Make sure it works when run by Steam.
+ */
+static void
+test_unblocks_sigchld (Fixture *f,
+                       gconstpointer context)
+{
+  gboolean result;
+  int exit_status = -1;
+  JsonParser *parser = NULL;
+  JsonNode *node = NULL;
+  JsonObject *json;
+  JsonObject *json_arch;
+  GError *error = NULL;
+  gchar *output = NULL;
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  gchar *adverb = g_build_filename (f->builddir, "adverb", NULL);
+  gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
+  const gchar *argv[] =
+    {
+      adverb,
+      "--ignore-sigchld",
+      "--block-sigchld",
+      "--",
+      "env",
+      "G_DEBUG=fatal_criticals",
+      "steam-runtime-system-info",
+      "--expectations",
+      expectations_in,
+      NULL
+    };
+
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         NULL,    /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_nonnull (output);
+
+  parser = json_parser_new ();
+  result = json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
+  node = json_parser_get_root (parser);
+  json = json_node_get_object (node);
+
+  g_assert_true (json_object_has_member (json, "can-write-uinput"));
+
+  g_assert_true (json_object_has_member (json, "architectures"));
+  json = json_object_get_object_member (json, "architectures");
+
+  for (gsize i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+    {
+      g_assert_true (json_object_has_member (json, multiarch_tuples[i]));
+      json_arch = json_object_get_object_member (json, multiarch_tuples[i]);
+      g_assert_true (json_object_has_member (json_arch, "can-run"));
+      g_assert_cmpint (json_object_get_boolean_member (json_arch, "can-run"),
+                      ==, srt_system_info_can_run (info, multiarch_tuples[i]));
+    }
+
+  g_object_unref (parser);
+  g_object_unref (info);
+  g_free (output);
+  g_clear_error (&error);
+  g_free (adverb);
+  g_free (expectations_in);
+}
+
 int
 main (int argc,
       char **argv)
@@ -736,6 +812,8 @@ main (int argc,
               setup, steam_issues, teardown);
   g_test_add ("/system-info-cli/help-and-version", Fixture, NULL,
               setup, test_help_and_version, teardown);
+  g_test_add ("/system-info-cli/unblocks_sigchld", Fixture, NULL,
+              setup, test_unblocks_sigchld, teardown);
 
   return g_test_run ();
 }

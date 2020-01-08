@@ -52,3 +52,7 @@ G_GNUC_INTERNAL gboolean _srt_process_timeout_wait_status (int wait_status,
 const char *srt_enum_value_to_nick (GType enum_type,
                                     int value);
 
+G_GNUC_INTERNAL void _srt_child_setup_unblock_signals (gpointer ignored);
+
+/* not G_GNUC_INTERNAL because s-r-s-i calls it */
+void _srt_unblock_signals (void);

@@ -178,9 +178,16 @@ gobject = dependency(
   'gobject-2.0',
   version : '>= 2.32',
 )
+gio = dependency(
+  'gio-2.0',
+  version : '>= 2.32',
+)
 json_glib = dependency(
   'json-glib-1.0',
   version : '>= 1.0',
+)
+threads = dependency(
+  'threads',
 )
 vulkan = dependency(
   'vulkan',

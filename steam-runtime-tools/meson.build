@@ -76,7 +76,7 @@ libsteamrt = library(
     '-D_SRT_API_MAJOR="' + api_major + '"',
   ],
   include_directories : project_include_dirs,
-  dependencies : [glib, gobject, libdl, json_glib],
+  dependencies : [glib, gobject, libdl, json_glib, threads],
   soversion : abi_major,
   version : abi_major + '.' + abi_minor,
   install : true,

@@ -533,6 +533,8 @@ main (int argc,
       return 1;
     }
 
+  _srt_unblock_signals ();
+
   info = srt_system_info_new (expectations);
 
   builder = json_builder_new ();

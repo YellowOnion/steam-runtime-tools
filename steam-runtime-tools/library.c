@@ -652,7 +652,7 @@ _srt_check_library_presence (const char *helpers_path,
                      (gchar **) argv->pdata,
                      my_environ, /* envp */
                      G_SPAWN_SEARCH_PATH,          /* flags */
-                     NULL,       /* child setup */
+                     _srt_child_setup_unblock_signals,
                      NULL,       /* user data */
                      &output,    /* stdout */
                      &child_stderr,

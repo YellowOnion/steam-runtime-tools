@@ -66,6 +66,14 @@
  * Other threads may create their own parallel #SrtSystemInfo object and
  * use that instead, if desired.
  *
+ * The majority of the #SrtSystemInfo API involves child processes, and
+ * requires `SIGCHLD` to be handled (somehow) by the host process:
+ * `SIGCHLD` must not have been ignored (by `sigaction(2)` with `SIG_IGN`)
+ * or blocked (for example with `sigprocmask(2)`) in the thread that is
+ * acting on the #SrtSystemInfo. If this cannot be guaranteed, please run
+ * `steam-runtime-system-info(1)` as a child process and inspect its
+ * JSON output instead of calling library functions directly.
+ *
  * Ownership can be transferred to other threads by an operation that
  * implies a memory barrier, such as g_atomic_pointer_set() or
  * g_object_ref(), but after this is done the previous owner must not
@@ -760,7 +768,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
-                        NULL,    /* child setup */
+                        _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
                         &output, /* stdout */
                         &messages, /* stderr */
@@ -860,7 +868,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
-                        NULL,    /* child setup */
+                        _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
                         &output, /* stdout */
                         &messages, /* stderr */
@@ -899,7 +907,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
-                        NULL,    /* child setup */
+                        _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
                         &output, /* stdout */
                         &messages, /* stderr */

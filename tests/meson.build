@@ -70,6 +70,15 @@ executable(
   install_dir : tests_dir,
 )
 
+executable(
+  'adverb',
+  'adverb.c',
+  dependencies : [glib, gio],
+  include_directories : project_include_dirs,
+  install : get_option('installed_tests'),
+  install_dir : tests_dir,
+)
+
 foreach test_name : tests
   exe = executable(
     'test-' + test_name,

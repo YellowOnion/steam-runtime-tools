@@ -84,7 +84,7 @@ _srt_architecture_can_run (const char *helpers_path,
                      (gchar **) argv->pdata,
                      my_environ, /* envp */
                      0,          /* flags */
-                     NULL,       /* child setup */
+                     _srt_child_setup_unblock_signals,
                      NULL,       /* user data */
                      NULL,       /* stdout */
                      NULL,       /* stderr */

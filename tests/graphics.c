@@ -890,6 +890,8 @@ assert_egl_icd (SrtEglIcd *icd)
 
   if (error_property == NULL)
     {
+      srt_egl_icd_check_error (icd, &error);
+      g_assert_no_error (error);
       g_assert_true (srt_egl_icd_check_error (icd, NULL));
       g_assert_true (srt_egl_icd_check_error (icd, &error));
       g_assert_no_error (error);
@@ -1258,6 +1260,8 @@ assert_vulkan_icd (SrtVulkanIcd *icd)
 
   if (error_property == NULL)
     {
+      srt_vulkan_icd_check_error (icd, &error);
+      g_assert_no_error (error);
       g_assert_true (srt_vulkan_icd_check_error (icd, NULL));
       g_assert_true (srt_vulkan_icd_check_error (icd, &error));
       g_assert_no_error (error);

@@ -204,8 +204,7 @@ class TestPressureVessel(unittest.TestCase):
             'i386-linux-gnu-capsule-capture-libs',
             'x86_64-linux-gnu-capsule-capture-libs',
             'pressure-vessel-wrap',
-            # TODO: Add this when a version with --version has been integrated
-            # 'steam-runtime-system-info',
+            'steam-runtime-system-info',
         ):
             with self.catch('--version', exe=exe):
                 completed = self.run_subprocess(
@@ -297,15 +296,12 @@ class TestPressureVessel(unittest.TestCase):
             ] + adverb
 
         with self.catch('cat /etc/os-release in container'):
-            # TODO: Ideally this would use check=True,
-            # but that would need a bubblewrap with
-            # https://github.com/containers/bubblewrap/issues/336
-            # fixed, or a pressure-vessel with !18 fixed
             completed = self.run_subprocess(
                 adverb + ['cat', '/etc/os-release'],
                 cwd=self.tmpdir.name,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                check=True,
             )
 
             logger.info(
@@ -326,15 +322,12 @@ class TestPressureVessel(unittest.TestCase):
             'w',
         ) as writer:
             with self.catch('run s-r-s-i in container'):
-                # TODO: Ideally this would use check=True,
-                # but that would need a bubblewrap with
-                # https://github.com/containers/bubblewrap/issues/336
-                # fixed, or a pressure-vessel with !18 fixed
                 completed = self.run_subprocess(
                     adverb + ['steam-runtime-system-info', '--verbose'],
                     cwd=self.tmpdir.name,
                     stdout=writer,
                     stderr=subprocess.PIPE,
+                    check=True,
                 )
 
                 if completed.stderr:

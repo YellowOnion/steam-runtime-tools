@@ -89,6 +89,7 @@ static void
 libraries_presence (Fixture *f,
                     gconstpointer context)
 {
+  gboolean result;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -103,25 +104,27 @@ libraries_presence (Fixture *f,
       "steam-runtime-system-info", "--expectations", expectations_in, NULL
     };
 
-  g_assert_true (g_spawn_sync (NULL,    /* working directory */
-                               (gchar **) argv,
-                               NULL,    /* envp */
-                               G_SPAWN_SEARCH_PATH,
-                               NULL,    /* child setup */
-                               NULL,    /* user data */
-                               &output, /* stdout */
-                               NULL,    /* stderr */
-                               &exit_status,
-                               &error));
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         NULL,    /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   g_assert_cmpint (exit_status, ==, 0);
-  g_assert_null (error);
   g_assert_nonnull (output);
 
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  json_parser_load_from_data (parser, output, -1, &error);
+  result = json_parser_load_from_data (parser, output, -1, &error);
   g_assert_no_error (error);
+  g_assert_true (result);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 
@@ -210,6 +213,7 @@ static void
 libraries_missing (Fixture *f,
                    gconstpointer context)
 {
+  gboolean result;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -224,24 +228,27 @@ libraries_missing (Fixture *f,
       "steam-runtime-system-info", "--expectations", expectations_in, NULL
     };
 
-  g_assert_true (g_spawn_sync (NULL,    /* working directory */
-                               (gchar **) argv,
-                               NULL,    /* envp */
-                               G_SPAWN_SEARCH_PATH,
-                               NULL,    /* child setup */
-                               NULL,    /* user data */
-                               &output, /* stdout */
-                               NULL,    /* stderr */
-                               &exit_status,
-                               &error));
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         NULL,    /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   g_assert_cmpint (exit_status, ==, 0);
-  g_assert_null (error);
   g_assert_nonnull (output);
 
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  result = json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 
@@ -314,6 +321,7 @@ static void
 libraries_presence_verbose (Fixture *f,
                             gconstpointer context)
 {
+  gboolean result;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -331,24 +339,27 @@ libraries_presence_verbose (Fixture *f,
       "steam-runtime-system-info", "--expectations", expectations_in, "--verbose", NULL
     };
 
-  g_assert_true (g_spawn_sync (NULL,    /* working directory */
-                               (gchar **) argv,
-                               NULL,    /* envp */
-                               G_SPAWN_SEARCH_PATH,
-                               NULL,    /* child setup */
-                               NULL,    /* user data */
-                               &output, /* stdout */
-                               NULL,    /* stderr */
-                               &exit_status,
-                               &error));
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         NULL,    /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   g_assert_cmpint (exit_status, ==, 0);
-  g_assert_null (error);
   g_assert_nonnull (output);
 
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  result = json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 
@@ -388,6 +399,7 @@ static void
 no_arguments (Fixture *f,
               gconstpointer context)
 {
+  gboolean result;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -398,24 +410,27 @@ no_arguments (Fixture *f,
   SrtSystemInfo *info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
 
-  g_assert_true (g_spawn_sync (NULL,    /* working directory */
-                               (gchar **) argv,
-                               NULL,    /* envp */
-                               G_SPAWN_SEARCH_PATH,
-                               NULL,    /* child setup */
-                               NULL,    /* user data */
-                               &output, /* stdout */
-                               NULL,    /* stderr */
-                               &exit_status,
-                               &error));
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         NULL,    /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   g_assert_cmpint (exit_status, ==, 0);
-  g_assert_null (error);
   g_assert_nonnull (output);
 
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  result = json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 
@@ -446,6 +461,7 @@ static void
 steam_presence (Fixture *f,
                 gconstpointer context)
 {
+  gboolean result;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -463,24 +479,27 @@ steam_presence (Fixture *f,
   fake_home = fake_home_new ();
   fake_home_create_structure (fake_home);
 
-  g_assert_true (g_spawn_sync (NULL,    /* working directory */
-                               (gchar **) argv,
-                               fake_home->env, /* envp */
-                               G_SPAWN_SEARCH_PATH,
-                               NULL,    /* child setup */
-                               NULL,    /* user data */
-                               &output, /* stdout */
-                               NULL,    /* stderr */
-                               &exit_status,
-                               &error));
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         fake_home->env, /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   g_assert_cmpint (exit_status, ==, 0);
-  g_assert_null (error);
   g_assert_nonnull (output);
 
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  result = json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 
@@ -534,6 +553,7 @@ static void
 steam_issues (Fixture *f,
                 gconstpointer context)
 {
+  gboolean result;
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
@@ -548,32 +568,33 @@ steam_issues (Fixture *f,
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
 
-  g_assert_true (TRUE);
-
   fake_home = fake_home_new ();
   fake_home->create_pinning_libs = FALSE;
   fake_home->create_steam_symlink = FALSE;
   fake_home->create_steamrt_files = FALSE;
   fake_home_create_structure (fake_home);
 
-  g_assert_true (g_spawn_sync (NULL,    /* working directory */
-                               (gchar **) argv,
-                               fake_home->env, /* envp */
-                               G_SPAWN_SEARCH_PATH,
-                               NULL,    /* child setup */
-                               NULL,    /* user data */
-                               &output, /* stdout */
-                               NULL,    /* stderr */
-                               &exit_status,
-                               &error));
+  result = g_spawn_sync (NULL,    /* working directory */
+                         (gchar **) argv,
+                         fake_home->env, /* envp */
+                         G_SPAWN_SEARCH_PATH,
+                         NULL,    /* child setup */
+                         NULL,    /* user data */
+                         &output, /* stdout */
+                         NULL,    /* stderr */
+                         &exit_status,
+                         &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   g_assert_cmpint (exit_status, ==, 0);
-  g_assert_null (error);
   g_assert_nonnull (output);
 
   /* We can't use `json_from_string()` directly because we are targeting an
    * older json-glib version */
   parser = json_parser_new ();
-  g_assert_true (json_parser_load_from_data (parser, output, -1, NULL));
+  result = json_parser_load_from_data (parser, output, -1, &error);
+  g_assert_no_error (error);
+  g_assert_true (result);
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
 

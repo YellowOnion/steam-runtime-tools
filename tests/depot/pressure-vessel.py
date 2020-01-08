@@ -204,8 +204,7 @@ class TestPressureVessel(unittest.TestCase):
             'i386-linux-gnu-capsule-capture-libs',
             'x86_64-linux-gnu-capsule-capture-libs',
             'pressure-vessel-wrap',
-            # TODO: Add this when a version with --version has been integrated
-            # 'steam-runtime-system-info',
+            'steam-runtime-system-info',
         ):
             with self.catch('--version', exe=exe):
                 completed = self.run_subprocess(

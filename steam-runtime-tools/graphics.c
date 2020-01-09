@@ -2455,7 +2455,9 @@ _srt_get_extra_modules_directory (const gchar *library_search_path,
     }
 
   ret = g_list_prepend (ret, g_build_filename (dir, "lib", "dri", NULL));
+  g_debug ("Looking in lib directory: %s", (const char *) ret->data);
   ret = g_list_prepend (ret, g_build_filename (dir, libqual, "dri", NULL));
+  g_debug ("Looking in libQUAL directory: %s", (const char *) ret->data);
 
 out:
   g_free (lib_multiarch);
@@ -2504,6 +2506,10 @@ _srt_get_modules_from_path (gchar **envp,
 
   g_return_if_fail (module_directory_path != NULL);
   g_return_if_fail (drivers_out != NULL);
+
+  g_debug ("Looking for %sdrivers in %s",
+           is_extra ? "extra " : "",
+           module_directory_path);
 
   switch (module)
     {

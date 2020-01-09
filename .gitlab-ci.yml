@@ -1,0 +1,55 @@
+# Copyright © 2019-2020 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+
+variables:
+    BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
+
+stages:
+    - test
+    - analyze
+
+default:
+    image: "${BUILD_IMAGE}"
+    interruptible: true
+
+test:
+    stage: test
+    # Assume Gitlab-CI uses bash, not sh (bash is the default)
+    script: |
+        set -eu
+        set -o pipefail
+        make check 2>&1 | tee qa-buster.log
+    # Save qa.log for analysis
+    artifacts:
+        paths:
+            - qa-buster.log
+
+todo:
+    stage: analyze
+    # Succeed if grep fails (no failing or expected-failure tests),
+    # fail if grep succeeds
+    script: |
+        set -eu
+        fail=
+        if grep -B10 '^not ok\b' qa-buster.log; then fail=yes; fi
+        if grep -B10 '^not ok\b' qa-stretch.log; then fail=yes; fi
+        if grep -B10 '^not ok\b' qa-brewmaster.log; then fail=yes; fi
+        if [ -n "$fail" ]; then exit 1; fi
+    # Failure is just a warning
+    allow_failure: true
+
+# Run tests in stretch (this lets us assert that the test script
+# is syntactically valid in Python 3.5). Ignore any pyflakes, shellcheck,
+# etc. warnings because these older versions are probably less good at
+# avoiding false positives.
+test:stretch:
+    stage: test
+    image: docker.internal.steamos.cloud/steamos/package-builder:stretch
+    script: make check
+
+# The same, but for brewmaster and Python 3.4
+test:brewmaster:
+    stage: test
+    image: docker.internal.steamos.cloud/steamos/package-builder:brewmaster
+    script: make check

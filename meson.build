@@ -189,6 +189,15 @@ json_glib = dependency(
 threads = dependency(
   'threads',
 )
+
+libelf = dependency(
+  'libelf',
+  required: false,
+)
+if not libelf.found()
+  libelf = c_compiler.find_library('elf', required: true)
+endif
+
 vulkan = dependency(
   'vulkan',
 )

@@ -296,6 +296,7 @@ _srt_get_helper (const char *helpers_path,
   gchar *path;
   gchar *prefixed;
 
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail (base != NULL, NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 

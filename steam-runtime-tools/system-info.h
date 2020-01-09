@@ -53,6 +53,24 @@ typedef enum
   SRT_TEST_FLAGS_NONE = 0
 } SrtTestFlags;
 
+/**
+ * SrtDriverFlags:
+ * @SRT_DRIVER_FLAGS_NONE: Get just the drivers found in the canonical folders
+ * @SRT_DRIVER_FLAGS_INCLUDE_ALL: Get all the drivers that have been found,
+ *  even if they are in directories that we do not believe will normally be
+ *  loaded (srt_dri_driver_is_extra() or srt_va_api_driver_is_extra() will
+ *  return %TRUE)
+ *
+ * A bitfield with flags representing filters, used when retrieving a
+ * list of drivers. Use %SRT_DRIVER_FLAGS_NONE for a list of the drivers that
+ * are believed to be on the search path that will be used in practice.
+ */
+typedef enum
+{
+  SRT_DRIVER_FLAGS_INCLUDE_ALL = (1 << 1),
+  SRT_DRIVER_FLAGS_NONE = (1 << 0)
+} SrtDriverFlags;
+
 typedef struct _SrtSystemInfo SrtSystemInfo;
 typedef struct _SrtSystemInfoClass SrtSystemInfoClass;
 
@@ -91,6 +109,12 @@ GList *srt_system_info_list_egl_icds (SrtSystemInfo *self,
                                       const char * const *multiarch_tuples);
 GList *srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
                                          const char * const *multiarch_tuples);
+GList *srt_system_info_list_dri_drivers (SrtSystemInfo *self,
+                                         const char *multiarch_tuple,
+                                         SrtDriverFlags flags);
+GList *srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
+                                            const char *multiarch_tuple,
+                                            SrtDriverFlags flags);
 
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);

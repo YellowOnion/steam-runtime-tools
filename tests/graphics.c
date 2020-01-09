@@ -1674,6 +1674,321 @@ test_icd_vulkan (Fixture *f,
   g_list_free_full (icds, g_object_unref);
 }
 
+static void
+check_list_suffixes (const GList *list,
+                     const gchar *suffixes[],
+                     SrtGraphicsModule module)
+{
+  const gchar *value = NULL;
+  gsize i = 0;
+  for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
+    {
+      if (module == SRT_GRAPHICS_DRI_MODULE)
+        value = srt_dri_driver_get_library_path (iter->data);
+      else if (module == SRT_GRAPHICS_VAAPI_MODULE)
+        value = srt_va_api_driver_get_library_path (iter->data);
+      g_assert_nonnull (suffixes[i]);
+      g_assert_true (g_str_has_suffix (value, suffixes[i]));
+    }
+  g_assert_cmpstr (suffixes[i], ==, NULL);
+}
+
+static void
+check_list_extra (const GList *list,
+                  gsize non_extra,
+                  SrtGraphicsModule module)
+{
+  gsize i = 0;
+  for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
+    {
+      gboolean is_extra = (i >= non_extra);
+      if (module == SRT_GRAPHICS_DRI_MODULE)
+        g_assert_cmpint (is_extra, ==, srt_dri_driver_is_extra (iter->data));
+      else if (module == SRT_GRAPHICS_VAAPI_MODULE)
+        g_assert_cmpint (is_extra, ==, srt_va_api_driver_is_extra (iter->data));
+    }
+}
+
+static void
+test_dri_debian10 (Fixture *f,
+                   gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar *sysroot;
+  GList *dri;
+  GList *va_api;
+  const gchar *multiarch_tuples[] = {"mock-debian-i386", "mock-debian-x86_64", NULL};
+  const gchar *dri_suffixes_i386[] = {"/lib/i386-linux-gnu/dri/i965_dri.so",
+                                      "/lib/i386-linux-gnu/dri/r300_dri.so",
+                                      "/lib/i386-linux-gnu/dri/radeonsi_dri.so",
+                                      NULL};
+  const gchar *dri_suffixes_x86_64[] = {"/lib/x86_64-linux-gnu/dri/i965_dri.so",
+                                        "/lib/x86_64-linux-gnu/dri/r600_dri.so",
+                                        "/lib/x86_64-linux-gnu/dri/radeon_dri.so",
+                                        NULL};
+  const gchar *va_api_suffixes_i386[] = {"/lib/i386-linux-gnu/dri/r600_drv_video.so",
+                                         NULL};
+  const gchar *va_api_suffixes_x86_64[] = {"/lib/x86_64-linux-gnu/dri/r600_drv_video.so",
+                                           "/lib/x86_64-linux-gnu/dri/radeonsi_drv_video.so",
+                                           NULL};
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
+  envp = g_environ_unsetenv (envp, "LIBVA_DRIVERS_PATH");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  /* The output is guaranteed to be in aphabetical order */
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes_i386, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes_x86_64, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  /* The output is guaranteed to be in aphabetical order */
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes_i386, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes_x86_64, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  /* Do it again, this time using the cached result.
+   * While doing it we also try to get the "extra" drivers.
+   * We expect to receive the same drivers list as before because we are using
+   * a multiarch tuple that is different from what we have in debian10/usr/lib
+   * so _srt_get_extra_modules_folder will fail to split the path.
+   * Anyway, even if the folder had the same name as the multiarch tuple,
+   * we still would be unable to get extras because the drivers that we are
+   * using (e.g. libGL.so.1) are just empty files, so `elf_begin` would fail. */
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (dri, dri_suffixes_i386, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (dri, dri_suffixes_x86_64, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (va_api, va_api_suffixes_i386, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (va_api, va_api_suffixes_x86_64, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+test_dri_fedora (Fixture *f,
+                 gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar *sysroot;
+  GList *dri;
+  GList *va_api;
+  const gchar *multiarch_tuples[] = {"mock-fedora-32-bit", "mock-fedora-64-bit", NULL};
+  const gchar *dri_suffixes_32[] = {"/usr/lib/dri/i965_dri.so",
+                                    "/usr/lib/dri/r300_dri.so",
+                                    "/usr/lib/dri/radeonsi_dri.so",
+                                    NULL};
+  const gchar *dri_suffixes_64[] = {"/usr/lib64/dri/i965_dri.so",
+                                    "/usr/lib64/dri/r600_dri.so",
+                                    "/usr/lib64/dri/radeon_dri.so",
+                                    NULL};
+  const gchar *va_api_suffixes_32[] = {"/usr/lib/dri/r600_drv_video.so",
+                                       NULL};
+  const gchar *va_api_suffixes_64[] = {"/usr/lib64/dri/r600_drv_video.so",
+                                       "/usr/lib64/dri/radeonsi_drv_video.so",
+                                       NULL};
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "fedora", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
+  envp = g_environ_unsetenv (envp, "LIBVA_DRIVERS_PATH");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes_32, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes_64, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes_32, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes_64, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
+test_dri_with_env (Fixture *f,
+                   gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar *sysroot;
+  gchar *libgl;
+  gchar *libgl2;
+  gchar *libgl3;
+  gchar *libva;
+  gchar *libva2;
+  gchar *libva3;
+  gchar *libgl_combined;
+  gchar *libva_combined;
+  GList *dri;
+  GList *va_api;
+  const gchar *multiarch_tuples[] = {"mock-fedora-32-bit", NULL};
+  const gchar *dri_suffixes[] = {"/custom_path32/dri/r600_dri.so",
+                                 "/custom_path32/dri/radeon_dri.so",
+                                 "/custom_path32_2/dri/r300_dri.so",
+                                 NULL};
+  const gchar *dri_suffixes_with_extras[] = {"/custom_path32/dri/r600_dri.so",
+                                             "/custom_path32/dri/radeon_dri.so",
+                                             "/custom_path32_2/dri/r300_dri.so",
+                                             "/usr/lib/dri/i965_dri.so",
+                                             "/usr/lib/dri/radeonsi_dri.so",
+                                             NULL};
+  const gchar *va_api_suffixes[] = {"/custom_path32/va/r600_drv_video.so",
+                                    "/custom_path32/va/radeonsi_drv_video.so",
+                                    "/custom_path32_2/va/nouveau_drv_video.so",
+                                    NULL};
+  const gchar *va_api_suffixes_with_extras[] = {"/custom_path32/va/r600_drv_video.so",
+                                                "/custom_path32/va/radeonsi_drv_video.so",
+                                                "/custom_path32_2/va/nouveau_drv_video.so",
+                                                "/usr/lib/dri/r600_drv_video.so",
+                                                NULL};
+
+  if (strcmp (_SRT_MULTIARCH, "") == 0)
+    {
+      g_test_skip ("Unsupported architecture");
+      return;
+    }
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "no-os-release", NULL);
+
+  libgl = g_build_filename (sysroot, "custom_path32", "dri", NULL);
+  libva = g_build_filename (sysroot, "custom_path32", "va", NULL);
+  libgl2 = g_build_filename (sysroot, "custom_path32_2", "dri", NULL);
+  libva2 = g_build_filename (sysroot, "custom_path32_2", "va", NULL);
+  /* We have these two 64bit directories but we are using only one mock 32bit executable.
+   * So we expect to not receive the content of these directories because we should
+   * find 32bit only libraries. */
+  libgl3 = g_build_filename (sysroot, "custom_path64", "dri", NULL);
+  libva3 = g_build_filename (sysroot, "custom_path64", "va", NULL);
+
+  libgl_combined = g_strjoin (":", libgl, libgl2, libgl3, NULL);
+  libva_combined = g_strjoin (":", libva, libva2, libgl3, NULL);
+
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_setenv (envp, "LIBGL_DRIVERS_PATH", libgl_combined, TRUE);
+  envp = g_environ_setenv (envp, "LIBVA_DRIVERS_PATH", libva_combined, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  /* The output is guaranteed to be in aphabetical order */
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  /* The output is guaranteed to be in aphabetical order */
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  /* Do it again, this time including the extras */
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (dri, dri_suffixes_with_extras, SRT_GRAPHICS_DRI_MODULE);
+  /* Minus one to not count the NULL terminator */
+  check_list_extra (dri, G_N_ELEMENTS(dri_suffixes)-1, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (va_api, va_api_suffixes_with_extras, SRT_GRAPHICS_VAAPI_MODULE);
+  /* Minus one to not count the NULL terminator */
+  check_list_extra (va_api, G_N_ELEMENTS(va_api_suffixes)-1, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_free (libgl_combined);
+  g_free (libva_combined);
+  g_free (libgl);
+  g_free (libgl2);
+  g_free (libgl3);
+  g_free (libva);
+  g_free (libva2);
+  g_free (libva3);
+  g_strfreev (envp);
+}
+
+static void
+test_dri_flatpak (Fixture *f,
+                  gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar *sysroot;
+  GList *dri;
+  GList *va_api;
+  const gchar *multiarch_tuples[] = { "mock-abi", NULL };
+  const gchar *dri_suffixes[] = {"/usr/lib/mock-abi/GL/lib/dri/i965_dri.so",
+                                  NULL};
+  const gchar *va_api_suffixes[] = {"/usr/lib/mock-abi/dri/radeonsi_drv_video.so",
+                                    "/usr/lib/mock-abi/dri/intel-vaapi-driver/i965_drv_video.so",
+                                    "/usr/lib/mock-abi/GL/lib/dri/r600_drv_video.so",
+                                    NULL};
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "flatpak-example", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
+  envp = g_environ_unsetenv (envp, "LIBVA_DRIVERS_PATH");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
 static const Config dir_config = { ICD_MODE_EXPLICIT_DIRS };
 static const Config filename_config = { ICD_MODE_EXPLICIT_FILENAMES };
 static const Config flatpak_config = { ICD_MODE_FLATPAK };
@@ -1733,6 +2048,15 @@ main (int argc,
               setup, test_icd_vulkan, teardown);
   g_test_add ("/graphics/icd/vulkan/xdg", Fixture, &xdg_config,
               setup, test_icd_vulkan, teardown);
+
+  g_test_add ("/graphics/dri/debian10", Fixture, NULL,
+              setup, test_dri_debian10, teardown);
+  g_test_add ("/graphics/dri/fedora", Fixture, NULL,
+              setup, test_dri_fedora, teardown);
+  g_test_add ("/graphics/dri/with_env", Fixture, NULL,
+              setup, test_dri_with_env, teardown);
+  g_test_add ("/graphics/dri/flatpak", Fixture, NULL,
+              setup, test_dri_flatpak, teardown);
 
   return g_test_run ();
 }

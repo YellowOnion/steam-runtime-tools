@@ -449,6 +449,56 @@ print_graphics_details(JsonBuilder *builder,
   json_builder_end_object (builder); // End garphics-details
 }
 
+static void
+print_dri_details (JsonBuilder *builder,
+                   GList *dri_list)
+{
+  GList *iter;
+
+  json_builder_set_member_name (builder, "dri_drivers");
+  json_builder_begin_array (builder);
+    {
+      for (iter = dri_list; iter != NULL; iter = iter->next)
+        {
+          json_builder_begin_object (builder);
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, srt_dri_driver_get_library_path (iter->data));
+          if (srt_dri_driver_is_extra (iter->data))
+            {
+              json_builder_set_member_name (builder, "is_extra");
+              json_builder_add_boolean_value (builder, TRUE);
+            }
+          json_builder_end_object (builder);
+        }
+    }
+  json_builder_end_array (builder); // End dri_drivers
+}
+
+static void
+print_va_api_details (JsonBuilder *builder,
+                      GList *va_api_list)
+{
+  GList *iter;
+
+  json_builder_set_member_name (builder, "va-api_drivers");
+  json_builder_begin_array (builder);
+    {
+      for (iter = va_api_list; iter != NULL; iter = iter->next)
+        {
+          json_builder_begin_object (builder);
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, srt_va_api_driver_get_library_path (iter->data));
+          if (srt_va_api_driver_is_extra (iter->data))
+            {
+              json_builder_set_member_name (builder, "is_extra");
+              json_builder_add_boolean_value (builder, TRUE);
+            }
+          json_builder_end_object (builder);
+        }
+    }
+  json_builder_end_array (builder); // End va-api_drivers
+}
+
 static const char * const locales[] =
 {
   "",
@@ -758,6 +808,8 @@ main (int argc,
   for (gsize i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
       GList *libraries = NULL;
+      GList *dri_list = NULL;
+      GList *va_api_list = NULL;
 
       json_builder_set_member_name (builder, multiarch_tuples[i]);
       json_builder_begin_object (builder);
@@ -781,12 +833,21 @@ main (int argc,
 
       GList *graphics_list = srt_system_info_check_all_graphics (info,
                                                                  multiarch_tuples[i]);
-
       print_graphics_details (builder, graphics_list);
+
+      dri_list = srt_system_info_list_dri_drivers (info, multiarch_tuples[i],
+                                                           SRT_DRIVER_FLAGS_INCLUDE_ALL);
+      print_dri_details (builder, dri_list);
+
+      va_api_list = srt_system_info_list_va_api_drivers (info, multiarch_tuples[i],
+                                                          SRT_DRIVER_FLAGS_INCLUDE_ALL);
+      print_va_api_details (builder, va_api_list);
 
       json_builder_end_object (builder); // End multiarch_tuple object
       g_list_free_full (libraries, g_object_unref);
       g_list_free_full (graphics_list, g_object_unref);
+      g_list_free_full (dri_list, g_object_unref);
+      g_list_free_full (va_api_list, g_object_unref);
     }
 
   json_builder_end_object (builder);

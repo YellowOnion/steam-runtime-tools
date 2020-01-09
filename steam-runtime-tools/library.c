@@ -542,7 +542,7 @@ srt_check_library_presence (const char *soname,
                             SrtLibrary **more_details_out)
 {
   return _srt_check_library_presence (NULL, soname, multiarch,
-                                      symbols_path, NULL,
+                                      symbols_path, NULL, NULL,
                                       symbols_format, more_details_out);
 }
 
@@ -552,6 +552,7 @@ _srt_check_library_presence (const char *helpers_path,
                              const char *multiarch,
                              const char *symbols_path,
                              const char * const *hidden_deps,
+                             gchar **envp,
                              SrtLibrarySymbolsFormat symbols_format,
                              SrtLibrary **more_details_out)
 {
@@ -640,7 +641,11 @@ _srt_check_library_presence (const char *helpers_path,
   /* NULL terminate the array */
   g_ptr_array_add (argv, NULL);
 
-  my_environ = g_get_environ ();
+  if (envp == NULL)
+    my_environ = g_get_environ ();
+  else
+    my_environ = g_strdupv (envp);
+
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
   if (ld_preload != NULL)
     {

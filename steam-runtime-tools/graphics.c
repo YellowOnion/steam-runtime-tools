@@ -29,11 +29,18 @@
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <gelf.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <libelf.h>
 
 #include <json-glib/json-glib.h>
 
@@ -2170,6 +2177,865 @@ _srt_load_egl_icds (gchar **envp,
 
   g_strfreev (environ_copy);
   return g_list_reverse (ret);
+}
+
+/**
+ * SrtDriDriver:
+ *
+ * Opaque object representing a Mesa DRI driver.
+ */
+
+struct _SrtDriDriver
+{
+  /*< private >*/
+  GObject parent;
+  gchar *library_path;
+  gboolean is_extra;
+};
+
+struct _SrtDriDriverClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  DRI_DRIVER_PROP_0,
+  DRI_DRIVER_PROP_LIBRARY_PATH,
+  DRI_DRIVER_PROP_IS_EXTRA,
+  N_DRI_DRIVER_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtDriDriver, srt_dri_driver, G_TYPE_OBJECT)
+
+static void
+srt_dri_driver_init (SrtDriDriver *self)
+{
+}
+
+static void
+srt_dri_driver_get_property (GObject *object,
+                             guint prop_id,
+                             GValue *value,
+                             GParamSpec *pspec)
+{
+  SrtDriDriver *self = SRT_DRI_DRIVER (object);
+
+  switch (prop_id)
+    {
+      case DRI_DRIVER_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->library_path);
+        break;
+
+      case DRI_DRIVER_PROP_IS_EXTRA:
+        g_value_set_boolean (value, self->is_extra);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_dri_driver_set_property (GObject *object,
+                             guint prop_id,
+                             const GValue *value,
+                             GParamSpec *pspec)
+{
+  SrtDriDriver *self = SRT_DRI_DRIVER (object);
+
+  switch (prop_id)
+    {
+      case DRI_DRIVER_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->library_path == NULL);
+        self->library_path = g_value_dup_string (value);
+        break;
+
+      case DRI_DRIVER_PROP_IS_EXTRA:
+        self->is_extra = g_value_get_boolean (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_dri_driver_finalize (GObject *object)
+{
+  SrtDriDriver *self = SRT_DRI_DRIVER (object);
+
+  g_clear_pointer (&self->library_path, g_free);
+
+  G_OBJECT_CLASS (srt_dri_driver_parent_class)->finalize (object);
+}
+
+static GParamSpec *dri_driver_properties[N_DRI_DRIVER_PROPERTIES] = { NULL };
+
+static void
+srt_dri_driver_class_init (SrtDriDriverClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_dri_driver_get_property;
+  object_class->set_property = srt_dri_driver_set_property;
+  object_class->finalize = srt_dri_driver_finalize;
+
+  dri_driver_properties[DRI_DRIVER_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Absolute path to the DRI driver library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  dri_driver_properties[DRI_DRIVER_PROP_IS_EXTRA] =
+    g_param_spec_boolean ("is-extra", "Is extra?",
+                          "TRUE if the driver is located in an unusual path",
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_DRI_DRIVER_PROPERTIES,
+                                     dri_driver_properties);
+}
+
+/**
+ * srt_dri_driver_new:
+ * @library_path: (transfer none): the path to the library
+ * @is_extra: if the DRI driver is in an unusual path
+ *
+ * Returns: (transfer full): a new DRI driver
+ */
+static SrtDriDriver *
+srt_dri_driver_new (const gchar *library_path,
+                    gboolean is_extra)
+{
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_DRI_DRIVER,
+                       "library-path", library_path,
+                       "is-extra", is_extra,
+                       NULL);
+}
+
+/**
+ * srt_dri_driver_get_library_path:
+ * @self: The DRI driver
+ *
+ * Return the library path for this DRI driver.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtDriDriver:library-path
+ */
+const gchar *
+srt_dri_driver_get_library_path (SrtDriDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_DRI_DRIVER (self), NULL);
+  return self->library_path;
+}
+
+/**
+ * srt_dri_driver_is_extra:
+ * @self: The DRI driver
+ *
+ * Return a gboolean that indicates if the DRI is in an unusual position.
+ *
+ * Returns: %TRUE if the DRI driver is in an unusual position.
+ */
+gboolean
+srt_dri_driver_is_extra (SrtDriDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_DRI_DRIVER (self), FALSE);
+  return self->is_extra;
+}
+
+/**
+ * _srt_get_library_class:
+ * @library: (not nullable) (type filename): The library path to use
+ *
+ * Return the class of the specified library.
+ * If it fails, %ELFCLASSNONE will be returned.
+ *
+ * Returns: the library class.
+ */
+static int
+_srt_get_library_class (const gchar *library)
+{
+  Elf *elf = NULL;
+  int fd = -1;
+  int class = ELFCLASSNONE;
+
+  g_return_val_if_fail (library != NULL, ELFCLASSNONE);
+
+  if (elf_version (EV_CURRENT) == EV_NONE)
+    {
+      g_debug ("elf_version(EV_CURRENT): %s", elf_errmsg (elf_errno ()));
+      goto out;
+    }
+
+  if ((fd = open (library, O_RDONLY | O_CLOEXEC, 0)) < 0)
+    {
+      g_debug ("failed to open %s", library);
+      goto out;
+    }
+
+  if ((elf = elf_begin (fd, ELF_C_READ, NULL)) == NULL)
+    {
+      g_debug ("elf_begin() failed: %s", elf_errmsg (elf_errno ()));
+      goto out;
+    }
+
+  class = gelf_getclass (elf);
+
+out:
+  if (elf != NULL)
+    elf_end (elf);
+
+  if (fd >= 0)
+    close (fd);
+
+  return class;
+}
+
+/**
+ * _srt_get_extra_modules_directory:
+ * @library_search_path: (not nullable) (type filename): The absolute path to a directory that
+ *  is in the library search path (e.g. /usr/lib/x86_64-linux-gnu)
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ * @driver_class: Get the extra directories based on this ELF class, like
+ *  ELFCLASS64.
+ *
+ * Given a loader path, this function tries to create a list of extra directories where it
+ * might be possible to find driver modules.
+ * E.g. given /usr/lib/x86_64-linux-gnu, return /usr/lib64 and /usr/lib
+ *
+ * Returns: (transfer full) (element-type gchar *) (nullable): A list of absolute
+ *  paths in descending alphabetical order, or %NULL if an error occurred.
+ */
+static GList *
+_srt_get_extra_modules_directory (const gchar *library_search_path,
+                                  const gchar *multiarch_tuple,
+                                  int driver_class)
+{
+  GList *ret = NULL;
+  const gchar *libqual = NULL;
+  gchar *lib_multiarch;
+  gchar *dir;
+
+  g_return_val_if_fail (library_search_path != NULL, NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  dir = g_strdup (library_search_path);
+  lib_multiarch = g_strdup_printf ("/lib/%s", multiarch_tuple);
+
+  if (!g_str_has_suffix (dir, lib_multiarch))
+    {
+      g_debug ("%s is not in the loader path: %s", lib_multiarch, library_search_path);
+      goto out;
+    }
+
+  dir[strlen (dir) - strlen (lib_multiarch) + 1] = '\0';
+
+  switch (driver_class)
+    {
+      case ELFCLASS32:
+        libqual = "lib32";
+        break;
+
+      case ELFCLASS64:
+        libqual = "lib64";
+        break;
+
+      case ELFCLASSNONE:
+      default:
+        g_free (lib_multiarch);
+        g_free (dir);
+        g_return_val_if_reached (NULL);
+    }
+
+  ret = g_list_prepend (ret, g_build_filename (dir, "lib", "dri", NULL));
+  g_debug ("Looking in lib directory: %s", (const char *) ret->data);
+  ret = g_list_prepend (ret, g_build_filename (dir, libqual, "dri", NULL));
+  g_debug ("Looking in libQUAL directory: %s", (const char *) ret->data);
+
+out:
+  g_free (lib_multiarch);
+  g_free (dir);
+  return ret;
+}
+
+static SrtVaApiDriver *
+srt_va_api_driver_new (const gchar *library_path,
+                       gboolean is_extra);
+
+/**
+ * _srt_get_modules_from_path:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH
+ *  is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ * @module_directory_path: (not nullable) (type filename): Path where to
+ *  search for driver modules
+ * @is_extra: If this path should be considered an extra or not
+ * @module: Which graphic module to search
+ * @drivers_out: (inout): Prepend the found drivers to this list.
+ *  If @module is #SRT_GRAPHICS_DRI_MODULE, the element-type will be #SrtDriDriver.
+ *  Otherwise if @module is #SRT_GRAPHICS_VAAPI_MODULE, the element-type will be #SrtVaApiDriver.
+ *
+ * @drivers_out will be prepended only with modules that are of the same ELF class that
+ * corresponds to @multiarch_tuple.
+ *
+ * Drivers are added to `drivers_out` in reverse lexicographic order
+ * (`r600_dri.so` is before `r200_dri.so`, which is before `i965_dri.so`).
+ */
+static void
+_srt_get_modules_from_path (gchar **envp,
+                            const char *helpers_path,
+                            const char *multiarch_tuple,
+                            const char *module_directory_path,
+                            gboolean is_extra,
+                            SrtGraphicsModule module,
+                            GList **drivers_out)
+{
+  const gchar *member;
+  const gchar *module_suffix;
+  GDir *dir = NULL;
+  SrtLibraryIssues issues;
+
+  g_return_if_fail (module_directory_path != NULL);
+  g_return_if_fail (drivers_out != NULL);
+
+  g_debug ("Looking for %sdrivers in %s",
+           is_extra ? "extra " : "",
+           module_directory_path);
+
+  switch (module)
+    {
+      case SRT_GRAPHICS_DRI_MODULE:
+        module_suffix = "_dri.so";
+        break;
+
+      case SRT_GRAPHICS_VAAPI_MODULE:
+        module_suffix = "_drv_video.so";
+        break;
+
+      default:
+        g_return_if_reached ();
+    }
+
+  dir = g_dir_open (module_directory_path, 0, NULL);
+  if (dir)
+    {
+      GPtrArray *in_this_dir = g_ptr_array_new_with_free_func (g_free);
+      while ((member = g_dir_read_name (dir)) != NULL)
+        {
+          if (g_str_has_suffix (member, module_suffix))
+            g_ptr_array_add (in_this_dir, g_build_filename (module_directory_path, member, NULL));
+        }
+
+      g_ptr_array_sort (in_this_dir, indirect_strcmp0);
+
+      for (gsize j = 0; j < in_this_dir->len; j++)
+        {
+          const gchar *this_driver = g_ptr_array_index (in_this_dir, j);
+          issues = _srt_check_library_presence (helpers_path, this_driver, multiarch_tuple,
+                                                NULL, NULL, envp, SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, NULL);
+          /* If "${multiarch}-inspect-library" was unable to load the driver, it's safe to assume that
+           * its ELF class was not what we were searching for. */
+          if (issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD)
+            continue;
+
+          switch (module)
+            {
+              case SRT_GRAPHICS_DRI_MODULE:
+                *drivers_out = g_list_prepend (*drivers_out, srt_dri_driver_new (this_driver, is_extra));
+                break;
+
+              case SRT_GRAPHICS_VAAPI_MODULE:
+                *drivers_out = g_list_prepend (*drivers_out, srt_va_api_driver_new (this_driver, is_extra));
+                break;
+
+              default:
+                g_return_if_reached ();
+            }
+        }
+
+      g_ptr_array_free (in_this_dir, TRUE);
+      g_dir_close (dir);
+    }
+}
+
+/**
+ * _srt_get_modules_full:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ * @module: Which graphic module to search
+ * @drivers_out: (inout): Prepend the found drivers to this list.
+ *  If @module is #SRT_GRAPHICS_DRI_MODULE, the element-type will be #SrtDriDriver.
+ *  Otherwise if @module is #SRT_GRAPHICS_VAAPI_MODULE, the element-type will be #SrtVaApiDriver.
+ *
+ * On exit, `drivers_out` will have the least-preferred directories first and the
+ * most-preferred directories last. Within a directory, the drivers will be
+ * in reverse lexicographic order: `r600_dri.so` before `r200_dri.so`, which in turn
+ * is before `nouveau_dri.so`.
+ */
+static void
+_srt_get_modules_full (gchar **envp,
+                       const char *helpers_path,
+                       const char *multiarch_tuple,
+                       SrtGraphicsModule module,
+                       GList **drivers_out)
+{
+  const char * const *loader_libraries;
+  static const char *const dri_loaders[] = { "libGLX_mesa.so.0", "libEGL_mesa.so.0",
+                                             "libGL.so.1", NULL };
+  static const char *const va_api_loaders[] = { "libva.so.2", "libva.so.1", NULL };
+  const gchar *env_override;
+  const gchar *sysroot;
+  const gchar *drivers_path;
+  gchar *flatpak_info;
+  GHashTable *drivers_set;
+  gboolean is_extra = FALSE;
+
+  g_return_if_fail (multiarch_tuple != NULL);
+  g_return_if_fail (drivers_out != NULL);
+  g_return_if_fail (_srt_check_not_setuid ());
+
+  switch (module)
+    {
+      case SRT_GRAPHICS_DRI_MODULE:
+        loader_libraries = dri_loaders;
+        env_override = "LIBGL_DRIVERS_PATH";
+        break;
+
+      case SRT_GRAPHICS_VAAPI_MODULE:
+        loader_libraries = va_api_loaders;
+        env_override = "LIBVA_DRIVERS_PATH";
+        break;
+
+      default:
+        g_return_if_reached ();
+    }
+
+  if (envp)
+    {
+      sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
+      drivers_path = g_environ_getenv (envp, env_override);
+    }
+  else
+    {
+      sysroot = g_getenv ("SRT_TEST_SYSROOT");
+      drivers_path = g_getenv (env_override);
+    }
+
+  if (sysroot == NULL)
+    sysroot = "/";
+
+  flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
+  drivers_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  if (drivers_path)
+    {
+      g_debug ("A driver path environment is available: %s", drivers_path);
+      gchar **entries = g_strsplit (drivers_path, ":", 0);
+
+      for (gchar **entry = entries; entry != NULL && *entry != NULL; entry++)
+        {
+          if (*entry[0] == '\0')
+            continue;
+
+          if (!g_hash_table_contains (drivers_set, *entry))
+            {
+              g_hash_table_add (drivers_set, g_strdup (*entry));
+              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, *entry,
+                                          FALSE, module, drivers_out);
+            }
+        }
+      g_strfreev (entries);
+
+      /* We continue to search for libraries but we mark them all as "extra" because the
+       * loader wouldn't have picked them up. */
+      is_extra = TRUE;
+    }
+
+  /* If we are in a Flatpak environment we search in the same paths that Flatpak uses,
+   * keeping also the same search order.
+   *
+   * For VA-API these are the paths used:
+   * "%{libdir}/dri:%{libdir}/dri/intel-vaapi-driver:%{libdir}/GL/lib/dri"
+   * (reference:
+   * <https://gitlab.com/freedesktop-sdk/freedesktop-sdk/blob/master/elements/components/libva.bst>)
+   *
+   * For Mesa there is just a single path:
+   * "%{libdir}/GL/lib/dri"
+   * (really `GL/default/lib/dri` or `GL/mesa-git/lib/dri`, but `GL/lib/dri` is
+   * populated with symbolic links; reference:
+   * <https://gitlab.com/freedesktop-sdk/freedesktop-sdk/blob/master/elements/extensions/mesa/mesa.bst>
+   * and
+   * <https://gitlab.com/freedesktop-sdk/freedesktop-sdk/blob/master/elements/flatpak-images/platform.bst>)
+   * */
+  if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS))
+    {
+      gchar *libdir = g_build_filename (sysroot, "usr", "lib", multiarch_tuple, NULL);
+      if (module == SRT_GRAPHICS_VAAPI_MODULE)
+        {
+          gchar *libdir_dri = g_build_filename (libdir, "dri", NULL);
+          gchar *intel_vaapi = g_build_filename (libdir_dri, "intel-vaapi-driver", NULL);
+          if (!g_hash_table_contains (drivers_set, libdir_dri))
+            {
+              g_hash_table_add (drivers_set, g_strdup (libdir_dri));
+              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, libdir_dri,
+                                          is_extra, module, drivers_out);
+            }
+          if (!g_hash_table_contains (drivers_set, intel_vaapi))
+            {
+              g_hash_table_add (drivers_set, g_strdup (intel_vaapi));
+              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, intel_vaapi,
+                                          is_extra, module, drivers_out);
+            }
+          g_free (libdir_dri);
+          g_free (intel_vaapi);
+        }
+
+      gchar *gl_lib_dri = g_build_filename (libdir, "GL", "lib", "dri", NULL);
+      if (!g_hash_table_contains (drivers_set, gl_lib_dri))
+        {
+          g_hash_table_add (drivers_set, g_strdup (gl_lib_dri));
+          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, gl_lib_dri,
+                                      is_extra, module, drivers_out);
+        }
+      g_free (gl_lib_dri);
+      g_free (libdir);
+
+      /* We continue to search for libraries but we mark them all as "extra" because the
+       * loader wouldn't have picked them up. */
+      is_extra = TRUE;
+    }
+
+  for (gsize i = 0; loader_libraries[i] != NULL; i++)
+    {
+      SrtLibrary *library_details = NULL;
+      char *driver_canonical_path;
+      gchar *libdir;
+      gchar *dri_path;
+      GList *extras = NULL;
+      SrtLibraryIssues issues;
+
+      issues = _srt_check_library_presence (helpers_path,
+                                            loader_libraries[i],
+                                            multiarch_tuple,
+                                            NULL,   /* symbols path */
+                                            NULL,   /* hidden dependencies */
+                                            envp,
+                                            SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
+                                            &library_details);
+
+      if (issues & (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_INTERNAL_ERROR |
+                    SRT_LIBRARY_ISSUES_TIMEOUT))
+        {
+          const char *messages = srt_library_get_messages (library_details);
+
+          if (messages == NULL || messages[0] == '\0')
+            messages = "(no diagnostic output)";
+
+          g_debug ("Unable to load library %s: %s",
+                   loader_libraries[i],
+                   messages);
+        }
+
+      const gchar *loader_path = srt_library_get_absolute_path (library_details);
+      if (loader_path == NULL)
+        {
+          g_debug ("loader path for %s is NULL", loader_libraries[i]);
+          g_object_unref (library_details);
+          continue;
+        }
+
+      /* The path might still be a symbolic link or it can contains ./ or ../ */
+      driver_canonical_path = realpath (loader_path, NULL);
+      if (driver_canonical_path == NULL)
+        {
+          g_debug ("realpath(%s): %s", loader_path, g_strerror (errno));
+          g_object_unref (library_details);
+          continue;
+        }
+      libdir = g_path_get_dirname (driver_canonical_path);
+
+      dri_path = g_build_filename (libdir, "dri", NULL);
+      if (!g_hash_table_contains (drivers_set, dri_path))
+        {
+          g_hash_table_add (drivers_set, g_strdup (dri_path));
+          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, dri_path,
+                                      is_extra, module, drivers_out);
+        }
+
+      int driver_class = _srt_get_library_class (driver_canonical_path);
+      const GList *this_extra_path;
+      if (driver_class != ELFCLASSNONE)
+        {
+          extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
+          for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
+            {
+              if (!g_hash_table_contains (drivers_set, this_extra_path->data))
+                {
+                  g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
+                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, 
+                                              this_extra_path->data, TRUE, module,
+                                              drivers_out);
+                }
+            }
+        }
+
+      free (driver_canonical_path);
+      g_free (libdir);
+      g_free (dri_path);
+      g_object_unref (library_details);
+      if (extras)
+        g_list_free_full (extras, g_free);
+    }
+
+
+  g_hash_table_unref (drivers_set);
+  g_free (flatpak_info);
+}
+
+/**
+ * _srt_list_dri_drivers:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ *
+ * Implementation of srt_system_info_list_dri_drivers().
+ *
+ * The returned list will have the most-preferred directories first and the
+ * least-preferred directories last. Within a directory, the drivers will be in
+ * lexicographic order, for example `nouveau_dri.so`, `r200_dri.so`, `r600_dri.so`
+ * in that order.
+ *
+ * Returns: (transfer full) (element-type SrtDriDriver) (nullable): A list of
+ *  opaque #SrtDriDriver objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+_srt_list_dri_drivers (gchar **envp,
+                       const char *helpers_path,
+                       const char *multiarch_tuple)
+{
+  GList *drivers = NULL;
+
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_DRI_MODULE, &drivers);
+
+  return g_list_reverse (drivers);
+}
+
+/**
+ * SrtVaApiDriver:
+ *
+ * Opaque object representing a VA-API driver.
+ */
+
+struct _SrtVaApiDriver
+{
+  /*< private >*/
+  GObject parent;
+  gchar *library_path;
+  gboolean is_extra;
+};
+
+struct _SrtVaApiDriverClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  VA_API_DRIVER_PROP_0,
+  VA_API_DRIVER_PROP_LIBRARY_PATH,
+  VA_API_DRIVER_PROP_IS_EXTRA,
+  N_VA_API_DRIVER_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtVaApiDriver, srt_va_api_driver, G_TYPE_OBJECT)
+
+static void
+srt_va_api_driver_init (SrtVaApiDriver *self)
+{
+}
+
+static void
+srt_va_api_driver_get_property (GObject *object,
+                                guint prop_id,
+                                GValue *value,
+                                GParamSpec *pspec)
+{
+  SrtVaApiDriver *self = SRT_VA_API_DRIVER (object);
+
+  switch (prop_id)
+    {
+      case VA_API_DRIVER_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->library_path);
+        break;
+
+      case VA_API_DRIVER_PROP_IS_EXTRA:
+        g_value_set_boolean (value, self->is_extra);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_va_api_driver_set_property (GObject *object,
+                                guint prop_id,
+                                const GValue *value,
+                                GParamSpec *pspec)
+{
+  SrtVaApiDriver *self = SRT_VA_API_DRIVER (object);
+
+  switch (prop_id)
+    {
+      case VA_API_DRIVER_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->library_path == NULL);
+        self->library_path = g_value_dup_string (value);
+        break;
+
+      case VA_API_DRIVER_PROP_IS_EXTRA:
+        self->is_extra = g_value_get_boolean (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_va_api_driver_finalize (GObject *object)
+{
+  SrtVaApiDriver *self = SRT_VA_API_DRIVER (object);
+
+  g_clear_pointer (&self->library_path, g_free);
+
+  G_OBJECT_CLASS (srt_va_api_driver_parent_class)->finalize (object);
+}
+
+static GParamSpec *va_api_driver_properties[N_VA_API_DRIVER_PROPERTIES] = { NULL };
+
+static void
+srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_va_api_driver_get_property;
+  object_class->set_property = srt_va_api_driver_set_property;
+  object_class->finalize = srt_va_api_driver_finalize;
+
+  va_api_driver_properties[VA_API_DRIVER_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Absolute path to the DRI driver library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  va_api_driver_properties[VA_API_DRIVER_PROP_IS_EXTRA] =
+    g_param_spec_boolean ("is-extra", "Is extra?",
+                          "TRUE if the driver is located in an unusual path",
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_VA_API_DRIVER_PROPERTIES,
+                                     va_api_driver_properties);
+}
+
+/**
+ * srt_va_api_driver_new:
+ * @library_path: (transfer none): the path to the library
+ * @is_extra: if the DRI driver is in an unusual path
+ *
+ * Returns: (transfer full): a new VA-API driver
+ */
+static SrtVaApiDriver *
+srt_va_api_driver_new (const gchar *library_path,
+                       gboolean is_extra)
+{
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_VA_API_DRIVER,
+                       "library-path", library_path,
+                       "is-extra", is_extra,
+                       NULL);
+}
+
+/**
+ * srt_va_api_driver_get_library_path:
+ * @self: The VA-API driver
+ *
+ * Return the library path for this VA-API driver.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtVaApiDriver:library-path
+ */
+const gchar *
+srt_va_api_driver_get_library_path (SrtVaApiDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), NULL);
+  return self->library_path;
+}
+
+/**
+ * srt_va_api_driver_is_extra:
+ * @self: The VA-API driver
+ *
+ * Return a gboolean that indicates if the VA-API is in an unusual position.
+ *
+ * Returns: %TRUE if the VA-API driver is in an unusual position.
+ */
+gboolean
+srt_va_api_driver_is_extra (SrtVaApiDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), FALSE);
+  return self->is_extra;
+}
+
+/*
+ * _srt_list_va_api_drivers:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ *
+ * Implementation of srt_system_info_list_va_api_drivers().
+ *
+ * The returned list will have the most-preferred directories first and the
+ * least-preferred directories last. Within a directory, the drivers will be in
+ * lexicographic order, for example `nouveau_drv_video.so`, `r600_drv_video.so`,
+ * `radeonsi_drv_video.so` in that order.
+ *
+ * Returns: (transfer full) (element-type SrtVaApiDriver) (nullable): A list of
+ *  opaque #SrtVaApiDriver objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+_srt_list_va_api_drivers (gchar **envp,
+                          const char *helpers_path,
+                          const char *multiarch_tuple)
+{
+  GList *drivers = NULL;
+
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_VAAPI_MODULE, &drivers);
+
+  return g_list_reverse (drivers);
 }
 
 /**

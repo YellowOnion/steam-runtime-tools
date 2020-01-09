@@ -2717,8 +2717,30 @@ _srt_get_modules_full (gchar **envp,
       gchar *libdir;
       gchar *dri_path;
       GList *extras = NULL;
-      _srt_check_library_presence (helpers_path, loader_libraries[i], multiarch_tuple, NULL, NULL,
-                                   envp, SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, &library_details);
+      SrtLibraryIssues issues;
+
+      issues = _srt_check_library_presence (helpers_path,
+                                            loader_libraries[i],
+                                            multiarch_tuple,
+                                            NULL,   /* symbols path */
+                                            NULL,   /* hidden dependencies */
+                                            envp,
+                                            SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
+                                            &library_details);
+
+      if (issues & (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                    SRT_LIBRARY_ISSUES_INTERNAL_ERROR |
+                    SRT_LIBRARY_ISSUES_TIMEOUT))
+        {
+          const char *messages = srt_library_get_messages (library_details);
+
+          if (messages == NULL || messages[0] == '\0')
+            messages = "(no diagnostic output)";
+
+          g_debug ("Unable to load library %s: %s",
+                   loader_libraries[i],
+                   messages);
+        }
 
       const gchar *loader_path = srt_library_get_absolute_path (library_details);
       if (loader_path == NULL)

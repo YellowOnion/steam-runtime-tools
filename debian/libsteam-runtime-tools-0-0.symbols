@@ -1,10 +1,14 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
  _srt_filter_gameoverlayrenderer@Base 0.20190822.0
- _srt_unblock_signals@Base 0.20200801.0
+ _srt_unblock_signals@Base 0.20200109.0
  srt_architecture_can_run_i386@Base 0.20190717.0
  srt_architecture_can_run_x86_64@Base 0.20190717.0
  srt_check_library_presence@Base 0.20190801.0
+ srt_dri_driver_get_library_path@Base 0.20200109.0
+ srt_dri_driver_get_type@Base 0.20200109.0
+ srt_dri_driver_is_extra@Base 0.20200109.0
+ srt_driver_flags_get_type@Base 0.20200109.0
  srt_egl_icd_check_error@Base 0.20190926.0
  srt_egl_icd_get_json_path@Base 0.20190926.0
  srt_egl_icd_get_library_path@Base 0.20190926.0
@@ -77,10 +81,12 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_get_runtime_issues@Base 0.20190816.0
  srt_system_info_get_steam_issues@Base 0.20190816.0
  srt_system_info_get_type@Base 0.20190801.0
+ srt_system_info_list_dri_drivers@Base 0.20200109.0
  srt_system_info_list_egl_icds@Base 0.20190926.0
  srt_system_info_list_pinned_libs_32@Base 0.20191024.0
  srt_system_info_list_pinned_libs_64@Base 0.20191024.0
  srt_system_info_list_pressure_vessel_overrides@Base 0.20191024.0
+ srt_system_info_list_va_api_drivers@Base 0.20200109.0
  srt_system_info_list_vulkan_icds@Base 0.20190926.0
  srt_system_info_new@Base 0.20190801.0
  srt_system_info_set_environ@Base 0.20190816.0
@@ -89,6 +95,9 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_set_primary_multiarch_tuple@Base 0.20190909.0
  srt_system_info_set_test_flags@Base 0.20190909.0
  srt_test_flags_get_type@Base 0.20190909.0
+ srt_va_api_driver_get_library_path@Base 0.20200109.0
+ srt_va_api_driver_get_type@Base 0.20200109.0
+ srt_va_api_driver_is_extra@Base 0.20200109.0
  srt_vulkan_icd_check_error@Base 0.20190926.0
  srt_vulkan_icd_get_api_version@Base 0.20190926.0
  srt_vulkan_icd_get_json_path@Base 0.20190926.0

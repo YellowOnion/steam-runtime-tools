@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20200109.0-0+steamrt1.1) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Enumerate Mesa DRI and VA-API drivers.
+    Previously we were listing only ICDs (graphics drivers).
+    With this commit we are now able to get a more complete vision of the
+    running system listing also Mesa DRI and VA-API drivers.
+
+  [ Simon McVittie ]
+  * Consistently call _srt_check_not_setuid() before looking at the
+    environment
+  * build: Consistently sort dependencies in stack order
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 09 Jan 2020 17:44:02 +0000
+
 steam-runtime-tools (0.20200108.0-0+steamrt1.1) scout; urgency=medium
 
   * SrtSystemInfo: Document that we need SIGCHLD

@@ -220,6 +220,12 @@ typedef struct
   GHashTable *cached_graphics_results;
   SrtGraphicsIssues cached_combined_graphics_issues;
   gboolean graphics_cache_available;
+
+  GList *cached_dri_list;
+  gboolean dri_cache_available;
+
+  GList *cached_va_api_list;
+  gboolean va_api_cache_available;
 } Abi;
 
 static Abi *
@@ -248,6 +254,10 @@ ensure_abi (SrtSystemInfo *self,
   abi->libraries_cache_available = FALSE;
   abi->cached_graphics_results = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_object_unref);
   abi->cached_combined_graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
+  abi->cached_dri_list = NULL;
+  abi->dri_cache_available = FALSE;
+  abi->cached_va_api_list = NULL;
+  abi->va_api_cache_available = FALSE;
 
   /* transfer ownership to self->abis */
   g_ptr_array_add (self->abis, abi);
@@ -263,6 +273,9 @@ abi_free (gpointer self)
 
   if (abi->cached_graphics_results != NULL)
     g_hash_table_unref (abi->cached_graphics_results);
+
+  g_list_free_full (abi->cached_dri_list, g_object_unref);
+  g_list_free_full (abi->cached_va_api_list, g_object_unref);
 
   g_slice_free (Abi, self);
 }
@@ -1145,6 +1158,7 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
                                                                           multiarch_tuple,
                                                                           symbols_file,
                                                                           (const gchar * const *)hidden_deps,
+                                                                          NULL,
                                                                           SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                                                           &library);
               g_hash_table_insert (abi->cached_results, soname, library);
@@ -1282,6 +1296,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
                                                         multiarch_tuple,
                                                         symbols_file,
                                                         (const gchar * const *)hidden_deps,
+                                                        NULL,
                                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                                         &library);
                   g_hash_table_insert (abi->cached_results, soname_found, library);
@@ -1305,6 +1320,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
   issues = _srt_check_library_presence (self->helpers_path,
                                         soname,
                                         multiarch_tuple,
+                                        NULL,
                                         NULL,
                                         NULL,
                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
@@ -1362,6 +1378,42 @@ forget_graphics_results (SrtSystemInfo *self)
       g_hash_table_remove_all (abi->cached_graphics_results);
       abi->cached_combined_graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
       abi->graphics_cache_available = FALSE;
+    }
+}
+
+/*
+ * Forget any cached information about mesa DRI drivers.
+ */
+static void
+forget_dris (SrtSystemInfo *self)
+{
+  gsize i;
+
+  for (i = 0; i < self->abis->len; i++)
+    {
+      Abi *abi = g_ptr_array_index (self->abis, i);
+
+      g_list_free_full (abi->cached_dri_list, g_object_unref);
+      abi->cached_dri_list = NULL;
+      abi->dri_cache_available = FALSE;
+    }
+}
+
+/*
+ * Forget any cached information about VA-API drivers.
+ */
+static void
+forget_va_apis (SrtSystemInfo *self)
+{
+  gsize i;
+
+  for (i = 0; i < self->abis->len; i++)
+    {
+      Abi *abi = g_ptr_array_index (self->abis, i);
+
+      g_list_free_full (abi->cached_va_api_list, g_object_unref);
+      abi->cached_va_api_list = NULL;
+      abi->va_api_cache_available = FALSE;
     }
 }
 
@@ -1515,6 +1567,8 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
+  forget_dris (self);
+  forget_va_apis (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2090,6 +2144,8 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
+  forget_dris (self);
+  forget_va_apis (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2418,6 +2474,116 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
 
   for (iter = self->icds.vulkan; iter != NULL; iter = iter->next)
     ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_dri_drivers:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch
+ *  tuple such as %SRT_ABI_X86_64
+ * @flags: Filter the list of DRI drivers accordingly to these flags.
+ *  For example, "extra" drivers that are unlikely to be found by
+ *  the Mesa DRI loader will only be included if the
+ *  %SRT_DRIVER_FLAGS_INCLUDE_ALL flag is set.
+ *
+ * List of the available Mesa DRI modules.
+ *
+ * For the search $LIBGL_DRIVERS_PATH will be used if set.
+ * Otherwise some implementation-dependent paths will be used instead.
+ *
+ * Note that if `$LIBGL_DRIVERS_PATH` is set, all drivers outside that
+ * path will be treated as "extra", and omitted from the list unless
+ * %SRT_DRIVER_FLAGS_INCLUDE_ALL is used.
+ *
+ * Returns: (transfer full) (element-type SrtDriDriver) (nullable): A list of
+ *  opaque #SrtDriDriver objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_dri_drivers (SrtSystemInfo *self,
+                                  const char *multiarch_tuple,
+                                  SrtDriverFlags flags)
+{
+  Abi *abi = NULL;
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  abi = ensure_abi (self, multiarch_tuple);
+
+  if (!abi->dri_cache_available)
+    {
+      abi->cached_dri_list = _srt_list_dri_drivers (self->env,
+                                                    self->helpers_path,
+                                                    multiarch_tuple);
+      abi->dri_cache_available = TRUE;
+    }
+
+  for (iter = abi->cached_dri_list; iter != NULL; iter = iter->next)
+    {
+      if ((flags & SRT_DRIVER_FLAGS_NONE) && srt_dri_driver_is_extra (iter->data))
+        continue;
+      ret = g_list_prepend (ret, g_object_ref (iter->data));
+    }
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_va_api_drivers:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch
+ *  tuple such as %SRT_ABI_X86_64
+ * @flags: Filter the list of VA-API drivers accordingly to these flags.
+ *  For example, "extra" drivers that are unlikely to be found by
+ *  the VA-API loader will only be included if the
+ *  %SRT_DRIVER_FLAGS_INCLUDE_ALL flag is set.
+ *
+ * List of the available VA-API drivers.
+ *
+ * For the search $LIBVA_DRIVERS_PATH will be used if set.
+ * Otherwise some implementation-dependent paths will be used instead.
+ *
+ * Note that if `$LIBVA_DRIVERS_PATH` is set, all drivers outside that
+ * path will be treated as "extra", and omitted from the list unless
+ * %SRT_DRIVER_FLAGS_INCLUDE_ALL is used.
+ *
+ * Returns: (transfer full) (element-type SrtVaApiDriver) (nullable): A list of
+ *  opaque #SrtVaApiDriver objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
+                                     const char *multiarch_tuple,
+                                     SrtDriverFlags flags)
+{
+  Abi *abi = NULL;
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  abi = ensure_abi (self, multiarch_tuple);
+
+  if (!abi->va_api_cache_available)
+    {
+      abi->cached_va_api_list = _srt_list_va_api_drivers (self->env,
+                                                          self->helpers_path,
+                                                          multiarch_tuple);
+      abi->va_api_cache_available = TRUE;
+    }
+
+  for (iter = abi->cached_va_api_list; iter != NULL; iter = iter->next)
+    {
+      if ((flags & SRT_DRIVER_FLAGS_NONE) && srt_va_api_driver_is_extra (iter->data))
+        continue;
+      ret = g_list_prepend (ret, g_object_ref (iter->data));
+    }
 
   return g_list_reverse (ret);
 }

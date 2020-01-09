@@ -12,6 +12,7 @@ variables:
         debhelper
         glslang-tools
         gtk-doc-tools
+        libelf-dev
         libegl1-mesa-dev
         libgl1-mesa-dev
         libgles2-mesa-dev

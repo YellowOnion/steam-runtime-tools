@@ -155,6 +155,34 @@ gboolean srt_egl_icd_write_to_file (SrtEglIcd *self,
                                     const char *path,
                                     GError **error);
 
+typedef struct _SrtDriDriver SrtDriDriver;
+typedef struct _SrtDriDriverClass SrtDriDriverClass;
+
+#define SRT_TYPE_DRI_DRIVER (srt_dri_driver_get_type ())
+#define SRT_DRI_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_DRI_DRIVER, SrtDriDriver))
+#define SRT_DRI_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_DRI_DRIVER, SrtDriDriverClass))
+#define SRT_IS_DRI_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_DRI_DRIVER))
+#define SRT_IS_DRI_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_DRI_DRIVER))
+#define SRT_DRI_DRIVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_DRI_DRIVER, SrtDriDriverClass)
+GType srt_dri_driver_get_type (void);
+
+const gchar *srt_dri_driver_get_library_path (SrtDriDriver *self);
+gboolean srt_dri_driver_is_extra (SrtDriDriver *self);
+
+typedef struct _SrtVaApiDriver SrtVaApiDriver;
+typedef struct _SrtVaApiDriverClass SrtVaApiDriverClass;
+
+#define SRT_TYPE_VA_API_DRIVER (srt_va_api_driver_get_type ())
+#define SRT_VA_API_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_VA_API_DRIVER, SrtVaApiDriver))
+#define SRT_VA_API_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_VA_API_DRIVER, SrtVaApiDriverClass))
+#define SRT_IS_VA_API_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VA_API_DRIVER))
+#define SRT_IS_VA_API_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VA_API_DRIVER))
+#define SRT_VA_API_DRIVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VA_API_DRIVER, SrtVaApiDriverClass)
+GType srt_va_api_driver_get_type (void);
+
+const gchar *srt_va_api_driver_get_library_path (SrtVaApiDriver *self);
+gboolean srt_va_api_driver_is_extra (SrtVaApiDriver *self);
+
 typedef struct _SrtVulkanIcd SrtVulkanIcd;
 typedef struct _SrtVulkanIcdClass SrtVulkanIcdClass;
 
@@ -181,5 +209,7 @@ gboolean srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphics, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglIcd, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDriDriver, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVaApiDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVulkanIcd, g_object_unref)
 #endif

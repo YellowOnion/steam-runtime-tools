@@ -282,4 +282,49 @@ executable(
   install_dir: tests_dir
 )
 
+executable(
+  'mock-debian-x86_64-inspect-library',
+  'mock-debian-x86_64-inspect-library.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-debian-i386-inspect-library',
+  'mock-debian-i386-inspect-library.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-fedora-64-bit-inspect-library',
+  'mock-fedora-64-bit-inspect-library.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-fedora-32-bit-inspect-library',
+  'mock-fedora-32-bit-inspect-library.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-abi-inspect-library',
+  'mock-abi-inspect-library.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
 # vim:set sw=2 sts=2 et:

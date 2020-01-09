@@ -413,6 +413,34 @@ keys:
             :   The test to see if drawing works for the given graphics mode
                 had an error and was unable to draw.
 
+    **dri_drivers**
+    :   An array of objects describing the Mesa DRI driver modules that have been
+        found. These drivers are used by Mesa and by older versions of Xorg.
+        Every object can have the following keys:
+
+        **library_path**
+        :   Path to the driver module that has been found.
+
+        **is_extra**
+        :   A boolean value indicating whether the driver module is in an
+            "unusual" location, probably not in the canonical search path.
+            This key is optional and if is not provided, the default %FALSE
+            value should be assumed.
+
+    **va-api_drivers**
+    :   An array of objects describing the VA-API driver modules that have been
+        found. These drivers are used by the VA-API, either `libva.so.2` (the
+        current version) or `libva.so.1` (a legacy version).
+        Every object can have the following keys:
+
+        **library_path**
+        :   Path to the driver module that has been found.
+
+        **is_extra**
+        :   A boolean value indicating whether the driver module is in an
+            "unusual" location, probably not in the canonical search path.
+            This key is optional and if is not provided, the default %FALSE
+            value should be assumed.
 
 **locale-issues**
 :   An array of strings indicating locale-related issues.

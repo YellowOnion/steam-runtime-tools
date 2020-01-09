@@ -2454,8 +2454,8 @@ _srt_get_extra_modules_directory (const gchar *library_search_path,
         g_return_val_if_reached (NULL);
     }
 
-  ret = g_list_prepend (ret, g_build_filename (dir, "lib", NULL));
-  ret = g_list_prepend (ret, g_build_filename (dir, libqual, NULL));
+  ret = g_list_prepend (ret, g_build_filename (dir, "lib", "dri", NULL));
+  ret = g_list_prepend (ret, g_build_filename (dir, libqual, "dri", NULL));
 
 out:
   g_free (lib_multiarch);

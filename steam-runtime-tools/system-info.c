@@ -762,6 +762,8 @@ ensure_overrides_cached (SrtSystemInfo *self)
   int exit_status = -1;
   GError *error = NULL;
 
+  g_return_if_fail (_srt_check_not_setuid ());
+
   if (!self->overrides.have_data)
     {
       if (self->env != NULL)
@@ -865,6 +867,8 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
   gchar *runtime = NULL;
   int exit_status = -1;
   GError *error = NULL;
+
+  g_return_if_fail (_srt_check_not_setuid ());
 
   if (!self->pinned_libs.have_data)
     {

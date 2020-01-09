@@ -2593,6 +2593,7 @@ _srt_get_modules_full (gchar **envp,
 
   g_return_if_fail (multiarch_tuple != NULL);
   g_return_if_fail (drivers_out != NULL);
+  g_return_if_fail (_srt_check_not_setuid ());
 
   switch (module)
     {

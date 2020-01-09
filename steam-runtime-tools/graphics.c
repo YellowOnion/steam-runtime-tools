@@ -2388,8 +2388,12 @@ _srt_get_library_class (const gchar *library)
   class = gelf_getclass (elf);
 
 out:
-  elf_end (elf);
-  close (fd);
+  if (elf != NULL)
+    elf_end (elf);
+
+  if (fd >= 0)
+    close (fd);
+
   return class;
 }
 

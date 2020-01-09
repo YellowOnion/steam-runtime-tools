@@ -16,6 +16,7 @@ import unittest
 
 try:
     import typing
+    typing      # placate pyflakes
 except ImportError:
     pass
 
@@ -72,6 +73,13 @@ class TestPressureVessel(unittest.TestCase):
         # Path to an unpacked LD_LIBRARY_PATH runtime, or None.
         self.ld_library_path_runtime = os.getenv(
             'TEST_CONTAINER_RUNTIME_LD_LIBRARY_PATH_RUNTIME',
+            None,
+        )       # type: typing.Optional[str]
+
+        # Path to an unpacked steamrt source package for the target
+        # suite, or None.
+        self.steamrt_source = os.getenv(
+            'TEST_CONTAINER_RUNTIME_STEAMRT_SOURCE',
             None,
         )       # type: typing.Optional[str]
 
@@ -260,11 +268,11 @@ class TestPressureVessel(unittest.TestCase):
 
         self.get_runtime_build_id()
 
-    def test_pressure_vessel(
+    def get_pressure_vessel_adverb(
         self,
-        artifact_prefix='s-r-s-i-inside',
         ld_library_path_runtime=None        # type: typing.Optional[str]
-    ) -> None:
+    ):
+        # type: (...) -> typing.List[str]
         if self.runtime_suite == 'scout':
             adverb = [
                 os.path.join(self.depot, 'run-in-scout'),
@@ -294,6 +302,15 @@ class TestPressureVessel(unittest.TestCase):
             adverb = [
                 os.path.join(ld_library_path_runtime, 'run.sh'),
             ] + adverb
+
+        return adverb
+
+    def test_pressure_vessel(
+        self,
+        artifact_prefix='s-r-s-i-inside',
+        ld_library_path_runtime=None        # type: typing.Optional[str]
+    ) -> None:
+        adverb = self.get_pressure_vessel_adverb(ld_library_path_runtime)
 
         with self.catch('cat /etc/os-release in container'):
             completed = self.run_subprocess(
@@ -476,6 +493,39 @@ class TestPressureVessel(unittest.TestCase):
             self.skipTest(
                 'TEST_CONTAINER_RUNTIME_LD_LIBRARY_PATH_RUNTIME not provided'
             )
+
+    def test_steamrt_platform(
+        self,
+    ) -> None:
+        if self.steamrt_source is None:
+            self.skipTest(
+                'TEST_CONTAINER_RUNTIME_STEAMRT_SOURCE not provided'
+            )
+            return
+
+        if not os.path.exists(
+            os.path.join(self.steamrt_source, 'debian', 'tests', 'platform')
+        ):
+            self.skipTest(
+                'No script at '
+                '$TEST_CONTAINER_RUNTIME_STEAMRT_SOURCE/debian/tests/platform'
+            )
+            return
+
+        adverb = self.get_pressure_vessel_adverb()
+
+        with open(
+            os.path.join(self.artifacts, 'platform.log'),
+            'w',
+        ) as writer:
+            with self.catch('run steamrt platform test in container'):
+                self.run_subprocess(
+                    adverb + ['debian/tests/platform'],
+                    cwd=self.steamrt_source,
+                    stdout=writer,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                )
 
     def tearDown(self) -> None:
         pass

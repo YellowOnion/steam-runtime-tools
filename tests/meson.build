@@ -86,7 +86,7 @@ foreach test_name : tests
     c_args : [
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],
-    dependencies : [glib, gobject, libsteamrt_dep, json_glib],
+    dependencies : [glib, gobject, json_glib, libsteamrt_dep],
     include_directories : project_include_dirs,
     install : get_option('installed_tests'),
     install_dir : tests_dir,

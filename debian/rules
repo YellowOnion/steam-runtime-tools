@@ -62,6 +62,7 @@ override_dh_auto_build:
 
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
+	debian/check-version-number.sh $(CURDIR)/builddir $(DEB_VERSION_UPSTREAM)
 	mkdir debian/locales
 	localedef -f UTF-8 -i en_US --no-archive debian/locales/en_US.UTF-8
 	env LOCPATH=$(CURDIR)/debian/locales LC_ALL=en_US.UTF-8 \

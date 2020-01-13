@@ -30,12 +30,7 @@ todo:
     # Succeed if grep fails (no failing or expected-failure tests),
     # fail if grep succeeds
     script: |
-        set -eu
-        fail=
-        if grep -B10 '^not ok\b' qa-buster.log; then fail=yes; fi
-        if grep -B10 '^not ok\b' qa-stretch.log; then fail=yes; fi
-        if grep -B10 '^not ok\b' qa-brewmaster.log; then fail=yes; fi
-        if [ -n "$fail" ]; then exit 1; fi
+        ! grep -B10 '^not ok\b' qa-buster.log
     # Failure is just a warning
     allow_failure: true
 

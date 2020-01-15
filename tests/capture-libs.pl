@@ -297,14 +297,52 @@ SKIP: {
     diag "ld.so is $ld_so";
 
     run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--resolve-ld.so=/'], '>', \$stdout);
+    my $resolved = $stdout;
+    chomp $resolved;
 
-    is($stdout, abs_path($ld_so)."\n",
-        '--resolve-ld.so=/ should print '.abs_path($ld_so));
+    is(abs_path($resolved), abs_path($ld_so),
+       '--resolve-ld.so=/ should print a path to '.abs_path($ld_so));
+    ok(! -l $resolved,
+       '--resolve-ld.so=/ should not print a symlink');
+
+    # Autotools considers an unexpected pass to be a test failure, so we
+    # have to second-guess whether this is going to work.
+    if ($stdout eq abs_path($ld_so)."\n") {
+        is($stdout, abs_path($ld_so)."\n",
+           '--resolve-ld.so=/ should print '.abs_path($ld_so));
+    }
+    else {
+        TODO: {
+            local $TODO = 'symlinks before the last component are not resolved, '
+                .'e.g. /lib64 -> usr/lib on Arch Linux';
+            is($stdout, abs_path($ld_so)."\n",
+               '--resolve-ld.so=/ should print '.abs_path($ld_so));
+        }
+    }
+
     run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
             $CAPSULE_CAPTURE_LIBS_TOOL, "--resolve-ld.so=$host"],
         '>', \$stdout);
-    is($stdout, abs_path($ld_so)."\n",
-        "--resolve-ld.so=$host should print ".abs_path($ld_so));
+    $resolved = $stdout;
+    chomp $resolved;
+
+    is(abs_path($resolved), abs_path($ld_so),
+       "--resolve-ld.so=$host should print a path to ".abs_path($ld_so));
+    ok(! -l $resolved,
+       "--resolve-ld.so=$host should not print a symlink");
+
+    if ($stdout eq abs_path($ld_so)."\n") {
+        is($stdout, abs_path($ld_so)."\n",
+           "--resolve-ld.so=$host should print ".abs_path($ld_so));
+    }
+    else {
+        TODO: {
+            local $TODO = 'symlinks before the last component are not resolved, '
+                .'e.g. /lib64 -> usr/lib on Arch Linux';
+            is($stdout, abs_path($ld_so)."\n",
+               "--resolve-ld.so=$host should print ".abs_path($ld_so));
+        }
+    }
 };
 
 SKIP: {

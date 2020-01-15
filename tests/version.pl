@@ -52,7 +52,7 @@ $path = $4;
 is($root, $host);
 is($soname, 'libz.so.1');
 like($version, qr{^1\.[0-9]+\.[0-9]+$});
-like($path, qr{^\Q$host\E(/(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+like($path, qr{^\Q$host\E(/(?:usr/)?lib(?:32|64|x32|/.*-linux-gnu.*)?/libz\.so\.\Q$version\E)$});
 $path =~ s/^\Q$host\E//;
 ok(-e $path);
 
@@ -71,7 +71,7 @@ TODO: {
     local $TODO = 'returns 1 for some reason';
     like($version, qr{^1\.[0-9]+\.[0-9]+$});
 }
-like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+like($path, qr{^(/?(?:usr/)?lib(?:32|64|x32|/.*-linux-gnu.*)?/libz\.so\.\Q$version\E)$});
 ok(-e $1);
 
 # A different way
@@ -89,7 +89,7 @@ TODO: {
     local $TODO = 'returns 1 for some reason';
     like($version, qr{^1\.[0-9]+\.[0-9]+$});
 }
-like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$version\E)$});
+like($path, qr{^(/?(?:usr/)?lib(?:32|64|x32|/.*-linux-gnu.*)?/libz\.so\.\Q$version\E)$});
 ok(-e $path);
 
 # Another different way
@@ -108,7 +108,7 @@ TODO: {
     local $TODO = 'returns 1 for some reason';
     like($version, qr{^1\.[0-9]+\.[0-9]+$});
 }
-like($path, qr{^(/?(?:usr/)?lib/.*-linux-gnu.*/libz\.so\.\Q$3\E)$});
+like($path, qr{^(/?(?:usr/)?lib(?:32|64|x32|/.*-linux-gnu.*)?/libz\.so\.\Q$3\E)$});
 ok(-e $path);
 
 done_testing;

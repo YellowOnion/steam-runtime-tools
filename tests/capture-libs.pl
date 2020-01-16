@@ -41,7 +41,7 @@ my $host = "${test_tempdir}/host";
 mkdir($host);
 my $libdir = "${test_tempdir}/libdir";
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, 'soname:libc.so.6'], '>&2',
     init => sub { chdir $libdir or die $!; });
@@ -65,7 +65,7 @@ my @libc_family;
     }
 }
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
         "--dest=$libdir", 'soname-match:libc.so.6'], '>&2');
@@ -82,7 +82,7 @@ run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
 like(readlink "$libdir/libc.so.6", qr{^/run/host\Q$libc\E$},
      '$libdir/libc.so.6 is a symlink to /run/host + realpath of libc.so.6');
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -103,7 +103,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
 like(readlink "$libdir/libc.so.6", qr{^\Q$host\E\Q$libc\E$},
      '$libdir/libc.so.6 is a symlink to $host + realpath of libc.so.6');
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -124,7 +124,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
 like(readlink "$libdir/libc.so.6", qr{^/run/host\Q$libc\E$},
      '$libdir/libc.so.6 is a symlink to /run/host + realpath of libc.so.6');
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -143,7 +143,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
 like(readlink "$libdir/libjpeg.so.62", qr{^$LIBDIR/libjpeg\.so\.62(?:[0-9.]+)$},
      '$libdir/libjpeg.so.62 is a symlink to /run/host + realpath of libjpeg-6b');
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 my $stderr;
 my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
@@ -156,7 +156,7 @@ my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
 ok(! $result, 'a non-matching wildcard should fail');
 like($stderr, qr{"this\*library\*does\?not\?exist"});
 
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -167,7 +167,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
 
 # libgobject-2.0.so.0 depends on libglib-2.0.so.0 so normally,
 # capturing GObject captures GLib
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -192,7 +192,7 @@ like(readlink "$libdir/libglib-2.0.so.0",
 
 # only-dependencies: captures the dependency, GLib but not the
 # dependent library, GObject
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -216,7 +216,7 @@ like(readlink "$libdir/libglib-2.0.so.0",
 
 # no-dependencies: captures the dependent library, GObject but not the
 # dependency, GLib (not amazingly useful)
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -240,7 +240,7 @@ ok(! -e "$libdir/libglib-2.0.so.0",
 
 # --no-glibc doesn't capture glibc even if other dependencies are
 # captured
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
@@ -266,7 +266,7 @@ ok(! -e "$libdir/libc.so.6",
    '--no-glibc does not capture libc.so.6');
 
 # only-dependencies:no-dependencies: (either way round) is completely useless
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                        '--bind', $libdir, $libdir,
@@ -276,7 +276,7 @@ $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                        'only-dependencies:no-dependencies:libglib-2.0.so.0'],
                        '>&2');
 ok(! $result, 'only-dependencies:no-dependencies: is useless');
-ok(! system('rm', '-fr', $libdir));
+run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                        '--bind', $libdir, $libdir,
@@ -364,7 +364,7 @@ SKIP: {
         unless -e "/usr/lib/$other_multiarch/libjpeg.so.62";
 
     # Normally, the wrong ABI is an error...
-    ok(! system('rm', '-fr', $libdir));
+    run_ok(['rm', '-fr', $libdir]);
     mkdir($libdir);
     $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                            '--bind', $libdir, $libdir,
@@ -378,7 +378,7 @@ SKIP: {
 
     # ... but when we're dealing with a glob match, other ABIs are silently
     # ignored.
-    ok(! system('rm', '-fr', $libdir));
+    run_ok(['rm', '-fr', $libdir]);
     mkdir($libdir);
     $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                            '--bind', $libdir, $libdir,
@@ -391,7 +391,7 @@ SKIP: {
     ok(! -e "$libdir/libjpeg.so.62");
 
     # We can also ignore this case explicitly.
-    ok(! system('rm', '-fr', $libdir));
+    run_ok(['rm', '-fr', $libdir]);
     mkdir($libdir);
     $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                            '--bind', $libdir, $libdir,

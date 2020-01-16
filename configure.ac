@@ -57,6 +57,15 @@ AC_CHECK_FUNCS_ONCE([secure_getenv])
 
 AM_CONDITIONAL([ENABLE_SHARED], [test "x$enable_shared" = xyes])
 
+AC_ARG_ENABLE([library],
+  [AS_HELP_STRING([--enable-library],
+                  [build the libcapsule library (disable if you only want CLI tools)])],
+  [],
+  [enable_library="$enable_shared"])
+AS_IF([test "x$enable_shared" != xyes && test "x$enable_library" = xyes],
+      [AC_MSG_ERROR([libcapsule is only useful as a shared library])])
+AM_CONDITIONAL([ENABLE_LIBRARY], [test "x$enable_library" = xyes])
+
 dnl make sure we've got the _right_ libelf (doesn't always ship a .pc)
 PKG_CHECK_MODULES([LIBELF], [libelf >= 0.152], [have_libelf=yes], [
     AC_MSG_WARN([libelf.pc not found])

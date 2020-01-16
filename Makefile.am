@@ -28,7 +28,7 @@ static_docs             = Building Debugging Limitations Quick-Start Capsules
 
 # installable items:
 bin_PROGRAMS            = capsule-capture-libs capsule-symbols capsule-version
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 dist_bin_SCRIPTS        = data/capsule-init-project
 lib_LTLIBRARIES         = libcapsule.la
 pkgconfigdir            = $(libdir)/pkgconfig
@@ -43,7 +43,7 @@ tools_ldflags           = -Wl,-rpath,$(enable_tools_rpath)
 endif
 
 if ENABLE_HOST_PREFIX
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 bin_SCRIPTS             = data/$(HOST_PREFIX)capsule-mkstublib
 
 # Write out a version of capsule-mkstublib with different defaults
@@ -72,12 +72,12 @@ uninstall-hook-host-prefix:
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-symbols
 	cd $(DESTDIR)$(bindir) && rm -f $(HOST_PREFIX)capsule-version
 else
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 dist_bin_SCRIPTS            += data/capsule-mkstublib
 endif
 endif
 
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 # Headers to be included by shim libraries
 nobase_include_HEADERS += capsule/capsule-shim.h \
                           capsule/_int_dlopen.h
@@ -115,7 +115,7 @@ capsule_version_SOURCES = utils/print-version.c utils/tools.c utils/tools.h
 capsule_version_LDADD   = utils/libld.la
 capsule_version_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 libcapsule_la_SOURCES   = capsule/capsule-dlmopen.c  \
                           capsule/capsule-relocate.c \
                           capsule/capsule-init.c     \
@@ -153,7 +153,7 @@ include $(top_srcdir)/data/disabled.mk
 
 insttestsdir                         = $(libexecdir)/installed-tests/$(PACKAGE_TARNAME)
 
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 # /!\ Order is important here: the helper library must come first
 nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
                                        tests/green/libhelper.la                \
@@ -256,7 +256,7 @@ maintainer-update-gl-shims:
 		: > $(abs_top_srcdir)/examples/shim/"$$lib.symbols.updated-for"; \
 	done
 
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
@@ -356,7 +356,7 @@ AM_TESTS_ENVIRONMENT                 = export CAPSULE_CAPTURE_LIBS_TOOL="$(abs_b
                                        export MALLOC_CHECK_=2;                 \
                                        export NM="$(NM)";                      \
                                        export PKG_CONFIG_PATH="$(abs_builddir)/data";
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 test_extra_programs                  = tests/notgl-user                        \
                                        tests/notgl-helper-user                 \
                                        tests/notgl-dlopener
@@ -380,7 +380,7 @@ test_scripts                         = tests/capture-libs.pl                   \
                                        tests/symbols.pl                        \
                                        tests/version.pl
 
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 test_scripts                        += tests/gl-shim.pl                        \
                                        tests/init-project.pl                   \
                                        tests/notgl.pl
@@ -410,7 +410,7 @@ $(testmeta_DATA): tests/%.test: tests/% Makefile
 		echo "Exec=env CAPSULE_TESTS_GNU_HOST=$(host) $(insttestsdir)/tests/$*$$maybe_tap"; \
 	) > $@.tmp && mv $@.tmp $@
 
-if ENABLE_SHARED
+if ENABLE_LIBRARY
 # ============================================================================
 # gtk-doc configuration: see /usr/share/doc/gtk-doc-tools/examples/Makefile.am
 DOC_MODULE           = libcapsule

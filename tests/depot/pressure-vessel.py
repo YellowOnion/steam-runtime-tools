@@ -334,6 +334,10 @@ class TestPressureVessel(unittest.TestCase):
             else:
                 logger.info('(no stderr)')
 
+        if self.runtime_suite == 'heavy':
+            # heavy doesn't have (Meson or) steam-runtime-tools yet
+            return
+
         with open(
             os.path.join(self.artifacts, artifact_prefix + '.json'),
             'w',

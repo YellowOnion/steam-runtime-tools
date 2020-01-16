@@ -297,60 +297,6 @@ my %CAPSULE_CAPTURE_LIBS_TOOLS;
 
 =over
 
-=item bind_usr(I<TREE>[, I<DEST>])
-
-Return B<bwrap>(1) arguments that would bind-mount I<TREE> on I<DEST>.
-If I<TREE> has a F<usr> directory, it is assumed to be a complete
-sysroot with F<bin>, F<sbin>, F<lib*> and F<usr> directories, which
-will be mounted on I<DEST>. If not, it is assumed to be a merged
-F</usr>, and will be mounted on I<DEST>F</usr>, with compatibility
-symbolic links in I<DEST> for the F<bin>, F<sbin> and F<lib*>
-subdirectories.
-
-=cut
-
-sub bind_usr {
-    my $tree = shift;
-    my $dest = shift;
-    $dest = '' unless defined $dest;
-    my @bwrap;
-
-    my $has_usr = (-d "$tree/usr");
-
-    if ($has_usr) {
-        push @bwrap, '--ro-bind', "$tree/usr", "$dest/usr";
-    }
-    else {
-        push @bwrap, '--ro-bind', "$tree", "$dest/usr";
-    }
-
-    opendir(my $dir, $tree);
-    while (defined(my $subdir = readdir $dir)) {
-        if ($subdir =~ /^lib/ || $subdir =~ /^s?bin$/) {
-            if ($has_usr) {
-                push @bwrap, '--ro-bind', "$tree/$subdir", "$dest/$subdir";
-            }
-            else {
-                push @bwrap, '--symlink', "usr/$subdir", "$dest/$subdir";
-            }
-        }
-    }
-    closedir $dir;
-
-    if (-e "$tree/etc/ld.so.cache") {
-        push @bwrap, "--ro-bind", "$tree/etc/ld.so.cache",
-            "$dest/etc/ld.so.cache";
-    }
-
-    # TODO: This wouldn't be necessary in a purely glvnd system
-    if (-d "$tree/etc/alternatives") {
-        push @bwrap, "--ro-bind", "$tree/etc/alternatives",
-            "$dest/etc/alternatives";
-    }
-
-    return @bwrap;
-}
-
 =item run_in_container(I<TREE>, I<ARGV>, ...)
 
 Use B<bwrap>(1) to run the command I<ARGV> (an array reference) in I<TREE>,

@@ -31,6 +31,12 @@ use lib $FindBin::Bin;
 
 use CapsuleTest;
 
+sub tolerant_readlink ($)
+{
+    no autodie;
+    return readlink shift;
+}
+
 skip_all_unless_bwrap;
 
 my $LIBDIR = qr{/(?:usr/)?lib(?:32|64|x32)?(?:/\w+-linux-gnu\w*)?(?:/i686)?(?:/cmov)?};
@@ -39,6 +45,8 @@ my $test_tempdir = File::Temp->newdir();
 diag "Working directory: $test_tempdir";
 my $host = "${test_tempdir}/host";
 mkdir($host);
+my $container = "${test_tempdir}/container";
+mkdir($container);
 my $libdir = "${test_tempdir}/libdir";
 
 run_ok(['rm', '-fr', $libdir]);
@@ -403,6 +411,115 @@ SKIP: {
     ok($result, 'library of wrong ABI ignored when using if-same-abi');
     ok(! -e "$libdir/libjpeg.so.62");
 };
+
+SKIP: {
+    my $version1 = "$builddir/tests/version1";
+    $version1 .= '/.libs' if libcapsule_uninstalled;
+    my $version2 = "$builddir/tests/version2";
+    $version2 .= '/.libs' if libcapsule_uninstalled;
+
+    skip "shared libraries disabled", 1 unless -e "$version1/libunversionedsymbols.so.1";
+
+    run_ok(['rm', '-fr', $libdir]);
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / /),
+                           '--tmpfs', $host,
+                           bind_usr('/', $host),
+                           '--tmpfs', $container,
+                           bind_usr('/', $container),
+                           '--ro-bind', $version1, "$host/opt",
+                           '--ro-bind', $version2, "$container/opt",
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           'env', 'CAPSULE_DEBUG=all',
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+                           "--dest=$libdir", "--provider=$host",
+                           "--container=$container",
+                           'path-match:/opt/lib*.so.1'],
+                           '2>', \$stderr, '>&2');
+    diag $stderr;
+    ok($result);
+    is(tolerant_readlink("$libdir/libunversionedabibreak.so.1"),
+       '/run/host/opt/libunversionedabibreak.so.1.0.0',
+       "should take provider's version when neither's symbols are a superset of the other");
+    ok(! -l "$libdir/libunversionednumber.so.1",
+       "should not take provider's version when container's numeric tail is strictly newer");
+    TODO: {
+    local $TODO = 'counting symbols not yet implemented';
+    ok(! -l "$libdir/libunversionedsymbols.so.1",
+       "should not take provider's version when container has strictly more symbols");
+    }
+    is(tolerant_readlink("$libdir/libversionedabibreak.so.1"),
+       '/run/host/opt/libversionedabibreak.so.1.0.0',
+       "should take provider's version when neither's symbol-versions are a superset of the other");
+    ok(! -l "$libdir/libversionedlikedbus.so.1",
+       "should not take provider's older fake libdbus");
+    TODO: {
+    local $TODO = 'comparing versioned symbols not yet implemented';
+    ok(! -l "$libdir/libversionedlikeglibc.so.1",
+       "should not take provider's older fake glibc");
+    }
+    ok(! -l "$libdir/libversionednumber.so.1",
+       "should not take provider's version when container's numeric tail is strictly newer and symbols are equal");
+    TODO: {
+    local $TODO = 'comparing versioned symbols not yet implemented';
+    ok(! -l "$libdir/libversionedsymbols.so.1",
+       "should not take provider's version when container has strictly more symbols");
+    }
+    TODO: {
+    local $TODO = 'comparing versioned symbols not yet implemented';
+    ok(! -l "$libdir/libversionedupgrade.so.1",
+       "should not take provider's version when container has strictly more symbols");
+    }
+
+    # The opposite.
+    run_ok(['rm', '-fr', $libdir]);
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / /),
+                           '--tmpfs', $host,
+                           bind_usr('/', $host),
+                           '--tmpfs', $container,
+                           bind_usr('/', $container),
+                           '--ro-bind', $version1, "$container/opt",
+                           '--ro-bind', $version2, "$host/opt",
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           'env', 'CAPSULE_DEBUG=all',
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+                           "--dest=$libdir", "--provider=$host",
+                           "--container=$container",
+                           'path-match:/opt/lib*.so.1'],
+                           '2>', \$stderr, '>&2');
+    diag $stderr;
+    ok($result);
+    is(tolerant_readlink("$libdir/libunversionedabibreak.so.1"),
+       '/run/host/opt/libunversionedabibreak.so.1.0.0',
+       "should take provider's version when neither's symbols are a superset of the other");
+    is(tolerant_readlink("$libdir/libunversionednumber.so.1"),
+       '/run/host/opt/libunversionednumber.so.1.2.3',
+       "should take provider's version when container's numeric tail is strictly older");
+    is(tolerant_readlink("$libdir/libunversionedsymbols.so.1"),
+       '/run/host/opt/libunversionedsymbols.so.1.0.0',
+       "should take provider's version when it has strictly more symbols than container");
+    is(tolerant_readlink("$libdir/libversionedabibreak.so.1"),
+       '/run/host/opt/libversionedabibreak.so.1.0.0',
+       "should take provider's version when neither's symbol-versions are a superset of the other");
+    is(tolerant_readlink("$libdir/libversionedlikedbus.so.1"),
+       '/run/host/opt/libversionedlikedbus.so.1.2.0',
+       "should take provider's newer fake libdbus");
+    is(tolerant_readlink("$libdir/libversionedlikeglibc.so.1"),
+       '/run/host/opt/libversionedlikeglibc.so.1.0.0',
+       "should take provider's newer fake glibc");
+    is(tolerant_readlink("$libdir/libversionednumber.so.1"),
+       '/run/host/opt/libversionednumber.so.1.2.3',
+       "should take provider's version when its numeric tail is strictly newer and symbols are equal");
+    is(tolerant_readlink("$libdir/libversionedsymbols.so.1"),
+       '/run/host/opt/libversionedsymbols.so.1.0.0',
+       "should take provider's version when it has strictly more symbols");
+    is(tolerant_readlink("$libdir/libversionedupgrade.so.1"),
+       '/run/host/opt/libversionedupgrade.so.1.0.0',
+       "should take provider's version when it has strictly more symbols");
+}
 
 done_testing;
 

@@ -152,10 +152,11 @@ include $(top_srcdir)/data/disabled.mk
 # GNOME-style installed-tests
 
 insttestsdir                         = $(libexecdir)/installed-tests/$(PACKAGE_TARNAME)
+nobase_insttests_LTLIBRARIES         =
 
 if ENABLE_LIBRARY
 # /!\ Order is important here: the helper library must come first
-nobase_insttests_LTLIBRARIES         = tests/red/libhelper.la                  \
+nobase_insttests_LTLIBRARIES        += tests/red/libhelper.la                  \
                                        tests/green/libhelper.la                \
                                        tests/helper/libhelper.la               \
                                        tests/red/libnotgl.la                   \
@@ -333,6 +334,57 @@ tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols d
 		$@
 endif
 
+if ENABLE_SHARED
+nobase_insttests_LTLIBRARIES        += tests/version1/libunversionedabibreak.la \
+                                       tests/version2/libunversionedabibreak.la \
+                                       tests/version1/libunversionednumber.la \
+                                       tests/version2/libunversionednumber.la \
+                                       tests/version1/libunversionedsymbols.la \
+                                       tests/version2/libunversionedsymbols.la \
+                                       tests/version1/libversionedabibreak.la \
+                                       tests/version2/libversionedabibreak.la \
+                                       tests/version1/libversionedlikedbus.la \
+                                       tests/version2/libversionedlikedbus.la \
+                                       tests/version1/libversionedlikeglibc.la \
+                                       tests/version2/libversionedlikeglibc.la \
+                                       tests/version1/libversionednumber.la \
+                                       tests/version2/libversionednumber.la \
+                                       tests/version1/libversionedsymbols.la \
+                                       tests/version2/libversionedsymbols.la \
+                                       tests/version1/libversionedupgrade.la \
+                                       tests/version2/libversionedupgrade.la
+tests_version1_libunversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version2_libunversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version1_libunversionednumber_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version2_libunversionednumber_la_LDFLAGS = -shared -version-number 1:2:3
+tests_version1_libunversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version2_libunversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version1_libversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                 -Wl,--version-script=$(srcdir)/tests/version1/libversionedabibreak.map
+tests_version2_libversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                 -Wl,--version-script=$(srcdir)/tests/version2/libversionedabibreak.map
+tests_version1_libversionedlikedbus_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                 -Wl,--version-script=$(srcdir)/tests/version1/libversionedlikedbus.map
+tests_version2_libversionedlikedbus_la_LDFLAGS = -shared -version-number 1:2:0 \
+                                                 -Wl,--version-script=$(srcdir)/tests/version2/libversionedlikedbus.map
+tests_version1_libversionedlikeglibc_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                  -Wl,--version-script=$(srcdir)/tests/version1/libversionedlikeglibc.map
+tests_version2_libversionedlikeglibc_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                  -Wl,--version-script=$(srcdir)/tests/version2/libversionedlikeglibc.map
+tests_version1_libversionednumber_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                               -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version2_libversionednumber_la_LDFLAGS = -shared -version-number 1:2:3 \
+                                               -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version1_libversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version2_libversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version1_libversionedupgrade_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                -Wl,--version-script=$(srcdir)/tests/version1/libversionedupgrade.map
+tests_version2_libversionedupgrade_la_LDFLAGS = -shared -version-number 1:0:0 \
+                                                -Wl,--version-script=$(srcdir)/tests/version2/libversionedupgrade.map
+endif
+
 LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
                                        $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 LOG_COMPILER                         =
@@ -476,3 +528,12 @@ EXTRA_DIST             += doc/capsule-init-project.xml
 EXTRA_DIST             += doc/capsule-mkstublib.xml
 EXTRA_DIST             += doc/devhelp2man.xslt
 EXTRA_DIST             += tests/glib-tap.sh
+EXTRA_DIST             += tests/libversioned.map
+EXTRA_DIST             += tests/version1/libversionedabibreak.map
+EXTRA_DIST             += tests/version1/libversionedlikedbus.map
+EXTRA_DIST             += tests/version1/libversionedlikeglibc.map
+EXTRA_DIST             += tests/version1/libversionedupgrade.map
+EXTRA_DIST             += tests/version2/libversionedabibreak.map
+EXTRA_DIST             += tests/version2/libversionedlikedbus.map
+EXTRA_DIST             += tests/version2/libversionedlikeglibc.map
+EXTRA_DIST             += tests/version2/libversionedupgrade.map

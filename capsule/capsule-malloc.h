@@ -197,8 +197,6 @@ typedef struct _heap_info
 
 #define chunk_at_offset(p, s)  ((mchunkptr) (((char *) (p)) + (s)))
 
-typedef struct malloc_state *mstate;
-
 #define NONCONTIGUOUS_BIT (2U)
 #define contiguous(M)     (((M)->flags & NONCONTIGUOUS_BIT) == 0)
 #define noncontiguous(M)  (((M)->flags & NONCONTIGUOUS_BIT) != 0)

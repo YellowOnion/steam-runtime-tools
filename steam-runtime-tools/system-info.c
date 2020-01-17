@@ -2529,8 +2529,10 @@ srt_system_info_list_dri_drivers (SrtSystemInfo *self,
 
   for (iter = abi->cached_dri_list; iter != NULL; iter = iter->next)
     {
-      if ((flags & SRT_DRIVER_FLAGS_NONE) && srt_dri_driver_is_extra (iter->data))
+      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
+          srt_dri_driver_is_extra (iter->data))
         continue;
+
       ret = g_list_prepend (ret, g_object_ref (iter->data));
     }
 
@@ -2584,7 +2586,8 @@ srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
 
   for (iter = abi->cached_va_api_list; iter != NULL; iter = iter->next)
     {
-      if ((flags & SRT_DRIVER_FLAGS_NONE) && srt_va_api_driver_is_extra (iter->data))
+      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
+          srt_va_api_driver_is_extra (iter->data))
         continue;
       ret = g_list_prepend (ret, g_object_ref (iter->data));
     }

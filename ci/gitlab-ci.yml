@@ -94,3 +94,43 @@ build:bionic:
     variables:
         BUILD_IMAGE: 'ubuntu:bionic'
         LIBJPEG62: 'libjpeg62'
+
+build:arch:
+    when: manual
+    variables:
+        BUILD_IMAGE: 'archlinux'
+    image: ${BUILD_IMAGE}
+    before_script:
+        # bubblewrap-suid instead of bubblewrap will be necessary on some
+        # kernels.
+        #
+        # Full test coverage is likely to require running with
+        # docker run --privileged, which Gitlab-CI doesn't normally do;
+        # as much as anything, this is here to document what's necessary
+        # to build libcapsule with full test coverage.
+        - |
+            pacman -Syu --needed --noconfirm --noprogressbar \
+            autoconf \
+            autoconf-archive \
+            automake \
+            bubblewrap \
+            chrpath \
+            gcc \
+            glib2 \
+            gtk-doc \
+            libelf \
+            libjpeg6-turbo \
+            libtool \
+            libxslt \
+            make \
+            perl \
+            perl-ipc-run \
+            pkgconf \
+            sudo \
+            ${NULL+}
+    script: |
+        NOCONFIGURE=1 ./autogen.sh
+        ./configure
+        make
+        make check
+        make distcheck

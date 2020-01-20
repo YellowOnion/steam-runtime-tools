@@ -68,7 +68,7 @@ typedef enum
 typedef enum
 {
   SRT_DRIVER_FLAGS_INCLUDE_ALL = (1 << 1),
-  SRT_DRIVER_FLAGS_NONE = (1 << 0)
+  SRT_DRIVER_FLAGS_NONE = 0
 } SrtDriverFlags;
 
 typedef struct _SrtSystemInfo SrtSystemInfo;

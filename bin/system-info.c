@@ -131,6 +131,7 @@ enum
 {
   OPTION_HELP = 1,
   OPTION_EXPECTATION,
+  OPTION_IGNORE_EXTRA_DRIVERS,
   OPTION_VERBOSE,
   OPTION_VERSION,
 };
@@ -138,6 +139,7 @@ enum
 struct option long_options[] =
 {
     { "expectations", required_argument, NULL, OPTION_EXPECTATION },
+    { "ignore-extra-drivers", no_argument, NULL, OPTION_IGNORE_EXTRA_DRIVERS },
     { "verbose", no_argument, NULL, OPTION_VERBOSE },
     { "version", no_argument, NULL, OPTION_VERSION },
     { "help", no_argument, NULL, OPTION_HELP },
@@ -535,6 +537,7 @@ main (int argc,
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
   GList *icds;
   const GList *icd_iter;
+  SrtDriverFlags extra_driver_flags = SRT_DRIVER_FLAGS_INCLUDE_ALL;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
@@ -557,6 +560,10 @@ main (int argc,
                 " Version: %s\n",
                 argv[0], VERSION);
             return 0;
+
+          case OPTION_IGNORE_EXTRA_DRIVERS:
+            extra_driver_flags = SRT_DRIVER_FLAGS_NONE;
+            break;
 
           case OPTION_HELP:
             usage (0);
@@ -836,11 +843,11 @@ main (int argc,
       print_graphics_details (builder, graphics_list);
 
       dri_list = srt_system_info_list_dri_drivers (info, multiarch_tuples[i],
-                                                           SRT_DRIVER_FLAGS_INCLUDE_ALL);
+                                                   extra_driver_flags);
       print_dri_details (builder, dri_list);
 
       va_api_list = srt_system_info_list_va_api_drivers (info, multiarch_tuples[i],
-                                                          SRT_DRIVER_FLAGS_INCLUDE_ALL);
+                                                         extra_driver_flags);
       print_va_api_details (builder, va_api_list);
 
       json_builder_end_object (builder); // End multiarch_tuple object

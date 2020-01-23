@@ -35,7 +35,7 @@
 #include <gio/gio.h>
 
 #include "glib-backports.h"
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"
 #include "utils.h"

@@ -95,6 +95,10 @@ project_warning_cflags = [
     '-Wsign-compare',
 ]
 
+project_include_dirs = include_directories(
+    '.',
+    'subprojects',
+)
 
 c_compiler = meson.get_compiler('c')
 supported_warning_cflags = c_compiler.get_supported_arguments(warning_cflags)
@@ -186,6 +190,7 @@ executable(
     dependency('gio-unix-2.0', required : true),
     subproject('libglnx').get_variable('libglnx_dep'),
   ],
+  include_directories : project_include_dirs,
   install : true,
   install_dir : get_option('bindir'),
   build_rpath : '${ORIGIN}/../' + get_option('libdir'),
@@ -230,6 +235,7 @@ executable(
     dependency('xau', required : true),
     subproject('libglnx').get_variable('libglnx_dep'),
   ],
+  include_directories : project_include_dirs,
   install : true,
   install_dir : get_option('bindir'),
   build_rpath : '${ORIGIN}/../' + get_option('libdir'),
@@ -241,6 +247,7 @@ executable(
   sources : [
     'src/try-setlocale.c',
   ],
+  include_directories : project_include_dirs,
   install : true,
   install_dir : get_option('bindir'),
 )

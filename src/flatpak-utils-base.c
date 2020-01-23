@@ -25,7 +25,7 @@
 #include <string.h>
 
 #include <gio/gio.h>
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 char *
 flatpak_get_timezone (void)

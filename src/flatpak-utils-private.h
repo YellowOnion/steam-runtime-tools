@@ -23,7 +23,7 @@
 #ifndef __FLATPAK_UTILS_H__
 #define __FLATPAK_UTILS_H__
 
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 /* https://github.com/GNOME/libglnx/pull/38
  * Note by using #define rather than wrapping via a static inline, we

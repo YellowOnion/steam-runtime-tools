@@ -26,7 +26,7 @@
 #include <glib/gstdio.h>
 #include <gio/gio.h>
 
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 #include "glib-backports.h"
 #include "flatpak-bwrap-private.h"

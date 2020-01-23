@@ -22,7 +22,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 #include "flatpak-bwrap-private.h"
 #include "glib-backports.h"

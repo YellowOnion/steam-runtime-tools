@@ -27,6 +27,7 @@
 #include <X11/Xauth.h>
 #include <gio/gio.h>
 
+#include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
 /* In Flatpak this is optional, in pressure-vessel not so much */

@@ -1,7 +1,7 @@
 /*
  * A cut-down version of common/flatpak-utils from Flatpak
  *
- * Copyright © 2014 Red Hat, Inc
+ * Copyright © 2014-2019 Red Hat, Inc
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,6 +37,9 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
+#include <glib.h>
+#include "flatpak-utils-base-private.h"
+
 /* To keep this more similar to the original file, we explicitly disable
  * this warning rather than fixing it */
 #pragma GCC diagnostic ignored "-Wshadow"
@@ -49,46 +52,6 @@ char *
 flatpak_get_real_xdg_runtime_dir (void)
 {
   return realpath (g_get_user_runtime_dir (), NULL);
-}
-
-char *
-flatpak_get_timezone (void)
-{
-  g_autofree gchar *symlink = NULL;
-  gchar *etc_timezone = NULL;
-  const gchar *tzdir;
-
-  tzdir = getenv ("TZDIR");
-  if (tzdir == NULL)
-    tzdir = "/usr/share/zoneinfo";
-
-  symlink = flatpak_resolve_link ("/etc/localtime", NULL);
-  if (symlink != NULL)
-    {
-      /* Resolve relative path */
-      g_autofree gchar *canonical = flatpak_canonicalize_filename (symlink);
-      char *canonical_suffix;
-
-      /* Strip the prefix and slashes if possible. */
-      if (g_str_has_prefix (canonical, tzdir))
-        {
-          canonical_suffix = canonical + strlen (tzdir);
-          while (*canonical_suffix == '/')
-            canonical_suffix++;
-
-          return g_strdup (canonical_suffix);
-        }
-    }
-
-  if (g_file_get_contents ("/etc/timezeone", &etc_timezone,
-                           NULL, NULL))
-    {
-      g_strchomp (etc_timezone);
-      return etc_timezone;
-    }
-
-  /* Final fall-back is UTC */
-  return g_strdup ("UTC");
 }
 
 static gboolean
@@ -132,37 +95,6 @@ flatpak_quote_argv (const char *argv[],
     }
 
   return g_string_free (res, FALSE);
-}
-
-char *
-flatpak_readlink (const char *path,
-                  GError    **error)
-{
-  return glnx_readlinkat_malloc (-1, path, NULL, error);
-}
-
-char *
-flatpak_resolve_link (const char *path,
-                      GError    **error)
-{
-  g_autofree char *link = flatpak_readlink (path, error);
-  g_autofree char *dirname = NULL;
-
-  if (link == NULL)
-    return NULL;
-
-  if (g_path_is_absolute (link))
-    return g_steal_pointer (&link);
-
-  dirname = g_path_get_dirname (path);
-  return g_build_filename (dirname, link, NULL);
-}
-
-char *
-flatpak_canonicalize_filename (const char *path)
-{
-  g_autoptr(GFile) file = g_file_new_for_path (path);
-  return g_file_get_path (file);
 }
 
 /* If memfd_create() is available, generate a sealed memfd with contents of

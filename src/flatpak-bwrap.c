@@ -34,6 +34,7 @@
 #include "libglnx.h"
 
 #include "flatpak-bwrap-private.h"
+#include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
 #include "glib-backports.h"

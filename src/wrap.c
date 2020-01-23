@@ -41,6 +41,7 @@
 #include "bwrap-lock.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-run-private.h"
+#include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 #include "utils.h"
 #include "wrap-interactive.h"

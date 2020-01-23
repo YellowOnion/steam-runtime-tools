@@ -20,8 +20,6 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
-#include "flatpak-utils-private.h"
-
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -39,6 +37,7 @@
 
 #include <glib.h>
 #include "flatpak-utils-base-private.h"
+#include "flatpak-utils-private.h"
 
 /* To keep this more similar to the original file, we explicitly disable
  * this warning rather than fixing it */

@@ -6,18 +6,21 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * This library is free software; you can redistribute it and/or
+ * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
  * Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Authors:
+ *       Alexander Larsson <alexl@redhat.com>
  */
 
 #include "flatpak-run-private.h"
@@ -26,6 +29,7 @@
 
 #include <X11/Xauth.h>
 #include <gio/gio.h>
+#include "libglnx/libglnx.h"
 
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
@@ -126,7 +130,7 @@ write_xauth (char *number, FILE *output)
 
   fclose (f);
 }
-#endif
+#endif /* ENABLE_XAUTH */
 
 void
 flatpak_run_add_x11_args (FlatpakBwrap *bwrap,

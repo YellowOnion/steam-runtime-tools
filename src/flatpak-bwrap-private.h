@@ -48,7 +48,7 @@ void          flatpak_bwrap_add_noinherit_fd (FlatpakBwrap *bwrap,
 void          flatpak_bwrap_add_fd (FlatpakBwrap *bwrap,
                                     int           fd);
 void          flatpak_bwrap_add_args (FlatpakBwrap *bwrap,
-                                      ...);
+                                      ...) G_GNUC_NULL_TERMINATED;
 void          flatpak_bwrap_add_arg_printf (FlatpakBwrap *bwrap,
                                             const char   *format,
                                             ...) G_GNUC_PRINTF (2, 3);
@@ -80,7 +80,8 @@ gboolean      flatpak_bwrap_bundle_args (FlatpakBwrap *bwrap,
                                          GError      **error);
 
 void          flatpak_bwrap_child_setup_cb (gpointer user_data);
-
+void          flatpak_bwrap_child_setup (GArray *fd_array,
+                                         gboolean close_fd_workaround);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (FlatpakBwrap, flatpak_bwrap_free)
 

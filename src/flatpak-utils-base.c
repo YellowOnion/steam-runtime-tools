@@ -19,6 +19,8 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
+#include "config.h"
+
 #include "flatpak-utils-base-private.h"
 
 #include <stdlib.h>

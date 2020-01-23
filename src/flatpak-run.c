@@ -23,6 +23,8 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
+#include "config.h"
+
 #include "flatpak-run-private.h"
 
 #include <sys/utsname.h>

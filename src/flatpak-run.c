@@ -421,9 +421,6 @@ flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
   g_autofree char *dbus_session_socket = NULL;
   g_autofree char *sandbox_socket_path = g_strdup_printf ("/run/user/%d/bus", getuid ());
   g_autofree char *sandbox_dbus_address = g_strdup_printf ("unix:path=/run/user/%d/bus", getuid ());
-  g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
-
-  /* FIXME: upstream the use of user_runtime_dir to Flatpak */
 
   if (dbus_address != NULL)
     {
@@ -431,6 +428,7 @@ flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
     }
   else
     {
+      g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
       struct stat statbuf;
 
       dbus_session_socket = g_build_filename (user_runtime_dir, "bus", NULL);

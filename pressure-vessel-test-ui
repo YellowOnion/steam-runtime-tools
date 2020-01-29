@@ -25,6 +25,7 @@
 
 import logging
 import os
+import subprocess
 import sys
 
 try:
@@ -97,6 +98,18 @@ class Gui:
         self.window.add(self.grid)
 
         row = 0
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            'This is a test UI for developers. '
+            '<b>'
+            'Some options are known to break games and Steam features.'
+            '</b>'
+            ' Use at your own risk!'
+        )
+        label.set_line_wrap(True)
+        self.grid.attach(label, 0, row, 2, 1)
+        row += 1
 
         runtime_label = Gtk.Label.new('Runtime')
         self.grid.attach(runtime_label, 0, row, 1, 1)

@@ -67,7 +67,7 @@ class Gui:
 
         self.home = GLib.get_home_dir()
 
-        self.runtimes = {}      # type: typing.Dict[str, str]
+        self.container_runtimes = {}    # type: typing.Dict[str, str]
 
         for search in (
             os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
@@ -93,7 +93,7 @@ class Gui:
 
                 if os.path.isdir(files):
                     description = self._describe_runtime(path)
-                    self.runtimes[path] = description
+                    self.container_runtimes[path] = description
 
         self.window = Gtk.Window()
         self.window.set_default_size(600, 300)
@@ -124,24 +124,24 @@ class Gui:
         self.grid.attach(label, 0, row, 2, 1)
         row += 1
 
-        runtime_label = Gtk.Label.new('Runtime')
-        self.grid.attach(runtime_label, 0, row, 1, 1)
+        label = Gtk.Label.new('Container runtime')
+        self.grid.attach(label, 0, row, 1, 1)
 
-        self.runtime_combo = Gtk.ComboBoxText.new()
-        self.runtime_combo.append(
+        self.container_runtime_combo = Gtk.ComboBoxText.new()
+        self.container_runtime_combo.append(
             '/',
             'None (use host system and traditional LD_LIBRARY_PATH runtime)'
         )
 
-        for path, description in sorted(self.runtimes.items()):
-            self.runtime_combo.append(path, description)
+        for path, description in sorted(self.container_runtimes.items()):
+            self.container_runtime_combo.append(path, description)
 
-        if self.runtimes:
-            self.runtime_combo.set_active(1)
+        if self.container_runtimes:
+            self.container_runtime_combo.set_active(1)
         else:
-            self.runtime_combo.set_active(0)
+            self.container_runtime_combo.set_active(0)
 
-        self.grid.attach(self.runtime_combo, 1, row, 1, 1)
+        self.grid.attach(self.container_runtime_combo, 1, row, 1, 1)
 
         row += 1
 
@@ -352,7 +352,7 @@ class Gui:
             ),
         ]
 
-        id = self.runtime_combo.get_active_id()
+        id = self.container_runtime_combo.get_active_id()
 
         if id is None:
             argv.append('--runtime=')

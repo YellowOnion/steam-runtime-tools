@@ -549,3 +549,26 @@ _srt_unblock_signals (void)
         }
     }
 }
+
+/*
+ * _srt_indirect_strcmp0:
+ * @left: A non-%NULL pointer to a (possibly %NULL) `const char *`
+ * @right: A non-%NULL pointer to a (possibly %NULL) `const char *`
+ *
+ * A #GCompareFunc to sort pointers to strings in lexicographic
+ * (g_strcmp0()) order.
+ *
+ * Returns: An integer < 0 if left < right, > 0 if left > right,
+ *  or 0 if left == right or if they are not comparable
+ */
+int
+_srt_indirect_strcmp0 (gconstpointer left,
+                       gconstpointer right)
+{
+  const gchar * const *l = left;
+  const gchar * const *r = right;
+
+  g_return_val_if_fail (l != NULL, 0);
+  g_return_val_if_fail (r != NULL, 0);
+  return g_strcmp0 (*l, *r);
+}

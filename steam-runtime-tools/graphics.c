@@ -1312,29 +1312,6 @@ srt_icd_write_to_file (const SrtIcd *self,
 }
 
 /*
- * indirect_strcmp0:
- * @left: A non-%NULL pointer to a (possibly %NULL) `const char *`
- * @right: A non-%NULL pointer to a (possibly %NULL) `const char *`
- *
- * A #GCompareFunc to sort pointers to strings in lexicographic
- * (g_strcmp0()) order.
- *
- * Returns: An integer < 0 if left < right, > 0 if left > right,
- *  or 0 if left == right or if they are not comparable
- */
-static int
-indirect_strcmp0 (gconstpointer left,
-                  gconstpointer right)
-{
-  const gchar * const *l = left;
-  const gchar * const *r = right;
-
-  g_return_val_if_fail (l != NULL, 0);
-  g_return_val_if_fail (r != NULL, 0);
-  return g_strcmp0 (*l, *r);
-}
-
-/*
  * A #GCompareFunc that does not sort the members of the directory.
  */
 #define READDIR_ORDER ((GCompareFunc) NULL)
@@ -2143,7 +2120,7 @@ _srt_load_egl_icds (gchar **envp,
       if (value != NULL)
         {
           dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
-          load_json_dirs (sysroot, dirs, NULL, indirect_strcmp0,
+          load_json_dirs (sysroot, dirs, NULL, _srt_indirect_strcmp0,
                           egl_icd_load_json_cb, &ret);
           g_strfreev (dirs);
         }
@@ -2159,7 +2136,7 @@ _srt_load_egl_icds (gchar **envp,
               /* freedesktop-sdk reconfigures the EGL loader to look here. */
               tmp = g_strdup_printf ("/usr/lib/%s/GL/" EGL_VENDOR_SUFFIX,
                                      multiarch_tuples[i]);
-              load_json_dir (sysroot, tmp, NULL, indirect_strcmp0,
+              load_json_dir (sysroot, tmp, NULL, _srt_indirect_strcmp0,
                              egl_icd_load_json_cb, &ret);
               g_free (tmp);
             }
@@ -2167,9 +2144,9 @@ _srt_load_egl_icds (gchar **envp,
       else
         {
           load_json_dir (sysroot, get_glvnd_sysconfdir (), EGL_VENDOR_SUFFIX,
-                         indirect_strcmp0, egl_icd_load_json_cb, &ret);
+                         _srt_indirect_strcmp0, egl_icd_load_json_cb, &ret);
           load_json_dir (sysroot, get_glvnd_datadir (), EGL_VENDOR_SUFFIX,
-                         indirect_strcmp0, egl_icd_load_json_cb, &ret);
+                         _srt_indirect_strcmp0, egl_icd_load_json_cb, &ret);
         }
 
       g_free (flatpak_info);
@@ -2535,7 +2512,7 @@ _srt_get_modules_from_path (gchar **envp,
             g_ptr_array_add (in_this_dir, g_build_filename (module_directory_path, member, NULL));
         }
 
-      g_ptr_array_sort (in_this_dir, indirect_strcmp0);
+      g_ptr_array_sort (in_this_dir, _srt_indirect_strcmp0);
 
       for (gsize j = 0; j < in_this_dir->len; j++)
         {

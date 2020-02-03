@@ -40,6 +40,7 @@ main (int argc,
           "\",\n\t\t\"shading language version string\": \"1.40\",\n"
           "\t\t\"extensions\": [\n"
           "\t\t]\n\t}\n}\n");
+  fprintf (stderr, "warning: this warning should always be logged\n");
   return 0;
 }
 

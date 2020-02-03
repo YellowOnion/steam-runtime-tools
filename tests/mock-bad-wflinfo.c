@@ -30,7 +30,10 @@ main (int argc,
       char **argv)
 {
   // Give bad output
+  fprintf (stderr, "warning: this warning should always be logged\n");
+
   fprintf (stderr, "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+
   return 1;
 }
 

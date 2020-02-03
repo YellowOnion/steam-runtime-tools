@@ -713,6 +713,92 @@ out:
   return library_vendor;
 }
 
+/*
+ * Run the given helper and report any issues found
+ *
+ * @my_environ: (inout) (transfer full): The environment to modify and run the argv in
+ * @output: (inout) (transfer full): The output collected from the helper
+ * @child_stderr: (inout) (transfer full): The stderr collected from the helper
+ * @argv: (transfer none): The helper and arguments to run
+ * @wait_status: (out) (transfer full): The wait status of the helper
+ * @exit_status: (out) (transfer full): Exit status of helper(s) executed.
+ *   0 on success, positive on unsuccessful exit(), -1 if killed by a signal or
+ *   not run at all
+ * @terminating_signal: (out) (transfer full): Signal used to terminate helper
+ *   process if any, 0 otherwise
+ * @verbose: If true set environment variables for debug output
+ * @non_zero_waitstatus_issue: Which issue should be set if wait_status is non zero
+ */
+static SrtGraphicsIssues
+_srt_run_helper (GStrv *my_environ,
+                 gchar **output,
+                 gchar **child_stderr,
+                 const GPtrArray *argv,
+                 int *wait_status,
+                 int *exit_status,
+                 int *terminating_signal,
+                 gboolean verbose,
+                 SrtGraphicsIssues non_zero_wait_status_issue)
+{
+  // non_zero_wait_status_issue needs to be something other than NONE, otherwise
+  // we get no indication in caller that there was any error
+  g_return_val_if_fail (non_zero_wait_status_issue != SRT_GRAPHICS_ISSUES_NONE,
+                        SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  g_return_val_if_fail (wait_status != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (exit_status != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (terminating_signal != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  GError *error = NULL;
+
+  if (verbose)
+    {
+      // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+      *my_environ = g_environ_setenv (*my_environ, "LIBGL_DEBUG", "verbose", TRUE);
+    }
+
+  // Ignore what came on stderr previously, use this run's error message
+  g_free(*output);
+  *output = NULL;
+  g_free(*child_stderr);
+  *child_stderr = NULL;
+
+  if (!g_spawn_sync (NULL,    /* working directory */
+                     (gchar **) argv->pdata,
+                     *my_environ,    /* envp */
+                     G_SPAWN_SEARCH_PATH,       /* flags */
+                     _srt_child_setup_unblock_signals,
+                     NULL,    /* user data */
+                     output, /* stdout */
+                     child_stderr,
+                     wait_status,
+                     &error))
+    {
+      g_debug ("An error occurred calling the helper: %s", error->message);
+      *child_stderr = g_strdup (error->message);
+      g_clear_error (&error);
+      issues |= non_zero_wait_status_issue;
+    }
+
+  if (*wait_status != 0)
+    {
+      g_debug ("... wait status %d", *wait_status);
+      issues |= non_zero_wait_status_issue;
+
+      if (_srt_process_timeout_wait_status (*wait_status, exit_status, terminating_signal))
+        {
+          issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
+        }
+    }
+  else
+    {
+      *exit_status = 0;
+    }
+
+  return issues;
+}
+
 /**
  * _srt_check_graphics:
  * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
@@ -783,36 +869,33 @@ _srt_check_graphics (const char *helpers_path,
 
   library_vendor = _srt_check_library_vendor (multiarch_tuple, window_system, rendering_interface);
 
-  if (!g_spawn_sync (NULL,    /* working directory */
-                     (gchar **) argv->pdata,
-                     my_environ,    /* envp */
-                     G_SPAWN_SEARCH_PATH,       /* flags */
-                     _srt_child_setup_unblock_signals,
-                     NULL,    /* user data */
-                     &output, /* stdout */
-                     &child_stderr,
-                     &wait_status,
-                     &error))
+  issues |= _srt_run_helper (&my_environ,
+                             &output,
+                             &child_stderr,
+                             argv,
+                             &wait_status,
+                             &exit_status,
+                             &terminating_signal,
+                             FALSE,
+                             SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+
+  if (issues != SRT_GRAPHICS_ISSUES_NONE)
     {
-      g_debug ("An error occurred calling the helper: %s", error->message);
-      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+      issues |= _srt_run_helper (&my_environ,
+                                 &output,
+                                 &child_stderr,
+                                 argv,
+                                 &wait_status,
+                                 &exit_status,
+                                 &terminating_signal,
+                                 TRUE,
+                                 SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
     }
 
-  if (wait_status != 0)
+  if (issues != SRT_GRAPHICS_ISSUES_NONE)
     {
-      g_debug ("... wait status %d", wait_status);
-      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-
-      if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
-        {
-          issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
-        }
-
       goto out;
-    }
-  else
-    {
-      exit_status = 0;
     }
 
   /* We can't use `json_from_string()` directly because we are targeting an
@@ -823,6 +906,19 @@ _srt_check_graphics (const char *helpers_path,
     {
       g_debug ("The helper output is not a valid JSON: %s", error->message);
       issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+
+      // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+      issues |= _srt_run_helper (&my_environ,
+                                 &output,
+                                 &child_stderr,
+                                 argv,
+                                 &wait_status,
+                                 &exit_status,
+                                 &terminating_signal,
+                                 TRUE,
+                                 SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+
+
       goto out;
     }
 
@@ -830,6 +926,20 @@ _srt_check_graphics (const char *helpers_path,
   if (parse_wflinfo)
     {
       issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
+
+      if (issues != SRT_GRAPHICS_ISSUES_NONE)
+        {
+          // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+          issues |= _srt_run_helper (&my_environ,
+                                     &output,
+                                     &child_stderr,
+                                     argv,
+                                     &wait_status,
+                                     &exit_status,
+                                     &terminating_signal,
+                                     TRUE,
+                                     SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+        }
 
       if (rendering_interface == SRT_RENDERING_INTERFACE_GL &&
          window_system == SRT_WINDOW_SYSTEM_GLX)
@@ -852,34 +962,28 @@ _srt_check_graphics (const char *helpers_path,
             }
 
           /* Now run and report exit code/messages if failure */
-          if (!g_spawn_sync (NULL,    /* working directory */
-                             (gchar **) argv->pdata,
-                             my_environ,    /* envp */
-                             G_SPAWN_SEARCH_PATH,       /* flags */
-                             _srt_child_setup_unblock_signals,
-                             NULL,    /* user data */
-                             &output, /* stdout */
-                             &child_stderr2,
-                             &wait_status,
-                             &error))
-            {
-              g_debug ("An error occurred calling the helper: %s", error->message);
-              issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-            }
+          issues |= _srt_run_helper (&my_environ,
+                                     &output,
+                                     &child_stderr2,
+                                     argv,
+                                     &wait_status,
+                                     &exit_status,
+                                     &terminating_signal,
+                                     FALSE,
+                                     SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
 
-          if (wait_status != 0)
+          if (issues != SRT_GRAPHICS_ISSUES_NONE)
             {
-              g_debug ("... wait status %d", wait_status);
-              issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-
-              if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
-                {
-                  issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
-                }
-            }
-          else
-            {
-              exit_status = 0;
+              // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+              issues |= _srt_run_helper (&my_environ,
+                                         &output,
+                                         &child_stderr2,
+                                         argv,
+                                         &wait_status,
+                                         &exit_status,
+                                         &terminating_signal,
+                                         TRUE,
+                                         SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
             }
         }
     }
@@ -909,39 +1013,20 @@ _srt_check_graphics (const char *helpers_path,
         }
 
       /* Now run and report exit code/messages if failure */
-      if (!g_spawn_sync (NULL,    /* working directory */
-                         (gchar **) argv->pdata,
-                         my_environ,    /* envp */
-                         G_SPAWN_SEARCH_PATH,       /* flags */
-                         _srt_child_setup_unblock_signals,
-                         NULL,    /* user data */
-                         &output, /* stdout */
-                         &child_stderr2,
-                         &wait_status,
-                         &error))
-        {
-          g_debug ("An error occurred calling the helper: %s", error->message);
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-        }
+      issues |= _srt_run_helper (&my_environ,
+                                 &output,
+                                 &child_stderr2,
+                                 argv,
+                                 &wait_status,
+                                 &exit_status,
+                                 &terminating_signal,
+                                 FALSE,
+                                 SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
 
-      if (wait_status != 0)
-        {
-          g_debug ("... wait status %d", wait_status);
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-
-          if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
-            {
-              issues |= SRT_GRAPHICS_ISSUES_TIMEOUT;
-            }
-
-        }
-      else
-        {
-          exit_status = 0;
-        }
     }
 
 out:
+
   /* If we have stderr (or error messages) from both vulkaninfo and
    * check-vulkan, combine them */
   if (child_stderr2 != NULL && child_stderr2[0] != '\0')

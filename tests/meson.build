@@ -172,12 +172,9 @@ executable(
 foreach helper : [
   'mock-bad-check-vulkan',
   'mock-bad-vulkaninfo',
-  'mock-bad-wflinfo',
   'mock-good-vulkaninfo',
-  'mock-good-wflinfo',
   'mock-hanging-wflinfo',
   'mock-sigusr-wflinfo',
-  'mock-software-wflinfo',
 ]
   executable(
     helper,
@@ -202,6 +199,7 @@ executable(
   'mock-mixed-wflinfo',
   'mock-good-wflinfo.c',
   include_directories : project_include_dirs,
+  dependencies: [glib],
   install: true,
   install_dir: tests_dir
 )
@@ -225,11 +223,14 @@ endforeach
 # Helpers with a GLib dependency and one source file of the same name
 # as the helper itself.
 foreach helper : [
+  'mock-abi-inspect-library',
+  'mock-bad-wflinfo',
   'mock-debian-x86_64-inspect-library',
   'mock-debian-i386-inspect-library',
   'mock-fedora-64-bit-inspect-library',
   'mock-fedora-32-bit-inspect-library',
-  'mock-abi-inspect-library',
+  'mock-good-wflinfo',
+  'mock-software-wflinfo',
 ]
   executable(
     helper,

@@ -23,6 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <glib.h>
 #include <stdio.h>
 
 int
@@ -33,6 +34,11 @@ main (int argc,
   fprintf (stderr, "warning: this warning should always be logged\n");
 
   fprintf (stderr, "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+
+  if (g_strcmp0 (g_getenv ("LIBGL_DEBUG"), "verbose") == 0)
+    {
+      fprintf (stderr, "info: you used LIBGL_DEBUG=verbose\n");
+    }
 
   return 1;
 }

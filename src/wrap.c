@@ -158,7 +158,7 @@ check_bwrap (const char *tools_dir)
     }
   else
     {
-      int exit_status;
+      int wait_status;
       g_autofree gchar *child_stdout = NULL;
       g_autofree gchar *child_stderr = NULL;
 
@@ -171,15 +171,15 @@ check_bwrap (const char *tools_dir)
                          NULL, NULL,    /* child setup */
                          &child_stdout,
                          &child_stderr,
-                         &exit_status,
+                         &wait_status,
                          error))
         {
           g_warning ("Cannot run bwrap: %s", local_error->message);
           g_clear_error (&local_error);
         }
-      else if (exit_status != 0)
+      else if (wait_status != 0)
         {
-          g_warning ("Cannot run bwrap: exit status %d", exit_status);
+          g_warning ("Cannot run bwrap: wait status %d", wait_status);
 
           if (child_stdout != NULL && child_stdout[0] != '\0')
             g_warning ("Output:\n%s", child_stdout);
@@ -201,7 +201,7 @@ capture_output (const char * const * argv,
                 GError **error)
 {
   gsize len;
-  gint exit_status;
+  gint wait_status;
   g_autofree gchar *output = NULL;
   g_autofree gchar *errors = NULL;
   gsize i;
@@ -223,13 +223,13 @@ capture_output (const char * const * argv,
                      NULL, NULL,    /* child setup */
                      &output,
                      &errors,
-                     &exit_status,
+                     &wait_status,
                      error))
     return NULL;
 
   g_printerr ("%s", errors);
 
-  if (!g_spawn_check_exit_status (exit_status, error))
+  if (!g_spawn_check_exit_status (wait_status, error))
     return NULL;
 
   len = strlen (output);

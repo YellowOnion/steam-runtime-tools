@@ -1,5 +1,6 @@
 /*
  * A cut-down version of common/flatpak-utils from Flatpak
+ * Last updated: Flatpak 1.6.1
  *
  * Copyright © 2014-2019 Red Hat, Inc
  *

@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak
+ * Taken from Flatpak, last updated: Flatpak 1.6.1
  * Copyright © 2019 Red Hat, Inc
  *
  * This program is free software; you can redistribute it and/or

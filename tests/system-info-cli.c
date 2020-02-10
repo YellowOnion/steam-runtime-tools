@@ -130,6 +130,8 @@ libraries_presence (Fixture *f,
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
 
+  g_assert_true (json_object_has_member (json, "driver_environment"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -256,6 +258,8 @@ libraries_missing (Fixture *f,
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
 
+  g_assert_true (json_object_has_member (json, "driver_environment"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -373,6 +377,8 @@ libraries_presence_verbose (Fixture *f,
 
   g_assert_true (json_object_has_member (json, "runtime"));
 
+  g_assert_true (json_object_has_member (json, "driver_environment"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -441,6 +447,8 @@ no_arguments (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
+
+  g_assert_true (json_object_has_member (json, "driver_environment"));
 
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
@@ -545,6 +553,8 @@ steam_presence (Fixture *f,
   g_assert_true (json_object_has_member (json_sub_object, "pinned_libs_32"));
   g_assert_true (json_object_has_member (json_sub_object, "pinned_libs_64"));
 
+  g_assert_true (json_object_has_member (json, "driver_environment"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
 
   fake_home_clean_up (fake_home);
@@ -644,6 +654,8 @@ steam_issues (Fixture *f,
                    "not-runtime");
   g_assert_cmpstr (json_array_get_string_element (array, 1), ==,
                    "not-using-newer-host-libraries");
+
+  g_assert_true (json_object_has_member (json, "driver_environment"));
 
   g_assert_true (json_object_has_member (json, "architectures"));
 
@@ -778,6 +790,8 @@ test_unblocks_sigchld (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
+
+  g_assert_true (json_object_has_member (json, "driver_environment"));
 
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");

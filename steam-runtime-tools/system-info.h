@@ -161,6 +161,8 @@ gchar *srt_system_info_dup_os_variant_id (SrtSystemInfo *self);
 gchar *srt_system_info_dup_os_version_codename (SrtSystemInfo *self);
 gchar *srt_system_info_dup_os_version_id (SrtSystemInfo *self);
 
+gchar **srt_system_info_list_driver_environment (SrtSystemInfo *self);
+
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)
 #endif

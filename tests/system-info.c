@@ -2144,6 +2144,83 @@ pinned_libraries_missing (Fixture *f,
   g_object_unref (info);
 }
 
+static void
+driver_environment (Fixture *f,
+                    gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar **output;
+  gsize i;
+  const gchar *environment[][2] = { {"LIBVA_DRIVER_NAME", "radeonsi"},
+                                    {"MESA_LOADER_DRIVER_OVERRIDE", "i965"},
+                                    {"VDPAU_DRIVER", "secret_2"},
+                                    {"__GLX_FORCE_VENDOR_LIBRARY_0", "driver_display_zero"},
+                                    {"__GLX_FORCE_VENDOR_LIBRARY_12", "display_twelve"},
+                                    {"__GLX_VENDOR_LIBRARY_NAME", "my_custom_driver"},
+                                    {NULL, NULL} };
+
+  envp = g_get_environ ();
+
+  for (i = 0; environment[i][0] != NULL; i++)
+    envp = g_environ_setenv (envp, environment[i][0], environment[i][1], TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  output = srt_system_info_list_driver_environment (info);
+  g_assert_nonnull (output);
+  g_assert_nonnull (output[0]);
+  for (i = 0; output[i] != NULL; i++)
+    {
+      gchar *key_value = g_strjoin ("=", environment[i][0], environment[i][1], NULL);
+      g_assert_cmpstr (key_value, ==, output[i]);
+      g_free (key_value);
+    }
+  /* plus one for the last NULL item */
+  g_assert_cmpint (G_N_ELEMENTS (environment), ==, i+1);
+  g_strfreev (output);
+
+  /* Do it again using the cached values */
+  output = srt_system_info_list_driver_environment (info);
+  g_assert_nonnull (output);
+  g_assert_nonnull (output[0]);
+  for (i = 0; output[i] != NULL; i++)
+    {
+      gchar *key_value = g_strjoin ("=", environment[i][0], environment[i][1], NULL);
+      g_assert_cmpstr (key_value, ==, output[i]);
+      g_free (key_value);
+    }
+  /* plus one for the last NULL item */
+  g_assert_cmpint (G_N_ELEMENTS (environment), ==, i+1);
+  g_strfreev (output);
+
+  /* Test when no custom graphics environment variables are available */
+  for (i = 0; environment[i][0] != NULL; i++)
+    envp = g_environ_unsetenv (envp, environment[i][0]);
+
+  srt_system_info_set_environ (info, envp);
+  output = srt_system_info_list_driver_environment (info);
+  g_assert_null (output);
+
+  /* Test that variations from the canonical __GLX_FORCE_VENDOR_LIBRARY_[0-9]+
+   * are not picked up */
+  envp = g_environ_setenv (envp, "__GLX_FORCE_VENDOR_LIBRARY_0_EXTRA", "test", TRUE);
+  envp = g_environ_setenv (envp, "__GLX_FORCE_VENDOR_LIBRARY", "test", TRUE);
+  envp = g_environ_setenv (envp, "A__GLX_FORCE_VENDOR_LIBRARY_0", "test", TRUE);
+  envp = g_environ_setenv (envp, "__GLX_FORCE_VENDOR_LIBRARY_", "test", TRUE);
+  envp = g_environ_setenv (envp, "__GLX_FORCE_VENDOR_LIBRARY0", "test", TRUE);
+
+  srt_system_info_set_environ (info, envp);
+  output = srt_system_info_list_driver_environment (info);
+  /* We expect an empty list because the environment variables are not following the
+   * expected pattern */
+  g_assert_null (output);
+
+  g_object_unref (info);
+  g_strfreev (envp);
+}
+
 int
 main (int argc,
       char **argv)
@@ -2210,6 +2287,9 @@ main (int argc,
               setup, pinned_libraries_permission, teardown);
   g_test_add ("/system-info/libs/pinned_libraries_missing", Fixture, NULL,
               setup, pinned_libraries_missing, teardown);
+
+  g_test_add ("/system-info/driver_environment", Fixture, NULL,
+              setup, driver_environment, teardown);
 
   return g_test_run ();
 }

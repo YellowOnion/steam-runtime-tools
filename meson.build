@@ -56,8 +56,6 @@ endif
 glslang_validator = find_program('glslangValidator', required : true)
 
 warning_flags = [
-    '-Wall',
-    '-Wextra',
     '-Warray-bounds',
     '-Wcast-align',
     '-Wdouble-promotion',

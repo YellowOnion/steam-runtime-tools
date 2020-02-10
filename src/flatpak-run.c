@@ -1,24 +1,30 @@
 /*
  * Cut-down version of common/flatpak-run.c from Flatpak
+ * Last updated: Flatpak 1.6.1
  *
  * Copyright © 2017-2019 Collabora Ltd.
  * Copyright © 2014-2019 Red Hat, Inc
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * This library is free software; you can redistribute it and/or
+ * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
  * Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Authors:
+ *       Alexander Larsson <alexl@redhat.com>
  */
+
+#include "config.h"
 
 #include "flatpak-run-private.h"
 
@@ -26,7 +32,9 @@
 
 #include <X11/Xauth.h>
 #include <gio/gio.h>
+#include "libglnx/libglnx.h"
 
+#include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
 /* In Flatpak this is optional, in pressure-vessel not so much */
@@ -125,7 +133,7 @@ write_xauth (char *number, FILE *output)
 
   fclose (f);
 }
-#endif
+#endif /* ENABLE_XAUTH */
 
 void
 flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
@@ -171,7 +179,7 @@ flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
 #ifdef ENABLE_XAUTH
       g_auto(GLnxTmpfile) xauth_tmpf  = { 0, };
 
-      if (glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &xauth_tmpf, NULL))
+      if (glnx_open_anonymous_tmpfile_full (O_RDWR | O_CLOEXEC, "/tmp", &xauth_tmpf, NULL))
         {
           FILE *output = fdopen (xauth_tmpf.fd, "wb");
           if (output != NULL)
@@ -417,12 +425,9 @@ gboolean
 flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
 {
   const char *dbus_address = g_getenv ("DBUS_SESSION_BUS_ADDRESS");
-  char *dbus_session_socket = NULL;
+  g_autofree char *dbus_session_socket = NULL;
   g_autofree char *sandbox_socket_path = g_strdup_printf ("/run/user/%d/bus", getuid ());
   g_autofree char *sandbox_dbus_address = g_strdup_printf ("unix:path=/run/user/%d/bus", getuid ());
-  g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
-
-  /* FIXME: upstream the use of user_runtime_dir to Flatpak */
 
   if (dbus_address != NULL)
     {
@@ -430,6 +435,7 @@ flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
     }
   else
     {
+      g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
       struct stat statbuf;
 
       dbus_session_socket = g_build_filename (user_runtime_dir, "bus", NULL);

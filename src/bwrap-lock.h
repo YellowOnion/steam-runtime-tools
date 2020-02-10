@@ -23,7 +23,7 @@
 #include <glib-object.h>
 
 #include "glib-backports.h"
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 /**
  * PvBwrapLockFlags:

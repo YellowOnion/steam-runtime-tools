@@ -23,7 +23,7 @@
 #ifndef __FLATPAK_UTILS_H__
 #define __FLATPAK_UTILS_H__
 
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 /* https://github.com/GNOME/libglnx/pull/38
  * Note by using #define rather than wrapping via a static inline, we
@@ -37,16 +37,9 @@
  * it as a path into the sandbox */
 char * flatpak_get_real_xdg_runtime_dir (void);
 
-char *flatpak_get_timezone (void);
 
 char * flatpak_quote_argv (const char *argv[],
                            gssize      len);
-
-char * flatpak_readlink (const char *path,
-                         GError    **error);
-char * flatpak_resolve_link (const char *path,
-                             GError    **error);
-char * flatpak_canonicalize_filename (const char *path);
 
 gboolean flatpak_buffer_to_sealed_memfd_or_tmpfile (GLnxTmpfile *tmpf,
                                                     const char  *name,

@@ -33,7 +33,7 @@
 /* Include these before steam-runtime-tools.h so that their backport of
  * G_DEFINE_AUTOPTR_CLEANUP_FUNC will be visible to it */
 #include "glib-backports.h"
-#include "libglnx.h"
+#include "libglnx/libglnx.h"
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
@@ -41,6 +41,7 @@
 #include "bwrap-lock.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-run-private.h"
+#include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 #include "utils.h"
 #include "wrap-interactive.h"

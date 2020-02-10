@@ -1650,6 +1650,7 @@ static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
+static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 
 static gboolean
@@ -1899,6 +1900,9 @@ static GOptionEntry options[] =
   { "version", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_version,
     "Print version number and exit.", NULL },
+  { "test", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
+    "Smoke test pressure-vessel-wrap and exit.", NULL },
   { NULL }
 };
 
@@ -2057,7 +2061,7 @@ main (int argc,
       goto out;
     }
 
-  if (argc < 2)
+  if (argc < 2 && !opt_test)
     {
       g_printerr ("%s: An executable to run is required\n",
                   g_get_prgname ());
@@ -2079,7 +2083,7 @@ main (int argc,
       goto out;
     }
 
-  if (strcmp (argv[1], "--") == 0)
+  if (argc > 1 && strcmp (argv[1], "--") == 0)
     {
       argv++;
       argc--;
@@ -2242,7 +2246,7 @@ main (int argc,
       pv_bwrap_wrap_interactive (wrapped_command, opt_shell);
     }
 
-  if (argv[1][0] == '-')
+  if (argc > 1 && argv[1][0] == '-')
     {
       /* Make sure wrapped_command is something we can validly pass to env(1) */
       if (strchr (argv[1], '=') != NULL)
@@ -2260,6 +2264,20 @@ main (int argc,
 
   g_debug ("Checking for bwrap...");
   bwrap_executable = check_bwrap (tools_dir);
+
+  if (opt_test)
+    {
+      if (bwrap_executable == NULL)
+        {
+          ret = 1;
+          goto out;
+        }
+      else
+        {
+          ret = 0;
+          goto out;
+        }
+    }
 
   if (bwrap_executable == NULL)
     {

@@ -128,7 +128,10 @@ class Gui:
         self.grid.attach(runtime_label, 0, row, 1, 1)
 
         self.runtime_combo = Gtk.ComboBoxText.new()
-        self.runtime_combo.append('/', 'None (use host system)')
+        self.runtime_combo.append(
+            '/',
+            'None (use host system and traditional LD_LIBRARY_PATH runtime)'
+        )
 
         for path, description in sorted(self.runtimes.items()):
             self.runtime_combo.append(path, description)

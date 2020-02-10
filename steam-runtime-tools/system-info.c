@@ -229,6 +229,9 @@ typedef struct
 
   GList *cached_va_api_list;
   gboolean va_api_cache_available;
+
+  GList *cached_vdpau_list;
+  gboolean vdpau_cache_available;
 } Abi;
 
 static Abi *
@@ -261,6 +264,8 @@ ensure_abi (SrtSystemInfo *self,
   abi->dri_cache_available = FALSE;
   abi->cached_va_api_list = NULL;
   abi->va_api_cache_available = FALSE;
+  abi->cached_vdpau_list = NULL;
+  abi->vdpau_cache_available = FALSE;
 
   /* transfer ownership to self->abis */
   g_ptr_array_add (self->abis, abi);
@@ -279,6 +284,7 @@ abi_free (gpointer self)
 
   g_list_free_full (abi->cached_dri_list, g_object_unref);
   g_list_free_full (abi->cached_va_api_list, g_object_unref);
+  g_list_free_full (abi->cached_vdpau_list, g_object_unref);
 
   g_slice_free (Abi, self);
 }
@@ -1425,6 +1431,24 @@ forget_va_apis (SrtSystemInfo *self)
     }
 }
 
+/*
+ * Forget any cached information about VDPAU drivers.
+ */
+static void
+forget_vdpau (SrtSystemInfo *self)
+{
+  gsize i;
+
+  for (i = 0; i < self->abis->len; i++)
+    {
+      Abi *abi = g_ptr_array_index (self->abis, i);
+
+      g_list_free_full (abi->cached_vdpau_list, g_object_unref);
+      abi->cached_vdpau_list = NULL;
+      abi->vdpau_cache_available = FALSE;
+    }
+}
+
 /**
  * srt_system_info_check_graphics:
  * @self: The #SrtSystemInfo object to use.
@@ -1577,6 +1601,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 
   forget_dris (self);
   forget_va_apis (self);
+  forget_vdpau (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2155,6 +2180,7 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
 
   forget_dris (self);
   forget_va_apis (self);
+  forget_vdpau (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2595,6 +2621,67 @@ srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
           srt_va_api_driver_is_extra (iter->data))
         continue;
       ret = g_list_prepend (ret, g_object_ref (iter->data));
+    }
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_vdpau_drivers:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch
+ *  tuple such as %SRT_ABI_X86_64
+ * @flags: Filter the list of VDPAU drivers accordingly to these flags.
+ *  For example, "extra" drivers that are unlikely to be found by
+ *  the VDPAU loader will only be included if the
+ *  %SRT_DRIVER_FLAGS_INCLUDE_ALL flag is set.
+ *
+ * List of the available VDPAU drivers.
+ *
+ * For the search $VDPAU_DRIVER_PATH will be used if set.
+ * Otherwise some implementation-dependent paths will be used instead.
+ *
+ * Note that if `$VDPAU_DRIVER_PATH` is set, all drivers outside that
+ * path will be treated as "extra", and omitted from the list unless
+ * %SRT_DRIVER_FLAGS_INCLUDE_ALL is used.
+ *
+ * Returns: (transfer full) (element-type SrtVaApiDriver) (nullable): A list of
+ *  opaque #SrtVaApiDriver objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_vdpau_drivers (SrtSystemInfo *self,
+                                    const char *multiarch_tuple,
+                                    SrtDriverFlags flags)
+{
+  Abi *abi = NULL;
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  abi = ensure_abi (self, multiarch_tuple);
+
+  if (!abi->vdpau_cache_available)
+    {
+      abi->cached_vdpau_list = _srt_list_vdpau_drivers (self->env,
+                                                        self->helpers_path,
+                                                        multiarch_tuple);
+      abi->vdpau_cache_available = TRUE;
+    }
+
+  for (iter = abi->cached_vdpau_list; iter != NULL; iter = iter->next)
+    {
+      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
+          srt_vdpau_driver_is_extra (iter->data))
+        continue;
+      ret = g_list_prepend (ret, g_object_ref (iter->data));
+    }
+
+  for (const GList *iteri = ret; iteri != NULL; iteri = iteri->next)
+    {
+      g_debug ("LIST VDPAU %s", srt_vdpau_driver_get_library_path (iteri->data));
     }
 
   return g_list_reverse (ret);

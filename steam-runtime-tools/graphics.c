@@ -2445,6 +2445,10 @@ out:
 static SrtVaApiDriver *
 srt_va_api_driver_new (const gchar *library_path,
                        gboolean is_extra);
+static SrtVdpauDriver *
+srt_vdpau_driver_new (const gchar *library_path,
+                      const gchar *library_link,
+                      gboolean is_extra);
 
 /**
  * _srt_get_modules_from_path:
@@ -2477,7 +2481,9 @@ _srt_get_modules_from_path (gchar **envp,
                             GList **drivers_out)
 {
   const gchar *member;
-  const gchar *module_suffix;
+  /* We have up to 2 suffixes that we want to list */
+  const gchar *module_suffix[3];
+  const gchar *module_prefix = NULL;
   GDir *dir = NULL;
   SrtLibraryIssues issues;
 
@@ -2491,11 +2497,20 @@ _srt_get_modules_from_path (gchar **envp,
   switch (module)
     {
       case SRT_GRAPHICS_DRI_MODULE:
-        module_suffix = "_dri.so";
+        module_suffix[0] = "_dri.so";
+        module_suffix[1] = NULL;
         break;
 
       case SRT_GRAPHICS_VAAPI_MODULE:
-        module_suffix = "_drv_video.so";
+        module_suffix[0] = "_drv_video.so";
+        module_suffix[1] = NULL;
+        break;
+
+      case SRT_GRAPHICS_VDPAU_MODULE:
+        module_prefix = "libvdpau_";
+        module_suffix[0] = ".so";
+        module_suffix[1] = ".so.1";
+        module_suffix[2] = NULL;
         break;
 
       default:
@@ -2508,14 +2523,21 @@ _srt_get_modules_from_path (gchar **envp,
       GPtrArray *in_this_dir = g_ptr_array_new_with_free_func (g_free);
       while ((member = g_dir_read_name (dir)) != NULL)
         {
-          if (g_str_has_suffix (member, module_suffix))
-            g_ptr_array_add (in_this_dir, g_build_filename (module_directory_path, member, NULL));
+          for (gsize i = 0; module_suffix[i] != NULL; i++)
+            {
+              if (g_str_has_suffix (member, module_suffix[i]) &&
+                  (module_prefix == NULL || g_str_has_prefix (member, module_prefix)))
+                {
+                  g_ptr_array_add (in_this_dir, g_build_filename (module_directory_path, member, NULL));
+                }
+            }
         }
 
       g_ptr_array_sort (in_this_dir, _srt_indirect_strcmp0);
 
       for (gsize j = 0; j < in_this_dir->len; j++)
         {
+          gchar *this_driver_link = NULL;
           const gchar *this_driver = g_ptr_array_index (in_this_dir, j);
           issues = _srt_check_library_presence (helpers_path, this_driver, multiarch_tuple,
                                                 NULL, NULL, envp, SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, NULL);
@@ -2532,6 +2554,14 @@ _srt_get_modules_from_path (gchar **envp,
 
               case SRT_GRAPHICS_VAAPI_MODULE:
                 *drivers_out = g_list_prepend (*drivers_out, srt_va_api_driver_new (this_driver, is_extra));
+                break;
+
+              case SRT_GRAPHICS_VDPAU_MODULE:
+                this_driver_link = g_file_read_link (this_driver, NULL);
+                *drivers_out = g_list_prepend (*drivers_out, srt_vdpau_driver_new (this_driver,
+                                                                                   this_driver_link,
+                                                                                   is_extra));
+                g_free (this_driver_link);
                 break;
 
               default:
@@ -2552,8 +2582,9 @@ _srt_get_modules_from_path (gchar **envp,
  *  such as %SRT_ABI_X86_64
  * @module: Which graphic module to search
  * @drivers_out: (inout): Prepend the found drivers to this list.
- *  If @module is #SRT_GRAPHICS_DRI_MODULE, the element-type will be #SrtDriDriver.
- *  Otherwise if @module is #SRT_GRAPHICS_VAAPI_MODULE, the element-type will be #SrtVaApiDriver.
+ *  If @module is #SRT_GRAPHICS_DRI_MODULE or #SRT_GRAPHICS_VAAPI_MODULE or
+ *  #SRT_GRAPHICS_VDPAU_MODULE, the element-type will be #SrtDriDriver, or
+ *  #SrtVaApiDriver or #SrtVdpauDriver, respectively.
  *
  * On exit, `drivers_out` will have the least-preferred directories first and the
  * most-preferred directories last. Within a directory, the drivers will be
@@ -2571,6 +2602,7 @@ _srt_get_modules_full (gchar **envp,
   static const char *const dri_loaders[] = { "libGLX_mesa.so.0", "libEGL_mesa.so.0",
                                              "libGL.so.1", NULL };
   static const char *const va_api_loaders[] = { "libva.so.2", "libva.so.1", NULL };
+  static const char *const vdpau_loaders[] = { "libvdpau.so.1", NULL };
   const gchar *env_override;
   const gchar *sysroot;
   const gchar *drivers_path;
@@ -2592,6 +2624,11 @@ _srt_get_modules_full (gchar **envp,
       case SRT_GRAPHICS_VAAPI_MODULE:
         loader_libraries = va_api_loaders;
         env_override = "LIBVA_DRIVERS_PATH";
+        break;
+
+      case SRT_GRAPHICS_VDPAU_MODULE:
+        loader_libraries = vdpau_loaders;
+        env_override = "VDPAU_DRIVER_PATH";
         break;
 
       default:
@@ -2618,7 +2655,20 @@ _srt_get_modules_full (gchar **envp,
   if (drivers_path)
     {
       g_debug ("A driver path environment is available: %s", drivers_path);
-      gchar **entries = g_strsplit (drivers_path, ":", 0);
+      gchar **entries;
+      /* VDPAU_DRIVER_PATH holds just a single path and not a colon separeted
+       * list of paths. Because of that we handle the VDPAU case separately to
+       * avoid splitting a theoretically valid path like "/usr/lib/custom_d:r/" */
+      if (module == SRT_GRAPHICS_VDPAU_MODULE)
+        {
+          entries = g_new (gchar*, 2);
+          entries[0] = g_strdup (drivers_path);
+          entries[1] = NULL;
+        }
+      else
+        {
+          entries = g_strsplit (drivers_path, ":", 0);
+        }
 
       for (gchar **entry = entries; entry != NULL && *entry != NULL; entry++)
         {
@@ -2654,6 +2704,11 @@ _srt_get_modules_full (gchar **envp,
    * <https://gitlab.com/freedesktop-sdk/freedesktop-sdk/blob/master/elements/extensions/mesa/mesa.bst>
    * and
    * <https://gitlab.com/freedesktop-sdk/freedesktop-sdk/blob/master/elements/flatpak-images/platform.bst>)
+   *
+   * For VDPAU there is just a single path:
+   * "%{libdir}/vdpau"
+   * (reference:
+   * <https://gitlab.com/freedesktop-sdk/freedesktop-sdk/blob/master/elements/components/libvdpau.bst>)
    * */
   if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS))
     {
@@ -2678,19 +2733,26 @@ _srt_get_modules_full (gchar **envp,
           g_free (intel_vaapi);
         }
 
-      gchar *gl_lib_dri = g_build_filename (libdir, "GL", "lib", "dri", NULL);
-      if (!g_hash_table_contains (drivers_set, gl_lib_dri))
+      if (module == SRT_GRAPHICS_VAAPI_MODULE || module == SRT_GRAPHICS_DRI_MODULE)
         {
-          g_hash_table_add (drivers_set, g_strdup (gl_lib_dri));
-          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, gl_lib_dri,
-                                      is_extra, module, drivers_out);
+          gchar *gl_lib_dri = g_build_filename (libdir, "GL", "lib", "dri", NULL);
+          if (!g_hash_table_contains (drivers_set, gl_lib_dri))
+            {
+              g_hash_table_add (drivers_set, g_strdup (gl_lib_dri));
+              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, gl_lib_dri,
+                                          is_extra, module, drivers_out);
+            }
+          g_free (gl_lib_dri);
         }
-      g_free (gl_lib_dri);
+
       g_free (libdir);
 
       /* We continue to search for libraries but we mark them all as "extra" because the
-       * loader wouldn't have picked them up. */
-      is_extra = TRUE;
+       * loader wouldn't have picked them up.
+       * The only exception is for VDPAU, becuase in a Flatpak environment the search path
+       * is the same as in a non container environment. */
+      if (module != SRT_GRAPHICS_VDPAU_MODULE)
+        is_extra = TRUE;
     }
 
   for (gsize i = 0; loader_libraries[i] != NULL; i++)
@@ -2698,7 +2760,7 @@ _srt_get_modules_full (gchar **envp,
       SrtLibrary *library_details = NULL;
       char *driver_canonical_path;
       gchar *libdir;
-      gchar *dri_path;
+      gchar *libdir_driver;
       GList *extras = NULL;
       SrtLibraryIssues issues;
 
@@ -2743,12 +2805,16 @@ _srt_get_modules_full (gchar **envp,
         }
       libdir = g_path_get_dirname (driver_canonical_path);
 
-      dri_path = g_build_filename (libdir, "dri", NULL);
-      if (!g_hash_table_contains (drivers_set, dri_path))
+      if (module == SRT_GRAPHICS_VDPAU_MODULE)
+        libdir_driver = g_build_filename (libdir, "vdpau", NULL);
+      else
+        libdir_driver = g_build_filename (libdir, "dri", NULL);
+
+      if (!g_hash_table_contains (drivers_set, libdir_driver))
         {
-          g_hash_table_add (drivers_set, g_strdup (dri_path));
-          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, dri_path,
-                                      is_extra, module, drivers_out);
+          g_hash_table_add (drivers_set, g_strdup (libdir_driver));
+          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                      libdir_driver, is_extra, module, drivers_out);
         }
 
       int driver_class = _srt_get_library_class (driver_canonical_path);
@@ -2761,7 +2827,7 @@ _srt_get_modules_full (gchar **envp,
               if (!g_hash_table_contains (drivers_set, this_extra_path->data))
                 {
                   g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
-                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, 
+                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
                                               this_extra_path->data, TRUE, module,
                                               drivers_out);
                 }
@@ -2770,12 +2836,28 @@ _srt_get_modules_full (gchar **envp,
 
       free (driver_canonical_path);
       g_free (libdir);
-      g_free (dri_path);
+      g_free (libdir_driver);
       g_object_unref (library_details);
       if (extras)
         g_list_free_full (extras, g_free);
     }
 
+  /* Debian used to hardcode "/usr/lib/vdpau" as an additional search path for VDPAU.
+   * However since libvdpau 1.3-1 it has been removed; reference:
+   * <https://salsa.debian.org/nvidia-team/libvdpau/commit/11a3cd84>
+   * Just to be sure to not miss a potentially valid library path we search on it
+   * unconditionally, flagging it as extra. */
+  if (module == SRT_GRAPHICS_VDPAU_MODULE)
+    {
+      gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
+      if (!g_hash_table_contains (drivers_set, debian_additional))
+        {
+          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                      debian_additional, TRUE, module,
+                                      drivers_out);
+        }
+      g_free (debian_additional);
+    }
 
   g_hash_table_unref (drivers_set);
   g_free (flatpak_info);
@@ -3011,6 +3093,246 @@ _srt_list_va_api_drivers (gchar **envp,
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
   _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_VAAPI_MODULE, &drivers);
+
+  return g_list_reverse (drivers);
+}
+
+/**
+ * SrtVdpauDriver:
+ *
+ * Opaque object representing a VDPAU driver.
+ */
+
+struct _SrtVdpauDriver
+{
+  /*< private >*/
+  GObject parent;
+  gchar *library_path;
+  gchar *library_link;
+  gboolean is_extra;
+};
+
+struct _SrtVdpauDriverClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  VDPAU_DRIVER_PROP_0,
+  VDPAU_DRIVER_PROP_LIBRARY_PATH,
+  VDPAU_DRIVER_PROP_LIBRARY_LINK,
+  VDPAU_DRIVER_PROP_IS_EXTRA,
+  N_VDPAU_DRIVER_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtVdpauDriver, srt_vdpau_driver, G_TYPE_OBJECT)
+
+static void
+srt_vdpau_driver_init (SrtVdpauDriver *self)
+{
+}
+
+static void
+srt_vdpau_driver_get_property (GObject *object,
+                               guint prop_id,
+                               GValue *value,
+                               GParamSpec *pspec)
+{
+  SrtVdpauDriver *self = SRT_VDPAU_DRIVER (object);
+
+  switch (prop_id)
+    {
+      case VDPAU_DRIVER_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->library_path);
+        break;
+
+      case VDPAU_DRIVER_PROP_LIBRARY_LINK:
+        g_value_set_string (value, self->library_link);
+        break;
+
+      case VDPAU_DRIVER_PROP_IS_EXTRA:
+        g_value_set_boolean (value, self->is_extra);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_vdpau_driver_set_property (GObject *object,
+                               guint prop_id,
+                               const GValue *value,
+                               GParamSpec *pspec)
+{
+  SrtVdpauDriver *self = SRT_VDPAU_DRIVER (object);
+
+  switch (prop_id)
+    {
+      case VDPAU_DRIVER_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->library_path == NULL);
+        self->library_path = g_value_dup_string (value);
+        break;
+
+      case VDPAU_DRIVER_PROP_LIBRARY_LINK:
+        g_return_if_fail (self->library_link == NULL);
+        self->library_link = g_value_dup_string (value);
+        break;
+
+      case VDPAU_DRIVER_PROP_IS_EXTRA:
+        self->is_extra = g_value_get_boolean (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_vdpau_driver_finalize (GObject *object)
+{
+  SrtVdpauDriver *self = SRT_VDPAU_DRIVER (object);
+
+  g_clear_pointer (&self->library_path, g_free);
+  g_clear_pointer (&self->library_link, g_free);
+
+  G_OBJECT_CLASS (srt_vdpau_driver_parent_class)->finalize (object);
+}
+
+static GParamSpec *vdpau_driver_properties[N_VDPAU_DRIVER_PROPERTIES] = { NULL };
+
+static void
+srt_vdpau_driver_class_init (SrtVdpauDriverClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_vdpau_driver_get_property;
+  object_class->set_property = srt_vdpau_driver_set_property;
+  object_class->finalize = srt_vdpau_driver_finalize;
+
+  vdpau_driver_properties[VDPAU_DRIVER_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Absolute path to the VDPAU driver library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vdpau_driver_properties[VDPAU_DRIVER_PROP_LIBRARY_LINK] =
+    g_param_spec_string ("library-link", "Library symlink contents",
+                         "Contents of the symbolik link of the VDPAU driver library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vdpau_driver_properties[VDPAU_DRIVER_PROP_IS_EXTRA] =
+    g_param_spec_boolean ("is-extra", "Is extra?",
+                          "TRUE if the driver is located in an unusual path",
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_VDPAU_DRIVER_PROPERTIES,
+                                     vdpau_driver_properties);
+}
+
+/**
+ * srt_vdpau_driver_new:
+ * @library_path: (transfer none): the path to the library
+ * @library_link: (transfer none) (nullable): the content of the library symlink
+ * @is_extra: if the VDPAU driver is in an unusual path
+ *
+ * Returns: (transfer full): a new VDPAU driver
+ */
+static SrtVdpauDriver *
+srt_vdpau_driver_new (const gchar *library_path,
+                      const gchar *library_link,
+                      gboolean is_extra)
+{
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_VDPAU_DRIVER,
+                       "library-path", library_path,
+                       "library-link", library_link,
+                       "is-extra", is_extra,
+                       NULL);
+}
+
+/**
+ * srt_vdpau_driver_get_library_path:
+ * @self: The VDPAU driver
+ *
+ * Return the library path for this VDPAU driver.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtVdpauDriver:library-path
+ */
+const gchar *
+srt_vdpau_driver_get_library_path (SrtVdpauDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), NULL);
+  return self->library_path;
+}
+
+/**
+ * srt_vdpau_driver_get_library_link:
+ * @self: The VDPAU driver
+ *
+ * Return the content of the symbolic link for this VDPAU driver or %NULL
+ * if the library path is not a symlink.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtVdpauDriver:library-link
+ */
+const gchar *
+srt_vdpau_driver_get_library_link (SrtVdpauDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), NULL);
+  return self->library_link;
+}
+
+/**
+ * srt_vdpau_driver_is_extra:
+ * @self: The VDPAU driver
+ *
+ * Return a gboolean that indicates if the VDPAU is in an unusual position.
+ *
+ * Returns: %TRUE if the VDPAU driver is in an unusual position.
+ */
+gboolean
+srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), FALSE);
+  return self->is_extra;
+}
+
+/*
+ * _srt_list_vdpau_drivers:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ *
+ * Implementation of srt_system_info_list_vdpau_drivers().
+ *
+ * The returned list will have the most-preferred directories first and the
+ * least-preferred directories last. Within a directory, the drivers will be in
+ * lexicographic order, for example `libvdpau_nouveau.so`, `libvdpau_r600.so`,
+ * `libvdpau_radeonsi.so` in that order.
+ *
+ * Returns: (transfer full) (element-type SrtVdpauDriver) (nullable): A list of
+ *  opaque #SrtVdpauDriver objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+_srt_list_vdpau_drivers (gchar **envp,
+                         const char *helpers_path,
+                         const char *multiarch_tuple)
+{
+  GList *drivers = NULL;
+
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_VDPAU_MODULE, &drivers);
 
   return g_list_reverse (drivers);
 }

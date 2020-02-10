@@ -183,6 +183,21 @@ GType srt_va_api_driver_get_type (void);
 const gchar *srt_va_api_driver_get_library_path (SrtVaApiDriver *self);
 gboolean srt_va_api_driver_is_extra (SrtVaApiDriver *self);
 
+typedef struct _SrtVdpauDriver SrtVdpauDriver;
+typedef struct _SrtVdpauDriverClass SrtVdpauDriverClass;
+
+#define SRT_TYPE_VDPAU_DRIVER (srt_vdpau_driver_get_type ())
+#define SRT_VDPAU_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_VDPAU_DRIVER, SrtVdpauDriver))
+#define SRT_VDPAU_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_VDPAU_DRIVER, SrtVdpauDriverClass))
+#define SRT_IS_VDPAU_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VDPAU_DRIVER))
+#define SRT_IS_VDPAU_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VDPAU_DRIVER))
+#define SRT_VDPAU_DRIVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VDPAU_DRIVER, SrtVdpauDriverClass)
+GType srt_vdpau_driver_get_type (void);
+
+const gchar *srt_vdpau_driver_get_library_path (SrtVdpauDriver *self);
+const gchar *srt_vdpau_driver_get_library_link (SrtVdpauDriver *self);
+gboolean srt_vdpau_driver_is_extra (SrtVdpauDriver *self);
+
 typedef struct _SrtVulkanIcd SrtVulkanIcd;
 typedef struct _SrtVulkanIcdClass SrtVulkanIcdClass;
 
@@ -211,5 +226,6 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphics, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglIcd, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDriDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVaApiDriver, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVdpauDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVulkanIcd, g_object_unref)
 #endif

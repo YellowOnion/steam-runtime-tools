@@ -2274,6 +2274,7 @@ main (int argc,
         }
       else
         {
+          g_debug ("OK (%s)", bwrap_executable);
           ret = 0;
           goto out;
         }

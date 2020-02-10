@@ -29,6 +29,10 @@
 #include <gio/gio.h>
 #include "libglnx/libglnx.h"
 
+/* To keep this more similar to the original file, we explicitly disable
+ * this warning rather than fixing it */
+#pragma GCC diagnostic ignored "-Wshadow"
+
 char *
 flatpak_get_timezone (void)
 {

@@ -56,3 +56,6 @@ G_GNUC_INTERNAL void _srt_child_setup_unblock_signals (gpointer ignored);
 
 /* not G_GNUC_INTERNAL because s-r-s-i calls it */
 void _srt_unblock_signals (void);
+
+G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
+                                           gconstpointer right);

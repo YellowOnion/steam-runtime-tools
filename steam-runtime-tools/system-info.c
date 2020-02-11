@@ -151,6 +151,9 @@ struct _SrtSystemInfo
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
+  /* cached_driver_environment != NULL indicates we have already checked the
+   * driver-selection environment variables */
+  gchar **cached_driver_environment;
   /* (element-type Abi) */
   GPtrArray *abis;
 };
@@ -432,6 +435,7 @@ srt_system_info_finalize (GObject *object)
   g_free (self->expectations);
   g_free (self->helpers_path);
   g_strfreev (self->env);
+  g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   if (self->cached_hidden_deps)
     g_hash_table_unref (self->cached_hidden_deps);
 
@@ -1579,6 +1583,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_os (self);
   forget_overrides (self);
   forget_pinned_libs (self);
+  g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   g_strfreev (self->env);
   self->env = g_strdupv ((gchar **) env);
 
@@ -2593,4 +2598,88 @@ srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
     }
 
   return g_list_reverse (ret);
+}
+
+static void
+ensure_driver_environment (SrtSystemInfo *self)
+{
+  g_return_if_fail (_srt_check_not_setuid ());
+
+  if (self->cached_driver_environment == NULL)
+    {
+      GPtrArray *builder;
+      GRegex *regex;
+      gchar **env_list = get_environ (self);
+      /* This is the list of well-known driver-selection environment variables,
+       * plus __GLX_FORCE_VENDOR_LIBRARY_%d that will be searched with a regex */
+      static const gchar * const drivers_env[] = {"VDPAU_DRIVER",
+                                                  "MESA_LOADER_DRIVER_OVERRIDE",
+                                                  "LIBVA_DRIVER_NAME",
+                                                  "__GLX_VENDOR_LIBRARY_NAME",
+                                                  NULL};
+
+      builder = g_ptr_array_new_with_free_func (g_free);
+
+      for (guint i = 0; drivers_env[i] != NULL; i++)
+        {
+          const gchar *value = g_environ_getenv (env_list, drivers_env[i]);
+          if (value != NULL)
+            {
+              gchar *key_value = g_strjoin ("=", drivers_env[i], value, NULL);
+              g_ptr_array_add (builder, key_value);
+            }
+        }
+
+      regex = g_regex_new ("^__GLX_FORCE_VENDOR_LIBRARY_[0-9]+=", 0, 0, NULL);
+      g_assert (regex != NULL);    /* known to be valid at compile-time */
+
+      for (gsize i = 0; env_list != NULL && env_list[i] != NULL; i++)
+        {
+          if (!g_regex_match (regex, env_list[i], 0, NULL))
+            continue;
+
+          g_ptr_array_add (builder, g_strdup (env_list[i]));
+        }
+
+      g_ptr_array_sort (builder, _srt_indirect_strcmp0);
+      g_ptr_array_add (builder, NULL);
+      g_regex_unref (regex);
+
+      self->cached_driver_environment = (gchar **) g_ptr_array_free (builder, FALSE);
+    }
+}
+
+/**
+ * srt_system_info_list_driver_environment:
+ * @self: The #SrtSystemInfo object
+ *
+ * List of the driver-selection environment variables.
+ *
+ * Some drivers have an environment variable that overrides the automatic
+ * detection of which driver should be used.
+ * For example Mesa has `MESA_LOADER_DRIVER_OVERRIDE`, VA-API has
+ * `LIBVA_DRIVER_NAME` and so on.
+ *
+ * The output will contain a list, in the form "NAME=VALUE", of the well-known
+ * driver environment variables that are currently being set.
+ *
+ * The drivers will be in lexicographic order, for example
+ * `LIBVA_DRIVER_NAME=radeonsi`, `VDPAU_DRIVER=radeonsi`,
+ * `__GLX_FORCE_VENDOR_LIBRARY_0=i965`, in that order.
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable):
+ *  An array of strings, or %NULL if we were unable to find driver-selection
+ *  environment variables. Free with g_strfreev().
+ */
+gchar **
+srt_system_info_list_driver_environment (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_driver_environment (self);
+
+  if (self->cached_driver_environment == NULL || self->cached_driver_environment[0] == NULL)
+    return NULL;
+  else
+    return g_strdupv (self->cached_driver_environment);
 }

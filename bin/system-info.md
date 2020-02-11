@@ -292,6 +292,13 @@ keys:
 
         This is the **VARIANT** from **os-release**(5).
 
+**driver_environment**
+:   An array of strings, in the form "NAME=VALUE", with the well-known driver environment
+    variables that are currently set.
+    For example Mesa has `MESA_LOADER_DRIVER_OVERRIDE`, VA-API has
+    `LIBVA_DRIVER_NAME` and so on.
+    If empty, no environment variables related to driver selection have been found.
+
 **architectures**
 :   An object with architecture-specific information. The keys are
     Debian-style *multiarch tuples* describing ABIs, as returned by

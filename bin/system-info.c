@@ -807,6 +807,20 @@ main (int argc,
     }
   json_builder_end_object (builder);
 
+  json_builder_set_member_name (builder, "driver_environment");
+  json_builder_begin_array (builder);
+    {
+      GStrv strv = srt_system_info_list_driver_environment (info);
+      if (strv != NULL)
+        {
+          for (gsize i = 0; strv[i] != NULL; i++)
+            json_builder_add_string_value (builder, strv[i]);
+
+          g_strfreev (strv);
+        }
+    }
+  json_builder_end_array (builder);
+
   json_builder_set_member_name (builder, "architectures");
   json_builder_begin_object (builder);
 

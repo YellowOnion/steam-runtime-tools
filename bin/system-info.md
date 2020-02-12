@@ -449,6 +449,25 @@ keys:
             This key is optional and if is not provided, the default %FALSE
             value should be assumed.
 
+    **vdpau_drivers**
+    :   An array of objects describing the VDPAU driver modules that have been
+        found. These drivers are used by the VDPAU `libvdpau.so.1`.
+        Every object can have the following keys:
+
+        **library_path**
+        :   Path to the driver module that has been found.
+
+        **library_link**
+        :   Content of the **library_path** symbolic link. This key is optional
+            and if is not provided, it should be assumed that **library_path**
+            was a regular file and not a symbolic link.
+
+        **is_extra**
+        :   A boolean value indicating whether the driver module is in an
+            "unusual" location, probably not in the canonical search path.
+            This key is optional and if is not provided, the default %FALSE
+            value should be assumed.
+
 **locale-issues**
 :   An array of strings indicating locale-related issues.
     The array is empty if no problems were detected.

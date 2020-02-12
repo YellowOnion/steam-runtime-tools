@@ -152,6 +152,7 @@ libraries_presence (Fixture *f,
         }
       g_assert_true (json_object_has_member (json_arch, "dri_drivers"));
       g_assert_true (json_object_has_member (json_arch, "va-api_drivers"));
+      g_assert_true (json_object_has_member (json_arch, "vdpau_drivers"));
     }
 
   g_object_unref (parser);
@@ -274,6 +275,7 @@ libraries_missing (Fixture *f,
                       ==, srt_system_info_can_run (info, multiarch_tuples[i]));
       g_assert_true (json_object_has_member (json_arch, "dri_drivers"));
       g_assert_true (json_object_has_member (json_arch, "va-api_drivers"));
+      g_assert_true (json_object_has_member (json_arch, "vdpau_drivers"));
 
       check_libraries_missing (json_arch);
     }
@@ -393,6 +395,7 @@ libraries_presence_verbose (Fixture *f,
                       ==, srt_system_info_can_run (info, multiarch_tuples[i]));
       g_assert_true (json_object_has_member (json_arch, "dri_drivers"));
       g_assert_true (json_object_has_member (json_arch, "va-api_drivers"));
+      g_assert_true (json_object_has_member (json_arch, "vdpau_drivers"));
 
       check_libraries_verbose (json_arch);
     }
@@ -462,6 +465,7 @@ no_arguments (Fixture *f,
                       ==, srt_system_info_can_run (info, multiarch_tuples[i]));
       g_assert_true (json_object_has_member (json_arch, "dri_drivers"));
       g_assert_true (json_object_has_member (json_arch, "va-api_drivers"));
+      g_assert_true (json_object_has_member (json_arch, "vdpau_drivers"));
     }
 
   g_object_unref (parser);

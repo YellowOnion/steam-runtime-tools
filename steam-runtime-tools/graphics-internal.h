@@ -146,11 +146,13 @@ _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interf
  * SrtGraphicsModule:
  * @SRT_GRAPHICS_DRI_MODULE: Mesa DRI driver module
  * @SRT_GRAPHICS_VAAPI_MODULE: VA-API driver module
+ * @SRT_GRAPHICS_VDPAU_MODULE: VDPAU driver module
  */
 typedef enum
 {
   SRT_GRAPHICS_DRI_MODULE = 0,
-  SRT_GRAPHICS_VAAPI_MODULE
+  SRT_GRAPHICS_VAAPI_MODULE,
+  SRT_GRAPHICS_VDPAU_MODULE,
 } SrtGraphicsModule;
 
 G_GNUC_INTERNAL
@@ -169,3 +171,8 @@ G_GNUC_INTERNAL
 GList *_srt_list_dri_drivers (gchar **envp,
                               const char *helpers_path,
                               const char *multiarch_tuple);
+
+G_GNUC_INTERNAL
+GList *_srt_list_vdpau_drivers (gchar **envp,
+                                const char *helpers_path,
+                                const char *multiarch_tuple);

@@ -501,6 +501,36 @@ print_va_api_details (JsonBuilder *builder,
   json_builder_end_array (builder); // End va-api_drivers
 }
 
+static void
+print_vdpau_details (JsonBuilder *builder,
+                     GList *vdpau_list)
+{
+  GList *iter;
+
+  json_builder_set_member_name (builder, "vdpau_drivers");
+  json_builder_begin_array (builder);
+    {
+      for (iter = vdpau_list; iter != NULL; iter = iter->next)
+        {
+          json_builder_begin_object (builder);
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, srt_vdpau_driver_get_library_path (iter->data));
+          if (srt_vdpau_driver_get_library_link (iter->data) != NULL)
+            {
+              json_builder_set_member_name (builder, "library_link");
+              json_builder_add_string_value (builder, srt_vdpau_driver_get_library_link (iter->data));
+            }
+          if (srt_vdpau_driver_is_extra (iter->data))
+            {
+              json_builder_set_member_name (builder, "is_extra");
+              json_builder_add_boolean_value (builder, TRUE);
+            }
+          json_builder_end_object (builder);
+        }
+    }
+  json_builder_end_array (builder); // End vdpau_drivers
+}
+
 static const char * const locales[] =
 {
   "",
@@ -831,6 +861,7 @@ main (int argc,
       GList *libraries = NULL;
       GList *dri_list = NULL;
       GList *va_api_list = NULL;
+      GList *vdpau_list = NULL;
 
       json_builder_set_member_name (builder, multiarch_tuples[i]);
       json_builder_begin_object (builder);
@@ -864,11 +895,16 @@ main (int argc,
                                                          extra_driver_flags);
       print_va_api_details (builder, va_api_list);
 
+      vdpau_list = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[i],
+                                                       extra_driver_flags);
+      print_vdpau_details (builder, vdpau_list);
+
       json_builder_end_object (builder); // End multiarch_tuple object
       g_list_free_full (libraries, g_object_unref);
       g_list_free_full (graphics_list, g_object_unref);
       g_list_free_full (dri_list, g_object_unref);
       g_list_free_full (va_api_list, g_object_unref);
+      g_list_free_full (vdpau_list, g_object_unref);
     }
 
   json_builder_end_object (builder);

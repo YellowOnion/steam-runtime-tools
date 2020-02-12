@@ -41,6 +41,7 @@ main (int argc,
       if (g_strstr_len (argv[1], -1, "/lib/i386-linux-gnu/") != NULL ||
           g_strstr_len (argv[1], -1, "/lib32/dri/") != NULL ||
           g_strstr_len (argv[1], -1, "/lib/dri/") != NULL ||
+          g_strstr_len (argv[1], -1, "/lib/vdpau/") != NULL ||
           g_strstr_len (argv[1], -1, "/custom_path32/") != NULL ||
           g_strstr_len (argv[1], -1, "/custom_path32_2/") != NULL)
         {

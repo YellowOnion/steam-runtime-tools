@@ -224,6 +224,8 @@ executable(
     'src/flatpak-utils-base-private.h',
     'src/flatpak-utils.c',
     'src/flatpak-utils-private.h',
+    'src/runtime.c',
+    'src/runtime.h',
     'src/utils.c',
     'src/utils.h',
     'src/wrap.c',

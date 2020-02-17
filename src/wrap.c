@@ -43,6 +43,7 @@
 #include "flatpak-run-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
+#include "runtime.h"
 #include "utils.h"
 #include "wrap-interactive.h"
 
@@ -2013,11 +2014,11 @@ main (int argc,
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
-  g_autoptr(PvBwrapLock) runtime_lock = NULL;
   const gchar *home;
   g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
+  g_autoptr(PvRuntime) runtime = NULL;
 
   setlocale (LC_ALL, "");
   pv_avoid_gvfs ();
@@ -2397,23 +2398,18 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
-      g_autofree gchar *files_ref = NULL;
+      g_debug ("Configuring runtime %s...", opt_runtime);
 
-      g_debug ("Configuring runtime...");
+      runtime = pv_runtime_new (opt_runtime,
+                                bwrap_executable,
+                                tools_dir,
+                                error);
 
       /* Start with just the root tmpfs (which appears automatically)
        * and the standard API filesystems */
       pv_bwrap_add_api_filesystems (bwrap);
 
-      /* Take a lock on the runtime until we're finished with setup,
-       * to make sure it doesn't get deleted. */
-      files_ref = g_build_filename (opt_runtime, ".ref", NULL);
-      runtime_lock = pv_bwrap_lock_new (files_ref,
-                                        PV_BWRAP_LOCK_FLAGS_CREATE,
-                                        error);
-
-      /* If the runtime is being deleted, ... don't use it, I suppose? */
-      if (runtime_lock == NULL)
+      if (runtime == NULL)
         goto out;
 
       pv_search_path_append (bin_path, "/overrides/bin");
@@ -2510,8 +2506,7 @@ main (int argc,
 
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
-              if (opt_runtime != NULL
-                  && opt_runtime[0] != '\0'
+              if (runtime != NULL
                   && (g_str_has_prefix (preload, "/usr/")
                       || g_str_has_prefix (preload, "/lib")))
                 {
@@ -2580,7 +2575,7 @@ main (int argc,
 
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
-  if (opt_runtime == NULL || opt_runtime[0] == '\0')
+  if (runtime == NULL)
     {
       g_debug ("Making Steam Runtime available...");
 
@@ -2630,57 +2625,8 @@ main (int argc,
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     goto out;
 
-  /* If we are using a runtime, pass the lock fd to the executed process,
-   * and make it act as a subreaper for the game itself.
-   *
-   * If we were using --unshare-pid then we could use bwrap --sync-fd
-   * and rely on bubblewrap's init process for this, but we currently
-   * can't do that without breaking gameoverlayrender.so's assumptions. */
-  if (runtime_lock != NULL)
-    {
-      flatpak_bwrap_add_args (bwrap,
-                              "/run/pressure-vessel/bin/pressure-vessel-with-lock",
-                              "--subreaper",
-                              NULL);
-
-      if (pv_bwrap_lock_is_ofd (runtime_lock))
-        {
-          int fd = pv_bwrap_lock_steal_fd (runtime_lock);
-          g_autofree gchar *fd_str = NULL;
-
-          g_debug ("Passing lock fd %d down to with-lock", fd);
-          flatpak_bwrap_add_fd (bwrap, fd);
-          fd_str = g_strdup_printf ("%d", fd);
-          flatpak_bwrap_add_args (bwrap,
-                                  "--fd", fd_str,
-                                  NULL);
-        }
-      else
-        {
-          /*
-           * We were unable to take out an open file descriptor lock,
-           * so it will be released on fork(). Tell the with-lock process
-           * to take out its own compatible lock instead. There will be
-           * a short window during which we have lost our lock but the
-           * with-lock process has not taken its lock - that's unavoidable
-           * if we want to use exec() to replace ourselves with the
-           * container.
-           *
-           * pv_bwrap_bind_usr() arranges for /.ref to either be a
-           * symbolic link to /usr/.ref which is the runtime_lock
-           * (if opt_runtime is a merged /usr), or the runtime_lock
-           * itself (otherwise).
-           */
-          g_debug ("Telling process in container to lock /.ref");
-          flatpak_bwrap_add_args (bwrap,
-                                  "--lock-file", "/.ref",
-                                  NULL);
-        }
-
-      flatpak_bwrap_add_args (bwrap,
-                              "--",
-                              NULL);
-    }
+  if (runtime != NULL)
+    pv_runtime_append_lock_adverb (runtime, bwrap);
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);

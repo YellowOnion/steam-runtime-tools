@@ -323,11 +323,13 @@ static char *opt_steam_app_id = NULL;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
 static gboolean opt_host_graphics = TRUE;
+static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
+static gboolean opt_share_pid = TRUE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
@@ -517,6 +519,16 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
     "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
     "MODULE" },
+  { "remove-game-overlay", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_remove_game_overlay,
+    "Disable the Steam Overlay. "
+    "[Default if $PRESSURE_VESSEL_REMOVE_GAME_OVERLAY is 1]",
+    NULL },
+  { "keep-game-overlay", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_remove_game_overlay,
+    "Do not disable the Steam Overlay. "
+    "[Default unless $PRESSURE_VESSEL_REMOVE_GAME_OVERLAY is 1]",
+    NULL },
   { "runtime", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
@@ -540,6 +552,16 @@ static GOptionEntry options[] =
     "--freedesktop-app-id, --steam-app-id or $SteamAppId. "
     "[Default if $PRESSURE_VESSEL_HOME is set or "
     "$PRESSURE_VESSEL_SHARE_HOME is 0]",
+    NULL },
+  { "share-pid", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_share_pid,
+    "Do not create a new process ID namespace for the app. "
+    "[Default, unless $PRESSURE_VESSEL_SHARE_PID is 0]",
+    NULL },
+  { "unshare-pid", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_share_pid,
+    "Create a new process ID namespace for the app. "
+    "[Default if $PRESSURE_VESSEL_SHARE_PID is 0]",
     NULL },
   { "shell", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_shell_cb,
@@ -700,9 +722,12 @@ main (int argc,
   if (opt_home != NULL && opt_home[0] == '\0')
     g_clear_pointer (&opt_home, g_free);
 
+  opt_remove_game_overlay = boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
+                                                 FALSE);
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
   opt_host_graphics = boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
                                            TRUE);
+  opt_share_pid = boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
   opt_verbose = boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
@@ -1078,6 +1103,13 @@ main (int argc,
         goto out;
     }
 
+  if (!opt_share_pid)
+    {
+      g_warning ("Unsharing process ID namespace. This is not expected "
+                 "to work...");
+      flatpak_bwrap_add_arg (bwrap, "--unshare-pid");
+    }
+
   g_debug ("Adjusting LD_PRELOAD...");
 
   /* We need the LD_PRELOADs from Steam visible at the paths that were
@@ -1102,6 +1134,13 @@ main (int argc,
 
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
+              if (opt_remove_game_overlay
+                  && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+                {
+                  g_debug ("Disabling Steam Overlay: %s", preload);
+                  continue;
+                }
+
               if (runtime != NULL
                   && (g_str_has_prefix (preload, "/usr/")
                       || g_str_has_prefix (preload, "/lib")))

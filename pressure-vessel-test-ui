@@ -211,6 +211,48 @@ class Gui:
         self.grid.attach(label, 1, row, 1, 1)
         row += 1
 
+        self.unshare_pid_check = Gtk.CheckButton.new_with_label(
+            'Create a new process ID namespace'
+        )
+        share_pid = boolean_environment('PRESSURE_VESSEL_SHARE_PID', True)
+        self.unshare_pid_check.set_active(not share_pid)
+        self.grid.attach(self.unshare_pid_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            "Creating a new process ID namespace is very experimental, "
+            "and is known to break Steam's tracking of running games."
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self.keep_game_overlay_check = Gtk.CheckButton.new_with_label(
+            'Allow Steam Overlay'
+        )
+        remove = boolean_environment(
+            'PRESSURE_VESSEL_REMOVE_GAME_OVERLAY', False
+        )
+        self.keep_game_overlay_check.set_active(not remove)
+        self.grid.attach(self.keep_game_overlay_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'Disabling this seems to work around some of the issues with '
+            'process ID namespaces, but will break various Steam features.'
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
         self.xterm_check.set_active(False)
         self.grid.attach(self.xterm_check, 1, row, 1, 1)
@@ -419,6 +461,16 @@ class Gui:
             argv.append('--unshare-home')
         else:
             argv.append('--share-home')
+
+        if self.unshare_pid_check.get_active():
+            argv.append('--unshare-pid')
+        else:
+            argv.append('--share-pid')
+
+        if self.keep_game_overlay_check.get_active():
+            argv.append('--keep-game-overlay')
+        else:
+            argv.append('--remove-game-overlay')
 
         if self.xterm_check.get_active():
             argv.append('--terminal=xterm')

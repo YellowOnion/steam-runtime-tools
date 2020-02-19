@@ -2350,13 +2350,15 @@ main (int argc,
   if (opt_terminal != PV_TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
-  pv_bwrap_add_api_filesystems (bwrap);
-
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       g_autofree gchar *files_ref = NULL;
 
       g_debug ("Configuring runtime...");
+
+      /* Start with just the root tmpfs (which appears automatically)
+       * and the standard API filesystems */
+      pv_bwrap_add_api_filesystems (bwrap);
 
       /* Take a lock on the runtime until we're finished with setup,
        * to make sure it doesn't get deleted. */
@@ -2415,6 +2417,9 @@ main (int argc,
       flatpak_bwrap_add_args (bwrap,
                               "--bind", "/", "/",
                               NULL);
+      /* /dev is already visible, because we mounted the entire root
+       * filesystem, but we need to remount parts of it without nodev */
+      pv_bwrap_add_api_filesystems (bwrap);
     }
 
   /* Protect other users' homes (but guard against the unlikely

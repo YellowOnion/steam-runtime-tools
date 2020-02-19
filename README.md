@@ -232,7 +232,7 @@ Instructions for testing
     and a `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/metadata`
     file. For example, download a
     `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
-    from http://repo.steampowered.com/steamrt/steamrt-scout/snapshots/ and
+    from https://repo.steampowered.com/steamrt-images-scout/snapshots/ and
     unpack it like this:
 
         $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout

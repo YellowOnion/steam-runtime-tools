@@ -34,3 +34,11 @@ void pv_get_current_dirs (gchar **cwd_p,
 
 gboolean pv_is_same_file (const gchar *a,
                           const gchar *b);
+
+void pv_search_path_append (GString *search_path,
+                            const gchar *item);
+
+gchar *pv_capture_output (const char * const * argv,
+                          GError **error);
+
+gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);

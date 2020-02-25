@@ -78,19 +78,6 @@ find_executable_dir (GError **error)
   return g_path_get_dirname (target);
 }
 
-static void
-search_path_append (GString *search_path,
-                    const gchar *item)
-{
-  if (item == NULL || item[0] == '\0')
-    return;
-
-  if (search_path->len != 0)
-    g_string_append (search_path, ":");
-
-  g_string_append (search_path, item);
-}
-
 static gchar *
 find_bwrap (const char *tools_dir)
 {
@@ -195,53 +182,6 @@ check_bwrap (const char *tools_dir)
     }
 
   return NULL;
-}
-
-static gchar *
-capture_output (const char * const * argv,
-                GError **error)
-{
-  gsize len;
-  gint wait_status;
-  g_autofree gchar *output = NULL;
-  g_autofree gchar *errors = NULL;
-  gsize i;
-  g_autoptr(GString) command = g_string_new ("");
-
-  for (i = 0; argv[i] != NULL; i++)
-    {
-      g_autofree gchar *quoted = g_shell_quote (argv[i]);
-
-      g_string_append_printf (command, " %s", quoted);
-    }
-
-  g_debug ("run:%s", command->str);
-
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (char **) argv,
-                     NULL,  /* env */
-                     G_SPAWN_SEARCH_PATH,
-                     NULL, NULL,    /* child setup */
-                     &output,
-                     &errors,
-                     &wait_status,
-                     error))
-    return NULL;
-
-  g_printerr ("%s", errors);
-
-  if (!g_spawn_check_exit_status (wait_status, error))
-    return NULL;
-
-  len = strlen (output);
-
-  /* Emulate shell $() */
-  if (len > 0 && output[len - 1] == '\n')
-    output[len - 1] = '\0';
-
-  g_debug ("-> %s", output);
-
-  return g_steal_pointer (&output);
 }
 
 static gboolean
@@ -441,7 +381,7 @@ ensure_locales (gboolean on_host,
       g_debug ("%s is non-empty", locales);
 
       locpath = g_string_new ("/overrides/locales");
-      search_path_append (locpath, g_getenv ("LOCPATH"));
+      pv_search_path_append (locpath, g_getenv ("LOCPATH"));
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LOCPATH", locpath->str,
                               NULL);
@@ -637,22 +577,6 @@ bind_icd (gsize multiarch_index,
     }
 
   return TRUE;
-}
-
-/*
- * Returns: (transfer none): The first key in @table in iteration order, or %NULL if @table is empty.
- */
-static gpointer
-pv_hash_table_get_arbitrary_key (GHashTable *table)
-{
-  GHashTableIter iter;
-  gpointer key = NULL;
-
-  g_hash_table_iter_init (&iter, table);
-  if (g_hash_table_iter_next (&iter, &key, NULL))
-    return key;
-  else
-    return NULL;
 }
 
 static gboolean
@@ -877,7 +801,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
       /* This has the side-effect of testing whether we can run binaries
        * for this architecture on the host system. */
-      ld_so = capture_output (argv, NULL);
+      ld_so = pv_capture_output (argv, NULL);
 
       if (ld_so != NULL)
         {
@@ -913,8 +837,8 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
 
-          ld_so_in_runtime = capture_output ((const char * const *) temp_bwrap->argv->pdata,
-                                             NULL);
+          ld_so_in_runtime = pv_capture_output ((const char * const *) temp_bwrap->argv->pdata,
+                                                NULL);
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
@@ -928,7 +852,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           any_architecture_works = TRUE;
           g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
 
-          search_path_append (dri_path, this_dri_path_in_container);
+          pv_search_path_append (dri_path, this_dri_path_in_container);
 
           g_mkdir_with_parents (libdir_on_host, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
@@ -1394,7 +1318,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                                  error))
                 return FALSE;
 
-              search_path_append (egl_path, json_in_container);
+              pv_search_path_append (egl_path, json_in_container);
             }
           else if (details->kinds[i] == ICD_KIND_SONAME)
             {
@@ -1416,7 +1340,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_add_args (bwrap,
                                   "--ro-bind", json_on_host, json_in_container,
                                   NULL);
-          search_path_append (egl_path, json_in_container);
+          pv_search_path_append (egl_path, json_in_container);
         }
     }
 
@@ -1468,7 +1392,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                                  error))
                 return FALSE;
 
-              search_path_append (vulkan_path, json_in_container);
+              pv_search_path_append (vulkan_path, json_in_container);
             }
           else if (details->kinds[i] == ICD_KIND_SONAME)
             {
@@ -1490,7 +1414,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_add_args (bwrap,
                                   "--ro-bind", json_on_host, json_in_container,
                                   NULL);
-          search_path_append (vulkan_path, json_in_container);
+          pv_search_path_append (vulkan_path, json_in_container);
         }
     }
 
@@ -2444,7 +2368,7 @@ main (int argc,
 
   g_debug ("Checking bwrap features...");
   bwrap_help_argv[0] = bwrap_executable;
-  bwrap_help = capture_output (bwrap_help_argv, error);
+  bwrap_help = pv_capture_output (bwrap_help_argv, error);
 
   if (bwrap_help == NULL)
     goto out;
@@ -2492,8 +2416,8 @@ main (int argc,
       if (runtime_lock == NULL)
         goto out;
 
-      search_path_append (bin_path, "/overrides/bin");
-      search_path_append (bin_path, g_getenv ("PATH"));
+      pv_search_path_append (bin_path, "/overrides/bin");
+      pv_search_path_append (bin_path, g_getenv ("PATH"));
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "PATH",
                               bin_path->str,
@@ -2512,7 +2436,7 @@ main (int argc,
           ld_path = g_build_filename ("/overrides", "lib",
                                      multiarch_tuples[i], NULL);
 
-          search_path_append (ld_library_path, ld_path);
+          pv_search_path_append (ld_library_path, ld_path);
         }
 
       /* This would be filtered out by a setuid bwrap, so we have to go
@@ -2598,14 +2522,14 @@ main (int argc,
                   /* When using a runtime we can't write to /usr/ or /libQUAL/,
                    * so redirect this preloaded module to the corresponding
                    * location in /run/host. */
-                  search_path_append (adjusted_ld_preload, in_run_host);
+                  pv_search_path_append (adjusted_ld_preload, in_run_host);
                 }
               else
                 {
                   flatpak_bwrap_add_args (bwrap,
                                           "--ro-bind", preload, preload,
                                           NULL);
-                  search_path_append (adjusted_ld_preload, preload);
+                  pv_search_path_append (adjusted_ld_preload, preload);
                 }
             }
           else

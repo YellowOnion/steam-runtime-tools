@@ -47,8 +47,6 @@ PvRuntime *pv_runtime_new (const char *source_files,
 
 void pv_runtime_append_lock_adverb (PvRuntime *self,
                                     FlatpakBwrap *bwrap);
-void pv_runtime_set_search_paths (PvRuntime *self,
-                                  FlatpakBwrap *bwrap);
 gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakBwrap *bwrap,
                           GError **error);

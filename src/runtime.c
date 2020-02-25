@@ -104,6 +104,8 @@ static const char * const libquals[] =
 static gboolean pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                     FlatpakBwrap *bwrap,
                                                     GError **error);
+static void pv_runtime_set_search_paths (PvRuntime *self,
+                                         FlatpakBwrap *bwrap);
 
 static void
 pv_runtime_init (PvRuntime *self)
@@ -1760,6 +1762,10 @@ pv_runtime_bind (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  /* Start with just the root tmpfs (which appears automatically)
+   * and the standard API filesystems */
+  pv_bwrap_add_api_filesystems (bwrap);
+
   if (!bind_runtime (self, bwrap, error))
     return FALSE;
 
@@ -1771,6 +1777,8 @@ pv_runtime_bind (PvRuntime *self,
                           pressure_vessel_prefix,
                           "/run/pressure-vessel",
                           NULL);
+
+  pv_runtime_set_search_paths (self, bwrap);
 
   return TRUE;
 }

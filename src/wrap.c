@@ -1026,14 +1026,8 @@ main (int argc,
                                 tools_dir,
                                 error);
 
-      /* Start with just the root tmpfs (which appears automatically)
-       * and the standard API filesystems */
-      pv_bwrap_add_api_filesystems (bwrap);
-
       if (runtime == NULL)
         goto out;
-
-      pv_runtime_set_search_paths (runtime, bwrap);
 
       if (!pv_runtime_bind (runtime, bwrap, error))
         goto out;

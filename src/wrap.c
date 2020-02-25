@@ -1651,6 +1651,7 @@ static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
+static gboolean opt_version_only = FALSE;
 static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 
@@ -1901,6 +1902,9 @@ static GOptionEntry options[] =
   { "version", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_version,
     "Print version number and exit.", NULL },
+  { "version-only", '\0',
+    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_version_only,
+    "Print version number (no other information) and exit.", NULL },
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
     "Smoke test pressure-vessel-wrap and exit.", NULL },
@@ -2050,6 +2054,13 @@ main (int argc,
       g_autofree gchar *tmp = g_steal_pointer (&opt_runtime);
 
       opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
+    }
+
+  if (opt_version_only)
+    {
+      g_print ("%s\n", VERSION);
+      ret = 0;
+      goto out;
     }
 
   if (opt_version)

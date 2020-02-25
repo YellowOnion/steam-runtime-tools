@@ -25,6 +25,7 @@
 
 import logging
 import os
+import subprocess
 import sys
 
 try:
@@ -43,8 +44,21 @@ from gi.repository import Gtk
 logger = logging.getLogger('pressure-vessel-test-ui')
 
 
-# This doesn't fully work yet. Hack at own risk.
-CAN_UNSHARE_HOME = (os.getenv('PRESSURE_VESSEL_SHARE_HOME') is not None)
+def tristate_environment(name):
+    # type: (str) -> typing.Optional[bool]
+    value = os.getenv(name)
+
+    if value is None or value == '':
+        return None
+
+    if value == '1':
+        return True
+
+    if value == '0':
+        return False
+
+    logger.warning('Unrecognised value %r for $%s', value, name)
+    return None
 
 
 class Gui:
@@ -53,7 +67,7 @@ class Gui:
 
         self.home = GLib.get_home_dir()
 
-        self.runtimes = {}      # type: typing.Dict[str, str]
+        self.container_runtimes = {}    # type: typing.Dict[str, str]
 
         for search in (
             os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
@@ -79,7 +93,7 @@ class Gui:
 
                 if os.path.isdir(files):
                     description = self._describe_runtime(path)
-                    self.runtimes[path] = description
+                    self.container_runtimes[path] = description
 
         self.window = Gtk.Window()
         self.window.set_default_size(600, 300)
@@ -98,35 +112,62 @@ class Gui:
 
         row = 0
 
-        runtime_label = Gtk.Label.new('Runtime')
-        self.grid.attach(runtime_label, 0, row, 1, 1)
+        label = Gtk.Label.new('')
+        label.set_markup(
+            'This is a test UI for developers. '
+            '<b>'
+            'Some options are known to break games and Steam features.'
+            '</b>'
+            ' Use at your own risk!'
+        )
+        label.set_line_wrap(True)
+        self.grid.attach(label, 0, row, 2, 1)
+        row += 1
 
-        self.runtime_combo = Gtk.ComboBoxText.new()
-        self.runtime_combo.append('/', 'None (use host system)')
+        label = Gtk.Label.new('Container runtime')
+        self.grid.attach(label, 0, row, 1, 1)
 
-        for path, description in sorted(self.runtimes.items()):
-            self.runtime_combo.append(path, description)
+        self.container_runtime_combo = Gtk.ComboBoxText.new()
+        self.container_runtime_combo.append(
+            '/',
+            'None (use host system and traditional LD_LIBRARY_PATH runtime)'
+        )
 
-        if self.runtimes:
-            self.runtime_combo.set_active(1)
+        for path, description in sorted(self.container_runtimes.items()):
+            self.container_runtime_combo.append(path, description)
+
+        if self.container_runtimes:
+            self.container_runtime_combo.set_active(1)
         else:
-            self.runtime_combo.set_active(0)
+            self.container_runtime_combo.set_active(0)
 
-        self.grid.attach(self.runtime_combo, 1, row, 1, 1)
+        self.grid.attach(self.container_runtime_combo, 1, row, 1, 1)
 
         row += 1
 
-        if CAN_UNSHARE_HOME:
-            self.share_home_check = Gtk.CheckButton.new_with_label(
-                'Share real home directory'
-            )
-            self.share_home_check.set_active(
-                bool(os.getenv('PRESSURE_VESSEL_SHARE_HOME')))
-            self.grid.attach(self.share_home_check, 1, row, 1, 1)
+        self.unshare_home_check = Gtk.CheckButton.new_with_label(
+            'Use a separate home directory per game'
+        )
+        share_home = tristate_environment('PRESSURE_VESSEL_SHARE_HOME')
+        self.unshare_home_check.set_active(
+            share_home is not None and not share_home
+        )
+        self.grid.attach(self.unshare_home_check, 1, row, 1, 1)
+        row += 1
 
-            row += 1
-        else:
-            self.share_home_check = None
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'Creating a separate home directory is experimental, '
+            'and is likely to break Steam Cloud Auto-Sync, Steam Workshop '
+            'and probably other features.'
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
 
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
         self.xterm_check.set_active(False)
@@ -167,6 +208,31 @@ class Gui:
 
         row += 1
 
+        subproc = subprocess.Popen(
+            [
+                os.path.join(
+                    os.path.dirname(sys.argv[0]),
+                    'pressure-vessel-wrap'
+                ),
+                '--version-only',
+            ],
+            stdout=subprocess.PIPE,
+        )
+        stdout, _ = subproc.communicate()
+        version = stdout.decode('utf-8', errors='replace')
+
+        if version:
+            label = Gtk.Label.new('')
+            label.set_markup(
+                '<small>v{}</small>'.format(
+                    GLib.markup_escape_text(version),
+                )
+            )
+            label.set_line_wrap(True)
+            label.set_halign(Gtk.Align.START)
+            label.set_sensitive(False)
+            self.grid.attach(label, 0, row, 1, 1)
+
         buttons_grid = Gtk.Grid(
             column_spacing=6,
             column_homogeneous=True,
@@ -181,7 +247,7 @@ class Gui:
         run_button.connect('clicked', self.run_cb)
         buttons_grid.attach(run_button, 1, 0, 1, 1)
 
-        self.grid.attach(buttons_grid, 0, row, 2, 1)
+        self.grid.attach(buttons_grid, 1, row, 2, 1)
 
         row += 1
 
@@ -286,7 +352,7 @@ class Gui:
             ),
         ]
 
-        id = self.runtime_combo.get_active_id()
+        id = self.container_runtime_combo.get_active_id()
 
         if id is None:
             argv.append('--runtime=')
@@ -296,10 +362,10 @@ class Gui:
             argv.append('--runtime')
             argv.append(os.path.join(id, 'files'))
 
-        if self.share_home_check is None or self.share_home_check.get_active():
-            argv.append('--share-home')
-        else:
+        if self.unshare_home_check.get_active():
             argv.append('--unshare-home')
+        else:
+            argv.append('--share-home')
 
         if self.xterm_check.get_active():
             argv.append('--terminal=xterm')

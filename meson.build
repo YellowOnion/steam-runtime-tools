@@ -30,6 +30,7 @@ project(
   ],
 )
 
+gnome = import('gnome')
 prove = find_program('prove', required : false)
 sh = find_program('sh', required : true)
 
@@ -107,6 +108,7 @@ project_warning_cflags = [
 
 project_include_dirs = include_directories(
     '.',
+    'src',
     'subprojects',
 )
 
@@ -178,6 +180,16 @@ add_project_arguments(
   language : 'c',
 )
 
+# Headers to scan for enum/flags types.
+headers = [
+  'src/runtime.h',
+]
+
+enums = gnome.mkenums_simple(
+  'enumtypes',
+  sources : headers,
+)
+
 executable(
   'pressure-vessel-with-lock',
   sources : [
@@ -231,7 +243,7 @@ executable(
     'src/wrap.c',
     'src/wrap-interactive.c',
     'src/wrap-interactive.h',
-  ],
+  ] + enums,
   c_args : [
     '-Wno-unused-local-typedefs',
   ],

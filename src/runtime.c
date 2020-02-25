@@ -32,6 +32,7 @@
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
+#include "enumtypes.h"
 #include "flatpak-run-private.h"
 #include "utils.h"
 
@@ -55,6 +56,8 @@ struct _PvRuntime
   gchar *overrides_bin;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
+
+  PvRuntimeFlags flags;
   gboolean any_libc_from_host;
   gboolean all_libc_from_host;
 };
@@ -67,6 +70,7 @@ struct _PvRuntimeClass
 enum {
   PROP_0,
   PROP_BUBBLEWRAP,
+  PROP_FLAGS,
   PROP_SOURCE_FILES,
   PROP_TOOLS_DIRECTORY,
   N_PROPERTIES
@@ -128,6 +132,10 @@ pv_runtime_get_property (GObject *object,
         g_value_set_string (value, self->bubblewrap);
         break;
 
+      case PROP_FLAGS:
+        g_value_set_flags (value, self->flags);
+        break;
+
       case PROP_SOURCE_FILES:
         g_value_set_string (value, self->source_files);
         break;
@@ -155,6 +163,10 @@ pv_runtime_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->bubblewrap == NULL);
         self->bubblewrap = g_value_dup_string (value);
+        break;
+
+      case PROP_FLAGS:
+        self->flags = g_value_get_flags (value);
         break;
 
       case PROP_SOURCE_FILES:
@@ -294,6 +306,13 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_FLAGS] =
+    g_param_spec_flags ("flags", "Flags",
+                        "Flags affecting how we set up the runtime",
+                        PV_TYPE_RUNTIME_FLAGS, PV_RUNTIME_FLAGS_NONE,
+                        (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS));
+
   properties[PROP_SOURCE_FILES] =
     g_param_spec_string ("source-files", "Source files",
                          ("Path to read-only runtime files (merged-/usr "
@@ -316,11 +335,14 @@ PvRuntime *
 pv_runtime_new (const char *source_files,
                 const char *bubblewrap,
                 const char *tools_dir,
+                PvRuntimeFlags flags,
                 GError **error)
 {
   g_return_val_if_fail (source_files != NULL, NULL);
   g_return_val_if_fail (bubblewrap != NULL, NULL);
   g_return_val_if_fail (tools_dir != NULL, NULL);
+  g_return_val_if_fail ((flags & ~(PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK)) == 0,
+                        NULL);
 
   return g_initable_new (PV_TYPE_RUNTIME,
                          NULL,
@@ -328,6 +350,7 @@ pv_runtime_new (const char *source_files,
                          "bubblewrap", bubblewrap,
                          "source-files", source_files,
                          "tools-directory", tools_dir,
+                         "flags", flags,
                          NULL);
 }
 
@@ -942,8 +965,11 @@ bind_runtime (PvRuntime *self,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
 
-  if (!pv_runtime_use_host_graphics_stack (self, bwrap, error))
-    return FALSE;
+  if (self->flags & PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK)
+    {
+      if (!pv_runtime_use_host_graphics_stack (self, bwrap, error))
+        return FALSE;
+    }
 
   /* This needs to be done after pv_runtime_use_host_graphics_stack()
    * has decided whether to bring in the host system's libc. */

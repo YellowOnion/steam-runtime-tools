@@ -29,6 +29,19 @@
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-base-private.h"
 
+/**
+ * PvRuntimeFlags:
+ * @PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK: Use host system graphics stack
+ * @PV_RUNTIME_FLAGS_NONE: None of the above
+ *
+ * Flags affecting how we set up the runtime.
+ */
+typedef enum
+{
+  PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK = (1 << 0),
+  PV_RUNTIME_FLAGS_NONE = 0
+} PvRuntimeFlags;
+
 typedef struct _PvRuntime PvRuntime;
 typedef struct _PvRuntimeClass PvRuntimeClass;
 
@@ -43,6 +56,7 @@ GType pv_runtime_get_type (void);
 PvRuntime *pv_runtime_new (const char *source_files,
                            const char *bubblewrap,
                            const char *tools_dir,
+                           PvRuntimeFlags flags,
                            GError **error);
 
 void pv_runtime_append_lock_adverb (PvRuntime *self,

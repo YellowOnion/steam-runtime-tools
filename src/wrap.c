@@ -322,6 +322,7 @@ static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
+static gboolean opt_host_graphics = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static char *opt_runtime_base = NULL;
@@ -583,6 +584,14 @@ static GOptionEntry options[] =
   { "version-only", '\0',
     G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_version_only,
     "Print version number (no other information) and exit.", NULL },
+  { "with-host-graphics", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_host_graphics,
+    "If using --runtime, use the host graphics stack (default)", NULL },
+  { "without-host-graphics", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_host_graphics,
+    "If using --runtime, don't use the host graphics stack. "
+    "This is likely to result in software rendering or a crash.",
+    NULL },
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
     "Smoke test pressure-vessel-wrap and exit.", NULL },
@@ -692,6 +701,8 @@ main (int argc,
     g_clear_pointer (&opt_home, g_free);
 
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
+  opt_host_graphics = boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
+                                           TRUE);
   opt_verbose = boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
@@ -1019,11 +1030,17 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
+      PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
+
+      if (opt_host_graphics)
+        flags |= PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK;
+
       g_debug ("Configuring runtime %s...", opt_runtime);
 
       runtime = pv_runtime_new (opt_runtime,
                                 bwrap_executable,
                                 tools_dir,
+                                flags,
                                 error);
 
       if (runtime == NULL)

@@ -232,7 +232,7 @@ Instructions for testing
     and a `~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/metadata`
     file. For example, download a
     `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
-    from http://repo.steampowered.com/steamrt/steamrt-scout/snapshots/ and
+    from https://repo.steampowered.com/steamrt-images-scout/snapshots/ and
     unpack it like this:
 
         $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout
@@ -243,9 +243,9 @@ Instructions for testing
 
     Or to have a SDK environment with more debugging tools, and optionally
     detached debugging symbols, download a
-    `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz`
+    `com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-runtime.tar.gz`
     and optionally a matching
-    `com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-debug.tar.gz`,
+    `com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-debug.tar.gz`,
     and unpack them like this:
 
         $ rm -fr ~/.steam/steam/steamapps/common/SteamLinuxRuntime/scout_sdk

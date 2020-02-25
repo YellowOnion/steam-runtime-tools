@@ -379,10 +379,9 @@ pv_runtime_append_lock_adverb (PvRuntime *self,
 }
 
 static gboolean
-try_bind_dri (FlatpakBwrap *bwrap,
+try_bind_dri (PvRuntime *self,
+              FlatpakBwrap *bwrap,
               FlatpakBwrap *mount_runtime_on_scratch,
-              const char *overrides,
-              const char *scratch,
               const char *tool_path,
               const char *libdir,
               const char *libdir_on_host,
@@ -413,7 +412,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
       flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
-                              "--container", scratch,
+                              "--container", self->scratch,
                               "--link-target", "/run/host",
                               "--dest", libdir_on_host,
                               "--provider", "/",
@@ -434,7 +433,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
                               "--ro-bind", "/", "/",
                               "--tmpfs", "/run",
                               "--ro-bind", "/", "/run/host",
-                              "--bind", overrides, overrides,
+                              "--bind", self->overrides, self->overrides,
                               "sh", "-c",
                               "ln -fns \"$1\"/* \"$2\"",
                               "sh",   /* $0 */
@@ -459,7 +458,7 @@ try_bind_dri (FlatpakBwrap *bwrap,
       flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
-                              "--container", scratch,
+                              "--container", self->scratch,
                               "--link-target", "/run/host",
                               "--dest", libdir_on_host,
                               "--provider", "/",
@@ -483,15 +482,14 @@ try_bind_dri (FlatpakBwrap *bwrap,
  * for the container.
  */
 static void
-ensure_locales (gboolean on_host,
-                const char *tools_dir,
-                FlatpakBwrap *bwrap,
-                const char *overrides)
+ensure_locales (PvRuntime *self,
+                gboolean on_host,
+                FlatpakBwrap *bwrap)
 {
   g_autoptr(GError) local_error = NULL;
   g_autoptr(FlatpakBwrap) run_locale_gen = NULL;
   g_autofree gchar *locale_gen = NULL;
-  g_autofree gchar *locales = g_build_filename (overrides, "locales", NULL);
+  g_autofree gchar *locales = g_build_filename (self->overrides, "locales", NULL);
   g_autoptr(GDir) dir = NULL;
   int exit_status;
 
@@ -505,7 +503,7 @@ ensure_locales (gboolean on_host,
 
   if (on_host)
     {
-      locale_gen = g_build_filename (tools_dir,
+      locale_gen = g_build_filename (self->tools_dir,
                                      "pressure-vessel-locale-gen",
                                      NULL);
 
@@ -528,7 +526,7 @@ ensure_locales (gboolean on_host,
                                      NULL);
 
       flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
-      pv_bwrap_copy_tree (run_locale_gen, overrides, "/overrides");
+      pv_bwrap_copy_tree (run_locale_gen, self->overrides, "/overrides");
 
       if (!flatpak_bwrap_bundle_args (run_locale_gen, 1, -1, FALSE,
                                       &local_error))
@@ -539,7 +537,7 @@ ensure_locales (gboolean on_host,
         }
 
       flatpak_bwrap_add_args (run_locale_gen,
-                              "--ro-bind", tools_dir, "/run/host/tools",
+                              "--ro-bind", self->tools_dir, "/run/host/tools",
                               "--bind", locales, "/overrides/locales",
                               "--chdir", "/overrides/locales",
                               locale_gen,
@@ -644,11 +642,11 @@ icd_details_free (IcdDetails *self)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 
 static gboolean
-bind_icd (gsize multiarch_index,
+bind_icd (PvRuntime *self,
+          gsize multiarch_index,
           gsize sequence_number,
           const char *tool_path,
           FlatpakBwrap *mount_runtime_on_scratch,
-          const char *scratch,
           const char *libdir_on_host,
           const char *libdir_in_container,
           const char *subdir,
@@ -668,7 +666,6 @@ bind_icd (gsize multiarch_index,
   g_return_val_if_fail (mount_runtime_on_scratch->fds == NULL
                         || mount_runtime_on_scratch->fds->len == 0,
                         FALSE);
-  g_return_val_if_fail (scratch != NULL, FALSE);
   g_return_val_if_fail (libdir_on_host != NULL, FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
   g_return_val_if_fail (multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
@@ -714,7 +711,7 @@ bind_icd (gsize multiarch_index,
   flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
   flatpak_bwrap_add_args (temp_bwrap,
                           tool_path,
-                          "--container", scratch,
+                          "--container", self->scratch,
                           "--link-target", "/run/host",
                           "--dest", on_host == NULL ? libdir_on_host : on_host,
                           "--provider", "/",
@@ -746,7 +743,7 @@ bind_icd (gsize multiarch_index,
   flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
   flatpak_bwrap_add_args (temp_bwrap,
                           tool_path,
-                          "--container", scratch,
+                          "--container", self->scratch,
                           "--link-target", "/run/host",
                           "--dest", libdir_on_host,
                           "--provider", "/",
@@ -774,11 +771,8 @@ bind_icd (gsize multiarch_index,
 }
 
 static gboolean
-bind_runtime (FlatpakBwrap *bwrap,
-              const char *tools_dir,
-              const char *runtime,
-              const char *overrides,
-              const char *scratch,
+bind_runtime (PvRuntime *self,
+              FlatpakBwrap *bwrap,
               GError **error)
 {
   static const char * const bind_mutable[] =
@@ -827,13 +821,10 @@ bind_runtime (FlatpakBwrap *bwrap,
   guint n_vulkan_icds;
   const GList *icd_iter;
 
-  g_return_val_if_fail (tools_dir != NULL, FALSE);
-  g_return_val_if_fail (runtime != NULL, FALSE);
-  g_return_val_if_fail (overrides != NULL, FALSE);
-  g_return_val_if_fail (scratch != NULL, FALSE);
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, runtime, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, self->source_files, "/", error))
     return FALSE;
 
   flatpak_bwrap_add_args (bwrap,
@@ -846,7 +837,8 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
     {
-      g_autofree gchar *path = g_build_filename (runtime, bind_mutable[i],
+      g_autofree gchar *path = g_build_filename (self->source_files,
+                                                 bind_mutable[i],
                                                  NULL);
       g_autoptr(GDir) dir = NULL;
 
@@ -867,7 +859,10 @@ bind_runtime (FlatpakBwrap *bwrap,
           if (g_strv_contains (dont_bind, dest))
             continue;
 
-          full = g_build_filename (runtime, bind_mutable[i], member, NULL);
+          full = g_build_filename (self->source_files,
+                                   bind_mutable[i],
+                                   member,
+                                   NULL);
           target = glnx_readlinkat_malloc (-1, full, NULL, NULL);
 
           if (target != NULL)
@@ -990,7 +985,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
       g_debug ("Checking for %s libraries...", multiarch_tuples[i]);
 
-      tool_path = g_build_filename (tools_dir, tool, NULL);
+      tool_path = g_build_filename (self->tools_dir, tool, NULL);
       argv[0] = tool_path;
 
       /* This has the side-effect of testing whether we can run binaries
@@ -1006,7 +1001,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                                                     "lib",
                                                                     multiarch_tuples[i],
                                                                     NULL);
-          g_autofree gchar *libdir_on_host = g_build_filename (overrides, "lib",
+          g_autofree gchar *libdir_on_host = g_build_filename (self->overrides, "lib",
                                                                multiarch_tuples[i],
                                                                NULL);
           g_autofree gchar *this_dri_path_on_host = g_build_filename (libdir_on_host,
@@ -1023,7 +1018,10 @@ bind_runtime (FlatpakBwrap *bwrap,
                                   bwrap->argv->pdata[0],
                                   NULL);
 
-          if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
+          if (!pv_bwrap_bind_usr (temp_bwrap,
+                                  self->source_files,
+                                  "/",
+                                  error))
             return FALSE;
 
           flatpak_bwrap_add_args (temp_bwrap,
@@ -1055,11 +1053,13 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_add_args (mount_runtime_on_scratch,
                                   bwrap->argv->pdata[0],
                                   "--ro-bind", "/", "/",
-                                  "--bind", overrides, overrides,
-                                  "--tmpfs", scratch,
+                                  "--bind", self->overrides, self->overrides,
+                                  "--tmpfs", self->scratch,
                                   NULL);
-          if (!pv_bwrap_bind_usr (mount_runtime_on_scratch, runtime, scratch,
-                         error))
+          if (!pv_bwrap_bind_usr (mount_runtime_on_scratch,
+                                  self->source_files,
+                                  self->scratch,
+                                  error))
             return FALSE;
 
           g_debug ("Collecting GLX drivers from host system...");
@@ -1072,7 +1072,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
-                                  "--container", scratch,
+                                  "--container", self->scratch,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
@@ -1091,7 +1091,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
-                                  "--container", scratch,
+                                  "--container", self->scratch,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
@@ -1151,11 +1151,11 @@ bind_runtime (FlatpakBwrap *bwrap,
               details->resolved_library = srt_egl_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!bind_icd (i,
+              if (!bind_icd (self,
+                             i,
                              j,
                              tool_path,
                              mount_runtime_on_scratch,
-                             scratch,
                              libdir_on_host,
                              libdir_in_container,
                              "glvnd",
@@ -1173,7 +1173,7 @@ bind_runtime (FlatpakBwrap *bwrap,
           flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
-                                  "--container", scratch,
+                                  "--container", self->scratch,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
@@ -1197,11 +1197,11 @@ bind_runtime (FlatpakBwrap *bwrap,
               details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!bind_icd (i,
+              if (!bind_icd (self,
+                             i,
                              j,
                              tool_path,
                              mount_runtime_on_scratch,
-                             scratch,
                              libdir_on_host,
                              libdir_in_container,
                              "vulkan",
@@ -1230,7 +1230,10 @@ bind_runtime (FlatpakBwrap *bwrap,
                                       bwrap->argv->pdata[0],
                                       NULL);
 
-              if (!pv_bwrap_bind_usr (temp_bwrap, runtime, "/", error))
+              if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      self->source_files,
+                                      "/",
+                                      error))
                 return FALSE;
 
               flatpak_bwrap_add_args (temp_bwrap,
@@ -1252,7 +1255,7 @@ bind_runtime (FlatpakBwrap *bwrap,
               flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
               flatpak_bwrap_add_args (temp_bwrap,
                                       tool_path,
-                                      "--container", scratch,
+                                      "--container", self->scratch,
                                       "--link-target", "/run/host",
                                       "--dest", libdir_on_host,
                                       "--provider", "/",
@@ -1337,8 +1340,8 @@ bind_runtime (FlatpakBwrap *bwrap,
 
           for (j = 0; j < 6; j++)
             {
-              if (!try_bind_dri (bwrap, mount_runtime_on_scratch,
-                                 overrides, scratch, tool_path, dirs[j],
+              if (!try_bind_dri (self, bwrap, mount_runtime_on_scratch,
+                                 tool_path, dirs[j],
                                  libdir_on_host, error))
                 return FALSE;
             }
@@ -1450,11 +1453,11 @@ bind_runtime (FlatpakBwrap *bwrap,
         best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
     }
 
-  g_autofree gchar *runtime_usr = g_build_filename (runtime, "usr", NULL);
+  g_autofree gchar *runtime_usr = g_build_filename (self->source_files, "usr", NULL);
   if (g_file_test (runtime_usr, G_FILE_TEST_IS_DIR))
     libdrm_data_in_runtime = g_build_filename (runtime_usr, "share", "libdrm", NULL);
   else
-    libdrm_data_in_runtime = g_build_filename (runtime, "share", "libdrm", NULL);
+    libdrm_data_in_runtime = g_build_filename (self->source_files, "share", "libdrm", NULL);
 
   if (best_libdrm_data_from_host != NULL &&
       g_file_test (libdrm_data_in_runtime, G_FILE_TEST_IS_DIR))
@@ -1466,7 +1469,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   g_debug ("Setting up EGL ICD JSON...");
 
-  dir_on_host = g_build_filename (overrides,
+  dir_on_host = g_build_filename (self->overrides,
                                   "share", "glvnd", "egl_vendor.d", NULL);
 
   if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
@@ -1540,7 +1543,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   g_debug ("Setting up Vulkan ICD JSON...");
 
-  dir_on_host = g_build_filename (overrides,
+  dir_on_host = g_build_filename (self->overrides,
                                   "share", "vulkan", "icd.d", NULL);
 
   if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
@@ -1615,7 +1618,7 @@ bind_runtime (FlatpakBwrap *bwrap,
   if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;
 
-  ensure_locales (any_libc_from_host, tools_dir, bwrap, overrides);
+  ensure_locales (self, any_libc_from_host, bwrap);
 
   if (dri_path->len != 0)
       flatpak_bwrap_add_args (bwrap,
@@ -1660,7 +1663,7 @@ bind_runtime (FlatpakBwrap *bwrap,
   flatpak_run_add_pulseaudio_args (bwrap);
   flatpak_run_add_session_dbus_args (bwrap);
   flatpak_run_add_system_dbus_args (bwrap);
-  pv_bwrap_copy_tree (bwrap, overrides, "/overrides");
+  pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
 
   /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
    * non-existing targets), in which case we don't want to attempt to create
@@ -1720,12 +1723,7 @@ pv_runtime_bind (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!bind_runtime (bwrap,
-                     self->tools_dir,
-                     self->source_files,
-                     self->overrides,
-                     self->scratch,
-                     error))
+  if (!bind_runtime (self, bwrap, error))
     return FALSE;
 
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);

@@ -105,6 +105,7 @@ project_warning_cflags = [
 
 project_include_dirs = include_directories(
     '.',
+    'src',
     'subprojects',
 )
 
@@ -132,6 +133,7 @@ scripts = [
 ]
 
 tests = [
+  'cheap-copy.py',
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
@@ -145,10 +147,16 @@ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 foreach test_name : tests
+  test_args = ['-v', files('tests/' + test_name)]
+
+  if test_name.endswith('.py')
+    test_args += ['-e', python.path()]
+  endif
+
   if prove.found()
     test(
       test_name, prove,
-      args : ['-v', files('tests/' + test_name)],
+      args : test_args,
       env : test_env,
     )
   endif
@@ -258,6 +266,28 @@ executable(
   include_directories : project_include_dirs,
   install : true,
   install_dir : get_option('bindir'),
+)
+
+executable(
+  'test-cheap-copy',
+  sources : [
+    'src/flatpak-utils-base.c',
+    'src/flatpak-utils-base-private.h',
+    'src/glib-backports.c',
+    'src/glib-backports.h',
+    'src/utils.c',
+    'src/utils.h',
+    'tests/cheap-copy.c',
+  ],
+  c_args : [
+    '-Wno-unused-local-typedefs',
+  ],
+  dependencies : [
+    dependency('gio-unix-2.0', required : true),
+    subproject('libglnx').get_variable('libglnx_dep'),
+  ],
+  include_directories : project_include_dirs,
+  install : false,
 )
 
 if get_option('man')

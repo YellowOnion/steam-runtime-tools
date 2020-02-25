@@ -55,6 +55,8 @@ struct _PvRuntime
   gchar *overrides_bin;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
+  gboolean any_libc_from_host;
+  gboolean all_libc_from_host;
 };
 
 struct _PvRuntimeClass
@@ -99,9 +101,15 @@ static const char * const libquals[] =
   "lib32"
 };
 
+static gboolean pv_runtime_use_host_graphics_stack (PvRuntime *self,
+                                                    FlatpakBwrap *bwrap,
+                                                    GError **error);
+
 static void
 pv_runtime_init (PvRuntime *self)
 {
+  self->any_libc_from_host = FALSE;
+  self->all_libc_from_host = FALSE;
 }
 
 static void
@@ -832,37 +840,14 @@ bind_runtime (PvRuntime *self,
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
-  gsize i, j;
+  gsize i;
   const gchar *member;
-  g_autoptr(GString) dri_path = g_string_new ("");
-  g_autoptr(GString) egl_path = g_string_new ("");
-  g_autoptr(GString) vulkan_path = g_string_new ("");
-  gboolean any_architecture_works = FALSE;
-  gboolean any_libc_from_host = FALSE;
-  gboolean all_libc_from_host = TRUE;
-  gboolean all_libdrm_from_host = TRUE;
-  g_autoptr(GHashTable) libdrm_data_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                                       g_free, NULL);
-  g_autofree gchar *libdrm_data_in_runtime = NULL;
-  g_autofree gchar *best_libdrm_data_from_host = NULL;
-  g_autofree gchar *localedef = NULL;
-  g_autofree gchar *dir_on_host = NULL;
-  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
-  g_autoptr(SrtObjectList) egl_icds = NULL;
-  g_autoptr(SrtObjectList) vulkan_icds = NULL;
-  g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
-  guint n_egl_icds;
-  guint n_vulkan_icds;
-  const GList *icd_iter;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   if (!pv_bwrap_bind_usr (bwrap, self->source_files, "/", error))
-    return FALSE;
-
-  if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
   flatpak_bwrap_add_args (bwrap,
@@ -872,6 +857,9 @@ bind_runtime (PvRuntime *self,
                           "--tmpfs", "/var",
                           "--symlink", "../run", "/var/run",
                           NULL);
+
+  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
+    return FALSE;
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
     {
@@ -952,6 +940,107 @@ bind_runtime (PvRuntime *self,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
 
+  if (!pv_runtime_use_host_graphics_stack (self, bwrap, error))
+    return FALSE;
+
+  /* This needs to be done after pv_runtime_use_host_graphics_stack()
+   * has decided whether to bring in the host system's libc. */
+  ensure_locales (self, self->any_libc_from_host, bwrap);
+
+  /* These can add data fds to @bwrap, so they must come last - after
+   * other functions stop using @bwrap as a basis for their own bwrap
+   * invocations with flatpak_bwrap_append_bwrap().
+   * Otherwise, when flatpak_bwrap_append_bwrap() calls
+   * flatpak_bwrap_steal_fds(), it will make the original FlatpakBwrap
+   * unusable. */
+
+  flatpak_run_add_wayland_args (bwrap);
+  flatpak_run_add_x11_args (bwrap, TRUE);
+  flatpak_run_add_pulseaudio_args (bwrap);
+  flatpak_run_add_session_dbus_args (bwrap);
+  flatpak_run_add_system_dbus_args (bwrap);
+  pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
+
+  /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
+   * non-existing targets), in which case we don't want to attempt to create
+   * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
+   */
+  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
+    {
+      g_autofree char *target = NULL;
+      gboolean is_reachable = FALSE;
+      g_autofree char *tz = flatpak_get_timezone ();
+      g_autofree char *timezone_content = g_strdup_printf ("%s\n", tz);
+
+      target = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
+
+      if (target != NULL)
+        {
+          g_autoptr(GFile) base_file = NULL;
+          g_autoptr(GFile) target_file = NULL;
+          g_autofree char *target_canonical = NULL;
+
+          base_file = g_file_new_for_path ("/etc");
+          target_file = g_file_resolve_relative_path (base_file, target);
+          target_canonical = g_file_get_path (target_file);
+
+          is_reachable = g_str_has_prefix (target_canonical, "/usr/");
+        }
+
+      if (is_reachable)
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", target, "/etc/localtime",
+                                  NULL);
+        }
+      else
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", "/etc/localtime", "/etc/localtime",
+                                  NULL);
+        }
+
+      flatpak_bwrap_add_args_data (bwrap, "timezone",
+                                   timezone_content, -1, "/etc/timezone",
+                                   NULL);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+pv_runtime_use_host_graphics_stack (PvRuntime *self,
+                                    FlatpakBwrap *bwrap,
+                                    GError **error)
+{
+  gsize i, j;
+  g_autoptr(GString) dri_path = g_string_new ("");
+  g_autoptr(GString) egl_path = g_string_new ("");
+  g_autoptr(GString) vulkan_path = g_string_new ("");
+  gboolean any_architecture_works = FALSE;
+  g_autofree gchar *localedef = NULL;
+  g_autofree gchar *dir_on_host = NULL;
+  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) egl_icds = NULL;
+  g_autoptr(SrtObjectList) vulkan_icds = NULL;
+  g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
+  g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
+  guint n_egl_icds;
+  guint n_vulkan_icds;
+  const GList *icd_iter;
+  gboolean all_libdrm_from_host = TRUE;
+  g_autoptr(GHashTable) libdrm_data_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                       g_free, NULL);
+  g_autofree gchar *libdrm_data_in_runtime = NULL;
+  g_autofree gchar *best_libdrm_data_from_host = NULL;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (!pv_runtime_provide_container_access (self, error))
+    return FALSE;
+
   g_debug ("Enumerating EGL ICDs on host system...");
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
   n_egl_icds = g_list_length (egl_icds);
@@ -1012,6 +1101,10 @@ bind_runtime (PvRuntime *self,
     }
 
   g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+
+  /* We set this FALSE later if we decide not to use the host libc for
+   * some architecture. */
+  self->all_libc_from_host = TRUE;
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
@@ -1276,11 +1369,11 @@ bind_runtime (PvRuntime *self,
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-              any_libc_from_host = TRUE;
+              self->any_libc_from_host = TRUE;
             }
           else
             {
-              all_libc_from_host = FALSE;
+              self->all_libc_from_host = FALSE;
             }
 
           libdrm = g_build_filename (libdir_on_host, "libdrm.so.2", NULL);
@@ -1381,7 +1474,7 @@ bind_runtime (PvRuntime *self,
       return FALSE;
     }
 
-  if (any_libc_from_host && !all_libc_from_host)
+  if (self->any_libc_from_host && !self->all_libc_from_host)
     {
       /*
        * This shouldn't happen. It would mean that there exist at least
@@ -1399,7 +1492,7 @@ bind_runtime (PvRuntime *self,
                  "architectures! Arbitrarily using host locales.");
     }
 
-  if (any_libc_from_host)
+  if (self->any_libc_from_host)
     {
       g_debug ("Making host locale data visible in container");
 
@@ -1622,11 +1715,6 @@ bind_runtime (PvRuntime *self,
         }
     }
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
-    return FALSE;
-
-  ensure_locales (self, any_libc_from_host, bwrap);
-
   if (dri_path->len != 0)
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LIBGL_DRIVERS_PATH", dri_path->str,
@@ -1657,64 +1745,6 @@ bind_runtime (PvRuntime *self,
       flatpak_bwrap_add_args (bwrap,
                               "--unsetenv", "VK_ICD_FILENAMES",
                               NULL);
-
-  /* These can add data fds to @bwrap, so they must come last - after
-   * other functions stop using @bwrap as a basis for their own bwrap
-   * invocations with flatpak_bwrap_append_bwrap().
-   * Otherwise, when flatpak_bwrap_append_bwrap() calls
-   * flatpak_bwrap_steal_fds(), it will make the original FlatpakBwrap
-   * unusable. */
-
-  flatpak_run_add_wayland_args (bwrap);
-  flatpak_run_add_x11_args (bwrap, TRUE);
-  flatpak_run_add_pulseaudio_args (bwrap);
-  flatpak_run_add_session_dbus_args (bwrap);
-  flatpak_run_add_system_dbus_args (bwrap);
-  pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
-
-  /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
-   * non-existing targets), in which case we don't want to attempt to create
-   * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
-   */
-  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
-    {
-      g_autofree char *target = NULL;
-      gboolean is_reachable = FALSE;
-      g_autofree char *tz = flatpak_get_timezone ();
-      g_autofree char *timezone_content = g_strdup_printf ("%s\n", tz);
-
-      target = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
-
-      if (target != NULL)
-        {
-          g_autoptr(GFile) base_file = NULL;
-          g_autoptr(GFile) target_file = NULL;
-          g_autofree char *target_canonical = NULL;
-
-          base_file = g_file_new_for_path ("/etc");
-          target_file = g_file_resolve_relative_path (base_file, target);
-          target_canonical = g_file_get_path (target_file);
-
-          is_reachable = g_str_has_prefix (target_canonical, "/usr/");
-        }
-
-      if (is_reachable)
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", target, "/etc/localtime",
-                                  NULL);
-        }
-      else
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", "/etc/localtime", "/etc/localtime",
-                                  NULL);
-        }
-
-      flatpak_bwrap_add_args_data (bwrap, "timezone",
-                                   timezone_content, -1, "/etc/timezone",
-                                   NULL);
-    }
 
   return TRUE;
 }

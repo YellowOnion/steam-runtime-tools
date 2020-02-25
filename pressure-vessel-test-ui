@@ -98,7 +98,7 @@ class Gui:
         self.window = Gtk.Window()
         self.window.set_default_size(600, 300)
         self.window.connect('delete-event', Gtk.main_quit)
-        self.window.set_title('Choose pressure-vessel runtime')
+        self.window.set_title('pressure-vessel options')
 
         self.grid = Gtk.Grid(
             row_spacing=6,

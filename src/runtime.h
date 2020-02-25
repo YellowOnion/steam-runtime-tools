@@ -61,6 +61,7 @@ typedef struct _PvRuntimeClass PvRuntimeClass;
 GType pv_runtime_get_type (void);
 
 PvRuntime *pv_runtime_new (const char *source_files,
+                           const char *mutable_parent,
                            const char *bubblewrap,
                            const char *tools_dir,
                            PvRuntimeFlags flags,

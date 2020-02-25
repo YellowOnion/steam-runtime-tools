@@ -316,6 +316,7 @@ typedef enum
   TRISTATE_MAYBE
 } Tristate;
 
+static char *opt_copy_runtime_into = NULL;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
@@ -495,6 +496,11 @@ opt_share_home_cb (const gchar *option_name,
 
 static GOptionEntry options[] =
 {
+  { "copy-runtime-into", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_copy_runtime_into,
+    "If a --runtime is used, copy it into DIR and edit the copy in-place. "
+    "[Default: $PRESSURE_VESSEL_COPY_RUNTIME_INTO or empty]",
+    "DIR" },
   { "env-if-host", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
@@ -772,6 +778,13 @@ main (int argc,
 
       opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
     }
+
+  if (opt_copy_runtime_into == NULL)
+    opt_copy_runtime_into = g_strdup (g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"));
+
+  if (opt_copy_runtime_into != NULL
+      && opt_copy_runtime_into[0] == '\0')
+    opt_copy_runtime_into = NULL;
 
   if (opt_version_only)
     {
@@ -1079,6 +1092,7 @@ main (int argc,
       g_debug ("Configuring runtime %s...", opt_runtime);
 
       runtime = pv_runtime_new (opt_runtime,
+                                opt_copy_runtime_into,
                                 bwrap_executable,
                                 tools_dir,
                                 flags,

@@ -51,14 +51,19 @@ struct _PvRuntime
   gchar *tools_dir;
   PvBwrapLock *runtime_lock;
 
+  gchar *mutable_parent;
+  gchar *mutable_sysroot;
   gchar *tmpdir;
   gchar *overrides;
   gchar *overrides_bin;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
-  gchar *runtime_usr;           /* either source_files or that + "/usr" */
+  const gchar *runtime_files;   /* either source_files or mutable_sysroot */
+  gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
 
   PvRuntimeFlags flags;
+  int mutable_parent_fd;
+  int mutable_sysroot_fd;
   gboolean any_libc_from_host;
   gboolean all_libc_from_host;
   gboolean runtime_is_just_usr;
@@ -73,6 +78,7 @@ enum {
   PROP_0,
   PROP_BUBBLEWRAP,
   PROP_FLAGS,
+  PROP_MUTABLE_PARENT,
   PROP_SOURCE_FILES,
   PROP_TOOLS_DIRECTORY,
   N_PROPERTIES
@@ -201,6 +207,8 @@ pv_runtime_init (PvRuntime *self)
 {
   self->any_libc_from_host = FALSE;
   self->all_libc_from_host = FALSE;
+  self->mutable_parent_fd = -1;
+  self->mutable_sysroot_fd = -1;
 }
 
 static void
@@ -219,6 +227,10 @@ pv_runtime_get_property (GObject *object,
 
       case PROP_FLAGS:
         g_value_set_flags (value, self->flags);
+        break;
+
+      case PROP_MUTABLE_PARENT:
+        g_value_set_string (value, self->mutable_parent);
         break;
 
       case PROP_SOURCE_FILES:
@@ -241,6 +253,7 @@ pv_runtime_set_property (GObject *object,
                          GParamSpec *pspec)
 {
   PvRuntime *self = PV_RUNTIME (object);
+  const char *path;
 
   switch (prop_id)
     {
@@ -252,6 +265,15 @@ pv_runtime_set_property (GObject *object,
 
       case PROP_FLAGS:
         self->flags = g_value_get_flags (value);
+        break;
+
+      case PROP_MUTABLE_PARENT:
+        /* Construct-only */
+        g_return_if_fail (self->mutable_parent == NULL);
+        path = g_value_get_string (value);
+
+        if (path != NULL)
+          self->mutable_parent = flatpak_canonicalize_filename (path);
         break;
 
       case PROP_SOURCE_FILES:
@@ -284,6 +306,170 @@ pv_runtime_constructed (GObject *object)
 }
 
 static gboolean
+pv_runtime_init_mutable (PvRuntime *self,
+                         GError **error)
+{
+  g_autofree gchar *dest_usr = NULL;
+  g_autofree gchar *source_usr_subdir = NULL;
+  g_autofree gchar *temp_dir = NULL;
+  g_autoptr(GDir) dir = NULL;
+  g_autoptr(PvBwrapLock) copy_lock = NULL;
+  g_autoptr(PvBwrapLock) mutable_lock = NULL;
+  g_autoptr(PvBwrapLock) source_lock = NULL;
+  const char *member;
+  const char *source_usr;
+  glnx_autofd int temp_dir_fd = -1;
+  gboolean is_just_usr;
+
+  /* Nothing to do in this case */
+  if (self->mutable_parent == NULL)
+    return TRUE;
+
+  if (g_mkdir_with_parents (self->mutable_parent, 0700) != 0)
+    return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                    self->mutable_parent);
+
+  if (!glnx_opendirat (AT_FDCWD, self->mutable_parent, TRUE,
+                       &self->mutable_parent_fd, error))
+    return FALSE;
+
+  /* Lock the parent directory. Anything that directly manipulates the
+   * temporary runtimes (notably the deploy-runtime and run-in-steamrt
+   * scripts in SteamLinuxRuntime) is expected to do the same, so that
+   * it cannot be deleting temporary runtimes at the same time we're
+   * creating them.
+   *
+   * This is a read-mode lock: it's OK to create more than one temporary
+   * runtime in parallel, as long as nothing is deleting them
+   * concurrently. */
+  mutable_lock = pv_bwrap_lock_new (self->mutable_parent_fd, ".ref",
+                                    PV_BWRAP_LOCK_FLAGS_CREATE,
+                                    error);
+
+  if (mutable_lock == NULL)
+    return glnx_prefix_error (error, "Unable to lock \"%s/%s\"",
+                              self->mutable_parent, ".ref");
+
+  temp_dir = g_build_filename (self->mutable_parent, "tmp-XXXXXX", NULL);
+
+  if (g_mkdtemp (temp_dir) == NULL)
+    return glnx_throw_errno_prefix (error,
+                                    "Cannot create temporary directory \"%s\"",
+                                    temp_dir);
+
+  source_usr_subdir = g_build_filename (self->source_files, "usr", NULL);
+  dest_usr = g_build_filename (temp_dir, "usr", NULL);
+
+  is_just_usr = !g_file_test (source_usr_subdir, G_FILE_TEST_IS_DIR);
+
+  if (is_just_usr)
+    {
+      /* ${source_files}/usr does not exist, so assume it's a merged /usr,
+       * for example ./scout/files. Copy ${source_files}/bin to
+       * ${temp_dir}/usr/bin, etc. */
+      source_usr = self->source_files;
+
+      if (!pv_cheap_tree_copy (self->source_files, dest_usr, error))
+        return FALSE;
+    }
+  else
+    {
+      /* ${source_files}/usr exists, so assume it's a complete sysroot.
+       * Copy ${source_files}/bin to ${temp_dir}/bin, etc. */
+      source_usr = source_usr_subdir;
+
+      if (!pv_cheap_tree_copy (self->source_files, temp_dir, error))
+        return FALSE;
+    }
+
+  if (!glnx_opendirat (-1, temp_dir, FALSE, &temp_dir_fd, error))
+    return FALSE;
+
+  /* Create the copy in a pre-locked state. After the lock on the parent
+   * directory is released, the copy continues to have a read lock,
+   * preventing it from being modified or deleted while in use (even if
+   * a cleanup process successfully obtains a write lock on the parent).
+   *
+   * Because we control the structure of the runtime in this case, we
+   * actually lock /usr/.ref instead of /.ref, and ensure that /.ref
+   * is a symlink to it. This might become important if we pass the
+   * runtime's /usr to Flatpak, which normally takes out a lock on
+   * /usr/.ref (obviously this will only work if the runtime happens
+   * to be merged-/usr). */
+  copy_lock = pv_bwrap_lock_new (temp_dir_fd, "usr/.ref",
+                                 PV_BWRAP_LOCK_FLAGS_CREATE,
+                                 error);
+
+  if (copy_lock == NULL)
+    return glnx_prefix_error (error,
+                              "Unable to lock \"%s/.ref\" in temporary runtime",
+                              dest_usr);
+
+  if (is_just_usr)
+    {
+      g_autofree gchar *in_root = g_build_filename (temp_dir, ".ref", NULL);
+
+      if (unlink (in_root) != 0 && errno != ENOENT)
+        return glnx_throw_errno_prefix (error,
+                                        "Cannot remove \"%s\"", in_root);
+
+      if (symlink ("usr/.ref", in_root) != 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Cannot create symlink \"%s\" -> usr/.ref",
+                                        in_root);
+    }
+
+  dir = g_dir_open (source_usr, 0, error);
+
+  if (dir == NULL)
+    return FALSE;
+
+  for (member = g_dir_read_name (dir);
+       member != NULL;
+       member = g_dir_read_name (dir))
+    {
+      /* Create symlinks ${temp_dir}/bin -> usr/bin, etc. if missing.
+       *
+       * Also make ${temp_dir}/etc, ${temp_dir}/var symlinks to etc
+       * and var, for the benefit of tools like capsule-capture-libs
+       * accessing /etc/ld.so.cache in the incomplete container (for the
+       * final container command-line they get merged by bind_runtime()
+       * instead). */
+      if (g_str_equal (member, "bin") ||
+          g_str_equal (member, "etc") ||
+          (g_str_has_prefix (member, "lib") &&
+           !g_str_equal (member, "libexec")) ||
+          g_str_equal (member, "sbin") ||
+          g_str_equal (member, "var"))
+        {
+          g_autofree gchar *dest = g_build_filename (temp_dir, member, NULL);
+          g_autofree gchar *target = g_build_filename ("usr", member, NULL);
+
+          if (symlink (target, dest) != 0)
+            {
+              /* Ignore EEXIST in the case where it was not just /usr:
+               * it's fine if the runtime we copied from source_files
+               * already had either directories or symlinks in its root
+               * directory */
+              if (is_just_usr || errno != EEXIST)
+                return glnx_throw_errno_prefix (error,
+                                                "Cannot create symlink \"%s\" -> %s",
+                                                dest, target);
+            }
+        }
+    }
+
+  /* Hand over from holding a lock on the source to just holding a lock
+   * on the copy. We'll release source_lock when we leave this scope */
+  source_lock = g_steal_pointer (&self->runtime_lock);
+  self->runtime_lock = g_steal_pointer (&copy_lock);
+  self->mutable_sysroot = g_steal_pointer (&temp_dir);
+  self->mutable_sysroot_fd = glnx_steal_fd (&temp_dir_fd);
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_initable_init (GInitable *initable,
                           GCancellable *cancellable G_GNUC_UNUSED,
                           GError **error)
@@ -300,6 +486,13 @@ pv_runtime_initable_init (GInitable *initable,
                          self->bubblewrap);
     }
 
+  if (self->mutable_parent != NULL
+      && !g_file_test (self->mutable_parent, G_FILE_TEST_IS_DIR))
+    {
+      return glnx_throw (error, "\"%s\" is not a directory",
+                         self->mutable_parent);
+    }
+
   if (!g_file_test (self->source_files, G_FILE_TEST_IS_DIR))
     {
       return glnx_throw (error, "\"%s\" is not a directory",
@@ -313,7 +506,12 @@ pv_runtime_initable_init (GInitable *initable,
     }
 
   /* Take a lock on the runtime until we're finished with setup,
-   * to make sure it doesn't get deleted. */
+   * to make sure it doesn't get deleted.
+   *
+   * If the runtime is mounted read-only in the container, it will
+   * continue to be locked until all processes in the container exit.
+   * If we make a temporary mutable copy, we only hold this lock until
+   * setup has finished. */
   files_ref = g_build_filename (self->source_files, ".ref", NULL);
   self->runtime_lock = pv_bwrap_lock_new (AT_FDCWD, files_ref,
                                           PV_BWRAP_LOCK_FLAGS_CREATE,
@@ -331,12 +529,20 @@ pv_runtime_initable_init (GInitable *initable,
   if (self->tmpdir == NULL)
     return FALSE;
 
+  if (!pv_runtime_init_mutable (self, error))
+    return FALSE;
+
+  if (self->mutable_sysroot != NULL)
+    self->runtime_files = self->mutable_sysroot;
+  else
+    self->runtime_files = self->source_files;
+
   self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
   g_mkdir (self->overrides, 0700);
   self->overrides_bin = g_build_filename (self->overrides, "bin", NULL);
   g_mkdir (self->overrides_bin, 0700);
 
-  self->runtime_usr = g_build_filename (self->source_files, "usr", NULL);
+  self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
 
   if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
     {
@@ -344,10 +550,10 @@ pv_runtime_initable_init (GInitable *initable,
     }
   else
     {
-      /* source_files is just a merged /usr. */
+      /* runtime_files is just a merged /usr. */
       self->runtime_is_just_usr = TRUE;
       g_free (self->runtime_usr);
-      self->runtime_usr = g_strdup (self->source_files);
+      self->runtime_usr = g_strdup (self->runtime_files);
     }
 
   return TRUE;
@@ -381,6 +587,10 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  glnx_close_fd (&self->mutable_parent_fd);
+  g_free (self->mutable_parent);
+  glnx_close_fd (&self->mutable_sysroot_fd);
+  g_free (self->mutable_sysroot);
   g_free (self->runtime_usr);
   g_free (self->source_files);
   g_free (self->tools_dir);
@@ -415,6 +625,14 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_MUTABLE_PARENT] =
+    g_param_spec_string ("mutable-parent", "Mutable parent",
+                         ("Path to a directory in which to create a "
+                          "mutable copy of source-files, or NULL"),
+                         NULL,
+                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS));
+
   properties[PROP_SOURCE_FILES] =
     g_param_spec_string ("source-files", "Source files",
                          ("Path to read-only runtime files (merged-/usr "
@@ -435,6 +653,7 @@ pv_runtime_class_init (PvRuntimeClass *cls)
 
 PvRuntime *
 pv_runtime_new (const char *source_files,
+                const char *mutable_parent,
                 const char *bubblewrap,
                 const char *tools_dir,
                 PvRuntimeFlags flags,
@@ -449,6 +668,7 @@ pv_runtime_new (const char *source_files,
                          NULL,
                          error,
                          "bubblewrap", bubblewrap,
+                         "mutable-parent", mutable_parent,
                          "source-files", source_files,
                          "tools-directory", tools_dir,
                          "flags", flags,
@@ -541,12 +761,11 @@ pv_runtime_provide_container_access (PvRuntime *self,
        * shape" that the final system is going to be.
        *
        * In particular, if we are working with a writeable copy of a runtime
-       * that we are editing in-place, we can arrange that it's always
-       * like that. */
+       * that we are editing in-place, it's always like that. */
       g_debug ("%s: Setting up runtime without using bwrap",
                G_STRFUNC);
       self->container_access_adverb = flatpak_bwrap_new (NULL);
-      self->container_access = g_strdup (self->source_files);
+      self->container_access = g_strdup (self->runtime_files);
 
       /* This is going to go poorly for us if the runtime is not complete.
        * !self->runtime_is_just_usr means we know it has a /usr subdirectory,
@@ -563,7 +782,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
        * so we don't check for it. */
       for (i = 0; i < G_N_ELEMENTS (need_top_level); i++)
         {
-          g_autofree gchar *path = g_build_filename (self->source_files,
+          g_autofree gchar *path = g_build_filename (self->runtime_files,
                                                      need_top_level[i],
                                                      NULL);
 
@@ -579,6 +798,10 @@ pv_runtime_provide_container_access (PvRuntime *self,
       g_debug ("%s: Using bwrap to set up runtime that is just /usr",
                G_STRFUNC);
 
+      /* By design, writeable copies of the runtime never need this:
+       * the writeable copy is a complete sysroot, not just a merged /usr. */
+      g_assert (self->mutable_sysroot == NULL);
+
       self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
       g_mkdir (self->container_access, 0700);
 
@@ -590,7 +813,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
                               "--tmpfs", self->container_access,
                               NULL);
       if (!pv_bwrap_bind_usr (self->container_access_adverb,
-                              self->source_files,
+                              self->runtime_files,
                               self->container_access,
                               error))
         return FALSE;
@@ -1032,7 +1255,7 @@ bind_runtime (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, self->source_files, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, self->runtime_files, "/", error))
     return FALSE;
 
   flatpak_bwrap_add_args (bwrap,
@@ -1048,7 +1271,7 @@ bind_runtime (PvRuntime *self,
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
     {
-      g_autofree gchar *path = g_build_filename (self->source_files,
+      g_autofree gchar *path = g_build_filename (self->runtime_files,
                                                  bind_mutable[i],
                                                  NULL);
       g_autoptr(GDir) dir = NULL;
@@ -1070,7 +1293,7 @@ bind_runtime (PvRuntime *self,
           if (g_strv_contains (dont_bind, dest))
             continue;
 
-          full = g_build_filename (self->source_files,
+          full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],
                                    member,
                                    NULL);
@@ -1330,7 +1553,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                   NULL);
 
           if (!pv_bwrap_bind_usr (temp_bwrap,
-                                  self->source_files,
+                                  self->runtime_files,
                                   "/",
                                   error))
             return FALSE;

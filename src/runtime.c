@@ -51,9 +51,10 @@ struct _PvRuntime
   PvBwrapLock *runtime_lock;
 
   gchar *tmpdir;
-  gchar *scratch;
   gchar *overrides;
   gchar *overrides_bin;
+  gchar *container_access;
+  FlatpakBwrap *container_access_adverb;
 };
 
 struct _PvRuntimeClass
@@ -223,8 +224,6 @@ pv_runtime_initable_init (GInitable *initable,
   if (self->tmpdir == NULL)
     return FALSE;
 
-  self->scratch = g_build_filename (self->tmpdir, "scratch", NULL);
-  g_mkdir (self->scratch, 0700);
   self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
   g_mkdir (self->overrides, 0700);
   self->overrides_bin = g_build_filename (self->overrides, "bin", NULL);
@@ -249,7 +248,8 @@ pv_runtime_cleanup (PvRuntime *self)
 
   g_clear_pointer (&self->overrides_bin, g_free);
   g_clear_pointer (&self->overrides, g_free);
-  g_clear_pointer (&self->scratch, g_free);
+  g_clear_pointer (&self->container_access, g_free);
+  g_clear_pointer (&self->container_access_adverb, flatpak_bwrap_free);
   g_clear_pointer (&self->tmpdir, g_free);
 }
 
@@ -378,10 +378,53 @@ pv_runtime_append_lock_adverb (PvRuntime *self,
                           NULL);
 }
 
+/*
+ * Set self->container_access_adverb to a (possibly empty) command prefix
+ * that will result in the container being available at
+ * self->container_access, with write access to self->overrides, and
+ * read-only access to everything else.
+ */
+static gboolean
+pv_runtime_provide_container_access (PvRuntime *self,
+                                     GError **error)
+{
+  /* TODO: Avoid using bwrap if we don't need to: when run from inside
+   * a Flatpak, it won't work.
+   *
+   * If we are working with a non-merged-/usr runtime, we can just
+   * set self->container_access to its path.
+   *
+   * Similarly, if we are working with a writeable copy of a runtime
+   * that we are editing in-place, we can set self->container_access to
+   * that. */
+
+  if (self->container_access_adverb == NULL)
+    {
+      self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
+
+      g_mkdir (self->container_access, 0700);
+      self->container_access = self->container_access;
+
+      self->container_access_adverb = flatpak_bwrap_new (NULL);
+      flatpak_bwrap_add_args (self->container_access_adverb,
+                              self->bubblewrap,
+                              "--ro-bind", "/", "/",
+                              "--bind", self->overrides, self->overrides,
+                              "--tmpfs", self->container_access,
+                              NULL);
+      if (!pv_bwrap_bind_usr (self->container_access_adverb,
+                              self->source_files,
+                              self->container_access,
+                              error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 static gboolean
 try_bind_dri (PvRuntime *self,
               FlatpakBwrap *bwrap,
-              FlatpakBwrap *mount_runtime_on_scratch,
               const char *tool_path,
               const char *libdir,
               const char *libdir_on_host,
@@ -389,12 +432,6 @@ try_bind_dri (PvRuntime *self,
 {
   g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
   g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
-
-  /* mount_runtime_on_scratch can't own any fds, because if it did,
-   * flatpak_bwrap_append_bwrap() would steal them. */
-  g_return_val_if_fail (mount_runtime_on_scratch->fds == NULL
-                        || mount_runtime_on_scratch->fds->len == 0,
-                        FALSE);
 
   if (g_file_test (dri, G_FILE_TEST_IS_DIR))
     {
@@ -406,13 +443,13 @@ try_bind_dri (PvRuntime *self,
       expr = g_strdup_printf ("only-dependencies:if-exists:path-match:%s/dri/*.so",
                               libdir);
 
-      temp_bwrap = flatpak_bwrap_new (NULL);
-      g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                      || mount_runtime_on_scratch->fds->len == 0);
-      flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+      if (!pv_runtime_provide_container_access (self, error))
+        return FALSE;
+
+      temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
-                              "--container", self->scratch,
+                              "--container", self->container_access,
                               "--link-target", "/run/host",
                               "--dest", libdir_on_host,
                               "--provider", "/",
@@ -425,6 +462,9 @@ try_bind_dri (PvRuntime *self,
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
+      /* TODO: If we're already in a container, rely on /run/host
+       * already being mounted, so we don't need to re-enter a container
+       * here. */
       host_dri = g_build_filename ("/run/host", libdir, "dri", NULL);
       dest_dri = g_build_filename (libdir_on_host, "dri", NULL);
       temp_bwrap = flatpak_bwrap_new (NULL);
@@ -452,13 +492,14 @@ try_bind_dri (PvRuntime *self,
       g_autofree gchar *expr = NULL;
 
       expr = g_strdup_printf ("path-match:%s", s2tc);
-      temp_bwrap = flatpak_bwrap_new (NULL);
-      g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                      || mount_runtime_on_scratch->fds->len == 0);
-      flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+
+      if (!pv_runtime_provide_container_access (self, error))
+        return FALSE;
+
+      temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
       flatpak_bwrap_add_args (temp_bwrap,
                               tool_path,
-                              "--container", self->scratch,
+                              "--container", self->container_access,
                               "--link-target", "/run/host",
                               "--dest", libdir_on_host,
                               "--provider", "/",
@@ -646,7 +687,6 @@ bind_icd (PvRuntime *self,
           gsize multiarch_index,
           gsize sequence_number,
           const char *tool_path,
-          FlatpakBwrap *mount_runtime_on_scratch,
           const char *libdir_on_host,
           const char *libdir_in_container,
           const char *subdir,
@@ -662,10 +702,6 @@ bind_icd (PvRuntime *self,
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
 
   g_return_val_if_fail (tool_path != NULL, FALSE);
-  g_return_val_if_fail (mount_runtime_on_scratch != NULL, FALSE);
-  g_return_val_if_fail (mount_runtime_on_scratch->fds == NULL
-                        || mount_runtime_on_scratch->fds->len == 0,
-                        FALSE);
   g_return_val_if_fail (libdir_on_host != NULL, FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
   g_return_val_if_fail (multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
@@ -707,11 +743,13 @@ bind_icd (PvRuntime *self,
   dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
                                         options, mode, details->resolved_library);
 
-  temp_bwrap = flatpak_bwrap_new (NULL);
-  flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+  if (!pv_runtime_provide_container_access (self, error))
+    return FALSE;
+
+  temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
   flatpak_bwrap_add_args (temp_bwrap,
                           tool_path,
-                          "--container", self->scratch,
+                          "--container", self->container_access,
                           "--link-target", "/run/host",
                           "--dest", on_host == NULL ? libdir_on_host : on_host,
                           "--provider", "/",
@@ -737,13 +775,10 @@ bind_icd (PvRuntime *self,
         }
     }
 
-  temp_bwrap = flatpak_bwrap_new (NULL);
-  g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                  || mount_runtime_on_scratch->fds->len == 0);
-  flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+  temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
   flatpak_bwrap_add_args (temp_bwrap,
                           tool_path,
-                          "--container", self->scratch,
+                          "--container", self->container_access,
                           "--link-target", "/run/host",
                           "--dest", libdir_on_host,
                           "--provider", "/",
@@ -825,6 +860,9 @@ bind_runtime (PvRuntime *self,
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   if (!pv_bwrap_bind_usr (bwrap, self->source_files, "/", error))
+    return FALSE;
+
+  if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
   flatpak_bwrap_add_args (bwrap,
@@ -995,7 +1033,6 @@ bind_runtime (PvRuntime *self,
       if (ld_so != NULL)
         {
           g_auto(GStrv) dirs = NULL;
-          g_autoptr(FlatpakBwrap) mount_runtime_on_scratch = NULL;
           g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
           g_autofree gchar *libdir_in_container = g_build_filename ("/overrides",
                                                                     "lib",
@@ -1049,30 +1086,12 @@ bind_runtime (PvRuntime *self,
           g_mkdir_with_parents (libdir_on_host, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
 
-          mount_runtime_on_scratch = flatpak_bwrap_new (NULL);
-          flatpak_bwrap_add_args (mount_runtime_on_scratch,
-                                  bwrap->argv->pdata[0],
-                                  "--ro-bind", "/", "/",
-                                  "--bind", self->overrides, self->overrides,
-                                  "--tmpfs", self->scratch,
-                                  NULL);
-          if (!pv_bwrap_bind_usr (mount_runtime_on_scratch,
-                                  self->source_files,
-                                  self->scratch,
-                                  error))
-            return FALSE;
-
           g_debug ("Collecting GLX drivers from host system...");
 
-          temp_bwrap = flatpak_bwrap_new (NULL);
-          /* mount_runtime_on_scratch can't own any fds, because if it did,
-           * flatpak_bwrap_append_bwrap() would steal them. */
-          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                          || mount_runtime_on_scratch->fds->len == 0);
-          flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+          temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
-                                  "--container", self->scratch,
+                                  "--container", self->container_access,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
@@ -1085,13 +1104,10 @@ bind_runtime (PvRuntime *self,
 
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-          temp_bwrap = flatpak_bwrap_new (NULL);
-          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                          || mount_runtime_on_scratch->fds->len == 0);
-          flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+          temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
-                                  "--container", self->scratch,
+                                  "--container", self->container_access,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
@@ -1155,7 +1171,6 @@ bind_runtime (PvRuntime *self,
                              i,
                              j,
                              tool_path,
-                             mount_runtime_on_scratch,
                              libdir_on_host,
                              libdir_in_container,
                              "glvnd",
@@ -1167,13 +1182,10 @@ bind_runtime (PvRuntime *self,
           g_debug ("Collecting %s Vulkan drivers from host system...",
                    multiarch_tuples[i]);
 
-          temp_bwrap = flatpak_bwrap_new (NULL);
-          g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                          || mount_runtime_on_scratch->fds->len == 0);
-          flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+          temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
           flatpak_bwrap_add_args (temp_bwrap,
                                   tool_path,
-                                  "--container", self->scratch,
+                                  "--container", self->container_access,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
@@ -1201,7 +1213,6 @@ bind_runtime (PvRuntime *self,
                              i,
                              j,
                              tool_path,
-                             mount_runtime_on_scratch,
                              libdir_on_host,
                              libdir_in_container,
                              "vulkan",
@@ -1249,13 +1260,10 @@ bind_runtime (PvRuntime *self,
 
               /* Collect miscellaneous libraries that libc might dlopen.
                * At the moment this is just libidn2. */
-              temp_bwrap = flatpak_bwrap_new (NULL);
-              g_warn_if_fail (mount_runtime_on_scratch->fds == NULL
-                              || mount_runtime_on_scratch->fds->len == 0);
-              flatpak_bwrap_append_bwrap (temp_bwrap, mount_runtime_on_scratch);
+              temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
               flatpak_bwrap_add_args (temp_bwrap,
                                       tool_path,
-                                      "--container", self->scratch,
+                                      "--container", self->container_access,
                                       "--link-target", "/run/host",
                                       "--dest", libdir_on_host,
                                       "--provider", "/",
@@ -1340,8 +1348,7 @@ bind_runtime (PvRuntime *self,
 
           for (j = 0; j < 6; j++)
             {
-              if (!try_bind_dri (self, bwrap, mount_runtime_on_scratch,
-                                 tool_path, dirs[j],
+              if (!try_bind_dri (self, bwrap, tool_path, dirs[j],
                                  libdir_on_host, error))
                 return FALSE;
             }

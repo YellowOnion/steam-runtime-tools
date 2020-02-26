@@ -61,6 +61,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   gboolean any_libc_from_host;
   gboolean all_libc_from_host;
+  gboolean runtime_is_just_usr;
 };
 
 struct _PvRuntimeClass
@@ -337,9 +338,14 @@ pv_runtime_initable_init (GInitable *initable,
 
   self->runtime_usr = g_build_filename (self->source_files, "usr", NULL);
 
-  if (!g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
+  if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
+    {
+      self->runtime_is_just_usr = FALSE;
+    }
+  else
     {
       /* source_files is just a merged /usr. */
+      self->runtime_is_just_usr = TRUE;
       g_free (self->runtime_usr);
       self->runtime_usr = g_strdup (self->source_files);
     }
@@ -516,22 +522,65 @@ static gboolean
 pv_runtime_provide_container_access (PvRuntime *self,
                                      GError **error)
 {
-  /* TODO: Avoid using bwrap if we don't need to: when run from inside
-   * a Flatpak, it won't work.
-   *
-   * If we are working with a non-merged-/usr runtime, we can just
-   * set self->container_access to its path.
-   *
-   * Similarly, if we are working with a writeable copy of a runtime
-   * that we are editing in-place, we can set self->container_access to
-   * that. */
+  if (self->container_access_adverb != NULL)
+    return TRUE;
 
-  if (self->container_access_adverb == NULL)
+  if (!self->runtime_is_just_usr)
     {
-      self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
+      static const char * const need_top_level[] =
+      {
+        "bin",
+        "etc",
+        "lib",
+        "sbin",
+      };
+      gsize i;
 
+      /* If we are working with a runtime that has a root directory containing
+       * /etc and /usr, we can just access it via its path - that's "the same
+       * shape" that the final system is going to be.
+       *
+       * In particular, if we are working with a writeable copy of a runtime
+       * that we are editing in-place, we can arrange that it's always
+       * like that. */
+      g_debug ("%s: Setting up runtime without using bwrap",
+               G_STRFUNC);
+      self->container_access_adverb = flatpak_bwrap_new (NULL);
+      self->container_access = g_strdup (self->source_files);
+
+      /* This is going to go poorly for us if the runtime is not complete.
+       * !self->runtime_is_just_usr means we know it has a /usr subdirectory,
+       * but that doesn't guarantee that it has /bin, /lib, /sbin (either
+       * in the form of real directories or symlinks into /usr) and /etc
+       * (for at least /etc/alternatives and /etc/ld.so.cache).
+       *
+       * This check is not intended to be exhaustive, merely something
+       * that will catch obvious mistakes like completely forgetting to
+       * add the merged-/usr symlinks.
+       *
+       * In practice we also need /lib64 for 64-bit-capable runtimes,
+       * but a pure 32-bit runtime would legitimately not have that,
+       * so we don't check for it. */
+      for (i = 0; i < G_N_ELEMENTS (need_top_level); i++)
+        {
+          g_autofree gchar *path = g_build_filename (self->source_files,
+                                                     need_top_level[i],
+                                                     NULL);
+
+          if (!g_file_test (path, G_FILE_TEST_IS_DIR))
+            g_warning ("%s does not exist, this probably won't work",
+                       path);
+        }
+    }
+  else
+    {
+      /* Otherwise, will we need to use bwrap to build a directory hierarchy
+       * that is the same shape as the final system. */
+      g_debug ("%s: Using bwrap to set up runtime that is just /usr",
+               G_STRFUNC);
+
+      self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
       g_mkdir (self->container_access, 0700);
-      self->container_access = self->container_access;
 
       self->container_access_adverb = flatpak_bwrap_new (NULL);
       flatpak_bwrap_add_args (self->container_access_adverb,

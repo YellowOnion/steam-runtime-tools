@@ -1168,7 +1168,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                 {
                   g_autofree gchar *dir = NULL;
                   g_autofree gchar *lib_multiarch = NULL;
-                  g_autofree gchar *libdrm_folder_in_host = NULL;
+                  g_autofree gchar *libdrm_dir_in_host = NULL;
 
                   dir = g_path_get_dirname (target);
 
@@ -1185,17 +1185,17 @@ bind_runtime (FlatpakBwrap *bwrap,
                   if (g_str_has_prefix (dir, "/run/host"))
                     memmove (dir, dir + strlen ("/run/host"), strlen (dir) - strlen ("/run/host") + 1);
 
-                  libdrm_folder_in_host = g_build_filename (dir, "share", "libdrm", NULL);
+                  libdrm_dir_in_host = g_build_filename (dir, "share", "libdrm", NULL);
 
-                  if (g_file_test (libdrm_folder_in_host, G_FILE_TEST_IS_DIR))
+                  if (g_file_test (libdrm_dir_in_host, G_FILE_TEST_IS_DIR))
                     {
-                      g_hash_table_add (libdrm_data_from_host, g_steal_pointer (&libdrm_folder_in_host));
+                      g_hash_table_add (libdrm_data_from_host, g_steal_pointer (&libdrm_dir_in_host));
                     }
                   else
                     {
-                      g_debug ("We were expecting to have the libdrm folder in the host "
+                      g_debug ("We were expecting to have the libdrm directory in the host "
                                "to be located in \"%s\", but instead it is missing",
-                               libdrm_folder_in_host);
+                               libdrm_dir_in_host);
                     }
                 }
             }
@@ -1325,7 +1325,7 @@ bind_runtime (FlatpakBwrap *bwrap,
     {
       g_warning ("Found more than one possible libdrm data directory from host");
       /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
-       * the first folder in the hash table */
+       * the first directory in the hash table */
       if (g_hash_table_contains (libdrm_data_from_host, "/usr/share/libdrm"))
         best_libdrm_data_from_host = g_strdup ("/usr/share/libdrm");
       else

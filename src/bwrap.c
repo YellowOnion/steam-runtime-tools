@@ -224,7 +224,8 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
        member != NULL;
        member = g_dir_read_name (dir))
     {
-      if (g_str_has_prefix (member, "lib")
+      if ((g_str_has_prefix (member, "lib")
+           && !g_str_equal (member, "libexec"))
           || g_str_equal (member, "bin")
           || g_str_equal (member, "sbin")
           || g_str_equal (member, ".ref"))

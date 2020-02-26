@@ -56,6 +56,7 @@ struct _PvRuntime
   gchar *overrides_bin;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
+  gchar *runtime_usr;           /* either source_files or that + "/usr" */
 
   PvRuntimeFlags flags;
   gboolean any_libc_from_host;
@@ -251,6 +252,15 @@ pv_runtime_initable_init (GInitable *initable,
   self->overrides_bin = g_build_filename (self->overrides, "bin", NULL);
   g_mkdir (self->overrides_bin, 0700);
 
+  self->runtime_usr = g_build_filename (self->source_files, "usr", NULL);
+
+  if (!g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
+    {
+      /* source_files is just a merged /usr. */
+      g_free (self->runtime_usr);
+      self->runtime_usr = g_strdup (self->source_files);
+    }
+
   return TRUE;
 }
 
@@ -282,6 +292,7 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  g_free (self->runtime_usr);
   g_free (self->source_files);
   g_free (self->tools_dir);
   pv_bwrap_lock_free (self->runtime_lock);
@@ -1581,11 +1592,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
     }
 
-  g_autofree gchar *runtime_usr = g_build_filename (self->source_files, "usr", NULL);
-  if (g_file_test (runtime_usr, G_FILE_TEST_IS_DIR))
-    libdrm_data_in_runtime = g_build_filename (runtime_usr, "share", "libdrm", NULL);
-  else
-    libdrm_data_in_runtime = g_build_filename (self->source_files, "share", "libdrm", NULL);
+  libdrm_data_in_runtime = g_build_filename (self->runtime_usr, "share", "libdrm", NULL);
 
   if (best_libdrm_data_from_host != NULL &&
       g_file_test (libdrm_data_in_runtime, G_FILE_TEST_IS_DIR))

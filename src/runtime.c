@@ -502,7 +502,7 @@ try_bind_dri (PvRuntime *self,
       dest_dri = g_build_filename (libdir_on_host, "dri", NULL);
       temp_bwrap = flatpak_bwrap_new (NULL);
       flatpak_bwrap_add_args (temp_bwrap,
-                              bwrap->argv->pdata[0],
+                              self->bubblewrap,
                               "--ro-bind", "/", "/",
                               "--tmpfs", "/run",
                               "--ro-bind", "/", "/run/host",
@@ -582,7 +582,7 @@ ensure_locales (PvRuntime *self,
                                      NULL);
 
       flatpak_bwrap_add_args (run_locale_gen,
-                              bwrap->argv->pdata[0],
+                              self->bubblewrap,
                               "--ro-bind", "/", "/",
                               NULL);
       pv_bwrap_add_api_filesystems (run_locale_gen);
@@ -1173,7 +1173,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           temp_bwrap = flatpak_bwrap_new (NULL);
           flatpak_bwrap_add_args (temp_bwrap,
-                                  bwrap->argv->pdata[0],
+                                  self->bubblewrap,
                                   NULL);
 
           if (!pv_bwrap_bind_usr (temp_bwrap,
@@ -1359,7 +1359,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               temp_bwrap = flatpak_bwrap_new (NULL);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      bwrap->argv->pdata[0],
+                                      self->bubblewrap,
                                       NULL);
 
               if (!pv_bwrap_bind_usr (temp_bwrap,

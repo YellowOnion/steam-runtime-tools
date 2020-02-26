@@ -120,7 +120,6 @@ build:scout:
 
             meson \
               --prefix="$(pwd)/_build/prefix" \
-              -Dpython=python3.5 \
               -Dsrcdir=src \
               --werror \
               _build

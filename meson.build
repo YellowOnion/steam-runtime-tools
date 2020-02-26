@@ -29,8 +29,16 @@ project(
 )
 
 prove = find_program('prove', required : false)
-python = find_program(get_option('python'), required : true)
 sh = find_program('sh', required : true)
+
+# We'd like to use import('python').find_installation(), but before
+# Meson 0.50 there was a bug where it didn't have a path() method,
+# making it useless to us here.
+if get_option('python') == ''
+  python = find_program('python3.5', 'python3', required : true)
+else
+  python = find_program(get_option('python'), required : true)
+endif
 
 version = get_option('version')
 if version == 'auto'

@@ -131,7 +131,6 @@ pipeline {
               cd src
               meson \
                 --prefix="$(pwd)/_build/prefix" \
-                -Dpython=python3.5 \
                 -Dsrcdir=src \
                 _build
               ninja -C _build

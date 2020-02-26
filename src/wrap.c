@@ -639,6 +639,22 @@ bind_icd (gsize multiarch_index,
   return TRUE;
 }
 
+/*
+ * Returns: (transfer none): The first key in @table in iteration order, or %NULL if @table is empty.
+ */
+static gpointer
+pv_hash_table_get_arbitrary_key (GHashTable *table)
+{
+  GHashTableIter iter;
+  gpointer key = NULL;
+
+  g_hash_table_iter_init (&iter, table);
+  if (g_hash_table_iter_next (&iter, &key, NULL))
+    return key;
+  else
+    return NULL;
+}
+
 static gboolean
 bind_runtime (FlatpakBwrap *bwrap,
               const char *tools_dir,
@@ -677,6 +693,11 @@ bind_runtime (FlatpakBwrap *bwrap,
   gboolean any_architecture_works = FALSE;
   gboolean any_libc_from_host = FALSE;
   gboolean all_libc_from_host = TRUE;
+  gboolean all_libdrm_from_host = TRUE;
+  g_autoptr(GHashTable) libdrm_data_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                       g_free, NULL);
+  g_autofree gchar *libdrm_data_in_runtime = NULL;
+  g_autofree gchar *best_libdrm_data_from_host = NULL;
   g_autofree gchar *localedef = NULL;
   g_autofree gchar *dir_on_host = NULL;
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
@@ -876,6 +897,7 @@ bind_runtime (FlatpakBwrap *bwrap,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
           g_autofree gchar *ld_so_in_runtime = NULL;
+          g_autofree gchar *libdrm = NULL;
           const gchar *libqual = NULL;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
@@ -1132,6 +1154,57 @@ bind_runtime (FlatpakBwrap *bwrap,
               all_libc_from_host = FALSE;
             }
 
+          libdrm = g_build_filename (libdir_on_host, "libdrm.so.2", NULL);
+
+          /* If we have libdrm.so.2 in overrides we also want to mount
+           * ${prefix}/share/libdrm from the host. ${prefix} is derived from
+           * the absolute path of libdrm.so.2 */
+          if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
+            {
+              g_autofree char *target = NULL;
+              target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
+
+              if (target != NULL)
+                {
+                  g_autofree gchar *dir = NULL;
+                  g_autofree gchar *lib_multiarch = NULL;
+                  g_autofree gchar *libdrm_dir_in_host = NULL;
+
+                  dir = g_path_get_dirname (target);
+
+                  lib_multiarch = g_build_filename ("/lib", multiarch_tuples[i], NULL);
+                  if (g_str_has_suffix (dir, lib_multiarch))
+                    dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
+                  else if (g_str_has_suffix (dir, "/lib64"))
+                    dir[strlen (dir) - strlen ("/lib64")] = '\0';
+                  else if (g_str_has_suffix (dir, "/lib32"))
+                    dir[strlen (dir) - strlen ("/lib32")] = '\0';
+                  else if (g_str_has_suffix (dir, "/lib"))
+                    dir[strlen (dir) - strlen ("/lib")] = '\0';
+
+                  if (g_str_has_prefix (dir, "/run/host"))
+                    memmove (dir, dir + strlen ("/run/host"), strlen (dir) - strlen ("/run/host") + 1);
+
+                  libdrm_dir_in_host = g_build_filename (dir, "share", "libdrm", NULL);
+
+                  if (g_file_test (libdrm_dir_in_host, G_FILE_TEST_IS_DIR))
+                    {
+                      g_hash_table_add (libdrm_data_from_host, g_steal_pointer (&libdrm_dir_in_host));
+                    }
+                  else
+                    {
+                      g_debug ("We were expecting to have the libdrm directory in the host "
+                               "to be located in \"%s\", but instead it is missing",
+                               libdrm_dir_in_host);
+                    }
+                }
+            }
+          else
+            {
+              /* For at least a single architecture, libdrm is newer in the container */
+              all_libdrm_from_host = FALSE;
+            }
+
           /* /lib32 or /lib64 */
           g_assert (i < G_N_ELEMENTS (libquals));
           libqual = libquals[i];
@@ -1234,6 +1307,43 @@ bind_runtime (FlatpakBwrap *bwrap,
   else
     {
       g_debug ("Using included locale data from container");
+    }
+
+  if (g_hash_table_size (libdrm_data_from_host) > 0 && !all_libdrm_from_host)
+    {
+      /* See the explanation in the similar "any_libc_from_host && !all_libc_from_host"
+       * case, above */
+      g_warning ("Using libdrm.so.2 from host system for some but not all "
+                 "architectures! Will take /usr/share/libdrm from host.");
+    }
+
+  if (g_hash_table_size (libdrm_data_from_host) == 1)
+    {
+      best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
+    }
+  else if (g_hash_table_size (libdrm_data_from_host) > 1)
+    {
+      g_warning ("Found more than one possible libdrm data directory from host");
+      /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
+       * the first directory in the hash table */
+      if (g_hash_table_contains (libdrm_data_from_host, "/usr/share/libdrm"))
+        best_libdrm_data_from_host = g_strdup ("/usr/share/libdrm");
+      else
+        best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
+    }
+
+  g_autofree gchar *runtime_usr = g_build_filename (runtime, "usr", NULL);
+  if (g_file_test (runtime_usr, G_FILE_TEST_IS_DIR))
+    libdrm_data_in_runtime = g_build_filename (runtime_usr, "share", "libdrm", NULL);
+  else
+    libdrm_data_in_runtime = g_build_filename (runtime, "share", "libdrm", NULL);
+
+  if (best_libdrm_data_from_host != NULL &&
+      g_file_test (libdrm_data_in_runtime, G_FILE_TEST_IS_DIR))
+    {
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind", best_libdrm_data_from_host, "/usr/share/libdrm",
+                              NULL);
     }
 
   g_debug ("Setting up EGL ICD JSON...");

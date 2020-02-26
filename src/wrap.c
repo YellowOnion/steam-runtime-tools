@@ -640,10 +640,10 @@ bind_icd (gsize multiarch_index,
 }
 
 /*
- * Returns: (transfer none): The first item in @table in iteration order, or %NULL if @table is empty.
+ * Returns: (transfer none): The first key in @table in iteration order, or %NULL if @table is empty.
  */
 static gpointer
-pv_hash_table_get_arbitrary_item (GHashTable *table)
+pv_hash_table_get_arbitrary_key (GHashTable *table)
 {
   GHashTableIter iter;
   gpointer key = NULL;
@@ -1319,7 +1319,7 @@ bind_runtime (FlatpakBwrap *bwrap,
 
   if (g_hash_table_size (libdrm_data_from_host) == 1)
     {
-      best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_item (libdrm_data_from_host));
+      best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
     }
   else if (g_hash_table_size (libdrm_data_from_host) > 1)
     {
@@ -1329,7 +1329,7 @@ bind_runtime (FlatpakBwrap *bwrap,
       if (g_hash_table_contains (libdrm_data_from_host, "/usr/share/libdrm"))
         best_libdrm_data_from_host = g_strdup ("/usr/share/libdrm");
       else
-        best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_item (libdrm_data_from_host));
+        best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
     }
 
   g_autofree gchar *runtime_usr = g_build_filename (runtime, "usr", NULL);

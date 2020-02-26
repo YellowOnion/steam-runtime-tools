@@ -173,3 +173,80 @@ pv_is_same_file (const gchar *a,
           && a_buffer.st_dev == b_buffer.st_dev
           && a_buffer.st_ino == b_buffer.st_ino);
 }
+
+void
+pv_search_path_append (GString *search_path,
+                       const gchar *item)
+{
+  if (item == NULL || item[0] == '\0')
+    return;
+
+  if (search_path->len != 0)
+    g_string_append (search_path, ":");
+
+  g_string_append (search_path, item);
+}
+
+gchar *
+pv_capture_output (const char * const * argv,
+                   GError **error)
+{
+  gsize len;
+  gint wait_status;
+  g_autofree gchar *output = NULL;
+  g_autofree gchar *errors = NULL;
+  gsize i;
+  g_autoptr(GString) command = g_string_new ("");
+
+  for (i = 0; argv[i] != NULL; i++)
+    {
+      g_autofree gchar *quoted = g_shell_quote (argv[i]);
+
+      g_string_append_printf (command, " %s", quoted);
+    }
+
+  g_debug ("run:%s", command->str);
+
+  if (!g_spawn_sync (NULL,  /* cwd */
+                     (char **) argv,
+                     NULL,  /* env */
+                     G_SPAWN_SEARCH_PATH,
+                     NULL, NULL,    /* child setup */
+                     &output,
+                     &errors,
+                     &wait_status,
+                     error))
+    return NULL;
+
+  g_printerr ("%s", errors);
+
+  if (!g_spawn_check_exit_status (wait_status, error))
+    return NULL;
+
+  len = strlen (output);
+
+  /* Emulate shell $() */
+  if (len > 0 && output[len - 1] == '\n')
+    output[len - 1] = '\0';
+
+  g_debug ("-> %s", output);
+
+  return g_steal_pointer (&output);
+}
+
+/*
+ * Returns: (transfer none): The first key in @table in iteration order,
+ *  or %NULL if @table is empty.
+ */
+gpointer
+pv_hash_table_get_arbitrary_key (GHashTable *table)
+{
+  GHashTableIter iter;
+  gpointer key = NULL;
+
+  g_hash_table_iter_init (&iter, table);
+  if (g_hash_table_iter_next (&iter, &key, NULL))
+    return key;
+  else
+    return NULL;
+}

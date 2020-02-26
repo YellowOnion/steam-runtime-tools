@@ -20,12 +20,14 @@
 #pragma once
 
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <glib-object.h>
 
 #include "glib-backports.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-bwrap-private.h"
+#include "flatpak-utils-base-private.h"
 
 typedef struct _PvRuntime PvRuntime;
 typedef struct _PvRuntimeClass PvRuntimeClass;
@@ -45,5 +47,11 @@ PvRuntime *pv_runtime_new (const char *source_files,
 
 void pv_runtime_append_lock_adverb (PvRuntime *self,
                                     FlatpakBwrap *bwrap);
+void pv_runtime_set_search_paths (PvRuntime *self,
+                                  FlatpakBwrap *bwrap);
+gboolean pv_runtime_bind (PvRuntime *self,
+                          FlatpakBwrap *bwrap,
+                          GError **error);
+void pv_runtime_cleanup (PvRuntime *self);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvRuntime, g_object_unref)

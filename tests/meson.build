@@ -67,13 +67,21 @@ src = meson.current_source_dir() + '/' + 'sysroots'
 # Note that the `-a` option is Linux specific
 meson.add_install_script('sh', '-c', 'cp -a "$1" "${DESTDIR}/${MESON_INSTALL_PREFIX}/$2"', 'sh', src, tests_dir)
 
-executable(
+# These are all the same: they just exit 0.
+foreach helper : [
+  'mock-good-check-gl',
+  'mock-good-check-vulkan',
+  'mock-software-check-gl',
   'mock-true',
-  join_paths('..', 'helpers', 'true.c'),
-  include_directories : project_include_dirs,
-  install : get_option('installed_tests'),
-  install_dir : tests_dir,
-)
+]
+  executable(
+    helper,
+    join_paths('..', 'helpers', 'true.c'),
+    include_directories : project_include_dirs,
+    install : get_option('installed_tests'),
+    install_dir : tests_dir,
+  )
+endforeach
 
 executable(
   'adverb',
@@ -159,78 +167,30 @@ executable(
   install_dir : tests_dir
 )
 
-executable(
-  'mock-good-wflinfo',
-  'mock-good-wflinfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-hanging-wflinfo',
-  'mock-hanging-wflinfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-bad-wflinfo',
-  'mock-bad-wflinfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-software-wflinfo',
-  'mock-software-wflinfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-software-check-gl',
-  join_paths('..', 'helpers', 'true.c'),
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-good-vulkaninfo',
-  'mock-good-vulkaninfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-bad-vulkaninfo',
-  'mock-bad-vulkaninfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-good-check-vulkan',
-  join_paths('..', 'helpers', 'true.c'),
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
+# Helpers with no dependencies and one source file of the same name
+# as the helper itself.
+foreach helper : [
   'mock-bad-check-vulkan',
-  'mock-bad-check-vulkan.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
+  'mock-bad-vulkaninfo',
+  'mock-bad-wflinfo',
+  'mock-good-vulkaninfo',
+  'mock-good-wflinfo',
+  'mock-hanging-wflinfo',
+  'mock-sigusr-wflinfo',
+  'mock-software-wflinfo',
+]
+  executable(
+    helper,
+    helper + '.c',
+    include_directories : project_include_dirs,
+    install: true,
+    install_dir: tests_dir
+  )
+endforeach
 
+# These need to be the same as their -good- counterparts, to exercise
+# the case where the preliminary check succeeds, but actually rendering
+# a window fails (hence "mixed").
 executable(
   'mock-mixed-vulkaninfo',
   'mock-good-vulkaninfo.c',
@@ -238,31 +198,6 @@ executable(
   install: true,
   install_dir: tests_dir
 )
-
-executable(
-  'mock-mixed-check-vulkan',
-  'mock-bad-check-vulkan.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-good-check-gl',
-  join_paths('..', 'helpers', 'true.c'),
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
-  'mock-bad-check-gl',
-  'mock-bad-check-vulkan.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
 executable(
   'mock-mixed-wflinfo',
   'mock-good-wflinfo.c',
@@ -271,65 +206,39 @@ executable(
   install_dir: tests_dir
 )
 
-executable(
+# These are all essentially the same as mock-bad-check-vulkan: they
+# fail with a message on stderr.
+foreach helper : [
+  'mock-bad-check-gl',
+  'mock-mixed-check-vulkan',
   'mock-mixed-check-gl',
-  'mock-bad-check-vulkan.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
+]
+  executable(
+    helper,
+    'mock-bad-check-vulkan.c',
+    include_directories : project_include_dirs,
+    install: true,
+    install_dir: tests_dir
+  )
+endforeach
 
-executable(
-  'mock-sigusr-wflinfo',
-  'mock-sigusr-wflinfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
+# Helpers with a GLib dependency and one source file of the same name
+# as the helper itself.
+foreach helper : [
   'mock-debian-x86_64-inspect-library',
-  'mock-debian-x86_64-inspect-library.c',
-  dependencies : [glib],
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
   'mock-debian-i386-inspect-library',
-  'mock-debian-i386-inspect-library.c',
-  dependencies : [glib],
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
   'mock-fedora-64-bit-inspect-library',
-  'mock-fedora-64-bit-inspect-library.c',
-  dependencies : [glib],
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
   'mock-fedora-32-bit-inspect-library',
-  'mock-fedora-32-bit-inspect-library.c',
-  dependencies : [glib],
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-
-executable(
   'mock-abi-inspect-library',
-  'mock-abi-inspect-library.c',
-  dependencies : [glib],
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
+]
+  executable(
+    helper,
+    helper + '.c',
+    dependencies : [glib],
+    include_directories : project_include_dirs,
+    install: true,
+    install_dir: tests_dir
+  )
+endforeach
 
 # vim:set sw=2 sts=2 et:

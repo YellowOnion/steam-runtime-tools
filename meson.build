@@ -196,6 +196,10 @@ if not libelf.found()
   libelf = c_compiler.find_library('elf', required: true)
 endif
 
+vdpau = dependency(
+  'vdpau',
+)
+
 vulkan = dependency(
   'vulkan',
 )

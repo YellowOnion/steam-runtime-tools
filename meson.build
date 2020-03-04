@@ -24,6 +24,8 @@
 project(
   'pressure-vessel', 'c',
   default_options: [
+    'c_std=c99',
+    'cpp_std=c++11',
     'warning_level=2',
   ],
 )

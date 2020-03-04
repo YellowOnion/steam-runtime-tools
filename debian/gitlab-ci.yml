@@ -131,6 +131,9 @@ build:scout:
               ${NULL+}
             fi
 
+            # g++ 4.6 is too old for the submodule (see also debian/rules)
+            export CXX=g++-4.8
+
             meson \
               --prefix="$(pwd)/_build/prefix" \
               -Dsrcdir=src \

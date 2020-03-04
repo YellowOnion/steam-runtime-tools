@@ -5,6 +5,7 @@ Maintainer: Simon McVittie <smcv@collabora.com>
 Standards-Version: 4.4.0
 Build-Depends:
  debhelper (>= 9),
+ g++ (>= 4:4.8) | g++-4.8,
  libglib2.0-dev,
  libsteam-runtime-tools-0-dev (>= 0.20190926.0~),
  libxau-dev,

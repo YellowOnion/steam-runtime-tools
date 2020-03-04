@@ -292,6 +292,29 @@ keys:
 
         This is the **VARIANT** from **os-release**(5).
 
+**container**
+:   Details of the container we are running in, if any.
+    The keys are strings:
+
+    **type**
+    :   A short machine-readable string identifying the container type,
+        such as **flatpak**, **pressure-vessel**, **docker**,
+        **unknown** (if we appear to be in a container but the type is
+        unknown), or **none** (if we do not appear to be in a container).
+
+    **host**
+    :   An object describing the host system. The keys are strings:
+
+        **path**
+        :   Absolute path to a directory where important files from the
+            host system can be found, or **null** if unavailable.
+            In Flatpak and pressure-vessel, this will be either **/run/host**
+            or **null*.
+
+        **os-release**
+        :   The same as the **os-release** described above, but describing
+            the host system rather than the container.
+
 **driver_environment**
 :   An array of strings, in the form "NAME=VALUE", with the well-known driver environment
     variables that are currently set.

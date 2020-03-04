@@ -150,6 +150,12 @@ struct _SrtSystemInfo
     gchar **messages_64;
     gboolean have_data;
   } pinned_libs;
+  struct
+  {
+    SrtContainerType type;
+    gchar *host_directory;
+    gboolean have_data;
+  } container;
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
@@ -300,6 +306,8 @@ srt_system_info_init (SrtSystemInfo *self)
   self->abis = g_ptr_array_new_full (2, abi_free);
 
   _srt_os_release_init (&self->os_release);
+
+  self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
 }
 
 static void
@@ -340,6 +348,17 @@ srt_system_info_set_property (GObject *object,
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
+}
+
+/*
+ * Forget any cached information about container information.
+ */
+static void
+forget_container_info (SrtSystemInfo *self)
+{
+  g_clear_pointer (&self->container.host_directory, g_free);
+  self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
+  self->container.have_data = FALSE;
 }
 
 /*
@@ -431,6 +450,7 @@ srt_system_info_finalize (GObject *object)
 {
   SrtSystemInfo *self = SRT_SYSTEM_INFO (object);
 
+  forget_container_info (self);
   forget_icds (self);
   forget_locales (self);
   forget_os (self);
@@ -1592,6 +1612,7 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
+  forget_container_info (self);
   forget_graphics_modules (self);
   forget_libraries (self);
   forget_graphics_results (self);
@@ -2741,4 +2762,189 @@ srt_system_info_list_driver_environment (SrtSystemInfo *self)
     return NULL;
   else
     return g_strdupv (self->cached_driver_environment);
+}
+
+typedef struct
+{
+  SrtContainerType type;
+  const char *name;
+} ContainerTypeName;
+
+static const ContainerTypeName container_types[] =
+{
+  { SRT_CONTAINER_TYPE_DOCKER, "docker" }
+};
+
+static SrtContainerType
+container_type_from_name (const char *name)
+{
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (container_types); i++)
+    {
+      const ContainerTypeName *entry = &container_types[i];
+
+      if (strcmp (entry->name, name) == 0)
+        return entry->type;
+    }
+
+  return SRT_CONTAINER_TYPE_UNKNOWN;
+}
+
+static void
+ensure_container_info (SrtSystemInfo *self)
+{
+  const char *sysroot = NULL;
+  gchar *contents = NULL;
+  gchar *filename = NULL;
+
+  if (self->container.have_data)
+    return;
+
+  g_assert (self->container.host_directory == NULL);
+  g_assert (self->container.type == SRT_CONTAINER_TYPE_UNKNOWN);
+
+  sysroot = self->sysroot;
+
+  if (sysroot == NULL)
+    sysroot = "/";
+
+  g_debug ("Finding container info in sysroot %s...", sysroot);
+
+  filename = g_build_filename (sysroot, "run", "systemd", "container", NULL);
+
+  if (g_file_get_contents (filename, &contents, NULL, NULL))
+    {
+      g_strchomp (contents);
+      self->container.type = container_type_from_name (contents);
+      g_debug ("Type %d based on %s", self->container.type, filename);
+      goto out;
+    }
+
+  g_clear_pointer (&filename, g_free);
+  filename = g_build_filename (sysroot, ".flatpak-info", NULL);
+
+  if (g_file_test (filename, G_FILE_TEST_IS_REGULAR))
+    {
+      self->container.type = SRT_CONTAINER_TYPE_FLATPAK;
+      g_debug ("Flatpak based on %s", filename);
+      goto out;
+    }
+
+  g_clear_pointer (&filename, g_free);
+  filename = g_build_filename (sysroot, "run", "pressure-vessel", NULL);
+
+  if (g_file_test (filename, G_FILE_TEST_IS_DIR))
+    {
+      self->container.type = SRT_CONTAINER_TYPE_PRESSURE_VESSEL;
+      g_debug ("pressure-vessel based on %s", filename);
+      goto out;
+    }
+
+  g_clear_pointer (&filename, g_free);
+  filename = g_build_filename (sysroot, ".dockerenv", NULL);
+
+  if (g_file_test (filename, G_FILE_TEST_EXISTS))
+    {
+      self->container.type = SRT_CONTAINER_TYPE_DOCKER;
+      g_debug ("Docker based on %s", filename);
+      goto out;
+    }
+
+  g_clear_pointer (&filename, g_free);
+  filename = g_build_filename (sysroot, "proc", "1", "cgroup", NULL);
+
+  if (g_file_get_contents (filename, &contents, NULL, NULL))
+    {
+      if (strstr (contents, "/docker/") != NULL)
+        self->container.type = SRT_CONTAINER_TYPE_DOCKER;
+
+      if (self->container.type != SRT_CONTAINER_TYPE_UNKNOWN)
+        {
+          g_debug ("Type %d based on %s", self->container.type, filename);
+          goto out;
+        }
+    }
+
+  g_clear_pointer (&filename, g_free);
+  filename = g_build_filename (sysroot, "run", "host", NULL);
+
+  if (g_file_test (filename, G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Unknown container technology based on %s", filename);
+      self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
+      self->container.host_directory = g_steal_pointer (&filename);
+      goto out;
+    }
+
+  g_clear_pointer (&filename, g_free);
+
+  /* We haven't found any particular evidence of being in a container */
+  g_debug ("Probably not a container");
+  self->container.type = SRT_CONTAINER_TYPE_NONE;
+
+out:
+  g_free (contents);
+  g_free (filename);
+
+  switch (self->container.type)
+    {
+      case SRT_CONTAINER_TYPE_FLATPAK:
+      case SRT_CONTAINER_TYPE_PRESSURE_VESSEL:
+        self->container.host_directory = g_build_filename (sysroot, "run",
+                                                           "host", NULL);
+        break;
+
+      case SRT_CONTAINER_TYPE_DOCKER:
+      case SRT_CONTAINER_TYPE_UNKNOWN:
+      case SRT_CONTAINER_TYPE_NONE:
+      default:
+        break;
+    }
+
+  self->container.have_data = TRUE;
+}
+
+/**
+ * srt_system_info_get_container_type:
+ * @self: The #SrtSystemInfo object
+ *
+ * If the program appears to be running in a container, return what sort
+ * of container it is.
+ *
+ * Returns: A recognised container type, or %SRT_CONTAINER_TYPE_NONE
+ *  if a container cannot be detected, or %SRT_CONTAINER_TYPE_UNKNOWN
+ *  if unsure.
+ */
+SrtContainerType
+srt_system_info_get_container_type (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_CONTAINER_TYPE_UNKNOWN);
+
+  ensure_container_info (self);
+  return self->container.type;
+}
+
+/**
+ * srt_system_info_dup_container_host_directory:
+ *
+ * If the program appears to be running in a container, return the
+ * directory where host files can be found. For example, if this function
+ * returns `/run/host`, it might be possible to load the host system's
+ * `/usr/lib/os-release` by reading `/run/host/usr/lib/os-release`.
+ *
+ * The returned directory is usually not complete. For example,
+ * in a Flatpak app, `/run/host` will sometimes contain the host system's
+ * `/etc` and `/usr`, but only if suitable permissions flags are set.
+ *
+ * Returns: A path from which at least some host-system files can be
+ *  loaded, typically `/run/host`, or %NULL if unknown or unavailable
+ */
+gchar *
+srt_system_info_dup_container_host_directory (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_container_info (self);
+  return g_strdup (self->container.host_directory);
 }

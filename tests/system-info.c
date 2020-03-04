@@ -2182,6 +2182,75 @@ driver_environment (Fixture *f,
   g_strfreev (envp);
 }
 
+typedef struct
+{
+  const char *description;
+  const char *sysroot;
+  SrtContainerType type;
+  const char *host_directory;
+} ContainerTest;
+
+static const ContainerTest container_tests[] =
+{
+  { "Has /.dockerenv",
+    "debian-unstable", SRT_CONTAINER_TYPE_DOCKER, NULL },
+  { "Has an unknown value in /run/systemd/container",
+    "debian10", SRT_CONTAINER_TYPE_UNKNOWN, NULL },
+  { "Has 'docker' in /run/systemd/container",
+    "fedora", SRT_CONTAINER_TYPE_DOCKER, NULL },
+  { "Has /.flatpak-info",
+    "flatpak-example", SRT_CONTAINER_TYPE_FLATPAK, "/run/host" },
+  { "Has /run/host",
+    "invalid-os-release", SRT_CONTAINER_TYPE_UNKNOWN, "/run/host" },
+  { "Has no evidence of being a container",
+    "no-os-release", SRT_CONTAINER_TYPE_NONE, NULL },
+  { "Has /run/pressure-vessel",
+    "steamrt", SRT_CONTAINER_TYPE_PRESSURE_VESSEL, "/run/host" },
+  { "Has a Docker-looking /proc/1/cgroup",
+    "steamrt-unofficial", SRT_CONTAINER_TYPE_DOCKER, NULL },
+};
+
+static void
+test_containers (Fixture *f,
+                 gconstpointer context)
+{
+  gsize i, j;
+
+  for (i = 0; i < G_N_ELEMENTS (container_tests); i++)
+    {
+      const ContainerTest *test = &container_tests[i];
+      SrtSystemInfo *info;
+      gchar *sysroot, *got, *expected;
+
+      g_test_message ("%s: %s", test->sysroot, test->description);
+
+      sysroot = g_build_filename (f->srcdir, "sysroots", test->sysroot, NULL);
+
+      info = srt_system_info_new (NULL);
+      g_assert_nonnull (info);
+      srt_system_info_set_sysroot (info, sysroot);
+
+      for (j = 0; j < 2; j++)
+        {
+          g_assert_cmpint (srt_system_info_get_container_type (info), ==,
+                           test->type);
+          got = srt_system_info_dup_container_host_directory (info);
+
+          if (test->host_directory == NULL)
+            expected = NULL;
+          else
+            expected = g_build_filename (sysroot, test->host_directory, NULL);
+
+          g_assert_cmpstr (got, ==, expected);
+          g_free (got);
+          g_free (expected);
+        }
+
+      g_object_unref (info);
+      g_free (sysroot);
+    }
+}
+
 int
 main (int argc,
       char **argv)
@@ -2251,6 +2320,9 @@ main (int argc,
 
   g_test_add ("/system-info/driver_environment", Fixture, NULL,
               setup, driver_environment, teardown);
+
+  g_test_add ("/system-info/containers", Fixture, NULL,
+              setup, test_containers, teardown);
 
   return g_test_run ();
 }

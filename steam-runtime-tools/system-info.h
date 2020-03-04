@@ -71,6 +71,26 @@ typedef enum
   SRT_DRIVER_FLAGS_NONE = 0
 } SrtDriverFlags;
 
+/**
+ * SrtContainerType:
+ * @SRT_CONTAINER_TYPE_UNKNOWN: Unknown container type
+ * @SRT_CONTAINER_TYPE_NONE: No container detected
+ * @SRT_CONTAINER_TYPE_FLATPAK: Running in a Flatpak app
+ * @SRT_CONTAINER_TYPE_PRESSURE_VESSEL: Running in a Steam Runtime container
+ *  using pressure-vessel
+ * @SRT_CONTAINER_TYPE_DOCKER: Running in a Docker container
+ *
+ * A type of container.
+ */
+typedef enum
+{
+  SRT_CONTAINER_TYPE_NONE = 0,
+  SRT_CONTAINER_TYPE_FLATPAK,
+  SRT_CONTAINER_TYPE_PRESSURE_VESSEL,
+  SRT_CONTAINER_TYPE_DOCKER,
+  SRT_CONTAINER_TYPE_UNKNOWN = -1
+} SrtContainerType;
+
 typedef struct _SrtSystemInfo SrtSystemInfo;
 typedef struct _SrtSystemInfoClass SrtSystemInfoClass;
 
@@ -87,6 +107,9 @@ SrtSystemInfo *srt_system_info_new (const char *expectations);
 
 gboolean srt_system_info_can_run (SrtSystemInfo *self,
                                   const char *multiarch_tuple);
+SrtContainerType srt_system_info_get_container_type (SrtSystemInfo *self);
+gchar *srt_system_info_dup_container_host_directory (SrtSystemInfo *self);
+
 gboolean srt_system_info_can_write_to_uinput (SrtSystemInfo *self);
 SrtLibraryIssues srt_system_info_check_libraries (SrtSystemInfo *self,
                                                   const gchar *multiarch_tuple,

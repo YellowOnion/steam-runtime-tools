@@ -266,10 +266,11 @@ jsonify_graphics_issues (JsonBuilder *builder,
 }
 
 static void
-jsonify_graphics_library_vendor (JsonBuilder *builder,
-                                 SrtGraphicsLibraryVendor vendor)
+jsonify_enum (JsonBuilder *builder,
+              GType type,
+              int value)
 {
-  const char *s = srt_enum_value_to_nick (SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, vendor);
+  const char *s = srt_enum_value_to_nick (type, value);
 
   if (s != NULL)
     {
@@ -277,7 +278,7 @@ jsonify_graphics_library_vendor (JsonBuilder *builder,
     }
   else
     {
-      gchar *fallback = g_strdup_printf ("(unknown value %d)", vendor);
+      gchar *fallback = g_strdup_printf ("(unknown value %d)", value);
 
       json_builder_add_string_value (builder, fallback);
       g_free (fallback);
@@ -418,7 +419,7 @@ print_graphics_details(JsonBuilder *builder,
         {
           json_builder_set_member_name (builder, "library-vendor");
           srt_graphics_library_is_vendor_neutral (g->data, &library_vendor);
-          jsonify_graphics_library_vendor (builder, library_vendor);
+          jsonify_enum (builder, SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, library_vendor);
         }
 
       if (srt_graphics_get_issues (g->data) != SRT_GRAPHICS_ISSUES_NONE)

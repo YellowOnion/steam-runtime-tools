@@ -1,3 +1,23 @@
+steam-runtime-tools (0.20200304.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * meson: remove redundant Wall and Wextra flags
+  * Move indirect_strcmp0 to utils
+  * Log driver-selection environment variables
+  * Enumerate VDPAU drivers
+  * Add check-vdpau helper
+
+  [ Simon McVittie ]
+  * build: Belatedly update version number in meson.build
+  * Fail build if version number in meson.build hasn't been updated
+  * system-info: Make SRT_DRIVER_FLAGS_NONE the absence of flags
+  * system-info: Add an undocumented --ignore-extra-drivers option
+  * .gitignore: Ignore several common Meson build directories
+  * build: Use a loop to reduce repetition when compiling shaders
+  * tests: Use loops to build mock helpers
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 04 Mar 2020 14:08:19 +0000
+
 steam-runtime-tools (0.20200109.0-0+steamrt1.1) scout; urgency=medium
 
   [ Ludovico de Nittis ]

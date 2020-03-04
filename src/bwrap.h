@@ -49,3 +49,5 @@ pv_bwrap_was_finished (FlatpakBwrap *bwrap)
   return (bwrap->argv->len >= 1 &&
           bwrap->argv->pdata[bwrap->argv->len - 1] == NULL);
 }
+
+FlatpakBwrap *pv_bwrap_copy (FlatpakBwrap *bwrap);

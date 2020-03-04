@@ -61,6 +61,23 @@ def tristate_environment(name):
     return None
 
 
+def boolean_environment(name, default):
+    # type: (str, bool) -> bool
+    value = os.getenv(name)
+
+    if value is None:
+        return default
+
+    if value == '1':
+        return True
+
+    if value in ('', '0'):
+        return False
+
+    logger.warning('Unrecognised value %r for $%s', value, name)
+    return default
+
+
 class Gui:
     def __init__(self):
         # type: (...) -> None
@@ -144,6 +161,30 @@ class Gui:
         self.grid.attach(self.container_runtime_combo, 1, row, 1, 1)
 
         row += 1
+
+        self.host_graphics_check = Gtk.CheckButton.new_with_label(
+            'Use host-system graphics stack'
+        )
+        value = boolean_environment('PRESSURE_VESSEL_HOST_GRAPHICS', True)
+        self.host_graphics_check.set_active(value)
+        self.grid.attach(self.host_graphics_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            "Most games and GPUs won't work when this is disabled."
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self._container_runtime_changed(self.container_runtime_combo)
+        self.container_runtime_combo.connect(
+            'changed',
+            self._container_runtime_changed)
 
         self.unshare_home_check = Gtk.CheckButton.new_with_label(
             'Use a separate home directory per game'
@@ -258,6 +299,12 @@ class Gui:
         else:
             self.xterm_check.set_sensitive(True)
 
+    def _container_runtime_changed(self, combo):
+        if combo.get_active_id() == '/':
+            self.host_graphics_check.set_sensitive(False)
+        else:
+            self.host_graphics_check.set_sensitive(True)
+
     def _describe_runtime(
         self,
         path        # type: str
@@ -361,6 +408,11 @@ class Gui:
         else:
             argv.append('--runtime')
             argv.append(os.path.join(id, 'files'))
+
+        if self.host_graphics_check.get_active():
+            argv.append('--with-host-graphics')
+        else:
+            argv.append('--without-host-graphics')
 
         if self.unshare_home_check.get_active():
             argv.append('--unshare-home')

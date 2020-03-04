@@ -404,3 +404,19 @@ pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap)
                             "--dev-bind", "/dev/shm", "/dev/shm",
                             NULL);
 }
+
+FlatpakBwrap *
+pv_bwrap_copy (FlatpakBwrap *bwrap)
+{
+  FlatpakBwrap *ret;
+
+  g_return_val_if_fail (bwrap != NULL, NULL);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), NULL);
+  /* bwrap can't own any fds, because if it did,
+   * flatpak_bwrap_append_bwrap() would steal them. */
+  g_return_val_if_fail (bwrap->fds == NULL || bwrap->fds->len == 0, NULL);
+
+  ret = flatpak_bwrap_new (NULL);
+  flatpak_bwrap_append_bwrap (ret, bwrap);
+  return ret;
+}

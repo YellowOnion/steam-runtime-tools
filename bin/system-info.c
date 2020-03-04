@@ -266,10 +266,11 @@ jsonify_graphics_issues (JsonBuilder *builder,
 }
 
 static void
-jsonify_graphics_library_vendor (JsonBuilder *builder,
-                                 SrtGraphicsLibraryVendor vendor)
+jsonify_enum (JsonBuilder *builder,
+              GType type,
+              int value)
 {
-  const char *s = srt_enum_value_to_nick (SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, vendor);
+  const char *s = srt_enum_value_to_nick (type, value);
 
   if (s != NULL)
     {
@@ -277,7 +278,7 @@ jsonify_graphics_library_vendor (JsonBuilder *builder,
     }
   else
     {
-      gchar *fallback = g_strdup_printf ("(unknown value %d)", vendor);
+      gchar *fallback = g_strdup_printf ("(unknown value %d)", value);
 
       json_builder_add_string_value (builder, fallback);
       g_free (fallback);
@@ -418,7 +419,7 @@ print_graphics_details(JsonBuilder *builder,
         {
           json_builder_set_member_name (builder, "library-vendor");
           srt_graphics_library_is_vendor_neutral (g->data, &library_vendor);
-          jsonify_graphics_library_vendor (builder, library_vendor);
+          jsonify_enum (builder, SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, library_vendor);
         }
 
       if (srt_graphics_get_issues (g->data) != SRT_GRAPHICS_ISSUES_NONE)
@@ -529,6 +530,106 @@ print_vdpau_details (JsonBuilder *builder,
         }
     }
   json_builder_end_array (builder); // End vdpau_drivers
+}
+
+static void
+jsonify_os_release (JsonBuilder *builder,
+                    SrtSystemInfo *info)
+{
+  json_builder_set_member_name (builder, "os-release");
+  json_builder_begin_object (builder);
+    {
+      GStrv strv;
+      gsize i;
+      gchar *tmp;
+
+      tmp = srt_system_info_dup_os_id (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "id");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      strv = srt_system_info_dup_os_id_like (info, FALSE);
+
+      if (strv != NULL)
+        {
+          json_builder_set_member_name (builder, "id_like");
+          json_builder_begin_array (builder);
+            {
+              for (i = 0; strv[i] != NULL; i++)
+                json_builder_add_string_value (builder, strv[i]);
+            }
+          json_builder_end_array (builder);
+          g_strfreev (strv);
+        }
+
+      tmp = srt_system_info_dup_os_name (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "name");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      tmp = srt_system_info_dup_os_pretty_name (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "pretty_name");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      tmp = srt_system_info_dup_os_version_id (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "version_id");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      tmp = srt_system_info_dup_os_version_codename (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "version_codename");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      tmp = srt_system_info_dup_os_build_id (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "build_id");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      tmp = srt_system_info_dup_os_variant_id (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "variant_id");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+
+      tmp = srt_system_info_dup_os_variant (info);
+
+      if (tmp != NULL)
+        {
+          json_builder_set_member_name (builder, "variant");
+          json_builder_add_string_value (builder, tmp);
+          g_free (tmp);
+        }
+    }
+  json_builder_end_object (builder);
 }
 
 static const char * const locales[] =
@@ -742,100 +843,7 @@ main (int argc,
     }
   json_builder_end_object (builder);
 
-  json_builder_set_member_name (builder, "os-release");
-  json_builder_begin_object (builder);
-    {
-      GStrv strv;
-      gsize i;
-      gchar *tmp;
-
-      tmp = srt_system_info_dup_os_id (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "id");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      strv = srt_system_info_dup_os_id_like (info, FALSE);
-
-      if (strv != NULL)
-        {
-          json_builder_set_member_name (builder, "id_like");
-          json_builder_begin_array (builder);
-            {
-              for (i = 0; strv[i] != NULL; i++)
-                json_builder_add_string_value (builder, strv[i]);
-            }
-          json_builder_end_array (builder);
-          g_strfreev (strv);
-        }
-
-      tmp = srt_system_info_dup_os_name (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "name");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      tmp = srt_system_info_dup_os_pretty_name (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "pretty_name");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      tmp = srt_system_info_dup_os_version_id (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "version_id");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      tmp = srt_system_info_dup_os_version_codename (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "version_codename");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      tmp = srt_system_info_dup_os_build_id (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "build_id");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      tmp = srt_system_info_dup_os_variant_id (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "variant_id");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-
-      tmp = srt_system_info_dup_os_variant (info);
-
-      if (tmp != NULL)
-        {
-          json_builder_set_member_name (builder, "variant");
-          json_builder_add_string_value (builder, tmp);
-          g_free (tmp);
-        }
-    }
-  json_builder_end_object (builder);
+  jsonify_os_release (builder, info);
 
   json_builder_set_member_name (builder, "driver_environment");
   json_builder_begin_array (builder);

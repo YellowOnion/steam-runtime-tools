@@ -1218,7 +1218,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_mkdir_with_parents (libdir_on_host, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
 
-          g_debug ("Collecting GLX drivers from host system...");
+          g_debug ("Collecting graphics drivers from host system...");
 
           temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
           flatpak_bwrap_add_args (temp_bwrap,
@@ -1227,22 +1227,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
                                   "--provider", "/",
+                                  /* Mesa GLX, etc. */
                                   "gl:",
-                                  NULL);
-          flatpak_bwrap_finish (temp_bwrap);
-
-          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-            return FALSE;
-
-          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-
-          temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  tool_path,
-                                  "--container", self->container_access,
-                                  "--link-target", "/run/host",
-                                  "--dest", libdir_on_host,
-                                  "--provider", "/",
+                                  /* Vulkan */
+                                  "if-exists:if-same-abi:soname:libvulkan.so.1",
+                                  /* NVIDIA proprietary stack */
                                   "if-exists:even-if-older:soname-match:libEGL.so.*",
                                   "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
                                   "if-exists:even-if-older:soname-match:libGL.so.*",
@@ -1313,22 +1302,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           g_debug ("Collecting %s Vulkan drivers from host system...",
                    multiarch_tuples[i]);
-
-          temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  tool_path,
-                                  "--container", self->container_access,
-                                  "--link-target", "/run/host",
-                                  "--dest", libdir_on_host,
-                                  "--provider", "/",
-                                  "if-exists:if-same-abi:soname:libvulkan.so.1",
-                                  NULL);
-          flatpak_bwrap_finish (temp_bwrap);
-
-          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-            return FALSE;
-
-          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
           for (j = 0; j < vulkan_icd_details->len; j++)
             {

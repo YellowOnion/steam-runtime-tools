@@ -30,6 +30,8 @@ variables:
         python3
         python3.5
         zlib1g
+    # Set non-empty to require
+    CI_NEED_NEWER_STEAM_RUNTIME_TOOLS: ''
 
     DEBIAN_FRONTEND: noninteractive
 
@@ -110,14 +112,24 @@ build:scout:
             libcapsule0 \
             libcapsule-tools-relocatable:amd64 \
             libcapsule-tools-relocatable:i386 \
-            libsteam-runtime-tools-0-dev \
-            libsteam-runtime-tools-0-helpers:amd64 \
-            libsteam-runtime-tools-0-helpers:i386 \
             libglib2.0-dev \
             libxau-dev \
             meson \
-            steam-runtime-tools-bin
             ${NULL+}
+
+            if [ -n "$CI_NEED_NEWER_STEAM_RUNTIME_TOOLS" ]; then
+              git clone \
+              -b${STEAM_RUNTIME_TOOLS_GIT_BRANCH} \
+              ${STEAM_RUNTIME_TOOLS_GIT_REPO} \
+              subprojects/steam-runtime-tools
+            else
+              apt-get -y --no-install-recommends install \
+              libsteam-runtime-tools-0-dev \
+              libsteam-runtime-tools-0-helpers:amd64 \
+              libsteam-runtime-tools-0-helpers:i386 \
+              steam-runtime-tools-bin
+              ${NULL+}
+            fi
 
             meson \
               --prefix="$(pwd)/_build/prefix" \
@@ -127,14 +139,30 @@ build:scout:
             ninja -C _build
             meson test --verbose -C _build
             ninja -C _build install
-            rm -fr _build/relocatable-install
-            _build/prefix/bin/pressure-vessel-build-relocatable-install \
-              --output _build/relocatable-install \
-              --archive "$(pwd)/_build" \
-              ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
-              ${NULL+}
-            prove -v ./tests/relocatable-install.py :: \
-              "$(pwd)/_build/relocatable-install"
+
+            # We can only build the relocatable installation if the
+            # system copy of steam-runtime-tools is new enough.
+            if [ -z "$CI_NEED_NEWER_STEAM_RUNTIME_TOOLS" ]; then
+              rm -fr _build/relocatable-install
+              _build/prefix/bin/pressure-vessel-build-relocatable-install \
+                --output _build/relocatable-install \
+                --archive "$(pwd)/_build" \
+                ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
+                ${NULL+}
+              prove -v ./tests/relocatable-install.py :: \
+                "$(pwd)/_build/relocatable-install"
+            fi
+
+# These packaging-oriented jobs need a suitable steam-runtime-tools version
+# available via apt
+build:
+  only:
+    variables:
+      - $CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ''
+autopkgtest:
+  only:
+    variables:
+      - $CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ''
 
 # Artifacts are currently disabled because uploading them to the
 # coordinator results in HTTP 413 Request Entity Too Large.

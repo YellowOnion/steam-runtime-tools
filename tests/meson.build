@@ -209,7 +209,6 @@ executable(
 foreach helper : [
   'mock-bad-check-gl',
   'mock-mixed-check-vulkan',
-  'mock-mixed-check-gl',
 ]
   executable(
     helper,
@@ -230,6 +229,7 @@ foreach helper : [
   'mock-fedora-64-bit-inspect-library',
   'mock-fedora-32-bit-inspect-library',
   'mock-good-wflinfo',
+  'mock-mixed-check-gl',
   'mock-software-wflinfo',
 ]
   executable(

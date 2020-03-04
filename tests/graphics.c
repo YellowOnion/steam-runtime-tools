@@ -775,6 +775,9 @@ test_mixed_vulkan (Fixture *f,
                 "exit-status", &exit_status,
                 "terminating-signal", &terminating_signal,
                 NULL);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   "failed to create window surface!\n");
+
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
   g_assert_cmpstr (tuple, ==, "mock-mixed");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
@@ -826,6 +829,11 @@ test_mixed_gl (Fixture *f,
   g_assert_cmpstr (tuple, ==, "mock-mixed");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   "warning: this warning should always be logged\n"
+                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
+                   "info: you used LIBGL_DEBUG=verbose\n");
+
   g_free (tuple);
   g_free (renderer);
   g_free (version);

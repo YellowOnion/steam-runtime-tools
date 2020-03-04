@@ -156,23 +156,28 @@ typedef enum
 } SrtGraphicsModule;
 
 G_GNUC_INTERNAL
-GList *_srt_load_egl_icds (gchar **envp,
+GList *_srt_load_egl_icds (const char *sysroot,
+                           gchar **envp,
                            const char * const *multiarch_tuples);
 G_GNUC_INTERNAL
-GList *_srt_load_vulkan_icds (gchar **envp,
+GList *_srt_load_vulkan_icds (const char *sysroot,
+                              gchar **envp,
                               const char * const *multiarch_tuples);
 
 G_GNUC_INTERNAL
-GList *_srt_list_va_api_drivers (gchar **envp,
+GList *_srt_list_va_api_drivers (const char *sysroot,
+                                 gchar **envp,
                                  const char *helpers_path,
                                  const char *multiarch_tuple);
 
 G_GNUC_INTERNAL
-GList *_srt_list_dri_drivers (gchar **envp,
+GList *_srt_list_dri_drivers (const char *sysroot,
+                              gchar **envp,
                               const char *helpers_path,
                               const char *multiarch_tuple);
 
 G_GNUC_INTERNAL
-GList *_srt_list_vdpau_drivers (gchar **envp,
+GList *_srt_list_vdpau_drivers (const char *sysroot,
+                                gchar **envp,
                                 const char *helpers_path,
                                 const char *multiarch_tuple);

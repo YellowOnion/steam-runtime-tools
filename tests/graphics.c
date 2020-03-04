@@ -43,6 +43,7 @@ typedef struct
 {
   gchar *srcdir;
   gchar *builddir;
+  gchar *sysroot;
   gchar **fake_icds_envp;
 } Fixture;
 
@@ -64,7 +65,6 @@ setup (Fixture *f,
        gconstpointer context)
 {
   const Config *config = context;
-  gchar *tmp;
 
   f->srcdir = g_strdup (g_getenv ("G_TEST_SRCDIR"));
   f->builddir = g_strdup (g_getenv ("G_TEST_BUILDDIR"));
@@ -82,10 +82,11 @@ setup (Fixture *f,
 
   if (config == NULL || config->icd_mode != ICD_MODE_RELATIVE_FILENAMES)
     {
-      tmp = g_build_filename (f->srcdir, "fake-icds", NULL);
+      f->sysroot = g_build_filename (f->srcdir, "fake-icds", NULL);
+      /* Some of the mock helper programs rely on this, so we set it
+       * even though SrtSystemInfo doesn't use it any more */
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
-                                            "SRT_TEST_SYSROOT", tmp, TRUE);
-      g_free (tmp);
+                                            "SRT_TEST_SYSROOT", f->sysroot, TRUE);
     }
 
   f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
@@ -182,6 +183,7 @@ teardown (Fixture *f,
 
   g_free (f->srcdir);
   g_free (f->builddir);
+  g_free (f->sysroot);
   g_strfreev (f->fake_icds_envp);
 }
 
@@ -991,6 +993,7 @@ test_icd_egl (Fixture *f,
   const char * const multiarchs[] = { "mock-abi", NULL };
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
+  srt_system_info_set_sysroot (info, f->sysroot);
 
   if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     icds = srt_system_info_list_egl_icds (info, multiarchs);
@@ -1336,6 +1339,7 @@ test_icd_vulkan (Fixture *f,
   const char * const multiarchs[] = { "mock-abi", NULL };
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
+  srt_system_info_set_sysroot (info, f->sysroot);
 
   if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     icds = srt_system_info_list_vulkan_icds (info, multiarchs);
@@ -1787,6 +1791,7 @@ test_dri_debian10 (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   /* The output is guaranteed to be in aphabetical order */
@@ -1868,6 +1873,7 @@ test_dri_fedora (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
@@ -1957,6 +1963,7 @@ test_dri_with_env (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   /* The output is guaranteed to be in aphabetical order */
@@ -2020,6 +2027,7 @@ test_dri_flatpak (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
@@ -2070,6 +2078,7 @@ test_vdpau_debian10 (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
@@ -2122,6 +2131,7 @@ test_vdpau_fedora (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
@@ -2175,6 +2185,7 @@ test_vdpau_with_env (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   /* The output is guaranteed to be in aphabetical order */
@@ -2216,6 +2227,7 @@ test_vdpau_flatpak (Fixture *f,
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);

@@ -59,6 +59,7 @@ typedef struct
   gchar *amd64_usr_lib;
   gchar *amd64_bin;
   gchar *amd64_usr_bin;
+  gchar *sysroot;
   GStrv env;
 } FakeHome;
 

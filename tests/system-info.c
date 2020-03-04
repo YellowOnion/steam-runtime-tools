@@ -1260,17 +1260,14 @@ os_debian10 (Fixture *f,
              gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   s = srt_system_info_dup_os_build_id (info);
   g_assert_cmpstr (s, ==, NULL);
@@ -1316,7 +1313,6 @@ os_debian10 (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1324,17 +1320,14 @@ os_debian_unstable (Fixture *f,
                     gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "debian-unstable", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   s = srt_system_info_dup_os_build_id (info);
   g_assert_cmpstr (s, ==, NULL);
@@ -1380,7 +1373,6 @@ os_debian_unstable (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1388,19 +1380,15 @@ os_steamrt (Fixture *f,
             gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_unsetenv (envp, "STEAM_RUNTIME");
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   s = srt_system_info_dup_os_build_id (info);
   g_assert_cmpstr (s, ==, "0.20190924.0");
@@ -1463,7 +1451,6 @@ os_steamrt (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1471,19 +1458,15 @@ os_steamrt_unofficial (Fixture *f,
                        gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-unofficial", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_unsetenv (envp, "STEAM_RUNTIME");
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_expected_runtime_version (info, "0.20190711.3");
 
   s = srt_system_info_dup_os_build_id (info);
@@ -1549,7 +1532,6 @@ os_steamrt_unofficial (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1557,19 +1539,15 @@ os_invalid_os_release (Fixture *f,
                        gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "invalid-os-release", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_unsetenv (envp, "STEAM_RUNTIME");
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_expected_runtime_version (info, "0.20190711.3");
 
   s = srt_system_info_dup_os_build_id (info);
@@ -1629,7 +1607,6 @@ os_invalid_os_release (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1637,17 +1614,14 @@ os_no_os_release (Fixture *f,
                   gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "no-os-release", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   s = srt_system_info_dup_os_build_id (info);
   g_assert_cmpstr (s, ==, NULL);
@@ -1691,7 +1665,6 @@ os_no_os_release (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1699,7 +1672,6 @@ overrides (Fixture *f,
            gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **output;
   gchar **issues;
   gchar *sysroot;
@@ -1708,11 +1680,9 @@ overrides (Fixture *f,
   gboolean seen_link;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   s = srt_system_info_dup_os_id (info);
   g_assert_cmpstr (s, ==, "steamrt");
@@ -1761,7 +1731,6 @@ overrides (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
@@ -1769,7 +1738,6 @@ overrides_issues (Fixture *f,
                   gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **output;
   gchar **issues;
   gchar *sysroot;
@@ -1778,11 +1746,9 @@ overrides_issues (Fixture *f,
   gboolean seen_link;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-overrides-issues", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   lib_folder = g_build_filename (sysroot, "overrides", "lib", NULL);
 
@@ -1828,7 +1794,6 @@ overrides_issues (Fixture *f,
     g_object_unref (info);
     g_free (sysroot);
     g_free (lib_folder);
-    g_strfreev (envp);
 }
 
 static void
@@ -1836,17 +1801,14 @@ overrides_not_available (Fixture *f,
                          gconstpointer context)
 {
   SrtSystemInfo *info;
-  gchar **envp;
   gchar **output;
   gchar **issues;
   gchar *sysroot;
 
   sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
   info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
 
   output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
 
@@ -1856,7 +1818,6 @@ overrides_not_available (Fixture *f,
 
   g_object_unref (info);
   g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void

@@ -239,6 +239,8 @@ fake_home_create_structure (FakeHome *f)
   f->env = g_environ_setenv (f->env, "XDG_DATA_HOME", local_share, TRUE);
   /* Make sure we don't find /etc/os-release or /usr/lib/os-release
    * if we happen to be in a Steam Runtime container */
+  f->sysroot = g_strdup (f->home);
+  /* Make sure steam-runtime-system-info doesn't do that either */
   f->env = g_environ_setenv (f->env, "SRT_TEST_SYSROOT", f->home, TRUE);
 
   if (f->add_environments)
@@ -326,6 +328,7 @@ fake_home_clean_up (FakeHome *f)
   g_free (f->amd64_usr_lib);
   g_free (f->amd64_bin);
   g_free (f->amd64_usr_bin);
+  g_free (f->sysroot);
   g_strfreev (f->env);
 
   g_slice_free (FakeHome, f);
@@ -344,7 +347,9 @@ fake_home_apply_to_system_info (FakeHome *fake_home,
 {
   g_return_if_fail (fake_home != NULL);
   g_return_if_fail (fake_home->env != NULL);
+  g_return_if_fail (fake_home->sysroot != NULL);
   g_return_if_fail (SRT_IS_SYSTEM_INFO (info));
 
   srt_system_info_set_environ (info, fake_home->env);
+  srt_system_info_set_sysroot (info, fake_home->sysroot);
 }

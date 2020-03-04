@@ -725,6 +725,9 @@ main (int argc,
 
   info = srt_system_info_new (expectations);
 
+  /* For unit testing */
+  srt_system_info_set_sysroot (info, g_getenv ("SRT_TEST_SYSROOT"));
+
   builder = json_builder_new ();
   json_builder_begin_object (builder);
 

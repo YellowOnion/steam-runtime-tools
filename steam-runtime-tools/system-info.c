@@ -93,6 +93,8 @@ struct _SrtSystemInfo
   GObject parent;
   /* "" if we have tried and failed to auto-detect */
   gchar *expectations;
+  /* Fake root directory, or %NULL to use the real root */
+  gchar *sysroot;
   /* Fake environment variables, or %NULL to use the real environment */
   gchar **env;
   /* Path to find helper executables, or %NULL to use $SRT_HELPERS_PATH
@@ -440,6 +442,7 @@ srt_system_info_finalize (GObject *object)
   g_clear_pointer (&self->abis, g_ptr_array_unref);
   g_free (self->expectations);
   g_free (self->helpers_path);
+  g_free (self->sysroot);
   g_strfreev (self->env);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   if (self->cached_hidden_deps)
@@ -764,7 +767,6 @@ static void
 ensure_overrides_cached (SrtSystemInfo *self)
 {
   const gchar *argv[] = {"find", "overrides", "-ls", NULL};
-  const char *sysroot = NULL;
   gchar *output = NULL;
   gchar *messages = NULL;
   gchar *overrides_path = NULL;
@@ -776,11 +778,6 @@ ensure_overrides_cached (SrtSystemInfo *self)
 
   if (!self->overrides.have_data)
     {
-      if (self->env != NULL)
-        sysroot = g_environ_getenv (self->env, "SRT_TEST_SYSROOT");
-      else
-        sysroot = g_getenv ("SRT_TEST_SYSROOT");
-
       self->overrides.have_data = TRUE;
 
       runtime = srt_system_info_dup_runtime_path (self);
@@ -789,7 +786,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
       if (g_strcmp0 (runtime, "/") != 0)
         goto out;
 
-      if (!g_spawn_sync (sysroot == NULL ? "/" : sysroot, /* working directory */
+      if (!g_spawn_sync (self->sysroot == NULL ? "/" : self->sysroot, /* working directory */
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
@@ -1605,8 +1602,6 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
-  forget_os (self);
-  forget_overrides (self);
   forget_pinned_libs (self);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   g_strfreev (self->env);
@@ -1614,6 +1609,34 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 
   /* Forget what we know about Steam because it is bounded to the environment. */
   forget_steam (self);
+}
+
+/**
+ * srt_system_info_set_sysroot:
+ * @self: The #SrtSystemInfo
+ * @root: (nullable) (type filename) (transfer none): Path to the sysroot
+ *
+ * Use @root instead of the real root directory when investigating
+ * system properties.
+ *
+ * If @root is %NULL, go back to using the real root.
+ */
+void
+srt_system_info_set_sysroot (SrtSystemInfo *self,
+                             const char *root)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  forget_dris (self);
+  forget_va_apis (self);
+  forget_vdpau (self);
+  forget_libraries (self);
+  forget_graphics_results (self);
+  forget_locales (self);
+  forget_os (self);
+  forget_overrides (self);
+  g_free (self->sysroot);
+  self->sysroot = g_strdup (root);
 }
 
 static void
@@ -1735,7 +1758,7 @@ static void
 ensure_os_cached (SrtSystemInfo *self)
 {
   if (!self->os_release.populated)
-    _srt_os_release_populate (&self->os_release, self->env);
+    _srt_os_release_populate (&self->os_release, self->sysroot);
 }
 
 /**
@@ -2448,7 +2471,8 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
   if (!self->icds.have_egl)
     {
       g_assert (self->icds.egl == NULL);
-      self->icds.egl = _srt_load_egl_icds (self->env, multiarch_tuples);
+      self->icds.egl = _srt_load_egl_icds (self->sysroot, self->env,
+                                           multiarch_tuples);
       self->icds.have_egl = TRUE;
     }
 
@@ -2503,7 +2527,8 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
   if (!self->icds.have_vulkan)
     {
       g_assert (self->icds.vulkan == NULL);
-      self->icds.vulkan = _srt_load_vulkan_icds (self->env, multiarch_tuples);
+      self->icds.vulkan = _srt_load_vulkan_icds (self->sysroot, self->env,
+                                                 multiarch_tuples);
       self->icds.have_vulkan = TRUE;
     }
 
@@ -2552,7 +2577,8 @@ srt_system_info_list_dri_drivers (SrtSystemInfo *self,
 
   if (!abi->dri_cache_available)
     {
-      abi->cached_dri_list = _srt_list_dri_drivers (self->env,
+      abi->cached_dri_list = _srt_list_dri_drivers (self->sysroot,
+                                                    self->env,
                                                     self->helpers_path,
                                                     multiarch_tuple);
       abi->dri_cache_available = TRUE;
@@ -2609,7 +2635,8 @@ srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
 
   if (!abi->va_api_cache_available)
     {
-      abi->cached_va_api_list = _srt_list_va_api_drivers (self->env,
+      abi->cached_va_api_list = _srt_list_va_api_drivers (self->sysroot,
+                                                          self->env,
                                                           self->helpers_path,
                                                           multiarch_tuple);
       abi->va_api_cache_available = TRUE;
@@ -2665,7 +2692,8 @@ srt_system_info_list_vdpau_drivers (SrtSystemInfo *self,
 
   if (!abi->vdpau_cache_available)
     {
-      abi->cached_vdpau_list = _srt_list_vdpau_drivers (self->env,
+      abi->cached_vdpau_list = _srt_list_vdpau_drivers (self->sysroot,
+                                                        self->env,
                                                         self->helpers_path,
                                                         multiarch_tuple);
       abi->vdpau_cache_available = TRUE;

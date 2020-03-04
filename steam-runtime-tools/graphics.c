@@ -2060,6 +2060,7 @@ get_glvnd_datadir (void)
 
 /*
  * _srt_load_egl_icds:
+ * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this
  *  array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
@@ -2072,11 +2073,11 @@ get_glvnd_datadir (void)
  *  most-important first
  */
 GList *
-_srt_load_egl_icds (gchar **envp,
+_srt_load_egl_icds (const char *sysroot,
+                    gchar **envp,
                     const char * const *multiarch_tuples)
 {
   gchar **environ_copy = NULL;
-  const gchar *sysroot;
   const gchar *value;
   gsize i;
   /* To avoid O(n**2) performance, we build this list in reverse order,
@@ -2095,7 +2096,6 @@ _srt_load_egl_icds (gchar **envp,
    * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
    * for details of the search order. */
 
-  sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
   value = g_environ_getenv (envp, "__EGL_VENDOR_LIBRARY_FILENAMES");
 
   if (value != NULL)
@@ -2576,6 +2576,7 @@ _srt_get_modules_from_path (gchar **envp,
 
 /**
  * _srt_get_modules_full:
+ * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -2592,7 +2593,8 @@ _srt_get_modules_from_path (gchar **envp,
  * is before `nouveau_dri.so`.
  */
 static void
-_srt_get_modules_full (gchar **envp,
+_srt_get_modules_full (const char *sysroot,
+                       gchar **envp,
                        const char *helpers_path,
                        const char *multiarch_tuple,
                        SrtGraphicsModule module,
@@ -2604,7 +2606,6 @@ _srt_get_modules_full (gchar **envp,
   static const char *const va_api_loaders[] = { "libva.so.2", "libva.so.1", NULL };
   static const char *const vdpau_loaders[] = { "libvdpau.so.1", NULL };
   const gchar *env_override;
-  const gchar *sysroot;
   const gchar *drivers_path;
   gchar *flatpak_info;
   GHashTable *drivers_set;
@@ -2635,16 +2636,10 @@ _srt_get_modules_full (gchar **envp,
         g_return_if_reached ();
     }
 
-  if (envp)
-    {
-      sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
-      drivers_path = g_environ_getenv (envp, env_override);
-    }
+  if (envp != NULL)
+    drivers_path = g_environ_getenv (envp, env_override);
   else
-    {
-      sysroot = g_getenv ("SRT_TEST_SYSROOT");
-      drivers_path = g_getenv (env_override);
-    }
+    drivers_path = g_getenv (env_override);
 
   if (sysroot == NULL)
     sysroot = "/";
@@ -2865,6 +2860,7 @@ _srt_get_modules_full (gchar **envp,
 
 /**
  * _srt_list_dri_drivers:
+ * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -2882,7 +2878,8 @@ _srt_get_modules_full (gchar **envp,
  *  `g_list_free_full(list, g_object_unref)`.
  */
 GList *
-_srt_list_dri_drivers (gchar **envp,
+_srt_list_dri_drivers (const char *sysroot,
+                       gchar **envp,
                        const char *helpers_path,
                        const char *multiarch_tuple)
 {
@@ -2890,7 +2887,8 @@ _srt_list_dri_drivers (gchar **envp,
 
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
-  _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_DRI_MODULE, &drivers);
+  _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
+                         SRT_GRAPHICS_DRI_MODULE, &drivers);
 
   return g_list_reverse (drivers);
 }
@@ -3067,6 +3065,7 @@ srt_va_api_driver_is_extra (SrtVaApiDriver *self)
 
 /*
  * _srt_list_va_api_drivers:
+ * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -3084,7 +3083,8 @@ srt_va_api_driver_is_extra (SrtVaApiDriver *self)
  *  `g_list_free_full(list, g_object_unref)`.
  */
 GList *
-_srt_list_va_api_drivers (gchar **envp,
+_srt_list_va_api_drivers (const char *sysroot,
+                          gchar **envp,
                           const char *helpers_path,
                           const char *multiarch_tuple)
 {
@@ -3092,7 +3092,8 @@ _srt_list_va_api_drivers (gchar **envp,
 
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
-  _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_VAAPI_MODULE, &drivers);
+  _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
+                         SRT_GRAPHICS_VAAPI_MODULE, &drivers);
 
   return g_list_reverse (drivers);
 }
@@ -3307,6 +3308,7 @@ srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
 
 /*
  * _srt_list_vdpau_drivers:
+ * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -3324,7 +3326,8 @@ srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
  *  `g_list_free_full(list, g_object_unref)`.
  */
 GList *
-_srt_list_vdpau_drivers (gchar **envp,
+_srt_list_vdpau_drivers (const char *sysroot,
+                         gchar **envp,
                          const char *helpers_path,
                          const char *multiarch_tuple)
 {
@@ -3332,7 +3335,8 @@ _srt_list_vdpau_drivers (gchar **envp,
 
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
-  _srt_get_modules_full (envp, helpers_path, multiarch_tuple, SRT_GRAPHICS_VDPAU_MODULE, &drivers);
+  _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
+                         SRT_GRAPHICS_VDPAU_MODULE, &drivers);
 
   return g_list_reverse (drivers);
 }
@@ -3815,6 +3819,7 @@ get_vulkan_sysconfdir (void)
 
 /*
  * _srt_load_vulkan_icds:
+ * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this
  *  array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
@@ -3827,11 +3832,11 @@ get_vulkan_sysconfdir (void)
  *  most-important first
  */
 GList *
-_srt_load_vulkan_icds (gchar **envp,
+_srt_load_vulkan_icds (const char *sysroot,
+                       gchar **envp,
                        const char * const *multiarch_tuples)
 {
   gchar **environ_copy = NULL;
-  const gchar *sysroot;
   const gchar *value;
   gsize i;
   /* To avoid O(n**2) performance, we build this list in reverse order,
@@ -3852,7 +3857,6 @@ _srt_load_vulkan_icds (gchar **envp,
    * documentation is not completely up to date (as of September 2019)
    * so you should also look at the reference implementation. */
 
-  sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
   value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
 
   if (value != NULL)

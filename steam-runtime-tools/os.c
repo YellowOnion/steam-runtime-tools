@@ -133,9 +133,8 @@ do_line (SrtOsRelease *self,
 
 G_GNUC_INTERNAL void
 _srt_os_release_populate (SrtOsRelease *self,
-                          gchar **envp)
+                          const char *sysroot)
 {
-  const char *sysroot = NULL;
   gsize i;
 
   g_return_if_fail (_srt_check_not_setuid ());
@@ -148,11 +147,6 @@ _srt_os_release_populate (SrtOsRelease *self,
   g_return_if_fail (self->variant_id == NULL);
   g_return_if_fail (self->version_codename == NULL);
   g_return_if_fail (self->version_id == NULL);
-
-  if (envp != NULL)
-    sysroot = g_environ_getenv (envp, "SRT_TEST_SYSROOT");
-  else
-    sysroot = g_getenv ("SRT_TEST_SYSROOT");
 
   for (i = 0; i < G_N_ELEMENTS (os_release_paths); i++)
     {

@@ -1722,6 +1722,7 @@ check_list_extra (const GList *list,
             g_assert_cmpint (is_extra, ==, srt_vdpau_driver_is_extra (iter->data));
             break;
 
+          case NUM_SRT_GRAPHICS_MODULES:
           default:
             g_return_if_reached ();
         }
@@ -1745,6 +1746,7 @@ check_list_links (const GList *list,
 
           case SRT_GRAPHICS_VAAPI_MODULE:
           case SRT_GRAPHICS_DRI_MODULE:
+          case NUM_SRT_GRAPHICS_MODULES:
           default:
             g_return_if_reached ();
         }

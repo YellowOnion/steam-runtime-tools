@@ -2513,6 +2513,7 @@ _srt_get_modules_from_path (gchar **envp,
         module_suffix[2] = NULL;
         break;
 
+      case NUM_SRT_GRAPHICS_MODULES:
       default:
         g_return_if_reached ();
     }
@@ -2564,6 +2565,7 @@ _srt_get_modules_from_path (gchar **envp,
                 g_free (this_driver_link);
                 break;
 
+              case NUM_SRT_GRAPHICS_MODULES:
               default:
                 g_return_if_reached ();
             }
@@ -2632,6 +2634,7 @@ _srt_get_modules_full (const char *sysroot,
         env_override = "VDPAU_DRIVER_PATH";
         break;
 
+      case NUM_SRT_GRAPHICS_MODULES:
       default:
         g_return_if_reached ();
     }
@@ -2859,37 +2862,38 @@ _srt_get_modules_full (const char *sysroot,
 }
 
 /**
- * _srt_list_dri_drivers:
+ * _srt_list_graphics_modules:
  * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
  *  such as %SRT_ABI_X86_64
+ * @which: Graphics modules to look for
  *
- * Implementation of srt_system_info_list_dri_drivers().
+ * Implementation of srt_system_info_list_dri_drivers() etc.
  *
  * The returned list will have the most-preferred directories first and the
  * least-preferred directories last. Within a directory, the drivers will be in
  * lexicographic order, for example `nouveau_dri.so`, `r200_dri.so`, `r600_dri.so`
  * in that order.
  *
- * Returns: (transfer full) (element-type SrtDriDriver) (nullable): A list of
- *  opaque #SrtDriDriver objects, or %NULL if nothing was found. Free with
+ * Returns: (transfer full) (element-type GObject) (nullable): A list of
+ *  opaque #SrtDriDriver, etc. objects, or %NULL if nothing was found. Free with
  *  `g_list_free_full(list, g_object_unref)`.
  */
 GList *
-_srt_list_dri_drivers (const char *sysroot,
-                       gchar **envp,
-                       const char *helpers_path,
-                       const char *multiarch_tuple)
+_srt_list_graphics_modules (const char *sysroot,
+                            gchar **envp,
+                            const char *helpers_path,
+                            const char *multiarch_tuple,
+                            SrtGraphicsModule which)
 {
   GList *drivers = NULL;
 
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
   _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
-                         SRT_GRAPHICS_DRI_MODULE, &drivers);
-
+                         which, &drivers);
   return g_list_reverse (drivers);
 }
 
@@ -3061,41 +3065,6 @@ srt_va_api_driver_is_extra (SrtVaApiDriver *self)
 {
   g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), FALSE);
   return self->is_extra;
-}
-
-/*
- * _srt_list_va_api_drivers:
- * @sysroot: (nullable): Look in this directory instead of the real root
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
- * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
- * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
- *  such as %SRT_ABI_X86_64
- *
- * Implementation of srt_system_info_list_va_api_drivers().
- *
- * The returned list will have the most-preferred directories first and the
- * least-preferred directories last. Within a directory, the drivers will be in
- * lexicographic order, for example `nouveau_drv_video.so`, `r600_drv_video.so`,
- * `radeonsi_drv_video.so` in that order.
- *
- * Returns: (transfer full) (element-type SrtVaApiDriver) (nullable): A list of
- *  opaque #SrtVaApiDriver objects, or %NULL if nothing was found. Free with
- *  `g_list_free_full(list, g_object_unref)`.
- */
-GList *
-_srt_list_va_api_drivers (const char *sysroot,
-                          gchar **envp,
-                          const char *helpers_path,
-                          const char *multiarch_tuple)
-{
-  GList *drivers = NULL;
-
-  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
-
-  _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
-                         SRT_GRAPHICS_VAAPI_MODULE, &drivers);
-
-  return g_list_reverse (drivers);
 }
 
 /**
@@ -3304,41 +3273,6 @@ srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
 {
   g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), FALSE);
   return self->is_extra;
-}
-
-/*
- * _srt_list_vdpau_drivers:
- * @sysroot: (nullable): Look in this directory instead of the real root
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
- * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
- * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
- *  such as %SRT_ABI_X86_64
- *
- * Implementation of srt_system_info_list_vdpau_drivers().
- *
- * The returned list will have the most-preferred directories first and the
- * least-preferred directories last. Within a directory, the drivers will be in
- * lexicographic order, for example `libvdpau_nouveau.so`, `libvdpau_r600.so`,
- * `libvdpau_radeonsi.so` in that order.
- *
- * Returns: (transfer full) (element-type SrtVdpauDriver) (nullable): A list of
- *  opaque #SrtVdpauDriver objects, or %NULL if nothing was found. Free with
- *  `g_list_free_full(list, g_object_unref)`.
- */
-GList *
-_srt_list_vdpau_drivers (const char *sysroot,
-                         gchar **envp,
-                         const char *helpers_path,
-                         const char *multiarch_tuple)
-{
-  GList *drivers = NULL;
-
-  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
-
-  _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
-                         SRT_GRAPHICS_VDPAU_MODULE, &drivers);
-
-  return g_list_reverse (drivers);
 }
 
 /**

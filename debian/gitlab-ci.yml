@@ -19,6 +19,7 @@ variables:
         libglib2.0-dev
         libjson-glib-dev
         libtheora-dev
+        libva-dev
         libvdpau-dev
         libvulkan-dev
         libx11-dev

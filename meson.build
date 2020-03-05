@@ -196,6 +196,14 @@ if not libelf.found()
   libelf = c_compiler.find_library('elf', required: true)
 endif
 
+libva = dependency(
+  'libva',
+)
+
+libva_x11 = dependency(
+  'libva-x11',
+)
+
 vdpau = dependency(
   'vdpau',
 )

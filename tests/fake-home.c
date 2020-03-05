@@ -330,3 +330,21 @@ fake_home_clean_up (FakeHome *f)
 
   g_slice_free (FakeHome, f);
 }
+
+/**
+ * fake_home_apply_to_system_info:
+ * @fake_home: The fake home directory
+ * @info: The system info context
+ *
+ * Make @info look in @fake_home instead of the real root/home directories.
+ */
+void
+fake_home_apply_to_system_info (FakeHome *fake_home,
+                                SrtSystemInfo *info)
+{
+  g_return_if_fail (fake_home != NULL);
+  g_return_if_fail (fake_home->env != NULL);
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (info));
+
+  srt_system_info_set_environ (info, fake_home->env);
+}

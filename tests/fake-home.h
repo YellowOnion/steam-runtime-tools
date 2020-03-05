@@ -28,6 +28,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/steam-runtime-tools.h>
+
 typedef struct
 {
   gboolean create_pinning_libs;
@@ -63,3 +65,5 @@ typedef struct
 FakeHome * fake_home_new (void);
 gboolean fake_home_create_structure (FakeHome *fake_home);
 void fake_home_clean_up (FakeHome *f);
+void fake_home_apply_to_system_info (FakeHome *fake_home,
+                                     SrtSystemInfo *info);

@@ -14,6 +14,7 @@ Build-Depends:
  libglib2.0-dev,
  libjson-glib-dev (>= 1.0),
  libtheora0 <!nocheck>,
+ libva-dev,
  libvdpau-dev,
  libvulkan-dev,
  libx11-dev,

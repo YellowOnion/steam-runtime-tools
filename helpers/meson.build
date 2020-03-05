@@ -55,6 +55,17 @@ executable(
 )
 
 executable(
+  multiarch + '-check-va-api',
+  'check-va-api.c',
+  dependencies : [libva, libva_x11, xlib],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : pkglibexecdir,
+  # Deliberately no RPATH/RUNPATH here: we want to determine whether
+  # a game with no special linking would be able to use VA-API.
+)
+
+executable(
   multiarch + '-check-vdpau',
   'check-vdpau.c',
   dependencies : [xlib, vdpau],

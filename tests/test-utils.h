@@ -64,5 +64,3 @@
 #if !GLIB_CHECK_VERSION(2, 38, 0)
 #define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
 #endif
-
-gboolean rm_rf (char *directory);

@@ -29,6 +29,7 @@
 #include <dlfcn.h>
 #include <elf.h>
 #include <errno.h>
+#include <ftw.h>
 #include <link.h>
 #include <signal.h>
 #include <stdio.h>
@@ -571,4 +572,36 @@ _srt_indirect_strcmp0 (gconstpointer left,
   g_return_val_if_fail (l != NULL, 0);
   g_return_val_if_fail (r != NULL, 0);
   return g_strcmp0 (*l, *r);
+}
+
+static gint
+ftw_remove (const gchar *path,
+            const struct stat *sb,
+            gint typeflags,
+            struct FTW *ftwbuf)
+{
+  if (remove (path) < 0)
+    return -1;
+
+  return 0;
+}
+
+/**
+ * _srt_rm_rf:
+ * @directory: (type filename): The directory to remove.
+ *
+ * Recursively delete @directory within the same file system and
+ * without following symbolic links.
+ *
+ * Returns: %TRUE if the removal was successful
+ */
+gboolean
+_srt_rm_rf (const char *directory)
+{
+  g_return_val_if_fail (directory != NULL, FALSE);
+
+  if (nftw (directory, ftw_remove, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS) < 0)
+    return FALSE;
+
+  return TRUE;
 }

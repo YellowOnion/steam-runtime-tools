@@ -39,7 +39,6 @@ tests = [
 
 tests_utils = [
   'fake-home.c',
-  'test-utils.c',
 ]
 
 tests_dir = join_paths(

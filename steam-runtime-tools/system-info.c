@@ -93,6 +93,8 @@ struct _SrtSystemInfo
   GObject parent;
   /* "" if we have tried and failed to auto-detect */
   gchar *expectations;
+  /* Fake root directory, or %NULL to use the real root */
+  gchar *sysroot;
   /* Fake environment variables, or %NULL to use the real environment */
   gchar **env;
   /* Path to find helper executables, or %NULL to use $SRT_HELPERS_PATH
@@ -214,6 +216,12 @@ maybe_locale_free (gpointer p)
 
 typedef struct
 {
+  GList *modules;
+  gboolean available;
+} ModuleList;
+
+typedef struct
+{
   GQuark multiarch_tuple;
   Tristate can_run;
   GHashTable *cached_results;
@@ -224,14 +232,7 @@ typedef struct
   SrtGraphicsIssues cached_combined_graphics_issues;
   gboolean graphics_cache_available;
 
-  GList *cached_dri_list;
-  gboolean dri_cache_available;
-
-  GList *cached_va_api_list;
-  gboolean va_api_cache_available;
-
-  GList *cached_vdpau_list;
-  gboolean vdpau_cache_available;
+  ModuleList graphics_modules[NUM_SRT_GRAPHICS_MODULES];
 } Abi;
 
 static Abi *
@@ -260,12 +261,12 @@ ensure_abi (SrtSystemInfo *self,
   abi->libraries_cache_available = FALSE;
   abi->cached_graphics_results = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_object_unref);
   abi->cached_combined_graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
-  abi->cached_dri_list = NULL;
-  abi->dri_cache_available = FALSE;
-  abi->cached_va_api_list = NULL;
-  abi->va_api_cache_available = FALSE;
-  abi->cached_vdpau_list = NULL;
-  abi->vdpau_cache_available = FALSE;
+
+  for (i = 0; i < G_N_ELEMENTS (abi->graphics_modules); i++)
+    {
+      abi->graphics_modules[i].modules = NULL;
+      abi->graphics_modules[i].available = FALSE;
+    }
 
   /* transfer ownership to self->abis */
   g_ptr_array_add (self->abis, abi);
@@ -276,15 +277,16 @@ static void
 abi_free (gpointer self)
 {
   Abi *abi = self;
+  gsize i;
+
   if (abi->cached_results != NULL)
     g_hash_table_unref (abi->cached_results);
 
   if (abi->cached_graphics_results != NULL)
     g_hash_table_unref (abi->cached_graphics_results);
 
-  g_list_free_full (abi->cached_dri_list, g_object_unref);
-  g_list_free_full (abi->cached_va_api_list, g_object_unref);
-  g_list_free_full (abi->cached_vdpau_list, g_object_unref);
+  for (i = 0; i < G_N_ELEMENTS (abi->graphics_modules); i++)
+    g_list_free_full (abi->graphics_modules[i].modules, g_object_unref);
 
   g_slice_free (Abi, self);
 }
@@ -440,6 +442,7 @@ srt_system_info_finalize (GObject *object)
   g_clear_pointer (&self->abis, g_ptr_array_unref);
   g_free (self->expectations);
   g_free (self->helpers_path);
+  g_free (self->sysroot);
   g_strfreev (self->env);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   if (self->cached_hidden_deps)
@@ -764,7 +767,6 @@ static void
 ensure_overrides_cached (SrtSystemInfo *self)
 {
   const gchar *argv[] = {"find", "overrides", "-ls", NULL};
-  const char *sysroot = NULL;
   gchar *output = NULL;
   gchar *messages = NULL;
   gchar *overrides_path = NULL;
@@ -776,11 +778,6 @@ ensure_overrides_cached (SrtSystemInfo *self)
 
   if (!self->overrides.have_data)
     {
-      if (self->env != NULL)
-        sysroot = g_environ_getenv (self->env, "SRT_TEST_SYSROOT");
-      else
-        sysroot = g_getenv ("SRT_TEST_SYSROOT");
-
       self->overrides.have_data = TRUE;
 
       runtime = srt_system_info_dup_runtime_path (self);
@@ -789,7 +786,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
       if (g_strcmp0 (runtime, "/") != 0)
         goto out;
 
-      if (!g_spawn_sync (sysroot == NULL ? "/" : sysroot, /* working directory */
+      if (!g_spawn_sync (self->sysroot == NULL ? "/" : self->sysroot, /* working directory */
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
@@ -1396,56 +1393,23 @@ forget_graphics_results (SrtSystemInfo *self)
 }
 
 /*
- * Forget any cached information about mesa DRI drivers.
+ * Forget any cached information about graphics modules.
  */
 static void
-forget_dris (SrtSystemInfo *self)
+forget_graphics_modules (SrtSystemInfo *self)
 {
-  gsize i;
+  gsize i, j;
 
   for (i = 0; i < self->abis->len; i++)
     {
       Abi *abi = g_ptr_array_index (self->abis, i);
 
-      g_list_free_full (abi->cached_dri_list, g_object_unref);
-      abi->cached_dri_list = NULL;
-      abi->dri_cache_available = FALSE;
-    }
-}
-
-/*
- * Forget any cached information about VA-API drivers.
- */
-static void
-forget_va_apis (SrtSystemInfo *self)
-{
-  gsize i;
-
-  for (i = 0; i < self->abis->len; i++)
-    {
-      Abi *abi = g_ptr_array_index (self->abis, i);
-
-      g_list_free_full (abi->cached_va_api_list, g_object_unref);
-      abi->cached_va_api_list = NULL;
-      abi->va_api_cache_available = FALSE;
-    }
-}
-
-/*
- * Forget any cached information about VDPAU drivers.
- */
-static void
-forget_vdpau (SrtSystemInfo *self)
-{
-  gsize i;
-
-  for (i = 0; i < self->abis->len; i++)
-    {
-      Abi *abi = g_ptr_array_index (self->abis, i);
-
-      g_list_free_full (abi->cached_vdpau_list, g_object_unref);
-      abi->cached_vdpau_list = NULL;
-      abi->vdpau_cache_available = FALSE;
+      for (j = 0; j < G_N_ELEMENTS (abi->graphics_modules); j++)
+        {
+          g_list_free_full (g_steal_pointer (&abi->graphics_modules[j].modules),
+                            g_object_unref);
+          abi->graphics_modules[j].available = FALSE;
+        }
     }
 }
 
@@ -1599,14 +1563,10 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
-  forget_dris (self);
-  forget_va_apis (self);
-  forget_vdpau (self);
+  forget_graphics_modules (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
-  forget_os (self);
-  forget_overrides (self);
   forget_pinned_libs (self);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   g_strfreev (self->env);
@@ -1614,6 +1574,32 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 
   /* Forget what we know about Steam because it is bounded to the environment. */
   forget_steam (self);
+}
+
+/**
+ * srt_system_info_set_sysroot:
+ * @self: The #SrtSystemInfo
+ * @root: (nullable) (type filename) (transfer none): Path to the sysroot
+ *
+ * Use @root instead of the real root directory when investigating
+ * system properties.
+ *
+ * If @root is %NULL, go back to using the real root.
+ */
+void
+srt_system_info_set_sysroot (SrtSystemInfo *self,
+                             const char *root)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  forget_graphics_modules (self);
+  forget_libraries (self);
+  forget_graphics_results (self);
+  forget_locales (self);
+  forget_os (self);
+  forget_overrides (self);
+  g_free (self->sysroot);
+  self->sysroot = g_strdup (root);
 }
 
 static void
@@ -1735,7 +1721,7 @@ static void
 ensure_os_cached (SrtSystemInfo *self)
 {
   if (!self->os_release.populated)
-    _srt_os_release_populate (&self->os_release, self->env);
+    _srt_os_release_populate (&self->os_release, self->sysroot);
 }
 
 /**
@@ -2178,9 +2164,7 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
-  forget_dris (self);
-  forget_va_apis (self);
-  forget_vdpau (self);
+  forget_graphics_modules (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2448,7 +2432,8 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
   if (!self->icds.have_egl)
     {
       g_assert (self->icds.egl == NULL);
-      self->icds.egl = _srt_load_egl_icds (self->env, multiarch_tuples);
+      self->icds.egl = _srt_load_egl_icds (self->sysroot, self->env,
+                                           multiarch_tuples);
       self->icds.have_egl = TRUE;
     }
 
@@ -2503,12 +2488,77 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
   if (!self->icds.have_vulkan)
     {
       g_assert (self->icds.vulkan == NULL);
-      self->icds.vulkan = _srt_load_vulkan_icds (self->env, multiarch_tuples);
+      self->icds.vulkan = _srt_load_vulkan_icds (self->sysroot, self->env,
+                                                 multiarch_tuples);
       self->icds.have_vulkan = TRUE;
     }
 
   for (iter = self->icds.vulkan; iter != NULL; iter = iter->next)
     ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
+}
+
+/* Maybe they should implement a common GInterface or have a common
+ * base class or something, but for now we do this the easy way */
+static gboolean
+graphics_module_is_extra (SrtGraphicsModule which,
+                          gpointer object)
+{
+  switch (which)
+    {
+      case SRT_GRAPHICS_DRI_MODULE:
+        return srt_dri_driver_is_extra (object);
+
+      case SRT_GRAPHICS_VAAPI_MODULE:
+        return srt_va_api_driver_is_extra (object);
+
+      case SRT_GRAPHICS_VDPAU_MODULE:
+        return srt_vdpau_driver_is_extra (object);
+
+      case NUM_SRT_GRAPHICS_MODULES:
+      default:
+        g_return_val_if_reached (FALSE);
+    }
+}
+
+static GList *
+_srt_system_info_list_graphics_modules (SrtSystemInfo *self,
+                                        const char *multiarch_tuple,
+                                        SrtDriverFlags flags,
+                                        SrtGraphicsModule which)
+{
+  Abi *abi = NULL;
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+  g_return_val_if_fail ((int) which >= 0, NULL);
+  g_return_val_if_fail ((int) which < NUM_SRT_GRAPHICS_MODULES, NULL);
+
+  abi = ensure_abi (self, multiarch_tuple);
+
+  if (!abi->graphics_modules[which].available)
+    {
+      abi->graphics_modules[which].modules = _srt_list_graphics_modules (self->sysroot,
+                                                                         self->env,
+                                                                         self->helpers_path,
+                                                                         multiarch_tuple,
+                                                                         which);
+      abi->graphics_modules[which].available = TRUE;
+    }
+
+  for (iter = abi->graphics_modules[which].modules;
+       iter != NULL;
+       iter = iter->next)
+    {
+      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
+          graphics_module_is_extra (which, iter->data))
+        continue;
+
+      ret = g_list_prepend (ret, g_object_ref (iter->data));
+    }
 
   return g_list_reverse (ret);
 }
@@ -2541,33 +2591,8 @@ srt_system_info_list_dri_drivers (SrtSystemInfo *self,
                                   const char *multiarch_tuple,
                                   SrtDriverFlags flags)
 {
-  Abi *abi = NULL;
-  GList *ret = NULL;
-  const GList *iter;
-
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
-  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
-
-  abi = ensure_abi (self, multiarch_tuple);
-
-  if (!abi->dri_cache_available)
-    {
-      abi->cached_dri_list = _srt_list_dri_drivers (self->env,
-                                                    self->helpers_path,
-                                                    multiarch_tuple);
-      abi->dri_cache_available = TRUE;
-    }
-
-  for (iter = abi->cached_dri_list; iter != NULL; iter = iter->next)
-    {
-      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
-          srt_dri_driver_is_extra (iter->data))
-        continue;
-
-      ret = g_list_prepend (ret, g_object_ref (iter->data));
-    }
-
-  return g_list_reverse (ret);
+  return _srt_system_info_list_graphics_modules (self, multiarch_tuple, flags,
+                                                 SRT_GRAPHICS_DRI_MODULE);
 }
 
 /**
@@ -2598,32 +2623,8 @@ srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
                                      const char *multiarch_tuple,
                                      SrtDriverFlags flags)
 {
-  Abi *abi = NULL;
-  GList *ret = NULL;
-  const GList *iter;
-
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
-  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
-
-  abi = ensure_abi (self, multiarch_tuple);
-
-  if (!abi->va_api_cache_available)
-    {
-      abi->cached_va_api_list = _srt_list_va_api_drivers (self->env,
-                                                          self->helpers_path,
-                                                          multiarch_tuple);
-      abi->va_api_cache_available = TRUE;
-    }
-
-  for (iter = abi->cached_va_api_list; iter != NULL; iter = iter->next)
-    {
-      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
-          srt_va_api_driver_is_extra (iter->data))
-        continue;
-      ret = g_list_prepend (ret, g_object_ref (iter->data));
-    }
-
-  return g_list_reverse (ret);
+  return _srt_system_info_list_graphics_modules (self, multiarch_tuple, flags,
+                                                 SRT_GRAPHICS_VAAPI_MODULE);
 }
 
 /**
@@ -2654,37 +2655,8 @@ srt_system_info_list_vdpau_drivers (SrtSystemInfo *self,
                                     const char *multiarch_tuple,
                                     SrtDriverFlags flags)
 {
-  Abi *abi = NULL;
-  GList *ret = NULL;
-  const GList *iter;
-
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
-  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
-
-  abi = ensure_abi (self, multiarch_tuple);
-
-  if (!abi->vdpau_cache_available)
-    {
-      abi->cached_vdpau_list = _srt_list_vdpau_drivers (self->env,
-                                                        self->helpers_path,
-                                                        multiarch_tuple);
-      abi->vdpau_cache_available = TRUE;
-    }
-
-  for (iter = abi->cached_vdpau_list; iter != NULL; iter = iter->next)
-    {
-      if ((flags & SRT_DRIVER_FLAGS_INCLUDE_ALL) == 0 &&
-          srt_vdpau_driver_is_extra (iter->data))
-        continue;
-      ret = g_list_prepend (ret, g_object_ref (iter->data));
-    }
-
-  for (const GList *iteri = ret; iteri != NULL; iteri = iteri->next)
-    {
-      g_debug ("LIST VDPAU %s", srt_vdpau_driver_get_library_path (iteri->data));
-    }
-
-  return g_list_reverse (ret);
+  return _srt_system_info_list_graphics_modules (self, multiarch_tuple, flags,
+                                                 SRT_GRAPHICS_VDPAU_MODULE);
 }
 
 static void

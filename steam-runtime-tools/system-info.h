@@ -121,6 +121,8 @@ GList *srt_system_info_list_vdpau_drivers (SrtSystemInfo *self,
 
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);
+void srt_system_info_set_sysroot (SrtSystemInfo *self,
+                                  const char *root);
 void srt_system_info_set_helpers_path (SrtSystemInfo *self,
                                        const gchar *path);
 const char *srt_system_info_get_primary_multiarch_tuple (SrtSystemInfo *self);

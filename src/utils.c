@@ -22,6 +22,8 @@
 
 #include "utils.h"
 
+#include <ftw.h>
+
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <gio/gio.h>
@@ -249,4 +251,125 @@ pv_hash_table_get_arbitrary_key (GHashTable *table)
     return key;
   else
     return NULL;
+}
+
+/* nftw() doesn't have a user_data argument so we need to use a global
+ * variable :-( */
+static struct
+{
+  gchar *source_root;
+  gchar *dest_root;
+  GError *error;
+} nftw_data;
+
+static int
+copy_tree_helper (const char *fpath,
+                  const struct stat *sb,
+                  int typeflag,
+                  struct FTW *ftwbuf)
+{
+  size_t len;
+  const char *suffix;
+  g_autofree gchar *dest = NULL;
+  g_autofree gchar *target = NULL;
+  GError **error = &nftw_data.error;
+
+  g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.source_root), 1);
+
+  if (strcmp (fpath, nftw_data.source_root) == 0)
+    {
+      if (typeflag != FTW_D)
+        {
+          glnx_throw (error, "\"%s\" is not a directory", fpath);
+          return 1;
+        }
+
+      if (!glnx_shutil_mkdir_p_at (-1, nftw_data.dest_root, 0700, NULL,
+                                   error))
+        return 1;
+
+      return 0;
+    }
+
+  len = strlen (nftw_data.source_root);
+  g_return_val_if_fail (fpath[len] == '/', 1);
+  suffix = &fpath[len + 1];
+  dest = g_build_filename (nftw_data.dest_root, suffix, NULL);
+
+  switch (typeflag)
+    {
+      case FTW_D:
+        /* For now we assume the permissions are not significant */
+        if (!glnx_shutil_mkdir_p_at (-1, dest, 0755, NULL, error))
+          return 1;
+        break;
+
+      case FTW_SL:
+        target = glnx_readlinkat_malloc (-1, fpath, NULL, error);
+
+        if (target == NULL)
+          return 1;
+
+        if (symlink (target, dest) != 0)
+          {
+            glnx_throw_errno_prefix (error,
+                                     "Unable to create symlink at \"%s\"",
+                                     dest);
+            return 1;
+          }
+        break;
+
+      case FTW_F:
+        /* TODO: If creating a hard link doesn't work, fall back to
+         * copying */
+        if (link (fpath, dest) != 0)
+          {
+            glnx_throw_errno_prefix (error,
+                                     "Unable to create hard link from \"%s\" to \"%s\"",
+                                     fpath, dest);
+            return 1;
+          }
+        break;
+
+      default:
+        glnx_throw (&nftw_data.error,
+                    "Don't know how to handle ftw type flag %d at %s",
+                    typeflag, fpath);
+        return 1;
+    }
+
+  return 0;
+}
+
+gboolean
+pv_cheap_tree_copy (const char *source_root,
+                    const char *dest_root,
+                    GError **error)
+{
+  int res;
+
+  /* Can't run concurrently */
+  g_return_val_if_fail (nftw_data.source_root == NULL, FALSE);
+
+  nftw_data.source_root = flatpak_canonicalize_filename (source_root);
+  nftw_data.dest_root = flatpak_canonicalize_filename (dest_root);
+  nftw_data.error = NULL;
+
+  res = nftw (nftw_data.source_root, copy_tree_helper, 100, FTW_PHYS);
+
+  if (res == -1)
+    {
+      g_assert (nftw_data.error == NULL);
+      glnx_throw_errno_prefix (error, "Unable to copy \"%s\" to \"%s\"",
+                               source_root, dest_root);
+    }
+  else if (res != 0)
+    {
+      g_propagate_error (error, g_steal_pointer (&nftw_data.error));
+    }
+
+  g_clear_pointer (&nftw_data.source_root, g_free);
+  g_clear_pointer (&nftw_data.dest_root, g_free);
+  g_assert (nftw_data.error == NULL);
+  return (res == 0);
 }

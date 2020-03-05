@@ -42,3 +42,7 @@ gchar *pv_capture_output (const char * const * argv,
                           GError **error);
 
 gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);
+
+gboolean pv_cheap_tree_copy (const char *source_root,
+                             const char *dest_root,
+                             GError **error);

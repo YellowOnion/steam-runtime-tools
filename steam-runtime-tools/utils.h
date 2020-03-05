@@ -47,3 +47,5 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtObjectList, _srt_free_object_list)
 #endif
 
 G_GNUC_INTERNAL gboolean _srt_check_not_setuid (void);
+
+gboolean _srt_rm_rf (const char *directory);

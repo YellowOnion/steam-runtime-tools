@@ -33,6 +33,7 @@
 #include <glib/gstdio.h>
 
 #include "test-utils.h"
+#include <steam-runtime-tools/steam-runtime-tools.h>
 
 /**
  * fake_home_new:
@@ -305,7 +306,7 @@ fake_home_create_structure (FakeHome *f)
 void
 fake_home_clean_up (FakeHome *f)
 {
-  if (!rm_rf (f->home))
+  if (!_srt_rm_rf (f->home))
     g_debug ("Unable to remove the fake home directory: %s", f->home);
 
   g_free (f->home);

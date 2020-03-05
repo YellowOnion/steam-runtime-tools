@@ -558,6 +558,7 @@ def main():
                     '--exclude=./_build',
                     '--exclude=./debian',
                     '--exclude=./relocatable-install',
+                    '--exclude=./subprojects/steam-runtime-tools',
                     '-cf-',
                     '.',
                 ], stdout=subprocess.PIPE)

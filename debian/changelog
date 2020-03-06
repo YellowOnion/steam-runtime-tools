@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20200306.0-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200306.0-0+steamrt1.1) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * Enumerate VDPAU drivers
@@ -28,7 +28,7 @@ steam-runtime-tools (0.20200306.0-0+steamrt1.1) UNRELEASED; urgency=medium
   * If wflinfo or check-gl fails, run a second time with
     LIBGL_DEBUG=verbose set
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 06 Mar 2020 16:51:22 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 06 Mar 2020 17:05:23 +0000
 
 steam-runtime-tools (0.20200109.0-0+steamrt1.1) scout; urgency=medium
 

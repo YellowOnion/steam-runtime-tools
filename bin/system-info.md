@@ -491,6 +491,19 @@ keys:
             This key is optional and if is not provided, the default %FALSE
             value should be assumed.
 
+    **glx_drivers**
+    :   An array of objects describing the GLX ICD modules that have been
+        found. These drivers provide the OpenGL API for the X Window System,
+        and are used by the `libGL.so.1` or `libGLX.so.0` loaders provided by
+        [GLVND](https://github.com/NVIDIA/libglvnd).
+        Every object can have the following keys:
+
+        **library_soname**
+        :   SONAME of the ICD module that has been found.
+
+        **library_path**
+        :   Absolute path to the library that imlements the **library_soname**.
+
 **locale-issues**
 :   An array of strings indicating locale-related issues.
     The array is empty if no problems were detected.

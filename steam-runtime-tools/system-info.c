@@ -2537,6 +2537,10 @@ graphics_module_is_extra (SrtGraphicsModule which,
       case SRT_GRAPHICS_VDPAU_MODULE:
         return srt_vdpau_driver_is_extra (object);
 
+      /* We don't have extras for GLX, yet */
+      case SRT_GRAPHICS_GLX_MODULE:
+        return FALSE;
+
       case NUM_SRT_GRAPHICS_MODULES:
       default:
         g_return_val_if_reached (FALSE);
@@ -2678,6 +2682,37 @@ srt_system_info_list_vdpau_drivers (SrtSystemInfo *self,
 {
   return _srt_system_info_list_graphics_modules (self, multiarch_tuple, flags,
                                                  SRT_GRAPHICS_VDPAU_MODULE);
+}
+
+/**
+ * srt_system_info_list_glx_icds:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch
+ *  tuple such as %SRT_ABI_X86_64
+ * @flags: Filter the list of GLX ICDs accordingly to these flags.
+ *  At the moment no filters are available, so there are no practical
+ *  differences between %SRT_DRIVER_FLAGS_INCLUDE_ALL and
+ *  %SRT_DRIVER_FLAGS_NONE.
+ *
+ * List the available GLX ICDs, in an unspecified order.
+ * These are the drivers used by `libGL.so.1` or `libGLX.so.0`
+ * if it is the loader library provided by
+ * [GLVND](https://github.com/NVIDIA/libglvnd)
+ * (if this is the case, srt_graphics_library_is_vendor_neutral() for
+ * the combination of %SRT_WINDOW_SYSTEM_X11 and %SRT_RENDERING_INTERFACE_GL
+ * will return %TRUE and indicate %SRT_GRAPHICS_LIBRARY_VENDOR_GLVND).
+ *
+ * Returns: (transfer full) (element-type SrtGlxIcd) (nullable): A list of
+ *  opaque #SrtGlxIcd objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_glx_icds (SrtSystemInfo *self,
+                               const char *multiarch_tuple,
+                               SrtDriverFlags flags)
+{
+  return _srt_system_info_list_graphics_modules (self, multiarch_tuple, flags,
+                                                 SRT_GRAPHICS_GLX_MODULE);
 }
 
 static void

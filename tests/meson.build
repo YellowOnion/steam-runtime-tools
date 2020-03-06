@@ -241,4 +241,26 @@ foreach helper : [
   )
 endforeach
 
+# i386 and x86_64 helpers with GLib and Gio dependencies, and one source file of
+# the same name as the helper itself (with the arch prefix).
+foreach arch : [
+  'i386',
+  'x86_64',
+]
+  foreach helper : [
+    'mock-container-capsule-capture-libs',
+    'mock-debian-capsule-capture-libs',
+  ]
+    executable(
+      arch + '-' + helper,
+      helper + '.c',
+      c_args : ['-DMOCK_ARCHITECTURE_' + arch],
+      dependencies : [glib, gio],
+      include_directories : project_include_dirs,
+      install: true,
+      install_dir: tests_dir
+    )
+  endforeach
+endforeach
+
 # vim:set sw=2 sts=2 et:

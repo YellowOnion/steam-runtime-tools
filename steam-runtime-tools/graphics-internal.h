@@ -147,6 +147,7 @@ _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interf
  * @SRT_GRAPHICS_DRI_MODULE: Mesa DRI driver module
  * @SRT_GRAPHICS_VAAPI_MODULE: VA-API driver module
  * @SRT_GRAPHICS_VDPAU_MODULE: VDPAU driver module
+ * @SRT_GRAPHICS_GLX_MODULE: GLX ICD module
  * @NUM_SRT_GRAPHICS_MODULES: 1 more than the last valid enum value
  */
 typedef enum
@@ -154,6 +155,7 @@ typedef enum
   SRT_GRAPHICS_DRI_MODULE = 0,
   SRT_GRAPHICS_VAAPI_MODULE,
   SRT_GRAPHICS_VDPAU_MODULE,
+  SRT_GRAPHICS_GLX_MODULE,
   NUM_SRT_GRAPHICS_MODULES  /* Always add new values before this one */
 } SrtGraphicsModule;
 

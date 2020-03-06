@@ -221,6 +221,20 @@ gboolean srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
                                        const char *path,
                                        GError **error);
 
+typedef struct _SrtGlxIcd SrtGlxIcd;
+typedef struct _SrtGlxIcdClass SrtGlxIcdClass;
+
+#define SRT_TYPE_GLX_ICD (srt_glx_icd_get_type ())
+#define SRT_GLX_ICD(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_GLX_ICD, SrtGlxIcd))
+#define SRT_GLX_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_GLX_ICD, SrtGlxIcdClass))
+#define SRT_IS_GLX_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_GLX_ICD))
+#define SRT_IS_GLX_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_GLX_ICD))
+#define SRT_GLX_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_GLX_ICD, SrtGlxIcdClass)
+GType srt_glx_icd_get_type (void);
+
+const gchar *srt_glx_icd_get_library_soname (SrtGlxIcd *self);
+const gchar *srt_glx_icd_get_library_path (SrtGlxIcd *self);
+
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphics, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglIcd, g_object_unref)
@@ -228,4 +242,5 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDriDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVaApiDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVdpauDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVulkanIcd, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGlxIcd, g_object_unref)
 #endif

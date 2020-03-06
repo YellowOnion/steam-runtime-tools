@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -622,6 +622,64 @@ _argv_for_check_gl (const char *helpers_path,
     return NULL;
 
   g_ptr_array_add (argv, NULL);
+  return argv;
+}
+
+static GPtrArray *
+_argv_for_list_glx_icds (const char *helpers_path,
+                         const char *multiarch_tuple,
+                         const char *temp_dir,
+                         GError **error)
+{
+  GPtrArray *argv;
+
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
+                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+
+  if (argv == NULL)
+    return NULL;
+
+  g_ptr_array_add (argv, g_strdup ("--dest"));
+  g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libGLX_*.so.0"));
+  /* This one might seem redundant but it is required because "libGLX_indirect"
+   * is usually a symlink to someone else's implementation and can't be found
+   * in the ld.so cache, that "capsule-capture-libs" uses. So instead of using
+   * a wildcard-matching we have to look it up explicitly. */
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libGLX_indirect.so.0"));
+  /* If we are in a container the same might happen also for the other GLX drivers.
+   * To increase our chances to find all the libraries we hard code "mesa" and
+   * "nvidia" that, in the vast majority of the cases, are all we care about. */
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libGLX_mesa.so.0"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libGLX_nvidia.so.0"));
+  g_ptr_array_add (argv, NULL);
+  return argv;
+}
+
+static GPtrArray *
+_argv_for_list_glx_icds_in_path (const char *helpers_path,
+                                 const char *multiarch_tuple,
+                                 const char *temp_dir,
+                                 const char *base_path,
+                                 GError **error)
+{
+  GPtrArray *argv;
+
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
+                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+
+  if (argv == NULL)
+    return NULL;
+
+  gchar *lib_full_path = g_build_filename (base_path, "lib", multiarch_tuple, "libGLX_*.so.*", NULL);
+
+  g_ptr_array_add (argv, g_strdup ("--dest"));
+  g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strjoin (NULL,
+                                    "no-dependencies:if-exists:even-if-older:path-match:", lib_full_path,
+                                    NULL));
+  g_ptr_array_add (argv, NULL);
+  g_free (lib_full_path);
   return argv;
 }
 
@@ -2534,6 +2592,9 @@ static SrtVdpauDriver *
 srt_vdpau_driver_new (const gchar *library_path,
                       const gchar *library_link,
                       gboolean is_extra);
+static SrtGlxIcd *
+srt_glx_icd_new (const gchar *library_soname,
+                 const gchar *library_path);
 
 /**
  * _srt_get_modules_from_path:
@@ -2598,6 +2659,7 @@ _srt_get_modules_from_path (gchar **envp,
         module_suffix[2] = NULL;
         break;
 
+      case SRT_GRAPHICS_GLX_MODULE:
       case NUM_SRT_GRAPHICS_MODULES:
       default:
         g_return_if_reached ();
@@ -2650,6 +2712,7 @@ _srt_get_modules_from_path (gchar **envp,
                 g_free (this_driver_link);
                 break;
 
+              case SRT_GRAPHICS_GLX_MODULE:
               case NUM_SRT_GRAPHICS_MODULES:
               default:
                 g_return_if_reached ();
@@ -2719,6 +2782,7 @@ _srt_get_modules_full (const char *sysroot,
         env_override = "VDPAU_DRIVER_PATH";
         break;
 
+      case SRT_GRAPHICS_GLX_MODULE:
       case NUM_SRT_GRAPHICS_MODULES:
       default:
         g_return_if_reached ();
@@ -2946,6 +3010,205 @@ _srt_get_modules_full (const char *sysroot,
   g_free (flatpak_info);
 }
 
+/*
+ * _srt_list_glx_icds_from_directory:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @argv: (array zero-terminated=1) (not nullable): The `argv` of the helper to use
+ * @tmp_directory: (not nullable) (type filename): Full path to the destination
+ *  directory used by the "capsule-capture-libs" helper
+ * @known_libs: (not optional): set of library names, plus their links, that
+ *  we already found. Newely found libraries will be added to this list
+ * @glxs: (element-type SrtGlxIcd) (not optional) (inout): Prepend all the unique
+ *  #SrtGlxIcd found to this list in an unspecified order.
+ */
+static void
+_srt_list_glx_icds_from_directory (gchar **envp,
+                                   GPtrArray *argv,
+                                   const gchar *tmp_directory,
+                                   GHashTable *known_libs,
+                                   GList **glxs)
+{
+  int exit_status = -1;
+  GError *error = NULL;
+  gchar *stderr = NULL;
+  gchar *output = NULL;
+  GDir *dir_iter = NULL;
+  const gchar *member;
+  gchar *full_path = NULL;
+  gchar *glx_path = NULL;
+  gchar *soname_path = NULL;
+
+  g_return_if_fail (argv != NULL);
+  g_return_if_fail (tmp_directory != NULL);
+  g_return_if_fail (known_libs != NULL);
+  g_return_if_fail (glxs != NULL);
+
+  if (!g_spawn_sync (NULL,    /* working directory */
+                     (gchar **) argv->pdata,
+                     envp,
+                     G_SPAWN_SEARCH_PATH,       /* flags */
+                     _srt_child_setup_unblock_signals,
+                     NULL,    /* user data */
+                     &output, /* stdout */
+                     &stderr,
+                     &exit_status,
+                     &error))
+    {
+      g_debug ("An error occurred calling the helper: %s", error->message);
+      goto out;
+    }
+
+  if (exit_status != 0)
+    {
+      g_debug ("... wait status %d", exit_status);
+      goto out;
+    }
+
+  dir_iter = g_dir_open (tmp_directory, 0, &error);
+
+  if (dir_iter == NULL)
+    {
+      g_debug ("Failed to open \"%s\": %s", tmp_directory, error->message);
+      goto out;
+    }
+
+  while ((member = g_dir_read_name (dir_iter)) != NULL)
+    {
+      full_path = g_build_filename (tmp_directory, member, NULL);
+      glx_path = g_file_read_link (full_path, &error);
+      if (glx_path == NULL)
+        {
+          g_debug ("An error occurred trying to read the symlink: %s", error->message);
+          g_free (full_path);
+          goto out;
+        }
+      if (!g_path_is_absolute (glx_path))
+        {
+          g_free (full_path);
+          g_free (glx_path);
+          g_debug ("We were expecting an absolute path, instead we have: %s", glx_path);
+          goto out;
+        }
+      /* Instead of just using just the library name to filter duplicates, we use it in
+       * combination with its path. Because in one of the multiple iterations we might
+       * find the same library that points to two different locations. And in this
+       * case we want to log both of them.
+       *
+       * `member` cannot contain `/`, so we know we can use `/` to make
+       * a composite key for deduplication. */
+      soname_path = g_strjoin ("/", member, glx_path, NULL);
+      if (!g_hash_table_contains (known_libs, soname_path))
+        {
+          g_hash_table_add (known_libs, g_strdup (soname_path));
+          *glxs = g_list_prepend (*glxs, srt_glx_icd_new (member, glx_path));
+        }
+      g_free (soname_path);
+      g_free (full_path);
+      g_free (glx_path);
+    }
+
+out:
+  if (dir_iter != NULL)
+    g_dir_close (dir_iter);
+  g_free (output);
+  g_free (stderr);
+  g_clear_error (&error);
+}
+
+/*
+ * _srt_list_glx_icds:
+ * @sysroot: (nullable): Look in this directory instead of the real root
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "capsule-capture-libs" helper,
+ *  PATH is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ * @drivers_out: (inout): Prepend the found drivers to this list as opaque
+ *  #SrtGlxIcd objects. There is no guarantee about the order of the list
+ *
+ * Implementation of srt_system_info_list_glx_icds().
+ */
+static void
+_srt_list_glx_icds (const char *sysroot,
+                    gchar **envp,
+                    const char *helpers_path,
+                    const char *multiarch_tuple,
+                    GList **drivers_out)
+{
+  GPtrArray *by_soname_argv = NULL;
+  GPtrArray *overrides_argv = NULL;
+  GError *error = NULL;
+  gchar *by_soname_tmp_dir = NULL;
+  gchar *overrides_tmp_dir = NULL;
+  gchar *overrides_path = NULL;
+  GHashTable *known_libs = NULL;
+
+  g_return_if_fail (multiarch_tuple != NULL);
+  g_return_if_fail (drivers_out != NULL);
+  g_return_if_fail (_srt_check_not_setuid ());
+
+  known_libs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  by_soname_tmp_dir = g_dir_make_tmp ("glx-icds-XXXXXX", &error);
+  if (by_soname_tmp_dir == NULL)
+    {
+      g_debug ("An error occurred trying to create a temporary folder: %s", error->message);
+      goto out;
+    }
+
+  by_soname_argv = _argv_for_list_glx_icds (helpers_path, multiarch_tuple, by_soname_tmp_dir, &error);
+
+  if (by_soname_argv == NULL)
+    {
+      g_debug ("An error occurred trying to capture glx ICDs: %s", error->message);
+      goto out;
+    }
+
+  _srt_list_glx_icds_from_directory (envp, by_soname_argv, by_soname_tmp_dir, known_libs, drivers_out);
+
+  /* When in a container we might miss valid GLX drivers because the `ld.so.cache` in
+   * use doesn't have a reference about them. To fix that we also include every
+   * "libGLX_*.so.*" libraries that we find in the "/overrides/lib/${multiarch}" folder */
+  overrides_path = sysroot ? g_build_filename (sysroot, "/overrides", NULL) : g_strdup ("/overrides");
+  if (g_file_test (overrides_path, G_FILE_TEST_IS_DIR))
+    {
+      overrides_tmp_dir = g_dir_make_tmp ("glx-icds-XXXXXX", &error);
+      if (overrides_tmp_dir == NULL)
+        {
+          g_debug ("An error occurred trying to create a temporary folder: %s", error->message);
+          goto out;
+        }
+
+      overrides_argv = _argv_for_list_glx_icds_in_path (helpers_path, multiarch_tuple, overrides_tmp_dir, overrides_path, &error);
+
+      if (overrides_argv == NULL)
+        {
+          g_debug ("An error occurred trying to capture glx ICDs: %s", error->message);
+          goto out;
+        }
+
+      _srt_list_glx_icds_from_directory (envp, overrides_argv, overrides_tmp_dir, known_libs, drivers_out);
+    }
+
+out:
+  g_clear_pointer (&by_soname_argv, g_ptr_array_unref);
+  g_clear_pointer (&overrides_argv, g_ptr_array_unref);
+  if (by_soname_tmp_dir)
+    {
+      if (!_srt_rm_rf (by_soname_tmp_dir))
+        g_debug ("Unable to remove the temporary directory: %s", by_soname_tmp_dir);
+    }
+  if (overrides_tmp_dir)
+    {
+      if (!_srt_rm_rf (overrides_tmp_dir))
+        g_debug ("Unable to remove the temporary directory: %s", overrides_tmp_dir);
+    }
+  g_free (by_soname_tmp_dir);
+  g_free (overrides_tmp_dir);
+  g_free (overrides_path);
+  g_hash_table_unref (known_libs);
+  g_clear_error (&error);
+}
+
 /**
  * _srt_list_graphics_modules:
  * @sysroot: (nullable): Look in this directory instead of the real root
@@ -2957,10 +3220,12 @@ _srt_get_modules_full (const char *sysroot,
  *
  * Implementation of srt_system_info_list_dri_drivers() etc.
  *
- * The returned list will have the most-preferred directories first and the
- * least-preferred directories last. Within a directory, the drivers will be in
- * lexicographic order, for example `nouveau_dri.so`, `r200_dri.so`, `r600_dri.so`
- * in that order.
+ * The returned list for GLX modules is in an unspecified order.
+ *
+ * Instead the returned list for all the other graphics modules will have the
+ * most-preferred directories first and the least-preferred directories last.
+ * Within a directory, the drivers will be in lexicographic order, for example
+ * `nouveau_dri.so`, `r200_dri.so`, `r600_dri.so` in that order.
  *
  * Returns: (transfer full) (element-type GObject) (nullable): A list of
  *  opaque #SrtDriDriver, etc. objects, or %NULL if nothing was found. Free with
@@ -2977,8 +3242,12 @@ _srt_list_graphics_modules (const char *sysroot,
 
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
-  _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
-                         which, &drivers);
+  if (which == SRT_GRAPHICS_GLX_MODULE)
+    _srt_list_glx_icds (sysroot, envp, helpers_path, multiarch_tuple, &drivers);
+  else
+    _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple, which,
+                           &drivers);
+
   return g_list_reverse (drivers);
 }
 
@@ -3996,4 +4265,178 @@ _srt_load_vulkan_icds (const char *sysroot,
 
   g_strfreev (environ_copy);
   return g_list_reverse (ret);
+}
+
+/**
+ * SrtGlxIcd:
+ *
+ * Opaque object representing a GLVND GLX ICD.
+ */
+
+struct _SrtGlxIcd
+{
+  /*< private >*/
+  GObject parent;
+  gchar *library_soname;
+  gchar *library_path;
+};
+
+struct _SrtGlxIcdClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  GLX_ICD_PROP_0,
+  GLX_ICD_PROP_LIBRARY_SONAME,
+  GLX_ICD_PROP_LIBRARY_PATH,
+  N_GLX_ICD_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtGlxIcd, srt_glx_icd, G_TYPE_OBJECT)
+
+static void
+srt_glx_icd_init (SrtGlxIcd *self)
+{
+}
+
+static void
+srt_glx_icd_get_property (GObject *object,
+                          guint prop_id,
+                          GValue *value,
+                          GParamSpec *pspec)
+{
+  SrtGlxIcd *self = SRT_GLX_ICD (object);
+
+  switch (prop_id)
+    {
+      case GLX_ICD_PROP_LIBRARY_SONAME:
+        g_value_set_string (value, self->library_soname);
+        break;
+
+      case GLX_ICD_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->library_path);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_glx_icd_set_property (GObject *object,
+                          guint prop_id,
+                          const GValue *value,
+                          GParamSpec *pspec)
+{
+  SrtGlxIcd *self = SRT_GLX_ICD (object);
+
+  switch (prop_id)
+    {
+      case GLX_ICD_PROP_LIBRARY_SONAME:
+        g_return_if_fail (self->library_soname == NULL);
+        self->library_soname = g_value_dup_string (value);
+        break;
+
+      case GLX_ICD_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->library_path == NULL);
+        self->library_path = g_value_dup_string (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_glx_icd_finalize (GObject *object)
+{
+  SrtGlxIcd *self = SRT_GLX_ICD (object);
+
+  g_clear_pointer (&self->library_soname, g_free);
+  g_clear_pointer (&self->library_path, g_free);
+
+  G_OBJECT_CLASS (srt_glx_icd_parent_class)->finalize (object);
+}
+
+static GParamSpec *glx_icd_properties[N_GLX_ICD_PROPERTIES] = { NULL };
+
+static void
+srt_glx_icd_class_init (SrtGlxIcdClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_glx_icd_get_property;
+  object_class->set_property = srt_glx_icd_set_property;
+  object_class->finalize = srt_glx_icd_finalize;
+
+  glx_icd_properties[GLX_ICD_PROP_LIBRARY_SONAME] =
+    g_param_spec_string ("library-soname", "Library soname",
+                         "SONAME of the GLX ICD library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  glx_icd_properties[GLX_ICD_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library absolute path",
+                         "Absolute path to the GLX ICD library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_GLX_ICD_PROPERTIES,
+                                     glx_icd_properties);
+}
+
+/**
+ * srt_glx_icd_new:
+ * @library_soname: (transfer none): the soname of the library
+ * @library_path: (transfer none): the absolute path of the library
+ *
+ * Returns: (transfer full): a new GLVND GLX ICD
+ */
+static SrtGlxIcd *
+srt_glx_icd_new (const gchar *library_soname,
+                 const gchar *library_path)
+{
+  g_return_val_if_fail (library_soname != NULL, NULL);
+  g_return_val_if_fail (library_path != NULL, NULL);
+  g_return_val_if_fail (g_path_is_absolute (library_path), NULL);
+
+  return g_object_new (SRT_TYPE_GLX_ICD,
+                       "library-soname", library_soname,
+                       "library-path", library_path,
+                       NULL);
+}
+
+/**
+ * srt_glx_icd_get_library_soname:
+ * @self: The GLX ICD
+ *
+ * Return the library SONAME for this GLX ICD, for example `libGLX_mesa.so.0`.
+ *
+ * Returns: (type filename) (transfer none): #SrtGlxIcd:library-soname
+ */
+const gchar *
+srt_glx_icd_get_library_soname (SrtGlxIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_GLX_ICD (self), NULL);
+  return self->library_soname;
+}
+
+/**
+ * srt_glx_icd_get_library_path:
+ * @self: The GLX ICD
+ *
+ * Return the absolute path to the library that implements this GLX soname.
+ *
+ * Returns: (type filename) (transfer none): #SrtGlxIcd:library-path
+ */
+const gchar *
+srt_glx_icd_get_library_path (SrtGlxIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_GLX_ICD (self), NULL);
+  return self->library_path;
 }

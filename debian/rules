@@ -75,6 +75,8 @@ override_dh_auto_install:
 		$(DESTDIR)/usr/$(pkglibexecdir)/
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-wflinfo \
 		$(DESTDIR)/usr/$(pkglibexecdir)/
+	ln -s ../../lib/libcapsule/relocatable/$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
+		$(DESTDIR)/usr/$(pkglibexecdir)/
 	set -e; for x in $(DESTDIR)/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \
 		if [ -f "$$x" ] \
 		&& cmp -s "$$x" \

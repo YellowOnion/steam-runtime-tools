@@ -1702,9 +1702,9 @@ overrides (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  /* The overrides folder contains 4 folders plus the root folder, plus one symlink,
-   * plus 2 ".keep" files */
-  g_assert_cmpint (i, ==, 8);
+  /* The overrides folder contains 4 folders plus the root folder, plus 4 files,
+   * plus one ".keep" file */
+  g_assert_cmpint (i, ==, 10);
   g_assert_true (seen_link);
   g_strfreev (output);
 
@@ -1721,7 +1721,7 @@ overrides (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  g_assert_cmpint (i, ==, 8);
+  g_assert_cmpint (i, ==, 10);
   g_assert_true (seen_link);
   g_strfreev (output);
 

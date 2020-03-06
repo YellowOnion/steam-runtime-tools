@@ -141,6 +141,9 @@ GList *srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
 GList *srt_system_info_list_vdpau_drivers (SrtSystemInfo *self,
                                            const char *multiarch_tuple,
                                            SrtDriverFlags flags);
+GList *srt_system_info_list_glx_icds (SrtSystemInfo *self,
+                                      const char *multiarch_tuple,
+                                      SrtDriverFlags flags);
 
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);

@@ -672,6 +672,28 @@ jsonify_container (JsonBuilder *builder,
   g_strfreev (env);
 }
 
+static void
+print_glx_details (JsonBuilder *builder,
+                   GList *glx_list)
+{
+  GList *iter;
+
+  json_builder_set_member_name (builder, "glx_drivers");
+  json_builder_begin_array (builder);
+    {
+      for (iter = glx_list; iter != NULL; iter = iter->next)
+        {
+          json_builder_begin_object (builder);
+          json_builder_set_member_name (builder, "library_soname");
+          json_builder_add_string_value (builder, srt_glx_icd_get_library_soname (iter->data));
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, srt_glx_icd_get_library_path (iter->data));
+          json_builder_end_object (builder);
+        }
+    }
+  json_builder_end_array (builder); // End glx_drivers
+}
+
 static const char * const locales[] =
 {
   "",
@@ -914,6 +936,7 @@ main (int argc,
       GList *dri_list = NULL;
       GList *va_api_list = NULL;
       GList *vdpau_list = NULL;
+      GList *glx_list = NULL;
 
       json_builder_set_member_name (builder, multiarch_tuples[i]);
       json_builder_begin_object (builder);
@@ -951,12 +974,17 @@ main (int argc,
                                                        extra_driver_flags);
       print_vdpau_details (builder, vdpau_list);
 
+      glx_list = srt_system_info_list_glx_icds (info, multiarch_tuples[i],
+                                                SRT_DRIVER_FLAGS_INCLUDE_ALL);
+      print_glx_details (builder, glx_list);
+
       json_builder_end_object (builder); // End multiarch_tuple object
       g_list_free_full (libraries, g_object_unref);
       g_list_free_full (graphics_list, g_object_unref);
       g_list_free_full (dri_list, g_object_unref);
       g_list_free_full (va_api_list, g_object_unref);
       g_list_free_full (vdpau_list, g_object_unref);
+      g_list_free_full (glx_list, g_object_unref);
     }
 
   json_builder_end_object (builder);

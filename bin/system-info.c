@@ -632,6 +632,46 @@ jsonify_os_release (JsonBuilder *builder,
   json_builder_end_object (builder);
 }
 
+static void
+jsonify_container (JsonBuilder *builder,
+                   SrtSystemInfo *info)
+{
+  SrtContainerType type = srt_system_info_get_container_type (info);
+  gchar *host_directory = srt_system_info_dup_container_host_directory (info);
+  gchar **env = NULL;
+  SrtSystemInfo *host = NULL;
+
+  json_builder_set_member_name (builder, "container");
+  json_builder_begin_object (builder);
+    {
+      json_builder_set_member_name (builder, "type");
+      jsonify_enum (builder, SRT_TYPE_CONTAINER_TYPE, type);
+
+      if (type != SRT_CONTAINER_TYPE_NONE)
+        {
+          json_builder_set_member_name (builder, "host");
+          json_builder_begin_object (builder);
+            {
+              json_builder_set_member_name (builder, "path");
+              json_builder_add_string_value (builder, host_directory);
+
+              if (host_directory != NULL)
+                {
+                  host = srt_system_info_new (NULL);
+                  srt_system_info_set_sysroot (host, host_directory);
+                  jsonify_os_release (builder, host);
+                }
+            }
+          json_builder_end_object (builder);
+        }
+    }
+  json_builder_end_object (builder);
+
+  g_free (host_directory);
+  g_clear_object (&host);
+  g_strfreev (env);
+}
+
 static const char * const locales[] =
 {
   "",
@@ -847,6 +887,7 @@ main (int argc,
   json_builder_end_object (builder);
 
   jsonify_os_release (builder, info);
+  jsonify_container (builder, info);
 
   json_builder_set_member_name (builder, "driver_environment");
   json_builder_begin_array (builder);

@@ -23,6 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <glib.h>
 #include <stdio.h>
 
 #include "../steam-runtime-tools/graphics-test-defines.h"
@@ -40,6 +41,13 @@ main (int argc,
           "\",\n\t\t\"shading language version string\": \"1.40\",\n"
           "\t\t\"extensions\": [\n"
           "\t\t]\n\t}\n}\n");
+  fprintf (stderr, "warning: this warning should always be logged\n");
+
+  if (g_strcmp0 (g_getenv ("LIBGL_DEBUG"), "verbose") == 0)
+    {
+      fprintf (stderr, "info: you used LIBGL_DEBUG=verbose\n");
+    }
+
   return 0;
 }
 

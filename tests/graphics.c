@@ -263,6 +263,7 @@ test_good_graphics (Fixture *f,
 {
   SrtGraphics *graphics = NULL;
   SrtGraphicsIssues issues;
+  gchar *messages;
   gchar *tuple;
   gchar *renderer;
   gchar *version;
@@ -278,6 +279,8 @@ test_good_graphics (Fixture *f,
                                            SRT_RENDERING_INTERFACE_GL,
                                            &graphics);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   NULL);
   g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
                    SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
@@ -285,6 +288,7 @@ test_good_graphics (Fixture *f,
   g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
   g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
   g_object_get (graphics,
+                "messages", &messages,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
@@ -292,6 +296,7 @@ test_good_graphics (Fixture *f,
                 "exit-status", &exit_status,
                 "terminating-signal", &terminating_signal,
                 NULL);
+  g_assert_cmpstr (messages, ==, NULL);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
   g_assert_cmpstr (tuple, ==, "mock-good");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
@@ -301,6 +306,7 @@ test_good_graphics (Fixture *f,
   g_free (tuple);
   g_free (renderer);
   g_free (version);
+  g_free (messages);
 
   g_object_unref (graphics);
   g_object_unref (info);
@@ -464,7 +470,9 @@ test_bad_graphics (Fixture *f,
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
                    NULL);
   g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
-                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+                   "warning: this warning should always be logged\n"
+                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
+                  "info: you used LIBGL_DEBUG=verbose\n");
   g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
   g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
 
@@ -487,7 +495,9 @@ test_bad_graphics (Fixture *f,
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
   g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
   g_assert_cmpstr (messages, ==,
-                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n");
+                   "warning: this warning should always be logged\n"
+                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
+                  "info: you used LIBGL_DEBUG=verbose\n");
   g_assert_cmpstr (tuple, ==, "mock-bad");
   g_assert_cmpstr (renderer, ==, NULL);
   g_assert_cmpstr (version, ==, NULL);
@@ -568,6 +578,7 @@ test_software_rendering (Fixture *f,
 {
   SrtGraphics *graphics = NULL;
   SrtGraphicsIssues issues;
+  gchar *messages;
   gchar *tuple;
   gchar *renderer;
   gchar *version;
@@ -583,6 +594,9 @@ test_software_rendering (Fixture *f,
                                            SRT_RENDERING_INTERFACE_GL,
                                            &graphics);
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   "warning: this warning should always be logged\n"
+                   "info: you used LIBGL_DEBUG=verbose\n");
   g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
                    SRT_TEST_SOFTWARE_GRAPHICS_RENDERER);
   g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
@@ -591,6 +605,7 @@ test_software_rendering (Fixture *f,
   g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
 
   g_object_get (graphics,
+                "messages", &messages,
                 "multiarch-tuple", &tuple,
                 "issues", &issues,
                 "renderer-string", &renderer,
@@ -604,9 +619,14 @@ test_software_rendering (Fixture *f,
   g_assert_cmpstr (version, ==, SRT_TEST_SOFTWARE_GRAPHICS_VERSION);
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_cmpint (terminating_signal, ==, 0);
+  g_assert_cmpstr (messages, ==,
+                   "warning: this warning should always be logged\n"
+                   "info: you used LIBGL_DEBUG=verbose\n");
+
   g_free (tuple);
   g_free (renderer);
   g_free (version);
+  g_free (messages);
 
   g_object_unref (graphics);
   g_object_unref (info);
@@ -757,6 +777,9 @@ test_mixed_vulkan (Fixture *f,
                 "exit-status", &exit_status,
                 "terminating-signal", &terminating_signal,
                 NULL);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   "failed to create window surface!\n");
+
   g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
   g_assert_cmpstr (tuple, ==, "mock-mixed");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
@@ -808,6 +831,11 @@ test_mixed_gl (Fixture *f,
   g_assert_cmpstr (tuple, ==, "mock-mixed");
   g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
+                   "warning: this warning should always be logged\n"
+                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
+                   "info: you used LIBGL_DEBUG=verbose\n");
+
   g_free (tuple);
   g_free (renderer);
   g_free (version);

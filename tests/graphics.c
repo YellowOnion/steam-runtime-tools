@@ -1708,7 +1708,7 @@ test_icd_vulkan (Fixture *f,
 
 static void
 check_list_suffixes (const GList *list,
-                     const gchar *suffixes[],
+                     const gchar * const *suffixes,
                      SrtGraphicsModule module)
 {
   const gchar *value = NULL;
@@ -1773,7 +1773,7 @@ check_list_extra (const GList *list,
 
 static void
 check_list_links (const GList *list,
-                  const gchar *suffixes[],
+                  const gchar * const *suffixes,
                   SrtGraphicsModule module)
 {
   const gchar *value = NULL;
@@ -2153,213 +2153,208 @@ test_dri_flatpak (Fixture *f,
   g_strfreev (envp);
 }
 
-static void
-test_vdpau_debian10 (Fixture *f,
-                     gconstpointer context)
+typedef struct
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
-  GList *vdpau;
-  const gchar *multiarch_tuples[] = {"mock-debian-i386", "mock-debian-x86_64", NULL};
-  const gchar *vdpau_suffixes_i386[] = {"/lib/i386-linux-gnu/vdpau/libvdpau_r600.so",
-                                        "/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so",
-                                        "/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so.1",
-                                        NULL};
-  const gchar *vdpau_suffixes_x86_64[] = {"/lib/x86_64-linux-gnu/vdpau/libvdpau_r600.so.1",
-                                          "/lib/x86_64-linux-gnu/vdpau/libvdpau_radeonsi.so",
-                                          "/lib/x86_64-linux-gnu/vdpau/libvdpau_radeonsi.so.1",
-                                          NULL};
-  /* These symlinks are provided by "libvdpau_radeonsi.so" and "libvdpau_radeonsi.so.1" */
-  const gchar *vdpau_links_i386[] = {"libvdpau_radeonsi.so.1.0.0",
-                                     "libvdpau_radeonsi.so.1.0.0",
-                                     NULL};
-  /* These symlinks are provided by "libvdpau_r600.so", "libvdpau_radeonsi.so"
-   * and "libvdpau_radeonsi.so.1" */
-  const gchar *vdpau_links_x86_64[] = {"libvdpau_r600.so.1.0.0",
-                                       "libvdpau_radeonsi.so.1.0.0",
-                                       "libvdpau_radeonsi.so.1.0.0",
-                                       NULL};
+  const gchar *description;
+  const gchar *multiarch_tuple;
+  const gchar *sysroot;
+  const gchar *vdpau_suffixes[5];
+  const gchar *vdpau_links[5];
+  const gchar *vdpau_suffixes_extra[5];
+  const gchar *vdpau_path_env;
+} VdpauTest;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_unsetenv (envp, "VDPAU_DRIVER_PATH");
-
-  info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
-  srt_system_info_set_sysroot (info, sysroot);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes_i386, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links_i386, SRT_GRAPHICS_VDPAU_MODULE);
-  check_paths_are_absolute (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes_x86_64, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links_x86_64, SRT_GRAPHICS_VDPAU_MODULE);
-  check_paths_are_absolute (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
-}
-
-static void
-test_vdpau_fedora (Fixture *f,
-                   gconstpointer context)
+static const VdpauTest vdpau_test[] =
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
-  GList *vdpau;
-  const gchar *multiarch_tuples[] = {"mock-fedora-32-bit", "mock-fedora-64-bit", NULL};
-  const gchar *vdpau_suffixes_32[] = {"/usr/lib/vdpau/libvdpau_nouveau.so.1",
-                                      "/usr/lib/vdpau/libvdpau_r600.so",
-                                      "/usr/lib/vdpau/libvdpau_radeonsi.so",
-                                      "/usr/lib/vdpau/libvdpau_radeonsi.so.1",
-                                       NULL};
-  const gchar *vdpau_suffixes_64[] = {"/usr/lib64/vdpau/libvdpau_r300.so",
-                                      "/usr/lib64/vdpau/libvdpau_r300.so.1",
-                                      "/usr/lib64/vdpau/libvdpau_radeonsi.so",
-                                      "/usr/lib64/vdpau/libvdpau_radeonsi.so.1",
-                                       NULL};
-  /* These symlinks are provided by "libvdpau_radeonsi.so" and "libvdpau_radeonsi.so.1" */
-  const gchar *vdpau_links_32[] = {"libvdpau_radeonsi.so.1.0.0",
-                                   "libvdpau_radeonsi.so.1.0.0",
-                                   NULL};
-  /* These symlinks are provided by "libvdpau_r300.so.1" and "libvdpau_radeonsi.so.1" */
-  const gchar *vdpau_links_64[] = {"libvdpau_r300.so",
-                                   "libvdpau_radeonsi.so",
-                                   NULL};
-
-  sysroot = g_build_filename (f->srcdir, "sysroots", "fedora", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_unsetenv (envp, "VDPAU_DRIVER_PATH");
-
-  info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
-  srt_system_info_set_sysroot (info, sysroot);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes_32, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links_32, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes_64, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links_64, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
-}
-
-static void
-test_vdpau_with_env (Fixture *f,
-                     gconstpointer context)
-{
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
-  gchar *vdpau_path;
-  GList *vdpau;
-  const gchar *multiarch_tuples[] = {"mock-fedora-32-bit", NULL};
-  const gchar *vdpau_suffixes[] = {"/custom_path32/vdpau/libvdpau_r600.so.1",
-                                   "/custom_path32/vdpau/libvdpau_radeonsi.so.1",
-                                   NULL};
-  const gchar *vdpau_suffixes_with_extras[] = {"/custom_path32/vdpau/libvdpau_r600.so.1",
-                                               "/custom_path32/vdpau/libvdpau_radeonsi.so.1",
-                                               "/usr/lib/vdpau/libvdpau_nouveau.so.1",
-                                               NULL};
-  /* There are no symlinks */
-  const gchar *vdpau_links[] = {NULL};
-
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
+  {
+    .description = "debian 10 i386",
+    .multiarch_tuple = "mock-debian-i386",
+    .sysroot = "debian10",
+    .vdpau_suffixes =
     {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+      "/lib/i386-linux-gnu/vdpau/libvdpau_r600.so",
+      "/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so",
+      "/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so.1",
+      NULL
+    },
+    /* These symlinks are provided by "libvdpau_radeonsi.so" and "libvdpau_radeonsi.so.1" */
+    .vdpau_links =
+    {
+      "libvdpau_radeonsi.so.1.0.0",
+      "libvdpau_radeonsi.so.1.0.0",
+      NULL
+    },
+  },
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "no-os-release", NULL);
+  {
+    .description = "debian 10 x86_64",
+    .multiarch_tuple = "mock-debian-x86_64",
+    .sysroot = "debian10",
+    .vdpau_suffixes =
+    {
+      "/lib/x86_64-linux-gnu/vdpau/libvdpau_r600.so.1",
+      "/lib/x86_64-linux-gnu/vdpau/libvdpau_radeonsi.so",
+      "/lib/x86_64-linux-gnu/vdpau/libvdpau_radeonsi.so.1",
+      NULL
+    },
+    /* These symlinks are provided by "libvdpau_r600.so", "libvdpau_radeonsi.so"
+     * and "libvdpau_radeonsi.so.1" */
+    .vdpau_links =
+    {
+      "libvdpau_r600.so.1.0.0",
+      "libvdpau_radeonsi.so.1.0.0",
+      "libvdpau_radeonsi.so.1.0.0",
+      NULL
+    },
+  },
 
-  vdpau_path = g_build_filename (sysroot, "custom_path32", "vdpau", NULL);
+  {
+    .description = "fedora 32 bit",
+    .multiarch_tuple = "mock-fedora-32-bit",
+    .sysroot = "fedora",
+    .vdpau_suffixes =
+    {
+      "/usr/lib/vdpau/libvdpau_nouveau.so.1",
+      "/usr/lib/vdpau/libvdpau_r600.so",
+      "/usr/lib/vdpau/libvdpau_radeonsi.so",
+      "/usr/lib/vdpau/libvdpau_radeonsi.so.1",
+      NULL
+    },
+    /* These symlinks are provided by "libvdpau_radeonsi.so" and "libvdpau_radeonsi.so.1" */
+    .vdpau_links =
+    {
+      "libvdpau_radeonsi.so.1.0.0",
+      "libvdpau_radeonsi.so.1.0.0",
+      NULL
+    },
+  },
 
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
+  {
+    .description = "fedora 64 bit",
+    .multiarch_tuple = "mock-fedora-64-bit",
+    .sysroot = "fedora",
+    .vdpau_suffixes =
+    {
+      "/usr/lib64/vdpau/libvdpau_r300.so",
+      "/usr/lib64/vdpau/libvdpau_r300.so.1",
+      "/usr/lib64/vdpau/libvdpau_radeonsi.so",
+      "/usr/lib64/vdpau/libvdpau_radeonsi.so.1",
+      NULL
+    },
+    /* These symlinks are provided by "libvdpau_r300.so.1" and "libvdpau_radeonsi.so.1" */
+    .vdpau_links =
+    {
+      "libvdpau_r300.so",
+      "libvdpau_radeonsi.so",
+      NULL
+    },
+  },
 
-  info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
-  srt_system_info_set_sysroot (info, sysroot);
-  srt_system_info_set_helpers_path (info, f->builddir);
+  {
+    .description = "vdpau with environment",
+    .multiarch_tuple = "mock-fedora-32-bit",
+    .sysroot = "no-os-release",
+    .vdpau_suffixes =
+    {
+      "/custom_path32/vdpau/libvdpau_r600.so.1",
+      "/custom_path32/vdpau/libvdpau_radeonsi.so.1",
+      NULL
+    },
+    .vdpau_suffixes_extra =
+    {
+      "/custom_path32/vdpau/libvdpau_r600.so.1",
+      "/custom_path32/vdpau/libvdpau_radeonsi.so.1",
+      "/usr/lib/vdpau/libvdpau_nouveau.so.1",
+      NULL
+    },
+    .vdpau_path_env = "custom_path32"
+  },
 
-  /* The output is guaranteed to be in aphabetical order */
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  /* Do it again, this time including the extras */
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
-  check_list_suffixes (vdpau, vdpau_suffixes_with_extras, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
-  /* Minus one to not count the NULL terminator */
-  check_list_extra (vdpau, G_N_ELEMENTS(vdpau_suffixes)-1, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  /* Test a vdpau relative path */
-  g_free (vdpau_path);
-  vdpau_path = g_build_filename ("sysroots", "no-os-release", "custom_path32", "vdpau", NULL);
-  envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
-  srt_system_info_set_environ (info, envp);
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
-  check_list_links (vdpau, vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
-  check_paths_are_relative (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_free (vdpau_path);
-  g_strfreev (envp);
-}
+  {
+    .description = "flatpak",
+    .multiarch_tuple = "mock-abi",
+    .sysroot = "flatpak-example",
+    .vdpau_suffixes =
+    {
+      "/usr/lib/mock-abi/vdpau/libvdpau_radeonsi.so.1",
+      NULL
+    },
+  },
+};
 
 static void
-test_vdpau_flatpak (Fixture *f,
-                    gconstpointer context)
+test_vdpau (Fixture *f,
+            gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
-  GList *vdpau;
-  const gchar *multiarch_tuples[] = { "mock-abi", NULL };
-  const gchar *vdpau_suffixes[] = {"/usr/lib/mock-abi/vdpau/libvdpau_radeonsi.so.1",
-                                   NULL};
+  for (gsize i = 0; i < G_N_ELEMENTS (vdpau_test); i++)
+    {
+      const VdpauTest *test = &vdpau_test[i];
+      SrtSystemInfo *info;
+      gchar **envp;
+      gchar *sysroot;
+      gchar *vdpau_path = NULL;
+      gchar *vdpau_relative_path = NULL;
+      GList *vdpau;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "flatpak-example", NULL);
-  envp = g_get_environ ();
-  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_unsetenv (envp, "VDPAU_DRIVER_PATH");
+      g_test_message ("%s: %s", test->sysroot, test->description);
 
-  info = srt_system_info_new (NULL);
-  srt_system_info_set_environ (info, envp);
-  srt_system_info_set_sysroot (info, sysroot);
-  srt_system_info_set_helpers_path (info, f->builddir);
+      sysroot = g_build_filename (f->srcdir, "sysroots", test->sysroot, NULL);
+      envp = g_get_environ ();
+      envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+      if (test->vdpau_path_env == NULL)
+        {
+          envp = g_environ_unsetenv (envp, "VDPAU_DRIVER_PATH");
+        }
+      else
+        {
+          vdpau_path = g_build_filename (sysroot, test->vdpau_path_env, "vdpau", NULL);
+          vdpau_relative_path = g_build_filename ("sysroots", test->sysroot, test->vdpau_path_env,
+                                                  "vdpau", NULL);
+          envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
+        }
 
-  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
-  check_list_suffixes (vdpau, vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
-  g_list_free_full (vdpau, g_object_unref);
+      info = srt_system_info_new (NULL);
+      srt_system_info_set_environ (info, envp);
+      srt_system_info_set_sysroot (info, sysroot);
+      srt_system_info_set_helpers_path (info, f->builddir);
 
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
+      /* The output is guaranteed to be in aphabetical order */
+      vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_NONE);
+      check_list_suffixes (vdpau, test->vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
+      check_list_links (vdpau, test->vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
+      check_paths_are_absolute (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
+      g_list_free_full (vdpau, g_object_unref);
+
+      if (test->vdpau_suffixes_extra[0] != NULL)
+        {
+          /* Do it again, this time including the extras */
+          vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_INCLUDE_ALL);
+          check_list_suffixes (vdpau, test->vdpau_suffixes_extra, SRT_GRAPHICS_VDPAU_MODULE);
+          check_paths_are_absolute (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
+          gulong non_extras = 0;
+          for (; test->vdpau_suffixes[non_extras] != NULL; non_extras++)
+            continue;
+          check_list_extra (vdpau, non_extras, SRT_GRAPHICS_VDPAU_MODULE);
+          g_list_free_full (vdpau, g_object_unref);
+        }
+
+      if (vdpau_relative_path != NULL)
+        {
+          envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_relative_path, TRUE);
+          srt_system_info_set_environ (info, envp);
+          vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_NONE);
+          check_list_suffixes (vdpau, test->vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
+          check_list_links (vdpau, test->vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
+          check_paths_are_relative (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
+          g_list_free_full (vdpau, g_object_unref);
+        }
+
+      g_object_unref (info);
+      g_free (sysroot);
+      g_free (vdpau_path);
+      g_free (vdpau_relative_path);
+      g_strfreev (envp);
+    }
 }
 
 static gint
@@ -2537,14 +2532,8 @@ main (int argc,
   g_test_add ("/graphics/dri/flatpak", Fixture, NULL,
               setup, test_dri_flatpak, teardown);
 
-  g_test_add ("/graphics/vdpau/debian10", Fixture, NULL,
-              setup, test_vdpau_debian10, teardown);
-  g_test_add ("/graphics/vdpau/fedora", Fixture, NULL,
-              setup, test_vdpau_fedora, teardown);
-  g_test_add ("/graphics/vdpau/with_env", Fixture, NULL,
-              setup, test_vdpau_with_env, teardown);
-  g_test_add ("/graphics/vdpau/flatpak", Fixture, NULL,
-              setup, test_vdpau_flatpak, teardown);
+  g_test_add ("/graphics/vdpau", Fixture, NULL,
+              setup, test_vdpau, teardown);
 
   g_test_add ("/graphics/glx/debian", Fixture, NULL,
               setup, test_glx_debian, teardown);

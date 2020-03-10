@@ -1808,6 +1808,68 @@ check_list_links (const GList *list,
 }
 
 static void
+check_paths_are_absolute (const GList *list,
+                          SrtGraphicsModule module)
+{
+  const gchar *library_path = NULL;
+  gchar *absolute_path = NULL;
+  for (const GList *iter = list; iter != NULL; iter = iter->next)
+    {
+      switch (module)
+        {
+          case SRT_GRAPHICS_VDPAU_MODULE:
+            library_path = srt_vdpau_driver_get_library_path (iter->data);
+            absolute_path = srt_vdpau_driver_resolve_library_path (iter->data);
+            break;
+
+          case SRT_GRAPHICS_DRI_MODULE:
+          case SRT_GRAPHICS_VAAPI_MODULE:
+          case SRT_GRAPHICS_GLX_MODULE:
+          case NUM_SRT_GRAPHICS_MODULES:
+          default:
+            g_return_if_reached ();
+        }
+      g_assert_cmpstr (library_path, ==, absolute_path);
+      g_assert_nonnull (library_path);
+      g_assert_cmpint (library_path[0], ==, '/');
+      g_free (absolute_path);
+    }
+}
+
+static void
+check_paths_are_relative (const GList *list,
+                          SrtGraphicsModule module)
+{
+  const gchar *library_path = NULL;
+  gchar *absolute_path = NULL;
+  gsize i = 0;
+  for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
+    {
+      switch (module)
+        {
+          case SRT_GRAPHICS_VDPAU_MODULE:
+            library_path = srt_vdpau_driver_get_library_path (iter->data);
+            absolute_path = srt_vdpau_driver_resolve_library_path (iter->data);
+            break;
+
+          case SRT_GRAPHICS_DRI_MODULE:
+          case SRT_GRAPHICS_VAAPI_MODULE:
+          case SRT_GRAPHICS_GLX_MODULE:
+          case NUM_SRT_GRAPHICS_MODULES:
+          default:
+            g_return_if_reached ();
+        }
+      g_assert_cmpstr (library_path, !=, absolute_path);
+      g_assert_nonnull (library_path);
+      g_assert_nonnull (absolute_path);
+      g_assert_cmpint (library_path[0], !=, '/');
+      g_assert_cmpint (absolute_path[0], ==, '/');
+      assert_same_file (library_path, absolute_path);
+      g_free (absolute_path);
+    }
+}
+
+static void
 test_dri_debian10 (Fixture *f,
                    gconstpointer context)
 {
@@ -2132,11 +2194,13 @@ test_vdpau_debian10 (Fixture *f,
   vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (vdpau, vdpau_suffixes_i386, SRT_GRAPHICS_VDPAU_MODULE);
   check_list_links (vdpau, vdpau_links_i386, SRT_GRAPHICS_VDPAU_MODULE);
+  check_paths_are_absolute (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
   g_list_free_full (vdpau, g_object_unref);
 
   vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (vdpau, vdpau_suffixes_x86_64, SRT_GRAPHICS_VDPAU_MODULE);
   check_list_links (vdpau, vdpau_links_x86_64, SRT_GRAPHICS_VDPAU_MODULE);
+  check_paths_are_absolute (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
   g_list_free_full (vdpau, g_object_unref);
 
   g_object_unref (info);
@@ -2248,6 +2312,17 @@ test_vdpau_with_env (Fixture *f,
   check_list_links (vdpau, vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
   /* Minus one to not count the NULL terminator */
   check_list_extra (vdpau, G_N_ELEMENTS(vdpau_suffixes)-1, SRT_GRAPHICS_VDPAU_MODULE);
+  g_list_free_full (vdpau, g_object_unref);
+
+  /* Test a vdpau relative path */
+  g_free (vdpau_path);
+  vdpau_path = g_build_filename ("sysroots", "no-os-release", "custom_path32", "vdpau", NULL);
+  envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
+  srt_system_info_set_environ (info, envp);
+  vdpau = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (vdpau, vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
+  check_list_links (vdpau, vdpau_links, SRT_GRAPHICS_VDPAU_MODULE);
+  check_paths_are_relative (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
   g_list_free_full (vdpau, g_object_unref);
 
   g_object_unref (info);

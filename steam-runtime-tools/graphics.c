@@ -3448,6 +3448,7 @@ enum
   VDPAU_DRIVER_PROP_LIBRARY_PATH,
   VDPAU_DRIVER_PROP_LIBRARY_LINK,
   VDPAU_DRIVER_PROP_IS_EXTRA,
+  VDPAU_DRIVER_PROP_RESOLVED_LIBRARY_PATH,
   N_VDPAU_DRIVER_PROPERTIES
 };
 
@@ -3478,6 +3479,10 @@ srt_vdpau_driver_get_property (GObject *object,
 
       case VDPAU_DRIVER_PROP_IS_EXTRA:
         g_value_set_boolean (value, self->is_extra);
+        break;
+
+      case VDPAU_DRIVER_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_vdpau_driver_resolve_library_path (self));
         break;
 
       default:
@@ -3538,7 +3543,9 @@ srt_vdpau_driver_class_init (SrtVdpauDriverClass *cls)
 
   vdpau_driver_properties[VDPAU_DRIVER_PROP_LIBRARY_PATH] =
     g_param_spec_string ("library-path", "Library path",
-                         "Absolute path to the VDPAU driver library",
+                         "Path to the VDPAU driver library. It might be absolute "
+                         "(e.g. /usr/lib/vdpau/libvdpau_radeonsi.so) or relative "
+                         "(e.g. custom/vdpau/libvdpau_radeonsi.so)",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -3556,6 +3563,14 @@ srt_vdpau_driver_class_init (SrtVdpauDriverClass *cls)
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
+
+  vdpau_driver_properties[VDPAU_DRIVER_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Absolute path to the VDPAU driver library. This is similar "
+                         "to 'library-path', but is guaranteed to be an "
+                         "absolute path (e.g. /usr/lib/vdpau/libvdpau_radeonsi.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_VDPAU_DRIVER_PROPERTIES,
                                      vdpau_driver_properties);
@@ -3589,7 +3604,7 @@ srt_vdpau_driver_new (const gchar *library_path,
  *
  * Return the library path for this VDPAU driver.
  *
- * Returns: (type filename) (transfer none) (nullable): #SrtVdpauDriver:library-path
+ * Returns: (type filename) (transfer none): #SrtVdpauDriver:library-path
  */
 const gchar *
 srt_vdpau_driver_get_library_path (SrtVdpauDriver *self)
@@ -3627,6 +3642,36 @@ srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
 {
   g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), FALSE);
   return self->is_extra;
+}
+
+/**
+ * srt_vdpau_driver_resolve_library_path:
+ * @self: The VDPAU driver
+ *
+ * Return the absolute library path for this VDPAU driver.
+ * If srt_vdpau_driver_get_library_path() is already an absolute path, a copy
+ * of the same value will be returned.
+ *
+ * Returns: (type filename) (transfer full): A copy of
+ *  #SrtVdpauDriver:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self)
+{
+  gchar *base;
+  gchar *ret;
+
+  g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), NULL);
+  g_return_val_if_fail (self->library_path != NULL, NULL);
+
+  /* We can't use g_canonicalize_filename() because we are targeting an earlier glib version */
+  if (self->library_path[0] == '/')
+    return g_strdup (self->library_path);
+
+  base = g_get_current_dir ();
+  ret = g_build_filename (base, self->library_path, NULL);
+  g_free (base);
+  return ret;
 }
 
 /**

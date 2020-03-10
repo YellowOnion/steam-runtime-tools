@@ -197,6 +197,7 @@ GType srt_vdpau_driver_get_type (void);
 const gchar *srt_vdpau_driver_get_library_path (SrtVdpauDriver *self);
 const gchar *srt_vdpau_driver_get_library_link (SrtVdpauDriver *self);
 gboolean srt_vdpau_driver_is_extra (SrtVdpauDriver *self);
+gchar *srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self);
 
 typedef struct _SrtVulkanIcd SrtVulkanIcd;
 typedef struct _SrtVulkanIcdClass SrtVulkanIcdClass;

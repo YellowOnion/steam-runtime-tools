@@ -57,6 +57,10 @@ main (int argc,
         }
     }
 
+  /* If the argument is a 64bit directory, we return an exit failure */
+  if (g_strstr_len (argv[1], -1, "/custom_path64/") != NULL)
+    return EXIT_FAILURE;
+
   gchar **envp = g_get_environ ();
   gchar *path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib", argv[1], NULL);
 

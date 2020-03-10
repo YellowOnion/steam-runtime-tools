@@ -3251,6 +3251,24 @@ _srt_list_graphics_modules (const char *sysroot,
   return g_list_reverse (drivers);
 }
 
+static gchar *
+_srt_resolve_library_path (const gchar *library_path)
+{
+  gchar *base;
+  gchar *ret;
+
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  /* We can't use g_canonicalize_filename() because we are targeting an earlier glib version */
+  if (library_path[0] == '/')
+    return g_strdup (library_path);
+
+  base = g_get_current_dir ();
+  ret = g_build_filename (base, library_path, NULL);
+  g_free (base);
+  return ret;
+}
+
 /**
  * SrtVaApiDriver:
  *
@@ -3276,6 +3294,7 @@ enum
   VA_API_DRIVER_PROP_0,
   VA_API_DRIVER_PROP_LIBRARY_PATH,
   VA_API_DRIVER_PROP_IS_EXTRA,
+  VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH,
   N_VA_API_DRIVER_PROPERTIES
 };
 
@@ -3302,6 +3321,10 @@ srt_va_api_driver_get_property (GObject *object,
 
       case VA_API_DRIVER_PROP_IS_EXTRA:
         g_value_set_boolean (value, self->is_extra);
+        break;
+
+      case VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_va_api_driver_resolve_library_path (self));
         break;
 
       default:
@@ -3356,7 +3379,9 @@ srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
 
   va_api_driver_properties[VA_API_DRIVER_PROP_LIBRARY_PATH] =
     g_param_spec_string ("library-path", "Library path",
-                         "Absolute path to the DRI driver library",
+                         "Path to the DRI driver library. It might be absolute "
+                         "(e.g. /usr/lib/dri/iHD_drv_video.so) or relative "
+                         "(e.g. custom/dri/iHD_drv_video.so)",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -3367,6 +3392,14 @@ srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
+
+  va_api_driver_properties[VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Absolute path to the DRI driver library. This is similar "
+                         "to 'library-path', but is guaranteed to be an "
+                         "absolute path (e.g. /usr/lib/dri/iHD_drv_video.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_VA_API_DRIVER_PROPERTIES,
                                      va_api_driver_properties);
@@ -3397,7 +3430,7 @@ srt_va_api_driver_new (const gchar *library_path,
  *
  * Return the library path for this VA-API driver.
  *
- * Returns: (type filename) (transfer none) (nullable): #SrtVaApiDriver:library-path
+ * Returns: (type filename) (transfer none): #SrtVaApiDriver:library-path
  */
 const gchar *
 srt_va_api_driver_get_library_path (SrtVaApiDriver *self)
@@ -3419,6 +3452,26 @@ srt_va_api_driver_is_extra (SrtVaApiDriver *self)
 {
   g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), FALSE);
   return self->is_extra;
+}
+
+/**
+ * srt_va_api_driver_resolve_library_path:
+ * @self: The VA-API driver
+ *
+ * Return the absolute library path for this VA-API driver.
+ * If srt_va_api_driver_get_library_path() is already an absolute path, a copy
+ * of the same value will be returned.
+ *
+ * Returns: (type filename) (transfer full): A copy of
+ *  #SrtVaApiDriver:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), NULL);
+  g_return_val_if_fail (self->library_path != NULL, NULL);
+
+  return _srt_resolve_library_path (self->library_path);
 }
 
 /**
@@ -3658,20 +3711,10 @@ srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
 gchar *
 srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self)
 {
-  gchar *base;
-  gchar *ret;
-
   g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), NULL);
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
-  /* We can't use g_canonicalize_filename() because we are targeting an earlier glib version */
-  if (self->library_path[0] == '/')
-    return g_strdup (self->library_path);
-
-  base = g_get_current_dir ();
-  ret = g_build_filename (base, self->library_path, NULL);
-  g_free (base);
-  return ret;
+  return _srt_resolve_library_path (self->library_path);
 }
 
 /**

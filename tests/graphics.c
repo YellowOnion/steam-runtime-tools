@@ -1822,8 +1822,12 @@ check_paths_are_absolute (const GList *list,
             absolute_path = srt_vdpau_driver_resolve_library_path (iter->data);
             break;
 
-          case SRT_GRAPHICS_DRI_MODULE:
           case SRT_GRAPHICS_VAAPI_MODULE:
+            library_path = srt_va_api_driver_get_library_path (iter->data);
+            absolute_path = srt_va_api_driver_resolve_library_path (iter->data);
+            break;
+
+          case SRT_GRAPHICS_DRI_MODULE:
           case SRT_GRAPHICS_GLX_MODULE:
           case NUM_SRT_GRAPHICS_MODULES:
           default:
@@ -1852,8 +1856,12 @@ check_paths_are_relative (const GList *list,
             absolute_path = srt_vdpau_driver_resolve_library_path (iter->data);
             break;
 
-          case SRT_GRAPHICS_DRI_MODULE:
           case SRT_GRAPHICS_VAAPI_MODULE:
+            library_path = srt_va_api_driver_get_library_path (iter->data);
+            absolute_path = srt_va_api_driver_resolve_library_path (iter->data);
+            break;
+
+          case SRT_GRAPHICS_DRI_MODULE:
           case SRT_GRAPHICS_GLX_MODULE:
           case NUM_SRT_GRAPHICS_MODULES:
           default:
@@ -1916,10 +1924,12 @@ test_dri_debian10 (Fixture *f,
   /* The output is guaranteed to be in aphabetical order */
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_i386, SRT_GRAPHICS_VAAPI_MODULE);
+  check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_x86_64, SRT_GRAPHICS_VAAPI_MODULE);
+  check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
   /* Do it again, this time using the cached result.
@@ -2064,7 +2074,7 @@ test_dri_with_env (Fixture *f,
   libva3 = g_build_filename (sysroot, "custom_path64", "va", NULL);
 
   libgl_combined = g_strjoin (":", libgl, libgl2, libgl3, NULL);
-  libva_combined = g_strjoin (":", libva, libva2, libgl3, NULL);
+  libva_combined = g_strjoin (":", libva, libva2, libva3, NULL);
 
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -2097,6 +2107,22 @@ test_dri_with_env (Fixture *f,
   check_list_suffixes (va_api, va_api_suffixes_with_extras, SRT_GRAPHICS_VAAPI_MODULE);
   /* Minus one to not count the NULL terminator */
   check_list_extra (va_api, G_N_ELEMENTS(va_api_suffixes)-1, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  /* Test a va_api relative path */
+  g_free (libva);
+  g_free (libva2);
+  g_free (libva3);
+  g_free (libva_combined);
+  libva = g_build_filename ("sysroots", "no-os-release", "custom_path32", "va", NULL);
+  libva2 = g_build_filename ("sysroots", "no-os-release", "custom_path32_2", "va", NULL);
+  libva3 = g_build_filename ("sysroots", "no-os-release", "custom_path64", "va", NULL);
+  libva_combined = g_strjoin (":", libva, libva2, libva3, NULL);
+  envp = g_environ_setenv (envp, "LIBVA_DRIVERS_PATH", libva_combined, TRUE);
+  srt_system_info_set_environ (info, envp);
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
+  check_paths_are_relative (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
   g_object_unref (info);

@@ -182,6 +182,7 @@ GType srt_va_api_driver_get_type (void);
 
 const gchar *srt_va_api_driver_get_library_path (SrtVaApiDriver *self);
 gboolean srt_va_api_driver_is_extra (SrtVaApiDriver *self);
+gchar *srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self);
 
 typedef struct _SrtVdpauDriver SrtVdpauDriver;
 typedef struct _SrtVdpauDriverClass SrtVdpauDriverClass;

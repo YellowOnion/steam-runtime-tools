@@ -168,6 +168,7 @@ GType srt_dri_driver_get_type (void);
 
 const gchar *srt_dri_driver_get_library_path (SrtDriDriver *self);
 gboolean srt_dri_driver_is_extra (SrtDriDriver *self);
+gchar *srt_dri_driver_resolve_library_path (SrtDriDriver *self);
 
 typedef struct _SrtVaApiDriver SrtVaApiDriver;
 typedef struct _SrtVaApiDriverClass SrtVaApiDriverClass;

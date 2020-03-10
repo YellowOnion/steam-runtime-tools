@@ -1817,6 +1817,11 @@ check_paths_are_absolute (const GList *list,
     {
       switch (module)
         {
+          case SRT_GRAPHICS_DRI_MODULE:
+            library_path = srt_dri_driver_get_library_path (iter->data);
+            absolute_path = srt_dri_driver_resolve_library_path (iter->data);
+            break;
+
           case SRT_GRAPHICS_VDPAU_MODULE:
             library_path = srt_vdpau_driver_get_library_path (iter->data);
             absolute_path = srt_vdpau_driver_resolve_library_path (iter->data);
@@ -1827,7 +1832,6 @@ check_paths_are_absolute (const GList *list,
             absolute_path = srt_va_api_driver_resolve_library_path (iter->data);
             break;
 
-          case SRT_GRAPHICS_DRI_MODULE:
           case SRT_GRAPHICS_GLX_MODULE:
           case NUM_SRT_GRAPHICS_MODULES:
           default:
@@ -1851,6 +1855,11 @@ check_paths_are_relative (const GList *list,
     {
       switch (module)
         {
+          case SRT_GRAPHICS_DRI_MODULE:
+            library_path = srt_dri_driver_get_library_path (iter->data);
+            absolute_path = srt_dri_driver_resolve_library_path (iter->data);
+            break;
+
           case SRT_GRAPHICS_VDPAU_MODULE:
             library_path = srt_vdpau_driver_get_library_path (iter->data);
             absolute_path = srt_vdpau_driver_resolve_library_path (iter->data);
@@ -1861,7 +1870,6 @@ check_paths_are_relative (const GList *list,
             absolute_path = srt_va_api_driver_resolve_library_path (iter->data);
             break;
 
-          case SRT_GRAPHICS_DRI_MODULE:
           case SRT_GRAPHICS_GLX_MODULE:
           case NUM_SRT_GRAPHICS_MODULES:
           default:
@@ -1915,10 +1923,12 @@ test_dri_debian10 (Fixture *f,
   /* The output is guaranteed to be in aphabetical order */
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes_i386, SRT_GRAPHICS_DRI_MODULE);
+  check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes_x86_64, SRT_GRAPHICS_DRI_MODULE);
+  check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
   /* The output is guaranteed to be in aphabetical order */
@@ -2109,17 +2119,32 @@ test_dri_with_env (Fixture *f,
   check_list_extra (va_api, G_N_ELEMENTS(va_api_suffixes)-1, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
-  /* Test a va_api relative path */
+  /* Test relative path */
+  g_free (libgl);
+  g_free (libgl2);
+  g_free (libgl3);
   g_free (libva);
   g_free (libva2);
   g_free (libva3);
+  g_free (libgl_combined);
   g_free (libva_combined);
+  libgl = g_build_filename ("sysroots", "no-os-release", "custom_path32", "dri", NULL);
+  libgl2 = g_build_filename ("sysroots", "no-os-release", "custom_path32_2", "dri", NULL);
+  libgl3 = g_build_filename ("sysroots", "no-os-release", "custom_path64", "dri", NULL);
   libva = g_build_filename ("sysroots", "no-os-release", "custom_path32", "va", NULL);
   libva2 = g_build_filename ("sysroots", "no-os-release", "custom_path32_2", "va", NULL);
   libva3 = g_build_filename ("sysroots", "no-os-release", "custom_path64", "va", NULL);
+  libgl_combined = g_strjoin (":", libgl, libgl2, libgl3, NULL);
   libva_combined = g_strjoin (":", libva, libva2, libva3, NULL);
+  envp = g_environ_setenv (envp, "LIBGL_DRIVERS_PATH", libgl_combined, TRUE);
   envp = g_environ_setenv (envp, "LIBVA_DRIVERS_PATH", libva_combined, TRUE);
   srt_system_info_set_environ (info, envp);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
+  check_paths_are_relative (dri, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   check_paths_are_relative (va_api, SRT_GRAPHICS_VAAPI_MODULE);

@@ -463,14 +463,24 @@ print_dri_details (JsonBuilder *builder,
     {
       for (iter = dri_list; iter != NULL; iter = iter->next)
         {
+          const gchar *library;
+          gchar *resolved = NULL;
           json_builder_begin_object (builder);
+          library = srt_dri_driver_get_library_path (iter->data);
           json_builder_set_member_name (builder, "library_path");
-          json_builder_add_string_value (builder, srt_dri_driver_get_library_path (iter->data));
+          json_builder_add_string_value (builder, library);
+          resolved = srt_dri_driver_resolve_library_path (iter->data);
+          if (g_strcmp0 (library, resolved) != 0)
+            {
+              json_builder_set_member_name (builder, "library_path_resolved");
+              json_builder_add_string_value (builder, resolved);
+            }
           if (srt_dri_driver_is_extra (iter->data))
             {
               json_builder_set_member_name (builder, "is_extra");
               json_builder_add_boolean_value (builder, TRUE);
             }
+          g_free (resolved);
           json_builder_end_object (builder);
         }
     }
@@ -488,14 +498,24 @@ print_va_api_details (JsonBuilder *builder,
     {
       for (iter = va_api_list; iter != NULL; iter = iter->next)
         {
+          const gchar *library;
+          gchar *resolved = NULL;
           json_builder_begin_object (builder);
+          library = srt_va_api_driver_get_library_path (iter->data);
           json_builder_set_member_name (builder, "library_path");
-          json_builder_add_string_value (builder, srt_va_api_driver_get_library_path (iter->data));
+          json_builder_add_string_value (builder, library);
+          resolved = srt_va_api_driver_resolve_library_path (iter->data);
+          if (g_strcmp0 (library, resolved) != 0)
+            {
+              json_builder_set_member_name (builder, "library_path_resolved");
+              json_builder_add_string_value (builder, resolved);
+            }
           if (srt_va_api_driver_is_extra (iter->data))
             {
               json_builder_set_member_name (builder, "is_extra");
               json_builder_add_boolean_value (builder, TRUE);
             }
+          g_free (resolved);
           json_builder_end_object (builder);
         }
     }
@@ -513,9 +533,18 @@ print_vdpau_details (JsonBuilder *builder,
     {
       for (iter = vdpau_list; iter != NULL; iter = iter->next)
         {
+          const gchar *library;
+          gchar *resolved = NULL;
           json_builder_begin_object (builder);
+          library = srt_vdpau_driver_get_library_path (iter->data);
           json_builder_set_member_name (builder, "library_path");
-          json_builder_add_string_value (builder, srt_vdpau_driver_get_library_path (iter->data));
+          json_builder_add_string_value (builder, library);
+          resolved = srt_vdpau_driver_resolve_library_path (iter->data);
+          if (g_strcmp0 (library, resolved) != 0)
+            {
+              json_builder_set_member_name (builder, "library_path_resolved");
+              json_builder_add_string_value (builder, resolved);
+            }
           if (srt_vdpau_driver_get_library_link (iter->data) != NULL)
             {
               json_builder_set_member_name (builder, "library_link");
@@ -526,6 +555,7 @@ print_vdpau_details (JsonBuilder *builder,
               json_builder_set_member_name (builder, "is_extra");
               json_builder_add_boolean_value (builder, TRUE);
             }
+          g_free (resolved);
           json_builder_end_object (builder);
         }
     }

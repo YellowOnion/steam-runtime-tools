@@ -168,6 +168,7 @@ GType srt_dri_driver_get_type (void);
 
 const gchar *srt_dri_driver_get_library_path (SrtDriDriver *self);
 gboolean srt_dri_driver_is_extra (SrtDriDriver *self);
+gchar *srt_dri_driver_resolve_library_path (SrtDriDriver *self);
 
 typedef struct _SrtVaApiDriver SrtVaApiDriver;
 typedef struct _SrtVaApiDriverClass SrtVaApiDriverClass;
@@ -182,6 +183,7 @@ GType srt_va_api_driver_get_type (void);
 
 const gchar *srt_va_api_driver_get_library_path (SrtVaApiDriver *self);
 gboolean srt_va_api_driver_is_extra (SrtVaApiDriver *self);
+gchar *srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self);
 
 typedef struct _SrtVdpauDriver SrtVdpauDriver;
 typedef struct _SrtVdpauDriverClass SrtVdpauDriverClass;
@@ -197,6 +199,7 @@ GType srt_vdpau_driver_get_type (void);
 const gchar *srt_vdpau_driver_get_library_path (SrtVdpauDriver *self);
 const gchar *srt_vdpau_driver_get_library_link (SrtVdpauDriver *self);
 gboolean srt_vdpau_driver_is_extra (SrtVdpauDriver *self);
+gchar *srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self);
 
 typedef struct _SrtVulkanIcd SrtVulkanIcd;
 typedef struct _SrtVulkanIcdClass SrtVulkanIcdClass;

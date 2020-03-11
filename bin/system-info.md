@@ -451,6 +451,10 @@ keys:
         **library_path**
         :   Path to the driver module that has been found.
 
+        **library_path_resolved**
+        :   Absolute path to the driver module that has been found.
+            This key is present only if **library_path** is relative.
+
         **is_extra**
         :   A boolean value indicating whether the driver module is in an
             "unusual" location, probably not in the canonical search path.
@@ -466,6 +470,10 @@ keys:
         **library_path**
         :   Path to the driver module that has been found.
 
+        **library_path_resolved**
+        :   Absolute path to the driver module that has been found.
+            This key is present only if **library_path** is relative.
+
         **is_extra**
         :   A boolean value indicating whether the driver module is in an
             "unusual" location, probably not in the canonical search path.
@@ -479,6 +487,10 @@ keys:
 
         **library_path**
         :   Path to the driver module that has been found.
+
+        **library_path_resolved**
+        :   Absolute path to the driver module that has been found.
+            This key is present only if **library_path** is relative.
 
         **library_link**
         :   Content of the **library_path** symbolic link. This key is optional

@@ -2299,6 +2299,24 @@ _srt_load_egl_icds (const char *sysroot,
   return g_list_reverse (ret);
 }
 
+static gchar *
+_srt_resolve_library_path (const gchar *library_path)
+{
+  gchar *base;
+  gchar *ret;
+
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  /* We can't use g_canonicalize_filename() because we are targeting an earlier glib version */
+  if (library_path[0] == '/')
+    return g_strdup (library_path);
+
+  base = g_get_current_dir ();
+  ret = g_build_filename (base, library_path, NULL);
+  g_free (base);
+  return ret;
+}
+
 /**
  * SrtDriDriver:
  *
@@ -2324,6 +2342,7 @@ enum
   DRI_DRIVER_PROP_0,
   DRI_DRIVER_PROP_LIBRARY_PATH,
   DRI_DRIVER_PROP_IS_EXTRA,
+  DRI_DRIVER_PROP_RESOLVED_LIBRARY_PATH,
   N_DRI_DRIVER_PROPERTIES
 };
 
@@ -2350,6 +2369,10 @@ srt_dri_driver_get_property (GObject *object,
 
       case DRI_DRIVER_PROP_IS_EXTRA:
         g_value_set_boolean (value, self->is_extra);
+        break;
+
+      case DRI_DRIVER_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_dri_driver_resolve_library_path (self));
         break;
 
       default:
@@ -2404,7 +2427,9 @@ srt_dri_driver_class_init (SrtDriDriverClass *cls)
 
   dri_driver_properties[DRI_DRIVER_PROP_LIBRARY_PATH] =
     g_param_spec_string ("library-path", "Library path",
-                         "Absolute path to the DRI driver library",
+                         "Path to the DRI driver library. It might be absolute "
+                         "(e.g. /usr/lib/dri/i965_dri.so) or relative "
+                         "(e.g. custom/dri/i965_dri.so)",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -2415,6 +2440,14 @@ srt_dri_driver_class_init (SrtDriDriverClass *cls)
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
+
+  dri_driver_properties[DRI_DRIVER_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Absolute path to the DRI driver library. This is similar "
+                         "to 'library-path', but is guaranteed to be an "
+                         "absolute path (e.g. /usr/lib/dri/i965_dri.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_DRI_DRIVER_PROPERTIES,
                                      dri_driver_properties);
@@ -2445,7 +2478,7 @@ srt_dri_driver_new (const gchar *library_path,
  *
  * Return the library path for this DRI driver.
  *
- * Returns: (type filename) (transfer none) (nullable): #SrtDriDriver:library-path
+ * Returns: (type filename) (transfer none): #SrtDriDriver:library-path
  */
 const gchar *
 srt_dri_driver_get_library_path (SrtDriDriver *self)
@@ -2467,6 +2500,26 @@ srt_dri_driver_is_extra (SrtDriDriver *self)
 {
   g_return_val_if_fail (SRT_IS_DRI_DRIVER (self), FALSE);
   return self->is_extra;
+}
+
+/**
+ * srt_dri_driver_resolve_library_path:
+ * @self: The DRI driver
+ *
+ * Return the absolute path for this DRI driver.
+ * If srt_dri_driver_get_library_path() is already an absolute path, a copy
+ * of the same value will be returned.
+ *
+ * Returns: (type filename) (transfer full): A copy of
+ *  #SrtDriDriver:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_dri_driver_resolve_library_path (SrtDriDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_DRI_DRIVER (self), NULL);
+  g_return_val_if_fail (self->library_path != NULL, NULL);
+
+  return _srt_resolve_library_path (self->library_path);
 }
 
 /**
@@ -3276,6 +3329,7 @@ enum
   VA_API_DRIVER_PROP_0,
   VA_API_DRIVER_PROP_LIBRARY_PATH,
   VA_API_DRIVER_PROP_IS_EXTRA,
+  VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH,
   N_VA_API_DRIVER_PROPERTIES
 };
 
@@ -3302,6 +3356,10 @@ srt_va_api_driver_get_property (GObject *object,
 
       case VA_API_DRIVER_PROP_IS_EXTRA:
         g_value_set_boolean (value, self->is_extra);
+        break;
+
+      case VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_va_api_driver_resolve_library_path (self));
         break;
 
       default:
@@ -3356,7 +3414,9 @@ srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
 
   va_api_driver_properties[VA_API_DRIVER_PROP_LIBRARY_PATH] =
     g_param_spec_string ("library-path", "Library path",
-                         "Absolute path to the DRI driver library",
+                         "Path to the DRI driver library. It might be absolute "
+                         "(e.g. /usr/lib/dri/iHD_drv_video.so) or relative "
+                         "(e.g. custom/dri/iHD_drv_video.so)",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -3367,6 +3427,14 @@ srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
+
+  va_api_driver_properties[VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Absolute path to the DRI driver library. This is similar "
+                         "to 'library-path', but is guaranteed to be an "
+                         "absolute path (e.g. /usr/lib/dri/iHD_drv_video.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_VA_API_DRIVER_PROPERTIES,
                                      va_api_driver_properties);
@@ -3397,7 +3465,7 @@ srt_va_api_driver_new (const gchar *library_path,
  *
  * Return the library path for this VA-API driver.
  *
- * Returns: (type filename) (transfer none) (nullable): #SrtVaApiDriver:library-path
+ * Returns: (type filename) (transfer none): #SrtVaApiDriver:library-path
  */
 const gchar *
 srt_va_api_driver_get_library_path (SrtVaApiDriver *self)
@@ -3419,6 +3487,26 @@ srt_va_api_driver_is_extra (SrtVaApiDriver *self)
 {
   g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), FALSE);
   return self->is_extra;
+}
+
+/**
+ * srt_va_api_driver_resolve_library_path:
+ * @self: The VA-API driver
+ *
+ * Return the absolute library path for this VA-API driver.
+ * If srt_va_api_driver_get_library_path() is already an absolute path, a copy
+ * of the same value will be returned.
+ *
+ * Returns: (type filename) (transfer full): A copy of
+ *  #SrtVaApiDriver:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), NULL);
+  g_return_val_if_fail (self->library_path != NULL, NULL);
+
+  return _srt_resolve_library_path (self->library_path);
 }
 
 /**
@@ -3448,6 +3536,7 @@ enum
   VDPAU_DRIVER_PROP_LIBRARY_PATH,
   VDPAU_DRIVER_PROP_LIBRARY_LINK,
   VDPAU_DRIVER_PROP_IS_EXTRA,
+  VDPAU_DRIVER_PROP_RESOLVED_LIBRARY_PATH,
   N_VDPAU_DRIVER_PROPERTIES
 };
 
@@ -3478,6 +3567,10 @@ srt_vdpau_driver_get_property (GObject *object,
 
       case VDPAU_DRIVER_PROP_IS_EXTRA:
         g_value_set_boolean (value, self->is_extra);
+        break;
+
+      case VDPAU_DRIVER_PROP_RESOLVED_LIBRARY_PATH:
+        g_value_take_string (value, srt_vdpau_driver_resolve_library_path (self));
         break;
 
       default:
@@ -3538,7 +3631,9 @@ srt_vdpau_driver_class_init (SrtVdpauDriverClass *cls)
 
   vdpau_driver_properties[VDPAU_DRIVER_PROP_LIBRARY_PATH] =
     g_param_spec_string ("library-path", "Library path",
-                         "Absolute path to the VDPAU driver library",
+                         "Path to the VDPAU driver library. It might be absolute "
+                         "(e.g. /usr/lib/vdpau/libvdpau_radeonsi.so) or relative "
+                         "(e.g. custom/vdpau/libvdpau_radeonsi.so)",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -3556,6 +3651,14 @@ srt_vdpau_driver_class_init (SrtVdpauDriverClass *cls)
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
+
+  vdpau_driver_properties[VDPAU_DRIVER_PROP_RESOLVED_LIBRARY_PATH] =
+    g_param_spec_string ("resolved-library-path", "Resolved library path",
+                         "Absolute path to the VDPAU driver library. This is similar "
+                         "to 'library-path', but is guaranteed to be an "
+                         "absolute path (e.g. /usr/lib/vdpau/libvdpau_radeonsi.so)",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_VDPAU_DRIVER_PROPERTIES,
                                      vdpau_driver_properties);
@@ -3589,7 +3692,7 @@ srt_vdpau_driver_new (const gchar *library_path,
  *
  * Return the library path for this VDPAU driver.
  *
- * Returns: (type filename) (transfer none) (nullable): #SrtVdpauDriver:library-path
+ * Returns: (type filename) (transfer none): #SrtVdpauDriver:library-path
  */
 const gchar *
 srt_vdpau_driver_get_library_path (SrtVdpauDriver *self)
@@ -3627,6 +3730,26 @@ srt_vdpau_driver_is_extra (SrtVdpauDriver *self)
 {
   g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), FALSE);
   return self->is_extra;
+}
+
+/**
+ * srt_vdpau_driver_resolve_library_path:
+ * @self: The VDPAU driver
+ *
+ * Return the absolute library path for this VDPAU driver.
+ * If srt_vdpau_driver_get_library_path() is already an absolute path, a copy
+ * of the same value will be returned.
+ *
+ * Returns: (type filename) (transfer full): A copy of
+ *  #SrtVdpauDriver:resolved-library-path. Free with g_free().
+ */
+gchar *
+srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), NULL);
+  g_return_val_if_fail (self->library_path != NULL, NULL);
+
+  return _srt_resolve_library_path (self->library_path);
 }
 
 /**

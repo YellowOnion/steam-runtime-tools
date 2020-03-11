@@ -329,7 +329,13 @@ main (int argc,
                 }
               else
                 {
-                  if (!has_versioned_symbol (handle, symbol, version))
+                  if (strcmp (symbol, version) == 0)
+                    {
+                      /* Ignore: dlsym() and dlvsym() don't find the
+                       * special symbol representing the version itself,
+                       * because it is neither data nor code. */
+                    }
+                  else if (!has_versioned_symbol (handle, symbol, version))
                     {
                       char * merged_string;
                       asprintf_or_die (&merged_string, "%s@%s", symbol, version);

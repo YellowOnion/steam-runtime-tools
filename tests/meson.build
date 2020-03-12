@@ -230,6 +230,7 @@ foreach helper : [
   'mock-good-wflinfo',
   'mock-mixed-check-gl',
   'mock-software-wflinfo',
+  'mock-ubuntu-64-bit-inspect-library',
 ]
   executable(
     helper,

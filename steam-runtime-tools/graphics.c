@@ -2600,6 +2600,21 @@ _srt_get_extra_modules_directory (const gchar *library_search_path,
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
   dir = g_strdup (library_search_path);
+
+  /* If the loader path ends with "/mesa" we try to look one directory above.
+   * For example this is how Ubuntu 16.04 works, the loaders are in ${libdir}/mesa
+   * and the DRI modules in ${libdir}/dri */
+  if (g_str_has_suffix (dir, "/mesa"))
+    {
+      dir[strlen (dir) - strlen ("/mesa") + 1] = '\0';
+      /* Remove the trailing slash */
+      if (g_strcmp0 (dir, "/") != 0)
+        dir[strlen (dir) - 1] = '\0';
+    }
+
+  ret = g_list_prepend (ret, g_build_filename (dir, "dri", NULL));
+  g_debug ("Looking in lib directory: %s", (const char *) ret->data);
+
   lib_multiarch = g_strdup_printf ("/lib/%s", multiarch_tuple);
 
   if (!g_str_has_suffix (dir, lib_multiarch))
@@ -2631,6 +2646,8 @@ _srt_get_extra_modules_directory (const gchar *library_search_path,
   g_debug ("Looking in lib directory: %s", (const char *) ret->data);
   ret = g_list_prepend (ret, g_build_filename (dir, libqual, "dri", NULL));
   g_debug ("Looking in libQUAL directory: %s", (const char *) ret->data);
+
+  ret = g_list_sort (ret, (GCompareFunc) strcmp);
 
 out:
   g_free (lib_multiarch);
@@ -2810,9 +2827,11 @@ _srt_get_modules_full (const char *sysroot,
   static const char *const vdpau_loaders[] = { "libvdpau.so.1", NULL };
   const gchar *env_override;
   const gchar *drivers_path;
+  const gchar *force_elf_class = NULL;
   gchar *flatpak_info;
   GHashTable *drivers_set;
   gboolean is_extra = FALSE;
+  int driver_class;
 
   g_return_if_fail (multiarch_tuple != NULL);
   g_return_if_fail (drivers_out != NULL);
@@ -2845,6 +2864,11 @@ _srt_get_modules_full (const char *sysroot,
     drivers_path = g_environ_getenv (envp, env_override);
   else
     drivers_path = g_getenv (env_override);
+
+  if (envp != NULL)
+    force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
+  else
+    force_elf_class = g_getenv ("SRT_TEST_FORCE_ELF");
 
   if (sysroot == NULL)
     sysroot = "/";
@@ -3017,7 +3041,18 @@ _srt_get_modules_full (const char *sysroot,
                                       libdir_driver, is_extra, module, drivers_out);
         }
 
-      int driver_class = _srt_get_library_class (driver_canonical_path);
+      if (force_elf_class)
+        {
+          if (g_strcmp0 (force_elf_class, "64") == 0)
+            driver_class = ELFCLASS64;
+          else
+            driver_class = ELFCLASS32;
+        }
+      else
+        {
+          driver_class = _srt_get_library_class (driver_canonical_path);
+        }
+
       const GList *this_extra_path;
       if (driver_class != ELFCLASSNONE)
         {

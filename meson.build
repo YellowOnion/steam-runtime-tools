@@ -29,6 +29,7 @@ project(
     'cpp_std=c++11',
     'warning_level=2',
   ],
+  meson_version : '>=0.49.0',
 )
 add_languages('cpp')
 

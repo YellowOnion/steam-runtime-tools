@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <libelf.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -2028,6 +2029,57 @@ test_dri_fedora (Fixture *f,
 }
 
 static void
+test_dri_ubuntu16 (Fixture *f,
+                   gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar *sysroot;
+  GList *dri;
+  GList *va_api;
+  const gchar *multiarch_tuples[] = {"mock-ubuntu-64-bit", NULL};
+  const gchar *dri_suffixes[] = {NULL};
+  const gchar *dri_suffixes_extra[] = {"/lib/dri/radeonsi_dri.so",
+                                       "/lib/mock-ubuntu-64-bit/dri/i965_dri.so",
+                                       "/lib/mock-ubuntu-64-bit/dri/radeon_dri.so",
+                                       NULL};
+  const gchar *va_api_suffixes[] = {"/lib/mock-ubuntu-64-bit/dri/radeonsi_drv_video.so",
+                                    NULL};
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "ubuntu16", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+  envp = g_environ_setenv (envp, "SRT_TEST_FORCE_ELF", "64", TRUE);
+  envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
+  envp = g_environ_unsetenv (envp, "LIBVA_DRIVERS_PATH");
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_sysroot (info, sysroot);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (dri, dri_suffixes_extra, SRT_GRAPHICS_DRI_MODULE);
+  g_list_free_full (dri, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+  check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
+  g_list_free_full (va_api, g_object_unref);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
+static void
 test_dri_with_env (Fixture *f,
                    gconstpointer context)
 {
@@ -2578,6 +2630,8 @@ main (int argc,
               setup, test_dri_debian10, teardown);
   g_test_add ("/graphics/dri/fedora", Fixture, NULL,
               setup, test_dri_fedora, teardown);
+  g_test_add ("/graphics/dri/ubuntu16", Fixture, NULL,
+              setup, test_dri_ubuntu16, teardown);
   g_test_add ("/graphics/dri/with_env", Fixture, NULL,
               setup, test_dri_with_env, teardown);
   g_test_add ("/graphics/dri/flatpak", Fixture, NULL,

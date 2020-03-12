@@ -480,6 +480,13 @@ Design constraints
   directory equal to the game's base directory, typically something
   like `SteamApps/common/Half-Life`.
 
+    - This is not actually completely true! Apparently some games, like
+      "Estranged: Act I" (ID 261820), start up with the current working
+      directory as *a subdirectory of* the directory they need.
+      pressure-vessel does not currently receive enough information from
+      Steam to fix this. See
+      [steam-runtime#236](https://github.com/ValveSoftware/steam-runtime/issues/236).
+
 * Steam games are delivered via existing code to use the Steam CDN, not
   as Flatpak packages.
 

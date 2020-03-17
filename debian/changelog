@@ -1,3 +1,48 @@
+pressure-vessel (0.20200317.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  [ Jeremy Whiting ]
+  * Add --test command line argument to pressure-vessel-wrap.
+    When --test is used, check for bubblewrap executable and return
+    0 if found, 1 otherwise.
+
+  [ Ludovico de Nittis ]
+  * wrap: mount /usr/share/libdrm if using host libdrm
+  * README: update scout download URL
+  * README: fix scout SDK package name
+
+  [ Simon McVittie ]
+  * wrap: Remount API filesystems when operating without a runtime
+  * test-ui: Do some expectation-management.
+    We don't want users who discover this test UI to think that everything
+    is going to work as-is.
+  * test-ui: Always offer to unshare home, with a clearer UI.
+    Rephrase it so that in the UI, unsharing the home directory looks like
+    the active choice ("separate home directory"), with the shared home
+    directory as the passive/default choice.
+  * test-ui: Clarify what the "no runtime" choice means
+  * test-ui: Rename "runtime" to "container runtime"
+    When we start dealing with LD_LIBRARY_PATH runtimes too, the difference
+    will become significant.
+  * test-ui: Show the version number of pressure-vessel-wrap
+  * bwrap: Don't create a /libexec symlink
+  * wrap: Resync some code borrowed from Flatpak with their version
+  * wrap: Correct some wait-status / exit status confusion
+  * wrap: Debug-log the bwrap executable if --test succeeds
+  * CONTRIBUTING.md: Add notes on what it's OK to depend on
+  * build: Automatically use python3.5 if available.
+    Steam Runtime 1 'scout' has python3.5 as a non-default Python 3 version,
+    and python3.2 as default.
+  * utils: Add a method to copy a directory tree using hard links.
+    This will let us duplicate a runtime and edit it in-place.
+  * runtime: Factor out a PvRuntime object
+  * runtime: Add an off-switch for the host graphics stack.
+    In practice we always want the host graphics stack, but maybe this
+    will be useful when debugging.
+  * runtime: Combine multiple runs of capsule-capture-libs into one
+  * README: Document a wrong assumption
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 17 Mar 2020 17:23:16 +0000
+
 pressure-vessel (0.20200108.0-0+steamrt1.1) scout; urgency=medium
 
   * wrap: Don't pass --lock-file to bwrap.

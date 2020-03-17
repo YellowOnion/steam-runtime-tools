@@ -1,4 +1,4 @@
-pressure-vessel (0.20200317.0-0+steamrt1.1) UNRELEASED; urgency=medium
+pressure-vessel (0.20200317.0) UNRELEASED; urgency=medium
 
   [ Jeremy Whiting ]
   * Add --test command line argument to pressure-vessel-wrap.
@@ -40,6 +40,11 @@ pressure-vessel (0.20200317.0-0+steamrt1.1) UNRELEASED; urgency=medium
     will be useful when debugging.
   * runtime: Combine multiple runs of capsule-capture-libs into one
   * README: Document a wrong assumption
+  * Build as a native package again.
+    Now that deb-build-snapshot supports a Build-Suffix option in
+    debian/git-version-gen.control, we don't need to worry about whether
+    the version number will be less than a previous version that had a +srt
+    suffix added by the Open Build Service.
 
  -- Simon McVittie <smcv@collabora.com>  Tue, 17 Mar 2020 17:23:16 +0000
 

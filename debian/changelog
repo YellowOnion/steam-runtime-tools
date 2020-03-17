@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20200317.0-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200317.0) UNRELEASED; urgency=medium
 
   [ Ludovico de Nittis ]
   * Add srt_vdpau_driver_resolve_library_path, etc. methods.
@@ -19,6 +19,11 @@ steam-runtime-tools (0.20200317.0-0+steamrt1.1) UNRELEASED; urgency=medium
   * Document the minimum meson version.
     The Steam Runtime has a backport of meson 0.49.0, originally from Debian
     stretch-backports, which is the oldest thing we'll even try to support.
+  * Build as a native package.
+    Now that deb-build-snapshot supports a Build-Suffix option in
+    debian/git-version-gen.control, we don't need to worry about whether
+    the version number will be less than a previous version that had a +srt
+    suffix added by the Open Build Service.
 
  -- Simon McVittie <smcv@collabora.com>  Tue, 17 Mar 2020 17:11:42 +0000
 

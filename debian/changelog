@@ -1,3 +1,17 @@
+steam-runtime-tools (0.20200403.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Diagnose problems with "steam:" URL handler
+  * Create a new srt_system_info_get_steam_details function
+  * tests: Generate mock sysroots programmatically
+
+  [ Simon McVittie ]
+  * tests: Factor out the directory containing mock sysroots
+  * tests: Add a script to generate the mock sysroots
+  * Build as a native package.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 03 Apr 2020 10:23:42 +0100
+
 steam-runtime-tools (0.20200331.1-0+steamrt1.1) scout; urgency=medium
 
   * Fix version number

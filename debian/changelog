@@ -1,3 +1,27 @@
+steam-runtime-tools (0.20200317.0-0+steamrt1.1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Add srt_vdpau_driver_resolve_library_path, etc. methods.
+    The corresponding _get_library_path methods might return a relative
+    path, so add a way to go from that to an absolute path.
+  * Refactor vdpau tests into a single function
+  * Add a special Mesa DRIs search path to cover Ubuntu 16.04.
+    Ubuntu 16.04 is older than GLVND and it places Mesa loaders in
+    ${libdir}/mesa and the DRIs in ${libdir}/dri.
+
+  [ Simon McVittie ]
+  * inspect-library: Ignore symbols like LIBATOMIC_1.0@LIBATOMIC_1.0.
+    I had hoped that dlsym() and dlvsym() would find these special symbols,
+    but in fact they don't. To check for ABI compatibility we need to look
+    for specific symbols, like __atomic_load_1@LIBATOMIC_1.0.
+  * build: Disable gtk-doc by default.
+    This lets us do self-hosting releases from SteamRT 1 'scout'.
+  * Document the minimum meson version.
+    The Steam Runtime has a backport of meson 0.49.0, originally from Debian
+    stretch-backports, which is the oldest thing we'll even try to support.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 17 Mar 2020 17:11:42 +0000
+
 steam-runtime-tools (0.20200306.0-0+steamrt1.1) scout; urgency=medium
 
   [ Ludovico de Nittis ]

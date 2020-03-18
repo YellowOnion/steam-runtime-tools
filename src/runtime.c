@@ -1058,6 +1058,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   g_autoptr(GString) vulkan_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autofree gchar *localedef = NULL;
+  g_autofree gchar *ldconfig = NULL;
   g_autofree gchar *dir_on_host = NULL;
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
@@ -1533,7 +1534,20 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           flatpak_bwrap_add_args (bwrap,
                                   "--symlink", target,
-                                      "/overrides/bin/localedef",
+                                  "/overrides/bin/localedef",
+                                  NULL);
+        }
+
+      ldconfig = g_find_program_in_path ("ldconfig");
+
+      if (ldconfig == NULL)
+        {
+          g_warning ("Cannot find ldconfig in PATH");
+        }
+      else
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", ldconfig, "/sbin/ldconfig",
                                   NULL);
         }
     }

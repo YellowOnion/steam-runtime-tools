@@ -1071,8 +1071,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   gboolean all_libdrm_from_host = TRUE;
   g_autoptr(GHashTable) libdrm_data_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                        g_free, NULL);
+  g_autoptr(GHashTable) gconv_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                 g_free, NULL);
   g_autofree gchar *libdrm_data_in_runtime = NULL;
   g_autofree gchar *best_libdrm_data_from_host = NULL;
+  GHashTableIter iter;
+  const gchar *gconv_path;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
@@ -1334,6 +1338,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
               g_autofree gchar *ld_so_in_host = NULL;
+              g_autofree char *libc_target = NULL;
 
               g_debug ("Making host ld.so visible in container");
 
@@ -1381,6 +1386,48 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                 return FALSE;
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+              libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
+              if (libc_target != NULL)
+                {
+                  g_autofree gchar *dir = NULL;
+                  g_autofree gchar *gconv_dir_in_host = NULL;
+                  gboolean found = FALSE;
+
+                  dir = g_path_get_dirname (libc_target);
+
+                  if (g_str_has_prefix (dir, "/run/host/"))
+                    memmove (dir, dir + strlen ("/run/host"), strlen (dir) - strlen ("/run/host") + 1);
+
+                  /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
+                   * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
+                   * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
+                   * had its default value "$(libdir)/gconv". */
+                  gconv_dir_in_host = g_build_filename (dir, "gconv", NULL);
+
+                  if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
+                    {
+                      g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
+                      found = TRUE;
+                    }
+                  else if (!g_str_has_prefix (dir, "/usr/"))
+                    {
+                      g_free (gconv_dir_in_host);
+                      gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
+                      if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
+                        {
+                          g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
+                          found = TRUE;
+                        }
+                    }
+
+                  if (!found)
+                    {
+                      g_debug ("We were expecting to have the gconv modules directory in the "
+                               "host to be located in \"%s\", but instead it is missing",
+                               gconv_dir_in_host);
+                    }
+                }
 
               self->any_libc_from_host = TRUE;
             }
@@ -1550,10 +1597,31 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                   "--ro-bind", ldconfig, "/sbin/ldconfig",
                                   NULL);
         }
+
+      g_debug ("Making host gconv modules visible in container");
+
+      g_hash_table_iter_init (&iter, gconv_from_host);
+      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
+        {
+          g_autofree gchar *gconv_in_runtime = NULL;
+
+          if (g_str_has_prefix (gconv_path, "/usr/"))
+            gconv_in_runtime = g_build_filename (self->runtime_usr, gconv_path + strlen ("/usr"), NULL);
+          else
+            gconv_in_runtime = g_build_filename (self->runtime_usr, gconv_path, NULL);
+
+          if (g_file_test (gconv_in_runtime, G_FILE_TEST_IS_DIR))
+            {
+              flatpak_bwrap_add_args (bwrap,
+                                      "--ro-bind", gconv_path, gconv_path,
+                                      NULL);
+            }
+        }
     }
   else
     {
       g_debug ("Using included locale data from container");
+      g_debug ("Using included gconv modules from container");
     }
 
   if (g_hash_table_size (libdrm_data_from_host) > 0 && !all_libdrm_from_host)

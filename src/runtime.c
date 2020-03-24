@@ -1059,6 +1059,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   gboolean any_architecture_works = FALSE;
   g_autofree gchar *localedef = NULL;
   g_autofree gchar *ldconfig = NULL;
+  g_autofree gchar *locale = NULL;
   g_autofree gchar *dir_on_host = NULL;
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
@@ -1582,6 +1583,23 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           flatpak_bwrap_add_args (bwrap,
                                   "--symlink", target,
                                   "/overrides/bin/localedef",
+                                  NULL);
+        }
+
+      locale = g_find_program_in_path ("locale");
+
+      if (locale == NULL)
+        {
+          g_warning ("Cannot find locale in PATH");
+        }
+      else
+        {
+          g_autofree gchar *target = g_build_filename ("/run/host",
+                                                       locale, NULL);
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", target,
+                                  "/overrides/bin/locale",
                                   NULL);
         }
 

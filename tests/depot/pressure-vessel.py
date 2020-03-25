@@ -410,19 +410,10 @@ class TestPressureVessel(unittest.TestCase):
             elif self.runtime_suite == 'soldier':
                 self.assertEqual('2', parsed['os-release']['version_id'])
 
-            if self.runtime_suite == 'scout':
-                # Older versions of base-files didn't have version_codename
-                if 'version_codename' in parsed['os-release']:
-                    self.assertEqual(
-                        'scout',
-                        parsed['os-release']['version_codename'],
-                    )
-            else:
-                self.assertEqual(
-                    self.runtime_suite,
-                    parsed['os-release']['version_codename'],
-                )
-
+            self.assertEqual(
+                self.runtime_suite,
+                parsed['os-release']['version_codename'],
+            )
             self.assertEqual(
                 self.runtime_build_id,
                 parsed['os-release']['build_id'],

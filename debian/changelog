@@ -1,4 +1,4 @@
-pressure-vessel (0.20200317.0) UNRELEASED; urgency=medium
+pressure-vessel (0.20200325.0) UNRELEASED; urgency=medium
 
   [ Jeremy Whiting ]
   * Add --test command line argument to pressure-vessel-wrap.
@@ -6,6 +6,8 @@ pressure-vessel (0.20200317.0) UNRELEASED; urgency=medium
     0 if found, 1 otherwise.
 
   [ Ludovico de Nittis ]
+  * Bind the host's ldconfig, gconv modules, locale(1) if we already use
+    libc from the host
   * wrap: mount /usr/share/libdrm if using host libdrm
   * README: update scout download URL
   * README: fix scout SDK package name
@@ -46,7 +48,7 @@ pressure-vessel (0.20200317.0) UNRELEASED; urgency=medium
     the version number will be less than a previous version that had a +srt
     suffix added by the Open Build Service.
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 17 Mar 2020 17:23:16 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 25 Mar 2020 18:26:44 +0000
 
 pressure-vessel (0.20200108.0-0+steamrt1.1) scout; urgency=medium
 

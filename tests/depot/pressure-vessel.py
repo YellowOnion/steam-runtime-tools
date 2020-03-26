@@ -419,6 +419,10 @@ class TestPressureVessel(unittest.TestCase):
 
         for arch in self.dpkg_architectures:
             if arch == 'i386':
+                if self.runtime_suite == 'heavy':
+                    # heavy doesn't fully support i386
+                    continue
+
                 multiarch = 'i386-linux-gnu'
             elif arch == 'amd64':
                 multiarch = 'x86_64-linux-gnu'

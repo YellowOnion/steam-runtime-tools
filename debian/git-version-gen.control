@@ -1,3 +1,0 @@
-Upstream: yes
-Build-Suffix: +srt
-Avoid-Build-Suffix: +vcs

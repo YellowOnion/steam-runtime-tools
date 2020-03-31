@@ -1,8 +1,9 @@
-steam-runtime-tools (0.20200331.1-0+steamrt1.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200331.1-0+steamrt1.1) scout; urgency=medium
 
   * Fix version number
+  * Update symbols file
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 31 Mar 2020 20:51:36 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 31 Mar 2020 21:00:28 +0100
 
 steam-runtime-tools (0.20200331.0-0+steamrt1.1) scout; urgency=medium
 

@@ -1,4 +1,4 @@
-pressure-vessel (0.20200325.0) UNRELEASED; urgency=medium
+pressure-vessel (0.20200331.0) scout; urgency=medium
 
   [ Jeremy Whiting ]
   * Add --test command line argument to pressure-vessel-wrap.
@@ -48,7 +48,7 @@ pressure-vessel (0.20200325.0) UNRELEASED; urgency=medium
     the version number will be less than a previous version that had a +srt
     suffix added by the Open Build Service.
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 25 Mar 2020 18:26:44 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 31 Mar 2020 20:39:16 +0100
 
 pressure-vessel (0.20200108.0-0+steamrt1.1) scout; urgency=medium
 

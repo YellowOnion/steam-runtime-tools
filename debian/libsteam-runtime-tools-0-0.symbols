@@ -10,6 +10,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_dri_driver_get_library_path@Base 0.20200109.0
  srt_dri_driver_get_type@Base 0.20200109.0
  srt_dri_driver_is_extra@Base 0.20200109.0
+ srt_dri_driver_resolve_library_path@Base 0.20200331.1
  srt_driver_flags_get_type@Base 0.20200109.0
  srt_egl_icd_check_error@Base 0.20190926.0
  srt_egl_icd_get_json_path@Base 0.20190926.0
@@ -109,10 +110,12 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_va_api_driver_get_library_path@Base 0.20200109.0
  srt_va_api_driver_get_type@Base 0.20200109.0
  srt_va_api_driver_is_extra@Base 0.20200109.0
+ srt_va_api_driver_resolve_library_path@Base 0.20200331.1
  srt_vdpau_driver_get_library_link@Base 0.20200306.0
  srt_vdpau_driver_get_library_path@Base 0.20200306.0
  srt_vdpau_driver_get_type@Base 0.20200306.0
  srt_vdpau_driver_is_extra@Base 0.20200306.0
+ srt_vdpau_driver_resolve_library_path@Base 0.20200331.1
  srt_vulkan_icd_check_error@Base 0.20190926.0
  srt_vulkan_icd_get_api_version@Base 0.20190926.0
  srt_vulkan_icd_get_json_path@Base 0.20190926.0

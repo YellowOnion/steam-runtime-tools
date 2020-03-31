@@ -1,6 +1,6 @@
 /*<private_header>*/
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,8 +31,32 @@
 #include <glib.h>
 #include <glib-object.h>
 
+/*
+ * _srt_library_new:
+ *
+ * Returns: (transfer full): A new #SrtSteam
+ */
+static inline SrtSteam *_srt_steam_new (SrtSteamIssues issues,
+                                        const char *install_path,
+                                        const char *data_path,
+                                        const char *bin32_path);
+
+#ifndef __GTK_DOC_IGNORE__
+static inline SrtSteam *
+_srt_steam_new (SrtSteamIssues issues,
+                const char *install_path,
+                const char *data_path,
+                const char *bin32_path)
+{
+  return g_object_new (SRT_TYPE_STEAM,
+                       "issues", issues,
+                       "install-path", install_path,
+                       "data-path", data_path,
+                       "bin32-path", bin32_path,
+                       NULL);
+}
+#endif
+
 G_GNUC_INTERNAL
 SrtSteamIssues _srt_steam_check (const GStrv env,
-                                 gchar **install_path_out,
-                                 gchar **data_path_out,
-                                 gchar **bin32_out);
+                                 SrtSteam **more_details_out);

@@ -104,6 +104,7 @@ struct _SrtSystemInfo
    * shouldn't matter, or %NULL to use the compiled-in default */
   GQuark primary_multiarch_tuple;
   GHashTable *cached_hidden_deps;
+  SrtSteam *steam_data;
   struct
   {
     /* GQuark => MaybeLocale */
@@ -111,15 +112,6 @@ struct _SrtSystemInfo
     SrtLocaleIssues issues;
     gboolean have_issues;
   } locales;
-  struct
-  {
-    /* install_path != NULL or issues != NONE indicates we have already
-     * checked the Steam installation */
-    gchar *install_path;
-    gchar *data_path;
-    gchar *bin32;
-    SrtSteamIssues issues;
-  } steam;
   struct
   {
     /* path != NULL or issues != NONE indicates we have already checked
@@ -401,10 +393,9 @@ static void
 forget_steam (SrtSystemInfo *self)
 {
   forget_runtime (self);
-  self->steam.issues = SRT_STEAM_ISSUES_NONE;
-  g_clear_pointer (&self->steam.install_path, g_free);
-  g_clear_pointer (&self->steam.data_path, g_free);
-  g_clear_pointer (&self->steam.bin32, g_free);
+  if (self->steam_data != NULL)
+    g_object_unref (self->steam_data);
+  self->steam_data = NULL;
 }
 
 /*
@@ -1626,13 +1617,8 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
 static void
 ensure_steam_cached (SrtSystemInfo *self)
 {
-  if (self->steam.issues == SRT_STEAM_ISSUES_NONE &&
-      self->steam.install_path == NULL &&
-      self->steam.data_path == NULL)
-    self->steam.issues = _srt_steam_check (self->env,
-                                           &self->steam.install_path,
-                                           &self->steam.data_path,
-                                           &self->steam.bin32);
+  if (self->steam_data == NULL)
+    _srt_steam_check (self->env, &self->steam_data);
 }
 
 /**
@@ -1651,7 +1637,7 @@ srt_system_info_get_steam_issues (SrtSystemInfo *self)
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
 
   ensure_steam_cached (self);
-  return self->steam.issues;
+  return srt_steam_get_issues (self->steam_data);
 }
 
 /**
@@ -1693,7 +1679,7 @@ srt_system_info_dup_steam_installation_path (SrtSystemInfo *self)
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
   ensure_steam_cached (self);
-  return g_strdup (self->steam.install_path);
+  return g_strdup (srt_steam_get_install_path (self->steam_data));
 }
 
 /**
@@ -1735,7 +1721,7 @@ srt_system_info_dup_steam_data_path (SrtSystemInfo *self)
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
   ensure_steam_cached (self);
-  return g_strdup (self->steam.data_path);
+  return g_strdup (srt_steam_get_data_path (self->steam_data));
 }
 
 static void
@@ -2083,7 +2069,7 @@ ensure_runtime_cached (SrtSystemInfo *self)
         }
       else
         {
-          self->runtime.issues = _srt_runtime_check (self->steam.bin32,
+          self->runtime.issues = _srt_runtime_check (srt_steam_get_bin32_path (self->steam_data),
                                                      self->runtime.expected_version,
                                                      self->env,
                                                      &self->runtime.version,

@@ -29,6 +29,20 @@
 #error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
 #endif
 
+#include <glib.h>
+#include <glib-object.h>
+
+typedef struct _SrtSteam SrtSteam;
+typedef struct _SrtSteamClass SrtSteamClass;
+
+#define SRT_TYPE_STEAM srt_steam_get_type ()
+#define SRT_STEAM(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_STEAM, SrtSteam))
+#define SRT_STEAM_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_STEAM, SrtSteamClass))
+#define SRT_IS_STEAM(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_STEAM))
+#define SRT_IS_STEAM_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_STEAM))
+#define SRT_STEAM_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_STEAM, SrtSteamClass)
+GType srt_steam_get_type (void);
+
 /**
  * SrtSteamIssues:
  * @SRT_STEAM_ISSUES_NONE: There are no problems
@@ -74,3 +88,8 @@ typedef enum
   SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY = (1 << 6),
   SRT_STEAM_ISSUES_NONE = 0
 } SrtSteamIssues;
+
+SrtSteamIssues srt_steam_get_issues (SrtSteam *self);
+const char *srt_steam_get_install_path (SrtSteam *self);
+const char *srt_steam_get_data_path (SrtSteam *self);
+const char *srt_steam_get_bin32_path (SrtSteam *self);

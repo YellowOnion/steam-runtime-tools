@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -33,6 +33,7 @@
 
 #include <glib.h>
 
+#include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/utils.h"
 
@@ -46,23 +47,237 @@
  * installation.
  */
 
-/*
- * _srt_steam_check:
- * @environ: (nullable): The list of environment variables to use.
- * @install_path_out: (out) (optional) (nullable) (type filename):
- *  Used to return the absolute path to the Steam installation
- * @data_path_out: (out) (optional) (nullable) (type filename):
- *  Used to return the absolute path to the Steam data directory,
- *  which is usually the same as @install_path_out, but may be different
- *  while testing a new Steam release
- * @bin32_out: (out) (optional) (nullable) (type filename):
- *  Used to return the absolute path to `ubuntu12_32`
+struct _SrtSteam
+{
+  /*< private >*/
+  GObject parent;
+  SrtSteamIssues issues;
+  gchar *install_path;
+  gchar *data_path;
+  gchar *bin32_path;
+};
+
+struct _SrtSteamClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum {
+  PROP_0,
+  PROP_ISSUES,
+  PROP_INSTALL_PATH,
+  PROP_DATA_PATH,
+  PROP_BIN32_PATH,
+  N_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtSteam, srt_steam, G_TYPE_OBJECT)
+
+static void
+srt_steam_init (SrtSteam *self)
+{
+}
+
+static void
+srt_steam_get_property (GObject *object,
+                        guint prop_id,
+                        GValue *value,
+                        GParamSpec *pspec)
+{
+  SrtSteam *self = SRT_STEAM (object);
+
+  switch (prop_id)
+    {
+      case PROP_ISSUES:
+        g_value_set_flags (value, self->issues);
+        break;
+
+      case PROP_INSTALL_PATH:
+        g_value_set_string (value, self->install_path);
+        break;
+
+      case PROP_DATA_PATH:
+        g_value_set_string (value, self->data_path);
+        break;
+
+      case PROP_BIN32_PATH:
+        g_value_set_string (value, self->bin32_path);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_steam_set_property (GObject *object,
+                        guint prop_id,
+                        const GValue *value,
+                        GParamSpec *pspec)
+{
+  SrtSteam *self = SRT_STEAM (object);
+
+  switch (prop_id)
+    {
+      case PROP_ISSUES:
+        /* Construct-only */
+        g_return_if_fail (self->issues == 0);
+        self->issues = g_value_get_flags (value);
+        break;
+
+      case PROP_INSTALL_PATH:
+        /* Construct only */
+        g_return_if_fail (self->install_path == NULL);
+        self->install_path = g_value_dup_string (value);
+        break;
+
+      case PROP_DATA_PATH:
+        /* Construct only */
+        g_return_if_fail (self->data_path == NULL);
+        self->data_path = g_value_dup_string (value);
+        break;
+
+      case PROP_BIN32_PATH:
+        /* Construct only */
+        g_return_if_fail (self->bin32_path == NULL);
+        self->bin32_path = g_value_dup_string (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_steam_finalize (GObject *object)
+{
+  SrtSteam *self = SRT_STEAM (object);
+
+  g_free (self->install_path);
+  g_free (self->data_path);
+  g_free (self->bin32_path);
+
+  G_OBJECT_CLASS (srt_steam_parent_class)->finalize (object);
+}
+
+static GParamSpec *properties[N_PROPERTIES] = { NULL };
+
+static void
+srt_steam_class_init (SrtSteamClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_steam_get_property;
+  object_class->set_property = srt_steam_set_property;
+  object_class->finalize = srt_steam_finalize;
+
+  properties[PROP_ISSUES] =
+    g_param_spec_flags ("issues", "Issues", "Problems with the steam installation",
+                        SRT_TYPE_STEAM_ISSUES, SRT_STEAM_ISSUES_NONE,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_INSTALL_PATH] =
+    g_param_spec_string ("install-path", "Install path",
+                         "Absolute path to the Steam installation",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_DATA_PATH] =
+    g_param_spec_string ("data-path", "Data path",
+                         "Absolute path to the Steam data directory, which is usually "
+                         "the same as install-path, but may be different while "
+                         "testing a new Steam release",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_BIN32_PATH] =
+    g_param_spec_string ("bin32-path", "Bin32 path",
+                         "Absolute path to `ubuntu12_32`",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_PROPERTIES, properties);
+}
+
+/**
+ * srt_steam_get_issues:
+ * @self: The #SrtSteam object
+ *
+ * Return the problems found in @self.
+ *
+ * Returns: A bitfield containing problems, or %SRT_STEAM_ISSUES_NONE
+ *  if no problems were found
  */
 SrtSteamIssues
-_srt_steam_check (const GStrv environ,
-                  gchar **install_path_out,
-                  gchar **data_path_out,
-                  gchar **bin32_out)
+srt_steam_get_issues (SrtSteam *self)
+{
+  g_return_val_if_fail (SRT_IS_STEAM (self), SRT_STEAM_ISSUES_INTERNAL_ERROR);
+  return self->issues;
+}
+/**
+ * srt_steam_get_install_path:
+ * @self: The #SrtSteam object
+ *
+ * Returns: (nullable) (type filename): The absolute path to the Steam
+ *  installation, which is valid as long as @self is not destroyed.
+ */
+const char *
+srt_steam_get_install_path (SrtSteam *self)
+{
+  g_return_val_if_fail (SRT_IS_STEAM (self), NULL);
+  return self->install_path;
+}
+
+/**
+ * srt_steam_get_data_path:
+ * @self: The #SrtSteam object
+ *
+ * Used to return the absolute path to the Steam data directory, which
+ * is usually the same as `srt_steam_get_install_path`, but may be different
+ * while testing a new Steam release.
+ *
+ * Returns: (nullable) (type filename): The absolute path to the Steam data
+ *  directory, which is valid as long as @self is not destroyed.
+ */
+const char *
+srt_steam_get_data_path (SrtSteam *self)
+{
+  g_return_val_if_fail (SRT_IS_STEAM (self), NULL);
+  return self->data_path;
+}
+
+/**
+ * srt_steam_get_bin32_path:
+ * @self: The #SrtSteam object
+ *
+ * Returns: (nullable) (type filename): The absolute path to `ubuntu12_32`,
+ *  which is valid as long as @self is not destroyed.
+ */
+const char *
+srt_steam_get_bin32_path (SrtSteam *self)
+{
+  g_return_val_if_fail (SRT_IS_STEAM (self), NULL);
+  return self->bin32_path;
+}
+
+/**
+ * _srt_steam_check:
+ * @my_environ: (nullable): The list of environment variables to use.
+ * @more_details_out: (out) (optional) (transfer full): Used to return an
+ *  #SrtSteam object representing information about the current Steam
+ *  installation. Free with `g_object_unref()`.
+ *
+ * Returns: A bitfield containing problems, or %SRT_STEAM_ISSUES_NONE
+ *  if no problems were found
+ */
+SrtSteamIssues
+_srt_steam_check (const GStrv my_environ,
+                  SrtSteam **more_details_out)
 {
   SrtSteamIssues issues = SRT_STEAM_ISSUES_NONE;
   gchar *dot_steam_bin32 = NULL;
@@ -78,14 +293,10 @@ _srt_steam_check (const GStrv environ,
 
   g_return_val_if_fail (_srt_check_not_setuid (),
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (install_path_out == NULL || *install_path_out == NULL,
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (data_path_out == NULL || *data_path_out == NULL,
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (bin32_out == NULL || *bin32_out == NULL,
+  g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
 
-  env = (environ == NULL) ? g_get_environ () : g_strdupv (environ);
+  env = (my_environ == NULL) ? g_get_environ () : g_strdupv (my_environ);
 
   home = g_environ_getenv (env, "HOME");
   user_data = g_environ_getenv (env, "XDG_DATA_HOME");
@@ -256,17 +467,13 @@ _srt_steam_check (const GStrv environ,
       g_debug ("Found Steam data at %s", data_path);
     }
 
-  /* We can't just transfer ownership here, because in the older GLib
-   * that we're targeting, g_free() and free() are not guaranteed to be
-   * associated with the same memory pool. */
-  if (install_path_out != NULL)
-    *install_path_out = g_strdup (install_path);
 
-  if (data_path_out != NULL)
-    *data_path_out = g_strdup (data_path);
 
-  if (bin32_out != NULL)
-    *bin32_out = g_strdup (bin32);
+  if (more_details_out != NULL)
+    *more_details_out = _srt_steam_new (issues,
+                                        install_path,
+                                        data_path,
+                                        bin32);
 
   free (install_path);
   free (data_path);

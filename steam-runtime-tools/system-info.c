@@ -27,6 +27,7 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
+#include "steam-runtime-tools/desktop-entry-internal.h"
 #include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
@@ -148,6 +149,11 @@ struct _SrtSystemInfo
     gchar *host_directory;
     gboolean have_data;
   } container;
+  struct
+  {
+    GList *values;
+    gboolean have_data;
+  } desktop_entry;
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
@@ -342,6 +348,14 @@ srt_system_info_set_property (GObject *object,
     }
 }
 
+static void
+forget_desktop_entries (SrtSystemInfo *self)
+{
+  self->desktop_entry.have_data = FALSE;
+  g_list_free_full (self->desktop_entry.values, g_object_unref);
+  self->desktop_entry.values = NULL;
+}
+
 /*
  * Forget any cached information about container information.
  */
@@ -441,6 +455,7 @@ srt_system_info_finalize (GObject *object)
 {
   SrtSystemInfo *self = SRT_SYSTEM_INFO (object);
 
+  forget_desktop_entries (self);
   forget_container_info (self);
   forget_icds (self);
   forget_locales (self);
@@ -2968,4 +2983,54 @@ srt_system_info_dup_container_host_directory (SrtSystemInfo *self)
 
   ensure_container_info (self);
   return g_strdup (self->container.host_directory);
+}
+
+static void
+ensure_desktop_entries (SrtSystemInfo *self)
+{
+  if (self->desktop_entry.have_data)
+    return;
+
+  g_assert (self->desktop_entry.values == NULL);
+
+  self->desktop_entry.values = _srt_list_steam_desktop_entries ();
+  self->desktop_entry.have_data = TRUE;
+}
+
+/**
+ * srt_system_info_list_desktop_entries:
+ * @self: The #SrtSystemInfo object
+ *
+ * List all the available desktop applications that are able to handle the
+ * type "x-scheme-handler/steam".
+ *
+ * This function will also search for well known desktop applications ID like
+ * the Flathub `com.valvesoftware.Steam.desktop` and they'll be included even
+ * if they are not able to handle the `steam:` URI.
+ * Using `srt_desktop_entry_is_steam_handler()` it is possible to filter them out.
+ *
+ * The returned list is in no particular order.
+ *
+ * Please note that the environment variables of the current process will be used.
+ * Any possible custom environ set with `srt_system_info_set_environ()` will be
+ * ignored.
+ *
+ * Returns: (transfer full) (element-type SrtDesktopEntry) (nullable): A list of
+ *  opaque #SrtDesktopEntry objects or %NULL if nothing was found. Free with
+ *  `g_list_free_full (entries, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_desktop_entries (SrtSystemInfo *self)
+{
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_desktop_entries (self);
+
+  for (iter = self->desktop_entry.values; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
 }

@@ -32,6 +32,7 @@
 #include <string.h>
 
 #include <glib.h>
+#include <gio/gio.h>
 
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-compat.h"
@@ -272,6 +273,9 @@ srt_steam_get_bin32_path (SrtSteam *self)
  *  #SrtSteam object representing information about the current Steam
  *  installation. Free with `g_object_unref()`.
  *
+ * Please note that @my_environ can't be used when checking the default
+ * desktop entry that handles `steam:` URIs.
+ *
  * Returns: A bitfield containing problems, or %SRT_STEAM_ISSUES_NONE
  *  if no problems were found
  */
@@ -284,12 +288,18 @@ _srt_steam_check (const GStrv my_environ,
   gchar *dot_steam_steam = NULL;
   gchar *dot_steam_root = NULL;
   gchar *default_steam_path = NULL;
+  GAppInfo *default_app = NULL;
   char *install_path = NULL;
   char *data_path = NULL;
   char *bin32 = NULL;
   const char *home = NULL;
   const char *user_data = NULL;
+  const char *steam_script = NULL;
+  const char *commandline = NULL;
+  const char *executable = NULL;
+  const char *app_id = NULL;
   GStrv env = NULL;
+  GError *error = NULL;
 
   g_return_val_if_fail (_srt_check_not_setuid (),
                         SRT_STEAM_ISSUES_INTERNAL_ERROR);
@@ -467,7 +477,82 @@ _srt_steam_check (const GStrv my_environ,
       g_debug ("Found Steam data at %s", data_path);
     }
 
+  default_app = g_app_info_get_default_for_uri_scheme ("steam");
 
+  if (default_app == NULL)
+    {
+      g_debug ("There isn't a default app that can handle `steam:` URLs");
+      issues |= SRT_STEAM_ISSUES_MISSING_STEAM_URI_HANDLER;
+    }
+  else
+    {
+      executable = g_app_info_get_executable (default_app);
+      commandline = g_app_info_get_commandline (default_app);
+      app_id = g_app_info_get_id (default_app);
+      gboolean found_expected_steam_uri_handler = FALSE;
+
+      if (commandline != NULL)
+        {
+          gchar **argvp;
+          if (g_shell_parse_argv (commandline, NULL, &argvp, &error))
+            {
+              const char *const expectations[] = { executable, "%U", NULL };
+              gsize i;
+              for (i = 0; argvp[i] != NULL && expectations[i] != NULL; i++)
+                {
+                  if (g_strcmp0 (argvp[i], expectations[i]) != 0)
+                    break;
+                }
+
+              if (argvp[i] == NULL && expectations[i] == NULL)
+                found_expected_steam_uri_handler = TRUE;
+
+              g_strfreev (argvp);
+            }
+          else
+            {
+              g_debug ("Cannot parse \"Exec=%s\" like a shell would: %s", commandline, error->message);
+              g_clear_error (&error);
+            }
+        }
+
+      /* Exclude the special case `/usr/bin/env steam %U` that we use in our unit tests */
+      if (!found_expected_steam_uri_handler && (g_strcmp0 (commandline, "/usr/bin/env steam %U") != 0))
+        issues |= SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER;
+
+      if (g_strcmp0 (app_id, "steam.desktop") != 0 && g_strcmp0 (app_id, "com.valvesoftware.Steam.desktop") != 0)
+        {
+          g_debug ("The default Steam app handler id is not what we expected: %s", app_id ? app_id : "NULL");
+          issues |= SRT_STEAM_ISSUES_UNEXPECTED_STEAM_DESKTOP_ID;
+        }
+    }
+
+  steam_script = g_environ_getenv (env, "STEAMSCRIPT");
+  if (steam_script == NULL)
+    {
+      g_debug ("\"STEAMSCRIPT\" environment variable is missing");
+      issues |= SRT_STEAM_ISSUES_STEAMSCRIPT_NOT_IN_ENVIRONMENT;
+
+      if (executable != NULL &&
+          g_strcmp0 (executable, "/usr/bin/steam") != 0 &&
+          /* Arch Linux steam.desktop */
+          g_strcmp0 (executable, "/usr/bin/steam-runtime") != 0 &&
+          /* Debian steam.desktop */
+          g_strcmp0 (executable, "/usr/games/steam"))
+        {
+          g_debug ("The default Steam app executable is not what we expected: %s", executable);
+          issues |= SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER;
+        }
+    }
+  else
+    {
+      if (g_strcmp0 (executable, steam_script) != 0)
+        {
+          g_debug ("Unexpectedly \"STEAMSCRIPT\" environment variable and the default Steam app "
+                   "executable point to different paths: \"%s\" and \"%s\"", steam_script, executable);
+          issues |= SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER;
+        }
+    }
 
   if (more_details_out != NULL)
     *more_details_out = _srt_steam_new (issues,

@@ -630,6 +630,28 @@ keys:
     :   Vulkan API version implemented by this ICD as a dotted-decimal
         string, for example **1.1.90**
 
+**desktop-entries**
+:   An array of objects describing the Steam related desktop entries
+    that have been found.
+    Every object can have the following keys:
+
+    **id**
+    :   A string with the ID of the application entry, such as `steam.desktop`.
+
+    **commandline**
+    :   A string with which the application will be started, such as
+        `/usr/bin/steam %U`.
+
+    **filename**
+    :   Absolute path to the desktop entry file.
+
+    **default_steam_uri_handler**
+    :   A boolean value indicating whether this entry is the default used
+        to open `steam:` URIs.
+
+    **steam_uri_handler**
+    :   A boolean value indicating whether this entry can open `steam:` URIs.
+
 # EXIT STATUS
 
 0

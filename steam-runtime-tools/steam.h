@@ -70,6 +70,16 @@ GType srt_steam_get_type (void);
  *  neither a directory nor a symbolic link to a directory.
  *  Steam is unlikely to work in this situation.
  *  See srt_system_info_dup_steam_installation_path().
+ * @SRT_STEAM_ISSUES_STEAMSCRIPT_NOT_IN_ENVIRONMENT: The environment
+ *  `STEAMSCRIPT` is not set. Probably it's safe to be considered a minor
+ *  issue.
+ * @SRT_STEAM_ISSUES_MISSING_STEAM_URI_HANDLER: There isn't a default desktop
+ *  application that can handle `steam:` URIs.
+ * @SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER: The default Steam URI
+ *  handler executable is either not what we expected or is different from the
+ *  one `STEAMSCRIPT` points to.
+ * @SRT_STEAM_ISSUES_UNEXPECTED_STEAM_DESKTOP_ID: The default Steam desktop
+ *  application ID is not what we expected.
  *
  * A bitfield with flags representing problems with the Steam
  * installation, or %SRT_STEAM_ISSUES_NONE (which is numerically zero)
@@ -86,6 +96,10 @@ typedef enum
   SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_DIRECTORY = (1 << 4),
   SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_SYMLINK = (1 << 5),
   SRT_STEAM_ISSUES_DOT_STEAM_ROOT_NOT_DIRECTORY = (1 << 6),
+  SRT_STEAM_ISSUES_STEAMSCRIPT_NOT_IN_ENVIRONMENT = (1 << 7),
+  SRT_STEAM_ISSUES_MISSING_STEAM_URI_HANDLER = (1 << 8),
+  SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER = (1 << 9),
+  SRT_STEAM_ISSUES_UNEXPECTED_STEAM_DESKTOP_ID = (1 << 10),
   SRT_STEAM_ISSUES_NONE = 0
 } SrtSteamIssues;
 

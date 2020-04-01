@@ -500,7 +500,7 @@ steam_presence (Fixture *f,
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (NULL);
   fake_home_create_structure (fake_home);
 
   result = g_spawn_sync (NULL,    /* working directory */
@@ -594,7 +594,7 @@ steam_issues (Fixture *f,
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (NULL);
   fake_home->create_pinning_libs = FALSE;
   fake_home->create_steam_symlink = FALSE;
   fake_home->create_steamrt_files = FALSE;

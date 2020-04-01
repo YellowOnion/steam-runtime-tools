@@ -64,3 +64,6 @@
 #if !GLIB_CHECK_VERSION(2, 38, 0)
 #define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
 #endif
+
+gchar *_srt_global_setup_private_xdg_dirs (void);
+gboolean _srt_global_teardown_private_xdg_dirs (void);

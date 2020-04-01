@@ -759,6 +759,7 @@ main (int argc,
   int opt;
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
   GList *icds;
+  GList *desktop_entries;
   const GList *icd_iter;
   SrtDriverFlags extra_driver_flags = SRT_DRIVER_FLAGS_INCLUDE_ALL;
 
@@ -1174,6 +1175,43 @@ main (int argc,
   g_list_free_full (icds, g_object_unref);
   json_builder_end_array (builder);   // vulkan.icds
   json_builder_end_object (builder);  // vulkan
+
+  json_builder_set_member_name (builder, "desktop-entries");
+  json_builder_begin_array (builder);
+    {
+      desktop_entries = srt_system_info_list_desktop_entries (info);
+      for (GList *iter = desktop_entries; iter != NULL; iter = iter->next)
+        {
+          json_builder_begin_object (builder);
+          if (srt_desktop_entry_get_id (iter->data) != NULL)
+            {
+              json_builder_set_member_name (builder, "id");
+              json_builder_add_string_value (builder, srt_desktop_entry_get_id (iter->data));
+            }
+
+          if (srt_desktop_entry_get_commandline (iter->data) != NULL)
+            {
+              json_builder_set_member_name (builder, "commandline");
+              json_builder_add_string_value (builder, srt_desktop_entry_get_commandline (iter->data));
+            }
+
+          if (srt_desktop_entry_get_filename (iter->data) != NULL)
+            {
+              json_builder_set_member_name (builder, "filename");
+              json_builder_add_string_value (builder, srt_desktop_entry_get_filename (iter->data));
+            }
+
+          json_builder_set_member_name (builder, "default_steam_uri_handler");
+          json_builder_add_boolean_value (builder, srt_desktop_entry_is_default_handler (iter->data));
+
+          json_builder_set_member_name (builder, "steam_uri_handler");
+          json_builder_add_boolean_value (builder, srt_desktop_entry_is_steam_handler (iter->data));
+
+          json_builder_end_object (builder);
+        }
+      g_list_free_full (desktop_entries, g_object_unref);
+    }
+  json_builder_end_array (builder);
 
   json_builder_end_object (builder); // End global object
 

@@ -29,6 +29,7 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 tests = [
   'architecture',
+  'desktop-entry',
   'graphics',
   'library',
   'locale',
@@ -39,6 +40,7 @@ tests = [
 
 tests_utils = [
   'fake-home.c',
+  'test-utils.c',
 ]
 
 tests_dir = join_paths(

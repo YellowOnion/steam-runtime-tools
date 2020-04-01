@@ -37,18 +37,34 @@
 
 /**
  * fake_home_new:
+ * @home: (nullable) (type filename): Path to a temporary directory that will
+ *  be used, which must be in a trusted directory (not `/tmp` or `/var/tmp`).
+ *  If it doesn't exist yet, it will be created. If @home is %NULL a
+ *  random temporary directory will be used instead.
  *
  * Create a new #FakeHome object and a temporary folder in the file system
  *
  * Returns: the newely created #FakeHome object
  */
 FakeHome *
-fake_home_new (void)
+fake_home_new (const gchar *home)
 {
   GError *error = NULL;
   FakeHome *fake_home = g_slice_new (FakeHome);
-  fake_home->home = g_dir_make_tmp ("fake-home-XXXXXX", &error);
-  g_assert_no_error (error);
+  if (home)
+    {
+      gchar *dirname = g_path_get_dirname (home);
+      g_assert_cmpstr (dirname, !=, "/tmp");
+      g_assert_cmpstr (dirname, !=, "/var/tmp");
+      fake_home->home = g_strdup (home);
+      g_assert_cmpint (g_mkdir_with_parents (fake_home->home, 0755), ==, 0);
+      g_free (dirname);
+    }
+  else
+    {
+      fake_home->home = g_dir_make_tmp ("fake-home-XXXXXX", &error);
+      g_assert_no_error (error);
+    }
 
   fake_home->create_pinning_libs = TRUE;
   fake_home->create_i386_folders = TRUE;
@@ -59,6 +75,7 @@ fake_home_new (void)
   fake_home->add_environments = TRUE;
   fake_home->has_debian_bug_916303 = FALSE;
   fake_home->testing_beta_client = FALSE;
+  fake_home->create_steam_mime_apps = TRUE;
 
   return fake_home;
 }
@@ -90,8 +107,32 @@ fake_home_create_structure (FakeHome *f)
   gchar *ld_path = NULL;
   gchar *prepended_path = NULL;
   gchar *ubuntu12_32 = NULL;
+  gchar *app_home = NULL;
+  gchar *data_name = NULL;
   GError *error = NULL;
   int saved_errno;
+
+/* Instead of `/usr/bin/steam` we set Exec to `/usr/bin/env steam` because it
+ * needs to point to something that we are sure to have */
+const gchar *steam_data =
+  "[Desktop Entry]\n"
+  "Name=Steam\n"
+  "Exec=/usr/bin/env steam %U\n"
+  "Type=Application\n"
+  "Actions=Library;\n"
+  "MimeType=x-scheme-handler/steam;\n"
+  "\n"
+  "[Desktop Action Library]\n"
+  "Name=Library\n"
+  "Exec=steam steam://open/games";
+
+const gchar *mime_list =
+  "[Default Applications]\n"
+  "x-scheme-handler/steam=steam.desktop;\n";
+
+const gchar *mime_cache =
+  "[MIME Cache]\n"
+  "x-scheme-handler/steam=steam.desktop;\n";
 
   g_return_val_if_fail (f != NULL, FALSE);
 
@@ -274,6 +315,31 @@ fake_home_create_structure (FakeHome *f)
       f->env = g_environ_setenv (f->env, "PATH", prepended_path, TRUE);
     }
 
+  if (f->create_steam_mime_apps)
+    {
+      app_home = g_build_filename (local_share, "applications", NULL);
+      if (g_mkdir_with_parents (app_home, 0755) != 0)
+        goto out;
+
+      /* Instead of `/usr/bin/steam` we set it to `/usr/bin/env`, like the "steam.desktop"
+       * that we are going to create */
+      f->env = g_environ_setenv (f->env, "STEAMSCRIPT", "/usr/bin/env", TRUE);
+
+      data_name = g_build_filename (app_home, "steam.desktop", NULL);
+      g_file_set_contents (data_name, steam_data, -1, &error);
+      g_assert_no_error (error);
+      g_free (data_name);
+
+      data_name = g_build_filename (app_home, "mimeapps.list", NULL);
+      g_file_set_contents (data_name, mime_list, -1, &error);
+      g_assert_no_error (error);
+      g_free (data_name);
+
+      data_name = g_build_filename (app_home, "mimeinfo.cache", NULL);
+      g_file_set_contents (data_name, mime_cache, -1, &error);
+      g_assert_no_error (error);
+    }
+
   ret = TRUE;
 
   out:
@@ -290,6 +356,8 @@ fake_home_create_structure (FakeHome *f)
     g_free (ld_path);
     g_free (prepended_path);
     g_free (ubuntu12_32);
+    g_free (app_home);
+    g_free (data_name);
 
     if (!ret)
       g_warning ("Unable to create directories: %s", g_strerror (saved_errno));

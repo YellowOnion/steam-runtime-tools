@@ -24,6 +24,8 @@
 libsteamrt_sources = [
     'architecture-internal.h',
     'architecture.c',
+    'desktop-entry-internal.h',
+    'desktop-entry.c',
     'graphics-internal.h',
     'graphics.c',
     'library-internal.h',
@@ -43,6 +45,7 @@ libsteamrt_sources = [
 
 libsteamrt_public_headers = [
     'architecture.h',
+    'desktop-entry.h',
     'graphics.h',
     'library.h',
     'locale.h',
@@ -76,7 +79,7 @@ libsteamrt = library(
     '-D_SRT_API_MAJOR="' + api_major + '"',
   ],
   include_directories : project_include_dirs,
-  dependencies : [libdl, threads, libelf, glib, gobject, json_glib],
+  dependencies : [libdl, threads, libelf, gio_unix, glib, gobject, json_glib],
   soversion : abi_major,
   version : abi_major + '.' + abi_minor,
   install : true,

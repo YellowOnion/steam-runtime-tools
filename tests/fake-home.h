@@ -41,6 +41,7 @@ typedef struct
   gboolean add_environments;
   gboolean has_debian_bug_916303;
   gboolean testing_beta_client;
+  gboolean create_steam_mime_apps;
 
   gchar *home;
   gchar *steam_install;
@@ -63,7 +64,7 @@ typedef struct
   GStrv env;
 } FakeHome;
 
-FakeHome * fake_home_new (void);
+FakeHome * fake_home_new (const gchar *home);
 gboolean fake_home_create_structure (FakeHome *fake_home);
 void fake_home_clean_up (FakeHome *f);
 void fake_home_apply_to_system_info (FakeHome *fake_home,

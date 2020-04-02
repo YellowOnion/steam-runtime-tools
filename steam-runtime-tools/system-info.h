@@ -165,6 +165,7 @@ gchar *srt_system_info_dup_runtime_path (SrtSystemInfo *self);
 gchar *srt_system_info_dup_runtime_version (SrtSystemInfo *self);
 
 SrtSteamIssues srt_system_info_get_steam_issues (SrtSystemInfo *self);
+SrtSteam *srt_system_info_get_steam_details (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_installation_path (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_data_path (SrtSystemInfo *self);
 

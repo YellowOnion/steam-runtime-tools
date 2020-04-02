@@ -733,6 +733,7 @@ steam_runtime (Fixture *f,
   SrtSystemInfo *info;
   SrtRuntimeIssues runtime_issues;
   SrtSteamIssues steam_issues;
+  SrtSteam *steam_details;
   gchar *runtime_path = NULL;
   gchar *installation_path = NULL;
   FakeHome *fake_home;
@@ -764,13 +765,21 @@ steam_runtime (Fixture *f,
   /* Check for Steam issues */
   steam_issues = srt_system_info_get_steam_issues (info);
   g_assert_cmpint (steam_issues, ==, SRT_STEAM_ISSUES_NONE);
+  steam_details = srt_system_info_get_steam_details (info);
+  steam_issues = srt_steam_get_issues (steam_details);
+  g_assert_cmpint (steam_issues, ==, SRT_STEAM_ISSUES_NONE);
+  g_object_unref (steam_details);
 
   /* Do the check again, this time using the cache */
   steam_issues = srt_system_info_get_steam_issues (info);
   g_assert_cmpint (steam_issues, ==, SRT_STEAM_ISSUES_NONE);
+  steam_details = srt_system_info_get_steam_details (info);
+  steam_issues = srt_steam_get_issues (steam_details);
+  g_assert_cmpint (steam_issues, ==, SRT_STEAM_ISSUES_NONE);
 
   fake_home_clean_up (fake_home);
   g_object_unref (info);
+  g_object_unref (steam_details);
   g_free (runtime_path);
   g_free (installation_path);
 }

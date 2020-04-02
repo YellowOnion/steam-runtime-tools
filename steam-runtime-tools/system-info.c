@@ -1656,6 +1656,24 @@ srt_system_info_get_steam_issues (SrtSystemInfo *self)
 }
 
 /**
+ * srt_system_info_get_steam_details:
+ * @self: The #SrtSystemInfo object
+ *
+ * Gather and return information about the Steam installation.
+ *
+ * Returns: (transfer full): An #SrtSteam object. Free with
+ *  `g_object_unref ()`.
+ */
+SrtSteam *
+srt_system_info_get_steam_details (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_steam_cached (self);
+  return g_object_ref (self->steam_data);
+}
+
+/**
  * srt_system_info_dup_steam_installation_path:
  * @self: The #SrtSystemInfo object
  *

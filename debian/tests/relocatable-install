@@ -20,7 +20,13 @@ apt-get -y install \
     --output "${AUTOPKGTEST_TMP}/relocatable-install" \
     --archive "${AUTOPKGTEST_TMP}"
 
-./tests/relocatable-install.py "${AUTOPKGTEST_TMP}/relocatable-install"
+if command -v python3.5; then
+   PYTHON=python3.5
+else
+   PYTHON=python3
+fi
+
+"$PYTHON" ./tests/relocatable-install.py "${AUTOPKGTEST_TMP}/relocatable-install"
 
 for archive in "${AUTOPKGTEST_TMP}"/*.tar.*; do
     echo "==== $(basename "$archive") ===="

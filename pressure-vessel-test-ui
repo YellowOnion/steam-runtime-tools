@@ -43,6 +43,8 @@ from gi.repository import Gtk
 
 logger = logging.getLogger('pressure-vessel-test-ui')
 
+assert sys.version_info >= (3, 4), 'Python 3.4+ is required for this script'
+
 
 def tristate_environment(name):
     # type: (str) -> typing.Optional[bool]

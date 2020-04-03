@@ -5,6 +5,7 @@
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -121,6 +122,10 @@ class TestCheapCopy(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    assert sys.version_info >= (3, 5), \
+        'Python 3.5+ is required (configure with -Dpython=python3.5 ' \
+        'if necessary)'
+
     try:
         from tap.runner import TAPTestRunner
     except ImportError:

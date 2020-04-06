@@ -211,7 +211,6 @@ class Gui:
         self.grid.attach(label, 1, row, 1, 1)
         row += 1
 
-
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
         self.xterm_check.set_active(False)
         self.grid.attach(self.xterm_check, 1, row, 1, 1)

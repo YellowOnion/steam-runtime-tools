@@ -77,7 +77,7 @@ setup (Fixture *f,
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
 
-  f->sysroots = g_build_filename (f->srcdir, "sysroots", NULL);
+  f->sysroots = g_build_filename (f->builddir, "sysroots", NULL);
 
   if (g_chdir (f->srcdir) != 0)
     g_error ("chdir %s: %s", f->srcdir, g_strerror (errno));
@@ -2175,7 +2175,10 @@ test_dri_with_env (Fixture *f,
   check_list_extra (va_api, G_N_ELEMENTS(va_api_suffixes)-1, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
-  /* Test relative path */
+  /* Test relative path.
+   * Move to the build directory because otherwise we can't use the relative sysroots path */
+  if (g_chdir (f->builddir) != 0)
+    g_error ("chdir %s: %s", f->builddir, g_strerror (errno));
   g_free (libgl);
   g_free (libgl2);
   g_free (libgl3);
@@ -2448,6 +2451,9 @@ test_vdpau (Fixture *f,
       if (vdpau_relative_path != NULL)
         {
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_relative_path, TRUE);
+          /* Move to the build directory because otherwise we can't use the relative sysroots path */
+          if (g_chdir (f->builddir) != 0)
+            g_error ("chdir %s: %s", f->builddir, g_strerror (errno));
           srt_system_info_set_environ (info, envp);
           vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_NONE);
           check_list_suffixes (vdpau, test->vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);

@@ -71,7 +71,7 @@ setup (Fixture *f,
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
 
-  f->sysroots = g_build_filename (f->srcdir, "sysroots", NULL);
+  f->sysroots = g_build_filename (f->builddir, "sysroots", NULL);
 }
 
 static void

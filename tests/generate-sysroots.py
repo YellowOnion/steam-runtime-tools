@@ -25,6 +25,7 @@
 
 import os
 import argparse
+import shutil
 
 parser = argparse.ArgumentParser()
 parser.add_argument("path")
@@ -37,7 +38,12 @@ if args.install:
 else:
     full_path = args.path
 
-# If the chosen destination 'sysroot' is not yet available we create it
+# We recreate the chosen destination 'sysroot', to avoid potential issues with
+# old files
+try:
+    shutil.rmtree(full_path)
+except FileNotFoundError:
+    pass
 os.makedirs(full_path, mode=0o755, exist_ok=True)
 os.chdir(full_path)
 

@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 try:
@@ -659,6 +660,9 @@ def main():
 
 
 if __name__ == '__main__':
+    assert sys.version_info >= (3, 5), \
+        'Python 3.5+ is required (configure with -Dpython=python3.5 ' \
+        'if necessary)'
     logging.basicConfig()
     main()
 

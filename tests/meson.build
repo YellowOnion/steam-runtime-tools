@@ -64,13 +64,13 @@ install_subdir('fake-steam-runtime', install_dir : tests_dir)
 
 meson.add_postconf_script(
   python.path(),
-  join_paths(meson.source_root(), 'tests', 'generate-sysroots.py'),
+  join_paths(meson.current_source_dir(), 'generate-sysroots.py'),
   join_paths(meson.current_build_dir(), 'sysroots'),
 )
 
 meson.add_install_script(
   python.path(),
-  join_paths(meson.source_root(), 'tests', 'generate-sysroots.py'),
+  join_paths(meson.current_source_dir(), 'generate-sysroots.py'),
   '--install',
   join_paths(tests_dir, 'sysroots'),
 )

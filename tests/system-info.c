@@ -48,6 +48,7 @@ typedef struct
 {
   gchar *srcdir;
   gchar *builddir;
+  gchar *sysroots;
 } Fixture;
 
 typedef struct
@@ -69,6 +70,8 @@ setup (Fixture *f,
 
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
+
+  f->sysroots = g_build_filename (f->builddir, "sysroots", NULL);
 }
 
 static void
@@ -79,6 +82,7 @@ teardown (Fixture *f,
 
   g_free (f->srcdir);
   g_free (f->builddir);
+  g_free (f->sysroots);
 
   /* We expect that fake_home already cleaned this up, but just to be sure we
    * do it too */
@@ -1278,7 +1282,7 @@ os_debian10 (Fixture *f,
   gchar *sysroot;
   gchar *s;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  sysroot = g_build_filename (f->sysroots, "debian10", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1338,7 +1342,7 @@ os_debian_unstable (Fixture *f,
   gchar *sysroot;
   gchar *s;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "debian-unstable", NULL);
+  sysroot = g_build_filename (f->sysroots, "debian-unstable", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1399,7 +1403,7 @@ os_steamrt (Fixture *f,
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
+  sysroot = g_build_filename (f->sysroots, "steamrt", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1477,7 +1481,7 @@ os_steamrt_unofficial (Fixture *f,
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-unofficial", NULL);
+  sysroot = g_build_filename (f->sysroots, "steamrt-unofficial", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1558,7 +1562,7 @@ os_invalid_os_release (Fixture *f,
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "invalid-os-release", NULL);
+  sysroot = g_build_filename (f->sysroots, "invalid-os-release", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1632,7 +1636,7 @@ os_no_os_release (Fixture *f,
   gchar *sysroot;
   gchar *s;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "no-os-release", NULL);
+  sysroot = g_build_filename (f->sysroots, "no-os-release", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1693,7 +1697,7 @@ overrides (Fixture *f,
   gsize i;
   gboolean seen_link;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
+  sysroot = g_build_filename (f->sysroots, "steamrt", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1759,7 +1763,7 @@ overrides_issues (Fixture *f,
   gsize i;
   gboolean seen_link;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt-overrides-issues", NULL);
+  sysroot = g_build_filename (f->sysroots, "steamrt-overrides-issues", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -1819,7 +1823,7 @@ overrides_not_available (Fixture *f,
   gchar **issues;
   gchar *sysroot;
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  sysroot = g_build_filename (f->sysroots, "debian10", NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -2238,7 +2242,7 @@ test_containers (Fixture *f,
 
       g_test_message ("%s: %s", test->sysroot, test->description);
 
-      sysroot = g_build_filename (f->srcdir, "sysroots", test->sysroot, NULL);
+      sysroot = g_build_filename (f->sysroots, test->sysroot, NULL);
 
       info = srt_system_info_new (NULL);
       g_assert_nonnull (info);

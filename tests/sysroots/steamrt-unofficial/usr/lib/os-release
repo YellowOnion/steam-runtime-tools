@@ -1,9 +1,0 @@
-NAME="Steam Runtime"
-VERSION="1 (scout)"
-ID=steamrt
-ID_LIKE=ubuntu
-PRETTY_NAME="Steam Runtime 1 (scout)"
-VERSION_ID="1"
-BUILD_ID="unofficial-0.20190924.0"
-VARIANT=Platform
-VARIANT_ID="com.valvesoftware.steamruntime.platform-amd64_i386-scout"

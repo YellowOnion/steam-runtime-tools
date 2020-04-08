@@ -44,6 +44,7 @@ typedef struct
 {
   gchar *srcdir;
   gchar *builddir;
+  gchar *sysroots;
   gchar *sysroot;
   gchar **fake_icds_envp;
 } Fixture;
@@ -75,6 +76,8 @@ setup (Fixture *f,
 
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
+
+  f->sysroots = g_build_filename (f->builddir, "sysroots", NULL);
 
   if (g_chdir (f->srcdir) != 0)
     g_error ("chdir %s: %s", f->srcdir, g_strerror (errno));
@@ -185,6 +188,7 @@ teardown (Fixture *f,
   g_free (f->srcdir);
   g_free (f->builddir);
   g_free (f->sysroot);
+  g_free (f->sysroots);
   g_strfreev (f->fake_icds_envp);
 }
 
@@ -1910,7 +1914,7 @@ test_dri_debian10 (Fixture *f,
                                            "/lib/x86_64-linux-gnu/dri/radeonsi_drv_video.so",
                                            NULL};
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  sysroot = g_build_filename (f->sysroots, "debian10", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
   envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
@@ -1996,7 +2000,7 @@ test_dri_fedora (Fixture *f,
                                        "/usr/lib64/dri/radeonsi_drv_video.so",
                                        NULL};
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "fedora", NULL);
+  sysroot = g_build_filename (f->sysroots, "fedora", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
   envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
@@ -2046,7 +2050,7 @@ test_dri_ubuntu16 (Fixture *f,
   const gchar *va_api_suffixes[] = {"/lib/mock-ubuntu-64-bit/dri/radeonsi_drv_video.so",
                                     NULL};
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "ubuntu16", NULL);
+  sysroot = g_build_filename (f->sysroots, "ubuntu16", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
   envp = g_environ_setenv (envp, "SRT_TEST_FORCE_ELF", "64", TRUE);
@@ -2123,7 +2127,7 @@ test_dri_with_env (Fixture *f,
       return;
     }
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "no-os-release", NULL);
+  sysroot = g_build_filename (f->sysroots, "no-os-release", NULL);
 
   libgl = g_build_filename (sysroot, "custom_path32", "dri", NULL);
   libva = g_build_filename (sysroot, "custom_path32", "va", NULL);
@@ -2171,7 +2175,10 @@ test_dri_with_env (Fixture *f,
   check_list_extra (va_api, G_N_ELEMENTS(va_api_suffixes)-1, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
-  /* Test relative path */
+  /* Test relative path.
+   * Move to the build directory because otherwise we can't use the relative sysroots path */
+  if (g_chdir (f->builddir) != 0)
+    g_error ("chdir %s: %s", f->builddir, g_strerror (errno));
   g_free (libgl);
   g_free (libgl2);
   g_free (libgl3);
@@ -2232,7 +2239,7 @@ test_dri_flatpak (Fixture *f,
                                     "/usr/lib/mock-abi/GL/lib/dri/r600_drv_video.so",
                                     NULL};
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "flatpak-example", NULL);
+  sysroot = g_build_filename (f->sysroots, "flatpak-example", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
   envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
@@ -2401,7 +2408,7 @@ test_vdpau (Fixture *f,
 
       g_test_message ("%s: %s", test->sysroot, test->description);
 
-      sysroot = g_build_filename (f->srcdir, "sysroots", test->sysroot, NULL);
+      sysroot = g_build_filename (f->sysroots, test->sysroot, NULL);
       envp = g_get_environ ();
       envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
       if (test->vdpau_path_env == NULL)
@@ -2444,6 +2451,9 @@ test_vdpau (Fixture *f,
       if (vdpau_relative_path != NULL)
         {
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_relative_path, TRUE);
+          /* Move to the build directory because otherwise we can't use the relative sysroots path */
+          if (g_chdir (f->builddir) != 0)
+            g_error ("chdir %s: %s", f->builddir, g_strerror (errno));
           srt_system_info_set_environ (info, envp);
           vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_NONE);
           check_list_suffixes (vdpau, test->vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
@@ -2486,7 +2496,7 @@ test_glx_debian (Fixture *f,
   const gchar *glx_paths_x86_64[] = {"/lib/x86_64-linux-gnu/libGLX_mesa.so.0",
                                      NULL};
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  sysroot = g_build_filename (f->sysroots, "debian10", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 
@@ -2536,7 +2546,7 @@ test_glx_container (Fixture *f,
                                      "/lib/x86_64-linux-gnu/libGLX_mesa.so.0",
                                      NULL};
 
-  sysroot = g_build_filename (f->srcdir, "sysroots", "steamrt", NULL);
+  sysroot = g_build_filename (f->sysroots, "steamrt", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
 

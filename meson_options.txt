@@ -32,3 +32,11 @@ option(
   value : '',
   description : 'Debian-style multiarch tuple',
 )
+
+option(
+  'python',
+  type : 'string',
+  value : '',
+  description: 'Search for this Python instead of "python3.5" and "python3"'
+)
+

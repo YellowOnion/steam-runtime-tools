@@ -61,12 +61,19 @@ install_subdir('expectations_with_missings', install_dir : tests_dir)
 # Vulkan *.json files. (The order of EGL *.json files is well-defined.)
 install_subdir('fake-icds', install_dir : tests_dir)
 install_subdir('fake-steam-runtime', install_dir : tests_dir)
-# Instead of doing `install_subdir` for "sysroot" we use a custom install
-# script because with `install_subdir` the symlinks don't get preserved,
-# but instead they are copied as files. And this behavior breaks our tests.
-src = meson.current_source_dir() + '/' + 'sysroots'
-# Note that the `-a` option is Linux specific
-meson.add_install_script('sh', '-c', 'cp -a "$1" "${DESTDIR}/${MESON_INSTALL_PREFIX}/$2"', 'sh', src, tests_dir)
+
+meson.add_postconf_script(
+  python.path(),
+  join_paths(meson.source_root(), 'tests', 'generate-sysroots.py'),
+  join_paths(meson.current_build_dir(), 'sysroots'),
+)
+
+meson.add_install_script(
+  python.path(),
+  join_paths(meson.source_root(), 'tests', 'generate-sysroots.py'),
+  '--install',
+  join_paths(tests_dir, 'sysroots'),
+)
 
 # These are all the same: they just exit 0.
 foreach helper : [

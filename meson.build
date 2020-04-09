@@ -257,7 +257,7 @@ executable(
   dependencies : [
     dependency(
       'steam-runtime-tools-0',
-      version : '>=0.20190926.0',
+      version : '>=0.20200331.1',
       required : true,
       fallback : ['steam-runtime-tools', 'libsteamrt_dep'],
       default_options : ['gtk_doc=false'],

@@ -68,6 +68,7 @@ flatpak-example/usr/lib/mock-abi/vdpau
 flatpak-example/run/host
 invalid-os-release/usr/lib
 invalid-os-release/run/host
+no-os-release/another_custom_path
 no-os-release/custom_path32/dri
 no-os-release/custom_path32/va
 no-os-release/custom_path32/vdpau
@@ -154,6 +155,7 @@ flatpak-example/usr/lib/mock-abi/libvdpau.so.1
 flatpak-example/usr/lib/mock-abi/vdpau/libvdpau_radeonsi.so.1
 flatpak-example/run/host/.exists
 invalid-os-release/run/host/.exists
+no-os-release/another_custom_path/libvdpau_custom.so
 no-os-release/custom_path32/dri/r600_dri.so
 no-os-release/custom_path32/dri/radeon_dri.so
 no-os-release/custom_path32/va/r600_drv_video.so
@@ -170,6 +172,7 @@ no-os-release/usr/lib/dri/radeonsi_dri.so
 no-os-release/usr/lib/libGL.so.1
 no-os-release/usr/lib/libva.so.1
 no-os-release/usr/lib/libvdpau.so.1
+no-os-release/usr/lib/libvdpau_r9000.so
 no-os-release/usr/lib/vdpau/libvdpau_nouveau.so.1
 steamrt/overrides/bin/.keep
 steamrt/overrides/lib/x86_64-linux-gnu/libGLX_custom.so.0

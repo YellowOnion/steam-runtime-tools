@@ -1899,7 +1899,7 @@ test_dri_debian10 (Fixture *f,
   gchar *sysroot;
   GList *dri;
   GList *va_api;
-  const gchar *multiarch_tuples[] = {"mock-debian-i386", "mock-debian-x86_64", NULL};
+  const gchar *multiarch_tuples[] = {"i386-mock-debian", "x86_64-mock-debian", NULL};
   const gchar *dri_suffixes_i386[] = {"/lib/i386-linux-gnu/dri/i965_dri.so",
                                       "/lib/i386-linux-gnu/dri/r300_dri.so",
                                       "/lib/i386-linux-gnu/dri/radeonsi_dri.so",
@@ -1985,7 +1985,7 @@ test_dri_fedora (Fixture *f,
   gchar *sysroot;
   GList *dri;
   GList *va_api;
-  const gchar *multiarch_tuples[] = {"mock-fedora-32-bit", "mock-fedora-64-bit", NULL};
+  const gchar *multiarch_tuples[] = {"i386-mock-fedora", "x86_64-mock-fedora", NULL};
   const gchar *dri_suffixes_32[] = {"/usr/lib/dri/i965_dri.so",
                                     "/usr/lib/dri/r300_dri.so",
                                     "/usr/lib/dri/radeonsi_dri.so",
@@ -2100,7 +2100,7 @@ test_dri_with_env (Fixture *f,
   gchar *libva_combined;
   GList *dri;
   GList *va_api;
-  const gchar *multiarch_tuples[] = {"mock-fedora-32-bit", NULL};
+  const gchar *multiarch_tuples[] = {"i386-mock-fedora", NULL};
   const gchar *dri_suffixes[] = {"/custom_path32/dri/r600_dri.so",
                                  "/custom_path32/dri/radeon_dri.so",
                                  "/custom_path32_2/dri/r300_dri.so",
@@ -2270,15 +2270,17 @@ typedef struct
   const gchar *sysroot;
   const gchar *vdpau_suffixes[5];
   const gchar *vdpau_links[5];
-  const gchar *vdpau_suffixes_extra[5];
+  const gchar *vdpau_suffixes_extra[6];
   const gchar *vdpau_path_env;
+  const gchar *vdpau_driver_env;
+  const gchar *ld_library_path_env;
 } VdpauTest;
 
 static const VdpauTest vdpau_test[] =
 {
   {
     .description = "debian 10 i386",
-    .multiarch_tuple = "mock-debian-i386",
+    .multiarch_tuple = "i386-mock-debian",
     .sysroot = "debian10",
     .vdpau_suffixes =
     {
@@ -2298,7 +2300,7 @@ static const VdpauTest vdpau_test[] =
 
   {
     .description = "debian 10 x86_64",
-    .multiarch_tuple = "mock-debian-x86_64",
+    .multiarch_tuple = "x86_64-mock-debian",
     .sysroot = "debian10",
     .vdpau_suffixes =
     {
@@ -2320,7 +2322,7 @@ static const VdpauTest vdpau_test[] =
 
   {
     .description = "fedora 32 bit",
-    .multiarch_tuple = "mock-fedora-32-bit",
+    .multiarch_tuple = "i386-mock-fedora",
     .sysroot = "fedora",
     .vdpau_suffixes =
     {
@@ -2341,7 +2343,7 @@ static const VdpauTest vdpau_test[] =
 
   {
     .description = "fedora 64 bit",
-    .multiarch_tuple = "mock-fedora-64-bit",
+    .multiarch_tuple = "x86_64-mock-fedora",
     .sysroot = "fedora",
     .vdpau_suffixes =
     {
@@ -2362,7 +2364,7 @@ static const VdpauTest vdpau_test[] =
 
   {
     .description = "vdpau with environment",
-    .multiarch_tuple = "mock-fedora-32-bit",
+    .multiarch_tuple = "i386-mock-fedora",
     .sysroot = "no-os-release",
     .vdpau_suffixes =
     {
@@ -2375,9 +2377,13 @@ static const VdpauTest vdpau_test[] =
       "/custom_path32/vdpau/libvdpau_r600.so.1",
       "/custom_path32/vdpau/libvdpau_radeonsi.so.1",
       "/usr/lib/vdpau/libvdpau_nouveau.so.1",
+      "/another_custom_path/libvdpau_custom.so",
+      "/usr/lib/libvdpau_r9000.so",
       NULL
     },
-    .vdpau_path_env = "custom_path32"
+    .vdpau_path_env = "custom_path32",
+    .vdpau_driver_env = "r9000",
+    .ld_library_path_env = "another_custom_path",
   },
 
   {
@@ -2402,6 +2408,7 @@ test_vdpau (Fixture *f,
       SrtSystemInfo *info;
       gchar **envp;
       gchar *sysroot;
+      gchar *ld_library_path = NULL;
       gchar *vdpau_path = NULL;
       gchar *vdpau_relative_path = NULL;
       GList *vdpau;
@@ -2421,6 +2428,21 @@ test_vdpau (Fixture *f,
           vdpau_relative_path = g_build_filename ("sysroots", test->sysroot, test->vdpau_path_env,
                                                   "vdpau", NULL);
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
+        }
+
+      if (test->vdpau_driver_env == NULL)
+        envp = g_environ_unsetenv (envp, "VDPAU_DRIVER");
+      else
+        envp = g_environ_setenv (envp, "VDPAU_DRIVER", test->vdpau_driver_env, TRUE);
+
+      if (test->ld_library_path_env == NULL)
+        {
+          envp = g_environ_unsetenv (envp, "LD_LIBRARY_PATH");
+        }
+      else
+        {
+          ld_library_path = g_build_filename (sysroot, test->ld_library_path_env, NULL);
+          envp = g_environ_setenv (envp, "LD_LIBRARY_PATH", ld_library_path, TRUE);
         }
 
       info = srt_system_info_new (NULL);
@@ -2464,6 +2486,7 @@ test_vdpau (Fixture *f,
 
       g_object_unref (info);
       g_free (sysroot);
+      g_free (ld_library_path);
       g_free (vdpau_path);
       g_free (vdpau_relative_path);
       g_strfreev (envp);

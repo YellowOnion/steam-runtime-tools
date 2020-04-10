@@ -232,10 +232,10 @@ endforeach
 foreach helper : [
   'mock-abi-inspect-library',
   'mock-bad-wflinfo',
-  'mock-debian-x86_64-inspect-library',
-  'mock-debian-i386-inspect-library',
-  'mock-fedora-64-bit-inspect-library',
-  'mock-fedora-32-bit-inspect-library',
+  'x86_64-mock-debian-inspect-library',
+  'i386-mock-debian-inspect-library',
+  'x86_64-mock-fedora-inspect-library',
+  'i386-mock-fedora-inspect-library',
   'mock-good-wflinfo',
   'mock-mixed-check-gl',
   'mock-software-wflinfo',
@@ -260,6 +260,7 @@ foreach arch : [
   foreach helper : [
     'mock-container-capsule-capture-libs',
     'mock-debian-capsule-capture-libs',
+    'mock-fedora-capsule-capture-libs',
   ]
     executable(
       arch + '-' + helper,

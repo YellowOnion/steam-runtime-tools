@@ -652,6 +652,23 @@ keys:
     **steam_uri_handler**
     :   A boolean value indicating whether this entry can open `steam:` URIs.
 
+**cpu-features**
+:   An object decribing some of the features that the CPU in use supports.
+    Currently it has the following string keys, each with a boolean
+    value indicating whether the CPU feature is present or absent:
+
+    **x86-64**
+    :   Whether the CPU supports the "Long mode", i.e. x86-64 architecture
+        (listed as `lm` in `/proc/cpuinfo`).
+
+    **sse3**
+    :   Whether the CPU supports the SSE3 extension (Streaming SIMD Extensions
+        3, listed as `pni` (Prescott New Instructions) in `/proc/cpuinfo`).
+
+    **cmpxchg16b**
+    :   Whether the CPU supports the CMPXCHG16B instruction
+        (listed as `cx16` in `/proc/cpuinfo`).
+
 # EXIT STATUS
 
 0

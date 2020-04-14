@@ -132,6 +132,8 @@ libraries_presence (Fixture *f,
 
   g_assert_true (json_object_has_member (json, "driver_environment"));
 
+  g_assert_true (json_object_has_member (json, "cpu-features"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 

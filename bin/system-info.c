@@ -252,6 +252,49 @@ jsonify_flags (JsonBuilder *builder,
 }
 
 static void
+jsonify_flags_string_bool_map (JsonBuilder *builder,
+                               GType flags_type,
+                               unsigned int values)
+{
+  GFlagsClass *class;
+  GFlagsValue *flags_value;
+
+  g_return_if_fail (G_TYPE_IS_FLAGS (flags_type));
+
+  class = g_type_class_ref (flags_type);
+
+  for (flags_value = class->values; flags_value->value_name; flags_value++)
+    {
+      /* Skip the numerically zero flag (usually "none") */
+      if (flags_value->value == 0)
+        continue;
+
+      json_builder_set_member_name (builder, flags_value->value_nick);
+      if ((flags_value->value & values) == flags_value->value)
+        {
+          json_builder_add_boolean_value (builder, TRUE);
+          values &= ~flags_value->value;
+        }
+      else
+        {
+          json_builder_add_boolean_value (builder, FALSE);
+        }
+    }
+
+  if (values)
+    {
+      gchar *rest = g_strdup_printf ("0x%x", values);
+
+      json_builder_set_member_name (builder, rest);
+      json_builder_add_boolean_value (builder, TRUE);
+
+      g_free (rest);
+    }
+
+  g_type_class_unref (class);
+}
+
+static void
 jsonify_library_issues (JsonBuilder *builder,
                         SrtLibraryIssues issues)
 {
@@ -304,6 +347,13 @@ jsonify_locale_issues (JsonBuilder *builder,
                        SrtLocaleIssues issues)
 {
   jsonify_flags (builder, SRT_TYPE_LOCALE_ISSUES, issues);
+}
+
+static void
+jsonify_x86_features (JsonBuilder *builder,
+                      SrtX86FeatureFlags features)
+{
+  jsonify_flags_string_bool_map (builder, SRT_TYPE_X86_FEATURE_FLAGS, features);
 }
 
 static void
@@ -743,6 +793,7 @@ main (int argc,
   SrtSteamIssues steam_issues = SRT_STEAM_ISSUES_NONE;
   SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
   SrtLocaleIssues locale_issues = SRT_LOCALE_ISSUES_NONE;
+  SrtX86FeatureFlags x86_features = SRT_X86_FEATURE_NONE;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
@@ -1212,6 +1263,14 @@ main (int argc,
       g_list_free_full (desktop_entries, g_object_unref);
     }
   json_builder_end_array (builder);
+
+  json_builder_set_member_name (builder, "cpu-features");
+  json_builder_begin_object (builder);
+    {
+      x86_features = srt_system_info_get_x86_features (info);
+      jsonify_x86_features (builder, x86_features);
+    }
+  json_builder_end_object (builder);
 
   json_builder_end_object (builder); // End global object
 

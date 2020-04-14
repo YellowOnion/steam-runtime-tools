@@ -27,6 +27,7 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
+#include "steam-runtime-tools/cpu-feature-internal.h"
 #include "steam-runtime-tools/desktop-entry-internal.h"
 #include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/graphics.h"
@@ -154,6 +155,11 @@ struct _SrtSystemInfo
     GList *values;
     gboolean have_data;
   } desktop_entry;
+  struct
+  {
+    SrtX86FeatureFlags x86_features;
+    gboolean have_x86;
+  } cpu_features;
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
@@ -3051,4 +3057,33 @@ srt_system_info_list_desktop_entries (SrtSystemInfo *self)
     ret = g_list_prepend (ret, g_object_ref (iter->data));
 
   return g_list_reverse (ret);
+}
+
+static void
+ensure_x86_features_cached (SrtSystemInfo *self)
+{
+  if (self->cpu_features.have_x86)
+    return;
+
+  self->cpu_features.x86_features = _srt_feature_get_x86_flags ();
+  self->cpu_features.have_x86 = TRUE;
+}
+
+/**
+ * srt_system_info_get_x86_features:
+ * @self: The #SrtSystemInfo object
+ *
+ * Detect and return a list of x86 features that the CPU supports.
+ *
+ * Returns: x86 CPU supported features, or %SRT_X86_FEATURE_NONE
+ *  if none of the checked features are supported.
+ */
+SrtX86FeatureFlags
+srt_system_info_get_x86_features (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_X86_FEATURE_NONE);
+
+  ensure_x86_features_cached (self);
+
+  return self->cpu_features.x86_features;
 }

@@ -32,6 +32,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/cpu-feature.h>
 #include <steam-runtime-tools/graphics.h>
 #include <steam-runtime-tools/library.h>
 #include <steam-runtime-tools/locale.h>
@@ -196,6 +197,8 @@ gchar *srt_system_info_dup_os_version_id (SrtSystemInfo *self);
 gchar **srt_system_info_list_driver_environment (SrtSystemInfo *self);
 
 GList *srt_system_info_list_desktop_entries (SrtSystemInfo *self);
+
+SrtX86FeatureFlags srt_system_info_get_x86_features (SrtSystemInfo *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)

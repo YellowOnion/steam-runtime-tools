@@ -32,23 +32,39 @@ executable(
   install_rpath : bin_rpath,
 )
 
+executable(
+  'steam-runtime-check-requirements',
+  'check-requirements.c',
+  dependencies : [glib, gobject, libsteamrt_dep],
+  install : true,
+  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
+  # LD_LIBRARY_PATH even if set
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
 if get_option('man')
-  custom_target(
-    'steam-runtime-system-info.1',
-    build_by_default : true,
-    command : [
-      pandoc,
-      '-s',
-      '-o', '@OUTPUT@',
-      '-f', pandoc_markdown_nosmart,
-      '-t', 'man',
-      '@INPUT@',
-    ],
-    input : 'system-info.md',
-    output : 'steam-runtime-system-info.1',
-    install : true,
-    install_dir : join_paths(get_option('prefix'), get_option('mandir'), 'man1'),
-  )
+  foreach bin_name : [
+    'check-requirements',
+    'system-info',
+  ]
+    custom_target(
+      'steam-runtime-' + bin_name + '.1',
+      build_by_default : true,
+      command : [
+        pandoc,
+        '-s',
+        '-o', '@OUTPUT@',
+        '-f', pandoc_markdown_nosmart,
+        '-t', 'man',
+        '@INPUT@',
+      ],
+      input : bin_name + '.md',
+      output : 'steam-runtime-' + bin_name + '.1',
+      install : true,
+      install_dir : join_paths(get_option('prefix'), get_option('mandir'), 'man1'),
+    )
+  endforeach
 endif
 
 # vim:set sw=2 sts=2 et:

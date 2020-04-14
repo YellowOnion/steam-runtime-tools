@@ -107,9 +107,10 @@ Description:
  supporting code used by the Steam client to discover system information.
  .
  This package contains symbolic links to libraries depended on by the
- steam-runtime-system-info and libsteam-runtime-tools-0-helpers packages,
- which make it possible to run those tools from an LD_LIBRARY_PATH-style
- Steam Runtime even if the LD_LIBRARY_PATH is not correctly set.
+ steam-runtime-system-info, steam-runtime-check-requirements and
+ libsteam-runtime-tools-0-helpers packages, which make it possible to run
+ those tools from an LD_LIBRARY_PATH-style Steam Runtime even if the
+ LD_LIBRARY_PATH is not correctly set.
 
 Package: libsteam-runtime-tools-0-tests
 Architecture: any
@@ -146,4 +147,5 @@ Description: Steam Runtime utility library - command-line tools
  .
  This package contains the command-line tool steam-runtime-system-info,
  which summarizes everything that the libsteam-runtime-tools library
- can find out.
+ can find out, and steam-runtime-check-requirements, which performs checks
+ to ensure that the Steam client requirements are met.

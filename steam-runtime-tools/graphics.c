@@ -357,6 +357,14 @@ _srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gc
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
 
   JsonNode *node = json_parser_get_root (parser);
+
+  if (node == NULL)
+    {
+      g_debug ("The json output is empty");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
   JsonObject *object = json_node_get_object (node);
   JsonNode *sub_node = NULL;
   JsonObject *sub_object = NULL;
@@ -405,6 +413,14 @@ _srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const g
 
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
   JsonNode *node = json_parser_get_root (parser);
+
+  if (node == NULL)
+    {
+      g_debug ("The json output is empty");
+      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+      return issues;
+    }
+
   JsonObject *object = json_node_get_object (node);
   JsonNode *sub_node = NULL;
   JsonObject *sub_object = NULL;

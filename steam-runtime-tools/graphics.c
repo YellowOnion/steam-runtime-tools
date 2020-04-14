@@ -642,6 +642,49 @@ _argv_for_check_gl (const char *helpers_path,
 }
 
 static GPtrArray *
+_argv_for_list_vdpau_drivers (gchar **envp,
+                              const char *helpers_path,
+                              const char *multiarch_tuple,
+                              const char *temp_dir,
+                              GError **error)
+{
+  const gchar *vdpau_driver = NULL;
+  GPtrArray *argv;
+
+  if (envp != NULL)
+    vdpau_driver = g_environ_getenv (envp, "VDPAU_DRIVER");
+  else
+    vdpau_driver = g_getenv ("VDPAU_DRIVER");
+
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
+                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+
+  if (argv == NULL)
+    return NULL;
+
+  g_ptr_array_add (argv, g_strdup ("--dest"));
+  g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libvdpau_*.so"));
+  /* If the driver is not in the ld.so.cache the wildcard-matching will not find it.
+   * To increase our chances we specifically search for the chosen driver and some
+   * commonly used drivers. */
+  if (vdpau_driver != NULL)
+    {
+      g_ptr_array_add (argv, g_strjoin (NULL,
+                                        "no-dependencies:if-exists:even-if-older:soname:libvdpau_",
+                                        vdpau_driver, ".so", NULL));
+    }
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libvdpau_nouveau.so"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libvdpau_nvidia.so"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libvdpau_r300.so"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libvdpau_r600.so"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libvdpau_radeonsi.so"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libvdpau_va_gl.so"));
+  g_ptr_array_add (argv, NULL);
+  return argv;
+}
+
+static GPtrArray *
 _argv_for_list_glx_icds (const char *helpers_path,
                          const char *multiarch_tuple,
                          const char *temp_dir,
@@ -2811,6 +2854,165 @@ _srt_get_modules_from_path (gchar **envp,
 }
 
 /**
+ * _srt_list_modules_from_directory:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @argv: (array zero-terminated=1) (not nullable): The `argv` of the helper to use
+ * @tmp_directory: (not nullable) (type filename): Full path to the destination
+ *  directory used by the "capsule-capture-libs" helper
+ * @known_table: (not optional): set of library names, plus their links, that
+ *  we already found. Newely found libraries will be added to this list.
+ *  For VDPAU provide a set with just paths where we already looked into, and in
+ *  the VDPAU case the set will not be changed by this function.
+ * @module: Which graphic module to search
+ * @is_extra: If this path should be considered an extra or not. This is used only if
+ *  @module is #SRT_GRAPHICS_VDPAU_MODULE.
+ * @modules_out: (not optional) (inout): Prepend the found modules to this list.
+ *  If @module is #SRT_GRAPHICS_GLX_MODULE, the element-type will be #SrtGlxIcd.
+ *  Otherwise if @module is #SRT_GRAPHICS_VDPAU_MODULE, the element-type will be #SrtVdpauDriver.
+ *
+ * Modules are added to @modules_out in reverse lexicographic order
+ * (`libvdpau_r600.so` is before `libvdpau_r300.so`, which is before `libvdpau_nouveau.so`).
+ */
+static void
+_srt_list_modules_from_directory (gchar **envp,
+                                  GPtrArray *argv,
+                                  const gchar *tmp_directory,
+                                  GHashTable *known_table,
+                                  SrtGraphicsModule module,
+                                  gboolean is_extra,
+                                  GList **modules_out)
+{
+  int exit_status = -1;
+  GError *error = NULL;
+  gchar *stderr = NULL;
+  gchar *output = NULL;
+  GDir *dir_iter = NULL;
+  GPtrArray *members = NULL;
+  const gchar *member;
+  gchar *full_path = NULL;
+  gchar *driver_path = NULL;
+  gchar *driver_directory = NULL;
+  gchar *driver_link = NULL;
+  gchar *soname_path = NULL;
+
+  g_return_if_fail (argv != NULL);
+  g_return_if_fail (tmp_directory != NULL);
+  g_return_if_fail (known_table != NULL);
+  g_return_if_fail (modules_out != NULL);
+
+  if (!g_spawn_sync (NULL,    /* working directory */
+                     (gchar **) argv->pdata,
+                     envp,
+                     G_SPAWN_SEARCH_PATH,       /* flags */
+                     _srt_child_setup_unblock_signals,
+                     NULL,    /* user data */
+                     &output, /* stdout */
+                     &stderr,
+                     &exit_status,
+                     &error))
+    {
+      g_debug ("An error occurred calling the helper: %s", error->message);
+      goto out;
+    }
+
+  if (exit_status != 0)
+    {
+      g_debug ("... wait status %d", exit_status);
+      goto out;
+    }
+
+  dir_iter = g_dir_open (tmp_directory, 0, &error);
+
+  if (dir_iter == NULL)
+    {
+      g_debug ("Failed to open \"%s\": %s", tmp_directory, error->message);
+      goto out;
+    }
+
+  members = g_ptr_array_new_with_free_func (g_free);
+
+  while ((member = g_dir_read_name (dir_iter)) != NULL)
+    g_ptr_array_add (members, g_strdup (member));
+
+  g_ptr_array_sort (members, _srt_indirect_strcmp0);
+
+  for (gsize i = 0; i < members->len; i++)
+    {
+      member = g_ptr_array_index (members, i);
+
+      full_path = g_build_filename (tmp_directory, member, NULL);
+      driver_path = g_file_read_link (full_path, &error);
+      if (driver_path == NULL)
+        {
+          g_debug ("An error occurred trying to read the symlink: %s", error->message);
+          g_free (full_path);
+          goto out;
+        }
+      if (!g_path_is_absolute (driver_path))
+        {
+          g_free (full_path);
+          g_free (driver_path);
+          g_debug ("We were expecting an absolute path, instead we have: %s", driver_path);
+          goto out;
+        }
+
+      switch (module)
+        {
+          case SRT_GRAPHICS_GLX_MODULE:
+            /* Instead of just using just the library name to filter duplicates, we use it in
+             * combination with its path. Because in one of the multiple iterations we might
+             * find the same library that points to two different locations. And in this
+             * case we want to log both of them.
+             *
+             * `member` cannot contain `/`, so we know we can use `/` to make
+             * a composite key for deduplication. */
+            soname_path = g_strjoin ("/", member, driver_path, NULL);
+            if (!g_hash_table_contains (known_table, soname_path))
+              {
+                g_hash_table_add (known_table, g_strdup (soname_path));
+                *modules_out = g_list_prepend (*modules_out, srt_glx_icd_new (member, driver_path));
+              }
+            g_free (soname_path);
+            break;
+
+          case SRT_GRAPHICS_VDPAU_MODULE:
+            driver_directory = g_path_get_dirname (driver_path);
+            if (!g_hash_table_contains (known_table, driver_directory))
+              {
+                /* We do not add `driver_directory` to the hash table because it contains
+                 * a list of directories where we already looked into. In this case we are
+                 * just adding a single driver instead of searching for all the `libvdpau_*`
+                 * files in `driver_directory`. */
+                driver_link = g_file_read_link (driver_path, NULL);
+                *modules_out = g_list_prepend (*modules_out, srt_vdpau_driver_new (driver_path,
+                                                                                  driver_link,
+                                                                                  is_extra));
+                g_free (driver_link);
+              }
+            g_free (driver_directory);
+            break;
+
+          case SRT_GRAPHICS_DRI_MODULE:
+          case SRT_GRAPHICS_VAAPI_MODULE:
+          case NUM_SRT_GRAPHICS_MODULES:
+          default:
+            g_return_if_reached ();
+        }
+
+      g_free (full_path);
+      g_free (driver_path);
+    }
+
+out:
+  if (dir_iter != NULL)
+    g_dir_close (dir_iter);
+  g_clear_pointer (&members, g_ptr_array_unref);
+  g_free (output);
+  g_free (stderr);
+  g_clear_error (&error);
+}
+
+/**
  * _srt_get_modules_full:
  * @sysroot: (nullable): Look in this directory instead of the real root
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
@@ -2844,10 +3046,14 @@ _srt_get_modules_full (const char *sysroot,
   const gchar *env_override;
   const gchar *drivers_path;
   const gchar *force_elf_class = NULL;
+  const gchar *ld_library_path = NULL;
   gchar *flatpak_info;
+  gchar *tmp_dir = NULL;
   GHashTable *drivers_set;
   gboolean is_extra = FALSE;
   int driver_class;
+  GPtrArray *vdpau_argv = NULL;
+  GError *error = NULL;
 
   g_return_if_fail (multiarch_tuple != NULL);
   g_return_if_fail (drivers_out != NULL);
@@ -2877,14 +3083,17 @@ _srt_get_modules_full (const char *sysroot,
     }
 
   if (envp != NULL)
-    drivers_path = g_environ_getenv (envp, env_override);
+    {
+      drivers_path = g_environ_getenv (envp, env_override);
+      force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
+      ld_library_path = g_environ_getenv (envp, "LD_LIBRARY_PATH");
+    }
   else
-    drivers_path = g_getenv (env_override);
-
-  if (envp != NULL)
-    force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
-  else
-    force_elf_class = g_getenv ("SRT_TEST_FORCE_ELF");
+    {
+      drivers_path = g_getenv (env_override);
+      force_elf_class = g_getenv ("SRT_TEST_FORCE_ELF");
+      ld_library_path = g_getenv ("LD_LIBRARY_PATH");
+    }
 
   if (sysroot == NULL)
     sysroot = "/";
@@ -3093,13 +3302,66 @@ _srt_get_modules_full (const char *sysroot,
         g_list_free_full (extras, g_free);
     }
 
-  /* Debian used to hardcode "/usr/lib/vdpau" as an additional search path for VDPAU.
-   * However since libvdpau 1.3-1 it has been removed; reference:
-   * <https://salsa.debian.org/nvidia-team/libvdpau/commit/11a3cd84>
-   * Just to be sure to not miss a potentially valid library path we search on it
-   * unconditionally, flagging it as extra. */
+
+
   if (module == SRT_GRAPHICS_VDPAU_MODULE)
     {
+      /* VDPAU modules are also loaded by just dlopening the bare filename
+       * libvdpau_${VDPAU_DRIVER}.so
+       * To cover that we search in all directories listed in LD_LIBRARY_PATH. */
+      if (ld_library_path != NULL)
+        {
+          gchar **entries = g_strsplit (ld_library_path, ":", 0);
+          gchar **entry;
+          char *entry_realpath;
+
+          for (entry = entries; entry != NULL && *entry != NULL; entry++)
+            {
+              /* Scripts that manipulate LD_LIBRARY_PATH have a habit of
+               * adding empty entries */
+              if (*entry[0] == '\0')
+                continue;
+
+              entry_realpath = realpath (*entry, NULL);
+              if (entry_realpath == NULL)
+                {
+                  g_debug ("realpath(%s): %s", *entry, g_strerror (errno));
+                  continue;
+                }
+              if (!g_hash_table_contains (drivers_set, entry_realpath))
+                {
+                  g_hash_table_add (drivers_set, g_strdup (entry_realpath));
+                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                              entry_realpath, is_extra, module,
+                                              drivers_out);
+                }
+              free (entry_realpath);
+            }
+          g_strfreev (entries);
+        }
+
+      /* Also use "capsule-capture-libs" to search for VDPAU drivers that we might have
+       * missed */
+      tmp_dir = g_dir_make_tmp ("vdpau-drivers-XXXXXX", &error);
+      if (tmp_dir == NULL)
+        {
+          g_debug ("An error occurred trying to create a temporary folder: %s", error->message);
+          goto out;
+        }
+      vdpau_argv = _argv_for_list_vdpau_drivers (envp, helpers_path, multiarch_tuple, tmp_dir, &error);
+      if (vdpau_argv == NULL)
+        {
+          g_debug ("An error occurred trying to capture VDPAU drivers: %s", error->message);
+          goto out;
+        }
+      _srt_list_modules_from_directory (envp, vdpau_argv, tmp_dir, drivers_set,
+                                        SRT_GRAPHICS_VDPAU_MODULE, is_extra, drivers_out);
+
+      /* Debian used to hardcode "/usr/lib/vdpau" as an additional search path for VDPAU.
+       * However since libvdpau 1.3-1 it has been removed; reference:
+       * <https://salsa.debian.org/nvidia-team/libvdpau/commit/11a3cd84>
+       * Just to be sure to not miss a potentially valid library path we search on it
+       * unconditionally, flagging it as extra. */
       gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
       if (!g_hash_table_contains (drivers_set, debian_additional))
         {
@@ -3110,112 +3372,16 @@ _srt_get_modules_full (const char *sysroot,
       g_free (debian_additional);
     }
 
+out:
+  g_clear_pointer (&vdpau_argv, g_ptr_array_unref);
+  if (tmp_dir)
+    {
+      if (!_srt_rm_rf (tmp_dir))
+        g_debug ("Unable to remove the temporary directory: %s", tmp_dir);
+    }
+  g_free (tmp_dir);
   g_hash_table_unref (drivers_set);
   g_free (flatpak_info);
-}
-
-/*
- * _srt_list_glx_icds_from_directory:
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
- * @argv: (array zero-terminated=1) (not nullable): The `argv` of the helper to use
- * @tmp_directory: (not nullable) (type filename): Full path to the destination
- *  directory used by the "capsule-capture-libs" helper
- * @known_libs: (not optional): set of library names, plus their links, that
- *  we already found. Newely found libraries will be added to this list
- * @glxs: (element-type SrtGlxIcd) (not optional) (inout): Prepend all the unique
- *  #SrtGlxIcd found to this list in an unspecified order.
- */
-static void
-_srt_list_glx_icds_from_directory (gchar **envp,
-                                   GPtrArray *argv,
-                                   const gchar *tmp_directory,
-                                   GHashTable *known_libs,
-                                   GList **glxs)
-{
-  int exit_status = -1;
-  GError *error = NULL;
-  gchar *stderr = NULL;
-  gchar *output = NULL;
-  GDir *dir_iter = NULL;
-  const gchar *member;
-  gchar *full_path = NULL;
-  gchar *glx_path = NULL;
-  gchar *soname_path = NULL;
-
-  g_return_if_fail (argv != NULL);
-  g_return_if_fail (tmp_directory != NULL);
-  g_return_if_fail (known_libs != NULL);
-  g_return_if_fail (glxs != NULL);
-
-  if (!g_spawn_sync (NULL,    /* working directory */
-                     (gchar **) argv->pdata,
-                     envp,
-                     G_SPAWN_SEARCH_PATH,       /* flags */
-                     _srt_child_setup_unblock_signals,
-                     NULL,    /* user data */
-                     &output, /* stdout */
-                     &stderr,
-                     &exit_status,
-                     &error))
-    {
-      g_debug ("An error occurred calling the helper: %s", error->message);
-      goto out;
-    }
-
-  if (exit_status != 0)
-    {
-      g_debug ("... wait status %d", exit_status);
-      goto out;
-    }
-
-  dir_iter = g_dir_open (tmp_directory, 0, &error);
-
-  if (dir_iter == NULL)
-    {
-      g_debug ("Failed to open \"%s\": %s", tmp_directory, error->message);
-      goto out;
-    }
-
-  while ((member = g_dir_read_name (dir_iter)) != NULL)
-    {
-      full_path = g_build_filename (tmp_directory, member, NULL);
-      glx_path = g_file_read_link (full_path, &error);
-      if (glx_path == NULL)
-        {
-          g_debug ("An error occurred trying to read the symlink: %s", error->message);
-          g_free (full_path);
-          goto out;
-        }
-      if (!g_path_is_absolute (glx_path))
-        {
-          g_free (full_path);
-          g_free (glx_path);
-          g_debug ("We were expecting an absolute path, instead we have: %s", glx_path);
-          goto out;
-        }
-      /* Instead of just using just the library name to filter duplicates, we use it in
-       * combination with its path. Because in one of the multiple iterations we might
-       * find the same library that points to two different locations. And in this
-       * case we want to log both of them.
-       *
-       * `member` cannot contain `/`, so we know we can use `/` to make
-       * a composite key for deduplication. */
-      soname_path = g_strjoin ("/", member, glx_path, NULL);
-      if (!g_hash_table_contains (known_libs, soname_path))
-        {
-          g_hash_table_add (known_libs, g_strdup (soname_path));
-          *glxs = g_list_prepend (*glxs, srt_glx_icd_new (member, glx_path));
-        }
-      g_free (soname_path);
-      g_free (full_path);
-      g_free (glx_path);
-    }
-
-out:
-  if (dir_iter != NULL)
-    g_dir_close (dir_iter);
-  g_free (output);
-  g_free (stderr);
   g_clear_error (&error);
 }
 
@@ -3267,7 +3433,8 @@ _srt_list_glx_icds (const char *sysroot,
       goto out;
     }
 
-  _srt_list_glx_icds_from_directory (envp, by_soname_argv, by_soname_tmp_dir, known_libs, drivers_out);
+  _srt_list_modules_from_directory (envp, by_soname_argv, by_soname_tmp_dir, known_libs,
+                                    SRT_GRAPHICS_GLX_MODULE, FALSE, drivers_out);
 
   /* When in a container we might miss valid GLX drivers because the `ld.so.cache` in
    * use doesn't have a reference about them. To fix that we also include every
@@ -3290,7 +3457,8 @@ _srt_list_glx_icds (const char *sysroot,
           goto out;
         }
 
-      _srt_list_glx_icds_from_directory (envp, overrides_argv, overrides_tmp_dir, known_libs, drivers_out);
+      _srt_list_modules_from_directory (envp, overrides_argv, overrides_tmp_dir, known_libs,
+                                        SRT_GRAPHICS_GLX_MODULE, FALSE, drivers_out);
     }
 
 out:

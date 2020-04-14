@@ -38,28 +38,40 @@ main (int argc,
   gchar *file_path = NULL;
   gchar *target = NULL;
   GFile *file = NULL;
+  const gchar *soname_match = NULL;
+  GPtrArray *found = NULL;
 
 #if defined(MOCK_ARCHITECTURE_x86_64)
-  const gchar *multiarch = "x86_64-linux-gnu";
-  static const char *const sonames[] = { "libGLX_mesa.so.0", NULL };
+  static const char *const sonames[] = { "libvdpau_r9000.so", NULL };
+  /* We don't use the x86_64 version yet */
+  return EXIT_FAILURE;
 #else
-  const gchar *multiarch = "i386-linux-gnu";
-  static const char *const sonames[] = { "libGLX_mesa.so.0", "libGLX_nvidia.so.0", NULL };
+  static const char *const sonames[] = { "libvdpau_r9000.so", NULL };
 #endif
 
   g_return_val_if_fail (argc > 3, EXIT_FAILURE);
   g_return_val_if_fail (g_strcmp0 (argv[1], "--dest") == 0, EXIT_FAILURE);
 
-  const gchar *soname_match = g_strrstr (argv[3], "libGLX_");
-  /* We are using this capsule-capture-libs just for libGLX*. Discard every other request */
-  if (soname_match == NULL)
-    return EXIT_SUCCESS;
+  found = g_ptr_array_new_with_free_func (g_free);
 
+  /* Currently we are using this just for VDPAU. Discard every other request.
+   * Also we mimic a system where a wildcard-matching search will return no
+   * results. */
   for (gsize i = 0; sonames[i] != NULL; i++)
     {
-      file_path = g_build_filename (argv[2], sonames[i], NULL);
+      for (gsize j = 3; argv[j] != NULL; j++)
+        {
+          soname_match = g_strrstr (argv[j], sonames[i]);
+          if (soname_match != NULL)
+            g_ptr_array_add (found, g_strdup (sonames[i]));
+        }
+    }
+
+  for (gsize i = 0; i < found->len; i++)
+    {
+      file_path = g_build_filename (argv[2], found->pdata[i], NULL);
       file = g_file_new_for_path (file_path);
-      target = g_build_filename ("/lib", multiarch, sonames[i], NULL);
+      target = g_build_filename ("/usr/lib", found->pdata[i], NULL);
       if (!g_file_make_symbolic_link (file, target, NULL, &error))
         {
           g_critical ("An error occurred creating a symlink: %s", error->message);
@@ -73,6 +85,8 @@ main (int argc,
       g_free (file_path);
       g_free (target);
     }
+
+  g_ptr_array_free (found, TRUE);
 
   return EXIT_SUCCESS;
 }

@@ -105,6 +105,8 @@ static const char * const libquals[] =
   "lib64",
   "lib32"
 };
+G_STATIC_ASSERT (G_N_ELEMENTS (libquals)
+                 == G_N_ELEMENTS (multiarch_tuples) - 1);
 
 static gboolean pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                     FlatpakBwrap *bwrap,
@@ -682,7 +684,10 @@ typedef struct
    * or (type SrtVaApiDriver) */
   gpointer icd;
   gchar *resolved_library;
-  /* Last entry is always NONEXISTENT */
+  /* Last entry is always NONEXISTENT.
+   * For VA-API, we use [0] and ignore the other elements.
+   * For the rest, this is keyed by the index of a multiarch tuple
+   * in multiarch_tuples. */
   IcdKind kinds[G_N_ELEMENTS (multiarch_tuples)];
   /* Last entry is always NULL */
   gchar *paths_in_container[G_N_ELEMENTS (multiarch_tuples)];
@@ -1079,8 +1084,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
-  g_autoptr(SrtObjectList) vdpau_drivers = NULL;
-  g_autoptr(SrtObjectList) va_api_drivers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) va_api_icd_details = NULL;   /* (element-type IcdDetails) */
@@ -1205,6 +1208,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
           const gchar *libqual = NULL;
+          g_autoptr(SrtObjectList) vdpau_drivers = NULL;
+          g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
           flatpak_bwrap_add_args (temp_bwrap,
@@ -1393,8 +1398,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                                 multiarch_tuples[i],
                                                                 SRT_DRIVER_FLAGS_NONE);
 
+          /* Guess that there will be about the same number of VA-API ICDs
+           * for each word size. This only needs to be approximately right:
+           * g_ptr_array_add() will resize the allocated buffer if needed. */
           if (va_api_icd_details == NULL)
-            va_api_icd_details = g_ptr_array_new_full (g_list_length (va_api_drivers),
+            va_api_icd_details = g_ptr_array_new_full (g_list_length (va_api_drivers) * (G_N_ELEMENTS (multiarch_tuples) - 1),
                                                        (GDestroyNotify) G_CALLBACK (icd_details_free));
 
           for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
@@ -1915,8 +1923,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       IcdDetails *details = g_ptr_array_index (va_api_icd_details, i);
 
-      g_assert (G_N_ELEMENTS (details->kinds) > 1);
-      g_assert (G_N_ELEMENTS (details->paths_in_container) > 1);
+      G_STATIC_ASSERT (G_N_ELEMENTS (details->kinds) > 1);
+      G_STATIC_ASSERT (G_N_ELEMENTS (details->paths_in_container) > 1);
       /* We add entries in va_api_icd_details only after a successful bind,
        * so we expect to always have ICD_KIND_ABSOLUTE.
        * Also we use IcdDetails for a single multiarch always added as the first element.

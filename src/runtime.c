@@ -1398,8 +1398,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                                 multiarch_tuples[i],
                                                                 SRT_DRIVER_FLAGS_NONE);
 
+          /* Guess that there will be about the same number of VA-API ICDs
+           * for each word size. This only needs to be approximately right:
+           * g_ptr_array_add() will resize the allocated buffer if needed. */
           if (va_api_icd_details == NULL)
-            va_api_icd_details = g_ptr_array_new_full (g_list_length (va_api_drivers),
+            va_api_icd_details = g_ptr_array_new_full (g_list_length (va_api_drivers) * (G_N_ELEMENTS (multiarch_tuples) - 1),
                                                        (GDestroyNotify) G_CALLBACK (icd_details_free));
 
           for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)

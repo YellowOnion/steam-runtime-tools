@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20200415.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200415.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * Diagnose problems with "steam:" URL handler
@@ -22,7 +22,7 @@ steam-runtime-tools (0.20200415.0) UNRELEASED; urgency=medium
   * tests: Add a script to generate the mock sysroots
   * Build as a native package
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 15 Apr 2020 12:31:56 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 15 Apr 2020 13:21:10 +0100
 
 steam-runtime-tools (0.20200331.1-0+steamrt1.1) scout; urgency=medium
 

@@ -1079,8 +1079,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
-  g_autoptr(SrtObjectList) vdpau_drivers = NULL;
-  g_autoptr(SrtObjectList) va_api_drivers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) va_api_icd_details = NULL;   /* (element-type IcdDetails) */
@@ -1205,6 +1203,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
           const gchar *libqual = NULL;
+          g_autoptr(SrtObjectList) vdpau_drivers = NULL;
+          g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
           temp_bwrap = flatpak_bwrap_new (NULL);
           flatpak_bwrap_add_args (temp_bwrap,

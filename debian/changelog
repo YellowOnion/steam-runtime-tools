@@ -1,16 +1,28 @@
-steam-runtime-tools (0.20200403.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200415.0) UNRELEASED; urgency=medium
 
   [ Ludovico de Nittis ]
   * Diagnose problems with "steam:" URL handler
+    (implements: T20052; diagnoses: steam-for-linux#6942)
   * Create a new srt_system_info_get_steam_details function
-  * tests: Generate mock sysroots programmatically
+  * tests: Generate mock sysroots programmatically (fixes: T20177)
+  * Enumerate VDPAU drivers from LD_LIBRARY_PATH and system library
+    search path (implements: T19545)
+  * Avoid warnings when a graphics check returns empty JSON
+  * Check for required CPU features.
+    Check if the CPU supports the features we are interested in.
+    Right now they are: SSE3 (pni), x86_64 (lm) and CMPXCHG16B (cx16).
+    (implements: T20489; diagnoses: steam-for-linux#5164,
+    steam-for-linux#6812, steam-for-linux#6795, steam-for-linux#4196)
+  * Add check-requirements preflight check.
+    With check-requirements we can do a preflight check and ensure that the
+    Steam client requirements are met. (implements: T20491)
 
   [ Simon McVittie ]
   * tests: Factor out the directory containing mock sysroots
   * tests: Add a script to generate the mock sysroots
-  * Build as a native package.
+  * Build as a native package
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 03 Apr 2020 10:23:42 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 15 Apr 2020 12:31:56 +0100
 
 steam-runtime-tools (0.20200331.1-0+steamrt1.1) scout; urgency=medium
 

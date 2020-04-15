@@ -23,7 +23,7 @@
 
 project(
   'steam-runtime-tools', 'c',
-  version : '0.20200331.1',
+  version : '0.20200415.0',
   default_options: [
     'c_std=c99',
     'cpp_std=c++11',
@@ -35,7 +35,7 @@ add_languages('cpp')
 
 api_major = '0'
 abi_major = '0'
-abi_minor = '20200331.1'
+abi_minor = '20200415.0'
 
 pkg = import('pkgconfig')
 gnome = import('gnome')

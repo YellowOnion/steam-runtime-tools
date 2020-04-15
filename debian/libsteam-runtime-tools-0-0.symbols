@@ -7,6 +7,12 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_architecture_can_run_x86_64@Base 0.20190717.0
  srt_check_library_presence@Base 0.20190801.0
  srt_container_type_get_type@Base 0.20200306.0
+ srt_desktop_entry_get_commandline@Base 0.20200415.0
+ srt_desktop_entry_get_filename@Base 0.20200415.0
+ srt_desktop_entry_get_id@Base 0.20200415.0
+ srt_desktop_entry_get_type@Base 0.20200415.0
+ srt_desktop_entry_is_default_handler@Base 0.20200415.0
+ srt_desktop_entry_is_steam_handler@Base 0.20200415.0
  srt_dri_driver_get_library_path@Base 0.20200109.0
  srt_dri_driver_get_type@Base 0.20200109.0
  srt_dri_driver_is_extra@Base 0.20200109.0
@@ -60,6 +66,11 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_locale_issues_get_type@Base 0.20190909.0
  srt_rendering_interface_get_type@Base 0.20190822.0
  srt_runtime_issues_get_type@Base 0.20190816.0
+ srt_steam_get_bin32_path@Base 0.20200415.0
+ srt_steam_get_data_path@Base 0.20200415.0
+ srt_steam_get_install_path@Base 0.20200415.0
+ srt_steam_get_issues@Base 0.20200415.0
+ srt_steam_get_type@Base 0.20200415.0
  srt_steam_issues_get_type@Base 0.20190816.0
  srt_system_info_can_run@Base 0.20190801.0
  srt_system_info_can_write_to_uinput@Base 0.20190801.0
@@ -87,8 +98,11 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_get_locale_issues@Base 0.20190909.0
  srt_system_info_get_primary_multiarch_tuple@Base 0.20190909.0
  srt_system_info_get_runtime_issues@Base 0.20190816.0
+ srt_system_info_get_steam_details@Base 0.20200415.0
  srt_system_info_get_steam_issues@Base 0.20190816.0
  srt_system_info_get_type@Base 0.20190801.0
+ srt_system_info_get_x86_features@Base 0.20200415.0
+ srt_system_info_list_desktop_entries@Base 0.20200415.0
  srt_system_info_list_dri_drivers@Base 0.20200109.0
  srt_system_info_list_driver_environment@Base 0.20200306.0
  srt_system_info_list_egl_icds@Base 0.20190926.0
@@ -125,3 +139,4 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_vulkan_icd_resolve_library_path@Base 0.20190926.0
  srt_vulkan_icd_write_to_file@Base 0.20190926.0
  srt_window_system_get_type@Base 0.20190822.0
+ srt_x86_feature_flags_get_type@Base 0.20200415.0

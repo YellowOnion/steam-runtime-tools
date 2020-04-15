@@ -678,7 +678,8 @@ typedef enum
 
 typedef struct
 {
-  /* (type SrtEglIcd) or (type SrtVulkanIcd) or (type SrtVdpauDriver) */
+  /* (type SrtEglIcd) or (type SrtVulkanIcd) or (type SrtVdpauDriver)
+   * or (type SrtVaApiDriver) */
   gpointer icd;
   gchar *resolved_library;
   /* Last entry is always NONEXISTENT */
@@ -696,7 +697,8 @@ icd_details_new (gpointer icd)
   g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
   g_return_val_if_fail (SRT_IS_EGL_ICD (icd) ||
                         SRT_IS_VULKAN_ICD (icd) ||
-                        SRT_IS_VDPAU_DRIVER (icd),
+                        SRT_IS_VDPAU_DRIVER (icd) ||
+                        SRT_IS_VA_API_DRIVER (icd),
                         NULL);
 
   self = g_slice_new0 (IcdDetails);
@@ -1068,6 +1070,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   g_autoptr(GString) dri_path = g_string_new ("");
   g_autoptr(GString) egl_path = g_string_new ("");
   g_autoptr(GString) vulkan_path = g_string_new ("");
+  g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autofree gchar *localedef = NULL;
   g_autofree gchar *ldconfig = NULL;
@@ -1077,8 +1080,10 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
   g_autoptr(SrtObjectList) vdpau_drivers = NULL;
+  g_autoptr(SrtObjectList) va_api_drivers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(GPtrArray) va_api_icd_details = NULL;   /* (element-type IcdDetails) */
   guint n_egl_icds;
   guint n_vulkan_icds;
   const GList *icd_iter;
@@ -1252,6 +1257,15 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                   "if-exists:if-same-abi:soname:libvulkan.so.1",
                                   /* VDPAU */
                                   "if-exists:if-same-abi:soname:libvdpau.so.1",
+                                  /* VA-API */
+                                  "if-exists:if-same-abi:soname:libva.so.1",
+                                  "if-exists:if-same-abi:soname:libva-drm.so.1",
+                                  "if-exists:if-same-abi:soname:libva-glx.so.1",
+                                  "if-exists:if-same-abi:soname:libva-x11.so.1",
+                                  "if-exists:if-same-abi:soname:libva.so.2",
+                                  "if-exists:if-same-abi:soname:libva-drm.so.2",
+                                  "if-exists:if-same-abi:soname:libva-glx.so.2",
+                                  "if-exists:if-same-abi:soname:libva-x11.so.2",
                                   /* NVIDIA proprietary stack */
                                   "if-exists:even-if-older:soname-match:libEGL.so.*",
                                   "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
@@ -1369,6 +1383,38 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                              libdir_on_host,
                              libdir_in_container,
                              "vdpau",
+                             details,
+                             error))
+                return FALSE;
+            }
+
+          g_debug ("Enumerating %s VA-API drivers on host system...", multiarch_tuples[i]);
+          va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                                multiarch_tuples[i],
+                                                                SRT_DRIVER_FLAGS_NONE);
+
+          if (va_api_icd_details == NULL)
+            va_api_icd_details = g_ptr_array_new_full (g_list_length (va_api_drivers),
+                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+          for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+            {
+              IcdDetails *details = icd_details_new (icd_iter->data);
+              g_ptr_array_add (va_api_icd_details, details);
+              details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
+              g_assert (details->resolved_library != NULL);
+              g_assert (g_path_is_absolute (details->resolved_library));
+
+              /* We don't reuse the same IcdDetails for different multiarch.
+               * So we pass zero as the multiarch_index parameter to always fill
+               * just the first element in the array. */
+              if (!bind_icd (self,
+                             0,
+                             j,
+                             tool_path,
+                             libdir_on_host,
+                             libdir_in_container,
+                             "dri",
                              details,
                              error))
                 return FALSE;
@@ -1865,6 +1911,24 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         }
     }
 
+  for (i = 0; i < va_api_icd_details->len; i++)
+    {
+      IcdDetails *details = g_ptr_array_index (va_api_icd_details, i);
+
+      g_assert (G_N_ELEMENTS (details->kinds) > 1);
+      g_assert (G_N_ELEMENTS (details->paths_in_container) > 1);
+      /* We add entries in va_api_icd_details only after a successful bind,
+       * so we expect to always have ICD_KIND_ABSOLUTE.
+       * Also we use IcdDetails for a single multiarch always added as the first element.
+       * Because of that we expect the second element to be NONEXISTENT. */
+      g_assert (details->kinds[0] == ICD_KIND_ABSOLUTE);
+      g_assert (details->kinds[1] == ICD_KIND_NONEXISTENT);
+      g_assert (details->paths_in_container[1] == NULL);
+
+      g_autofree gchar *va_api_binded_path = g_path_get_dirname (details->paths_in_container[0]);
+      pv_search_path_append (va_api_path, va_api_binded_path);
+    }
+
   if (dri_path->len != 0)
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LIBGL_DRIVERS_PATH", dri_path->str,
@@ -1894,6 +1958,15 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   else
       flatpak_bwrap_add_args (bwrap,
                               "--unsetenv", "VK_ICD_FILENAMES",
+                              NULL);
+
+  if (va_api_path->len != 0)
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", "LIBVA_DRIVERS_PATH",
+                              va_api_path->str, NULL);
+  else
+      flatpak_bwrap_add_args (bwrap,
+                              "--unsetenv", "LIBVA_DRIVERS_PATH",
                               NULL);
 
   /* We binded the VDPAU drivers in "%{libdir}/vdpau".

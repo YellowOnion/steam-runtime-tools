@@ -105,6 +105,8 @@ static const char * const libquals[] =
   "lib64",
   "lib32"
 };
+G_STATIC_ASSERT (G_N_ELEMENTS (libquals)
+                 == G_N_ELEMENTS (multiarch_tuples) - 1);
 
 static gboolean pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                     FlatpakBwrap *bwrap,

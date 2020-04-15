@@ -1918,8 +1918,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       IcdDetails *details = g_ptr_array_index (va_api_icd_details, i);
 
-      g_assert (G_N_ELEMENTS (details->kinds) > 1);
-      g_assert (G_N_ELEMENTS (details->paths_in_container) > 1);
+      G_STATIC_ASSERT (G_N_ELEMENTS (details->kinds) > 1);
+      G_STATIC_ASSERT (G_N_ELEMENTS (details->paths_in_container) > 1);
       /* We add entries in va_api_icd_details only after a successful bind,
        * so we expect to always have ICD_KIND_ABSOLUTE.
        * Also we use IcdDetails for a single multiarch always added as the first element.

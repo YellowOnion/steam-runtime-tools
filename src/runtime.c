@@ -678,7 +678,7 @@ typedef enum
 
 typedef struct
 {
-  /* (type SrtEglIcd) or (type SrtVulkanIcd) */
+  /* (type SrtEglIcd) or (type SrtVulkanIcd) or (type SrtVdpauDriver) */
   gpointer icd;
   gchar *resolved_library;
   /* Last entry is always NONEXISTENT */
@@ -694,7 +694,9 @@ icd_details_new (gpointer icd)
   gsize i;
 
   g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
-  g_return_val_if_fail (SRT_IS_EGL_ICD (icd) || SRT_IS_VULKAN_ICD (icd),
+  g_return_val_if_fail (SRT_IS_EGL_ICD (icd) ||
+                        SRT_IS_VULKAN_ICD (icd) ||
+                        SRT_IS_VDPAU_DRIVER (icd),
                         NULL);
 
   self = g_slice_new0 (IcdDetails);
@@ -726,6 +728,10 @@ icd_details_free (IcdDetails *self)
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 
+/*
+ * @sequence_number: numbered directory to use. Set to G_MAXSIZE to
+ *  use just @subdir without a numbered sub directory
+ */
 static gboolean
 bind_icd (PvRuntime *self,
           gsize multiarch_index,
@@ -766,8 +772,15 @@ bind_icd (PvRuntime *self,
       /* Because the ICDs might have collisions among their
        * basenames (might differ only by directory), we put each
        * in its own numbered directory. */
-      seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
-      on_host = g_build_filename (libdir_on_host, subdir, seq_str, NULL);
+      if (sequence_number != G_MAXSIZE)
+        {
+          seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
+          on_host = g_build_filename (libdir_on_host, subdir, seq_str, NULL);
+        }
+      else
+        {
+          on_host = g_build_filename (libdir_on_host, subdir, NULL);
+        }
 
       g_debug ("Ensuring %s exists", on_host);
 
@@ -837,11 +850,10 @@ bind_icd (PvRuntime *self,
 
   if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
     {
-      g_assert (seq_str != NULL);
       g_assert (on_host != NULL);
       details->paths_in_container[multiarch_index] = g_build_filename (libdir_in_container,
                                                                        subdir,
-                                                                       seq_str,
+                                                                       seq_str ? seq_str : "",
                                                                        glnx_basename (details->resolved_library),
                                                                        NULL);
     }
@@ -1064,6 +1076,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
+  g_autoptr(SrtObjectList) vdpau_drivers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   guint n_egl_icds;
@@ -1237,6 +1250,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                   "gl:",
                                   /* Vulkan */
                                   "if-exists:if-same-abi:soname:libvulkan.so.1",
+                                  /* VDPAU */
+                                  "if-exists:if-same-abi:soname:libvdpau.so.1",
                                   /* NVIDIA proprietary stack */
                                   "if-exists:even-if-older:soname-match:libEGL.so.*",
                                   "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
@@ -1327,6 +1342,33 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                              libdir_on_host,
                              libdir_in_container,
                              "vulkan",
+                             details,
+                             error))
+                return FALSE;
+            }
+
+          g_debug ("Enumerating %s VDPAU ICDs on host system...", multiarch_tuples[i]);
+          vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
+                                                              multiarch_tuples[i],
+                                                              SRT_DRIVER_FLAGS_NONE);
+
+          for (icd_iter = vdpau_drivers; icd_iter != NULL; icd_iter = icd_iter->next)
+            {
+              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+              details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
+              g_assert (details->resolved_library != NULL);
+              g_assert (g_path_is_absolute (details->resolved_library));
+
+              /* We avoid using the sequence number for VDPAU because they can only
+               * be located in a single directory, so by definition we can't have
+               * collisions */
+              if (!bind_icd (self,
+                             i,
+                             G_MAXSIZE,
+                             tool_path,
+                             libdir_on_host,
+                             libdir_in_container,
+                             "vdpau",
                              details,
                              error))
                 return FALSE;
@@ -1853,6 +1895,49 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       flatpak_bwrap_add_args (bwrap,
                               "--unsetenv", "VK_ICD_FILENAMES",
                               NULL);
+
+  /* We binded the VDPAU drivers in "%{libdir}/vdpau".
+   * Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't
+   * easily list both x86_64 and i386 drivers path.
+   * As a workaround we set VDPAU_DRIVER_PATH to
+   * "/overrides/lib/${PLATFORM}-linux-gnu/vdpau". And because we can't control
+   * the ${PLATFORM} placeholder value we also create symlinks from `i486`, up
+   * to `i686`, to the library directory `i386` that we expect to have
+   * already. */
+  flatpak_bwrap_add_args (bwrap,
+                          "--setenv", "VDPAU_DRIVER_PATH",
+                          "/overrides/lib/${PLATFORM}-linux-gnu/vdpau",
+                          NULL);
+
+  static const char * const extra_multiarch_tuples[] =
+  {
+    "i486-linux-gnu",
+    "i586-linux-gnu",
+    "i686-linux-gnu",
+    NULL
+  };
+
+  g_autofree gchar *i386_libdir_on_host = g_build_filename (self->overrides, "lib",
+                                                            "i386-linux-gnu",
+                                                            NULL);
+
+  for (i = 0; i < G_N_ELEMENTS (extra_multiarch_tuples) - 1; i++)
+    {
+      g_autofree gchar *extra_libdir_on_host = g_build_filename (self->overrides, "lib",
+                                                                 extra_multiarch_tuples[i],
+                                                                 NULL);
+
+      if (!g_file_test (extra_libdir_on_host, G_FILE_TEST_EXISTS) &&
+          g_file_test (i386_libdir_on_host, G_FILE_TEST_IS_DIR))
+        {
+          g_unlink (extra_libdir_on_host);
+
+          if (symlink ("i386-linux-gnu", extra_libdir_on_host) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink %s -> i386-linux-gnu",
+                                            extra_libdir_on_host);
+        }
+    }
 
   return TRUE;
 }

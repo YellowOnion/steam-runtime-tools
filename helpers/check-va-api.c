@@ -40,12 +40,14 @@
 enum
 {
   OPTION_HELP = 1,
+  OPTION_VERBOSE,
   OPTION_VERSION,
 };
 
 struct option long_options[] =
 {
   { "help", no_argument, NULL, OPTION_HELP },
+  { "verbose", no_argument, NULL, OPTION_VERBOSE },
   { "version", no_argument, NULL, OPTION_VERSION },
   { NULL, 0, NULL, 0 }
 };
@@ -89,6 +91,7 @@ main (int argc,
 
 #define do_vaapi_or_exit(expr) if (! _do_vaapi (#expr, expr)) goto out;
 
+  bool verbose = false;
   int opt;
   int surfaces_count = 2;
   int ret = 1;
@@ -121,6 +124,10 @@ main (int argc,
         {
           case OPTION_HELP:
             usage (0);
+            break;
+
+          case OPTION_VERBOSE:
+            verbose = true;
             break;
 
           case OPTION_VERSION:
@@ -179,6 +186,9 @@ main (int argc,
     }
 
   do_vaapi_or_exit (vaInitialize (va_display, &major_version, &minor_version));
+
+  if (verbose)
+    printf ("%s\n", vaQueryVendorString (va_display));
 
   /* Test the ability to get the supported profiles and that they are not more than
    * the maximum number from the implementation */

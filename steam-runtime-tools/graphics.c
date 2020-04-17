@@ -505,6 +505,7 @@ _argv_for_graphics_test (const char *helpers_path,
           case SRT_RENDERING_INTERFACE_GLESV2:
           case SRT_RENDERING_INTERFACE_VULKAN:
           case SRT_RENDERING_INTERFACE_VDPAU:
+          case SRT_RENDERING_INTERFACE_VAAPI:
           default:
             g_critical ("GLX window system only makes sense with GL "
                         "rendering interface, not %d",
@@ -529,6 +530,7 @@ _argv_for_graphics_test (const char *helpers_path,
 
           case SRT_RENDERING_INTERFACE_VULKAN:
           case SRT_RENDERING_INTERFACE_VDPAU:
+          case SRT_RENDERING_INTERFACE_VAAPI:
             /* They don't set platformstring, just set argv later. */
             break;
 
@@ -547,6 +549,7 @@ _argv_for_graphics_test (const char *helpers_path,
 
           case SRT_RENDERING_INTERFACE_VULKAN:
           case SRT_RENDERING_INTERFACE_VDPAU:
+          case SRT_RENDERING_INTERFACE_VAAPI:
           default:
             g_critical ("EGL window system only makes sense with a GL-based "
                         "rendering interface, not %d",
@@ -594,6 +597,16 @@ _argv_for_graphics_test (const char *helpers_path,
 
       case SRT_RENDERING_INTERFACE_VDPAU:
         argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-vdpau",
+                                flags, error);
+
+        if (argv == NULL)
+          goto out;
+
+        g_ptr_array_add (argv, g_strdup ("--verbose"));
+        break;
+
+      case SRT_RENDERING_INTERFACE_VAAPI:
+        argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-va-api",
                                 flags, error);
 
         if (argv == NULL)
@@ -795,10 +808,11 @@ _srt_check_library_vendor (const char *multiarch_tuple,
   SrtLibraryIssues issues;
   const char * const *dependencies;
 
-  /* Vulkan and VDPAU are always vendor-neutral, so it doesn't make sense to check it.
+  /* Vulkan, VDPAU and VA-API are always vendor-neutral, so it doesn't make sense to check it.
    * We simply return SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
   if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN ||
-      rendering_interface == SRT_RENDERING_INTERFACE_VDPAU)
+      rendering_interface == SRT_RENDERING_INTERFACE_VDPAU ||
+      rendering_interface == SRT_RENDERING_INTERFACE_VAAPI)
     goto out;
 
   switch (window_system)
@@ -1013,6 +1027,7 @@ _srt_check_graphics (const char *helpers_path,
         break;
 
       case SRT_RENDERING_INTERFACE_VDPAU:
+      case SRT_RENDERING_INTERFACE_VAAPI:
         /* The test here tries to draw an offscreen X11 window */
         non_zero_wait_status_issue = SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
         break;
@@ -1077,6 +1092,7 @@ _srt_check_graphics (const char *helpers_path,
         break;
 
       case SRT_RENDERING_INTERFACE_VDPAU:
+      case SRT_RENDERING_INTERFACE_VAAPI:
         /* The output is in plan text, nothing to do here */
         break;
 
@@ -1188,6 +1204,7 @@ _srt_check_graphics (const char *helpers_path,
         break;
 
       case SRT_RENDERING_INTERFACE_VDPAU:
+      case SRT_RENDERING_INTERFACE_VAAPI:
         if (output != NULL)
           renderer_string = output;
         break;
@@ -1258,7 +1275,7 @@ srt_graphics_get_issues (SrtGraphics *self)
  *  or vendor-specific, and if vendor-specific, attempt to guess the vendor
  *
  * Return whether the entry-point library for this graphics stack is vendor-neutral or vendor-specific.
- * Vulkan and VDPAU are always vendor-neutral, so this function will always return %TRUE for them.
+ * Vulkan, VDPAU and VA-API are always vendor-neutral, so this function will always return %TRUE for them.
  *
  * Returns: %TRUE if the graphics library is vendor-neutral, %FALSE otherwise.
  */
@@ -1273,6 +1290,7 @@ srt_graphics_library_is_vendor_neutral (SrtGraphics *self,
 
   return (self->rendering_interface == SRT_RENDERING_INTERFACE_VULKAN ||
           self->rendering_interface == SRT_RENDERING_INTERFACE_VDPAU ||
+          self->rendering_interface == SRT_RENDERING_INTERFACE_VAAPI ||
           self->library_vendor == SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
 }
 

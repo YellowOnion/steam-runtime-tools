@@ -2166,6 +2166,26 @@ static const GraphicsTest graphics_test[] =
     .vendor_neutral = TRUE,
   },
 
+  {
+    .description = "good va-api",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VAAPI,
+    .issues = SRT_GRAPHICS_ISSUES_NONE,
+    .multiarch_tuple = "mock-good",
+    .renderer_string = SRT_TEST_GOOD_VAAPI_RENDERER,
+    .vendor_neutral = TRUE,
+  },
+
+  {
+    .description = "bad va-api",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VAAPI,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+    .multiarch_tuple = "mock-bad",
+    .messages = SRT_TEST_BAD_VAAPI_MESSAGES,
+    .exit_status = 1,
+    .vendor_neutral = TRUE,
+  },
 };
 
 static void

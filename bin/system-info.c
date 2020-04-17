@@ -469,7 +469,8 @@ print_graphics_details(JsonBuilder *builder,
 
       rendering_interface = srt_graphics_get_rendering_interface (g->data);
       if (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN &&
-          rendering_interface != SRT_RENDERING_INTERFACE_VDPAU)
+          rendering_interface != SRT_RENDERING_INTERFACE_VDPAU &&
+          rendering_interface != SRT_RENDERING_INTERFACE_VAAPI)
         {
           json_builder_set_member_name (builder, "library-vendor");
           srt_graphics_library_is_vendor_neutral (g->data, &library_vendor);

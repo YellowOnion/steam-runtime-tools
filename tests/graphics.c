@@ -260,64 +260,6 @@ test_object (Fixture *f,
 }
 
 /*
- * Test a mock system with hardware graphics stack
- */
-static void
-test_good_graphics (Fixture *f,
-                    gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *messages;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-good",
-                                           SRT_WINDOW_SYSTEM_GLX,
-                                           SRT_RENDERING_INTERFACE_GL,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
-                   NULL);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   SRT_TEST_GOOD_GRAPHICS_VERSION);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-  g_object_get (graphics,
-                "messages", &messages,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpstr (messages, ==, NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
-  g_assert_cmpstr (tuple, ==, "mock-good");
-  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
-  g_assert_cmpint (exit_status, ==, 0);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-  g_free (messages);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
  * Test that the X11 window system is normalized correctly.
  */
 static void
@@ -440,412 +382,6 @@ test_normalize_window_system (Fixture *f,
       g_clear_object (&graphics);
     }
 
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with no graphics stack
- */
-static void
-test_bad_graphics (Fixture *f,
-                   gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  SrtGraphicsLibraryVendor library_vendor;
-  gboolean vendor_neutral;
-  gchar *messages;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-bad",
-                                           SRT_WINDOW_SYSTEM_GLX,
-                                           SRT_RENDERING_INTERFACE_GL,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   NULL);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   NULL);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
-                   "warning: this warning should always be logged\n"
-                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
-                  "info: you used LIBGL_DEBUG=verbose\n");
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-
-  /* We used "mock-bad" for the architecture so, when checking the library vendor,
-   * we will not be able to call the helper `mock-bad-check-library`.
-   * For this reason we expect %SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
-  vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
-  g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
-  g_assert_false (vendor_neutral);
-  g_object_get (graphics,
-                "messages", &messages,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "library-vendor", &library_vendor,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert_cmpint (library_vendor, ==, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
-  g_assert_cmpstr (messages, ==,
-                   "warning: this warning should always be logged\n"
-                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
-                  "info: you used LIBGL_DEBUG=verbose\n");
-  g_assert_cmpstr (tuple, ==, "mock-bad");
-  g_assert_cmpstr (renderer, ==, NULL);
-  g_assert_cmpstr (version, ==, NULL);
-  g_assert_cmpint (exit_status, ==, 1);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (messages);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with timeout
- */
-static void
-test_timeout_graphics (Fixture *f,
-                   gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-  srt_system_info_set_test_flags (info, SRT_TEST_FLAGS_TIME_OUT_SOONER);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-hanging",
-                                           SRT_WINDOW_SYSTEM_GLX,
-                                           SRT_RENDERING_INTERFACE_GL,
-                                           &graphics);
-  g_debug ("issues is 0x%x", issues);
-  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD), ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT), ==, SRT_GRAPHICS_ISSUES_TIMEOUT);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   NULL);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   NULL);
-  // Timeout has exit code 124
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 124);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_CANNOT_LOAD), ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert_cmphex ((issues & SRT_GRAPHICS_ISSUES_TIMEOUT), ==, SRT_GRAPHICS_ISSUES_TIMEOUT);
-  g_assert_cmpstr (tuple, ==, "mock-hanging");
-  g_assert_cmpstr (renderer, ==, NULL);
-  g_assert_cmpstr (version, ==, NULL);
-  g_assert_cmpint (exit_status, ==, 124);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with software rendering
- */
-static void
-test_software_rendering (Fixture *f,
-                         gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *messages;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-software",
-                                           SRT_WINDOW_SYSTEM_GLX,
-                                           SRT_RENDERING_INTERFACE_GL,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
-                   "warning: this warning should always be logged\n"
-                   "info: you used LIBGL_DEBUG=verbose\n");
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   SRT_TEST_SOFTWARE_GRAPHICS_RENDERER);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   SRT_TEST_SOFTWARE_GRAPHICS_VERSION);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-
-  g_object_get (graphics,
-                "messages", &messages,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING);
-  g_assert_cmpstr (tuple, ==, "mock-software");
-  g_assert_cmpstr (renderer, ==, SRT_TEST_SOFTWARE_GRAPHICS_RENDERER);
-  g_assert_cmpstr (version, ==, SRT_TEST_SOFTWARE_GRAPHICS_VERSION);
-  g_assert_cmpint (exit_status, ==, 0);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_assert_cmpstr (messages, ==,
-                   "warning: this warning should always be logged\n"
-                   "info: you used LIBGL_DEBUG=verbose\n");
-
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-  g_free (messages);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with good vulkan drivers
- */
-static void
-test_good_vulkan (Fixture *f,
-                  gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-good",
-                                           SRT_WINDOW_SYSTEM_X11,
-                                           SRT_RENDERING_INTERFACE_VULKAN,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   SRT_TEST_GOOD_VULKAN_VERSION);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
-  g_assert_cmpstr (tuple, ==, "mock-good");
-  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_VULKAN_VERSION);
-  g_assert_cmpint (exit_status, ==, 0);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with no vulkan graphics driver
- */
-static void
-test_bad_vulkan (Fixture *f,
-                 gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-bad",
-                                           SRT_WINDOW_SYSTEM_X11,
-                                           SRT_RENDERING_INTERFACE_VULKAN,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   NULL);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   NULL);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-  g_assert_cmpstr (tuple, ==, "mock-bad");
-  g_assert_cmpstr (renderer, ==, NULL);
-  g_assert_cmpstr (version, ==, NULL);
-  g_assert_cmpint (exit_status, ==, 1);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with vulkan driver but check-vulkan failure
- */
-static void
-test_mixed_vulkan (Fixture *f,
-                 gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  int exit_status;
-  int terminating_signal;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-mixed",
-                                           SRT_WINDOW_SYSTEM_X11,
-                                           SRT_RENDERING_INTERFACE_VULKAN,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   SRT_TEST_GOOD_VULKAN_VERSION);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
-
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
-                   "failed to create window surface!\n");
-
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-  g_assert_cmpstr (tuple, ==, "mock-mixed");
-  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_VULKAN_VERSION);
-  g_assert_cmpint (exit_status, ==, 1);
-  g_assert_cmpint (terminating_signal, ==, 0);
-
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
-
-/*
- * Test a mock system with gl driver but check-gl failure
- */
-static void
-test_mixed_gl (Fixture *f,
-               gconstpointer context)
-{
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-mixed",
-                                           SRT_WINDOW_SYSTEM_GLX,
-                                           SRT_RENDERING_INTERFACE_GL,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==,
-                   SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==,
-                   SRT_TEST_GOOD_GRAPHICS_VERSION);
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-  g_assert_cmpstr (tuple, ==, "mock-mixed");
-  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_GRAPHICS_RENDERER);
-  g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==,
-                   "warning: this warning should always be logged\n"
-                   "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
-                   "info: you used LIBGL_DEBUG=verbose\n");
-
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-
-  g_object_unref (graphics);
   g_object_unref (info);
 }
 
@@ -2493,110 +2029,209 @@ test_vdpau (Fixture *f,
     }
 }
 
-static void
-test_good_vdpau (Fixture *f,
-                 gconstpointer context)
+typedef struct
 {
-  SrtGraphics *graphics = NULL;
+  const gchar *description;
+  SrtWindowSystem window_system;
+  SrtRenderingInterface rendering_interface;
+  SrtGraphicsLibraryVendor library_vendor;
   SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  gchar *messages;
+  SrtTestFlags test_flags;
+  const gchar *multiarch_tuple;
+  const gchar *renderer_string;
+  const gchar *version_string;
+  const gchar *messages;
   int exit_status;
-  int terminating_signal;
+  gboolean vendor_neutral;
+} GraphicsTest;
 
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
+static const GraphicsTest graphics_test[] =
+{
+  {
+    .description = "good vdpau",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+    .issues = SRT_GRAPHICS_ISSUES_NONE,
+    .multiarch_tuple = "mock-good",
+    .renderer_string = SRT_TEST_GOOD_VDPAU_RENDERER,
+    .vendor_neutral = TRUE,
+  },
 
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-good",
-                                           SRT_WINDOW_SYSTEM_X11,
-                                           SRT_RENDERING_INTERFACE_VDPAU,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==, SRT_TEST_GOOD_VDPAU_RENDERER);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==, NULL);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, NULL);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+  {
+    .description = "bad vdpau",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+    .multiarch_tuple = "mock-bad",
+    .messages = SRT_TEST_BAD_VDPAU_MESSAGES,
+    .exit_status = 1,
+    .vendor_neutral = TRUE,
+  },
 
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "messages", &messages,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
-  g_assert_cmpstr (tuple, ==, "mock-good");
-  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_VDPAU_RENDERER);
-  g_assert_cmpstr (version, ==, NULL);
-  g_assert_cmpstr (messages, ==, NULL);
-  g_assert_cmpint (exit_status, ==, 0);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-  g_free (messages);
+  {
+    .description = "good gl",
+    .window_system = SRT_WINDOW_SYSTEM_GLX,
+    .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+    .issues = SRT_GRAPHICS_ISSUES_NONE,
+    .multiarch_tuple = "mock-good",
+    .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+    .version_string = SRT_TEST_GOOD_GRAPHICS_VERSION,
+  },
 
-  g_object_unref (graphics);
-  g_object_unref (info);
-}
+  {
+    .description = "no graphics stack",
+    .window_system = SRT_WINDOW_SYSTEM_GLX,
+    .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD,
+    .multiarch_tuple = "mock-bad",
+    .messages = "warning: this warning should always be logged\n"
+                "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
+                "info: you used LIBGL_DEBUG=verbose\n",
+    /* We used "mock-bad" for the architecture so, when checking the library vendor,
+     * we will not be able to call the helper `mock-bad-check-library`.
+     * For this reason we expect %SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
+    .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN,
+    .exit_status = 1,
+  },
+
+  {
+    .description = "graphics timeout",
+    .window_system = SRT_WINDOW_SYSTEM_GLX,
+    .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+    .issues = (SRT_GRAPHICS_ISSUES_CANNOT_LOAD | SRT_GRAPHICS_ISSUES_TIMEOUT),
+    .test_flags = SRT_TEST_FLAGS_TIME_OUT_SOONER,
+    .multiarch_tuple = "mock-hanging",
+    // Timeout has exit code 124
+    .exit_status = 124,
+  },
+
+  {
+    .description = "software rendering",
+    .window_system = SRT_WINDOW_SYSTEM_GLX,
+    .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+    .issues = SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING,
+    .multiarch_tuple = "mock-software",
+    .renderer_string = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
+    .version_string = SRT_TEST_SOFTWARE_GRAPHICS_VERSION,
+    .messages = "warning: this warning should always be logged\n"
+                "info: you used LIBGL_DEBUG=verbose\n",
+  },
+
+  {
+    .description = "gl driver ok but check-gl fails",
+    .window_system = SRT_WINDOW_SYSTEM_GLX,
+    .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+    .multiarch_tuple = "mock-mixed",
+    .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+    .version_string = SRT_TEST_GOOD_GRAPHICS_VERSION,
+    .messages = "warning: this warning should always be logged\n"
+                "Waffle error: 0x2 WAFFLE_ERROR_UNKNOWN: XOpenDisplay failed\n"
+                "info: you used LIBGL_DEBUG=verbose\n",
+    .exit_status = 1,
+  },
+
+  {
+    .description = "good vulkan",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+    .issues = SRT_GRAPHICS_ISSUES_NONE,
+    .multiarch_tuple = "mock-good",
+    .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+    .version_string = SRT_TEST_GOOD_VULKAN_VERSION,
+    .vendor_neutral = TRUE,
+  },
+
+  {
+    .description = "bad vulkan",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD,
+    .multiarch_tuple = "mock-bad",
+    .messages = "/build/vulkan-tools/src/Vulkan-Tools-1.1.114/vulkaninfo/vulkaninfo.c:5884: failed with VK_ERROR_INITIALIZATION_FAILED\n",
+    .exit_status = 1,
+    .vendor_neutral = TRUE,
+  },
+
+  {
+    .description = "good vulkan driver but check-vulkan failure",
+    .window_system = SRT_WINDOW_SYSTEM_X11,
+    .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+    .multiarch_tuple = "mock-mixed",
+    .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+    .version_string = SRT_TEST_GOOD_VULKAN_VERSION,
+    .messages = "failed to create window surface!\n",
+    .exit_status = 1,
+    .vendor_neutral = TRUE,
+  },
+
+};
 
 static void
-test_bad_vdpau (Fixture *f,
-                gconstpointer context)
+test_check_graphics (Fixture *f,
+                     gconstpointer context)
 {
-  SrtGraphics *graphics = NULL;
-  SrtGraphicsIssues issues;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
-  gchar *messages;
-  int exit_status;
-  int terminating_signal;
+  for (gsize i = 0; i < G_N_ELEMENTS (graphics_test); i++)
+    {
+      const GraphicsTest *test = &graphics_test[i];
+      SrtGraphics *graphics = NULL;
+      SrtGraphicsIssues issues;
+      gchar *tuple;
+      gchar *renderer;
+      gchar *version;
+      gchar *messages;
+      int exit_status;
+      int terminating_signal;
+      gboolean vendor_neutral;
+      SrtGraphicsLibraryVendor library_vendor;
 
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  srt_system_info_set_helpers_path (info, f->builddir);
+      g_test_message ("%s", test->description);
 
-  issues = srt_system_info_check_graphics (info,
-                                           "mock-bad",
-                                           SRT_WINDOW_SYSTEM_X11,
-                                           SRT_RENDERING_INTERFACE_VDPAU,
-                                           &graphics);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==, NULL);
-  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==, NULL);
-  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, SRT_TEST_BAD_VDPAU_MESSAGES);
-  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
-  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+      SrtSystemInfo *info = srt_system_info_new (NULL);
+      srt_system_info_set_helpers_path (info, f->builddir);
+      srt_system_info_set_test_flags (info, test->test_flags);
 
-  g_object_get (graphics,
-                "multiarch-tuple", &tuple,
-                "issues", &issues,
-                "renderer-string", &renderer,
-                "version-string", &version,
-                "messages", &messages,
-                "exit-status", &exit_status,
-                "terminating-signal", &terminating_signal,
-                NULL);
-  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-  g_assert_cmpstr (tuple, ==, "mock-bad");
-  g_assert_cmpstr (renderer, ==, NULL);
-  g_assert_cmpstr (version, ==, NULL);
-  g_assert_cmpstr (messages, ==, SRT_TEST_BAD_VDPAU_MESSAGES);
-  g_assert_cmpint (exit_status, ==, 1);
-  g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-  g_free (messages);
+      issues = srt_system_info_check_graphics (info,
+                                               test->multiarch_tuple,
+                                               test->window_system,
+                                               test->rendering_interface,
+                                               &graphics);
+      g_assert_cmpint (issues, ==, test->issues);
+      g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==, test->renderer_string);
+      g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==, test->version_string);
+      g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, test->messages);
+      g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, test->exit_status);
+      g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
 
-  g_object_unref (graphics);
-  g_object_unref (info);
+      vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
+      g_assert_cmpint (library_vendor, ==, test->library_vendor);
+      g_assert_cmpint (vendor_neutral, ==, test->vendor_neutral);
+
+      g_object_get (graphics,
+                    "multiarch-tuple", &tuple,
+                    "issues", &issues,
+                    "renderer-string", &renderer,
+                    "version-string", &version,
+                    "messages", &messages,
+                    "exit-status", &exit_status,
+                    "terminating-signal", &terminating_signal,
+                    NULL);
+      g_assert_cmpint (issues, ==, test->issues);
+      g_assert_cmpstr (tuple, ==, test->multiarch_tuple);
+      g_assert_cmpstr (renderer, ==, test->renderer_string);
+      g_assert_cmpstr (version, ==, test->version_string);
+      g_assert_cmpstr (messages, ==, test->messages);
+      g_assert_cmpint (exit_status, ==, test->exit_status);
+      g_assert_cmpint (terminating_signal, ==, 0);
+      g_free (tuple);
+      g_free (renderer);
+      g_free (version);
+      g_free (messages);
+
+      g_object_unref (graphics);
+      g_object_unref (info);
+    }
 }
 
 static gint
@@ -2720,27 +2355,10 @@ main (int argc,
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/graphics/object", Fixture, NULL,
               setup, test_object, teardown);
-  g_test_add ("/graphics/good", Fixture, NULL,
-              setup, test_good_graphics, teardown);
-  g_test_add ("/graphics/bad", Fixture, NULL,
-              setup, test_bad_graphics, teardown);
-  g_test_add ("/graphics/hanging", Fixture, NULL,
-              setup, test_timeout_graphics, teardown);
-  g_test_add ("/graphics/software", Fixture, NULL,
-              setup, test_software_rendering, teardown);
   g_test_add ("/graphics/normalize_window_system", Fixture, NULL,
               setup, test_normalize_window_system, teardown);
-  g_test_add ("/graphics/gl-mixed", Fixture, NULL,
-              setup, test_mixed_gl, teardown);
   g_test_add ("/graphics/sigusr", Fixture, NULL,
               setup, test_sigusr, teardown);
-
-  g_test_add ("/graphics/vulkan", Fixture, NULL,
-              setup, test_good_vulkan, teardown);
-  g_test_add ("/graphics/vulkan-bad", Fixture, NULL,
-              setup, test_bad_vulkan, teardown);
-  g_test_add ("/graphics/vulkan-mixed", Fixture, NULL,
-              setup, test_mixed_vulkan, teardown);
 
   g_test_add ("/graphics/icd/egl/basic", Fixture, NULL,
               setup, test_icd_egl, teardown);
@@ -2778,10 +2396,9 @@ main (int argc,
 
   g_test_add ("/graphics/vdpau/basic", Fixture, NULL,
               setup, test_vdpau, teardown);
-  g_test_add ("/graphics/vdpau/good", Fixture, NULL,
-              setup, test_good_vdpau, teardown);
-  g_test_add ("/graphics/vdpau/bad", Fixture, NULL,
-              setup, test_bad_vdpau, teardown);
+
+  g_test_add ("/graphics/check", Fixture, NULL,
+              setup, test_check_graphics, teardown);
 
   g_test_add ("/graphics/glx/debian", Fixture, NULL,
               setup, test_glx_debian, teardown);

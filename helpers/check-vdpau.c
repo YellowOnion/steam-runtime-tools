@@ -27,6 +27,7 @@
  */
 
 #include <assert.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -37,6 +38,7 @@
 #include <vdpau/vdpau.h>
 #include <vdpau/vdpau_x11.h>
 
+static VdpGetInformationString *vdp_get_information_string;
 static VdpGetProcAddress *vdp_get_proc_address;
 static VdpDeviceDestroy *vdp_device_destroy;
 static VdpGetErrorString *vdp_get_error_string;
@@ -48,12 +50,14 @@ static VdpOutputSurfaceRenderOutputSurface *vdp_output_surface_render_output_sur
 enum
 {
   OPTION_HELP = 1,
+  OPTION_VERBOSE,
   OPTION_VERSION,
 };
 
 struct option long_options[] =
 {
   { "help", no_argument, NULL, OPTION_HELP },
+  { "verbose", no_argument, NULL, OPTION_VERBOSE },
   { "version", no_argument, NULL, OPTION_VERSION },
   { NULL, 0, NULL, 0 }
 };
@@ -103,12 +107,13 @@ load_vdpau (VdpDevice dev)
 {
 #define GET_POINTER(fid, fn) do_vdpau_or_exit (vdp_get_proc_address (dev, fid, (void**)&fn))
 
-   GET_POINTER(VDP_FUNC_ID_DEVICE_DESTROY,                       vdp_device_destroy);
-   GET_POINTER(VDP_FUNC_ID_GET_ERROR_STRING,                     vdp_get_error_string);
-   GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_CREATE,                vdp_output_surface_create);
-   GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_GET_BITS_NATIVE,       vdp_output_surface_get_bits_native);
-   GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_PUT_BITS_NATIVE,       vdp_output_surface_put_bits_native);
-   GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_RENDER_OUTPUT_SURFACE, vdp_output_surface_render_output_surface);
+  GET_POINTER(VDP_FUNC_ID_GET_INFORMATION_STRING,               vdp_get_information_string);
+  GET_POINTER(VDP_FUNC_ID_DEVICE_DESTROY,                       vdp_device_destroy);
+  GET_POINTER(VDP_FUNC_ID_GET_ERROR_STRING,                     vdp_get_error_string);
+  GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_CREATE,                vdp_output_surface_create);
+  GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_GET_BITS_NATIVE,       vdp_output_surface_get_bits_native);
+  GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_PUT_BITS_NATIVE,       vdp_output_surface_put_bits_native);
+  GET_POINTER(VDP_FUNC_ID_OUTPUT_SURFACE_RENDER_OUTPUT_SURFACE, vdp_output_surface_render_output_surface);
 }
 
 int
@@ -119,8 +124,10 @@ main (int argc,
   VdpDevice device;
   VdpOutputSurface out_surface_1;
   VdpOutputSurface out_surface_2;
+  bool verbose = false;
   int screen;
   int opt;
+  const char* information = NULL;
 
   /* Arbitrarily declare two 4x4 source images */
   uint32_t black_box[] =
@@ -151,6 +158,10 @@ main (int argc,
             usage (0);
             break;
 
+          case OPTION_VERBOSE:
+            verbose = true;
+            break;
+
           case OPTION_VERSION:
             /* Output version number as YAML for machine-readability,
              * inspired by `ostree --version` and `docker version` */
@@ -179,6 +190,12 @@ main (int argc,
   do_vdpau_or_exit (vdp_device_create_x11 (display, screen, &device, &vdp_get_proc_address));
 
   load_vdpau (device);
+
+  if (verbose)
+    {
+      do_vdpau_or_exit (vdp_get_information_string (&information));
+      printf ("%s\n", information);
+    }
 
   do_vdpau_or_exit (vdp_output_surface_create (device, VDP_RGBA_FORMAT_B8G8R8A8, 4, 4, &out_surface_1));
   do_vdpau_or_exit (vdp_output_surface_create (device, VDP_RGBA_FORMAT_B8G8R8A8, 4, 4, &out_surface_2));

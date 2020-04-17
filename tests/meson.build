@@ -179,8 +179,10 @@ executable(
 # Helpers with no dependencies and one source file of the same name
 # as the helper itself.
 foreach helper : [
+  'mock-bad-check-vdpau',
   'mock-bad-check-vulkan',
   'mock-bad-vulkaninfo',
+  'mock-good-check-vdpau',
   'mock-good-vulkaninfo',
   'mock-hanging-wflinfo',
   'mock-sigusr-wflinfo',

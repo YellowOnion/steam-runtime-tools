@@ -2493,6 +2493,112 @@ test_vdpau (Fixture *f,
     }
 }
 
+static void
+test_good_vdpau (Fixture *f,
+                 gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+  gchar *messages;
+  int exit_status;
+  int terminating_signal;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-good",
+                                           SRT_WINDOW_SYSTEM_X11,
+                                           SRT_RENDERING_INTERFACE_VDPAU,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==, SRT_TEST_GOOD_VDPAU_RENDERER);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==, NULL);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, NULL);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 0);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                "messages", &messages,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_NONE);
+  g_assert_cmpstr (tuple, ==, "mock-good");
+  g_assert_cmpstr (renderer, ==, SRT_TEST_GOOD_VDPAU_RENDERER);
+  g_assert_cmpstr (version, ==, NULL);
+  g_assert_cmpstr (messages, ==, NULL);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_cmpint (terminating_signal, ==, 0);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+  g_free (messages);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
+static void
+test_bad_vdpau (Fixture *f,
+                gconstpointer context)
+{
+  SrtGraphics *graphics = NULL;
+  SrtGraphicsIssues issues;
+  gchar *tuple;
+  gchar *renderer;
+  gchar *version;
+  gchar *messages;
+  int exit_status;
+  int terminating_signal;
+
+  SrtSystemInfo *info = srt_system_info_new (NULL);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  issues = srt_system_info_check_graphics (info,
+                                           "mock-bad",
+                                           SRT_WINDOW_SYSTEM_X11,
+                                           SRT_RENDERING_INTERFACE_VDPAU,
+                                           &graphics);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+  g_assert_cmpstr (srt_graphics_get_renderer_string (graphics), ==, NULL);
+  g_assert_cmpstr (srt_graphics_get_version_string (graphics), ==, NULL);
+  g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, SRT_TEST_BAD_VDPAU_MESSAGES);
+  g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, 1);
+  g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
+  g_object_get (graphics,
+                "multiarch-tuple", &tuple,
+                "issues", &issues,
+                "renderer-string", &renderer,
+                "version-string", &version,
+                "messages", &messages,
+                "exit-status", &exit_status,
+                "terminating-signal", &terminating_signal,
+                NULL);
+  g_assert_cmpint (issues, ==, SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+  g_assert_cmpstr (tuple, ==, "mock-bad");
+  g_assert_cmpstr (renderer, ==, NULL);
+  g_assert_cmpstr (version, ==, NULL);
+  g_assert_cmpstr (messages, ==, SRT_TEST_BAD_VDPAU_MESSAGES);
+  g_assert_cmpint (exit_status, ==, 1);
+  g_assert_cmpint (terminating_signal, ==, 0);
+  g_free (tuple);
+  g_free (renderer);
+  g_free (version);
+  g_free (messages);
+
+  g_object_unref (graphics);
+  g_object_unref (info);
+}
+
 static gint
 glx_icd_compare (SrtGlxIcd *a, SrtGlxIcd *b)
 {
@@ -2670,8 +2776,12 @@ main (int argc,
   g_test_add ("/graphics/dri/flatpak", Fixture, NULL,
               setup, test_dri_flatpak, teardown);
 
-  g_test_add ("/graphics/vdpau", Fixture, NULL,
+  g_test_add ("/graphics/vdpau/basic", Fixture, NULL,
               setup, test_vdpau, teardown);
+  g_test_add ("/graphics/vdpau/good", Fixture, NULL,
+              setup, test_good_vdpau, teardown);
+  g_test_add ("/graphics/vdpau/bad", Fixture, NULL,
+              setup, test_bad_vdpau, teardown);
 
   g_test_add ("/graphics/glx/debian", Fixture, NULL,
               setup, test_glx_debian, teardown);

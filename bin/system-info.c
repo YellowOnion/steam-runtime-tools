@@ -449,6 +449,7 @@ print_graphics_details(JsonBuilder *builder,
       gchar *parameters = srt_graphics_dup_parameters_string (g->data);
       const char *messages;
       SrtGraphicsLibraryVendor library_vendor;
+      SrtRenderingInterface rendering_interface;
 
       json_builder_set_member_name (builder, parameters);
       json_builder_begin_object (builder);
@@ -465,7 +466,10 @@ print_graphics_details(JsonBuilder *builder,
       json_builder_add_string_value (builder, srt_graphics_get_renderer_string (g->data));
       json_builder_set_member_name (builder, "version");
       json_builder_add_string_value (builder, srt_graphics_get_version_string (g->data));
-      if (srt_graphics_get_rendering_interface (g->data) != SRT_RENDERING_INTERFACE_VULKAN)
+
+      rendering_interface = srt_graphics_get_rendering_interface (g->data);
+      if (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN &&
+          rendering_interface != SRT_RENDERING_INTERFACE_VDPAU)
         {
           json_builder_set_member_name (builder, "library-vendor");
           srt_graphics_library_is_vendor_neutral (g->data, &library_vendor);

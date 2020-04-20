@@ -1538,7 +1538,7 @@ GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
       return list;
     }
 
-  // Try each of glx and gles
+  // Try each rendering interface
   // Try each window system
 
   abi->cached_combined_issues |=
@@ -1567,6 +1567,13 @@ GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
                                     multiarch_tuple,
                                     SRT_WINDOW_SYSTEM_X11,
                                     SRT_RENDERING_INTERFACE_VULKAN,
+                                    NULL);
+
+  abi->cached_combined_issues |=
+    srt_system_info_check_graphics (self,
+                                    multiarch_tuple,
+                                    SRT_WINDOW_SYSTEM_X11,
+                                    SRT_RENDERING_INTERFACE_VDPAU,
                                     NULL);
 
   abi->graphics_cache_available = TRUE;

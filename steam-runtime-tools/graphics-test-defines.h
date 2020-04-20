@@ -33,4 +33,9 @@
 #define SRT_TEST_SOFTWARE_GRAPHICS_VERSION "3.1 Mesa 19.1.3"
 #define SRT_TEST_GOOD_VULKAN_DRIVER_VERSION "79695877"
 #define SRT_TEST_GOOD_VULKAN_VERSION "1.1.102 (device 8086:0412) (driver 19.1.5)"
-
+#define SRT_TEST_GOOD_VDPAU_RENDERER "G3DVL VDPAU Driver Shared Library version 1.0\n"
+#define SRT_TEST_BAD_VDPAU_MESSAGES "Failed to open VDPAU backend libvdpau_nvidia.so: cannot open shared object file: No such file or directory\n\
+vdp_device_create_x11 (display, screen, &device, &vdp_get_proc_address) failed: 1\n"
+#define SRT_TEST_GOOD_VAAPI_RENDERER "Mesa Gallium driver 20.0.4 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.3-arch1-1, LLVM 9.0.1)\n"
+#define SRT_TEST_BAD_VAAPI_MESSAGES "libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)\n\
+vaInitialize (va_display, &major_version, &minor_version) failed: unknown libva error (-1)\n"

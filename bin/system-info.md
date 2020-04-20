@@ -411,6 +411,12 @@ keys:
         **vulkan**
         :   Vulkan
 
+        **vdpau**
+        :   VDPAU
+
+        **va-api**
+        :   VA-API
+
         The values are objects with the following string keys:
 
         **renderer**

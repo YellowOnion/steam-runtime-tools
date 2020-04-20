@@ -504,6 +504,8 @@ _argv_for_graphics_test (const char *helpers_path,
 
           case SRT_RENDERING_INTERFACE_GLESV2:
           case SRT_RENDERING_INTERFACE_VULKAN:
+          case SRT_RENDERING_INTERFACE_VDPAU:
+          case SRT_RENDERING_INTERFACE_VAAPI:
           default:
             g_critical ("GLX window system only makes sense with GL "
                         "rendering interface, not %d",
@@ -527,6 +529,8 @@ _argv_for_graphics_test (const char *helpers_path,
             break;
 
           case SRT_RENDERING_INTERFACE_VULKAN:
+          case SRT_RENDERING_INTERFACE_VDPAU:
+          case SRT_RENDERING_INTERFACE_VAAPI:
             /* They don't set platformstring, just set argv later. */
             break;
 
@@ -544,6 +548,8 @@ _argv_for_graphics_test (const char *helpers_path,
             break;
 
           case SRT_RENDERING_INTERFACE_VULKAN:
+          case SRT_RENDERING_INTERFACE_VDPAU:
+          case SRT_RENDERING_INTERFACE_VAAPI:
           default:
             g_critical ("EGL window system only makes sense with a GL-based "
                         "rendering interface, not %d",
@@ -587,6 +593,26 @@ _argv_for_graphics_test (const char *helpers_path,
           goto out;
 
         g_ptr_array_add (argv, g_strdup ("-j"));
+        break;
+
+      case SRT_RENDERING_INTERFACE_VDPAU:
+        argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-vdpau",
+                                flags, error);
+
+        if (argv == NULL)
+          goto out;
+
+        g_ptr_array_add (argv, g_strdup ("--verbose"));
+        break;
+
+      case SRT_RENDERING_INTERFACE_VAAPI:
+        argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-va-api",
+                                flags, error);
+
+        if (argv == NULL)
+          goto out;
+
+        g_ptr_array_add (argv, g_strdup ("--verbose"));
         break;
 
       default:
@@ -782,9 +808,11 @@ _srt_check_library_vendor (const char *multiarch_tuple,
   SrtLibraryIssues issues;
   const char * const *dependencies;
 
-  /* Vulkan is always vendor-neutral, so it doesn't make sense to check it. We simply return
-   * SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
-  if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
+  /* Vulkan, VDPAU and VA-API are always vendor-neutral, so it doesn't make sense to check it.
+   * We simply return SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
+  if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN ||
+      rendering_interface == SRT_RENDERING_INTERFACE_VDPAU ||
+      rendering_interface == SRT_RENDERING_INTERFACE_VAAPI)
     goto out;
 
   switch (window_system)
@@ -954,6 +982,7 @@ _srt_check_graphics (const char *helpers_path,
   const gchar *renderer_string = NULL;
   GError *error = NULL;
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+  SrtGraphicsIssues non_zero_wait_status_issue = SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
@@ -989,6 +1018,24 @@ _srt_check_graphics (const char *helpers_path,
 
   library_vendor = _srt_check_library_vendor (multiarch_tuple, window_system, rendering_interface);
 
+  switch (rendering_interface)
+    {
+      case SRT_RENDERING_INTERFACE_GL:
+      case SRT_RENDERING_INTERFACE_GLESV2:
+      case SRT_RENDERING_INTERFACE_VULKAN:
+        non_zero_wait_status_issue = SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
+        break;
+
+      case SRT_RENDERING_INTERFACE_VDPAU:
+      case SRT_RENDERING_INTERFACE_VAAPI:
+        /* The test here tries to draw an offscreen X11 window */
+        non_zero_wait_status_issue = SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+        break;
+
+      default:
+        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+    }
+
   issues |= _srt_run_helper (&my_environ,
                              &output,
                              &child_stderr,
@@ -997,7 +1044,7 @@ _srt_check_graphics (const char *helpers_path,
                              &exit_status,
                              &terminating_signal,
                              FALSE,
-                             SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+                             non_zero_wait_status_issue);
 
   if (issues != SRT_GRAPHICS_ISSUES_NONE)
     {
@@ -1010,7 +1057,7 @@ _srt_check_graphics (const char *helpers_path,
                                  &exit_status,
                                  &terminating_signal,
                                  TRUE,
-                                 SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+                                 non_zero_wait_status_issue);
 
       goto out;
     }
@@ -1042,6 +1089,11 @@ _srt_check_graphics (const char *helpers_path,
 
             goto out;
           }
+        break;
+
+      case SRT_RENDERING_INTERFACE_VDPAU:
+      case SRT_RENDERING_INTERFACE_VAAPI:
+        /* The output is in plan text, nothing to do here */
         break;
 
       default:
@@ -1151,6 +1203,12 @@ _srt_check_graphics (const char *helpers_path,
                                    SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
         break;
 
+      case SRT_RENDERING_INTERFACE_VDPAU:
+      case SRT_RENDERING_INTERFACE_VAAPI:
+        if (output != NULL)
+          renderer_string = output;
+        break;
+
       default:
         g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
     }
@@ -1217,7 +1275,7 @@ srt_graphics_get_issues (SrtGraphics *self)
  *  or vendor-specific, and if vendor-specific, attempt to guess the vendor
  *
  * Return whether the entry-point library for this graphics stack is vendor-neutral or vendor-specific.
- * Vulkan is always vendor-neutral, so this function will always return %TRUE for it.
+ * Vulkan, VDPAU and VA-API are always vendor-neutral, so this function will always return %TRUE for them.
  *
  * Returns: %TRUE if the graphics library is vendor-neutral, %FALSE otherwise.
  */
@@ -1231,6 +1289,8 @@ srt_graphics_library_is_vendor_neutral (SrtGraphics *self,
     *vendor_out = self->library_vendor;
 
   return (self->rendering_interface == SRT_RENDERING_INTERFACE_VULKAN ||
+          self->rendering_interface == SRT_RENDERING_INTERFACE_VDPAU ||
+          self->rendering_interface == SRT_RENDERING_INTERFACE_VAAPI ||
           self->library_vendor == SRT_GRAPHICS_LIBRARY_VENDOR_GLVND);
 }
 

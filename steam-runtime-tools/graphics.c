@@ -483,6 +483,7 @@ _argv_for_graphics_test (const char *helpers_path,
                          SrtRenderingInterface rendering_interface,
                          GError **error)
 {
+  const char *api;
   GPtrArray *argv = NULL;
   gchar *platformstring = NULL;
   SrtHelperFlags flags = (SRT_HELPER_FLAGS_TIME_OUT
@@ -495,55 +496,60 @@ _argv_for_graphics_test (const char *helpers_path,
 
   if (*window_system == SRT_WINDOW_SYSTEM_GLX)
     {
-      if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
+      switch (rendering_interface)
         {
-          platformstring = g_strdup ("glx");
-        }
-      else
-        {
-          g_critical ("GLX window system only makes sense with GL "
-                      "rendering interface, not %d",
-                      rendering_interface);
-          g_return_val_if_reached (NULL);
+          case SRT_RENDERING_INTERFACE_GL:
+            platformstring = g_strdup ("glx");
+            break;
+
+          case SRT_RENDERING_INTERFACE_GLESV2:
+          case SRT_RENDERING_INTERFACE_VULKAN:
+          default:
+            g_critical ("GLX window system only makes sense with GL "
+                        "rendering interface, not %d",
+                        rendering_interface);
+            g_return_val_if_reached (NULL);
+            break;
         }
     }
   else if (*window_system == SRT_WINDOW_SYSTEM_X11)
     {
-      if (rendering_interface == SRT_RENDERING_INTERFACE_GL)
+      switch (rendering_interface)
         {
-          platformstring = g_strdup ("glx");
-          *window_system = SRT_WINDOW_SYSTEM_GLX;
-        }
-      else if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
-        {
-          platformstring = g_strdup ("x11_egl");
-          *window_system = SRT_WINDOW_SYSTEM_EGL_X11;
-        }
-      else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
-        {
-          // Vulkan, don't set platformstring, just set argv later.
-        }
-      else
-        {
-          /* should not be reached because the precondition checks
-           * should have caught this */
-          g_return_val_if_reached (NULL);
+          case SRT_RENDERING_INTERFACE_GL:
+            platformstring = g_strdup ("glx");
+            *window_system = SRT_WINDOW_SYSTEM_GLX;
+            break;
+
+          case SRT_RENDERING_INTERFACE_GLESV2:
+            platformstring = g_strdup ("x11_egl");
+            *window_system = SRT_WINDOW_SYSTEM_EGL_X11;
+            break;
+
+          case SRT_RENDERING_INTERFACE_VULKAN:
+            /* They don't set platformstring, just set argv later. */
+            break;
+
+          default:
+            g_return_val_if_reached (NULL);
         }
     }
   else if (*window_system == SRT_WINDOW_SYSTEM_EGL_X11)
     {
-      if (rendering_interface == SRT_RENDERING_INTERFACE_GL
-          || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
+      switch (rendering_interface)
         {
-          platformstring = g_strdup ("x11_egl");
-        }
-      else
-        {
-          /* e.g. Vulkan (when implemented) */
-          g_critical ("EGL window system only makes sense with a GL-based "
-                      "rendering interface, not %d",
-                      rendering_interface);
-          g_return_val_if_reached (NULL);
+          case SRT_RENDERING_INTERFACE_GL:
+          case SRT_RENDERING_INTERFACE_GLESV2:
+            platformstring = g_strdup ("x11_egl");
+            break;
+
+          case SRT_RENDERING_INTERFACE_VULKAN:
+          default:
+            g_critical ("EGL window system only makes sense with a GL-based "
+                        "rendering interface, not %d",
+                        rendering_interface);
+            g_return_val_if_reached (NULL);
+            break;
         }
     }
   else
@@ -553,41 +559,39 @@ _argv_for_graphics_test (const char *helpers_path,
       g_return_val_if_reached (NULL);
     }
 
-  if (rendering_interface == SRT_RENDERING_INTERFACE_GL
-      || rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
+  switch (rendering_interface)
     {
-      const char *api;
+      case SRT_RENDERING_INTERFACE_GL:
+      case SRT_RENDERING_INTERFACE_GLESV2:
+        argv = _srt_get_helper (helpers_path, multiarch_tuple, "wflinfo", flags,
+                                error);
 
-      argv = _srt_get_helper (helpers_path, multiarch_tuple, "wflinfo", flags,
-                              error);
+        if (argv == NULL)
+          goto out;
 
-      if (argv == NULL)
-        goto out;
+        if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
+          api = "gles2";
+        else
+          api = "gl";
 
-      if (rendering_interface == SRT_RENDERING_INTERFACE_GLESV2)
-        api = "gles2";
-      else
-        api = "gl";
+        g_ptr_array_add (argv, g_strdup_printf ("--platform=%s", platformstring));
+        g_ptr_array_add (argv, g_strdup_printf ("--api=%s", api));
+        g_ptr_array_add (argv, g_strdup ("--format=json"));
+        break;
 
-      g_ptr_array_add (argv, g_strdup_printf ("--platform=%s", platformstring));
-      g_ptr_array_add (argv, g_strdup_printf ("--api=%s", api));
-      g_ptr_array_add (argv, g_strdup ("--format=json"));
-    }
-  else if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
-    {
-      argv = _srt_get_helper (helpers_path, multiarch_tuple, "vulkaninfo",
-                              flags, error);
+      case SRT_RENDERING_INTERFACE_VULKAN:
+        argv = _srt_get_helper (helpers_path, multiarch_tuple, "vulkaninfo",
+                                flags, error);
 
-      if (argv == NULL)
-        goto out;
+        if (argv == NULL)
+          goto out;
 
-      g_ptr_array_add (argv, g_strdup ("-j"));
-    }
-  else
-    {
-      /* should not be reached because the precondition checks should
-       * have caught this */
-      g_return_val_if_reached (NULL);
+        g_ptr_array_add (argv, g_strdup ("-j"));
+        break;
+
+      default:
+        g_return_val_if_reached (NULL);
+        break;
     }
 
   g_ptr_array_add (argv, NULL);
@@ -954,7 +958,6 @@ _srt_check_graphics (const char *helpers_path,
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
   SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
-  gboolean parse_wflinfo = (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN);
 
   g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
   g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
@@ -1008,138 +1011,148 @@ _srt_check_graphics (const char *helpers_path,
                                  &terminating_signal,
                                  TRUE,
                                  SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-    }
-
-  if (issues != SRT_GRAPHICS_ISSUES_NONE)
-    {
-      goto out;
-    }
-
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-
-  if (!json_parser_load_from_data (parser, output, -1, &error))
-    {
-      g_debug ("The helper output is not a valid JSON: %s", error->message);
-      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-
-      // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
-      issues |= _srt_run_helper (&my_environ,
-                                 &output,
-                                 &child_stderr,
-                                 argv,
-                                 &wait_status,
-                                 &exit_status,
-                                 &terminating_signal,
-                                 TRUE,
-                                 SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-
 
       goto out;
     }
 
-  /* Process json output */
-  if (parse_wflinfo)
+  switch (rendering_interface)
     {
-      issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
+      case SRT_RENDERING_INTERFACE_GL:
+      case SRT_RENDERING_INTERFACE_GLESV2:
+      case SRT_RENDERING_INTERFACE_VULKAN:
+        /* We can't use `json_from_string()` directly because we are targeting an
+         * older json-glib version */
+        parser = json_parser_new ();
 
-      if (issues != SRT_GRAPHICS_ISSUES_NONE)
-        {
-          // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
-          issues |= _srt_run_helper (&my_environ,
-                                     &output,
-                                     &child_stderr,
-                                     argv,
-                                     &wait_status,
-                                     &exit_status,
-                                     &terminating_signal,
-                                     TRUE,
-                                     SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
-        }
+        if (!json_parser_load_from_data (parser, output, -1, &error))
+          {
+            g_debug ("The helper output is not a valid JSON: %s", error->message);
+            issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
 
-      if (rendering_interface == SRT_RENDERING_INTERFACE_GL &&
-         window_system == SRT_WINDOW_SYSTEM_GLX)
-        {
-          /* Now perform *-check-gl drawing test */
-          g_ptr_array_unref (argv);
-          g_clear_pointer (&output, g_free);
+            // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+            issues |= _srt_run_helper (&my_environ,
+                                       &output,
+                                       &child_stderr,
+                                       argv,
+                                       &wait_status,
+                                       &exit_status,
+                                       &terminating_signal,
+                                       TRUE,
+                                       SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
 
-          argv = _argv_for_check_gl (helpers_path,
-                                     test_flags,
-                                     multiarch_tuple,
-                                     &error);
+            goto out;
+          }
+        break;
 
-          if (argv == NULL)
-            {
-              issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-              /* Put the error message in the 'messages' */
-              child_stderr2 = g_strdup (error->message);
-              goto out;
-            }
-
-          /* Now run and report exit code/messages if failure */
-          issues |= _srt_run_helper (&my_environ,
-                                     &output,
-                                     &child_stderr2,
-                                     argv,
-                                     &wait_status,
-                                     &exit_status,
-                                     &terminating_signal,
-                                     FALSE,
-                                     SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-
-          if (issues != SRT_GRAPHICS_ISSUES_NONE)
-            {
-              // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
-              issues |= _srt_run_helper (&my_environ,
-                                         &output,
-                                         &child_stderr2,
-                                         argv,
-                                         &wait_status,
-                                         &exit_status,
-                                         &terminating_signal,
-                                         TRUE,
-                                         SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
-            }
-        }
+      default:
+        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
     }
-  else
+
+  switch (rendering_interface)
     {
-      issues |= _srt_process_vulkaninfo (parser, &new_version_string, &renderer_string);
-      if (new_version_string != NULL)
-        {
-          version_string = new_version_string;
-        }
+      case SRT_RENDERING_INTERFACE_GL:
+      case SRT_RENDERING_INTERFACE_GLESV2:
+        issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
 
-      /* Now perform *-check-vulkan drawing test */
-      g_ptr_array_unref (argv);
-      g_clear_pointer (&output, g_free);
+        if (issues != SRT_GRAPHICS_ISSUES_NONE)
+          {
+            // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+            issues |= _srt_run_helper (&my_environ,
+                                       &output,
+                                       &child_stderr,
+                                       argv,
+                                       &wait_status,
+                                       &exit_status,
+                                       &terminating_signal,
+                                       TRUE,
+                                       SRT_GRAPHICS_ISSUES_CANNOT_LOAD);
+          }
 
-      argv = _argv_for_check_vulkan (helpers_path,
-                                     test_flags,
-                                     multiarch_tuple,
-                                     &error);
+        if (rendering_interface == SRT_RENDERING_INTERFACE_GL &&
+            window_system == SRT_WINDOW_SYSTEM_GLX)
+          {
+            /* Now perform *-check-gl drawing test */
+            g_ptr_array_unref (argv);
+            g_clear_pointer (&output, g_free);
 
-      if (argv == NULL)
-        {
-          issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-          /* Put the error message in the 'messages' */
-          child_stderr2 = g_strdup (error->message);
-          goto out;
-        }
+            argv = _argv_for_check_gl (helpers_path,
+                                       test_flags,
+                                       multiarch_tuple,
+                                       &error);
 
-      /* Now run and report exit code/messages if failure */
-      issues |= _srt_run_helper (&my_environ,
-                                 &output,
-                                 &child_stderr2,
-                                 argv,
-                                 &wait_status,
-                                 &exit_status,
-                                 &terminating_signal,
-                                 FALSE,
-                                 SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+            if (argv == NULL)
+              {
+                issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+                /* Put the error message in the 'messages' */
+                child_stderr2 = g_strdup (error->message);
+                goto out;
+              }
 
+            /* Now run and report exit code/messages if failure */
+            issues |= _srt_run_helper (&my_environ,
+                                       &output,
+                                       &child_stderr2,
+                                       argv,
+                                       &wait_status,
+                                       &exit_status,
+                                       &terminating_signal,
+                                       FALSE,
+                                       SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+
+            if (issues != SRT_GRAPHICS_ISSUES_NONE)
+              {
+                // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
+                issues |= _srt_run_helper (&my_environ,
+                                           &output,
+                                           &child_stderr2,
+                                           argv,
+                                           &wait_status,
+                                           &exit_status,
+                                           &terminating_signal,
+                                           TRUE,
+                                           SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+              }
+          }
+        break;
+
+      case SRT_RENDERING_INTERFACE_VULKAN:
+        issues |= _srt_process_vulkaninfo (parser, &new_version_string, &renderer_string);
+        if (new_version_string != NULL)
+          {
+            version_string = new_version_string;
+          }
+
+        /* Now perform *-check-vulkan drawing test */
+        g_ptr_array_unref (argv);
+        g_clear_pointer (&output, g_free);
+
+        argv = _argv_for_check_vulkan (helpers_path,
+                                       test_flags,
+                                       multiarch_tuple,
+                                       &error);
+
+        if (argv == NULL)
+          {
+            issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+            /* Put the error message in the 'messages' */
+            child_stderr2 = g_strdup (error->message);
+            goto out;
+          }
+
+        /* Now run and report exit code/messages if failure */
+        issues |= _srt_run_helper (&my_environ,
+                                   &output,
+                                   &child_stderr2,
+                                   argv,
+                                   &wait_status,
+                                   &exit_status,
+                                   &terminating_signal,
+                                   FALSE,
+                                   SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+        break;
+
+      default:
+        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
     }
 
 out:

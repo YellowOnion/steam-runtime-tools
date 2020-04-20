@@ -105,7 +105,7 @@ main (int argc,
   VASurfaceID *surfaces = NULL;
   VAImageFormat image_format;
   VAProfile *profiles = NULL;
-  VAConfigID config;
+  VAConfigID config = VA_INVALID_ID;
   VAContextID context = VA_INVALID_ID;
   VABufferID misc_buf_id = VA_INVALID_ID;
   VABufferID pipeline_param_buf_id = VA_INVALID_ID;
@@ -283,6 +283,8 @@ out:
         vaDestroyContext (va_display, context);
       if (img.image_id != VA_INVALID_ID)
         vaDestroyImage (va_display, img.image_id);
+      if (config != VA_INVALID_ID)
+        vaDestroyConfig(va_display, config);
       if (surfaces)
         vaDestroySurfaces (va_display, surfaces, surfaces_count);
 

@@ -7,12 +7,18 @@
 set -e
 set -u
 
+set --
+
+if [ -z "${TESTS_ONLY-}" ]; then
+    set -- "$@" ./*.py
+fi
+
+set -- "$@" tests/depot/*.py
+
 if [ "x${PYFLAKES:=pyflakes3}" = xfalse ] || \
         [ -z "$(command -v "$PYFLAKES")" ]; then
     echo "1..0 # SKIP pyflakes3 not found"
-elif "${PYFLAKES}" \
-    tests/depot/*.py \
-    >&2; then
+elif "${PYFLAKES}" "$@" >&2; then
     echo "1..1"
     echo "ok 1 - $PYFLAKES reported no issues"
 else

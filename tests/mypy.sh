@@ -9,10 +9,16 @@ set -u
 
 export MYPYPATH="${PYTHONPATH:=$(pwd)}"
 
+set --
+
+if [ -z "${TESTS_ONLY-}" ]; then
+    set -- "$@" ./*.py
+fi
+
+set -- "$@" tests/depot/*.py
+
 i=0
-for script in \
-    tests/depot/*.py \
-; do
+for script in "$@"; do
     i=$((i + 1))
     if [ "x${MYPY:="$(command -v mypy || echo false)"}" = xfalse ]; then
         echo "ok $i - $script # SKIP mypy not found"

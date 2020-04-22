@@ -41,10 +41,10 @@ todo:
 test:stretch:
     stage: test
     image: docker.internal.steamos.cloud/steamos/package-builder:stretch
-    script: make check
+    script: make check TESTS_ONLY=true
 
 # The same, but for brewmaster and Python 3.4
 test:brewmaster:
     stage: test
     image: docker.internal.steamos.cloud/steamos/package-builder:brewmaster
-    script: make check
+    script: make check TESTS_ONLY=true

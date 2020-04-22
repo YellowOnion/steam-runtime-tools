@@ -10,9 +10,15 @@ set -u
 n=0
 fail=
 
-for script in \
-    tests/depot/*.py \
-; do
+set --
+
+if [ -z "${TESTS_ONLY-}" ]; then
+    set -- "$@" ./*.py
+fi
+
+set -- "$@" tests/depot/*.py
+
+for script in "$@"; do
     n=$(( n + 1 ))
     if python3 "$script" --help >/dev/null; then
         echo "ok $n - $script --help succeeded with python3"

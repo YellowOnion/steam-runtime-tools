@@ -1,6 +1,8 @@
 /depot/.ref
 /depot/com.valvesoftware.SteamRuntime.*-buildid.txt
 /depot/com.valvesoftware.SteamRuntime.*-runtime.tar.gz
+/depot/com.valvesoftware.SteamRuntime.*-sysroot.Dockerfile
+/depot/com.valvesoftware.SteamRuntime.*-sysroot.tar.gz
 /depot/pressure-vessel/
 /depot/scout
 /depot/scout_*-0.20*.*/

@@ -62,10 +62,12 @@ class Runtime:
         suite: str,
 
         architecture: str = 'amd64,i386',
+        include_sdk: bool = False,
         path: Optional[str] = None,
         version: str = 'latest',
     ) -> None:
         self.architecture = architecture
+        self.include_sdk = include_sdk
         self.name = name
         self.path = path
         self.suite = suite
@@ -80,11 +82,27 @@ class Runtime:
             self.architecture,
             self.suite,
         )
+        self.dockerfile = '{}-{}-{}-sysroot.Dockerfile'.format(
+            self.sdk,
+            self.architecture,
+            self.suite,
+        )
+        self.sysroot_tarball = '{}-{}-{}-sysroot.tar.gz'.format(
+            self.sdk,
+            self.architecture,
+            self.suite,
+        )
         self.build_id_file = '{}-{}-{}-buildid.txt'.format(
             self.platform,
             self.architecture,
             self.suite,
         )
+
+        self.runtime_files = [self.tarball]
+
+        if self.include_sdk:
+            self.runtime_files.append(self.sysroot_tarball)
+            self.runtime_files.append(self.dockerfile)
 
     def __str__(self) -> str:
         return self.name
@@ -95,6 +113,7 @@ class Runtime:
         name: str,
         details: Dict[str, Any],
         default_architecture: str = 'amd64,i386',
+        default_include_sdk: bool = False,
         default_suite: str = '',
         default_version: str = 'latest',
     ):
@@ -103,6 +122,7 @@ class Runtime:
             architecture=details.get(
                 'architecture', default_architecture,
             ),
+            include_sdk=details.get('include_sdk', default_include_sdk),
             path=details.get('path', None),
             suite=details.get('suite', default_suite or name),
             version=details.get('version', default_version),
@@ -191,6 +211,7 @@ class Main:
         architecture: str = 'amd64,i386',
         credential_envs: Sequence[str] = (),
         depot: str = 'depot',
+        include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
         ssh: bool = False,
@@ -234,6 +255,7 @@ class Main:
         self.opener = urllib.request.build_opener(*openers)
 
         self.default_architecture = architecture
+        self.default_include_sdk = include_sdk
         self.default_suite = suite
         self.default_version = version
         self.depot = os.path.abspath(depot)
@@ -262,6 +284,7 @@ class Main:
             name,
             details,
             default_architecture=self.default_architecture,
+            default_include_sdk=self.default_include_sdk,
             default_suite=self.default_suite,
             default_version=self.default_version,
         )
@@ -309,14 +332,14 @@ class Main:
         for runtime in self.runtimes:
             if runtime.path:
                 logger.info(
-                    'Using Platform from local directory %r',
+                    'Using runtime from local directory %r',
                     runtime.path)
-                self.use_local_platform(runtime)
+                self.use_local_runtime(runtime)
             else:
                 logger.info(
-                    'Downloading Platform from %s',
+                    'Downloading runtime from %s',
                     runtime)
-                self.download_platform(runtime)
+                self.download_runtime(runtime)
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         os.makedirs(self.depot, exist_ok=True)
@@ -343,30 +366,33 @@ class Main:
                 check=True,
             )
 
-    def use_local_platform(self, runtime: Runtime) -> None:
+    def use_local_runtime(self, runtime: Runtime) -> None:
         assert runtime.path
-        src = os.path.join(runtime.path, runtime.tarball)
-        dest = os.path.join(self.depot, runtime.tarball)
-        logger.info('Hard-linking local runtime %r to %r', src, dest)
 
-        with suppress(FileNotFoundError):
-            os.unlink(dest)
+        for basename in runtime.runtime_files:
+            src = os.path.join(runtime.path, basename)
+            dest = os.path.join(self.depot, basename)
+            logger.info('Hard-linking local runtime %r to %r', src, dest)
 
-        os.link(src, dest)
+            with suppress(FileNotFoundError):
+                os.unlink(dest)
+
+            os.link(src, dest)
 
         with open(
             os.path.join(self.depot, runtime.build_id_file), 'w',
         ) as writer:
             writer.write(f'{runtime.version}\n')
 
-    def download_platform(self, runtime: Runtime) -> None:
+    def download_runtime(self, runtime: Runtime) -> None:
         """
         Download a pre-prepared Platform from a previous container
         runtime build.
         """
 
         pinned = runtime.pin_version(self.opener, ssh=self.ssh)
-        runtime.fetch(runtime.tarball, self.depot, self.opener, ssh=self.ssh)
+        for basename in runtime.runtime_files:
+            runtime.fetch(basename, self.depot, self.opener, ssh=self.ssh)
 
         with open(
             os.path.join(self.depot, runtime.build_id_file), 'w',
@@ -455,6 +481,10 @@ def main() -> None:
         )
     )
     parser.add_argument(
+        '--include-sdk', default=False, action='store_true',
+        help='Include a corresponding SDK',
+    )
+    parser.add_argument(
         '--unpack-ld-library-path', metavar='PATH', default='',
         help=(
             'Get the steam-runtime.tar.xz from the same place as '
@@ -471,8 +501,9 @@ def main() -> None:
             'Runtimes to download, in the form NAME or NAME="DETAILS". '
             'DETAILS is a JSON object containing something like '
             '{"path": "../prebuilt", "suite: "scout", "version": "latest", '
-            '"architecture": "amd64,i386"}, or the path to a file with '
-            'the same JSON object in. All JSON fields are optional.'
+            '"architecture": "amd64,i386", "include_sdk": true}, or the '
+            'path to a file with the same JSON object in. All JSON fields '
+            'are optional.'
         ),
     )
 

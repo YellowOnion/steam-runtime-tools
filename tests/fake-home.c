@@ -106,7 +106,6 @@ fake_home_create_structure (FakeHome *f)
   gchar *local_share = NULL;
   gchar *ld_path = NULL;
   gchar *prepended_path = NULL;
-  gchar *ubuntu12_32 = NULL;
   gchar *app_home = NULL;
   gchar *data_name = NULL;
   GError *error = NULL;
@@ -156,8 +155,9 @@ const gchar *mime_cache =
       f->steam_data = g_strdup (f->steam_install);
     }
 
-  f->runtime = g_build_filename (f->steam_install, "ubuntu12_32",
-                                 "steam-runtime", NULL);
+  f->ubuntu12_32 = g_build_filename (f->steam_install, "ubuntu12_32", NULL);
+
+  f->runtime = g_build_filename (f->ubuntu12_32, "steam-runtime", NULL);
 
   scripts = g_build_filename (f->runtime, "scripts", NULL);
 
@@ -249,8 +249,7 @@ const gchar *mime_cache =
       dot_steam_bin32 = g_build_filename (dot_steam, "bin32", NULL);
       symlink_gfile = g_file_new_for_path (dot_steam_bin32);
 
-      ubuntu12_32 = g_build_filename (f->steam_install, "ubuntu12_32", NULL);
-      g_file_make_symbolic_link (symlink_gfile, ubuntu12_32, NULL, &error);
+      g_file_make_symbolic_link (symlink_gfile, f->ubuntu12_32, NULL, &error);
       g_object_unref (symlink_gfile);
       g_assert_no_error (error);
     }
@@ -355,7 +354,6 @@ const gchar *mime_cache =
     g_free (local_share);
     g_free (ld_path);
     g_free (prepended_path);
-    g_free (ubuntu12_32);
     g_free (app_home);
     g_free (data_name);
 
@@ -382,6 +380,7 @@ fake_home_clean_up (FakeHome *f)
   g_free (f->home);
   g_free (f->steam_data);
   g_free (f->steam_install);
+  g_free (f->ubuntu12_32);
   g_free (f->runtime);
   g_free (f->pinned_32);
   g_free (f->pinned_64);

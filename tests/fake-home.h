@@ -46,6 +46,7 @@ typedef struct
   gchar *home;
   gchar *steam_install;
   gchar *steam_data;
+  gchar *ubuntu12_32;
   gchar *runtime;
   gchar *pinned_32;
   gchar *pinned_64;

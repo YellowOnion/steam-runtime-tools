@@ -740,6 +740,7 @@ steam_runtime (Fixture *f,
   SrtSteam *steam_details;
   gchar *runtime_path = NULL;
   gchar *installation_path = NULL;
+  gchar *bin32_path = NULL;
   FakeHome *fake_home;
 
   fake_home = fake_home_new (fake_home_path);
@@ -755,8 +756,11 @@ steam_runtime (Fixture *f,
   g_assert_cmpstr (runtime_path, ==, fake_home->runtime);
   installation_path = srt_system_info_dup_steam_installation_path (info);
   g_assert_cmpstr (installation_path, ==, fake_home->steam_install);
+  bin32_path = srt_system_info_dup_steam_bin32_path (info);
+  g_assert_cmpstr (bin32_path, ==, fake_home->ubuntu12_32);
   g_free (runtime_path);
   g_free (installation_path);
+  g_free (bin32_path);
 
   /* Do the check again, this time using the cache */
   runtime_issues = srt_system_info_get_runtime_issues (info);
@@ -765,6 +769,8 @@ steam_runtime (Fixture *f,
   g_assert_cmpstr (runtime_path, ==, fake_home->runtime);
   installation_path = srt_system_info_dup_steam_installation_path (info);
   g_assert_cmpstr (installation_path, ==, fake_home->steam_install);
+  bin32_path = srt_system_info_dup_steam_bin32_path (info);
+  g_assert_cmpstr (bin32_path, ==, fake_home->ubuntu12_32);
 
   /* Check for Steam issues */
   steam_issues = srt_system_info_get_steam_issues (info);
@@ -786,6 +792,7 @@ steam_runtime (Fixture *f,
   g_object_unref (steam_details);
   g_free (runtime_path);
   g_free (installation_path);
+  g_free (bin32_path);
 }
 
 static void

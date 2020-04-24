@@ -808,6 +808,7 @@ main (int argc,
   gchar *version = NULL;
   gchar *inst_path = NULL;
   gchar *data_path = NULL;
+  gchar *bin32_path = NULL;
   gchar *rt_path = NULL;
   gchar **overrides = NULL;
   gchar **messages = NULL;
@@ -891,6 +892,9 @@ main (int argc,
   json_builder_set_member_name (builder, "data_path");
   data_path = srt_system_info_dup_steam_data_path (info);
   json_builder_add_string_value (builder, data_path);
+  json_builder_set_member_name (builder, "bin32_path");
+  bin32_path = srt_system_info_dup_steam_bin32_path (info);
+  json_builder_add_string_value (builder, bin32_path);
   json_builder_set_member_name (builder, "issues");
   json_builder_begin_array (builder);
   steam_issues = srt_system_info_get_steam_issues (info);
@@ -1299,6 +1303,7 @@ main (int argc,
   json_node_free (root);
   g_object_unref (builder);
   g_object_unref (info);
+  g_free (bin32_path);
   g_free (rt_path);
   g_free (data_path);
   g_free (inst_path);

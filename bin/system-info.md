@@ -51,6 +51,12 @@ keys:
         This is usually the same as **path** but can differ under some
         circumstances.
 
+    **bin32_path**
+    :   A string: the absolute path to the Steam "ubuntu12_32" directory,
+        typically containing **steam-runtime** among others.
+        This is usually a direct subdirectory of **path** but can differ under
+        some circumstances.
+
     **issues**
     :   An array of strings representing problems with the Steam
         installation. If empty, no problems were found.

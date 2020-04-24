@@ -1770,6 +1770,32 @@ srt_system_info_dup_steam_data_path (SrtSystemInfo *self)
   return g_strdup (srt_steam_get_data_path (self->steam_data));
 }
 
+/**
+ * srt_system_info_dup_steam_bin32_path:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the absolute path to the Steam `ubuntu12_32` directory in use
+ * (the directory containing `steam-runtime/` among other files and
+ * directories).
+ *
+ * Under normal circumstances, this is a `ubuntu12_32` direct subdirectory
+ * under the srt_system_info_dup_steam_installation_path().
+ * Typically of the form `/home/me/.local/share/Steam/ubuntu12_32`.
+ * It is canonically accessed via the symbolic link `~/.steam/bin32`.
+ *
+ * Returns: (transfer full) (type filename) (nullable): The absolute path
+ *  to the Steam `ubuntu12_32` directory, or %NULL if it could not be
+ *  determined. Free with g_free().
+ */
+gchar *
+srt_system_info_dup_steam_bin32_path (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_steam_cached (self);
+  return g_strdup (srt_steam_get_bin32_path (self->steam_data));
+}
+
 static void
 ensure_os_cached (SrtSystemInfo *self)
 {

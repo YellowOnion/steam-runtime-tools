@@ -95,6 +95,7 @@ libraries_presence (Fixture *f,
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
+  JsonObject *json_graphics;
   GError *error = NULL;
   gchar *output = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
@@ -156,6 +157,15 @@ libraries_presence (Fixture *f,
       g_assert_true (json_object_has_member (json_arch, "va-api_drivers"));
       g_assert_true (json_object_has_member (json_arch, "vdpau_drivers"));
       g_assert_true (json_object_has_member (json_arch, "glx_drivers"));
+
+      g_assert_true (json_object_has_member (json_arch, "graphics-details"));
+      json_graphics = json_object_get_object_member (json_arch, "graphics-details");
+      g_assert_true (json_object_has_member (json_graphics, "x11/vulkan"));
+      g_assert_true (json_object_has_member (json_graphics, "x11/vdpau"));
+      g_assert_true (json_object_has_member (json_graphics, "x11/vaapi"));
+      g_assert_true (json_object_has_member (json_graphics, "glx/gl"));
+      g_assert_true (json_object_has_member (json_graphics, "egl_x11/gl"));
+      g_assert_true (json_object_has_member (json_graphics, "egl_x11/glesv2"));
     }
 
   g_object_unref (parser);

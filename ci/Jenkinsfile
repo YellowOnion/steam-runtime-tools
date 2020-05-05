@@ -142,7 +142,13 @@ pipeline {
                 --archive "${WORKSPACE}" \
                 ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
                 ${NULL+}
-              prove -v ./tests/relocatable-install.py :: \
+
+              if ! PYTHON=$(command -v python3.5); then
+                PYTHON=$(command -v python3)
+              fi
+
+              prove -v --exec "${PYTHON}" \
+                ./tests/relocatable-install.py :: \
                 "${WORKSPACE}/relocatable-install"
               '''
             }

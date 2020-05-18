@@ -553,10 +553,9 @@ pv_runtime_provide_container_access (PvRuntime *self,
 
 static gboolean
 try_bind_dri (PvRuntime *self,
+              RuntimeArchitecture *arch,
               FlatpakBwrap *bwrap,
-              const char *capsule_capture_libs,
               const char *libdir,
-              const char *libdir_on_host,
               GError **error)
 {
   g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
@@ -577,10 +576,10 @@ try_bind_dri (PvRuntime *self,
 
       temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
       flatpak_bwrap_add_args (temp_bwrap,
-                              capsule_capture_libs,
+                              arch->capsule_capture_libs,
                               "--container", self->container_access,
                               "--link-target", "/run/host",
-                              "--dest", libdir_on_host,
+                              "--dest", arch->libdir_on_host,
                               "--provider", "/",
                               expr,
                               NULL);
@@ -595,7 +594,7 @@ try_bind_dri (PvRuntime *self,
        * already being mounted, so we don't need to re-enter a container
        * here. */
       host_dri = g_build_filename ("/run/host", libdir, "dri", NULL);
-      dest_dri = g_build_filename (libdir_on_host, "dri", NULL);
+      dest_dri = g_build_filename (arch->libdir_on_host, "dri", NULL);
       temp_bwrap = flatpak_bwrap_new (NULL);
       flatpak_bwrap_add_args (temp_bwrap,
                               self->bubblewrap,
@@ -627,10 +626,10 @@ try_bind_dri (PvRuntime *self,
 
       temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
       flatpak_bwrap_add_args (temp_bwrap,
-                              capsule_capture_libs,
+                              arch->capsule_capture_libs,
                               "--container", self->container_access,
                               "--link-target", "/run/host",
-                              "--dest", libdir_on_host,
+                              "--dest", arch->libdir_on_host,
                               "--provider", "/",
                               expr,
                               NULL);
@@ -1607,9 +1606,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           for (j = 0; j < 6; j++)
             {
-              if (!try_bind_dri (self, bwrap,
-                                 arch->capsule_capture_libs,
-                                 dirs[j], arch->libdir_on_host, error))
+              if (!try_bind_dri (self, arch, bwrap, dirs[j], error))
                 return FALSE;
             }
         }

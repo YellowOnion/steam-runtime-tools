@@ -108,6 +108,73 @@ static const char * const libquals[] =
 G_STATIC_ASSERT (G_N_ELEMENTS (libquals)
                  == G_N_ELEMENTS (multiarch_tuples) - 1);
 
+typedef struct
+{
+  gsize multiarch_index;
+  const char *tuple;
+  gchar *capsule_capture_libs_basename;
+  gchar *capsule_capture_libs;
+  gchar *libdir_on_host;
+  gchar *libdir_in_container;
+  const char *libqual;
+  gchar *ld_so;
+} RuntimeArchitecture;
+
+static gboolean
+runtime_architecture_init (RuntimeArchitecture *self,
+                           PvRuntime *runtime)
+{
+  const gchar *argv[] = { NULL, "--print-ld.so", NULL };
+
+  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (libquals), FALSE);
+  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
+                        FALSE);
+  g_return_val_if_fail (self->tuple == NULL, FALSE);
+
+  self->tuple = multiarch_tuples[self->multiarch_index];
+  g_return_val_if_fail (self->tuple != NULL, FALSE);
+  self->libqual = libquals[self->multiarch_index];
+
+  self->capsule_capture_libs_basename = g_strdup_printf ("%s-capsule-capture-libs",
+                                                         self->tuple);
+  self->capsule_capture_libs = g_build_filename (runtime->tools_dir,
+                                                 self->capsule_capture_libs_basename,
+                                                 NULL);
+  self->libdir_on_host = g_build_filename (runtime->overrides, "lib",
+                                           self->tuple, NULL);
+  self->libdir_in_container = g_build_filename ("/overrides", "lib",
+                                                self->tuple, NULL);
+
+  /* This has the side-effect of testing whether we can run binaries
+   * for this architecture on the host system. */
+  argv[0] = self->capsule_capture_libs;
+  self->ld_so = pv_capture_output (argv, NULL);
+
+  if (self->ld_so == NULL)
+    {
+      g_debug ("Cannot determine ld.so for %s", self->tuple);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static void
+runtime_architecture_clear (RuntimeArchitecture *self)
+{
+  self->multiarch_index = G_MAXSIZE;
+  self->tuple = NULL;
+  self->libqual = NULL;
+  g_clear_pointer (&self->capsule_capture_libs_basename, g_free);
+  g_clear_pointer (&self->capsule_capture_libs, g_free);
+  g_clear_pointer (&self->libdir_on_host, g_free);
+  g_clear_pointer (&self->libdir_in_container, g_free);
+  g_clear_pointer (&self->ld_so, g_free);
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RuntimeArchitecture,
+                                  runtime_architecture_clear)
+
 static gboolean pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                     FlatpakBwrap *bwrap,
                                                     GError **error);
@@ -1176,40 +1243,22 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
-      g_autofree gchar *tool = g_strdup_printf ("%s-capsule-capture-libs",
-                                                multiarch_tuples[i]);
-      g_autofree gchar *capsule_capture_libs = NULL;
-      g_autofree gchar *ld_so = NULL;
-      const gchar *argv[] = { NULL, "--print-ld.so", NULL };
+      g_auto (RuntimeArchitecture) arch_on_stack = { i };
+      RuntimeArchitecture *arch = &arch_on_stack;
 
       g_debug ("Checking for %s libraries...", multiarch_tuples[i]);
 
-      capsule_capture_libs = g_build_filename (self->tools_dir, tool, NULL);
-      argv[0] = capsule_capture_libs;
-
-      /* This has the side-effect of testing whether we can run binaries
-       * for this architecture on the host system. */
-      ld_so = pv_capture_output (argv, NULL);
-
-      if (ld_so != NULL)
+      if (runtime_architecture_init (arch, self))
         {
           g_auto(GStrv) dirs = NULL;
           g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-          g_autofree gchar *libdir_in_container = g_build_filename ("/overrides",
-                                                                    "lib",
-                                                                    multiarch_tuples[i],
-                                                                    NULL);
-          g_autofree gchar *libdir_on_host = g_build_filename (self->overrides, "lib",
-                                                               multiarch_tuples[i],
-                                                               NULL);
-          g_autofree gchar *this_dri_path_on_host = g_build_filename (libdir_on_host,
+          g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_on_host,
                                                                       "dri", NULL);
-          g_autofree gchar *this_dri_path_in_container = g_build_filename (libdir_in_container,
+          g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
-          const gchar *libqual = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
@@ -1225,7 +1274,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
             return FALSE;
 
           flatpak_bwrap_add_args (temp_bwrap,
-                                  "readlink", "-e", ld_so,
+                                  "readlink", "-e", arch->ld_so,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
 
@@ -1237,26 +1286,28 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           if (ld_so_in_runtime == NULL)
             {
               g_debug ("Container does not have %s so it cannot run "
-                       "%s binaries", ld_so, multiarch_tuples[i]);
+                       "%s binaries",
+                       arch->ld_so, arch->tuple);
               continue;
             }
 
           any_architecture_works = TRUE;
-          g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
+          g_debug ("Container path: %s -> %s",
+                   arch->ld_so, ld_so_in_runtime);
 
           pv_search_path_append (dri_path, this_dri_path_in_container);
 
-          g_mkdir_with_parents (libdir_on_host, 0755);
+          g_mkdir_with_parents (arch->libdir_on_host, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
 
           g_debug ("Collecting graphics drivers from host system...");
 
           temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
           flatpak_bwrap_add_args (temp_bwrap,
-                                  capsule_capture_libs,
+                                  arch->capsule_capture_libs,
                                   "--container", self->container_access,
                                   "--link-target", "/run/host",
-                                  "--dest", libdir_on_host,
+                                  "--dest", arch->libdir_on_host,
                                   "--provider", "/",
                                   /* Mesa GLX, etc. */
                                   "gl:",
@@ -1317,7 +1368,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
           g_debug ("Collecting %s EGL drivers from host system...",
-                   multiarch_tuples[i]);
+                   arch->tuple);
 
           for (j = 0; j < egl_icd_details->len; j++)
             {
@@ -1331,11 +1382,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
 
               if (!bind_icd (self,
-                             i,
+                             arch->multiarch_index,
                              j,
-                             capsule_capture_libs,
-                             libdir_on_host,
-                             libdir_in_container,
+                             arch->capsule_capture_libs,
+                             arch->libdir_on_host,
+                             arch->libdir_in_container,
                              "glvnd",
                              details,
                              error))
@@ -1343,7 +1394,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
             }
 
           g_debug ("Collecting %s Vulkan drivers from host system...",
-                   multiarch_tuples[i]);
+                   arch->tuple);
 
           for (j = 0; j < vulkan_icd_details->len; j++)
             {
@@ -1357,20 +1408,20 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
 
               if (!bind_icd (self,
-                             i,
+                             arch->multiarch_index,
                              j,
-                             capsule_capture_libs,
-                             libdir_on_host,
-                             libdir_in_container,
+                             arch->capsule_capture_libs,
+                             arch->libdir_on_host,
+                             arch->libdir_in_container,
                              "vulkan",
                              details,
                              error))
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VDPAU ICDs on host system...", multiarch_tuples[i]);
+          g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->tuple);
           vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
-                                                              multiarch_tuples[i],
+                                                              arch->tuple,
                                                               SRT_DRIVER_FLAGS_NONE);
 
           for (icd_iter = vdpau_drivers; icd_iter != NULL; icd_iter = icd_iter->next)
@@ -1384,20 +1435,21 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                * be located in a single directory, so by definition we can't have
                * collisions */
               if (!bind_icd (self,
-                             i,
+                             arch->multiarch_index,
                              G_MAXSIZE,
-                             capsule_capture_libs,
-                             libdir_on_host,
-                             libdir_in_container,
+                             arch->capsule_capture_libs,
+                             arch->libdir_on_host,
+                             arch->libdir_in_container,
                              "vdpau",
                              details,
                              error))
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VA-API drivers on host system...", multiarch_tuples[i]);
+          g_debug ("Enumerating %s VA-API drivers on host system...",
+                   arch->tuple);
           va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
-                                                                multiarch_tuples[i],
+                                                                arch->tuple,
                                                                 SRT_DRIVER_FLAGS_NONE);
 
           /* Guess that there will be about the same number of VA-API ICDs
@@ -1420,9 +1472,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               if (!bind_icd (self,
                              0,
                              j,
-                             capsule_capture_libs,
-                             libdir_on_host,
-                             libdir_in_container,
+                             arch->capsule_capture_libs,
+                             arch->libdir_on_host,
+                             arch->libdir_in_container,
                              "dri",
                              details,
                              error))
@@ -1431,7 +1483,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
             }
 
-          libc = g_build_filename (libdir_on_host, "libc.so.6", NULL);
+          libc = g_build_filename (arch->libdir_on_host, "libc.so.6", NULL);
 
           /* If we are going to use the host system's libc6 (likely)
            * then we have to use its ld.so too. */
@@ -1442,9 +1494,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               g_debug ("Making host ld.so visible in container");
 
-              ld_so_in_host = flatpak_canonicalize_filename (ld_so);
-              g_debug ("Host path: %s -> %s", ld_so, ld_so_in_host);
-              g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
+              ld_so_in_host = flatpak_canonicalize_filename (arch->ld_so);
+              g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
+              g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
               flatpak_bwrap_add_args (bwrap,
                                       "--ro-bind", ld_so_in_host,
                                       ld_so_in_runtime,
@@ -1455,10 +1507,10 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (temp_bwrap == NULL);
               temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      capsule_capture_libs,
+                                      arch->capsule_capture_libs,
                                       "--container", self->container_access,
                                       "--link-target", "/run/host",
-                                      "--dest", libdir_on_host,
+                                      "--dest", arch->libdir_on_host,
                                       "--provider", "/",
                                       "if-exists:libidn2.so.0",
                                       NULL);
@@ -1518,7 +1570,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               self->all_libc_from_host = FALSE;
             }
 
-          libdrm = g_build_filename (libdir_on_host, "libdrm.so.2", NULL);
+          libdrm = g_build_filename (arch->libdir_on_host, "libdrm.so.2", NULL);
 
           /* If we have libdrm.so.2 in overrides we also want to mount
            * ${prefix}/share/libdrm from the host. ${prefix} is derived from
@@ -1536,7 +1588,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
                   dir = g_path_get_dirname (target);
 
-                  lib_multiarch = g_build_filename ("/lib", multiarch_tuples[i], NULL);
+                  lib_multiarch = g_build_filename ("/lib", arch->tuple, NULL);
                   if (g_str_has_suffix (dir, lib_multiarch))
                     dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
                   else if (g_str_has_suffix (dir, "/lib64"))
@@ -1569,28 +1621,21 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               all_libdrm_from_host = FALSE;
             }
 
-          /* /lib32 or /lib64 */
-          g_assert (i < G_N_ELEMENTS (libquals));
-          libqual = libquals[i];
-
           dirs = g_new0 (gchar *, 7);
-          dirs[0] = g_build_filename ("/lib", multiarch_tuples[i], NULL);
-          dirs[1] = g_build_filename ("/usr", "lib", multiarch_tuples[i], NULL);
+          dirs[0] = g_build_filename ("/lib", arch->tuple, NULL);
+          dirs[1] = g_build_filename ("/usr", "lib", arch->tuple, NULL);
           dirs[2] = g_strdup ("/lib");
           dirs[3] = g_strdup ("/usr/lib");
-          dirs[4] = g_build_filename ("/", libqual, NULL);
-          dirs[5] = g_build_filename ("/usr", libqual, NULL);
+          dirs[4] = g_build_filename ("/", arch->libqual, NULL);
+          dirs[5] = g_build_filename ("/usr", arch->libqual, NULL);
 
           for (j = 0; j < 6; j++)
             {
-              if (!try_bind_dri (self, bwrap, capsule_capture_libs, dirs[j],
-                                 libdir_on_host, error))
+              if (!try_bind_dri (self, bwrap,
+                                 arch->capsule_capture_libs,
+                                 dirs[j], arch->libdir_on_host, error))
                 return FALSE;
             }
-        }
-      else
-        {
-          g_debug ("Cannot determine ld.so for %s", multiarch_tuples[i]);
         }
     }
 

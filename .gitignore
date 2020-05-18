@@ -4,6 +4,8 @@
 /depot/com.valvesoftware.SteamRuntime.*-sysroot.Dockerfile
 /depot/com.valvesoftware.SteamRuntime.*-sysroot.tar.gz
 /depot/pressure-vessel/
+/depot/run-in-scout
+/depot/run-in-soldier
 /depot/scout
 /depot/scout_*-0.20*.*/
 /depot/scout_0.20*.*/

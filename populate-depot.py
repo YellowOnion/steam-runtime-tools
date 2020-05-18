@@ -205,6 +205,27 @@ class Runtime:
         return pinned
 
 
+RUN_IN_WHATEVER_SOURCE = '''\
+#!/bin/sh
+# {source_for_generated_file}
+
+set -eu
+
+me="$(readlink -f "$0")"
+here="${{me%/*}}"
+me="${{me##*/}}"
+
+exec "$here/run-in-steamrt" \\
+    --arch={escaped_arch} \\
+    --deploy \\
+    --runtime={escaped_runtime} \\
+    --suite={escaped_suite} \\
+    {escaped_name} \\
+    -- \\
+    "$@"
+'''
+
+
 class Main:
     def __init__(
         self,
@@ -340,6 +361,22 @@ class Main:
                     'Downloading runtime from %s',
                     runtime)
                 self.download_runtime(runtime)
+
+            with open(
+                os.path.join(self.depot, 'run-in-' + runtime.name), 'w'
+            ) as writer:
+                writer.write(
+                    RUN_IN_WHATEVER_SOURCE.format(
+                        escaped_arch=shlex.quote(runtime.architecture),
+                        escaped_name=shlex.quote(runtime.name),
+                        escaped_runtime=shlex.quote(runtime.platform),
+                        escaped_suite=shlex.quote(runtime.suite),
+                        source_for_generated_file=(
+                            'Generated file, do not edit'
+                        ),
+                    )
+                )
+            os.chmod(os.path.join(self.depot, 'run-in-' + runtime.name), 0o755)
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         os.makedirs(self.depot, exist_ok=True)

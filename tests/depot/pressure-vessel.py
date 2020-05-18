@@ -273,30 +273,11 @@ class TestPressureVessel(unittest.TestCase):
         ld_library_path_runtime=None        # type: typing.Optional[str]
     ):
         # type: (...) -> typing.List[str]
-        if self.runtime_suite == 'scout':
-            adverb = [
-                os.path.join(self.depot, 'run-in-scout'),
-                '--verbose',
-                '--',
-            ]
-        else:
-            if ld_library_path_runtime is None:
-                exe = 'pressure-vessel-wrap'
-            else:
-                exe = 'pressure-vessel-unruntime'
-
-            adverb = [
-                os.path.join(
-                    self.depot,
-                    'pressure-vessel',
-                    'bin',
-                    exe,
-                ),
-                '--verbose',
-                '--runtime-base={}'.format(self.depot),
-                '--runtime={}/files'.format(self.runtime_suite),
-                '--',
-            ]
+        adverb = [
+            os.path.join(self.depot, 'run-in-' + self.runtime_suite),
+            '--verbose',
+            '--',
+        ]
 
         if ld_library_path_runtime is not None:
             adverb = [

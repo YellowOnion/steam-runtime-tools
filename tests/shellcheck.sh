@@ -22,6 +22,8 @@ cd "$G_TEST_SRCDIR"
 n=0
 for shell_script in \
         debian/tests/depot \
+        depot/deploy-runtime \
+        depot/run-in-steamrt \
         tests/*.sh \
         ; do
     n=$((n + 1))

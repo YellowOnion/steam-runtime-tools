@@ -1409,8 +1409,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
-              IcdDetails *details = icd_details_new (icd_iter->data);
-              g_ptr_array_add (va_api_icd_details, details);
+              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
               details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
@@ -1428,6 +1427,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                              details,
                              error))
                 return FALSE;
+
+              g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
             }
 
           libc = g_build_filename (libdir_on_host, "libc.so.6", NULL);

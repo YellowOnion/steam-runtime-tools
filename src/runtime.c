@@ -564,8 +564,8 @@ try_bind_dri (PvRuntime *self,
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
-      g_autofree gchar *host_dri = NULL;
-      g_autofree gchar *dest_dri = NULL;
+      g_autoptr(GDir) dir = NULL;
+      const char *member;
 
       expr = g_strdup_printf ("only-dependencies:if-exists:path-match:%s/dri/*.so",
                               libdir);
@@ -589,28 +589,34 @@ try_bind_dri (PvRuntime *self,
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-      /* TODO: If we're already in a container, rely on /run/host
-       * already being mounted, so we don't need to re-enter a container
-       * here. */
-      host_dri = g_build_filename ("/run/host", libdir, "dri", NULL);
-      dest_dri = g_build_filename (arch->libdir_on_host, "dri", NULL);
-      temp_bwrap = flatpak_bwrap_new (NULL);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              self->bubblewrap,
-                              "--ro-bind", "/", "/",
-                              "--tmpfs", "/run",
-                              "--ro-bind", "/", "/run/host",
-                              "--bind", self->overrides, self->overrides,
-                              "sh", "-c",
-                              "ln -fns \"$1\"/* \"$2\"",
-                              "sh",   /* $0 */
-                              host_dri,
-                              dest_dri,
-                              NULL);
-      flatpak_bwrap_finish (temp_bwrap);
+      dir = g_dir_open (dri, 0, error);
 
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+      if (dir == NULL)
         return FALSE;
+
+      for (member = g_dir_read_name (dir);
+           member != NULL;
+           member = g_dir_read_name (dir))
+        {
+          g_autofree gchar *target = g_build_filename ("/run/host", dri,
+                                                      member, NULL);
+          g_autofree gchar *dest = g_build_filename (arch->libdir_on_host,
+                                                     "dri", member, NULL);
+
+          g_debug ("Creating symbolic link \"%s\" -> \"%s\" for \"%s\" DRI driver",
+                   dest, target, arch->tuple);
+
+          /* Delete an existing symlink if any, like ln -f */
+          if (unlink (dest) != 0 && errno != ENOENT)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to remove \"%s\"",
+                                            dest);
+
+          if (symlink (target, dest) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink \"%s\" -> \"%s\"",
+                                            dest, target);
+        }
     }
 
   if (g_file_test (s2tc, G_FILE_TEST_EXISTS))

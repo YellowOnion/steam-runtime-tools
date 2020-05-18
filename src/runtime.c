@@ -1466,11 +1466,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
 
-              /* We don't reuse the same IcdDetails for different multiarch.
-               * So we pass zero as the multiarch_index parameter to always fill
-               * just the first element in the array. */
               if (!bind_icd (self,
-                             0,
+                             arch->multiarch_index,
                              j,
                              arch->capsule_capture_libs,
                              arch->libdir_on_host,
@@ -1957,22 +1954,29 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         }
     }
 
-  for (i = 0; i < va_api_icd_details->len; i++)
+  for (j = 0; j < va_api_icd_details->len; j++)
     {
-      IcdDetails *details = g_ptr_array_index (va_api_icd_details, i);
+      IcdDetails *details = g_ptr_array_index (va_api_icd_details, j);
 
-      G_STATIC_ASSERT (G_N_ELEMENTS (details->kinds) > 1);
-      G_STATIC_ASSERT (G_N_ELEMENTS (details->paths_in_container) > 1);
-      /* We add entries in va_api_icd_details only after a successful bind,
-       * so we expect to always have ICD_KIND_ABSOLUTE.
-       * Also we use IcdDetails for a single multiarch always added as the first element.
-       * Because of that we expect the second element to be NONEXISTENT. */
-      g_assert (details->kinds[0] == ICD_KIND_ABSOLUTE);
-      g_assert (details->kinds[1] == ICD_KIND_NONEXISTENT);
-      g_assert (details->paths_in_container[1] == NULL);
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+        {
+          g_assert (i < G_N_ELEMENTS (details->kinds));
+          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
 
-      g_autofree gchar *va_api_binded_path = g_path_get_dirname (details->paths_in_container[0]);
-      pv_search_path_append (va_api_path, va_api_binded_path);
+          if (details->kinds[i] == ICD_KIND_NONEXISTENT)
+            {
+              continue;
+            }
+          else
+            {
+              g_autofree gchar *parent = NULL;
+
+              g_assert (details->kinds[i] == ICD_KIND_ABSOLUTE);
+
+              parent = g_path_get_dirname (details->paths_in_container[i]);
+              pv_search_path_append (va_api_path, parent);
+            }
+        }
     }
 
   if (dri_path->len != 0)

@@ -183,7 +183,9 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
   static const char * const bind_etc[] =
   {
     "alternatives",
-    "ld.so.cache"
+    "ld.so.cache",
+    "ld.so.conf",
+    "ld.so.conf.d",
   };
   gsize i;
 

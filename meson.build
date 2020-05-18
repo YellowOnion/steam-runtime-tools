@@ -129,6 +129,19 @@ add_project_arguments(supported_warning_cflags, language : 'c')
 
 libglnx = subproject('libglnx')
 
+steam_runtime_tools = dependency(
+  'steam-runtime-tools-0',
+  version : '>=0.20200331.1',
+  required : true,
+  fallback : ['steam-runtime-tools', 'libsteamrt_dep'],
+  default_options : [
+    'gtk_doc=false',
+    'man=false',
+    'installed_tests=false',
+    'introspection=false',
+  ],
+)
+
 scripts = [
   'pressure-vessel-locale-gen',
   'pressure-vessel-test-ui',
@@ -257,13 +270,7 @@ executable(
     '-Wno-unused-local-typedefs',
   ],
   dependencies : [
-    dependency(
-      'steam-runtime-tools-0',
-      version : '>=0.20200331.1',
-      required : true,
-      fallback : ['steam-runtime-tools', 'libsteamrt_dep'],
-      default_options : ['gtk_doc=false'],
-    ),
+    steam_runtime_tools,
     dependency('gio-unix-2.0', required : true),
     dependency('xau', required : true),
     libglnx.get_variable('libglnx_dep'),

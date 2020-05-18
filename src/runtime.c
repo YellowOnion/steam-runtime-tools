@@ -159,6 +159,20 @@ runtime_architecture_init (RuntimeArchitecture *self,
   return TRUE;
 }
 
+static gboolean
+runtime_architecture_check_valid (RuntimeArchitecture *self)
+{
+  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (libquals), FALSE);
+  g_return_val_if_fail (self->tuple == multiarch_tuples[self->multiarch_index], FALSE);
+  g_return_val_if_fail (self->capsule_capture_libs_basename != NULL, FALSE);
+  g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
+  g_return_val_if_fail (self->libdir_on_host != NULL, FALSE);
+  g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
+  g_return_val_if_fail (self->libqual == libquals[self->multiarch_index], FALSE);
+  g_return_val_if_fail (self->ld_so != NULL, FALSE);
+  return TRUE;
+}
+
 static void
 runtime_architecture_clear (RuntimeArchitecture *self)
 {
@@ -810,11 +824,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
  */
 static gboolean
 bind_icd (PvRuntime *self,
-          gsize multiarch_index,
+          RuntimeArchitecture *arch,
           gsize sequence_number,
-          const char *capsule_capture_libs,
-          const char *libdir_on_host,
-          const char *libdir_in_container,
           const char *subdir,
           IcdDetails *details,
           GError **error)
@@ -826,14 +837,13 @@ bind_icd (PvRuntime *self,
   g_autofree gchar *seq_str = NULL;
   const char *mode;
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  gsize multiarch_index;
 
-  g_return_val_if_fail (capsule_capture_libs != NULL, FALSE);
-  g_return_val_if_fail (libdir_on_host != NULL, FALSE);
+  g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
-  g_return_val_if_fail (multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
-                        FALSE);
   g_return_val_if_fail (details != NULL, FALSE);
   g_return_val_if_fail (details->resolved_library != NULL, FALSE);
+  multiarch_index = arch->multiarch_index;
   g_return_val_if_fail (details->kinds[multiarch_index] == ICD_KIND_NONEXISTENT,
                         FALSE);
   g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
@@ -851,11 +861,11 @@ bind_icd (PvRuntime *self,
       if (sequence_number != G_MAXSIZE)
         {
           seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
-          on_host = g_build_filename (libdir_on_host, subdir, seq_str, NULL);
+          on_host = g_build_filename (arch->libdir_on_host, subdir, seq_str, NULL);
         }
       else
         {
-          on_host = g_build_filename (libdir_on_host, subdir, NULL);
+          on_host = g_build_filename (arch->libdir_on_host, subdir, NULL);
         }
 
       g_debug ("Ensuring %s exists", on_host);
@@ -881,10 +891,11 @@ bind_icd (PvRuntime *self,
 
   temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
   flatpak_bwrap_add_args (temp_bwrap,
-                          capsule_capture_libs,
+                          arch->capsule_capture_libs,
                           "--container", self->container_access,
                           "--link-target", "/run/host",
-                          "--dest", on_host == NULL ? libdir_on_host : on_host,
+                          "--dest",
+                            on_host == NULL ? arch->libdir_on_host : on_host,
                           "--provider", "/",
                           pattern,
                           NULL);
@@ -910,10 +921,10 @@ bind_icd (PvRuntime *self,
 
   temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
   flatpak_bwrap_add_args (temp_bwrap,
-                          capsule_capture_libs,
+                          arch->capsule_capture_libs,
                           "--container", self->container_access,
                           "--link-target", "/run/host",
-                          "--dest", libdir_on_host,
+                          "--dest", arch->libdir_on_host,
                           "--provider", "/",
                           dependency_pattern,
                           NULL);
@@ -927,7 +938,7 @@ bind_icd (PvRuntime *self,
   if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
     {
       g_assert (on_host != NULL);
-      details->paths_in_container[multiarch_index] = g_build_filename (libdir_in_container,
+      details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
                                                                        subdir,
                                                                        seq_str ? seq_str : "",
                                                                        glnx_basename (details->resolved_library),
@@ -1381,15 +1392,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               details->resolved_library = srt_egl_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!bind_icd (self,
-                             arch->multiarch_index,
-                             j,
-                             arch->capsule_capture_libs,
-                             arch->libdir_on_host,
-                             arch->libdir_in_container,
-                             "glvnd",
-                             details,
-                             error))
+              if (!bind_icd (self, arch, j, "glvnd", details, error))
                 return FALSE;
             }
 
@@ -1407,15 +1410,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!bind_icd (self,
-                             arch->multiarch_index,
-                             j,
-                             arch->capsule_capture_libs,
-                             arch->libdir_on_host,
-                             arch->libdir_in_container,
-                             "vulkan",
-                             details,
-                             error))
+              if (!bind_icd (self, arch, j, "vulkan", details, error))
                 return FALSE;
             }
 
@@ -1434,15 +1429,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               /* We avoid using the sequence number for VDPAU because they can only
                * be located in a single directory, so by definition we can't have
                * collisions */
-              if (!bind_icd (self,
-                             arch->multiarch_index,
-                             G_MAXSIZE,
-                             arch->capsule_capture_libs,
-                             arch->libdir_on_host,
-                             arch->libdir_in_container,
-                             "vdpau",
-                             details,
-                             error))
+              if (!bind_icd (self, arch, G_MAXSIZE, "vdpau", details, error))
                 return FALSE;
             }
 
@@ -1466,15 +1453,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
 
-              if (!bind_icd (self,
-                             arch->multiarch_index,
-                             j,
-                             arch->capsule_capture_libs,
-                             arch->libdir_on_host,
-                             arch->libdir_in_container,
-                             "dri",
-                             details,
-                             error))
+              if (!bind_icd (self, arch, j, "dri", details, error))
                 return FALSE;
 
               g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));

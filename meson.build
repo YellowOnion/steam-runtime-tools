@@ -127,6 +127,8 @@ endforeach
 supported_warning_cflags = c_compiler.get_supported_arguments(project_warning_cflags)
 add_project_arguments(supported_warning_cflags, language : 'c')
 
+libglnx = subproject('libglnx')
+
 scripts = [
   'pressure-vessel-locale-gen',
   'pressure-vessel-test-ui',
@@ -217,7 +219,7 @@ executable(
   ],
   dependencies : [
     dependency('gio-unix-2.0', required : true),
-    subproject('libglnx').get_variable('libglnx_dep'),
+    libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,
   install : true,
@@ -264,7 +266,7 @@ executable(
     ),
     dependency('gio-unix-2.0', required : true),
     dependency('xau', required : true),
-    subproject('libglnx').get_variable('libglnx_dep'),
+    libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,
   install : true,
@@ -299,7 +301,7 @@ executable(
   ],
   dependencies : [
     dependency('gio-unix-2.0', required : true),
-    subproject('libglnx').get_variable('libglnx_dep'),
+    libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,
   install : false,

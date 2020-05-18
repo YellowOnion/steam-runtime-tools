@@ -1168,11 +1168,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
     }
 
-  g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
-
   /* We set this FALSE later if we decide not to use the host libc for
    * some architecture. */
   self->all_libc_from_host = TRUE;
+
+  g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {

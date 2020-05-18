@@ -473,7 +473,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
 static gboolean
 try_bind_dri (PvRuntime *self,
               FlatpakBwrap *bwrap,
-              const char *tool_path,
+              const char *capsule_capture_libs,
               const char *libdir,
               const char *libdir_on_host,
               GError **error)
@@ -496,7 +496,7 @@ try_bind_dri (PvRuntime *self,
 
       temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
       flatpak_bwrap_add_args (temp_bwrap,
-                              tool_path,
+                              capsule_capture_libs,
                               "--container", self->container_access,
                               "--link-target", "/run/host",
                               "--dest", libdir_on_host,
@@ -546,7 +546,7 @@ try_bind_dri (PvRuntime *self,
 
       temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
       flatpak_bwrap_add_args (temp_bwrap,
-                              tool_path,
+                              capsule_capture_libs,
                               "--container", self->container_access,
                               "--link-target", "/run/host",
                               "--dest", libdir_on_host,
@@ -745,7 +745,7 @@ static gboolean
 bind_icd (PvRuntime *self,
           gsize multiarch_index,
           gsize sequence_number,
-          const char *tool_path,
+          const char *capsule_capture_libs,
           const char *libdir_on_host,
           const char *libdir_in_container,
           const char *subdir,
@@ -760,7 +760,7 @@ bind_icd (PvRuntime *self,
   const char *mode;
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
 
-  g_return_val_if_fail (tool_path != NULL, FALSE);
+  g_return_val_if_fail (capsule_capture_libs != NULL, FALSE);
   g_return_val_if_fail (libdir_on_host != NULL, FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
   g_return_val_if_fail (multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
@@ -814,7 +814,7 @@ bind_icd (PvRuntime *self,
 
   temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
   flatpak_bwrap_add_args (temp_bwrap,
-                          tool_path,
+                          capsule_capture_libs,
                           "--container", self->container_access,
                           "--link-target", "/run/host",
                           "--dest", on_host == NULL ? libdir_on_host : on_host,
@@ -843,7 +843,7 @@ bind_icd (PvRuntime *self,
 
   temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
   flatpak_bwrap_add_args (temp_bwrap,
-                          tool_path,
+                          capsule_capture_libs,
                           "--container", self->container_access,
                           "--link-target", "/run/host",
                           "--dest", libdir_on_host,
@@ -1178,14 +1178,14 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       g_autofree gchar *tool = g_strdup_printf ("%s-capsule-capture-libs",
                                                 multiarch_tuples[i]);
-      g_autofree gchar *tool_path = NULL;
+      g_autofree gchar *capsule_capture_libs = NULL;
       g_autofree gchar *ld_so = NULL;
       const gchar *argv[] = { NULL, "--print-ld.so", NULL };
 
       g_debug ("Checking for %s libraries...", multiarch_tuples[i]);
 
-      tool_path = g_build_filename (self->tools_dir, tool, NULL);
-      argv[0] = tool_path;
+      capsule_capture_libs = g_build_filename (self->tools_dir, tool, NULL);
+      argv[0] = capsule_capture_libs;
 
       /* This has the side-effect of testing whether we can run binaries
        * for this architecture on the host system. */
@@ -1253,7 +1253,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
           flatpak_bwrap_add_args (temp_bwrap,
-                                  tool_path,
+                                  capsule_capture_libs,
                                   "--container", self->container_access,
                                   "--link-target", "/run/host",
                                   "--dest", libdir_on_host,
@@ -1333,7 +1333,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               if (!bind_icd (self,
                              i,
                              j,
-                             tool_path,
+                             capsule_capture_libs,
                              libdir_on_host,
                              libdir_in_container,
                              "glvnd",
@@ -1359,7 +1359,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               if (!bind_icd (self,
                              i,
                              j,
-                             tool_path,
+                             capsule_capture_libs,
                              libdir_on_host,
                              libdir_in_container,
                              "vulkan",
@@ -1386,7 +1386,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               if (!bind_icd (self,
                              i,
                              G_MAXSIZE,
-                             tool_path,
+                             capsule_capture_libs,
                              libdir_on_host,
                              libdir_in_container,
                              "vdpau",
@@ -1421,7 +1421,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               if (!bind_icd (self,
                              0,
                              j,
-                             tool_path,
+                             capsule_capture_libs,
                              libdir_on_host,
                              libdir_in_container,
                              "dri",
@@ -1454,7 +1454,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (temp_bwrap == NULL);
               temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      tool_path,
+                                      capsule_capture_libs,
                                       "--container", self->container_access,
                                       "--link-target", "/run/host",
                                       "--dest", libdir_on_host,
@@ -1582,7 +1582,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           for (j = 0; j < 6; j++)
             {
-              if (!try_bind_dri (self, bwrap, tool_path, dirs[j],
+              if (!try_bind_dri (self, bwrap, capsule_capture_libs, dirs[j],
                                  libdir_on_host, error))
                 return FALSE;
             }

@@ -5,6 +5,7 @@
 /depot/scout
 /depot/scout_*-0.20*.*/
 /depot/scout_0.20*.*/
+/local/
 /pressure-vessel-*-bin+src.tar.gz
 /pressure-vessel-*-bin.tar.gz
 /pressure-vessel-bin+src.tar.gz

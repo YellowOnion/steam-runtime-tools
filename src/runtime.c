@@ -1701,9 +1701,17 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
       ldconfig = g_find_program_in_path ("ldconfig");
 
+      if (ldconfig == NULL
+          && g_file_test ("/sbin/ldconfig", G_FILE_TEST_IS_EXECUTABLE))
+        ldconfig = g_strdup ("/sbin/ldconfig");
+
+      if (ldconfig == NULL
+          && g_file_test ("/usr/sbin/ldconfig", G_FILE_TEST_IS_EXECUTABLE))
+        ldconfig = g_strdup ("/usr/sbin/ldconfig");
+
       if (ldconfig == NULL)
         {
-          g_warning ("Cannot find ldconfig in PATH");
+          g_warning ("Cannot find ldconfig in PATH, /sbin or /usr/sbin");
         }
       else
         {

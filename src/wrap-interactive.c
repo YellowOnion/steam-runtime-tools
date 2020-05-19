@@ -80,7 +80,8 @@ pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
       case PV_SHELL_AFTER:
         script =
           "e=0\n"
-          "\"$@\" || e=$?\n";
+          "\"$@\" || e=$?\n"
+          "echo \"$prgname: command exit status $e\"\n";
         break;
 
       case PV_SHELL_FAIL:

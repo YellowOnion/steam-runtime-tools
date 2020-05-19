@@ -72,6 +72,7 @@ pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
           "e=0\n"
           "\"$@\" || e=$?\n"
           "echo\n"
+          "echo \"$prgname: command exit status $e\"\n"
           "echo \"Press Enter or ^D to continue...\"\n"
           "read reply || true\n"
           "exit \"$e\"\n";

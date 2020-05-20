@@ -1443,25 +1443,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               ld_so_in_host = flatpak_canonicalize_filename (ld_so);
               g_debug ("Host path: %s -> %s", ld_so, ld_so_in_host);
-
-              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-
-              temp_bwrap = flatpak_bwrap_new (NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      self->bubblewrap,
-                                      NULL);
-
-              if (!pv_bwrap_bind_usr (temp_bwrap,
-                                      self->source_files,
-                                      "/",
-                                      error))
-                return FALSE;
-
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "readlink", "-f", ld_so,
-                                      NULL);
-              flatpak_bwrap_finish (temp_bwrap);
-
               g_debug ("Container path: %s -> %s", ld_so, ld_so_in_runtime);
               flatpak_bwrap_add_args (bwrap,
                                       "--ro-bind", ld_so_in_host,
@@ -1470,6 +1451,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               /* Collect miscellaneous libraries that libc might dlopen.
                * At the moment this is just libidn2. */
+              g_assert (temp_bwrap == NULL);
               temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
               flatpak_bwrap_add_args (temp_bwrap,
                                       tool_path,

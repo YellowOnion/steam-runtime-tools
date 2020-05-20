@@ -297,7 +297,9 @@ pv_runtime_finalize (GObject *object)
   g_free (self->runtime_usr);
   g_free (self->source_files);
   g_free (self->tools_dir);
-  pv_bwrap_lock_free (self->runtime_lock);
+
+  if (self->runtime_lock != NULL)
+    pv_bwrap_lock_free (self->runtime_lock);
 
   G_OBJECT_CLASS (pv_runtime_parent_class)->finalize (object);
 }

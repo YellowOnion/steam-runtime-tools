@@ -54,7 +54,7 @@ pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
       "echo\n"
       "echo\n"
       "echo\n"
-      "echo \"$1: Starting interactive shell (original command is in "
+      "echo \"$prgname: Starting interactive shell (original command is in "
       "\\\"\\$@\\\")\"\n"
       "echo\n"
       "echo\n"
@@ -72,6 +72,7 @@ pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
           "e=0\n"
           "\"$@\" || e=$?\n"
           "echo\n"
+          "echo \"$prgname: command exit status $e\"\n"
           "echo \"Press Enter or ^D to continue...\"\n"
           "read reply || true\n"
           "exit \"$e\"\n";
@@ -80,13 +81,14 @@ pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
       case PV_SHELL_AFTER:
         script =
           "e=0\n"
-          "\"$@\" || e=$?\n";
+          "\"$@\" || e=$?\n"
+          "echo \"$prgname: command exit status $e\"\n";
         break;
 
       case PV_SHELL_FAIL:
         script =
           "if \"$@\"; then exit 0; else e=\"$?\"; fi\n"
-          "echo \"$1: command exit status $e\"\n";
+          "echo \"$prgname: command exit status $e\"\n";
         break;
 
       case PV_SHELL_INSTEAD:
@@ -105,9 +107,9 @@ pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
                           "sh", "-euc",
                           command,
                           "sh",   /* $0 for sh */
-                          g_get_prgname (),   /* $1 for sh */
+                          g_get_prgname (),   /* $1 = $prgname for sh */
                           /* Original command will go here and become
-                           * the argv of command, and eventually
+                           * the rest of the argv of command, and eventually
                            * the argv of bash -i -s */
                           NULL);
 }

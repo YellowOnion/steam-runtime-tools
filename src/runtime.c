@@ -1120,7 +1120,9 @@ ensure_locales (PvRuntime *self,
                                      NULL);
 
       flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
-      pv_bwrap_copy_tree (run_locale_gen, self->overrides, "/overrides");
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind", self->overrides, "/overrides",
+                              NULL);
 
       if (!flatpak_bwrap_bundle_args (run_locale_gen, 1, -1, FALSE,
                                       &local_error))

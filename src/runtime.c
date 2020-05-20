@@ -1638,6 +1638,7 @@ typedef enum
 {
   TAKE_FROM_HOST_FLAGS_IF_DIR = (1 << 0),
   TAKE_FROM_HOST_FLAGS_IF_EXISTS = (1 << 1),
+  TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
   TAKE_FROM_HOST_FLAGS_NONE = 0
 } TakeFromHostFlags;
 
@@ -1706,6 +1707,43 @@ pv_runtime_take_from_host (PvRuntime *self,
     {
       /* We can't edit the runtime in-place, so tell bubblewrap to mount
        * a new version over the top */
+
+      if (flags & TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE)
+        {
+          g_autofree gchar *dest = NULL;
+
+          if (g_str_has_prefix (dest_in_container, "/usr/"))
+            dest = g_build_filename (self->runtime_usr,
+                                     dest_in_container + strlen ("/usr/"),
+                                     NULL);
+          else
+            dest = g_build_filename (self->runtime_files,
+                                     dest_in_container,
+                                     NULL);
+
+          if (g_file_test (source_in_host, G_FILE_TEST_IS_DIR))
+            {
+              if (!g_file_test (dest, G_FILE_TEST_IS_DIR))
+                {
+                  g_warning ("Not mounting \"%s\" over non-directory file or "
+                             "nonexistent path \"%s\"",
+                             source_in_host, dest);
+                  return TRUE;
+                }
+            }
+          else
+            {
+              if (!(g_file_test (dest, G_FILE_TEST_EXISTS) &&
+                    g_file_test (dest, G_FILE_TEST_IS_DIR)))
+                {
+                  g_warning ("Not mounting \"%s\" over directory or "
+                             "nonexistent path \"%s\"",
+                             source_in_host, dest);
+                  return TRUE;
+                }
+            }
+        }
+
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", source_in_host, dest_in_container,
                               NULL);
@@ -1743,7 +1781,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                                        g_free, NULL);
   g_autoptr(GHashTable) gconv_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                  g_free, NULL);
-  g_autofree gchar *libdrm_data_in_runtime = NULL;
   g_autofree gchar *best_libdrm_data_from_host = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
@@ -2353,14 +2390,14 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
     }
 
-  libdrm_data_in_runtime = g_build_filename (self->runtime_usr, "share", "libdrm", NULL);
-
-  if (best_libdrm_data_from_host != NULL &&
-      g_file_test (libdrm_data_in_runtime, G_FILE_TEST_IS_DIR))
+  if (best_libdrm_data_from_host != NULL)
     {
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", best_libdrm_data_from_host, "/usr/share/libdrm",
-                              NULL);
+      if (!pv_runtime_take_from_host (self, bwrap,
+                                      best_libdrm_data_from_host,
+                                      "/usr/share/libdrm",
+                                      TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                      error))
+        return FALSE;
     }
 
   g_debug ("Setting up EGL ICD JSON...");

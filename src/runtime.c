@@ -34,6 +34,7 @@
 #include "bwrap-lock.h"
 #include "enumtypes.h"
 #include "flatpak-run-private.h"
+#include "resolve-in-sysroot.h"
 #include "utils.h"
 
 /*
@@ -92,6 +93,38 @@ static void pv_runtime_initable_iface_init (GInitableIface *iface,
 G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 pv_runtime_initable_iface_init))
+
+/*
+ * Return whether @path is likely to be visible in /run/host.
+ * This needs to be kept approximately in sync with pv_bwrap_bind_usr()
+ * and Flatpak's --filesystem=host-os special keyword.
+ *
+ * This doesn't currently handle /etc: we make the pessimistic assumption
+ * that /etc/ld.so.cache, etc., are not shared.
+ */
+static gboolean
+path_visible_in_run_host (const char *path)
+{
+  while (path[0] == '/')
+    path++;
+
+  if (g_str_has_prefix (path, "usr") &&
+      (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
+
+  if (g_str_has_prefix (path, "lib"))
+    return TRUE;
+
+  if (g_str_has_prefix (path, "bin") &&
+      (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
+
+  if (g_str_has_prefix (path, "sbin") ||
+      (path[4] == '\0' || path[4] == '/'))
+    return TRUE;
+
+  return FALSE;
+}
 
 /*
  * Supported Debian-style multiarch tuples
@@ -1598,6 +1631,86 @@ bind_runtime (PvRuntime *self,
   return TRUE;
 }
 
+typedef enum
+{
+  TAKE_FROM_HOST_FLAGS_IF_DIR = (1 << 0),
+  TAKE_FROM_HOST_FLAGS_IF_EXISTS = (1 << 1),
+  TAKE_FROM_HOST_FLAGS_NONE = 0
+} TakeFromHostFlags;
+
+static gboolean
+pv_runtime_take_from_host (PvRuntime *self,
+                           FlatpakBwrap *bwrap,
+                           const char *source_in_host,
+                           const char *dest_in_container,
+                           TakeFromHostFlags flags,
+                           GError **error)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (flags & TAKE_FROM_HOST_FLAGS_IF_DIR)
+    {
+      if (!g_file_test (source_in_host, G_FILE_TEST_IS_DIR))
+        return TRUE;
+    }
+
+  if (flags & TAKE_FROM_HOST_FLAGS_IF_EXISTS)
+    {
+      if (!g_file_test (source_in_host, G_FILE_TEST_EXISTS))
+        return TRUE;
+    }
+
+  if (self->mutable_sysroot != NULL)
+    {
+      /* Replace ${mutable_sysroot}/usr/lib/locale with a symlink to
+       * /run/host/usr/lib/locale, or similar */
+      g_autofree gchar *parent_in_container = NULL;
+      g_autofree gchar *target = NULL;
+      const char *base;
+      glnx_autofd int parent_dirfd = -1;
+
+      /* If it isn't in /usr, /lib, etc., then the symlink will be
+       * dangling and this probably isn't going to work. */
+      if (!path_visible_in_run_host (source_in_host))
+        g_warning ("\"%s\" is unlikely to appear in /run/host",
+                   source_in_host);
+
+      parent_in_container = g_path_get_dirname (dest_in_container);
+      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                            parent_in_container,
+                                            PV_RESOLVE_FLAGS_MKDIR_P,
+                                            NULL, error);
+
+      if (parent_dirfd < 0)
+        return FALSE;
+
+      base = glnx_basename (dest_in_container);
+
+      if (!glnx_shutil_rm_rf_at (parent_dirfd, base, NULL, error))
+        return FALSE;
+
+      target = g_build_filename ("/run/host", source_in_host, NULL);
+
+      if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to create symlink \"%s/%s\" -> \"%s\"",
+                                        self->mutable_sysroot,
+                                        dest_in_container, target);
+    }
+  else
+    {
+      /* We can't edit the runtime in-place, so tell bubblewrap to mount
+       * a new version over the top */
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind", source_in_host, dest_in_container,
+                              NULL);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                     FlatpakBwrap *bwrap,
@@ -2124,17 +2237,19 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       g_debug ("Making host locale data visible in container");
 
-      if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
-        flatpak_bwrap_add_args (bwrap,
-                                "--ro-bind", "/usr/lib/locale",
-                                "/usr/lib/locale",
-                                NULL);
+      if (!pv_runtime_take_from_host (self, bwrap,
+                                      "/usr/lib/locale",
+                                      "/usr/lib/locale",
+                                      TAKE_FROM_HOST_FLAGS_IF_EXISTS,
+                                      error))
+        return FALSE;
 
-      if (g_file_test ("/usr/share/i18n", G_FILE_TEST_EXISTS))
-        flatpak_bwrap_add_args (bwrap,
-                                "--ro-bind", "/usr/share/i18n",
-                                "/usr/share/i18n",
-                                NULL);
+      if (!pv_runtime_take_from_host (self, bwrap,
+                                      "/usr/share/i18n",
+                                      "/usr/share/i18n",
+                                      TAKE_FROM_HOST_FLAGS_IF_EXISTS,
+                                      error))
+        return FALSE;
 
       localedef = g_find_program_in_path ("localedef");
 
@@ -2184,11 +2299,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_warning ("Cannot find ldconfig in PATH, /sbin or /usr/sbin");
         }
-      else
+      else if (!pv_runtime_take_from_host (self, bwrap,
+                                           ldconfig,
+                                           "/sbin/ldconfig",
+                                           TAKE_FROM_HOST_FLAGS_NONE,
+                                           error))
         {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", ldconfig, "/sbin/ldconfig",
-                                  NULL);
+          return FALSE;
         }
 
       g_debug ("Making host gconv modules visible in container");
@@ -2196,19 +2313,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       g_hash_table_iter_init (&iter, gconv_from_host);
       while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
         {
-          g_autofree gchar *gconv_in_runtime = NULL;
-
-          if (g_str_has_prefix (gconv_path, "/usr/"))
-            gconv_in_runtime = g_build_filename (self->runtime_usr, gconv_path + strlen ("/usr"), NULL);
-          else
-            gconv_in_runtime = g_build_filename (self->runtime_usr, gconv_path, NULL);
-
-          if (g_file_test (gconv_in_runtime, G_FILE_TEST_IS_DIR))
-            {
-              flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", gconv_path, gconv_path,
-                                      NULL);
-            }
+          if (!pv_runtime_take_from_host (self, bwrap,
+                                          gconv_path,
+                                          gconv_path,
+                                          TAKE_FROM_HOST_FLAGS_IF_DIR,
+                                          error))
+            return FALSE;
         }
     }
   else

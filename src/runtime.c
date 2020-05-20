@@ -666,23 +666,28 @@ pv_runtime_initable_init (GInitable *initable,
   if (self->runtime_lock == NULL)
     return FALSE;
 
-  g_debug ("Creating temporary directories...");
-
-  /* Using a runtime requires a temporary directory */
-  self->tmpdir = g_dir_make_tmp ("pressure-vessel-wrap.XXXXXX", error);
-
-  if (self->tmpdir == NULL)
-    return FALSE;
-
   if (!pv_runtime_init_mutable (self, error))
     return FALSE;
 
   if (self->mutable_sysroot != NULL)
-    self->runtime_files = self->mutable_sysroot;
+    {
+      self->overrides = g_build_filename (self->mutable_sysroot,
+                                          "overrides", NULL);
+      self->runtime_files = self->mutable_sysroot;
+    }
   else
-    self->runtime_files = self->source_files;
+    {
+      /* We currently only need a temporary directory if we don't have
+       * a mutable sysroot to work with. */
+      self->tmpdir = g_dir_make_tmp ("pressure-vessel-wrap.XXXXXX", error);
 
-  self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
+      if (self->tmpdir == NULL)
+        return FALSE;
+
+      self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
+      self->runtime_files = self->source_files;
+    }
+
   g_mkdir (self->overrides, 0700);
   self->overrides_bin = g_build_filename (self->overrides, "bin", NULL);
   g_mkdir (self->overrides_bin, 0700);
@@ -946,6 +951,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
       /* By design, writeable copies of the runtime never need this:
        * the writeable copy is a complete sysroot, not just a merged /usr. */
       g_assert (self->mutable_sysroot == NULL);
+      g_assert (self->tmpdir != NULL);
 
       self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
       g_mkdir (self->container_access, 0700);
@@ -1403,6 +1409,22 @@ bind_runtime (PvRuntime *self,
   if (!pv_bwrap_bind_usr (bwrap, self->runtime_files, "/", error))
     return FALSE;
 
+  /* In the case where we have a mutable sysroot, we can mount all of
+   * /overrides in one go, because we will be keeping it intact as long
+   * as the container is running (along with the rest of mutable_sysroot).
+   *
+   * We have to do this quite early, because we still mount additional
+   * files into /overrides later in setup, and re-mounting /overrides
+   * later on would undo all that.
+   *
+   * For now, we have to mount it read/write, again because we mount
+   * additional, individual files later on. It can become rw when
+   * we stop doing that. */
+  if (self->mutable_sysroot != NULL)
+    flatpak_bwrap_add_args (bwrap,
+                            "--bind", self->overrides, "/overrides",
+                            NULL);
+
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
                           "--tmpfs", "/run",
@@ -1516,7 +1538,16 @@ bind_runtime (PvRuntime *self,
   flatpak_run_add_pulseaudio_args (bwrap);
   flatpak_run_add_session_dbus_args (bwrap);
   flatpak_run_add_system_dbus_args (bwrap);
-  pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
+
+  if (self->mutable_sysroot == NULL)
+    {
+      /* self->overrides is in a temporary directory that will be
+       * cleaned up before we enter the container, so we need to convert
+       * it into a series of --dir and --symlink instructions.
+       *
+       * We have to do this late, because it adds data fds. */
+      pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
+    }
 
   /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
    * non-existing targets), in which case we don't want to attempt to create

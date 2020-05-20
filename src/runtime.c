@@ -61,6 +61,7 @@ struct _PvRuntime
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
   gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
+  const gchar *with_lock_in_container;
 
   PvRuntimeFlags flags;
   int mutable_parent_fd;
@@ -870,9 +871,11 @@ pv_runtime_append_lock_adverb (PvRuntime *self,
 {
   g_return_if_fail (PV_IS_RUNTIME (self));
   g_return_if_fail (!pv_bwrap_was_finished (bwrap));
+  /* This will be true if pv_runtime_bind() was successfully called. */
+  g_return_if_fail (self->with_lock_in_container != NULL);
 
   flatpak_bwrap_add_args (bwrap,
-                          "/run/pressure-vessel/bin/pressure-vessel-with-lock",
+                          self->with_lock_in_container,
                           "--subreaper",
                           NULL);
 
@@ -2637,14 +2640,48 @@ pv_runtime_bind (PvRuntime *self,
   if (!bind_runtime (self, bwrap, error))
     return FALSE;
 
+  /* steam-runtime-system-info uses this to detect pressure-vessel, so we
+   * need to create it even if it will be empty */
+  flatpak_bwrap_add_args (bwrap,
+                          "--dir",
+                          "/run/pressure-vessel",
+                          NULL);
+
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);
 
   /* Make sure pressure-vessel itself is visible there. */
-  flatpak_bwrap_add_args (bwrap,
-                          "--ro-bind",
-                          pressure_vessel_prefix,
-                          "/run/pressure-vessel",
-                          NULL);
+  if (self->mutable_sysroot != NULL)
+    {
+      g_autofree gchar *dest = NULL;
+      glnx_autofd int parent_dirfd = -1;
+
+      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                            "/usr/lib/pressure-vessel",
+                                            PV_RESOLVE_FLAGS_MKDIR_P,
+                                            NULL, error);
+
+      if (parent_dirfd < 0)
+        return FALSE;
+
+      if (!glnx_shutil_rm_rf_at (parent_dirfd, "from-host", NULL, error))
+        return FALSE;
+
+      dest = glnx_fdrel_abspath (parent_dirfd, "from-host");
+
+      if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest, error))
+        return FALSE;
+
+      self->with_lock_in_container = "/usr/lib/pressure-vessel/from-host/bin/pressure-vessel-with-lock";
+    }
+  else
+    {
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind",
+                              pressure_vessel_prefix,
+                              "/run/pressure-vessel/pv-from-host",
+                              NULL);
+      self->with_lock_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-with-lock";
+    }
 
   pv_runtime_set_search_paths (self, bwrap);
 

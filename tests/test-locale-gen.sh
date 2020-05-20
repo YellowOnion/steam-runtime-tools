@@ -89,6 +89,7 @@ locale_gen="pressure-vessel-locale-gen"
 try_setlocale="pressure-vessel-try-setlocale"
 
 mkdir "$tmpdir/1"
+mkdir "$tmpdir/cwd"
 
 one_missing=
 
@@ -128,7 +129,7 @@ else
     # Deliberately setting environment variables in subshell:
     # shellcheck disable=SC2030
     (
-        cd "$tmpdir/1"
+        cd "$tmpdir/cwd"
         export LC_CTYPE=cy_GB.utf8
         export LC_COLLATE=cs_CZ
         export LC_IDENTIFICATION=it_IT@euro
@@ -144,7 +145,7 @@ else
         export HOST_LC_ALL=hu_HU.UTF-8
         export LANG=en_DK
         export LC_ALL=en_AU.UTF-8
-        "$locale_gen"
+        "$locale_gen" --output-dir "$tmpdir/1"
     ) || failed="$?"
 
     if [ "$failed" = 72 ]; then
@@ -179,6 +180,13 @@ else
             not_ok "$tmpdir/1/$locale/LC_IDENTIFICATION not generated"
         fi
     done
+
+    for x in "$tmpdir/cwd"/*; do
+        if [ -e "$x" ]; then
+            not_ok "$locale_gen generated $x in current working directory"
+            failed=yes
+        fi
+    done
 fi
 
 mkdir "$tmpdir/2"
@@ -189,7 +197,7 @@ if "$try_setlocale" "en_US.UTF-8" >/dev/null; then
     # Deliberately setting environment variables in subshell:
     # shellcheck disable=SC2031
     (
-        cd "$tmpdir/2"
+        cd "$tmpdir/cwd"
         unset LC_CTYPE
         unset LC_COLLATE
         unset LC_IDENTIFICATION
@@ -205,7 +213,7 @@ if "$try_setlocale" "en_US.UTF-8" >/dev/null; then
         export HOST_LC_ALL=en_US.UTF-8
         export LANG=en_US.UTF-8
         export LC_ALL=en_US.UTF-8
-        "$locale_gen"
+        "$locale_gen" --output-dir "$tmpdir/2"
     ) || failed=yes
 
     if [ -n "$failed" ]; then

@@ -31,6 +31,7 @@ me="$(readlink -f "$0")"
 here="${me%/*}"
 me="${me##*/}"
 
+opt_output_dir=.
 opt_verbose=
 
 # Look for try-setlocale helper executable next to this script
@@ -125,9 +126,10 @@ generate_locale () {
     if [ "${codeset}" = 'utf8' ]; then
         codeset="UTF-8"
         locale="${language}${underscore_territory}.UTF-8${at_modifier}"
-        ln -fns "$locale" "${language}${underscore_territory}.utf8${at_modifier}"
+        ln -fns "$locale" \
+            "${opt_output_dir}/${language}${underscore_territory}.utf8${at_modifier}"
 
-        if [ -d "$locale" ]; then
+        if [ -d "$opt_output_dir/$locale" ]; then
             return 0
         fi
     fi
@@ -179,7 +181,7 @@ generate_locale () {
         -c \
         -f "$codeset" \
         -i "$without_codeset" \
-        ./"${locale}" \
+        "${opt_output_dir}/${locale}" \
     ; then
         log "Generated locale $locale successfully"
     else
@@ -192,7 +194,7 @@ generate_locale () {
         fi
     fi
 
-    if ! LOCPATH="$(pwd)" pressure-vessel-try-setlocale "$locale"; then
+    if ! LOCPATH="${opt_output_dir}" pressure-vessel-try-setlocale "$locale"; then
         log "Warning: $locale was generated but does not appear to work!"
     fi
 }
@@ -212,6 +214,8 @@ usage () {
     echo "in the current working directory."
     echo
     echo "Options:"
+    echo "--output-dir DIR, -o DIR"
+    echo "              Create locales in the given directory [default: .]"
     echo "--verbose     Be more verbose"
     echo
     echo "Arguments:"
@@ -221,14 +225,20 @@ usage () {
 }
 
 getopt_temp="help"
+getopt_temp="${getopt_temp},output-dir:,output-directory:"
 getopt_temp="${getopt_temp},verbose"
 
-getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
+getopt_temp="$(getopt -o 'o:' --long "$getopt_temp" -n "$me" -- "$@")"
 eval "set -- $getopt_temp"
 unset getopt_temp
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        (-o | --output-dir | --output-directory)
+            opt_output_dir="$2"
+            shift 2
+            ;;
+
         (--help)
             usage 0
             # not reached

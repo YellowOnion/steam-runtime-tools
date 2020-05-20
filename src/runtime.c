@@ -1639,6 +1639,7 @@ typedef enum
   TAKE_FROM_HOST_FLAGS_IF_DIR = (1 << 0),
   TAKE_FROM_HOST_FLAGS_IF_EXISTS = (1 << 1),
   TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
+  TAKE_FROM_HOST_FLAGS_COPY_FALLBACK = (1 << 3),
   TAKE_FROM_HOST_FLAGS_NONE = 0
 } TakeFromHostFlags;
 
@@ -1675,12 +1676,6 @@ pv_runtime_take_from_host (PvRuntime *self,
       const char *base;
       glnx_autofd int parent_dirfd = -1;
 
-      /* If it isn't in /usr, /lib, etc., then the symlink will be
-       * dangling and this probably isn't going to work. */
-      if (!path_visible_in_run_host (source_in_host))
-        g_warning ("\"%s\" is unlikely to appear in /run/host",
-                   source_in_host);
-
       parent_in_container = g_path_get_dirname (dest_in_container);
       parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
                                             parent_in_container,
@@ -1694,6 +1689,25 @@ pv_runtime_take_from_host (PvRuntime *self,
 
       if (!glnx_shutil_rm_rf_at (parent_dirfd, base, NULL, error))
         return FALSE;
+
+      /* If it isn't in /usr, /lib, etc., then the symlink will be
+       * dangling and this probably isn't going to work. */
+      if (!path_visible_in_run_host (source_in_host))
+        {
+          if (flags & TAKE_FROM_HOST_FLAGS_COPY_FALLBACK)
+            {
+              return glnx_file_copy_at (AT_FDCWD, source_in_host, NULL,
+                                        parent_dirfd, base,
+                                        GLNX_FILE_COPY_OVERWRITE,
+                                        NULL, error);
+            }
+          else
+            {
+              g_warning ("\"%s\" is unlikely to appear in /run/host",
+                         source_in_host);
+              /* ... but try it anyway, it can't hurt */
+            }
+        }
 
       target = g_build_filename ("/run/host", source_in_host, NULL);
 
@@ -2467,9 +2481,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                 "glvnd", "egl_vendor.d",
                                                 json_base, NULL);
 
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", json_on_host, json_in_container,
-                                  NULL);
+          if (!pv_runtime_take_from_host (self, bwrap,
+                                          json_on_host,
+                                          json_in_container,
+                                          TAKE_FROM_HOST_FLAGS_COPY_FALLBACK,
+                                          error))
+            return FALSE;
+
           pv_search_path_append (egl_path, json_in_container);
         }
     }
@@ -2541,9 +2559,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                 "vulkan", "icd.d",
                                                 json_base, NULL);
 
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", json_on_host, json_in_container,
-                                  NULL);
+          if (!pv_runtime_take_from_host (self, bwrap,
+                                          json_on_host,
+                                          json_in_container,
+                                          TAKE_FROM_HOST_FLAGS_COPY_FALLBACK,
+                                          error))
+            return FALSE;
+
           pv_search_path_append (vulkan_path, json_in_container);
         }
     }

@@ -731,16 +731,11 @@ ensure_locales (PvRuntime *self,
       locale_gen = g_build_filename (self->tools_dir,
                                      "pressure-vessel-locale-gen",
                                      NULL);
-
+      /* We don't actually need to use bwrap when we're just running on
+       * the host system. */
       flatpak_bwrap_add_args (run_locale_gen,
-                              self->bubblewrap,
-                              "--ro-bind", "/", "/",
-                              NULL);
-      pv_bwrap_add_api_filesystems (run_locale_gen);
-      flatpak_bwrap_add_args (run_locale_gen,
-                              "--bind", locales, locales,
-                              "--chdir", locales,
                               locale_gen,
+                              "--output-dir", locales,
                               "--verbose",
                               NULL);
     }
@@ -764,8 +759,8 @@ ensure_locales (PvRuntime *self,
       flatpak_bwrap_add_args (run_locale_gen,
                               "--ro-bind", self->tools_dir, "/run/host/tools",
                               "--bind", locales, "/overrides/locales",
-                              "--chdir", "/overrides/locales",
                               locale_gen,
+                              "--output-dir", "/overrides/locales",
                               "--verbose",
                               NULL);
     }

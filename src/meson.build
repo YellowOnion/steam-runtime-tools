@@ -23,6 +23,7 @@
 
 # Headers to scan for enum/flags types.
 headers = [
+  'resolve-in-sysroot.h',
   'runtime.h',
 ]
 
@@ -42,6 +43,8 @@ pressure_vessel_utils = static_library(
     'flatpak-utils-private.h',
     'glib-backports.c',
     'glib-backports.h',
+    'resolve-in-sysroot.c',
+    'resolve-in-sysroot.h',
     'utils.c',
     'utils.h',
   ],

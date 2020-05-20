@@ -1206,8 +1206,6 @@ main (int argc,
                           "--unsetenv", "PWD",
                           NULL);
 
-  /* TODO: Potential future expansion: use --unshare-pid for more isolation */
-
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
   if (runtime == NULL)

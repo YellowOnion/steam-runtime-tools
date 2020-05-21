@@ -64,7 +64,7 @@ build:devel:
             ${STEAM_RUNTIME_TOOLS_GIT_REPO} \
             subprojects/steam-runtime-tools
 
-            meson --werror _build
+            meson --werror -Dman=true _build
             ninja -C _build
             ninja -C _build install
             meson test --verbose -C _build

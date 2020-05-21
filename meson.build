@@ -215,24 +215,39 @@ enums = gnome.mkenums_simple(
   sources : headers,
 )
 
-executable(
-  'pressure-vessel-with-lock',
+pressure_vessel_utils = static_library(
+  'pressure-vessel-utils',
   sources : [
     'src/bwrap-lock.c',
     'src/bwrap-lock.h',
-    'src/glib-backports.c',
-    'src/glib-backports.h',
     'src/flatpak-utils-base.c',
     'src/flatpak-utils-base-private.h',
     'src/flatpak-utils.c',
     'src/flatpak-utils-private.h',
+    'src/glib-backports.c',
+    'src/glib-backports.h',
     'src/utils.c',
     'src/utils.h',
+  ],
+  dependencies : [
+    gio_unix,
+    libglnx.get_variable('libglnx_dep'),
+  ],
+  include_directories : project_include_dirs,
+  install: false,
+)
+
+executable(
+  'pressure-vessel-with-lock',
+  sources : [
     'src/with-lock.c',
   ],
   dependencies : [
     gio_unix,
     libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    pressure_vessel_utils,
   ],
   include_directories : project_include_dirs,
   install : true,
@@ -246,22 +261,12 @@ executable(
   sources : [
     'src/bwrap.c',
     'src/bwrap.h',
-    'src/bwrap-lock.c',
-    'src/bwrap-lock.h',
-    'src/glib-backports.c',
-    'src/glib-backports.h',
     'src/flatpak-bwrap.c',
     'src/flatpak-bwrap-private.h',
     'src/flatpak-run.c',
     'src/flatpak-run-private.h',
-    'src/flatpak-utils-base.c',
-    'src/flatpak-utils-base-private.h',
-    'src/flatpak-utils.c',
-    'src/flatpak-utils-private.h',
     'src/runtime.c',
     'src/runtime.h',
-    'src/utils.c',
-    'src/utils.h',
     'src/wrap.c',
     'src/wrap-interactive.c',
     'src/wrap-interactive.h',
@@ -271,6 +276,9 @@ executable(
     gio_unix,
     xau,
     libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    pressure_vessel_utils,
   ],
   include_directories : project_include_dirs,
   install : true,
@@ -292,17 +300,14 @@ executable(
 executable(
   'test-cheap-copy',
   sources : [
-    'src/flatpak-utils-base.c',
-    'src/flatpak-utils-base-private.h',
-    'src/glib-backports.c',
-    'src/glib-backports.h',
-    'src/utils.c',
-    'src/utils.h',
     'tests/cheap-copy.c',
   ],
   dependencies : [
     gio_unix,
     libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    pressure_vessel_utils,
   ],
   include_directories : project_include_dirs,
   install : false,

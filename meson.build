@@ -142,6 +142,8 @@ steam_runtime_tools = dependency(
     'introspection=false',
   ],
 )
+gio_unix = dependency('gio-unix-2.0', required : true)
+xau = dependency('xau', required : true)
 
 scripts = [
   'pressure-vessel-locale-gen',
@@ -229,7 +231,7 @@ executable(
     'src/with-lock.c',
   ],
   dependencies : [
-    dependency('gio-unix-2.0', required : true),
+    gio_unix,
     libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,
@@ -266,8 +268,8 @@ executable(
   ] + enums,
   dependencies : [
     steam_runtime_tools,
-    dependency('gio-unix-2.0', required : true),
-    dependency('xau', required : true),
+    gio_unix,
+    xau,
     libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,
@@ -299,7 +301,7 @@ executable(
     'tests/cheap-copy.c',
   ],
   dependencies : [
-    dependency('gio-unix-2.0', required : true),
+    gio_unix,
     libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,

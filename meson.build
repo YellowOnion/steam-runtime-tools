@@ -143,6 +143,11 @@ steam_runtime_tools = dependency(
   ],
 )
 gio_unix = dependency('gio-unix-2.0', required : true)
+glib_tap_support = dependency(
+  'glib-2.0',
+  version : '>= 2.38',
+  required : false,
+)
 xau = dependency('xau', required : true)
 
 scripts = [

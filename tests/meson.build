@@ -35,6 +35,43 @@ tests = [
   'test-locale-gen.sh',
 ]
 
+compiled_tests = [
+  'utils',
+]
+
+foreach test_name : compiled_tests
+  exe = executable(
+    'test-' + test_name,
+    files(test_name + '.c'),
+    dependencies : [gio_unix, libglnx.get_variable('libglnx_dep')],
+    link_with : [pressure_vessel_utils],
+    include_directories : project_include_dirs,
+    install : false,
+  )
+
+  if glib_tap_support.found()
+    if prove.found()
+      test(
+        test_name, prove,
+        args : ['-v', '-e', '', exe, '::', '--tap'],
+        env : test_env,
+      )
+    else
+      test(
+        test_name, exe,
+        args : ['--tap'],
+        env : test_env,
+      )
+    endif
+  else
+    test(
+      test_name, exe,
+      env : test_env,
+    )
+  endif
+
+endforeach
+
 foreach test_name : tests
   test_args = ['-v', files(test_name)]
 

@@ -1478,7 +1478,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               g_debug ("Making host ld.so visible in container");
 
-              ld_so_in_host = flatpak_canonicalize_filename (arch->ld_so);
+              ld_so_in_host = realpath (arch->ld_so, NULL);
+
+              if (ld_so_in_host == NULL)
+                return glnx_throw_errno_prefix (error,
+                                                "Unable to determine host path to %s",
+                                                arch->ld_so);
+
               g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
               g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
               flatpak_bwrap_add_args (bwrap,

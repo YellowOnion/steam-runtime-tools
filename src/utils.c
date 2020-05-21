@@ -193,6 +193,8 @@ void
 pv_search_path_append (GString *search_path,
                        const gchar *item)
 {
+  g_return_if_fail (search_path != NULL);
+
   if (item == NULL || item[0] == '\0')
     return;
 
@@ -212,6 +214,10 @@ pv_capture_output (const char * const * argv,
   g_autofree gchar *errors = NULL;
   gsize i;
   g_autoptr(GString) command = g_string_new ("");
+
+  g_return_val_if_fail (argv != NULL, NULL);
+  g_return_val_if_fail (argv[0] != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   for (i = 0; argv[i] != NULL; i++)
     {
@@ -361,6 +367,9 @@ pv_cheap_tree_copy (const char *source_root,
 {
   int res;
 
+  g_return_val_if_fail (source_root != NULL, FALSE);
+  g_return_val_if_fail (dest_root != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
   /* Can't run concurrently */
   g_return_val_if_fail (nftw_data.source_root == NULL, FALSE);
 

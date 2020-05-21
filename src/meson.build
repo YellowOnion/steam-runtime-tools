@@ -1,0 +1,116 @@
+# Copyright © 2019-2020 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+# Headers to scan for enum/flags types.
+headers = [
+  'runtime.h',
+]
+
+enums = gnome.mkenums_simple(
+  'enumtypes',
+  sources : headers,
+)
+
+pressure_vessel_utils = static_library(
+  'pressure-vessel-utils',
+  sources : [
+    'bwrap-lock.c',
+    'bwrap-lock.h',
+    'flatpak-utils-base.c',
+    'flatpak-utils-base-private.h',
+    'flatpak-utils.c',
+    'flatpak-utils-private.h',
+    'glib-backports.c',
+    'glib-backports.h',
+    'utils.c',
+    'utils.h',
+  ],
+  dependencies : [
+    gio_unix,
+    libglnx.get_variable('libglnx_dep'),
+  ],
+  include_directories : project_include_dirs,
+  install: false,
+)
+
+executable(
+  'pressure-vessel-with-lock',
+  sources : [
+    'with-lock.c',
+  ],
+  dependencies : [
+    gio_unix,
+    libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    pressure_vessel_utils,
+  ],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : get_option('bindir'),
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
+)
+
+executable(
+  'pressure-vessel-wrap',
+  sources : [
+    'bwrap.c',
+    'bwrap.h',
+    'flatpak-bwrap.c',
+    'flatpak-bwrap-private.h',
+    'flatpak-run.c',
+    'flatpak-run-private.h',
+    'runtime.c',
+    'runtime.h',
+    'wrap.c',
+    'wrap-interactive.c',
+    'wrap-interactive.h',
+  ] + enums,
+  dependencies : [
+    steam_runtime_tools,
+    gio_unix,
+    xau,
+    libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    pressure_vessel_utils,
+  ],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : get_option('bindir'),
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
+)
+
+executable(
+  'pressure-vessel-try-setlocale',
+  sources : [
+    'try-setlocale.c',
+  ],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : get_option('bindir'),
+)
+
+# vim:set sw=2 sts=2 et:

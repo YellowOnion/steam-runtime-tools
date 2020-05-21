@@ -74,15 +74,15 @@ if ! tmpdir="$(mktemp -d)"; then
 fi
 
 if [ -z "${G_TEST_SRCDIR-}" ]; then
-    G_TEST_SRCDIR="${here%/*}"
+    G_TEST_SRCDIR="${here}"
 fi
 
 if [ -z "${G_TEST_BUILDDIR-}" ]; then
-    G_TEST_BUILDDIR="${here%/*}"
+    G_TEST_BUILDDIR="${here}"
 fi
 
 if [ -n "${PRESSURE_VESSEL_UNINSTALLED-}" ]; then
-    PATH="${G_TEST_BUILDDIR}:${G_TEST_SRCDIR}:${PATH}"
+    PATH="${G_TEST_BUILDDIR}/..:${G_TEST_SRCDIR}/..:${PATH}"
 fi
 
 locale_gen="pressure-vessel-locale-gen"

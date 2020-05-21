@@ -139,6 +139,71 @@ test_capture_output (Fixture *f,
 }
 
 static void
+test_envp_cmp (Fixture *f,
+               gconstpointer context)
+{
+  static const char * const unsorted[] =
+  {
+    "SAME_NAME=2",
+    "EARLY_NAME=a",
+    "SAME_NAME=222",
+    "Z_LATE_NAME=b",
+    "SUFFIX_ADDED=23",
+    "SAME_NAME=1",
+    "SAME_NAME=",
+    "SUFFIX=42",
+    "SAME_NAME=3",
+    "SAME_NAME",
+  };
+  static const char * const sorted[] =
+  {
+    "EARLY_NAME=a",
+    "SAME_NAME",
+    "SAME_NAME=",
+    "SAME_NAME=1",
+    "SAME_NAME=2",
+    "SAME_NAME=222",
+    "SAME_NAME=3",
+    "SUFFIX=42",
+    "SUFFIX_ADDED=23",
+    "Z_LATE_NAME=b",
+  };
+  G_GNUC_UNUSED const Config *config = context;
+  const char **sort_this = NULL;
+  gsize i, j;
+
+  G_STATIC_ASSERT (G_N_ELEMENTS (sorted) == G_N_ELEMENTS (unsorted));
+
+  for (i = 0; i < G_N_ELEMENTS (sorted); i++)
+    {
+      g_autofree gchar *copy = g_strdup (sorted[i]);
+
+      g_test_message ("%s == %s", copy, sorted[i]);
+      g_assert_cmpint (pv_envp_cmp (&copy, &sorted[i]), ==, 0);
+      g_assert_cmpint (pv_envp_cmp (&sorted[i], &copy), ==, 0);
+
+      for (j = i + 1; j < G_N_ELEMENTS (sorted); j++)
+        {
+          g_test_message ("%s < %s", sorted[i], sorted[j]);
+          g_assert_cmpint (pv_envp_cmp (&sorted[i], &sorted[j]), <, 0);
+          g_assert_cmpint (pv_envp_cmp (&sorted[j], &sorted[i]), >, 0);
+        }
+    }
+
+  sort_this = g_new0 (const char *, G_N_ELEMENTS (unsorted));
+
+  for (i = 0; i < G_N_ELEMENTS (unsorted); i++)
+    sort_this[i] = unsorted[i];
+
+  qsort (sort_this, G_N_ELEMENTS (unsorted), sizeof (char *), pv_envp_cmp);
+
+  for (i = 0; i < G_N_ELEMENTS (sorted); i++)
+    g_assert_cmpstr (sorted[i], ==, sort_this[i]);
+
+  g_free (sort_this);
+}
+
+static void
 test_same_file (Fixture *f,
                 gconstpointer context)
 {
@@ -225,6 +290,7 @@ main (int argc,
   g_test_add ("/avoid-gvfs", Fixture, NULL, setup, test_avoid_gvfs, teardown);
   g_test_add ("/capture-output", Fixture, NULL,
               setup, test_capture_output, teardown);
+  g_test_add ("/envp-cmp", Fixture, NULL, setup, test_envp_cmp, teardown);
   g_test_add ("/same-file", Fixture, NULL, setup, test_same_file, teardown);
   g_test_add ("/search-path-append", Fixture, NULL,
               setup, test_search_path_append, teardown);

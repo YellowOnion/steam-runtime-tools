@@ -1880,30 +1880,57 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
-          temp_bwrap = flatpak_bwrap_new (NULL);
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  self->bubblewrap,
-                                  NULL);
+          if (self->mutable_sysroot != NULL)
+            {
+              glnx_autofd int fd = -1;
 
-          if (!pv_bwrap_bind_usr (temp_bwrap,
-                                  self->runtime_files,
-                                  "/",
-                                  error))
-            return FALSE;
+              fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                          arch->ld_so,
+                                          PV_RESOLVE_FLAGS_NONE,
+                                          &ld_so_in_runtime,
+                                          error);
 
-          if (!pv_bwrap_bind_usr (temp_bwrap, "/", "/run/host", error))
-            return FALSE;
+              if (fd < 0)
+                return FALSE;
+            }
+          else
+            {
+              /* Do it the hard way, by asking a process running in the
+               * container (or at least a container resembling the one we
+               * are going to use) to resolve it for us */
+              temp_bwrap = flatpak_bwrap_new (NULL);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      self->bubblewrap,
+                                      NULL);
 
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  "env", "PATH=/usr/bin:/bin",
-                                  "readlink", "-e", arch->ld_so,
-                                  NULL);
-          flatpak_bwrap_finish (temp_bwrap);
+              if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      self->runtime_files,
+                                      "/",
+                                      error))
+                return FALSE;
 
-          ld_so_in_runtime = pv_capture_output ((const char * const *) temp_bwrap->argv->pdata,
-                                                NULL);
+              if (!pv_bwrap_bind_usr (temp_bwrap, "/", "/run/host", error))
+                return FALSE;
 
-          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      "env", "PATH=/usr/bin:/bin",
+                                      "readlink", "-e", arch->ld_so,
+                                      NULL);
+              flatpak_bwrap_finish (temp_bwrap);
+
+              ld_so_in_runtime = pv_capture_output (
+                  (const char * const *) temp_bwrap->argv->pdata, NULL);
+
+              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+              if (!g_path_is_absolute (ld_so_in_runtime))
+                {
+                  /* bwrap --ro-bind wants an absolute path */
+                  g_autofree gchar *temp = g_steal_pointer (&ld_so_in_runtime);
+
+                  ld_so_in_runtime = g_build_filename ("/", temp, NULL);
+                }
+            }
 
           if (ld_so_in_runtime == NULL)
             {

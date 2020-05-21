@@ -97,6 +97,7 @@ no_warning_cflags = [
     'missing-field-initializers',
     'pedantic',
     'sign-compare',
+    'unused-local-typedefs',
     'unused-parameter',
     'variadic-macros',
 ]
@@ -227,9 +228,6 @@ executable(
     'src/utils.h',
     'src/with-lock.c',
   ],
-  c_args : [
-    '-Wno-unused-local-typedefs',
-  ],
   dependencies : [
     dependency('gio-unix-2.0', required : true),
     libglnx.get_variable('libglnx_dep'),
@@ -266,9 +264,6 @@ executable(
     'src/wrap-interactive.c',
     'src/wrap-interactive.h',
   ] + enums,
-  c_args : [
-    '-Wno-unused-local-typedefs',
-  ],
   dependencies : [
     steam_runtime_tools,
     dependency('gio-unix-2.0', required : true),
@@ -302,9 +297,6 @@ executable(
     'src/utils.c',
     'src/utils.h',
     'tests/cheap-copy.c',
-  ],
-  c_args : [
-    '-Wno-unused-local-typedefs',
   ],
   dependencies : [
     dependency('gio-unix-2.0', required : true),

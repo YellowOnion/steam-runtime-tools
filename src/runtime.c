@@ -1736,6 +1736,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                   error))
             return FALSE;
 
+          if (!pv_bwrap_bind_usr (temp_bwrap, "/", "/run/host", error))
+            return FALSE;
+
           flatpak_bwrap_add_args (temp_bwrap,
                                   "env", "PATH=/usr/bin:/bin",
                                   "readlink", "-e", arch->ld_so,

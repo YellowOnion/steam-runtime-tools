@@ -36,6 +36,7 @@ tests = [
 ]
 
 compiled_tests = [
+  'bwrap-lock',
   'utils',
 ]
 

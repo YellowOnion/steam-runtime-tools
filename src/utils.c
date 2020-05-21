@@ -94,22 +94,35 @@ pv_envp_cmp (const void *p1,
   min = MIN (l1, l2);
   ret = strncmp (*s1, *s2, min);
 
+  /* If they differ before the first '=' (if any) in either s1 or s2,
+   * then they are certainly different */
   if (ret != 0)
     return ret;
 
+  ret = strcmp (*s1, *s2);
+
+  /* If they do not differ at all, then they are equal */
+  if (ret == 0)
+    return ret;
+
+  /* FOO < FOO=..., and FOO < FOOBAR */
   if ((*s1)[min] == '\0')
     return -1;
 
+  /* FOO=... > FOO, and FOOBAR > FOO */
   if ((*s2)[min] == '\0')
     return 1;
 
-  if ((*s1)[min] == '=')
+  /* FOO= < FOOBAR */
+  if ((*s1)[min] == '=' && (*s2)[min] != '=')
     return -1;
 
-  if ((*s2)[min] == '=')
+  /* FOOBAR > FOO= */
+  if ((*s2)[min] == '=' && (*s1)[min] != '=')
     return 1;
 
-  return strcmp (*s1, *s2);
+  /* Fall back to plain string comparison */
+  return ret;
 }
 
 /**

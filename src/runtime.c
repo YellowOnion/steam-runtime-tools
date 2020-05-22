@@ -32,6 +32,7 @@
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
+#include "elf-utils.h"
 #include "enumtypes.h"
 #include "flatpak-run-private.h"
 #include "resolve-in-sysroot.h"
@@ -1755,6 +1756,240 @@ pv_runtime_take_from_host (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_remove_overridden_libraries (PvRuntime *self,
+                                        RuntimeArchitecture *arch,
+                                        GError **error)
+{
+  static const char * const libdirs[] = { "lib", "usr/lib", "usr/lib/mesa" };
+  GHashTable *delete[G_N_ELEMENTS (libdirs)] = { NULL };
+  GLnxDirFdIterator iters[G_N_ELEMENTS (libdirs)] = { { FALSE } };
+  gchar *multiarch_libdirs[G_N_ELEMENTS (libdirs)] = { NULL };
+  gboolean ret = FALSE;
+  gsize i;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (arch != NULL, FALSE);
+  g_return_val_if_fail (arch->ld_so != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* Not applicable/possible if we don't have a mutable sysroot */
+  g_return_val_if_fail (self->mutable_sysroot != NULL, FALSE);
+
+  /* We have to figure out what we want to delete before we delete anything,
+   * because we can't tell whether a symlink points to a library of a
+   * particular SONAME if we already deleted the library. */
+  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+    {
+      glnx_autofd int libdir_fd = -1;
+      struct dirent *dent;
+
+      multiarch_libdirs[i] = g_build_filename (libdirs[i], arch->tuple, NULL);
+
+      /* Mostly ignore error: if the library directory cannot be opened,
+       * presumably we don't need to do anything with it... */
+        {
+          g_autoptr(GError) local_error = NULL;
+
+          libdir_fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                             multiarch_libdirs[i],
+                                             PV_RESOLVE_FLAGS_READABLE,
+                                             NULL, &local_error);
+
+          if (libdir_fd < 0)
+            {
+              g_debug ("Cannot resolve \"%s\" in \"%s\", so no need to delete "
+                       "libraries from it: %s",
+                       multiarch_libdirs[i], self->mutable_sysroot,
+                       local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+        }
+
+      g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
+               arch->tuple, multiarch_libdirs[i], self->mutable_sysroot);
+
+      if (!glnx_dirfd_iterator_init_take_fd (&libdir_fd, &iters[i], error))
+        {
+          glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
+                             self->mutable_sysroot,
+                             multiarch_libdirs[i]);
+          goto out;
+        }
+
+      delete[i] = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                         g_free, g_free);
+
+      while (TRUE)
+        {
+          g_autoptr(Elf) elf = NULL;
+          g_autoptr(GError) local_error = NULL;
+          glnx_autofd int libfd = -1;
+          g_autofree gchar *path = NULL;
+          g_autofree gchar *soname = NULL;
+          g_autofree gchar *target = NULL;
+
+          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
+                                                           NULL, error))
+            return glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+                                      self->mutable_sysroot,
+                                      multiarch_libdirs[i]);
+
+          if (dent == NULL)
+            break;
+
+          switch (dent->d_type)
+            {
+              case DT_REG:
+              case DT_LNK:
+                break;
+
+              case DT_BLK:
+              case DT_CHR:
+              case DT_DIR:
+              case DT_FIFO:
+              case DT_SOCK:
+              case DT_UNKNOWN:
+              default:
+                continue;
+            }
+
+          if (!g_str_has_prefix (dent->d_name, "lib"))
+            continue;
+
+          if (!g_str_has_suffix (dent->d_name, ".so") &&
+              strstr (dent->d_name, ".so.") == NULL)
+            continue;
+
+          path = g_build_filename (multiarch_libdirs[i], dent->d_name, NULL);
+
+          /* scope for soname_link */
+            {
+              g_autofree gchar *soname_link = NULL;
+
+              soname_link = g_build_filename (arch->libdir_on_host,
+                                              dent->d_name, NULL);
+
+              /* If we found libfoo.so.1 in the container, and libfoo.so.1
+               * also exists among the overrides, delete it. */
+              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+
+          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+                                           NULL, NULL);
+
+          if (target != NULL)
+            {
+              g_autofree gchar *soname_link = NULL;
+
+              soname_link = g_build_filename (arch->libdir_on_host,
+                                              glnx_basename (target),
+                                              NULL);
+
+              /* If the symlink in the container points to
+               * /foo/bar/libfoo.so.1, and libfoo.so.1 also exists among
+               * the overrides, delete it. */
+              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+
+          libfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd, path,
+                                         PV_RESOLVE_FLAGS_READABLE, NULL,
+                                         &local_error);
+
+          if (libfd < 0)
+            {
+              g_warning ("Unable to open %s/%s for reading: %s",
+                         self->mutable_sysroot, path, local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+
+          elf = pv_elf_open_fd (libfd, &local_error);
+
+          if (elf != NULL)
+            soname = pv_elf_get_soname (elf, &local_error);
+
+          if (soname == NULL)
+            {
+              g_warning ("Unable to get SONAME of %s/%s: %s",
+                         self->mutable_sysroot, path, local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+
+          /* If we found a library with SONAME libfoo.so.1 in the
+           * container, and libfoo.so.1 also exists among the overrides,
+           * delete it. */
+            {
+              g_autofree gchar *soname_link = NULL;
+
+              soname_link = g_build_filename (arch->libdir_on_host, soname,
+                                              NULL);
+
+              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+        }
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+    {
+      if (delete[i] == NULL)
+        continue;
+
+      g_assert (iters[i].initialized);
+      g_assert (iters[i].fd >= 0);
+
+      GLNX_HASH_TABLE_FOREACH_KV (delete[i],
+                                  const char *, name,
+                                  const char *, reason)
+        {
+          g_autoptr(GError) local_error = NULL;
+
+          g_debug ("Deleting %s/%s/%s because %s replaces it",
+                   self->mutable_sysroot, multiarch_libdirs[i], name, reason);
+
+          if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
+            {
+              g_warning ("Unable to delete %s/%s/%s: %s",
+                         self->mutable_sysroot, multiarch_libdirs[i],
+                         name, local_error->message);
+              g_clear_error (&local_error);
+            }
+        }
+    }
+
+  ret = TRUE;
+
+out:
+  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+    {
+      g_clear_pointer (&delete[i], g_hash_table_unref);
+      glnx_dirfd_iterator_clear (&iters[i]);
+      g_free (multiarch_libdirs[i]);
+    }
+
+  return ret;
+}
+
+static gboolean
 pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                     FlatpakBwrap *bwrap,
                                     GError **error)
@@ -2096,6 +2331,10 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
             }
+
+          if (self->mutable_sysroot != NULL &&
+              !pv_runtime_remove_overridden_libraries (self, arch, error))
+            return FALSE;
 
           libc = g_build_filename (arch->libdir_on_host, "libc.so.6", NULL);
 

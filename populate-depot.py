@@ -46,6 +46,10 @@ from typing import (
     Sequence,
 )
 
+from debian.deb822 import (
+    Sources,
+)
+
 
 logger = logging.getLogger('populate-depot')
 
@@ -94,6 +98,11 @@ class Runtime:
         )
         self.build_id_file = '{}-{}-{}-buildid.txt'.format(
             self.platform,
+            self.architecture,
+            self.suite,
+        )
+        self.sources = '{}-{}-{}-sources.deb822.gz'.format(
+            self.sdk,
             self.architecture,
             self.suite,
         )
@@ -238,6 +247,8 @@ class Main:
         ssh: bool = False,
         suite: str = '',
         unpack_ld_library_path: str = '',
+        unpack_sources: Sequence[str] = (),
+        unpack_sources_into: str = '.',
         version: str = 'latest',
         **kwargs: Dict[str, Any],
     ) -> None:
@@ -284,6 +295,8 @@ class Main:
         self.runtimes = []      # type: List[Runtime]
         self.ssh = ssh
         self.unpack_ld_library_path = unpack_ld_library_path
+        self.unpack_sources = unpack_sources
+        self.unpack_sources_into = unpack_sources_into
 
         for runtime in runtimes:
             if '=' in runtime:
@@ -349,6 +362,18 @@ class Main:
                 'as pressure-vessel into %r',
                 self.unpack_ld_library_path)
             self.download_scout_tarball(pressure_vessel_runtime)
+
+        if self.unpack_sources:
+            logger.info(
+                'Will download %s source code into %r',
+                ', '.join(self.unpack_sources), self.unpack_sources_into)
+            os.makedirs(self.unpack_sources_into, exist_ok=True)
+
+            for runtime in self.runtimes:
+                os.makedirs(
+                    os.path.join(self.unpack_sources_into, runtime.name),
+                    exist_ok=True,
+                )
 
         for runtime in self.runtimes:
             if runtime.path:
@@ -421,6 +446,37 @@ class Main:
         ) as writer:
             writer.write(f'{runtime.version}\n')
 
+        if self.unpack_sources:
+            with open(
+                os.path.join(runtime.path, runtime.sources), 'rb',
+            ) as reader:
+                for stanza in Sources.iter_paragraphs(
+                    sequence=reader,
+                    use_apt_pkg=True,
+                ):
+                    if stanza['package'] in self.unpack_sources:
+                        for f in stanza['files']:
+                            name = f['name']
+
+                            if name.endswith('.dsc'):
+                                subprocess.run(
+                                    [
+                                        'dpkg-source',
+                                        '-x',
+                                        os.path.join(
+                                            runtime.path,
+                                            'sources',
+                                            f['name'],
+                                        ),
+                                        os.path.join(
+                                            self.unpack_sources_into,
+                                            runtime.name,
+                                            stanza['package'],
+                                        ),
+                                    ],
+                                    check=True,
+                                )
+
     def download_runtime(self, runtime: Runtime) -> None:
         """
         Download a pre-prepared Platform from a previous container
@@ -435,6 +491,59 @@ class Main:
             os.path.join(self.depot, runtime.build_id_file), 'w',
         ) as writer:
             writer.write(f'{pinned}\n')
+
+        if self.unpack_sources:
+            with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
+                want = set(self.unpack_sources)
+                runtime.fetch(runtime.sources, tmp, self.opener, ssh=self.ssh)
+                with open(os.path.join(tmp, runtime.sources), 'rb') as reader:
+                    for stanza in Sources.iter_paragraphs(
+                        sequence=reader,
+                        use_apt_pkg=True,
+                    ):
+                        if stanza['package'] in self.unpack_sources:
+                            logger.info(
+                                'Found %s in %s',
+                                stanza['package'], runtime.name,
+                            )
+                            want.discard(stanza['package'])
+                            os.makedirs(
+                                os.path.join(tmp, 'sources'),
+                                exist_ok=True,
+                            )
+
+                            for f in stanza['files']:
+                                name = f['name']
+                                runtime.fetch(
+                                    os.path.join('sources', name),
+                                    tmp,
+                                    self.opener,
+                                    ssh=self.ssh,
+                                )
+
+                            for f in stanza['files']:
+                                name = f['name']
+
+                                if name.endswith('.dsc'):
+                                    subprocess.run(
+                                        [
+                                            'dpkg-source',
+                                            '-x',
+                                            os.path.join(tmp, 'sources', name),
+                                            os.path.join(
+                                                self.unpack_sources_into,
+                                                runtime.name,
+                                                stanza['package'],
+                                            ),
+                                        ],
+                                        check=True,
+                                    )
+
+                if want:
+                    logger.warning(
+                        'Did not find source package(s) %s in %s',
+                        ', '.join(want), runtime.name,
+                    )
 
     def download_scout_tarball(self, runtime: Runtime) -> None:
         """
@@ -527,6 +636,21 @@ def main() -> None:
             'Get the steam-runtime.tar.xz from the same place as '
             'pressure-vessel and unpack it into the given PATH, '
             'for use in regression testing.'
+        )
+    )
+    parser.add_argument(
+        '--unpack-source', metavar='PACKAGE', action='append', default=[],
+        dest='unpack_sources',
+        help=(
+            'Download and unpack the given source package from each runtime '
+            'if it exists, for use in regression testing. May be repeated.'
+        )
+    )
+    parser.add_argument(
+        '--unpack-sources-into', metavar='PATH', default='.',
+        help=(
+            'Unpack any source packages specified by --unpack-source '
+            'into PATH/RUNTIME/SOURCE (default: ./RUNTIME/SOURCE).'
         )
     )
     parser.add_argument(

@@ -111,8 +111,9 @@ class TestPressureVessel(unittest.TestCase):
     @contextlib.contextmanager
     def catch(
         self,
-        msg,        # type: str
-        **kwargs    # type: typing.Any
+        msg,                # type: str
+        diagnostic=None,    # type: typing.Any
+        **kwargs            # type: typing.Any
     ):
         """
         Run a sub-test, with additional logging.
@@ -127,6 +128,10 @@ class TestPressureVessel(unittest.TestCase):
                 yield
             except Exception:
                 logger.error(msg, exc_info=True)
+
+                if diagnostic is not None:
+                    logger.error('%r', diagnostic)
+
                 raise
 
     def get_runtime_build_id(self, suite):
@@ -176,16 +181,29 @@ class TestPressureVessel(unittest.TestCase):
 
         return completed
 
+    def tee_file_and_stderr(self, path: str) -> subprocess.Popen:
+        """
+        Return a context manager with a stdin attribute.
+        Anything written to its stdin will be written to `path`
+        and also to stderr.
+        """
+        return subprocess.Popen(
+            ['tee', '--', path],
+            stdin=subprocess.PIPE,
+            stdout=2,
+            stderr=2,
+        )
+
     def test_general_info(self) -> None:
-        with open(
-            os.path.join(self.artifacts, 'depot-contents.txt'), 'w'
-        ) as writer:
+        with self.tee_file_and_stderr(
+            os.path.join(self.artifacts, 'depot-contents.txt')
+        ) as tee:
             with self.catch('List contents of depot'):
                 completed = self.run_subprocess(
                     ['find', '.', '-ls'],
                     check=True,
                     cwd=self.depot,
-                    stdout=writer,
+                    stdout=tee.stdin,
                     stderr=subprocess.PIPE,
                 )
 
@@ -262,8 +280,8 @@ class TestPressureVessel(unittest.TestCase):
 
                 if completed.stderr:
                     logger.info(
-                        '%s --version (stderr) -> %s',
-                        exe, completed.stderr,
+                        'steam-runtime-system-info --verbose (stderr) -> %s',
+                        completed.stderr,
                     )
                 else:
                     logger.info('(no stderr)')
@@ -356,7 +374,10 @@ class TestPressureVessel(unittest.TestCase):
         self.assertIn('can-write-uinput', parsed)
         self.assertIn('steam-installation', parsed)
 
-        with self.catch('runtime information'):
+        with self.catch(
+            'runtime information',
+            diagnostic=parsed.get('runtime'),
+        ):
             self.assertIn('runtime', parsed)
             self.assertEqual('/', parsed['runtime'].get('path'))
             self.assertIn('version', parsed['runtime'])
@@ -377,7 +398,10 @@ class TestPressureVessel(unittest.TestCase):
             self.assertNotIn('pinned_libs_32', parsed['runtime'])
             self.assertNotIn('pinned_libs_64', parsed['runtime'])
 
-        with self.catch('os-release information'):
+        with self.catch(
+            'os-release information',
+            diagnostic=parsed.get('os-release'),
+        ):
             self.assertIn('os-release', parsed)
             self.assertEqual('steamrt', parsed['os-release']['id'])
             self.assertNotIn(
@@ -421,7 +445,11 @@ class TestPressureVessel(unittest.TestCase):
             self.assertIn(multiarch, parsed['architectures'])
             arch_info = parsed['architectures'][multiarch]
 
-            with self.catch('per-architecture information', arch=arch):
+            with self.catch(
+                'per-architecture information',
+                diagnostic=arch_info,
+                arch=arch,
+            ):
                 self.assertTrue(arch_info['can-run'])
                 self.assertEqual([], arch_info['library-issues-summary'])
                 # Graphics driver support depends on the host system, so we
@@ -433,6 +461,7 @@ class TestPressureVessel(unittest.TestCase):
             for soname, details in arch_info['library-details'].items():
                 with self.catch(
                     'per-library information',
+                    diagnostic=details,
                     arch=arch,
                     soname=soname,
                 ):
@@ -506,15 +535,14 @@ class TestPressureVessel(unittest.TestCase):
 
         adverb = self.get_pressure_vessel_adverb(suite)
 
-        with open(
+        with self.tee_file_and_stderr(
             os.path.join(self.artifacts, 'platform.log'),
-            'w',
-        ) as writer:
+        ) as tee:
             with self.catch('run steamrt platform test in container'):
                 self.run_subprocess(
                     adverb + ['debian/tests/platform'],
                     cwd=steamrt_source,
-                    stdout=writer,
+                    stdout=tee.stdin,
                     stderr=subprocess.STDOUT,
                     check=True,
                 )

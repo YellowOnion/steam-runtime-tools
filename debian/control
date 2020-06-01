@@ -6,6 +6,7 @@ Standards-Version: 4.4.0
 Build-Depends:
  debhelper (>= 9),
  g++ (>= 4:4.8) | g++-4.8,
+ libelf-dev,
  libglib2.0-dev,
  libsteam-runtime-tools-0-dev (>= 0.20200331.1~),
  libxau-dev,

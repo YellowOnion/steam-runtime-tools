@@ -37,6 +37,8 @@ pressure_vessel_utils = static_library(
   sources : [
     'bwrap-lock.c',
     'bwrap-lock.h',
+    'elf-utils.c',
+    'elf-utils.h',
     'flatpak-utils-base.c',
     'flatpak-utils-base-private.h',
     'flatpak-utils.c',
@@ -50,6 +52,7 @@ pressure_vessel_utils = static_library(
   ],
   dependencies : [
     gio_unix,
+    libelf,
     libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,

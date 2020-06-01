@@ -122,8 +122,10 @@ def check_dependencies(test, relocatable_install, path, is_wrapper=False):
         stdout=subprocess.PIPE,
         universal_newlines=True,
     )
+    stdout = subproc.stdout
+    assert stdout is not None       # for mypy
 
-    for line in subproc.stdout:
+    for line in stdout:
         line = line.strip()
 
         if (

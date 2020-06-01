@@ -28,19 +28,18 @@ fi
 
 if [ -z "${G_TEST_SRCDIR-}" ]; then
     me="$(readlink -f "$0")"
-    srcdir="${me%/*}"
-    G_TEST_SRCDIR="${srcdir%/*}"
+    G_TEST_SRCDIR="${me%/*}"
 fi
 
-cd "$G_TEST_SRCDIR"
+cd "$G_TEST_SRCDIR/.."
 
 n=0
 for shell_script in \
-        pressure-vessel-unruntime \
-        pressure-vessel-unruntime-scout \
-        pressure-vessel-unruntime-test-ui \
-        pressure-vessel-locale-gen \
-        tests/*.sh \
+        ./pressure-vessel-unruntime \
+        ./pressure-vessel-unruntime-scout \
+        ./pressure-vessel-unruntime-test-ui \
+        ./pressure-vessel-locale-gen \
+        ./tests/*.sh \
         ; do
     n=$((n + 1))
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -55,3 +55,11 @@
 #ifndef g_assert_cmpstr
 #define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
 #endif
+
+/*
+ * Other assorted test helpers.
+ */
+
+typedef GHashTable *TestsOpenFdSet;
+TestsOpenFdSet tests_check_fd_leaks_enter (void);
+void tests_check_fd_leaks_leave (TestsOpenFdSet fds);

@@ -567,6 +567,7 @@ try_bind_dri (PvRuntime *self,
       g_autoptr(GDir) dir = NULL;
       const char *member;
 
+      g_debug ("Collecting dependencies of DRI drivers in \"%s\"...", dri);
       expr = g_strdup_printf ("only-dependencies:if-exists:path-match:%s/dri/*.so",
                               libdir);
 
@@ -624,6 +625,7 @@ try_bind_dri (PvRuntime *self,
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
 
+      g_debug ("Collecting s2tc \"%s\" and its dependencies...", s2tc);
       expr = g_strdup_printf ("path-match:%s", s2tc);
 
       if (!pv_runtime_provide_container_access (self, error))

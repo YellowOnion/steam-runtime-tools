@@ -55,11 +55,11 @@ struct _PvBwrapLock
 
 /**
  * pv_bwrap_lock_new:
- * @path: Runtime directory to lock; the actual lock file will be `$path/.ref`
- * @flags: Flags affecting how we lock the directory
+ * @path: File to lock
+ * @flags: Flags affecting how we lock the file
  * @error: Used to raise an error on failure
  *
- * Take out a lock on a directory.
+ * Take out a lock on a file.
  *
  * If %PV_BWRAP_LOCK_FLAGS_WRITE is in @flags, the lock is a write-lock,
  * which can be held by at most one process at a time. This is appropriate

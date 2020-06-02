@@ -55,6 +55,8 @@ struct _PvBwrapLock
 
 /**
  * pv_bwrap_lock_new:
+ * @at_fd: If not `AT_FDCWD` or -1, look up @path relative to this
+ *  directory fd instead of the current working directory, as per `openat(2)`
  * @path: File to lock
  * @flags: Flags affecting how we lock the file
  * @error: Used to raise an error on failure
@@ -74,7 +76,8 @@ struct _PvBwrapLock
  *  or %NULL.
  */
 PvBwrapLock *
-pv_bwrap_lock_new (const gchar *path,
+pv_bwrap_lock_new (int at_fd,
+                   const gchar *path,
                    PvBwrapLockFlags flags,
                    GError **error)
 {
@@ -95,7 +98,8 @@ pv_bwrap_lock_new (const gchar *path,
   else
     open_flags |= O_RDONLY;
 
-  fd = TEMP_FAILURE_RETRY (openat (AT_FDCWD, path, open_flags, 0644));
+  at_fd = glnx_dirfd_canonicalize (at_fd);
+  fd = TEMP_FAILURE_RETRY (openat (at_fd, path, open_flags, 0644));
 
   if (fd < 0)
     {

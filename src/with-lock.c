@@ -117,7 +117,7 @@ opt_lock_file_cb (const char *name,
   if (opt_wait)
     flags |= PV_BWRAP_LOCK_FLAGS_WAIT;
 
-  lock = pv_bwrap_lock_new (value, flags, error);
+  lock = pv_bwrap_lock_new (AT_FDCWD, value, flags, error);
 
   if (lock == NULL)
     return FALSE;

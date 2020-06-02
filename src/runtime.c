@@ -314,7 +314,7 @@ pv_runtime_initable_init (GInitable *initable,
   /* Take a lock on the runtime until we're finished with setup,
    * to make sure it doesn't get deleted. */
   files_ref = g_build_filename (self->source_files, ".ref", NULL);
-  self->runtime_lock = pv_bwrap_lock_new (files_ref,
+  self->runtime_lock = pv_bwrap_lock_new (AT_FDCWD, files_ref,
                                           PV_BWRAP_LOCK_FLAGS_CREATE,
                                           error);
 

@@ -56,7 +56,8 @@ typedef enum
 
 typedef struct _PvBwrapLock PvBwrapLock;
 
-PvBwrapLock *pv_bwrap_lock_new (const gchar *path,
+PvBwrapLock *pv_bwrap_lock_new (int at_fd,
+                                const gchar *path,
                                 PvBwrapLockFlags flags,
                                 GError **error);
 PvBwrapLock *pv_bwrap_lock_new_take (int fd,

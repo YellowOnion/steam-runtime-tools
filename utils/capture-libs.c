@@ -246,6 +246,8 @@ static void usage (int code)
   fprintf( fh, "\n" );
   fprintf( fh, "Each PATTERN is one of:\n" );
   fprintf( fh, "\n" );
+  fprintf( fh, "from:FILE\n"
+               "\tRead PATTERNs from FILE, one per line.\n" );
   fprintf( fh, "soname:SONAME\n"
                "\tCapture the library in ld.so.cache whose name is\n"
                "\texactly SONAME\n" );
@@ -324,6 +326,9 @@ fail:
     ld_libs_finish( ldlibs );
     return false;
 }
+
+static bool capture_pattern( const char *pattern, capture_flags flags,
+                             int *code, char **message );
 
 static bool capture_patterns( const char * const *patterns,
                               capture_flags flags,
@@ -824,6 +829,54 @@ capture_path_match( const char *pattern, capture_flags flags,
 }
 
 static bool
+capture_lines( const char *filename, capture_flags flags,
+               int *code, char **message )
+{
+  FILE *fp = NULL;
+  bool ret = true;
+  char *line = NULL;
+  size_t len = 0;
+  ssize_t chars;
+
+  if( strcmp( filename, "-" ) != 0 )
+  {
+      fp = fopen( filename, "re" );
+
+      if( fp == NULL )
+      {
+          _capsule_set_error( code, message, errno,
+                              "Unable to open \"%s\": %s",
+                              filename, strerror( errno ) );
+          return false;
+      }
+  }
+
+  while( ( chars = getline( &line, &len, fp ? fp : stdin ) ) > -1 )
+  {
+      /* Ignore blank lines and shell-style comments (which must
+       * currently be at the beginning of the line) */
+      if( chars == 0 || line[0] == '\0' || line[0] == '\n' || line[0] == '#' )
+          continue;
+
+      if( line[chars - 1] == '\n' )
+          line[chars - 1] = '\0';
+
+      if( !capture_pattern( line, flags, code, message ) )
+      {
+          ret = false;
+          break;
+      }
+  }
+
+  free( line );
+
+  if( fp != NULL )
+      fclose( fp );
+
+  return ret;
+}
+
+static bool
 capture_pattern( const char *pattern, capture_flags flags,
                  int *code, char **message )
 {
@@ -1011,6 +1064,12 @@ capture_pattern( const char *pattern, capture_flags flags,
                                 ( flags | CAPTURE_FLAG_IF_EXISTS |
                                   CAPTURE_FLAG_EVEN_IF_OLDER ),
                                 code, message );
+    }
+
+    if( strstarts( pattern, "from:" ) )
+    {
+        return capture_lines( pattern + strlen( "from:" ),
+                              flags, code, message );
     }
 
     if( strchr( pattern, ':' ) != NULL )

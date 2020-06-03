@@ -49,6 +49,19 @@ my $container = "${test_tempdir}/container";
 mkdir($container);
 my $libdir = "${test_tempdir}/libdir";
 
+{
+    open(my $fh, '>', "${test_tempdir}/empty");
+    close $fh;
+}
+{
+    open(my $fh, '>', "${test_tempdir}/libc");
+    print $fh "# comment\n";
+    print $fh "\n";
+    print $fh "soname:libc.so.6\n";
+    print $fh "soname:libc.so.6";  # deliberately no trailing newline
+    close $fh;
+}
+
 run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
 run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, 'soname:libc.so.6'], '>&2',
@@ -97,7 +110,9 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         qw(--dev-bind /dev /dev),
         $CAPSULE_CAPTURE_LIBS_TOOL,
         "--dest=$libdir",
-        "--provider=$host", 'soname:libc.so.6'], '>&2');
+        "--provider=$host",
+        "from:$test_tempdir/empty",
+        "from:$test_tempdir/libc"], '>&2');
 {
     opendir(my $dir_iter, $libdir);
     my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;

@@ -339,13 +339,26 @@ copy_tree_helper (const char *fpath,
         break;
 
       case FTW_F:
-        /* TODO: If creating a hard link doesn't work, fall back to
-         * copying */
-        if (link (fpath, dest) != 0)
+        /* Fast path: try to make a hard link. */
+        if (link (fpath, dest) == 0)
+          break;
+
+        /* Slow path: fall back to copying.
+         *
+         * This does a FICLONE or copy_file_range to get btrfs reflinks
+         * if possible, making the copy as cheap as cp --reflink=auto.
+         *
+         * Rather than second-guessing which errno values would result
+         * in link() failing but a copy succeeding, we just try it
+         * unconditionally - the worst that can happen is that this
+         * fails too. */
+        if (!glnx_file_copy_at (AT_FDCWD, fpath, sb,
+                                AT_FDCWD, dest,
+                                GLNX_FILE_COPY_OVERWRITE,
+                                NULL, error))
           {
-            glnx_throw_errno_prefix (error,
-                                     "Unable to create hard link from \"%s\" to \"%s\"",
-                                     fpath, dest);
+            glnx_prefix_error (error, "Unable to copy \"%s\" to \"%s\"",
+                               fpath, dest);
             return 1;
           }
         break;

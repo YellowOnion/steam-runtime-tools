@@ -28,11 +28,10 @@ set -u
 
 if [ -z "${G_TEST_SRCDIR-}" ]; then
     me="$(readlink -f "$0")"
-    srcdir="${me%/*}"
-    G_TEST_SRCDIR="${srcdir%/*}"
+    G_TEST_SRCDIR="${me%/*}"
 fi
 
-cd "$G_TEST_SRCDIR"
+cd "$G_TEST_SRCDIR/.."
 
 if [ "x${PYCODESTYLE:=pycodestyle}" = xfalse ] || \
         [ -z "$(command -v "$PYCODESTYLE")" ]; then
@@ -48,10 +47,10 @@ echo "1..1"
 
 if "${PYCODESTYLE}" \
     --ignore=E402,W503 \
-    "$G_TEST_SRCDIR"/*.py \
-    "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
-    "${G_TEST_SRCDIR}"/sysroot/*.py \
-    "${G_TEST_SRCDIR}"/tests/*.py \
+    ./*.py \
+    ./pressure-vessel-test-ui \
+    ./sysroot/*.py \
+    ./tests/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"
 else

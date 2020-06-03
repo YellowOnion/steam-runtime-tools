@@ -28,20 +28,19 @@ set -u
 
 if [ -z "${G_TEST_SRCDIR-}" ]; then
     me="$(readlink -f "$0")"
-    srcdir="${me%/*}"
-    G_TEST_SRCDIR="${srcdir%/*}"
+    G_TEST_SRCDIR="${me%/*}"
 fi
 
-cd "$G_TEST_SRCDIR"
+cd "$G_TEST_SRCDIR/.."
 
 export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
 
 i=0
 for script in \
-    "${G_TEST_SRCDIR}"/*.py \
-    "${G_TEST_SRCDIR}"/pressure-vessel-test-ui \
-    "${G_TEST_SRCDIR}"/sysroot/*.py \
-    "${G_TEST_SRCDIR}"/tests/*.py \
+    ./*.py \
+    ./pressure-vessel-test-ui \
+    ./sysroot/*.py \
+    ./tests/*.py \
 ; do
     i=$((i + 1))
     if [ "x${MYPY:="$(command -v mypy || echo false)"}" = xfalse ]; then

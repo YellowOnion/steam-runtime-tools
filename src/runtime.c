@@ -56,7 +56,6 @@ struct _PvRuntime
   gchar *mutable_sysroot;
   gchar *tmpdir;
   gchar *overrides;
-  gchar *overrides_bin;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
@@ -723,8 +722,6 @@ pv_runtime_initable_init (GInitable *initable,
     }
 
   g_mkdir (self->overrides, 0700);
-  self->overrides_bin = g_build_filename (self->overrides, "bin", NULL);
-  g_mkdir (self->overrides_bin, 0700);
 
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
 
@@ -757,7 +754,6 @@ pv_runtime_cleanup (PvRuntime *self)
                  local_error->message);
     }
 
-  g_clear_pointer (&self->overrides_bin, g_free);
   g_clear_pointer (&self->overrides, g_free);
   g_clear_pointer (&self->container_access, g_free);
   g_clear_pointer (&self->container_access_adverb, flatpak_bwrap_free);
@@ -2311,15 +2307,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_warning ("Cannot find localedef in PATH");
         }
-      else
+      else if (!pv_runtime_take_from_host (self, bwrap, localedef,
+                                           "/usr/bin/localedef",
+                                           TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                           error))
         {
-          g_autofree gchar *target = g_build_filename ("/run/host",
-                                                       localedef, NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", target,
-                                  "/overrides/bin/localedef",
-                                  NULL);
+          return FALSE;
         }
 
       locale = g_find_program_in_path ("locale");
@@ -2328,15 +2321,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_warning ("Cannot find locale in PATH");
         }
-      else
+      else if (!pv_runtime_take_from_host (self, bwrap, locale,
+                                           "/usr/bin/locale",
+                                           TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                           error))
         {
-          g_autofree gchar *target = g_build_filename ("/run/host",
-                                                       locale, NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", target,
-                                  "/overrides/bin/locale",
-                                  NULL);
+          return FALSE;
         }
 
       ldconfig = g_find_program_in_path ("ldconfig");
@@ -2777,7 +2767,7 @@ pv_runtime_set_search_paths (PvRuntime *self,
                            * really make sense inside the container:
                            * in principle the layout could be totally
                            * different. */
-                          "--setenv", "PATH", "/overrides/bin:/usr/bin:/bin",
+                          "--setenv", "PATH", "/usr/bin:/bin",
                           "--setenv", "LD_LIBRARY_PATH",
                           ld_library_path->str,
                           NULL);

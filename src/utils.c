@@ -303,8 +303,8 @@ copy_tree_helper (const char *fpath,
           return 1;
         }
 
-      if (!glnx_shutil_mkdir_p_at (-1, nftw_data.dest_root, 0700, NULL,
-                                   error))
+      if (!glnx_shutil_mkdir_p_at (-1, nftw_data.dest_root,
+                                   sb->st_mode & 07777, NULL, error))
         return 1;
 
       return 0;
@@ -318,8 +318,8 @@ copy_tree_helper (const char *fpath,
   switch (typeflag)
     {
       case FTW_D:
-        /* For now we assume the permissions are not significant */
-        if (!glnx_shutil_mkdir_p_at (-1, dest, 0755, NULL, error))
+        if (!glnx_shutil_mkdir_p_at (-1, dest, sb->st_mode & 07777,
+                                     NULL, error))
           return 1;
         break;
 

@@ -43,6 +43,7 @@ if (length $ENV{CAPSULE_TESTS_UNINSTALLED}) {
     # Make sure the shim can load the just-built libcapsule
     push @libcapsule_environment, "LD_LIBRARY_PATH=$ENV{G_TEST_BUILDDIR}/.libs";
 }
+delete $ENV{MAKEFLAGS};
 
 my $examples = "$srcdir/examples";
 

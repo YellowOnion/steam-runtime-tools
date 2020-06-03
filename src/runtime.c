@@ -1990,6 +1990,59 @@ out:
 }
 
 static gboolean
+pv_runtime_take_ld_so_from_host (PvRuntime *self,
+                                 RuntimeArchitecture *arch,
+                                 const gchar *ld_so_in_runtime,
+                                 FlatpakBwrap *bwrap,
+                                 GError **error)
+{
+  g_autofree gchar *ld_so_in_host = NULL;
+
+  g_debug ("Making host ld.so visible in container");
+
+  ld_so_in_host = realpath (arch->ld_so, NULL);
+
+  if (ld_so_in_host == NULL)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to determine host path to %s",
+                                    arch->ld_so);
+
+  g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
+  /* Might be either absolute, or relative to the root */
+  g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
+
+  /* If we have a mutable sysroot, we can delete the interoperable path
+   * and replace it with a symlink to what we want.
+   * For example, overwrite /lib/ld-linux.so.2 with a symlink to
+   * /run/host/lib/i386-linux-gnu/ld-2.30.so, or similar. This avoids
+   * having to dereference a long chain of symlinks every time we run
+   * an executable. */
+  if (self->mutable_sysroot != NULL &&
+      !pv_runtime_take_from_host (self, bwrap, ld_so_in_host,
+                                  arch->ld_so, TAKE_FROM_HOST_FLAGS_NONE,
+                                  error))
+    return FALSE;
+
+  /* If we don't have a mutable sysroot, we cannot replace symlinks,
+   * and we also cannot mount onto symlinks (they get dereferenced),
+   * so our only choice is to bind-mount
+   * /lib/i386-linux-gnu/ld-2.30.so onto
+   * /lib/i386-linux-gnu/ld-2.15.so and so on.
+   *
+   * In the mutable sysroot case, we don't strictly need to
+   * overwrite /lib/i386-linux-gnu/ld-2.15.so with a symlink to
+   * /run/host/lib/i386-linux-gnu/ld-2.30.so, but we might as well do
+   * it anyway, for extra robustness: if we ever run a ld.so that
+   * doesn't match the libc we are using (perhaps via an OS-specific,
+   * non-standard path), that's pretty much a disaster, because it will
+   * just crash. However, all of those (chains of) non-standard symlinks
+   * will end up pointing to ld_so_in_runtime. */
+  return pv_runtime_take_from_host (self, bwrap, ld_so_in_host,
+                                    ld_so_in_runtime,
+                                    TAKE_FROM_HOST_FLAGS_NONE, error);
+}
+
+static gboolean
 pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                     FlatpakBwrap *bwrap,
                                     GError **error)
@@ -2110,6 +2163,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
+          /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
@@ -2157,14 +2211,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                   (const char * const *) temp_bwrap->argv->pdata, NULL);
 
               g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-
-              if (!g_path_is_absolute (ld_so_in_runtime))
-                {
-                  /* bwrap --ro-bind wants an absolute path */
-                  g_autofree gchar *temp = g_steal_pointer (&ld_so_in_runtime);
-
-                  ld_so_in_runtime = g_build_filename ("/", temp, NULL);
-                }
             }
 
           if (ld_so_in_runtime == NULL)
@@ -2342,24 +2388,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autofree gchar *ld_so_in_host = NULL;
               g_autofree char *libc_target = NULL;
 
-              g_debug ("Making host ld.so visible in container");
-
-              ld_so_in_host = realpath (arch->ld_so, NULL);
-
-              if (ld_so_in_host == NULL)
-                return glnx_throw_errno_prefix (error,
-                                                "Unable to determine host path to %s",
-                                                arch->ld_so);
-
-              g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
-              g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
-              flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", ld_so_in_host,
-                                      ld_so_in_runtime,
-                                      NULL);
+              if (!pv_runtime_take_ld_so_from_host (self, arch,
+                                                    ld_so_in_runtime,
+                                                    bwrap, error))
+                return FALSE;
 
               /* Collect miscellaneous libraries that libc might dlopen.
                * At the moment this is just libidn2. */

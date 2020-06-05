@@ -856,9 +856,12 @@ main (int argc,
           const char *equals = strchr (opt_env_if_host[i], '=');
 
           if (equals == NULL)
-            g_printerr ("%s: --env-if-host argument must be of the form "
-                        "NAME=VALUE, not \"%s\"\n",
-                        g_get_prgname (), opt_env_if_host[i]);
+            {
+              g_printerr ("%s: --env-if-host argument must be of the form "
+                          "NAME=VALUE, not \"%s\"\n",
+                          g_get_prgname (), opt_env_if_host[i]);
+              goto out;
+            }
         }
     }
 

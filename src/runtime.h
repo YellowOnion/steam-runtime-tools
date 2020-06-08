@@ -32,6 +32,7 @@
 /**
  * PvRuntimeFlags:
  * @PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK: Use host system graphics stack
+ * @PV_RUNTIME_FLAGS_GENERATE_LOCALES: Generate missing locales
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -39,8 +40,14 @@
 typedef enum
 {
   PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK = (1 << 0),
+  PV_RUNTIME_FLAGS_GENERATE_LOCALES = (1 << 1),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
+
+#define PV_RUNTIME_FLAGS_MASK \
+  (PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK \
+   | PV_RUNTIME_FLAGS_GENERATE_LOCALES \
+   )
 
 typedef struct _PvRuntime PvRuntime;
 typedef struct _PvRuntimeClass PvRuntimeClass;

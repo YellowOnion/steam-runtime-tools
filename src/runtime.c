@@ -437,8 +437,7 @@ pv_runtime_new (const char *source_files,
   g_return_val_if_fail (source_files != NULL, NULL);
   g_return_val_if_fail (bubblewrap != NULL, NULL);
   g_return_val_if_fail (tools_dir != NULL, NULL);
-  g_return_val_if_fail ((flags & ~(PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK)) == 0,
-                        NULL);
+  g_return_val_if_fail ((flags & ~(PV_RUNTIME_FLAGS_MASK)) == 0, NULL);
 
   return g_initable_new (PV_TYPE_RUNTIME,
                          NULL,
@@ -1082,7 +1081,8 @@ bind_runtime (PvRuntime *self,
 
   /* This needs to be done after pv_runtime_use_host_graphics_stack()
    * has decided whether to bring in the host system's libc. */
-  ensure_locales (self, self->any_libc_from_host, bwrap);
+  if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
+    ensure_locales (self, self->any_libc_from_host, bwrap);
 
   /* These can add data fds to @bwrap, so they must come last - after
    * other functions stop using @bwrap as a basis for their own bwrap

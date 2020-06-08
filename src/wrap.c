@@ -320,6 +320,7 @@ static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
+static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
 static gboolean opt_host_graphics = TRUE;
@@ -508,6 +509,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $SteamAppId]", "N" },
+  { "generate-locales", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
+    "If using --runtime, attempt to generate any missing locales. "
+    "[Default, unless $PRESSURE_VESSEL_GENERATE_LOCALES is 0]",
+    NULL },
+  { "no-generate-locales", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_generate_locales,
+    "If using --runtime, don't generate any missing locales.", NULL },
   { "home", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_home,
     "Use HOME as home directory. Implies --unshare-home. "
@@ -725,6 +734,7 @@ main (int argc,
   opt_remove_game_overlay = boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
                                                  FALSE);
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
+  opt_generate_locales = boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
   opt_host_graphics = boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
                                            TRUE);
   opt_share_pid = boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
@@ -1059,6 +1069,9 @@ main (int argc,
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
+
+      if (opt_generate_locales)
+        flags |= PV_RUNTIME_FLAGS_GENERATE_LOCALES;
 
       if (opt_host_graphics)
         flags |= PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK;

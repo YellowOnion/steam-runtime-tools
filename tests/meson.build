@@ -28,6 +28,7 @@ test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 tests = [
   'cheap-copy.py',
+  'invocation.py',
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',

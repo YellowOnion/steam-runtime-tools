@@ -26,6 +26,7 @@ project(
   default_options: [
     'c_std=c99',
     'cpp_std=c++11',
+    'prefix=/usr/lib/pressure-vessel/relocatable',
     'warning_level=2',
   ],
 )

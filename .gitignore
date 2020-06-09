@@ -7,3 +7,4 @@
 /pressure-vessel-[0-9]*.tar.gz
 /relocatable-install/
 /subprojects/steam-runtime-tools/
+__pycache__/

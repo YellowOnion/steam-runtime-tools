@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import unittest
 
 
 try:
@@ -16,19 +15,15 @@ try:
 except ImportError:
     pass
 
+from testutils import (
+    BaseTest,
+    test_main,
+)
 
-class TestCheapCopy(unittest.TestCase):
+
+class TestCheapCopy(BaseTest):
     def setUp(self) -> None:
-        self.G_TEST_SRCDIR = os.getenv(
-            'G_TEST_SRCDIR',
-            os.path.abspath(
-                os.path.join(os.path.dirname(__file__), os.pardir),
-            ),
-        )
-        self.G_TEST_BUILDDIR = os.getenv(
-            'G_TEST_BUILDDIR',
-            os.path.abspath('_build'),
-        )
+        super().setUp()
         self.cheap_copy = os.path.join(self.G_TEST_BUILDDIR, 'test-cheap-copy')
 
     def assert_tree_is_superset(
@@ -162,7 +157,7 @@ class TestCheapCopy(unittest.TestCase):
         self.test_populated('/tmp', '/var/tmp', require_hard_links=False)
 
     def tearDown(self) -> None:
-        pass
+        super().tearDown()
 
 
 if __name__ == '__main__':
@@ -170,27 +165,6 @@ if __name__ == '__main__':
         'Python 3.5+ is required (configure with -Dpython=python3.5 ' \
         'if necessary)'
 
-    try:
-        from tap.runner import TAPTestRunner
-    except ImportError:
-        TAPTestRunner = None    # type: ignore
-
-    if TAPTestRunner is not None:
-        runner = TAPTestRunner()
-        runner.set_stream(True)
-        unittest.main(testRunner=runner)
-    else:
-        print('1..1')
-        program = unittest.main(exit=False)
-        if program.result.wasSuccessful():
-            print(
-                'ok 1 - %r (tap module not available)'
-                % program.result
-            )
-        else:
-            print(
-                'not ok 1 - %r (tap module not available)'
-                % program.result
-            )
+    test_main()
 
 # vi: set sw=4 sts=4 et:

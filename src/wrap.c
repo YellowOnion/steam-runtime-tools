@@ -100,7 +100,8 @@ find_bwrap (const char *tools_dir)
 }
 
 static gchar *
-check_bwrap (const char *tools_dir)
+check_bwrap (const char *tools_dir,
+             gboolean only_prepare)
 {
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
@@ -118,6 +119,14 @@ check_bwrap (const char *tools_dir)
   if (bwrap_executable == NULL)
     {
       g_warning ("Cannot find bwrap");
+    }
+  else if (only_prepare)
+    {
+      /* With --only-prepare we don't necessarily expect to be able to run
+       * it anyway (we are probably in a Docker container that doesn't allow
+       * creation of nested user namespaces), so just assume that it's the
+       * right one. */
+      return g_steal_pointer (&bwrap_executable);
     }
   else
     {
@@ -325,6 +334,7 @@ static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
 static gboolean opt_host_graphics = TRUE;
+static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
@@ -632,6 +642,9 @@ static GOptionEntry options[] =
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
     "Smoke test pressure-vessel-wrap and exit.", NULL },
+  { "only-prepare", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_only_prepare,
+    "Prepare runtime, but do not actually run anything.", NULL },
   { NULL }
 };
 
@@ -803,7 +816,7 @@ main (int argc,
       goto out;
     }
 
-  if (argc < 2 && !opt_test)
+  if (argc < 2 && !opt_test && !opt_only_prepare)
     {
       g_printerr ("%s: An executable to run is required\n",
                   g_get_prgname ());
@@ -886,6 +899,13 @@ main (int argc,
               goto out;
             }
         }
+    }
+
+  if (opt_only_prepare && opt_test)
+    {
+      g_printerr ("%s: --only-prepare and --test are mutually exclusive",
+                  g_get_prgname ());
+      goto out;
     }
 
   /* Finished parsing arguments, so any subsequent failures will make
@@ -1006,7 +1026,7 @@ main (int argc,
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
 
   g_debug ("Checking for bwrap...");
-  bwrap_executable = check_bwrap (tools_dir);
+  bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
 
   if (opt_test)
     {
@@ -1322,7 +1342,11 @@ main (int argc,
     pv_runtime_cleanup (runtime);
 
   flatpak_bwrap_finish (bwrap);
-  pv_bwrap_execve (bwrap, error);
+
+  if (opt_only_prepare)
+    ret = 0;
+  else
+    pv_bwrap_execve (bwrap, error);
 
 out:
   if (local_error != NULL)

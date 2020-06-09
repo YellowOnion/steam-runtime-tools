@@ -273,13 +273,36 @@ pv_runtime_set_property (GObject *object,
         path = g_value_get_string (value);
 
         if (path != NULL)
-          self->mutable_parent = flatpak_canonicalize_filename (path);
+          {
+            self->mutable_parent = realpath (path, NULL);
+
+            if (self->mutable_parent == NULL)
+              {
+                /* It doesn't exist. Keep the non-canonical path so we
+                 * can warn about it later */
+                self->mutable_parent = g_strdup (path);
+              }
+          }
+
         break;
 
       case PROP_SOURCE_FILES:
         /* Construct-only */
         g_return_if_fail (self->source_files == NULL);
-        self->source_files = g_value_dup_string (value);
+        path = g_value_get_string (value);
+
+        if (path != NULL)
+          {
+            self->source_files = realpath (path, NULL);
+
+            if (self->source_files == NULL)
+              {
+                /* It doesn't exist. Keep the non-canonical path so we
+                 * can warn about it later */
+                self->source_files = g_strdup (path);
+              }
+          }
+
         break;
 
       case PROP_TOOLS_DIRECTORY:

@@ -5,6 +5,7 @@
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -132,5 +133,6 @@ def test_main():
                 'not ok 1 - %r (tap module not available)'
                 % program.result
             )
+            sys.exit(1)
 
 # vi: set sw=4 sts=4 et:

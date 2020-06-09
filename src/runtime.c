@@ -329,6 +329,122 @@ pv_runtime_constructed (GObject *object)
 }
 
 static gboolean
+pv_runtime_garbage_collect (PvRuntime *self,
+                            PvBwrapLock *mutable_parent_lock,
+                            GError **error)
+{
+  g_auto(GLnxDirFdIterator) iter = { FALSE };
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->mutable_parent != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  /* We don't actually *use* this: it just acts as an assertion that
+   * we are holding the lock on the parent directory. */
+  g_return_val_if_fail (mutable_parent_lock != NULL, FALSE);
+
+  if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->mutable_parent,
+                                    TRUE, &iter, error))
+    return FALSE;
+
+  while (TRUE)
+    {
+      g_autoptr(GError) local_error = NULL;
+      g_autoptr(PvBwrapLock) temp_lock = NULL;
+      g_autofree gchar *keep = NULL;
+      g_autofree gchar *ref = NULL;
+      struct dirent *dent;
+      struct stat ignore;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent,
+                                                       NULL, error))
+        return FALSE;
+
+      if (dent == NULL)
+        break;
+
+      switch (dent->d_type)
+        {
+          case DT_DIR:
+            break;
+
+          case DT_BLK:
+          case DT_CHR:
+          case DT_FIFO:
+          case DT_LNK:
+          case DT_REG:
+          case DT_SOCK:
+          case DT_UNKNOWN:
+          default:
+            g_debug ("Ignoring %s/%s: not a directory",
+                     self->mutable_parent, dent->d_name);
+            continue;
+        }
+
+      if (!g_str_has_prefix (dent->d_name, "tmp-"))
+        {
+          g_debug ("Ignoring %s/%s: not tmp-*",
+                   self->mutable_parent, dent->d_name);
+          continue;
+        }
+
+      g_debug ("Found temporary runtime %s/%s, considering whether to "
+               "delete it...",
+               self->mutable_parent, dent->d_name);
+
+      keep = g_build_filename (dent->d_name, "keep", NULL);
+
+      if (glnx_fstatat (self->mutable_parent_fd, keep, &ignore,
+                        AT_SYMLINK_NOFOLLOW, &local_error))
+        {
+          g_debug ("Not deleting \"%s/%s\": ./keep exists",
+                   self->mutable_parent, dent->d_name);
+          continue;
+        }
+      else if (!g_error_matches (local_error, G_IO_ERROR,
+                                 G_IO_ERROR_NOT_FOUND))
+        {
+          /* EACCES or something? Give it the benefit of the doubt */
+          g_warning ("Not deleting \"%s/%s\": unable to stat ./keep: %s",
+                   self->mutable_parent, dent->d_name, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_clear_error (&local_error);
+
+      ref = g_build_filename (dent->d_name, ".ref", NULL);
+      temp_lock = pv_bwrap_lock_new (self->mutable_parent_fd, ref,
+                                     (PV_BWRAP_LOCK_FLAGS_CREATE |
+                                      PV_BWRAP_LOCK_FLAGS_WRITE),
+                                     &local_error);
+
+      if (temp_lock == NULL)
+        {
+          g_debug ("Ignoring \"%s/%s\": unable to get lock: %s",
+                   self->mutable_parent, dent->d_name,
+                   local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_debug ("Deleting \"%s/%s\"...", self->mutable_parent, dent->d_name);
+
+      /* We have the lock, which would not have happened if someone was
+       * still using the runtime, so we can safely delete it. */
+      if (!glnx_shutil_rm_rf_at (self->mutable_parent_fd, dent->d_name,
+                                 NULL, &local_error))
+        {
+          g_debug ("Unable to delete %s/%s: %s",
+                   self->mutable_parent, dent->d_name, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_init_mutable (PvRuntime *self,
                          GError **error)
 {
@@ -357,8 +473,7 @@ pv_runtime_init_mutable (PvRuntime *self,
     return FALSE;
 
   /* Lock the parent directory. Anything that directly manipulates the
-   * temporary runtimes (notably the deploy-runtime and run-in-steamrt
-   * scripts in SteamLinuxRuntime) is expected to do the same, so that
+   * temporary runtimes is expected to do the same, so that
    * it cannot be deleting temporary runtimes at the same time we're
    * creating them.
    *
@@ -372,6 +487,13 @@ pv_runtime_init_mutable (PvRuntime *self,
   if (mutable_lock == NULL)
     return glnx_prefix_error (error, "Unable to lock \"%s/%s\"",
                               self->mutable_parent, ".ref");
+
+  /* GC old runtimes (if they have become unused) before we create a
+   * new one. This means we should only ever have one temporary runtime
+   * copy per game that is run concurrently. */
+  if ((self->flags & PV_RUNTIME_FLAGS_GC_RUNTIMES) != 0 &&
+      !pv_runtime_garbage_collect (self, mutable_lock, error))
+    return FALSE;
 
   temp_dir = g_build_filename (self->mutable_parent, "tmp-XXXXXX", NULL);
 

@@ -330,6 +330,7 @@ static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
+static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
@@ -525,6 +526,15 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $SteamAppId]", "N" },
+  { "gc-runtimes", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
+    "If using --copy-runtime-into, garbage-collect old temporary "
+    "runtimes. [Default, unless $PRESSURE_VESSEL_GC_RUNTIMES is 0]",
+    NULL },
+  { "no-gc-runtimes", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
+    "If using --copy-runtime-into, don't garbage-collect old "
+    "temporary runtimes.", NULL },
   { "generate-locales", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
     "If using --runtime, attempt to generate any missing locales. "
@@ -753,6 +763,7 @@ main (int argc,
   opt_remove_game_overlay = boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
                                                  FALSE);
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
+  opt_gc_runtimes = boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
   opt_host_graphics = boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
                                            TRUE);
@@ -1102,6 +1113,9 @@ main (int argc,
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
+
+      if (opt_gc_runtimes)
+        flags |= PV_RUNTIME_FLAGS_GC_RUNTIMES;
 
       if (opt_generate_locales)
         flags |= PV_RUNTIME_FLAGS_GENERATE_LOCALES;

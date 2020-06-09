@@ -24,10 +24,15 @@
 test_env = environment()
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
+test_env.set(
+  'PRESSURE_VESSEL_TEST_CONTAINERS',
+  get_option('test_containers_dir'),
+)
 test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 tests = [
   'cheap-copy.py',
+  'containers.py',
   'invocation.py',
   'mypy.sh',
   'pycodestyle.sh',
@@ -76,9 +81,14 @@ endforeach
 
 foreach test_name : tests
   test_args = ['-v', files(test_name)]
+  timeout = 30
 
   if test_name.endswith('.py')
     test_args += ['-e', python.path()]
+  endif
+
+  if test_name.endswith('containers.py')
+    timeout = 300
   endif
 
   if prove.found()
@@ -86,6 +96,7 @@ foreach test_name : tests
       test_name, prove,
       args : test_args,
       env : test_env,
+      timeout : timeout,
     )
   endif
 endforeach

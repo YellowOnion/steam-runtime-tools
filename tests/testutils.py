@@ -131,6 +131,20 @@ class BaseTest(unittest.TestCase):
         cls.tmpdir.cleanup()
 
 
+def tee_file_and_stderr(path: str) -> subprocess.Popen:
+    """
+    Return a context manager with a stdin attribute.
+    Anything written to its stdin will be written to `path`
+    and also to stderr.
+    """
+    return subprocess.Popen(
+        ['tee', '--', path],
+        stdin=subprocess.PIPE,
+        stdout=2,
+        stderr=2,
+    )
+
+
 def test_main():
     logging.basicConfig(level=logging.DEBUG)
 

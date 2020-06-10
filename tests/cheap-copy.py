@@ -36,25 +36,40 @@ class TestCheapCopy(unittest.TestCase):
             equivalent = os.path.join(superset, os.path.relpath(path, subset))
 
             for d in dirs:
-                if not os.path.isdir(os.path.join(equivalent, d)):
+                in_subset = os.path.join(path, d)
+                in_superset = os.path.join(equivalent, d)
+
+                if not os.path.isdir(in_superset):
                     raise AssertionError(
-                        '%r should be a directory', equivalent)
+                        '%r should be a directory', in_superset)
+
+                info = os.stat(in_subset)
+                info2 = os.stat(in_superset)
+                self.assertEqual(info.st_mode, info2.st_mode)
 
             for f in files:
                 in_subset = os.path.join(path, f)
+                in_superset = os.path.join(equivalent, f)
+
                 if (
                     os.path.islink(in_subset)
                     or not os.path.exists(in_subset)
                 ):
                     target = os.readlink(in_subset)
-                    target2 = os.readlink(os.path.join(equivalent, f))
+                    target2 = os.readlink(in_superset)
                     self.assertEqual(target, target2)
                 else:
                     info = os.stat(in_subset)
-                    info2 = os.stat(os.path.join(equivalent, f))
+                    info2 = os.stat(in_superset)
                     # they should be hard links
                     self.assertEqual(info.st_ino, info2.st_ino)
                     self.assertEqual(info.st_dev, info2.st_dev)
+                    # These should all be true automatically because
+                    # they're hard links, but to be thorough...
+                    self.assertEqual(info.st_mode, info2.st_mode)
+                    self.assertEqual(info.st_size, info2.st_size)
+                    self.assertEqual(int(info.st_mtime), int(info2.st_mtime))
+                    self.assertEqual(int(info.st_ctime), int(info2.st_ctime))
 
     def assert_tree_is_same(self, left, right):
         self.assert_tree_is_superset(left, right)
@@ -98,6 +113,11 @@ class TestCheapCopy(unittest.TestCase):
 
             with open(os.path.join(source, 'x'), 'w') as writer:
                 writer.write('hello')
+
+            # Use unusual (but safe) permissions to assert that they get
+            # copied
+            os.chmod(source, 0o2740)
+            os.chmod(os.path.join(source, 'x'), 0o651)
 
             with open(os.path.join(source, 'files', 'y'), 'w') as writer:
                 writer.write('hello')

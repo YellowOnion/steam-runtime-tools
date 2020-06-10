@@ -78,9 +78,11 @@ SteamOS 2 'brewmaster', Debian 8 'jessie', Ubuntu 14.04 'trusty'.
 """
 
 import contextlib
+import fcntl
 import logging
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -335,6 +337,7 @@ class TestContainers(BaseTest):
         scout: str,
         *,
         copy: bool = False,
+        gc: bool = True,
         locales: bool = False,
         only_prepare: bool = False
     ) -> None:
@@ -366,6 +369,9 @@ class TestContainers(BaseTest):
             if copy:
                 argv.extend(['--copy-runtime-into', temp])
 
+                if not gc:
+                    argv.append('--no-gc-runtimes')
+
             if only_prepare:
                 argv.append('--only-prepare')
             else:
@@ -378,9 +384,38 @@ class TestContainers(BaseTest):
                     os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),
                 ])
 
-            with tee_file_and_stderr(
+            # Create directories representing previous runs of
+            # pressure-vessel-wrap, so that we can assert that they are
+            # GC'd (or not) as desired.
+
+            # Do not delete because its name does not start with tmp-
+            os.makedirs(os.path.join(temp, 'donotdelete'), exist_ok=True)
+            # Delete
+            os.makedirs(os.path.join(temp, 'tmp-deleteme'), exist_ok=True)
+            # Delete, and assert that it is recursive
+            os.makedirs(
+                os.path.join(temp, 'tmp-deleteme2', 'usr', 'lib'),
+                exist_ok=True,
+            )
+            # Do not delete because it has ./keep
+            os.makedirs(os.path.join(temp, 'tmp-keep', 'keep'), exist_ok=True)
+            # Do not delete because we will read-lock .ref
+            os.makedirs(os.path.join(temp, 'tmp-rlock'), exist_ok=True)
+            # Do not delete because we will write-lock .ref
+            os.makedirs(os.path.join(temp, 'tmp-wlock'), exist_ok=True)
+
+            with open(
+                os.path.join(temp, 'tmp-rlock', '.ref'), 'w+'
+            ) as rlock_writer, open(
+                os.path.join(temp, 'tmp-wlock', '.ref'), 'w'
+            ) as wlock_writer, tee_file_and_stderr(
                 os.path.join(artifacts, 'inside-scout.log')
             ) as tee:
+                lockdata = struct.pack('hhlli', fcntl.F_RDLCK, 0, 0, 0, 0)
+                fcntl.fcntl(rlock_writer.fileno(), fcntl.F_SETLKW, lockdata)
+                lockdata = struct.pack('hhlli', fcntl.F_WRLCK, 0, 0, 0, 0)
+                fcntl.fcntl(wlock_writer.fileno(), fcntl.F_SETLKW, lockdata)
+
                 completed = self.run_subprocess(
                     argv,
                     cwd=self.artifacts,
@@ -393,7 +428,29 @@ class TestContainers(BaseTest):
 
             if copy:
                 members = set(os.listdir(temp))
+
+                self.assertIn('.ref', members)
+                self.assertIn('donotdelete', members)
+                self.assertIn('tmp-keep', members)
+                self.assertIn('tmp-rlock', members)
+                self.assertIn('tmp-wlock', members)
+                if gc:
+                    self.assertNotIn('tmp-deleteme', members)
+                    self.assertNotIn('tmp-deleteme2', members)
+                else:
+                    # These would have been deleted if not for --no-gc-runtimes
+                    self.assertIn('tmp-deleteme', members)
+                    self.assertIn('tmp-deleteme2', members)
+
                 members.discard('.ref')
+                members.discard('donotdelete')
+                members.discard('tmp-deleteme')
+                members.discard('tmp-deleteme2')
+                members.discard('tmp-keep')
+                members.discard('tmp-rlock')
+                members.discard('tmp-wlock')
+                # After discarding those, there should be exactly one left:
+                # the one we just created
                 self.assertEqual(len(members), 1)
                 tree = os.path.join(temp, members.pop())
 
@@ -429,7 +486,7 @@ class TestContainers(BaseTest):
             )
 
         with self.subTest('copy'):
-            self._test_scout('scout_sysroot_copy', scout, copy=True)
+            self._test_scout('scout_sysroot_copy', scout, copy=True, gc=False)
 
         with self.subTest('transient'):
             self._test_scout('scout_sysroot', scout, locales=True)

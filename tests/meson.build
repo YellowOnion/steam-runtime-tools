@@ -43,6 +43,7 @@ tests = [
 
 compiled_tests = [
   'bwrap-lock',
+  'resolve-in-sysroot',
   'utils',
 ]
 

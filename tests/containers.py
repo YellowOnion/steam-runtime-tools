@@ -79,6 +79,7 @@ SteamOS 2 'brewmaster', Debian 8 'jessie', Ubuntu 14.04 'trusty'.
 
 import contextlib
 import fcntl
+import json
 import logging
 import os
 import shutil
@@ -108,6 +109,7 @@ logger = logging.getLogger('test-containers')
 class TestContainers(BaseTest):
     bwrap = None            # type: typing.Optional[str]
     containers_dir = ''
+    host_srsi_parsed = {}   # type: typing.Dict[str, typing.Any]
     pv_dir = ''
     pv_wrap = ''
 
@@ -272,8 +274,15 @@ class TestContainers(BaseTest):
             os.environ['HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON'] = os.path.join(
                 cls.artifacts, 'host-srsi.json',
             )
+
+            with open(
+                os.path.join(cls.artifacts, 'host-srsi.json'),
+                'r',
+            ) as reader:
+                cls.host_srsi_parsed = json.load(reader)
         else:
             os.environ.pop('HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON', None)
+            cls.host_srsi_parsed = {}
 
         try:
             os.environ['HOST_LD_LINUX_SO_REALPATH'] = os.path.realpath(
@@ -294,6 +303,7 @@ class TestContainers(BaseTest):
         cls = self.__class__
         self.bwrap = cls.bwrap
         self.containers_dir = cls.containers_dir
+        self.host_srsi_parsed = cls.host_srsi_parsed
         self.pv_dir = cls.pv_dir
         self.pv_wrap = cls.pv_wrap
 
@@ -307,6 +317,21 @@ class TestContainers(BaseTest):
                 os.path.join(cls.G_TEST_SRCDIR, f),
                 os.path.join(cls.artifacts, 'tmp', f),
             )
+
+        # This parsing is sufficiently "cheap" that we repeat it for
+        # each test-case rather than introducing more class variables.
+
+        self.host_os_release = cls.host_srsi_parsed.get('os-release', {})
+
+        if self.host_os_release.get('id') == 'debian':
+            logger.info('Host OS is Debian')
+            self.host_is_debian_derived = True
+        elif 'debian' in self.host_os_release.get('id_like', []):
+            logger.info('Host OS is Debian-derived')
+            self.host_is_debian_derived = True
+        else:
+            logger.info('Host OS is not Debian-derived')
+            self.host_is_debian_derived = False
 
     def tearDown(self) -> None:
         with contextlib.suppress(FileNotFoundError):
@@ -416,15 +441,17 @@ class TestContainers(BaseTest):
                 lockdata = struct.pack('hhlli', fcntl.F_WRLCK, 0, 0, 0, 0)
                 fcntl.fcntl(wlock_writer.fileno(), fcntl.F_SETLKW, lockdata)
 
-                completed = self.run_subprocess(
-                    argv,
-                    cwd=self.artifacts,
-                    stdout=tee.stdin,
-                    stderr=tee.stdin,
-                    universal_newlines=True,
-                )
-
-            self.assertEqual(completed.returncode, 0)
+                # Put this in a subtest so that if it fails, we still get
+                # to inspect the copied sysroot
+                with self.subTest('run', copy=copy, scout=scout):
+                    completed = self.run_subprocess(
+                        argv,
+                        cwd=self.artifacts,
+                        stdout=tee.stdin,
+                        stderr=tee.stdin,
+                        universal_newlines=True,
+                    )
+                    self.assertEqual(completed.returncode, 0)
 
             if copy:
                 members = set(os.listdir(temp))
@@ -454,24 +481,129 @@ class TestContainers(BaseTest):
                 self.assertEqual(len(members), 1)
                 tree = os.path.join(temp, members.pop())
 
-                with open(
-                    os.path.join(artifacts, 'contents.txt'),
-                    'w',
-                ) as writer:
-                    self.run_subprocess([
-                        'find',
-                        '.',
-                        '-ls',
-                    ], cwd=tree, stderr=2, stdout=writer)
+                with self.subTest('mutable sysroot'):
+                    self._assert_mutable_sysroot(
+                        tree,
+                        artifacts,
+                        is_scout=True,
+                    )
 
-                self.assertTrue(os.path.isdir(os.path.join(tree, 'bin')))
-                self.assertTrue(os.path.isdir(os.path.join(tree, 'etc')))
-                self.assertTrue(os.path.isdir(os.path.join(tree, 'lib')))
-                self.assertTrue(os.path.isdir(os.path.join(tree, 'usr')))
-                self.assertFalse(
-                    os.path.isdir(os.path.join(tree, 'usr', 'usr'))
-                )
-                self.assertTrue(os.path.isdir(os.path.join(tree, 'sbin')))
+    def _assert_mutable_sysroot(
+        self,
+        tree: str,
+        artifacts: str,
+        *,
+        is_scout: bool = True
+    ) -> None:
+        with open(
+            os.path.join(artifacts, 'contents.txt'),
+            'w',
+        ) as writer:
+            self.run_subprocess([
+                'find',
+                '.',
+                '-ls',
+            ], cwd=tree, stderr=2, stdout=writer)
+
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'bin')))
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'etc')))
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'lib')))
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'usr')))
+        self.assertFalse(
+            os.path.isdir(os.path.join(tree, 'usr', 'usr'))
+        )
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'sbin')))
+
+        self.assertTrue(
+            os.path.isdir(os.path.join(tree, 'overrides', 'lib')),
+        )
+
+        for multiarch, arch_info in self.host_srsi_parsed.get(
+            'architectures', {}
+        ).items():
+            libdir = os.path.join(tree, 'overrides', 'lib', multiarch)
+            with self.subTest(arch=multiarch):
+
+                self.assertTrue(os.path.isdir(libdir))
+
+                if is_scout:
+                    for soname in (
+                        'libBrokenLocale.so.1',
+                        'libanl.so.1',
+                        'libc.so.6',
+                        'libcrypt.so.1',
+                        'libdl.so.2',
+                        'libm.so.6',
+                        'libnsl.so.1',
+                        'libpthread.so.0',
+                        'libresolv.so.2',
+                        'librt.so.1',
+                        'libutil.so.1',
+                    ):
+                        # These are from glibc, which is depended on by
+                        # Mesa, and is at least as new as scout's version
+                        # in every supported version of the Steam Runtime.
+                        with self.subTest(soname=soname):
+                            target = os.readlink(
+                                os.path.join(libdir, soname)
+                            )
+                            self.assertRegex(target, r'^/run/host/')
+
+                    for soname in (
+                        'libSDL-1.2.so.0',
+                        'libfltk.so.1.1',
+                    ):
+                        with self.subTest(soname=soname):
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(os.path.join(libdir, soname))
+
+                # Keys are the basename of a DRI driver.
+                # Values are lists of paths to DRI drivers of that name
+                # on the host. We assert that for each name, an arbitrary
+                # one of the DRI drivers of that name appears in the
+                # container.
+                expect_symlinks = {
+                }    # type: typing.Dict[str, typing.List[str]]
+
+                for dri in arch_info.get('dri_drivers', ()):
+                    path = dri['library_path']
+
+                    if path.startswith((    # any of:
+                        '/usr/lib/dri/',
+                        '/usr/lib32/dri/',
+                        '/usr/lib64/dri/',
+                        '/usr/lib/{}/dri/'.format(multiarch),
+                    )):
+                        # We don't make any assertion about the search
+                        # order here.
+
+                        # Take the realpath() on non-Debian-derived hosts,
+                        # because on Arch Linux, we find drivers in
+                        # /usr/lib64 that are physically in /usr/lib.
+                        # Be more strict on Debian because we know more
+                        # about the canonical paths there.
+                        if not self.host_is_debian_derived:
+                            with contextlib.suppress(OSError):
+                                path = os.path.realpath(path)
+
+                        expect_symlinks.setdefault(
+                            os.path.basename(path), []
+                        ).append(path)
+
+                for k, vs in expect_symlinks.items():
+                    with self.subTest(dri_symlink=k):
+                        link = os.path.join(libdir, 'dri', k)
+                        target = os.readlink(link)
+                        self.assertEqual(target[:10], '/run/host/')
+                        target = target[10:]
+
+                        # Again, take the realpath() on non-Debian-derived
+                        # hosts, but be more strict on Debian.
+                        if not self.host_is_debian_derived:
+                            with contextlib.suppress(OSError):
+                                target = os.path.realpath(target)
+
+                        self.assertIn(target, vs)
 
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')

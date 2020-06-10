@@ -31,7 +31,12 @@ class TestCheapCopy(unittest.TestCase):
         )
         self.cheap_copy = os.path.join(self.G_TEST_BUILDDIR, 'test-cheap-copy')
 
-    def assert_tree_is_superset(self, superset, subset):
+    def assert_tree_is_superset(
+        self,
+        superset,
+        subset,
+        require_hard_links: bool = True,
+    ):
         for path, dirs, files in os.walk(subset):
             equivalent = os.path.join(superset, os.path.relpath(path, subset))
 
@@ -61,19 +66,19 @@ class TestCheapCopy(unittest.TestCase):
                 else:
                     info = os.stat(in_subset)
                     info2 = os.stat(in_superset)
-                    # they should be hard links
-                    self.assertEqual(info.st_ino, info2.st_ino)
-                    self.assertEqual(info.st_dev, info2.st_dev)
-                    # These should all be true automatically because
-                    # they're hard links, but to be thorough...
+
+                    if require_hard_links:
+                        self.assertEqual(info.st_ino, info2.st_ino)
+                        self.assertEqual(info.st_dev, info2.st_dev)
+
                     self.assertEqual(info.st_mode, info2.st_mode)
                     self.assertEqual(info.st_size, info2.st_size)
                     self.assertEqual(int(info.st_mtime), int(info2.st_mtime))
                     self.assertEqual(int(info.st_ctime), int(info2.st_ctime))
 
-    def assert_tree_is_same(self, left, right):
-        self.assert_tree_is_superset(left, right)
-        self.assert_tree_is_superset(right, left)
+    def assert_tree_is_same(self, left, right, require_hard_links=True):
+        self.assert_tree_is_superset(left, right, require_hard_links)
+        self.assert_tree_is_superset(right, left, require_hard_links)
 
     def test_empty(self) -> None:
         with tempfile.TemporaryDirectory(
@@ -104,9 +109,16 @@ class TestCheapCopy(unittest.TestCase):
             )
             self.assert_tree_is_same(source, dest)
 
-    def test_populated(self) -> None:
+    def test_populated(
+        self,
+        dir1=None,      # type: typing.Optional[str]
+        dir2=None,      # type: typing.Optional[str]
+        require_hard_links=True,
+    ) -> None:
         with tempfile.TemporaryDirectory(
+            dir=dir1,
         ) as source, tempfile.TemporaryDirectory(
+            dir=dir2,
         ) as parent:
             os.makedirs(os.path.join(source, 'a', 'b', 'c'))
             os.makedirs(os.path.join(source, 'files'))
@@ -135,7 +147,19 @@ class TestCheapCopy(unittest.TestCase):
                 ],
                 check=True,
             )
-            self.assert_tree_is_same(source, dest)
+            self.assert_tree_is_same(source, dest, require_hard_links)
+
+    def test_cannot_hard_link(self):
+        """
+        Assert that we can copy a directory hierarchy between directories
+        that might be on different filesystems.
+
+        If /tmp and /var/tmp are both on the same mount point, this is
+        equivalent to test_populated(), but if they are on different
+        mount points (/tmp is often a tmpfs) then this exercises different
+        code paths.
+        """
+        self.test_populated('/tmp', '/var/tmp', require_hard_links=False)
 
     def tearDown(self) -> None:
         pass

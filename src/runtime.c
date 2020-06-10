@@ -1445,18 +1445,10 @@ bind_runtime (PvRuntime *self,
 
   /* In the case where we have a mutable sysroot, we can mount all of
    * /overrides in one go, because we will be keeping it intact as long
-   * as the container is running (along with the rest of mutable_sysroot).
-   *
-   * We have to do this quite early, because we still mount additional
-   * files into /overrides later in setup, and re-mounting /overrides
-   * later on would undo all that.
-   *
-   * For now, we have to mount it read/write, again because we mount
-   * additional, individual files later on. It can become rw when
-   * we stop doing that. */
+   * as the container is running (along with the rest of mutable_sysroot). */
   if (self->mutable_sysroot != NULL)
     flatpak_bwrap_add_args (bwrap,
-                            "--bind", self->overrides, "/overrides",
+                            "--ro-bind", self->overrides, "/overrides",
                             NULL);
 
   flatpak_bwrap_add_args (bwrap,

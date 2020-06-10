@@ -83,6 +83,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 
 try:
@@ -122,9 +123,8 @@ class TestContainers(BaseTest):
             stdout=2,
             stderr=2,
         ).returncode != 0:
-            # Right now this means we will skip all the tests, but in
-            # future we will be able to do some tests that just do the
-            # setup and do not actually go as far as running the container.
+            # We can only do tests that just do setup and don't actually
+            # try to run the container.
             cls.bwrap = None
         else:
             cls.bwrap = bwrap
@@ -334,9 +334,11 @@ class TestContainers(BaseTest):
         test_name: str,
         scout: str,
         *,
-        locales: bool = False
+        copy: bool = False,
+        locales: bool = False,
+        only_prepare: bool = False
     ) -> None:
-        if self.bwrap is None:
+        if self.bwrap is None and not only_prepare:
             self.skipTest('Unable to run bwrap (in a container?)')
 
         if not os.path.isdir(scout):
@@ -354,30 +356,65 @@ class TestContainers(BaseTest):
             '--verbose',
         ]
 
+        var = os.path.join(self.containers_dir, 'var')
+        os.makedirs(var, exist_ok=True)
+
         if not locales:
             argv.append('--no-generate-locales')
 
-        argv.extend([
-            '--',
-            'env',
-            'TEST_INSIDE_SCOUT_ARTIFACTS=' + artifacts,
-            'TEST_INSIDE_SCOUT_LOCALES=' + ('1' if locales else ''),
-            'python3.5',
-            os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),
-        ])
+        with tempfile.TemporaryDirectory(prefix='test-', dir=var) as temp:
+            if copy:
+                argv.extend(['--copy-runtime-into', temp])
 
-        with tee_file_and_stderr(
-            os.path.join(artifacts, 'inside-scout.log')
-        ) as tee:
-            completed = self.run_subprocess(
-                argv,
-                cwd=self.artifacts,
-                stdout=tee.stdin,
-                stderr=tee.stdin,
-                universal_newlines=True,
-            )
+            if only_prepare:
+                argv.append('--only-prepare')
+            else:
+                argv.extend([
+                    '--',
+                    'env',
+                    'TEST_INSIDE_SCOUT_ARTIFACTS=' + artifacts,
+                    'TEST_INSIDE_SCOUT_LOCALES=' + ('1' if locales else ''),
+                    'python3.5',
+                    os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),
+                ])
 
-        self.assertEqual(completed.returncode, 0)
+            with tee_file_and_stderr(
+                os.path.join(artifacts, 'inside-scout.log')
+            ) as tee:
+                completed = self.run_subprocess(
+                    argv,
+                    cwd=self.artifacts,
+                    stdout=tee.stdin,
+                    stderr=tee.stdin,
+                    universal_newlines=True,
+                )
+
+            self.assertEqual(completed.returncode, 0)
+
+            if copy:
+                members = set(os.listdir(temp))
+                members.discard('.ref')
+                self.assertEqual(len(members), 1)
+                tree = os.path.join(temp, members.pop())
+
+                with open(
+                    os.path.join(artifacts, 'contents.txt'),
+                    'w',
+                ) as writer:
+                    self.run_subprocess([
+                        'find',
+                        '.',
+                        '-ls',
+                    ], cwd=tree, stderr=2, stdout=writer)
+
+                self.assertTrue(os.path.isdir(os.path.join(tree, 'bin')))
+                self.assertTrue(os.path.isdir(os.path.join(tree, 'etc')))
+                self.assertTrue(os.path.isdir(os.path.join(tree, 'lib')))
+                self.assertTrue(os.path.isdir(os.path.join(tree, 'usr')))
+                self.assertFalse(
+                    os.path.isdir(os.path.join(tree, 'usr', 'usr'))
+                )
+                self.assertTrue(os.path.isdir(os.path.join(tree, 'sbin')))
 
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')
@@ -385,12 +422,29 @@ class TestContainers(BaseTest):
         if os.path.isdir(os.path.join(scout, 'files')):
             scout = os.path.join(scout, 'files')
 
-        self._test_scout('scout_sysroot', scout, locales=True)
+        with self.subTest('only-prepare'):
+            self._test_scout(
+                'scout_sysroot_prep', scout,
+                copy=True, only_prepare=True,
+            )
+
+        with self.subTest('copy'):
+            self._test_scout('scout_sysroot_copy', scout, copy=True)
+
+        with self.subTest('transient'):
+            self._test_scout('scout_sysroot', scout, locales=True)
 
     def test_scout_usr(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout', 'files')
 
-        self._test_scout('scout', scout, locales=True)
+        with self.subTest('only-prepare'):
+            self._test_scout('scout_prep', scout, copy=True, only_prepare=True)
+
+        with self.subTest('copy'):
+            self._test_scout('scout_copy', scout, copy=True, locales=True)
+
+        with self.subTest('transient'):
+            self._test_scout('scout', scout)
 
 
 if __name__ == '__main__':

@@ -64,6 +64,14 @@ class TestInvocation(BaseTest):
         )
         self.assertEqual(completed.returncode, 2)
 
+    def test_only_prepare_exclusive(self) -> None:
+        completed = run_subprocess(
+            [self.pv_wrap, '--only-prepare', '--test'],
+            stdout=2,
+            stderr=2,
+        )
+        self.assertEqual(completed.returncode, 2)
+
 
 if __name__ == '__main__':
     assert sys.version_info >= (3, 4), \

@@ -43,11 +43,16 @@ typedef struct _SrtSteamClass SrtSteamClass;
 #define SRT_STEAM_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_STEAM, SrtSteamClass)
 GType srt_steam_get_type (void);
 
+/* Backward compatibility with previous steam-runtime-tools naming */
+#define SRT_STEAM_ISSUES_INTERNAL_ERROR SRT_STEAM_ISSUES_UNKNOWN
+
 /**
  * SrtSteamIssues:
  * @SRT_STEAM_ISSUES_NONE: There are no problems
- * @SRT_STEAM_ISSUES_INTERNAL_ERROR: Unable to detect the status of the
- *  Steam installation
+ * @SRT_STEAM_ISSUES_UNKNOWN: A generic internal error occurred while trying
+ *  to detect the status of the Steam installation, or, while reading a
+ *  report, either an unknown issue flag was encountered or the Steam issues
+ *  field was missing
  * @SRT_STEAM_ISSUES_CANNOT_FIND: Unable to find the Steam installation,
  *  either via its canonical symlink `~/.steam/root` or various fallback
  *  methods. See srt_system_info_dup_steam_installation_path().
@@ -80,6 +85,7 @@ GType srt_steam_get_type (void);
  *  one `STEAMSCRIPT` points to.
  * @SRT_STEAM_ISSUES_UNEXPECTED_STEAM_DESKTOP_ID: The default Steam desktop
  *  application ID is not what we expected.
+ * @SRT_STEAM_ISSUES_UNKNOWN: The Steam problems are not known
  *
  * A bitfield with flags representing problems with the Steam
  * installation, or %SRT_STEAM_ISSUES_NONE (which is numerically zero)
@@ -89,7 +95,7 @@ GType srt_steam_get_type (void);
  */
 typedef enum
 {
-  SRT_STEAM_ISSUES_INTERNAL_ERROR = (1 << 0),
+  SRT_STEAM_ISSUES_UNKNOWN = (1 << 0),
   SRT_STEAM_ISSUES_CANNOT_FIND = (1 << 1),
   SRT_STEAM_ISSUES_DOT_STEAM_STEAM_NOT_SYMLINK = (1 << 2),
   SRT_STEAM_ISSUES_CANNOT_FIND_DATA = (1 << 3),

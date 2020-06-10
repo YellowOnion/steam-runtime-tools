@@ -254,7 +254,8 @@ jsonify_flags (JsonBuilder *builder,
 static void
 jsonify_flags_string_bool_map (JsonBuilder *builder,
                                GType flags_type,
-                               unsigned int values)
+                               unsigned int present,
+                               unsigned int known)
 {
   GFlagsClass *class;
   GFlagsValue *flags_value;
@@ -269,24 +270,45 @@ jsonify_flags_string_bool_map (JsonBuilder *builder,
       if (flags_value->value == 0)
         continue;
 
-      json_builder_set_member_name (builder, flags_value->value_nick);
-      if ((flags_value->value & values) == flags_value->value)
+      /* Skip the unknown flag */
+      if (g_strcmp0 (flags_value->value_nick, "unknown") == 0)
         {
-          json_builder_add_boolean_value (builder, TRUE);
-          values &= ~flags_value->value;
+          if ((flags_value->value & present) == flags_value->value)
+            present &= ~flags_value->value;
+          continue;
         }
-      else
+
+      if ((flags_value->value & present) == flags_value->value)
         {
+          json_builder_set_member_name (builder, flags_value->value_nick);
+          json_builder_add_boolean_value (builder, TRUE);
+          present &= ~flags_value->value;
+          known &= ~flags_value->value;
+        }
+      else if ((flags_value->value & known) == flags_value->value)
+        {
+          json_builder_set_member_name (builder, flags_value->value_nick);
           json_builder_add_boolean_value (builder, FALSE);
+          known &= ~flags_value->value;
         }
     }
 
-  if (values)
+  if (present)
     {
-      gchar *rest = g_strdup_printf ("0x%x", values);
+      gchar *rest = g_strdup_printf ("0x%x", present);
 
       json_builder_set_member_name (builder, rest);
       json_builder_add_boolean_value (builder, TRUE);
+
+      g_free (rest);
+    }
+
+  if (known)
+    {
+      gchar *rest = g_strdup_printf ("0x%x", known);
+
+      json_builder_set_member_name (builder, rest);
+      json_builder_add_boolean_value (builder, FALSE);
 
       g_free (rest);
     }
@@ -351,9 +373,10 @@ jsonify_locale_issues (JsonBuilder *builder,
 
 static void
 jsonify_x86_features (JsonBuilder *builder,
-                      SrtX86FeatureFlags features)
+                      SrtX86FeatureFlags present,
+                      SrtX86FeatureFlags known)
 {
-  jsonify_flags_string_bool_map (builder, SRT_TYPE_X86_FEATURE_FLAGS, features);
+  jsonify_flags_string_bool_map (builder, SRT_TYPE_X86_FEATURE_FLAGS, present, known);
 }
 
 static void
@@ -392,7 +415,7 @@ print_libraries_details (JsonBuilder *builder,
               json_builder_end_array (builder);
 
               int exit_status = srt_library_get_exit_status (l->data);
-              if (exit_status != 0 && exit_status != -1)
+              if (exit_status != 0)
                 {
                   json_builder_set_member_name (builder, "exit-status");
                   json_builder_add_int_value (builder, exit_status);
@@ -484,7 +507,7 @@ print_graphics_details(JsonBuilder *builder,
           jsonify_graphics_issues (builder, srt_graphics_get_issues (g->data));
           json_builder_end_array (builder);
           int exit_status = srt_graphics_get_exit_status (g->data);
-          if (exit_status != 0 && exit_status != -1)
+          if (exit_status != 0)
             {
               json_builder_set_member_name (builder, "exit-status");
               json_builder_add_int_value (builder, exit_status);
@@ -799,11 +822,13 @@ main (int argc,
   SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
   SrtLocaleIssues locale_issues = SRT_LOCALE_ISSUES_NONE;
   SrtX86FeatureFlags x86_features = SRT_X86_FEATURE_NONE;
+  SrtX86FeatureFlags known_x86_features = SRT_X86_FEATURE_NONE;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
   JsonGenerator *generator;
   gboolean can_run = FALSE;
+  const gchar *test_json_path = NULL;
   gchar *json_output;
   gchar *version = NULL;
   gchar *inst_path = NULL;
@@ -873,10 +898,26 @@ main (int argc,
 
   _srt_unblock_signals ();
 
-  info = srt_system_info_new (expectations);
+  test_json_path = g_getenv ("SRT_TEST_PARSE_JSON");
 
-  /* For unit testing */
-  srt_system_info_set_sysroot (info, g_getenv ("SRT_TEST_SYSROOT"));
+  if (test_json_path)
+    {
+      /* Get the system info from a JSON, used for unit testing */
+      info = srt_system_info_new_from_json (test_json_path, &error);
+      if (info == NULL)
+        {
+          g_warning ("%s", error->message);
+          g_clear_error (&error);
+          return 1;
+        }
+    }
+  else
+    {
+      info = srt_system_info_new (expectations);
+
+      /* For unit testing */
+      srt_system_info_set_sysroot (info, g_getenv ("SRT_TEST_SYSROOT"));
+    }
 
   builder = json_builder_new ();
   json_builder_begin_object (builder);
@@ -1276,8 +1317,9 @@ main (int argc,
   json_builder_set_member_name (builder, "cpu-features");
   json_builder_begin_object (builder);
     {
+      known_x86_features = srt_system_info_get_known_x86_features (info);
       x86_features = srt_system_info_get_x86_features (info);
-      jsonify_x86_features (builder, x86_features);
+      jsonify_x86_features (builder, x86_features, known_x86_features);
     }
   json_builder_end_object (builder);
 

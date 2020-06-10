@@ -30,6 +30,7 @@
 
 #include <glib.h>
 #include <glib-object.h>
+#include <json-glib/json-glib.h>
 
 G_GNUC_INTERNAL
 SrtRuntimeIssues _srt_runtime_check (const char *bin32,
@@ -37,3 +38,5 @@ SrtRuntimeIssues _srt_runtime_check (const char *bin32,
                                      const GStrv custom_environ,
                                      gchar **version_out,
                                      gchar **path_out);
+
+SrtRuntimeIssues _srt_runtime_get_issues_from_report (JsonObject *json_obj);

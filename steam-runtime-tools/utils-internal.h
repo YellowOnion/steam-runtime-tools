@@ -28,6 +28,8 @@
 
 #include <glib.h>
 
+#include <json-glib/json-glib.h>
+
 typedef enum
 {
   SRT_HELPER_FLAGS_SEARCH_PATH = (1 << 0),
@@ -52,6 +54,21 @@ G_GNUC_INTERNAL gboolean _srt_process_timeout_wait_status (int wait_status,
 const char *srt_enum_value_to_nick (GType enum_type,
                                     int value);
 
+gboolean srt_enum_from_nick (GType enum_type,
+                             const gchar *nick,
+                             gint *value_out,
+                             GError **error);
+
+gboolean srt_add_flag_from_nick (GType flags_type,
+                                 const gchar *string,
+                                 guint *value_out,
+                                 GError **error);
+
+guint srt_get_flags_from_json_array (GType flags_type,
+                                     JsonObject *json_obj,
+                                     const gchar *array_member,
+                                     guint flag_if_unknown);
+
 G_GNUC_INTERNAL void _srt_child_setup_unblock_signals (gpointer ignored);
 
 /* not G_GNUC_INTERNAL because s-r-s-i calls it */
@@ -59,3 +76,6 @@ void _srt_unblock_signals (void);
 
 G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
                                            gconstpointer right);
+
+gchar ** _srt_json_array_to_strv (JsonObject *json_obj,
+                                  const gchar *array_member);

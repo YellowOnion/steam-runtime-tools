@@ -105,6 +105,8 @@ struct _SrtSystemInfo
   /* Multiarch tuple to use for helper executables in cases where it
    * shouldn't matter, or %NULL to use the compiled-in default */
   GQuark primary_multiarch_tuple;
+  /* If %TRUE, #SrtSystemInfo cannot be changed anymore */
+  gboolean immutable_values;
   GHashTable *cached_hidden_deps;
   SrtSteam *steam_data;
   struct
@@ -158,7 +160,7 @@ struct _SrtSystemInfo
   struct
   {
     SrtX86FeatureFlags x86_features;
-    gboolean have_x86;
+    SrtX86FeatureFlags x86_known;
   } cpu_features;
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
@@ -246,8 +248,8 @@ typedef struct
 } Abi;
 
 static Abi *
-ensure_abi (SrtSystemInfo *self,
-            const char *multiarch_tuple)
+ensure_abi_unless_immutable (SrtSystemInfo *self,
+                             const char *multiarch_tuple)
 {
   GQuark quark;
   guint i;
@@ -262,6 +264,9 @@ ensure_abi (SrtSystemInfo *self,
       if (abi->multiarch_tuple == quark)
         return abi;
     }
+
+  if (self->immutable_values)
+    return NULL;
 
   abi = g_slice_new0 (Abi);
   abi->multiarch_tuple = quark;
@@ -537,6 +542,199 @@ srt_system_info_new (const char *expectations)
                        NULL);
 }
 
+static gchar ** _srt_system_info_driver_environment_from_report (JsonObject *json_obj);
+static SrtContainerType _srt_system_info_get_container_info_from_report (JsonObject *json_obj,
+                                                                         gchar **host_path);
+static gchar ** _srt_system_info_get_pinned_libs_from_report (JsonObject *json_obj,
+                                                              const gchar *which,
+                                                              gchar ***messages);
+
+/**
+ * srt_system_info_new_from_json:
+ * @path: (not nullable) (type filename): Path to a JSON report
+ *
+ * Return a new #SrtSystemInfo with the info parsed from an existing JSON
+ * report.
+ * The #SrtSystemInfo will be immutable: whatever information was in the JSON
+ * report, that will be the only information that is available.
+ *
+ * Returns: (transfer full): A new #SrtSystemInfo. Free with g_object_unref()
+ */
+SrtSystemInfo *
+srt_system_info_new_from_json (const char *path,
+                               GError **error)
+{
+  SrtSystemInfo *info = NULL;
+  JsonObject *json_obj = NULL;
+  JsonObject *json_sub_obj = NULL;
+  JsonParser *parser = NULL;
+  JsonNode *node = NULL;
+
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
+  g_return_val_if_fail (path != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  info = srt_system_info_new (NULL);
+
+  parser = json_parser_new ();
+
+  if (!json_parser_load_from_file (parser, path, error))
+    {
+      g_clear_object (&info);
+      goto out;
+    }
+
+  node = json_parser_get_root (parser);
+  if (node == NULL || !JSON_NODE_HOLDS_OBJECT (node))
+    {
+      if (error)
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                    "Expected to find a JSON object in the provided JSON");
+      g_clear_object (&info);
+      goto out;
+    }
+
+  json_obj = json_node_get_object (node);
+
+  if (json_object_has_member (json_obj, "can-write-uinput"))
+    info->can_write_uinput = json_object_get_boolean_member (json_obj, "can-write-uinput");
+
+  info->steam_data = _srt_steam_get_from_report (json_obj);
+
+  info->runtime.issues = SRT_RUNTIME_ISSUES_UNKNOWN;
+  if (json_object_has_member (json_obj, "runtime"))
+    {
+      json_sub_obj = json_object_get_object_member (json_obj, "runtime");
+
+      if (json_object_has_member (json_sub_obj, "path"))
+        info->runtime.path = g_strdup (json_object_get_string_member (json_sub_obj, "path"));
+
+      if (json_object_has_member (json_sub_obj, "version"))
+        info->runtime.version = g_strdup (json_object_get_string_member (json_sub_obj, "version"));
+
+      info->pinned_libs.have_data = TRUE;
+
+      info->runtime.issues = _srt_runtime_get_issues_from_report (json_sub_obj);
+
+      info->pinned_libs.values_32 = _srt_system_info_get_pinned_libs_from_report (json_sub_obj,
+                                                                                  "pinned_libs_32",
+                                                                                  &info->pinned_libs.messages_32);
+      info->pinned_libs.values_64 = _srt_system_info_get_pinned_libs_from_report (json_sub_obj,
+                                                                                  "pinned_libs_64",
+                                                                                  &info->pinned_libs.messages_64);
+    }
+
+  _srt_os_release_populate_from_report (json_obj, &info->os_release);
+
+  info->container.type = _srt_system_info_get_container_info_from_report (json_obj,
+                                                                          &info->container.host_directory);
+
+  info->cached_driver_environment = _srt_system_info_driver_environment_from_report (json_obj);
+
+  if (json_object_has_member (json_obj, "architectures"))
+    {
+      JsonObject *json_arch_obj = NULL;
+      GList *multiarch_tuples = NULL;
+      json_sub_obj = json_object_get_object_member (json_obj, "architectures");
+
+      multiarch_tuples = json_object_get_members (json_sub_obj);
+      for (GList *l = multiarch_tuples; l != NULL; l = l->next)
+        {
+          Abi *abi = NULL;
+
+          if (!json_object_has_member (json_sub_obj, l->data))
+            continue;
+
+          json_arch_obj = json_object_get_object_member (json_sub_obj, l->data);
+
+          abi = ensure_abi_unless_immutable (info, l->data);
+
+          abi->can_run = _srt_architecture_can_run_from_report (json_arch_obj);
+
+          abi->libraries_cache_available = TRUE;
+          abi->cached_combined_issues = _srt_library_get_issues_from_report (json_arch_obj);
+
+          _srt_graphics_get_from_report (json_arch_obj,
+                                         l->data,
+                                         &abi->cached_graphics_results);
+
+          abi->graphics_modules[SRT_GRAPHICS_DRI_MODULE].modules = _srt_dri_driver_get_from_report (json_arch_obj);
+          abi->graphics_modules[SRT_GRAPHICS_DRI_MODULE].available = TRUE;
+
+          abi->graphics_modules[SRT_GRAPHICS_VAAPI_MODULE].modules = _srt_va_api_driver_get_from_report (json_arch_obj);
+          abi->graphics_modules[SRT_GRAPHICS_VAAPI_MODULE].available = TRUE;
+
+          abi->graphics_modules[SRT_GRAPHICS_VDPAU_MODULE].modules = _srt_vdpau_driver_get_from_report (json_arch_obj);
+          abi->graphics_modules[SRT_GRAPHICS_VDPAU_MODULE].available = TRUE;
+
+          abi->graphics_modules[SRT_GRAPHICS_GLX_MODULE].modules = _srt_glx_icd_get_from_report (json_arch_obj);
+          abi->graphics_modules[SRT_GRAPHICS_GLX_MODULE].available = TRUE;
+        }
+    }
+
+  info->locales.have_issues = TRUE;
+  info->locales.issues = _srt_locale_get_issues_from_report (json_obj);
+
+  if (info->locales.cached_locales == NULL)
+    info->locales.cached_locales = g_hash_table_new_full (NULL, NULL, NULL,
+                                                          maybe_locale_free);
+
+  if (json_object_has_member (json_obj, "locales"))
+    {
+      JsonObject *json_locale_obj = NULL;
+      GList *locales_members = NULL;
+      json_sub_obj = json_object_get_object_member (json_obj, "locales");
+
+      locales_members = json_object_get_members (json_sub_obj);
+      for (GList *l = locales_members; l != NULL; l = l->next)
+        {
+          SrtLocale *locale = NULL;
+          MaybeLocale *maybe;
+          const gchar *requested_name = NULL;
+          GError *locale_error = NULL;
+          json_locale_obj = json_object_get_object_member (json_sub_obj, l->data);
+
+          requested_name = g_strcmp0 (l->data, "<default>") == 0 ? "" : l->data;
+
+          locale = _srt_locale_get_locale_from_report (json_locale_obj, l->data, &locale_error);
+          if (locale != NULL)
+            {
+              maybe = maybe_locale_new_positive (locale);
+              g_object_unref (locale);
+            }
+          else
+            {
+              maybe = maybe_locale_new_negative (locale_error);
+              g_clear_error (&locale_error);
+            }
+
+          g_hash_table_replace (info->locales.cached_locales,
+                                GUINT_TO_POINTER (g_quark_from_string (requested_name)),
+                                maybe);
+        }
+    }
+
+  info->icds.have_egl = TRUE;
+  info->icds.egl = _srt_get_egl_from_json_report (json_obj);
+
+  info->icds.have_vulkan = TRUE;
+  info->icds.vulkan = _srt_get_vulkan_from_json_report (json_obj);
+
+  info->desktop_entry.have_data = TRUE;
+  info->desktop_entry.values = _srt_get_steam_desktop_entries_from_json_report (json_obj);
+
+  info->cpu_features.x86_features = _srt_feature_get_x86_flags_from_report (json_obj,
+                                                                            &info->cpu_features.x86_known);
+
+  info->immutable_values = TRUE;
+
+out:
+  if (parser != NULL)
+    g_object_unref (parser);
+
+  return info;
+}
+
 /**
  * srt_system_info_can_run:
  * @self: A #SrtSystemInfo object
@@ -572,7 +770,10 @@ srt_system_info_can_run (SrtSystemInfo *self,
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), FALSE);
   g_return_val_if_fail (multiarch_tuple != NULL, FALSE);
 
-  abi = ensure_abi (self, multiarch_tuple);
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    return FALSE;
 
   if (abi->can_run == TRI_MAYBE)
     {
@@ -601,7 +802,7 @@ srt_system_info_can_write_to_uinput (SrtSystemInfo *self)
 {
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), FALSE);
 
-  if (self->can_write_uinput == TRI_MAYBE)
+  if (self->can_write_uinput == TRI_MAYBE && !self->immutable_values)
     {
       int fd = open ("/dev/uinput", O_WRONLY | O_NONBLOCK);
 
@@ -654,6 +855,7 @@ static gboolean
 ensure_expectations (SrtSystemInfo *self)
 {
   g_return_val_if_fail (_srt_check_not_setuid (), FALSE);
+  g_return_val_if_fail (!self->immutable_values, FALSE);
 
   if (self->expectations == NULL)
     {
@@ -693,6 +895,8 @@ ensure_expectations (SrtSystemInfo *self)
 static void
 ensure_hidden_deps (SrtSystemInfo *self)
 {
+  g_return_if_fail (!self->immutable_values);
+
   if (self->cached_hidden_deps == NULL)
     {
       JsonParser *parser = NULL;
@@ -807,6 +1011,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
   GError *error = NULL;
 
   g_return_if_fail (_srt_check_not_setuid ());
+  g_return_if_fail (!self->immutable_values);
 
   if (!self->overrides.have_data)
     {
@@ -890,7 +1095,8 @@ srt_system_info_list_pressure_vessel_overrides (SrtSystemInfo *self,
 {
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
-  ensure_overrides_cached (self);
+  if (!self->immutable_values)
+    ensure_overrides_cached (self);
 
   if (messages != NULL)
     *messages = g_strdupv (self->overrides.messages);
@@ -909,7 +1115,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
 
   g_return_if_fail (_srt_check_not_setuid ());
 
-  if (!self->pinned_libs.have_data)
+  if (!self->pinned_libs.have_data && !self->immutable_values)
     {
       runtime = srt_system_info_dup_runtime_path (self);
 
@@ -1093,6 +1299,41 @@ srt_system_info_list_pinned_libs_64 (SrtSystemInfo *self,
 }
 
 /**
+ * _srt_system_info_get_pinned_libs_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for @which
+ *  property
+ * @which: (not nullable): The member to look up
+ * @messages: (not nullable): Used to return human-readable debug information
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable):
+ *  An array of strings with the found pinned libs from the @json_obj, or %NULL
+ *  if @json_obj doesn't have a @which member. Free with g_strfreev().
+ */
+static gchar **
+_srt_system_info_get_pinned_libs_from_report (JsonObject *json_obj,
+                                              const gchar *which,
+                                              gchar ***messages)
+{
+  JsonObject *json_pinned_obj = NULL;
+  gchar **pinned_list = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+  g_return_val_if_fail (which != NULL, NULL);
+  g_return_val_if_fail (messages != NULL && *messages == NULL, NULL);
+
+  if (json_object_has_member (json_obj, which))
+    {
+      json_pinned_obj = json_object_get_object_member (json_obj, which);
+
+      pinned_list = _srt_json_array_to_strv (json_pinned_obj, "list");
+
+      *messages = _srt_json_array_to_strv (json_pinned_obj, "messages");
+    }
+
+  return pinned_list;
+}
+
+/**
  * srt_system_info_check_libraries:
  * @self: The #SrtSystemInfo object to use.
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
@@ -1122,20 +1363,17 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
   GDir *dir = NULL;
   FILE *fp = NULL;
   GError *error = NULL;
-  SrtLibraryIssues ret = SRT_LIBRARY_ISSUES_INTERNAL_ERROR;
+  SrtLibraryIssues ret = SRT_LIBRARY_ISSUES_UNKNOWN;
 
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (multiarch_tuple != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (multiarch_tuple != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (libraries_out == NULL || *libraries_out == NULL,
-                        SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+                        SRT_LIBRARY_ISSUES_UNKNOWN);
 
-  if (!ensure_expectations (self))
-    {
-      /* We don't know which libraries to check. */
-      return SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
-    }
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
 
-  abi = ensure_abi (self, multiarch_tuple);
+  if (abi == NULL)
+    return SRT_LIBRARY_ISSUES_CANNOT_LOAD;
 
   /* If we cached already the result, we return it */
   if (abi->libraries_cache_available)
@@ -1148,6 +1386,15 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
         }
 
       return abi->cached_combined_issues;
+    }
+
+  if (self->immutable_values)
+    return SRT_LIBRARY_ISSUES_UNKNOWN;
+
+  if (!ensure_expectations (self))
+    {
+      /* We don't know which libraries to check. */
+      return SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
     }
 
   dir_path = g_build_filename (self->expectations, multiarch_tuple, NULL);
@@ -1269,15 +1516,18 @@ srt_system_info_check_library (SrtSystemInfo *self,
   SrtLibraryIssues issues;
   GDir *dir = NULL;
   GError *error = NULL;
-  SrtLibraryIssues ret = SRT_LIBRARY_ISSUES_INTERNAL_ERROR;
+  SrtLibraryIssues ret = SRT_LIBRARY_ISSUES_UNKNOWN;
 
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (multiarch_tuple != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (multiarch_tuple != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
-                        SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+                        SRT_LIBRARY_ISSUES_UNKNOWN);
 
-  abi = ensure_abi (self, multiarch_tuple);
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    return SRT_LIBRARY_ISSUES_CANNOT_LOAD;
 
   /* If we have the result already in cache, we return it */
   library = g_hash_table_lookup (abi->cached_results, soname);
@@ -1287,6 +1537,9 @@ srt_system_info_check_library (SrtSystemInfo *self,
         *more_details_out = g_object_ref (library);
       return srt_library_get_issues (library);
     }
+
+  if (self->immutable_values)
+    return SRT_LIBRARY_ISSUES_UNKNOWN;
 
   if (ensure_expectations (self))
     {
@@ -1460,22 +1713,25 @@ forget_graphics_modules (SrtSystemInfo *self)
  */
 SrtGraphicsIssues
 srt_system_info_check_graphics (SrtSystemInfo *self,
-        const char *multiarch_tuple,
-        SrtWindowSystem window_system,
-        SrtRenderingInterface rendering_interface,
-        SrtGraphics **details_out)
+                                const char *multiarch_tuple,
+                                SrtWindowSystem window_system,
+                                SrtRenderingInterface rendering_interface,
+                                SrtGraphics **details_out)
 {
   Abi *abi = NULL;
   SrtGraphicsIssues issues;
 
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (multiarch_tuple != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (multiarch_tuple != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (details_out == NULL || *details_out == NULL,
-                        SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (((unsigned) rendering_interface) < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+                        SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (((unsigned) rendering_interface) < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
-  abi = ensure_abi (self, multiarch_tuple);
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    return SRT_GRAPHICS_ISSUES_UNKNOWN;
 
   /* If we have the result already in cache, we return it */
   int hash_key = _srt_graphics_hash_key (window_system, rendering_interface);
@@ -1486,6 +1742,9 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
         *details_out = g_object_ref (graphics);
       return srt_graphics_get_issues (graphics);
     }
+
+  if (self->immutable_values)
+    return SRT_GRAPHICS_ISSUES_UNKNOWN;
 
   graphics = NULL;
   issues = _srt_check_graphics (self->helpers_path,
@@ -1518,14 +1777,18 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
  * Free with 'g_list_free_full(list, g_object_unref)`.
  */
 GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
-    const char *multiarch_tuple)
+                                            const char *multiarch_tuple)
 {
   Abi *abi = NULL;
 
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
-  abi = ensure_abi (self, multiarch_tuple);
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    return NULL;
+
   GList *list = NULL;
 
   /* If we cached already the result, we return it */
@@ -1602,12 +1865,16 @@ GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
  * when locating the Steam Runtime.
  *
  * If @env is %NULL, go back to using the real environment variables.
+ *
+ * This method is not valid to call on a #SrtSystemInfo that was
+ * constructed with srt_system_info_new_from_json().
  */
 void
 srt_system_info_set_environ (SrtSystemInfo *self,
                              gchar * const *env)
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  g_return_if_fail (!self->immutable_values);
 
   forget_graphics_modules (self);
   forget_libraries (self);
@@ -1631,12 +1898,16 @@ srt_system_info_set_environ (SrtSystemInfo *self,
  * system properties.
  *
  * If @root is %NULL, go back to using the real root.
+ *
+ * This method is not valid to call on a #SrtSystemInfo that was
+ * constructed with srt_system_info_new_from_json().
  */
 void
 srt_system_info_set_sysroot (SrtSystemInfo *self,
                              const char *root)
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  g_return_if_fail (!self->immutable_values);
 
   forget_container_info (self);
   forget_graphics_modules (self);
@@ -1652,7 +1923,7 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
 static void
 ensure_steam_cached (SrtSystemInfo *self)
 {
-  if (self->steam_data == NULL)
+  if (self->steam_data == NULL && !self->immutable_values)
     _srt_steam_check (self->env, &self->steam_data);
 }
 
@@ -1668,8 +1939,7 @@ ensure_steam_cached (SrtSystemInfo *self)
 SrtSteamIssues
 srt_system_info_get_steam_issues (SrtSystemInfo *self)
 {
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_STEAM_ISSUES_UNKNOWN);
 
   ensure_steam_cached (self);
   return srt_steam_get_issues (self->steam_data);
@@ -1806,7 +2076,7 @@ srt_system_info_dup_steam_bin32_path (SrtSystemInfo *self)
 static void
 ensure_os_cached (SrtSystemInfo *self)
 {
-  if (!self->os_release.populated)
+  if (!self->os_release.populated && !self->immutable_values)
     _srt_os_release_populate (&self->os_release, self->sysroot);
 }
 
@@ -2087,12 +2357,27 @@ srt_system_info_set_expected_runtime_version (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
-  if (g_strcmp0 (version, self->runtime.expected_version) != 0)
+  if (self->immutable_values)
+  {
+    g_clear_pointer (&self->runtime.expected_version, g_free);
+    self->runtime.expected_version = g_strdup (version);
+    if (self->runtime.expected_version == NULL
+        || self->runtime.version == NULL
+        || g_strcmp0 (self->runtime.expected_version, self->runtime.version) == 0)
     {
-      forget_runtime (self);
-      g_clear_pointer (&self->runtime.expected_version, g_free);
-      self->runtime.expected_version = g_strdup (version);
+      self->runtime.issues &= ~SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION;
     }
+    else
+    {
+      self->runtime.issues |= SRT_RUNTIME_ISSUES_UNEXPECTED_VERSION;
+    }
+  }
+  else if (g_strcmp0 (version, self->runtime.expected_version) != 0)
+  {
+    forget_runtime (self);
+    g_clear_pointer (&self->runtime.expected_version, g_free);
+    self->runtime.expected_version = g_strdup (version);
+  }
 }
 
 /**
@@ -2114,6 +2399,9 @@ srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self)
 static void
 ensure_runtime_cached (SrtSystemInfo *self)
 {
+  if (self->immutable_values)
+    return;
+
   ensure_os_cached (self);
   ensure_steam_cached (self);
 
@@ -2170,7 +2458,7 @@ SrtRuntimeIssues
 srt_system_info_get_runtime_issues (SrtSystemInfo *self)
 {
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
-                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+                        SRT_RUNTIME_ISSUES_UNKNOWN);
 
   ensure_runtime_cached (self);
   return self->runtime.issues;
@@ -2243,12 +2531,16 @@ srt_system_info_dup_runtime_version (SrtSystemInfo *self)
  * instead of the normal installed location.
  *
  * If @path is %NULL, go back to using the installed location.
+ *
+ * This method is not valid to call on a #SrtSystemInfo that was
+ * constructed with srt_system_info_new_from_json().
  */
 void
 srt_system_info_set_helpers_path (SrtSystemInfo *self,
                                   const gchar *path)
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  g_return_if_fail (!self->immutable_values);
 
   forget_graphics_modules (self);
   forget_libraries (self);
@@ -2297,12 +2589,16 @@ srt_system_info_get_primary_multiarch_tuple (SrtSystemInfo *self)
  * during regression tests.
  *
  * If @path is %NULL, go back to using the compiled-in default.
+ *
+ * This method is not valid to call on a #SrtSystemInfo that was
+ * constructed with srt_system_info_new_from_json().
  */
 void
 srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
                                              const gchar *tuple)
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  g_return_if_fail (!self->immutable_values);
 
   forget_locales (self);
   self->primary_multiarch_tuple = g_quark_from_string (tuple);
@@ -2321,10 +2617,9 @@ srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
 SrtLocaleIssues
 srt_system_info_get_locale_issues (SrtSystemInfo *self)
 {
-  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
-                        SRT_LOCALE_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_LOCALE_ISSUES_UNKNOWN);
 
-  if (!self->locales.have_issues)
+  if (!self->locales.have_issues && !self->immutable_values)
     {
       SrtLocale *locale = NULL;
 
@@ -2413,6 +2708,12 @@ srt_system_info_check_locale (SrtSystemInfo *self,
                                     &value))
     {
       maybe = value;
+    }
+  else if (self->immutable_values)
+    {
+      g_set_error (error, SRT_LOCALE_ERROR, SRT_LOCALE_ERROR_INTERNAL_ERROR,
+                   "Information about the requested locale is missing");
+      return NULL;
     }
   else
     {
@@ -2515,7 +2816,7 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
 
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
-  if (!self->icds.have_egl)
+  if (!self->icds.have_egl && !self->immutable_values)
     {
       g_assert (self->icds.egl == NULL);
       self->icds.egl = _srt_load_egl_icds (self->sysroot, self->env,
@@ -2571,7 +2872,7 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
 
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
-  if (!self->icds.have_vulkan)
+  if (!self->icds.have_vulkan && !self->immutable_values)
     {
       g_assert (self->icds.vulkan == NULL);
       self->icds.vulkan = _srt_load_vulkan_icds (self->sysroot, self->env,
@@ -2627,9 +2928,12 @@ _srt_system_info_list_graphics_modules (SrtSystemInfo *self,
   g_return_val_if_fail ((int) which >= 0, NULL);
   g_return_val_if_fail ((int) which < NUM_SRT_GRAPHICS_MODULES, NULL);
 
-  abi = ensure_abi (self, multiarch_tuple);
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
 
-  if (!abi->graphics_modules[which].available)
+  if (abi == NULL)
+    return NULL;
+
+  if (!abi->graphics_modules[which].available && !self->immutable_values)
     {
       abi->graphics_modules[which].modules = _srt_list_graphics_modules (self->sysroot,
                                                                          self->env,
@@ -2785,7 +3089,7 @@ ensure_driver_environment (SrtSystemInfo *self)
 {
   g_return_if_fail (_srt_check_not_setuid ());
 
-  if (self->cached_driver_environment == NULL)
+  if (self->cached_driver_environment == NULL && !self->immutable_values)
     {
       GPtrArray *builder;
       GRegex *regex;
@@ -2864,6 +3168,21 @@ srt_system_info_list_driver_environment (SrtSystemInfo *self)
     return g_strdupv (self->cached_driver_environment);
 }
 
+/**
+ * _srt_system_info_driver_environment_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "driver_environment"
+ *  property
+ *
+ * Returns: (array zero-terminated=1) (element-type utf8) (nullable): An array
+ *  of strings, or %NULL if the provided @json_obj doesn't have a
+ *  "driver_environment" member. Free with g_strfreev().
+ */
+static gchar **
+_srt_system_info_driver_environment_from_report (JsonObject *json_obj)
+{
+  return _srt_json_array_to_strv (json_obj, "driver_environment");
+}
+
 typedef struct
 {
   SrtContainerType type;
@@ -2898,7 +3217,7 @@ ensure_container_info (SrtSystemInfo *self)
   gchar *contents = NULL;
   gchar *filename = NULL;
 
-  if (self->container.have_data)
+  if (self->container.have_data || self->immutable_values)
     return;
 
   g_assert (self->container.host_directory == NULL);
@@ -3049,9 +3368,64 @@ srt_system_info_dup_container_host_directory (SrtSystemInfo *self)
   return g_strdup (self->container.host_directory);
 }
 
+/**
+ * _srt_system_info_get_container_info_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "container"
+ *  property
+ * @host_path: (not nullable): Used to return the host path
+ *
+ * If the provided @json_obj doesn't have a "container" member,
+ * %SRT_CONTAINER_TYPE_UNKNOWN will be returned.
+ * If @json_obj has some elements that we can't parse, the returned
+ * #SrtContainerType will be set to %SRT_CONTAINER_TYPE_UNKNOWN.
+ *
+ * Returns: The found container type
+ */
+static SrtContainerType
+_srt_system_info_get_container_info_from_report (JsonObject *json_obj,
+                                                 gchar **host_path)
+{
+  JsonObject *json_sub_obj;
+  JsonObject *json_host_obj = NULL;
+  const gchar *type_string = NULL;
+  SrtContainerType ret = SRT_CONTAINER_TYPE_UNKNOWN;
+
+  g_return_val_if_fail (host_path != NULL && *host_path == NULL, SRT_CONTAINER_TYPE_UNKNOWN);
+
+  if (json_object_has_member (json_obj, "container"))
+    {
+      json_sub_obj = json_object_get_object_member (json_obj, "container");
+
+      if (json_sub_obj == NULL)
+        goto out;
+
+      if (json_object_has_member (json_sub_obj, "type"))
+        {
+          type_string = json_object_get_string_member (json_sub_obj, "type");
+          if (!srt_enum_from_nick (SRT_TYPE_CONTAINER_TYPE, type_string, &ret, NULL))
+            {
+              g_debug ("The parsed container type '%s' is not a known element", type_string);
+              ret = SRT_CONTAINER_TYPE_UNKNOWN;
+            }
+        }
+
+      if (json_object_has_member (json_sub_obj, "host"))
+        {
+          json_host_obj = json_object_get_object_member (json_sub_obj, "host");
+          if (json_object_has_member (json_host_obj, "path"))
+            *host_path = g_strdup (json_object_get_string_member (json_host_obj, "path"));
+        }
+    }
+
+out:
+  return ret;
+}
+
 static void
 ensure_desktop_entries (SrtSystemInfo *self)
 {
+  g_return_if_fail (!self->immutable_values);
+
   if (self->desktop_entry.have_data)
     return;
 
@@ -3091,7 +3465,8 @@ srt_system_info_list_desktop_entries (SrtSystemInfo *self)
 
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
-  ensure_desktop_entries (self);
+  if (!self->immutable_values)
+    ensure_desktop_entries (self);
 
   for (iter = self->desktop_entry.values; iter != NULL; iter = iter->next)
     ret = g_list_prepend (ret, g_object_ref (iter->data));
@@ -3102,11 +3477,12 @@ srt_system_info_list_desktop_entries (SrtSystemInfo *self)
 static void
 ensure_x86_features_cached (SrtSystemInfo *self)
 {
-  if (self->cpu_features.have_x86)
+  g_return_if_fail (!self->immutable_values);
+
+  if (self->cpu_features.x86_known != SRT_X86_FEATURE_NONE)
     return;
 
-  self->cpu_features.x86_features = _srt_feature_get_x86_flags ();
-  self->cpu_features.have_x86 = TRUE;
+  self->cpu_features.x86_features = _srt_feature_get_x86_flags (&self->cpu_features.x86_known);
 }
 
 /**
@@ -3123,7 +3499,28 @@ srt_system_info_get_x86_features (SrtSystemInfo *self)
 {
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_X86_FEATURE_NONE);
 
-  ensure_x86_features_cached (self);
+  if (!self->immutable_values)
+    ensure_x86_features_cached (self);
 
   return self->cpu_features.x86_features;
+}
+
+/**
+ * srt_system_info_get_known_x86_features:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return a list of x86 CPU features that has been checked.
+ *
+ * Returns: x86 CPU checked features, or %SRT_X86_FEATURE_NONE
+ *  if no features were checked, e.g. when the CPU is not x86 based.
+ */
+SrtX86FeatureFlags
+srt_system_info_get_known_x86_features (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_X86_FEATURE_NONE);
+
+  if (!self->immutable_values)
+    ensure_x86_features_cached (self);
+
+  return self->cpu_features.x86_known;
 }

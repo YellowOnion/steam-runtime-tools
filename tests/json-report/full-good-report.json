@@ -1,0 +1,253 @@
+{
+  "can-write-uinput" : true,
+  "steam-installation" : {
+    "path" : "/home/me/.local/share/Steam",
+    "data_path" : "/home/me/.local/share/Steam",
+    "bin32_path" : "/home/me/.local/share/Steam/ubuntu12_32",
+    "issues" : [
+      "steamscript-not-in-environment"
+    ]
+  },
+  "runtime" : {
+    "path" : "/home/me/.steam/root/ubuntu12_32/steam-runtime",
+    "version" : "0.20200123.4",
+    "issues" : [
+    ],
+    "pinned_libs_32" : {
+      "list" : [
+        " 13902790      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_32",
+        " 13902813      4 -rw-r--r--   1 me  me        50 Apr 24 21:32 pinned_libs_32/system_libGLU.so.1",
+        " 13902814      4 lrwxrwxrwx   1 me  me       107 Apr 24 21:32 pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13"
+      ]
+    },
+    "pinned_libs_64" : {
+      "list" : [
+        " 13902791      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_64",
+        " 13902805      4 -rw-r--r--   1 me  me        46 Apr 24 21:32 pinned_libs_64/system_libGLU.so.1",
+        " 13902795      4 lrwxrwxrwx   1 me  me       100 Apr 24 21:32 pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0"
+      ]
+    }
+  },
+  "os-release" : {
+    "id" : "arch",
+    "id_like" : [
+      "ubuntu",
+      "debian"
+    ],
+    "name" : "Arch Linux",
+    "pretty_name" : "Arch Linux",
+    "build_id" : "rolling"
+  },
+  "container" : {
+    "type" : "docker",
+    "host" : {
+      "path" : "/the/host/path",
+      "os-release" : {
+      }
+    }
+  },
+  "driver_environment" : [
+  ],
+  "architectures" : {
+    "i386-linux-gnu" : {
+      "can-run" : false,
+      "graphics-details" : {
+        "x11/vulkan" : {
+          "messages" : "ERROR: [Loader Message] Code 0 : /usr/lib/amdvlk64.so: wrong ELF class: ELFCLASS64\nCannot create Vulkan instance.\n",
+          "renderer" : null,
+          "version" : null,
+          "issues" : [
+            "cannot-load",
+            "cannot-draw"
+          ],
+          "exit-status" : 1
+        },
+        "x11/vdpau" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",
+          "version" : null
+        },
+        "x11/vaapi" : {
+          "renderer" : "Mesa Gallium driver 20.0.5 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)\n",
+          "version" : null
+        },
+        "glx/gl" : {
+          "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+          "version" : "4.6 (Compatibility Profile) Mesa 20.0.5",
+          "library-vendor" : "glvnd"
+        },
+        "egl_x11/gl" : {
+          "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+          "version" : "4.6 (Compatibility Profile) Mesa 20.0.5",
+          "library-vendor" : "glvnd"
+        },
+        "egl_x11/glesv2" : {
+          "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+          "version" : "OpenGL ES 3.2 Mesa 20.0.5",
+          "library-vendor" : "glvnd"
+        }
+      },
+      "dri_drivers" : [
+        {
+          "library_path" : "/usr/lib32/dri/radeonsi_dri.so"
+        },
+        {
+          "library_path" : "/usr/lib32/dri/vmwgfx_dri.so"
+        }
+      ],
+      "va-api_drivers" : [
+        {
+          "library_path" : "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/dri/dummy_drv_video.so"
+        }
+      ],
+      "vdpau_drivers" : [
+        {
+          "library_path" : "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/vdpau/libvdpau_trace.so.1",
+          "library_link" : "libvdpau_trace.so.1.0.0"
+        }
+      ],
+      "glx_drivers" : [
+        {
+          "library_soname" : "libGLX_indirect.so.0",
+          "library_path" : "/usr/lib32/libGLX_mesa.so.0.0.0"
+        },
+        {
+          "library_soname" : "libGLX_mesa.so.0",
+          "library_path" : "/usr/lib32/libGLX_mesa.so.0.0.0"
+        }
+      ]
+    },
+    "x86_64-linux-gnu" : {
+      "can-run" : true,
+      "library-issues-summary" : [
+      ],
+      "graphics-details" : {
+        "x11/vulkan" : {
+          "renderer" : "AMD Radeon RX 5700 XT",
+          "version" : "1.2.136 (device 1002:731f) (driver 2.0.140)"
+        },
+        "x11/vdpau" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",
+          "version" : null
+        },
+        "x11/vaapi" : {
+          "renderer" : "Mesa Gallium driver 20.0.5 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)\n",
+          "version" : null
+        },
+        "glx/gl" : {
+          "messages" : "libGL: Can't open configuration file /etc/drirc: No such file or directory.\n/usr/share/libdrm/amdgpu.ids version: 1.0.0\nlibGL: Using DRI3 for screen 0\n",
+          "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+          "version" : "4.6 (Compatibility Profile) Mesa 20.0.5",
+          "library-vendor" : "glvnd",
+          "issues" : [
+            "cannot-draw"
+          ],
+          "terminating-signal" : 6,
+          "terminating-signal-name" : "Aborted"
+        },
+        "egl_x11/gl" : {
+          "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+          "version" : "4.6 (Compatibility Profile) Mesa 20.0.5",
+          "library-vendor" : "glvnd"
+        },
+        "egl_x11/glesv2" : {
+          "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+          "version" : "OpenGL ES 3.2 Mesa 20.0.5",
+          "library-vendor" : "glvnd"
+        }
+      },
+      "dri_drivers" : [
+        {
+          "library_path" : "/usr/lib/dri/i915_dri.so"
+        },
+        {
+          "library_path" : "/usr/lib/dri/radeonsi_dri.so"
+        }
+      ],
+      "va-api_drivers" : [
+        {
+          "library_path" : "/usr/lib/dri/vdpau_drv_video.so"
+        },
+        {
+          "library_path" : "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/dri/dummy_drv_video.so"
+        }
+      ],
+      "vdpau_drivers" : [
+        {
+          "library_path" : "/usr/lib/vdpau/libvdpau_radeonsi.so",
+          "library_link" : "libvdpau_radeonsi.so.1.0.0"
+        },
+        {
+          "library_path" : "/usr/lib/vdpau/libvdpau_radeonsi.so.1",
+          "library_link" : "libvdpau_radeonsi.so.1.0.0"
+        }
+      ],
+      "glx_drivers" : [
+        {
+          "library_soname" : "libGLX_indirect.so.0",
+          "library_path" : "/usr/lib/libGLX_mesa.so.0.0.0"
+        },
+        {
+          "library_soname" : "libGLX_mesa.so.0",
+          "library_path" : "/usr/lib/libGLX_mesa.so.0.0.0"
+        }
+      ]
+    }
+  },
+  "locale-issues" : [
+    "c-utf8-missing",
+    "i18n-supported-missing"
+  ],
+  "locales" : {
+    "<default>" : {
+      "resulting-name" : "en_US.UTF-8",
+      "charset" : "UTF-8",
+      "is_utf8" : true
+    },
+    "C" : {
+      "resulting-name" : "C",
+      "charset" : "ANSI_X3.4-1968",
+      "is_utf8" : false
+    },
+    "C.UTF-8" : {
+      "error-domain" : "srt-locale-error-quark",
+      "error-code" : 0,
+      "error" : "No such file or directory"
+    },
+    "en_US.UTF-8" : {
+      "resulting-name" : "en_US.UTF-8",
+      "charset" : "UTF-8",
+      "is_utf8" : true
+    }
+  },
+  "egl" : {
+    "icds" : [
+      {
+        "json_path" : "/usr/share/glvnd/egl_vendor.d/51_mesa.json",
+        "library_path" : "libEGL_mesa.so.0"
+      }
+    ]
+  },
+  "vulkan" : {
+    "icds" : [
+      {
+        "json_path" : "/usr/share/vulkan/icd.d/amd_icd64.json",
+        "library_path" : "/usr/lib/amdvlk64.so",
+        "api_version" : "1.2.136"
+      }
+    ]
+  },
+  "desktop-entries" : [
+    {
+      "id" : "steam.desktop",
+      "commandline" : "/usr/bin/steam-runtime %U",
+      "filename" : "/usr/share/applications/steam.desktop",
+      "default_steam_uri_handler" : true,
+      "steam_uri_handler" : true
+    }
+  ],
+  "cpu-features" : {
+    "x86-64" : true,
+    "sse3" : false,
+    "cmpxchg16b" : true
+  }
+}

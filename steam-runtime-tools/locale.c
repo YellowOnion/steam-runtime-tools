@@ -357,6 +357,97 @@ out:
 }
 
 /**
+ * _srt_locale_get_locale_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for the locale's
+ *  properties, e.g. "resulting-name" and "charset"
+ * @requested_name: (not nullable): The locale name related to the provided
+ *  @json_obj
+ * @error: Used to raise an error on failure
+ *
+ * Returns: A new #SrtLocale or %NULL if an error occurred.
+ */
+SrtLocale *
+_srt_locale_get_locale_from_report (JsonObject *json_obj,
+                                    const gchar *requested_name,
+                                    GError **error)
+{
+  SrtLocale *locale = NULL;
+  const gchar *resulting_name = NULL;
+  const gchar *charset = NULL;
+  gboolean is_utf8 = FALSE;
+  GQuark error_domain = 0;
+  gint error_code = -1;
+  const gchar *error_message = "(missing error message)";
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+  g_return_val_if_fail (requested_name != NULL, NULL);
+  g_return_val_if_fail (error != NULL && *error == NULL, NULL);
+
+  if (json_object_has_member (json_obj, "resulting-name"))
+    resulting_name = json_object_get_string_member (json_obj, "resulting-name");
+
+  if (json_object_has_member (json_obj, "charset"))
+    charset = json_object_get_string_member (json_obj, "charset");
+
+  if (json_object_has_member (json_obj, "is_utf8"))
+    is_utf8 = json_object_get_boolean_member (json_obj, "is_utf8");
+
+  if (json_object_has_member (json_obj, "error-domain"))
+    error_domain = g_quark_from_string (json_object_get_string_member (json_obj, "error-domain"));
+
+  if (json_object_has_member (json_obj, "error-code"))
+    error_code = json_object_get_int_member (json_obj, "error-code");
+
+  if (json_object_has_member (json_obj, "error"))
+    error_message = json_object_get_string_member (json_obj, "error");
+
+  if (resulting_name != NULL && charset != NULL)
+    {
+      locale = _srt_locale_new (requested_name,
+                                resulting_name,
+                                charset,
+                                is_utf8);
+    }
+  else
+    {
+      if (error_domain == 0)
+        {
+          error_domain = G_IO_ERROR;
+          error_code = G_IO_ERROR_FAILED;
+        }
+      g_set_error_literal (error,
+                           error_domain,
+                           error_code,
+                           error_message);
+    }
+
+  return locale;
+}
+
+/**
+ * _srt_locale_get_issues_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "locale-issues"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "locale-issues" member, or it is
+ * malformed, %SRT_LOCALE_ISSUES_UNKNOWN will be returned.
+ * If @json_obj has some elements that we can't parse,
+ * %SRT_LOCALE_ISSUES_UNKNOWN will be added to the returned #SrtLocaleIssues.
+ *
+ * Returns: The %SrtLocaleIssues that has been found
+ */
+SrtLocaleIssues
+_srt_locale_get_issues_from_report (JsonObject *json_obj)
+{
+  g_return_val_if_fail (json_obj != NULL, SRT_LOCALE_ISSUES_UNKNOWN);
+
+  return srt_get_flags_from_json_array (SRT_TYPE_LOCALE_ISSUES,
+                                        json_obj,
+                                        "locale-issues",
+                                        SRT_LOCALE_ISSUES_UNKNOWN);
+}
+
+/**
  * srt_locale_get_requested_name:
  * @self: a locale object
  *

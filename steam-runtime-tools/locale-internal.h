@@ -28,6 +28,8 @@
 
 #include "steam-runtime-tools/steam-runtime-tools.h"
 
+#include <json-glib/json-glib.h>
+
 #ifndef __GTK_DOC_IGNORE__
 static inline SrtLocale *_srt_locale_new (const char *requested_name,
                                           const char *resulting_name,
@@ -58,3 +60,9 @@ SrtLocale *_srt_check_locale (const char *helpers_path,
                               const char *requested_name,
                               GError **error);
 #endif
+
+SrtLocale *_srt_locale_get_locale_from_report (JsonObject *json_obj,
+                                               const gchar *requested_name,
+                                               GError **error);
+
+SrtLocaleIssues _srt_locale_get_issues_from_report (JsonObject *json_obj);

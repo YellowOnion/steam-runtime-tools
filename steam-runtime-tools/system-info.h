@@ -106,6 +106,9 @@ GType srt_system_info_get_type (void);
 
 SrtSystemInfo *srt_system_info_new (const char *expectations);
 
+SrtSystemInfo *srt_system_info_new_from_json (const char *path,
+                                              GError **error);
+
 gboolean srt_system_info_can_run (SrtSystemInfo *self,
                                   const char *multiarch_tuple);
 SrtContainerType srt_system_info_get_container_type (SrtSystemInfo *self);
@@ -200,6 +203,7 @@ gchar **srt_system_info_list_driver_environment (SrtSystemInfo *self);
 GList *srt_system_info_list_desktop_entries (SrtSystemInfo *self);
 
 SrtX86FeatureFlags srt_system_info_get_x86_features (SrtSystemInfo *self);
+SrtX86FeatureFlags srt_system_info_get_known_x86_features (SrtSystemInfo *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)

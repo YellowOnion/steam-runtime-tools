@@ -580,11 +580,11 @@ _srt_check_library_presence (const char *helpers_path,
   SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
   GString *log_args = NULL;
 
-  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
-                        SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+                        SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_UNKNOWN);
 
   if (symbols_path == NULL)
     issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
@@ -629,7 +629,7 @@ _srt_check_library_presence (const char *helpers_path,
         break;
 
       default:
-        g_return_val_if_reached (SRT_LIBRARY_ISSUES_INTERNAL_ERROR);
+        g_return_val_if_reached (SRT_LIBRARY_ISSUES_UNKNOWN);
     }
 
   for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)
@@ -778,4 +778,27 @@ out:
   g_free (filtered_preload);
   g_clear_error (&error);
   return issues;
+}
+
+/**
+ * _srt_library_get_issues_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  "library-issues-summary" property
+ *
+ * If the provided @json_obj doesn't have a "library-issues-summary" member,
+ * or it is malformed, %SRT_LIBRARY_ISSUES_UNKNOWN will be returned.
+ * If @json_obj has some elements that we can't parse,
+ * %SRT_LIBRARY_ISSUES_UNKNOWN will be added to the returned #SrtLibraryIssues.
+ *
+ * Returns: The #SrtLibraryIssues that has been found
+ */
+SrtLibraryIssues
+_srt_library_get_issues_from_report (JsonObject *json_obj)
+{
+  g_return_val_if_fail (json_obj != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+
+  return srt_get_flags_from_json_array (SRT_TYPE_LIBRARY_ISSUES,
+                                        json_obj,
+                                        "library-issues-summary",
+                                        SRT_LIBRARY_ISSUES_UNKNOWN);
 }

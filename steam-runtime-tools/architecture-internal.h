@@ -27,6 +27,9 @@
 #pragma once
 
 #include <glib.h>
+#include <json-glib/json-glib.h>
 
 G_GNUC_INTERNAL gboolean _srt_architecture_can_run (const char *helpers_path,
                                                     const char *multiarch);
+
+gboolean _srt_architecture_can_run_from_report (JsonObject *json_obj);

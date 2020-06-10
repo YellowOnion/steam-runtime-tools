@@ -37,6 +37,7 @@
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/utils.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 /**
  * SECTION:steam
@@ -217,7 +218,7 @@ srt_steam_class_init (SrtSteamClass *cls)
 SrtSteamIssues
 srt_steam_get_issues (SrtSteam *self)
 {
-  g_return_val_if_fail (SRT_IS_STEAM (self), SRT_STEAM_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_STEAM (self), SRT_STEAM_ISSUES_UNKNOWN);
   return self->issues;
 }
 /**
@@ -301,10 +302,9 @@ _srt_steam_check (const GStrv my_environ,
   GStrv env = NULL;
   GError *error = NULL;
 
-  g_return_val_if_fail (_srt_check_not_setuid (),
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_STEAM_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
-                        SRT_STEAM_ISSUES_INTERNAL_ERROR);
+                        SRT_STEAM_ISSUES_UNKNOWN);
 
   env = (my_environ == NULL) ? g_get_environ () : g_strdupv (my_environ);
 
@@ -569,4 +569,73 @@ _srt_steam_check (const GStrv my_environ,
   g_free (default_steam_path);
   g_strfreev (env);
   return issues;
+}
+
+/**
+ * _srt_steam_get_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  "steam-installation" property
+ *
+ * If the provided @json_obj doesn't have a "steam-installation" member,
+ * #SrtSteamIssues of the returned #SrtSteam will be set to
+ * %SRT_STEAM_ISSUES_UNKNOWN.
+ *
+ * Returns: (transfer full): a new #StrSteam object.
+ */
+SrtSteam *
+_srt_steam_get_from_report (JsonObject *json_obj)
+{
+  JsonObject *json_sub_obj;
+  JsonArray *array;
+  SrtSteamIssues issues = SRT_STEAM_ISSUES_UNKNOWN;
+  const gchar *install_path = NULL;
+  const gchar *data_path = NULL;
+  const gchar *bin32_path = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "steam-installation"))
+    {
+      json_sub_obj = json_object_get_object_member (json_obj, "steam-installation");
+
+      if (json_sub_obj == NULL)
+        goto out;
+
+      if (json_object_has_member (json_sub_obj, "issues"))
+        {
+          issues = SRT_STEAM_ISSUES_NONE;
+          array = json_object_get_array_member (json_sub_obj, "issues");
+
+          /* We are expecting an array of issues here */
+          if (array == NULL)
+            {
+              g_debug ("'issues' in 'steam-installation' is not an array as expected");
+              issues |= SRT_STEAM_ISSUES_UNKNOWN;
+            }
+          else
+            {
+              for (guint i = 0; i < json_array_get_length (array); i++)
+                {
+                  const gchar *issue_string = json_array_get_string_element (array, i);
+                  if (!srt_add_flag_from_nick (SRT_TYPE_STEAM_ISSUES, issue_string, &issues, NULL))
+                    issues |= SRT_STEAM_ISSUES_UNKNOWN;
+                }
+            }
+        }
+
+      if (json_object_has_member (json_sub_obj, "path"))
+        install_path = json_object_get_string_member (json_sub_obj, "path");
+
+      if (json_object_has_member (json_sub_obj, "data_path"))
+        data_path = json_object_get_string_member (json_sub_obj, "data_path");
+
+      if (json_object_has_member (json_sub_obj, "bin32_path"))
+        bin32_path = json_object_get_string_member (json_sub_obj, "bin32_path");
+    }
+
+out:
+  return _srt_steam_new (issues,
+                         install_path,
+                         data_path,
+                         bin32_path);
 }

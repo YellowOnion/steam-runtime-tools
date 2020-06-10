@@ -1,0 +1,45 @@
+{
+  "container" : {
+    "type" : "flatpak",
+    "host" : {
+      "path" : null
+    }
+  },
+  "driver_environment" : [
+    "LIBVA_DRIVER_NAME=vava",
+    5,
+    "MESA_LOADER_DRIVER_OVERRIDE=radeonsi"
+  ],
+  "architectures" : {
+    "i386-linux-gnu" : {
+      "can-run" : false,
+      "graphics-details" : {
+        "x11/vdpau" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",
+          "library-vendor" : "futuristic"
+        },
+        "x12/missing" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 5.0\n"
+        }
+      }
+    },
+    "x86_64-linux-gnu" : {
+      "can-run" : true
+    }
+  },
+  "locales" : {
+    "<default>" : {
+      "resulting-name" : "en_US.UTF-8",
+      "charset" : "UTF-8",
+      "is_utf8" : true
+    }
+  },
+  "vulkan" : {
+    "icds" : [
+      {
+        "json_path" : "/usr/share/vulkan/icd.d/amd_icd64.json",
+        "error" : "Something went wrong"
+      }
+    ]
+  }
+}

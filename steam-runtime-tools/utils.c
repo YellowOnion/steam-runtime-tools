@@ -446,6 +446,157 @@ srt_enum_value_to_nick (GType enum_type,
   return result;
 }
 
+/**
+ * srt_enum_from_nick:
+ * @enum_type: The type of the enumeration
+ * @nick: The nickname to look up
+ * @value_out: (not nullable): Used to return the enumeration that has been
+ *  found from the provided @nick
+ * @error: Used to raise an error on failure
+ *
+ * Get the enumeration from a given #GEnumValue.value-nick.
+ * For example:
+ * `srt_enum_from_nick (SRT_TYPE_GRAPHICS_LIBRARY_VENDOR, "glvnd", (gint *) &library_vendor, NULL)`
+ * will set `library_vendor` to SRT_GRAPHICS_LIBRARY_VENDOR_GLVND.
+ *
+ * Returns: %TRUE if no errors have been found.
+ */
+gboolean
+srt_enum_from_nick (GType enum_type,
+                    const gchar *nick,
+                    gint *value_out,
+                    GError **error)
+{
+  GEnumClass *class;
+  GEnumValue *enum_value;
+  gboolean result = TRUE;
+
+  g_return_val_if_fail (G_TYPE_IS_ENUM (enum_type), FALSE);
+  g_return_val_if_fail (nick != NULL, FALSE);
+  g_return_val_if_fail (value_out != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  class = g_type_class_ref (enum_type);
+
+  enum_value = g_enum_get_value_by_nick (class, nick);
+  if (enum_value)
+    {
+      *value_out = enum_value->value;
+    }
+  else
+    {
+      if (error != NULL)
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "\"%s\" is not a known member of %s",
+                     nick, g_type_name (enum_type));
+      result = FALSE;
+    }
+
+  g_type_class_unref (class);
+  return result;
+}
+
+/**
+ * srt_add_flag_from_nick:
+ * @flags_type: The type of the flag
+ * @nick: The nickname to look up
+ * @value_out: (not nullable) (inout): The flag, from the provided @nick,
+ *  will be added to @value_out
+ * @error: Used to raise an error on failure
+ *
+ * Get the flag from a given #GEnumValue.value-nick.
+ * For example:
+ * `srt_add_flag_from_nick (SRT_TYPE_STEAM_ISSUES, "cannot-find", &issues, error)`
+ * will add SRT_STEAM_ISSUES_CANNOT_FIND to `issues`.
+ *
+ * Returns: %TRUE if no errors have been found.
+ */
+gboolean
+srt_add_flag_from_nick (GType flags_type,
+                        const gchar *nick,
+                        guint *value_out,
+                        GError **error)
+{
+  GFlagsClass *class;
+  GFlagsValue *flags_value;
+  gboolean result = TRUE;
+
+  g_return_val_if_fail (G_TYPE_IS_FLAGS (flags_type), FALSE);
+  g_return_val_if_fail (nick != NULL, FALSE);
+  g_return_val_if_fail (value_out != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  class = g_type_class_ref (flags_type);
+
+  flags_value = g_flags_get_value_by_nick (class, nick);
+  if (flags_value)
+    {
+      *value_out |= flags_value->value;
+    }
+  else
+    {
+      if (error != NULL)
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "\"%s\" is not a known member of %s",
+                     nick, g_type_name (flags_type));
+      result = FALSE;
+    }
+
+  g_type_class_unref (class);
+  return result;
+}
+
+/**
+ * srt_get_flags_from_json_array:
+ * @flags_type: The type of the flag
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  @array_member property
+ * @array_member: (not nullable): The JSON member to look up
+ * @flag_if_unknown: flag to use in case of parsing error
+ *
+ * Get the flags from a given JSON object array member.
+ * If @json_obj doesn't have the provided @member, or it is malformed, the
+ * @flag_if_unknown will be returned.
+ * If the parsed JSON array_member has some elements that we can't parse,
+ * @flag_if_unknown will be added to the returned flags.
+ *
+ * Returns: the found flags from the provided @json_obj
+ */
+guint
+srt_get_flags_from_json_array (GType flags_type,
+                               JsonObject *json_obj,
+                               const gchar *array_member,
+                               guint flag_if_unknown)
+{
+  JsonArray *array;
+  guint ret = flag_if_unknown;
+
+  g_return_val_if_fail (G_TYPE_IS_FLAGS (flags_type), 0);
+  g_return_val_if_fail (json_obj != NULL, 0);
+  g_return_val_if_fail (array_member != NULL, 0);
+
+  if (json_object_has_member (json_obj, array_member))
+    {
+      array = json_object_get_array_member (json_obj, array_member);
+
+      if (array == NULL)
+        goto out;
+
+      /* We reset the value out because we found the member we were looking for */
+      ret = 0;
+
+      for (guint j = 0; j < json_array_get_length (array); j++)
+        {
+          const gchar *issue_string = json_array_get_string_element (array, j);
+          if (!srt_add_flag_from_nick (flags_type, issue_string, &ret, NULL))
+            ret |= flag_if_unknown;
+        }
+    }
+
+out:
+  return ret;
+}
+
 static void _srt_constructor (void) __attribute__((__constructor__));
 static void
 _srt_constructor (void)
@@ -604,4 +755,50 @@ _srt_rm_rf (const char *directory)
     return FALSE;
 
   return TRUE;
+}
+
+/**
+ * _srt_json_array_to_strv:
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  @array_member property
+ * @array_member: (not nullable): The JSON member to look up
+ *
+ * Every %NULL or non string members of the array are replaced with the value
+ * "<invalid>".
+ *
+ * Returns: (transfer full) (array zero-terminated=1) (element-type utf8) (nullable):
+ *  A string array from the given @json_obj, or %NULL if it doesn't have a
+ *  property @array_member
+ */
+gchar **
+_srt_json_array_to_strv (JsonObject *json_obj,
+                         const gchar *array_member)
+{
+  JsonArray *array;
+  guint length;
+  const gchar *element;
+  gchar **ret = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+  g_return_val_if_fail (array_member != NULL, NULL);
+
+  if (json_object_has_member (json_obj, array_member))
+    {
+      array = json_object_get_array_member (json_obj, array_member);
+      if (array == NULL)
+        return ret;
+
+      length = json_array_get_length (array);
+      ret = g_new0 (gchar *, length + 1);
+      for (guint i = 0; i < length; i++)
+        {
+          element = json_array_get_string_element (array, i);
+          if (element == NULL)
+            element = "<invalid>";
+          ret[i] = g_strdup (element);
+        }
+      ret[length] = NULL;
+    }
+
+  return ret;
 }

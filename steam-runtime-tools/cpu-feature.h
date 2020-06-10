@@ -40,12 +40,15 @@
  *  `pni` in Linux `/proc/cpuinfo`
  * @SRT_X86_FEATURE_CMPXCHG16B: The CPU supports the CMPXCHG16B instruction,
  *  indicated by `cx16` in Linux `/proc/cpuinfo`
+ * @SRT_X86_FEATURE_UNKNOWN: An unknown CPU feature was encountered when
+ *  loading a report
  *
  * A bitfield with flags representing the features that the CPU supports, or
  * %SRT_X86_FEATURE_NONE (which is numerically zero) if none of the features
  * we checked are supported.
  *
- * In general, more bits set means more instructions are supported.
+ * In general, more bits set means more instructions are supported, with the
+ * only exception for %SRT_X86_FEATURE_UNKNOWN.
  *
  * At the time of writing, the Steam client requires %SRT_X86_FEATURE_X86_64,
  * %SRT_X86_FEATURE_SSE3 and %SRT_X86_FEATURE_CMPXCHG16B.
@@ -55,5 +58,6 @@ typedef enum
   SRT_X86_FEATURE_X86_64 = (1 << 0),
   SRT_X86_FEATURE_SSE3 = (1 << 1),
   SRT_X86_FEATURE_CMPXCHG16B = (1 << 2),
+  SRT_X86_FEATURE_UNKNOWN = (1 << 3),
   SRT_X86_FEATURE_NONE = 0
 } SrtX86FeatureFlags;

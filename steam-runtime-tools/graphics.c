@@ -351,8 +351,8 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
 static SrtGraphicsIssues
 _srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gchar **renderer_string)
 {
-  g_return_val_if_fail (version_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (version_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
 
@@ -408,8 +408,8 @@ _srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gc
 static SrtGraphicsIssues
 _srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const gchar **renderer_string)
 {
-  g_return_val_if_fail (new_version_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (new_version_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
   JsonNode *node = json_parser_get_root (parser);
@@ -892,11 +892,11 @@ _srt_run_helper (GStrv *my_environ,
   // non_zero_wait_status_issue needs to be something other than NONE, otherwise
   // we get no indication in caller that there was any error
   g_return_val_if_fail (non_zero_wait_status_issue != SRT_GRAPHICS_ISSUES_NONE,
-                        SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+                        SRT_GRAPHICS_ISSUES_UNKNOWN);
 
-  g_return_val_if_fail (wait_status != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (exit_status != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (terminating_signal != NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (wait_status != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (exit_status != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (terminating_signal != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
   GError *error = NULL;
@@ -988,10 +988,10 @@ _srt_check_graphics (const char *helpers_path,
   gchar *filtered_preload = NULL;
   SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
 
-  g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (((unsigned) rendering_interface) < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (((unsigned) rendering_interface) < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   GPtrArray *argv = _argv_for_graphics_test (helpers_path,
                                              test_flags,
@@ -1033,7 +1033,7 @@ _srt_check_graphics (const char *helpers_path,
         break;
 
       default:
-        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_UNKNOWN);
     }
 
   issues |= _srt_run_helper (&my_environ,
@@ -1097,7 +1097,7 @@ _srt_check_graphics (const char *helpers_path,
         break;
 
       default:
-        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_UNKNOWN);
     }
 
   switch (rendering_interface)
@@ -1210,7 +1210,7 @@ _srt_check_graphics (const char *helpers_path,
         break;
 
       default:
-        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_UNKNOWN);
     }
 
 out:
@@ -1263,7 +1263,7 @@ out:
 SrtGraphicsIssues
 srt_graphics_get_issues (SrtGraphics *self)
 {
-  g_return_val_if_fail (SRT_IS_GRAPHICS (self), SRT_GRAPHICS_ISSUES_INTERNAL_ERROR);
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), SRT_GRAPHICS_ISSUES_UNKNOWN);
   return self->issues;
 }
 
@@ -1440,6 +1440,156 @@ srt_graphics_get_messages (SrtGraphics *self)
 {
   g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
   return self->messages;
+}
+
+/**
+ * _srt_graphics_get_from_report:
+ * @json_obj: (not nullable): A JSON Object representing an ABI,
+ *  which is checked for a "graphics-details" member
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ * @cached_graphics: (not optional) (inout): An hash table with the #SrtGraphics
+ *  objects that have been found. The hash key is an int generated combining
+ *  the graphics window system and rendering interface.
+ */
+void
+_srt_graphics_get_from_report (JsonObject *json_obj,
+                               const gchar *multiarch_tuple,
+                               GHashTable **cached_graphics)
+{
+  JsonObject *json_graphics_obj;
+  JsonObject *json_stack_obj;
+  JsonArray *array;
+
+  g_return_if_fail (json_obj != NULL);
+  g_return_if_fail (multiarch_tuple != NULL);
+  g_return_if_fail (cached_graphics != NULL && *cached_graphics != NULL);
+
+  if (json_object_has_member (json_obj, "graphics-details"))
+    {
+      GList *graphics_members;
+      json_graphics_obj = json_object_get_object_member (json_obj, "graphics-details");
+
+      if (json_graphics_obj == NULL)
+        return;
+
+      graphics_members = json_object_get_members (json_graphics_obj);
+      for (GList *l = graphics_members; l != NULL; l = l->next)
+        {
+          const gchar *messages = NULL;
+          const gchar *renderer = NULL;
+          const gchar *version = NULL;
+          /* A missing exit_status means that its value is the default zero */
+          int exit_status = 0;
+          int terminating_signal = 0;
+          SrtGraphics *graphics;
+          SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
+          SrtGraphicsIssues graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
+          SrtWindowSystem window_system = SRT_WINDOW_SYSTEM_X11;
+          SrtRenderingInterface rendering_interface = SRT_RENDERING_INTERFACE_GL;
+
+          gchar **stack_parts = g_strsplit (l->data, "/", 2);
+          if (stack_parts[1] == NULL)
+            {
+              g_debug ("Expected to find a parameter divided by a slash, instead we got: %s",
+                       (gchar *) l->data);
+              g_strfreev (stack_parts);
+              continue;
+            }
+
+          if (!_srt_graphics_window_system_nick_to_enum (stack_parts[0], &window_system, NULL))
+            {
+              g_debug ("Unable to get the window system from the parsed enum: %s",
+                       stack_parts[0]);
+              g_strfreev (stack_parts);
+              continue;
+            }
+          if (!_srt_graphics_rendering_interface_nick_to_enum (stack_parts[1],
+                                                               &rendering_interface,
+                                                               NULL))
+            {
+              g_debug ("Unable to get the rendering interface from the parsed enum: %s",
+                       stack_parts[1]);
+              g_strfreev (stack_parts);
+              continue;
+            }
+
+          g_strfreev (stack_parts);
+
+          json_stack_obj = json_object_get_object_member (json_graphics_obj, l->data);
+
+          if (json_stack_obj == NULL)
+            {
+              g_debug ("'%s' is not a JSON object as expected", (gchar *) l->data);
+              continue;
+            }
+
+          if (json_object_has_member (json_stack_obj, "messages"))
+            messages = json_object_get_string_member (json_stack_obj, "messages");
+
+          if (json_object_has_member (json_stack_obj, "renderer"))
+            renderer = json_object_get_string_member (json_stack_obj, "renderer");
+
+          if (json_object_has_member (json_stack_obj, "version"))
+            version = json_object_get_string_member (json_stack_obj, "version");
+
+          /* In graphics, a missing "issues" array means that no issues were found */
+          if (json_object_has_member (json_stack_obj, "issues"))
+            {
+              array = json_object_get_array_member (json_stack_obj, "issues");
+
+              /* We are expecting an array of issues here */
+              if (array == NULL)
+                {
+                  g_debug ("'issues' in 'graphics-details' is not an array as expected");
+                  graphics_issues |= SRT_GRAPHICS_ISSUES_UNKNOWN;
+                }
+              else
+                {
+                  for (guint j = 0; j < json_array_get_length (array); j++)
+                    {
+                      const gchar *issue_string = json_array_get_string_element (array, j);
+                      if (!srt_add_flag_from_nick (SRT_TYPE_GRAPHICS_ISSUES,
+                                                   issue_string,
+                                                   &graphics_issues,
+                                                   NULL))
+                        graphics_issues |= SRT_GRAPHICS_ISSUES_UNKNOWN;
+                    }
+                }
+            }
+
+          if (json_object_has_member (json_stack_obj, "exit-status"))
+            exit_status = json_object_get_int_member (json_stack_obj, "exit-status");
+
+          if (json_object_has_member (json_stack_obj, "terminating-signal"))
+            terminating_signal = json_object_get_int_member (json_stack_obj, "terminating-signal");
+
+          if (json_object_has_member (json_stack_obj, "library-vendor"))
+            {
+              const gchar *vendor_string = json_object_get_string_member (json_stack_obj, "library-vendor");
+              G_STATIC_ASSERT (sizeof (SrtGraphicsLibraryVendor) == sizeof (gint));
+              if (!srt_enum_from_nick (SRT_TYPE_GRAPHICS_LIBRARY_VENDOR,
+                                       vendor_string,
+                                       (gint *) &library_vendor,
+                                       NULL))
+                library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
+            }
+
+          graphics = _srt_graphics_new (multiarch_tuple,
+                                        window_system,
+                                        rendering_interface,
+                                        library_vendor,
+                                        renderer,
+                                        version,
+                                        graphics_issues,
+                                        messages,
+                                        exit_status,
+                                        terminating_signal);
+
+          int hash_key = _srt_graphics_hash_key (window_system, rendering_interface);
+          g_hash_table_insert (*cached_graphics, GINT_TO_POINTER(hash_key), graphics);
+        }
+    }
 }
 
 /* EGL and Vulkan ICDs are actually basically the same, but we don't
@@ -2449,6 +2599,23 @@ _srt_resolve_library_path (const gchar *library_path)
   return ret;
 }
 
+static GList *
+get_driver_icds_from_json_report (JsonObject *json_obj,
+                                  GType which);
+
+/**
+ * _srt_get_egl_from_json_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "egl" property
+ *
+ * Returns: A list of #SrtEglIcd that have been found, or %NULL if none
+ *  has been found.
+ */
+GList *
+_srt_get_egl_from_json_report (JsonObject *json_obj)
+{
+  return get_driver_icds_from_json_report (json_obj, SRT_TYPE_EGL_ICD);
+}
+
 /**
  * SrtDriDriver:
  *
@@ -2652,6 +2819,52 @@ srt_dri_driver_resolve_library_path (SrtDriDriver *self)
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
   return _srt_resolve_library_path (self->library_path);
+}
+
+/**
+ * _srt_dri_driver_get_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "dri_drivers"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "dri_drivers" member, or it is
+ * malformed, %NULL will be returned.
+ *
+ * Returns: A list of #SrtDriDriver that have been found, or %NULL if none
+ *  has been found.
+ */
+GList *
+_srt_dri_driver_get_from_report (JsonObject *json_obj)
+{
+  JsonArray *array;
+  GList *dri_drivers = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "dri_drivers"))
+    {
+      array = json_object_get_array_member (json_obj, "dri_drivers");
+
+      if (array == NULL)
+        goto out;
+
+      guint length = json_array_get_length (array);
+      for (guint j = 0; j < length; j++)
+        {
+          const gchar *dri_path = NULL;
+          gboolean is_extra = FALSE;
+          JsonObject *json_dri_obj = json_array_get_object_element (array, j);
+          if (json_object_has_member (json_dri_obj, "library_path"))
+            dri_path = json_object_get_string_member (json_dri_obj, "library_path");
+
+          if (json_object_has_member (json_dri_obj, "is_extra"))
+            is_extra = json_object_get_boolean_member (json_dri_obj, "is_extra");
+
+          dri_drivers = g_list_prepend (dri_drivers, srt_dri_driver_new (dri_path, is_extra));
+        }
+    }
+
+out:
+  return g_list_reverse (dri_drivers);
 }
 
 /**
@@ -3296,7 +3509,7 @@ _srt_get_modules_full (const char *sysroot,
                                             &library_details);
 
       if (issues & (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
-                    SRT_LIBRARY_ISSUES_INTERNAL_ERROR |
+                    SRT_LIBRARY_ISSUES_UNKNOWN |
                     SRT_LIBRARY_ISSUES_TIMEOUT))
         {
           const char *messages = srt_library_get_messages (library_details);
@@ -3802,6 +4015,52 @@ srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self)
 }
 
 /**
+ * _srt_va_api_driver_get_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "va-api_drivers"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "va-api_drivers" member, or it is
+ * malformed, %NULL will be returned.
+ *
+ * Returns: A list of #SrtVaApiDriver that have been found, or %NULL if none
+ *  has been found.
+ */
+GList *
+_srt_va_api_driver_get_from_report (JsonObject *json_obj)
+{
+  JsonArray *array;
+  GList *va_api_drivers = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "va-api_drivers"))
+    {
+      array = json_object_get_array_member (json_obj, "va-api_drivers");
+
+      if (array == NULL)
+        goto out;
+
+      guint length = json_array_get_length (array);
+      for (guint j = 0; j < length; j++)
+        {
+          const gchar *va_api_path = NULL;
+          gboolean is_extra = FALSE;
+          JsonObject *json_va_api_obj = json_array_get_object_element (array, j);
+          if (json_object_has_member (json_va_api_obj, "library_path"))
+            va_api_path = json_object_get_string_member (json_va_api_obj, "library_path");
+
+          if (json_object_has_member (json_va_api_obj, "is_extra"))
+            is_extra = json_object_get_boolean_member (json_va_api_obj, "is_extra");
+
+          va_api_drivers = g_list_prepend (va_api_drivers, srt_va_api_driver_new (va_api_path, is_extra));
+        }
+    }
+
+out:
+  return g_list_reverse (va_api_drivers);
+}
+
+/**
  * SrtVdpauDriver:
  *
  * Opaque object representing a VDPAU driver.
@@ -4042,6 +4301,56 @@ srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self)
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
   return _srt_resolve_library_path (self->library_path);
+}
+
+/**
+ * _srt_vdpau_driver_get_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "vdpau_drivers"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "vdpau_drivers" member, or it is
+ * malformed, %NULL will be returned.
+ *
+ * Returns: A list of #SrtVdpauDriver that have been found, or %NULL if none
+ *  has been found.
+ */
+GList *
+_srt_vdpau_driver_get_from_report (JsonObject *json_obj)
+{
+  JsonArray *array;
+  GList *vdpau_drivers = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "vdpau_drivers"))
+    {
+      array = json_object_get_array_member (json_obj, "vdpau_drivers");
+
+      if (array == NULL)
+        goto out;
+
+      guint length = json_array_get_length (array);
+      for (guint j = 0; j < length; j++)
+        {
+          const gchar *vdpau_path = NULL;
+          const gchar *vdpau_link = NULL;
+          gboolean is_extra = FALSE;
+          JsonObject *json_vdpau_obj = json_array_get_object_element (array, j);
+          if (json_object_has_member (json_vdpau_obj, "library_path"))
+            vdpau_path = json_object_get_string_member (json_vdpau_obj, "library_path");
+
+          if (json_object_has_member (json_vdpau_obj, "library_link"))
+            vdpau_link = json_object_get_string_member (json_vdpau_obj, "library_link");
+
+          if (json_object_has_member (json_vdpau_obj, "is_extra"))
+            is_extra = json_object_get_boolean_member (json_vdpau_obj, "is_extra");
+
+          vdpau_drivers = g_list_prepend (vdpau_drivers, srt_vdpau_driver_new (vdpau_path, vdpau_link, is_extra));
+        }
+    }
+
+out:
+  return g_list_reverse (vdpau_drivers);
 }
 
 /**
@@ -4683,6 +4992,144 @@ _srt_load_vulkan_icds (const char *sysroot,
 }
 
 /**
+ * _srt_get_vulkan_from_json_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "vulkan" property
+ *
+ * Returns: A list of #SrtVulkanIcd that have been found, or %NULL if none
+ *  has been found.
+ */
+GList *
+_srt_get_vulkan_from_json_report (JsonObject *json_obj)
+{
+  return get_driver_icds_from_json_report (json_obj, SRT_TYPE_VULKAN_ICD);
+}
+
+/**
+ * get_driver_icds_from_json_report:
+ * @json_obj: (not nullable): A JSON Object used to search for Icd properties
+ * @which: Used to choose which ICD to search, it can be either
+ *  %SRT_TYPE_EGL_ICD or %SRT_TYPE_VULKAN_ICD
+ *
+ * Returns: A list of #SrtEglIcd (if @which is %SRT_TYPE_EGL_ICD) or
+ *  #SrtVulkanIcd (if @which is %SRT_TYPE_VULKAN_ICD) that have been found, or
+ *  %NULL if none has been found.
+ */
+static GList *
+get_driver_icds_from_json_report (JsonObject *json_obj,
+                                  GType which)
+{
+  const gchar *member;
+  JsonObject *json_sub_obj;
+  JsonArray *array;
+  GList *driver_icds = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (which == SRT_TYPE_EGL_ICD)
+    member = "egl";
+  else if (which == SRT_TYPE_VULKAN_ICD)
+    member = "vulkan";
+  else
+    g_return_val_if_reached (NULL);
+
+  if (json_object_has_member (json_obj, member))
+    {
+      json_sub_obj = json_object_get_object_member (json_obj, member);
+
+      /* We are expecting an object here */
+      if (json_sub_obj == NULL)
+        {
+          g_debug ("'%s' is not a JSON object as expected", member);
+          goto out;
+        }
+
+      if (json_object_has_member (json_sub_obj, "icds"))
+        {
+          array = json_object_get_array_member (json_sub_obj, "icds");
+
+          /* We are expecting an array of icds here */
+          if (array == NULL)
+            {
+              g_debug ("'icds' is not an array as expected");
+              goto out;
+            }
+
+          for (guint i = 0; i < json_array_get_length (array); i++)
+            {
+              const gchar *json_path = NULL;
+              const gchar *library_path = NULL;
+              const gchar *api_version = NULL;
+              GQuark error_domain = 0;
+              gint error_code = -1;
+              const gchar *error_message = "(missing error message)";
+              GError *icd_error = NULL;
+              JsonObject *json_icd_obj = json_array_get_object_element (array, i);
+              if (json_object_has_member (json_icd_obj, "json_path"))
+                json_path = json_object_get_string_member (json_icd_obj, "json_path");
+              else
+                {
+                  g_debug ("The parsed 'icd' is missing the expected 'json_path' member, skipping...");
+                  continue;
+                }
+
+              if (json_object_has_member (json_icd_obj, "library_path"))
+                library_path = json_object_get_string_member (json_icd_obj, "library_path");
+
+              if (json_object_has_member (json_icd_obj, "api_version"))
+                api_version = json_object_get_string_member (json_icd_obj, "api_version");
+
+              if (json_object_has_member (json_icd_obj, "error-domain"))
+                error_domain = g_quark_from_string (json_object_get_string_member (json_icd_obj,
+                                                                                   "error-domain"));
+
+              if (json_object_has_member (json_icd_obj, "error-code"))
+                error_code = json_object_get_int_member (json_icd_obj, "error-code");
+
+              if (json_object_has_member (json_icd_obj, "error"))
+                error_message = json_object_get_string_member (json_icd_obj, "error");
+
+              if (library_path != NULL)
+                {
+                  if (which == SRT_TYPE_EGL_ICD)
+                    driver_icds = g_list_prepend (driver_icds, srt_egl_icd_new (json_path,
+                                                                                library_path));
+                  else if (which == SRT_TYPE_VULKAN_ICD)
+                    driver_icds = g_list_prepend (driver_icds, srt_vulkan_icd_new (json_path,
+                                                                                   api_version,
+                                                                                   library_path));
+                  else
+                    g_return_val_if_reached (NULL);
+                }
+              else
+                {
+                  if (error_domain == 0)
+                    {
+                      error_domain = G_IO_ERROR;
+                      error_code = G_IO_ERROR_FAILED;
+                    }
+                  g_set_error_literal (&icd_error,
+                                       error_domain,
+                                       error_code,
+                                       error_message);
+                  if (which == SRT_TYPE_EGL_ICD)
+                    driver_icds = g_list_prepend (driver_icds, srt_egl_icd_new_error (json_path,
+                                                                                      icd_error));
+                  else if (which == SRT_TYPE_VULKAN_ICD)
+                    driver_icds = g_list_prepend (driver_icds, srt_vulkan_icd_new_error (json_path,
+                                                                                         icd_error));
+                  else
+                    g_return_val_if_reached (NULL);
+
+                  g_clear_error (&icd_error);
+                }
+            }
+        }
+    }
+out:
+  return driver_icds;
+}
+
+/**
  * SrtGlxIcd:
  *
  * Opaque object representing a GLVND GLX ICD.
@@ -4854,4 +5301,50 @@ srt_glx_icd_get_library_path (SrtGlxIcd *self)
 {
   g_return_val_if_fail (SRT_IS_GLX_ICD (self), NULL);
   return self->library_path;
+}
+
+/**
+ * _srt_glx_icd_get_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "glx_drivers"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "glx_drivers" member, or it is
+ * malformed, %NULL will be returned.
+ *
+ * Returns: A list of #SrtGlxIcd that have been found, or %NULL if none
+ *  has been found.
+ */
+GList *
+_srt_glx_icd_get_from_report (JsonObject *json_obj)
+{
+  JsonArray *array;
+  GList *glx_drivers = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "glx_drivers"))
+    {
+      array = json_object_get_array_member (json_obj, "glx_drivers");
+
+      if (array == NULL)
+        goto out;
+
+      guint length = json_array_get_length (array);
+      for (guint j = 0; j < length; j++)
+        {
+          const gchar *glx_path = NULL;
+          const gchar *glx_soname = NULL;
+          JsonObject *json_glx_obj = json_array_get_object_element (array, j);
+          if (json_object_has_member (json_glx_obj, "library_path"))
+            glx_path = json_object_get_string_member (json_glx_obj, "library_path");
+
+          if (json_object_has_member (json_glx_obj, "library_soname"))
+            glx_soname = json_object_get_string_member (json_glx_obj, "library_soname");
+
+          glx_drivers = g_list_prepend (glx_drivers, srt_glx_icd_new (glx_soname, glx_path));
+        }
+    }
+
+out:
+  return g_list_reverse (glx_drivers);
 }

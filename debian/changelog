@@ -1,3 +1,23 @@
+libcapsule (0.20200612.0-0co1) UNRELEASED; urgency=medium
+
+  * ld-libs: Always clear ldlibs->needed entry if ld_lib_open() fails,
+    fixing mishandling of libraries that are newer in the container but
+    only for one architecture
+  * build: Check that the compiler and --host are consistent
+  * Add basic Gitlab-CI on Debian (with deb-build-snapshot) and Arch Linux
+  * capture-libs: Expand list of known ld.so names
+  * tests: Fix Debianisms
+  * tests/capture-libs: Tolerate path to ld.so not being fully resolved
+  * capsule-malloc: Remove duplicate typedef for mstate, for clang 8
+  * Distinguish between enabling the library and enabling shared libraries.
+    Some tests for capsule-capture-libs will need to compile shared
+    libraries, even if libcapsule itself is not built.
+  * tests: Make older linkers happy with one of our test libraries
+  * tests: Cope with newer versions of GNU make
+  * capture-libs: Allow patterns to be read from a file
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 12 Jun 2020 16:34:02 +0100
+
 libcapsule (0.20190926.0-0co1) upstream; urgency=medium
 
   * utils: Add --help, --version and GNU argument parsing to all tools

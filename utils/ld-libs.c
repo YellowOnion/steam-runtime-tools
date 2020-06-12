@@ -338,7 +338,10 @@ ld_lib_open (ld_libs *ldlibs, const char *name, int i, int *code, char **message
                      acceptable );
 
         if( !acceptable )
+        {
+            clear_needed( &ldlibs->needed[i] );
             return 0;
+        }
 
         acceptable = !target_is_ourself( ldlibs, i );
 
@@ -363,6 +366,7 @@ ld_lib_open (ld_libs *ldlibs, const char *name, int i, int *code, char **message
         _capsule_set_error( code, message, errsv,
                             "Cannot open \"%s\": %s",
                             ldlibs->needed[i].path, strerror( errsv ) );
+        clear_needed( &ldlibs->needed[i] );
         return 0;
     }
 }
@@ -407,7 +411,18 @@ search_ldcache_cb (const char *name, // name of the DSO in the ldcache
         // needed[idx] slot if successful, and reset it ready for
         // another attempt if it fails.
         // TODO: Can we propagate error information?
-        return ld_lib_open( target->ldlibs, name, idx, NULL, NULL );
+        if( !ld_lib_open( target->ldlibs, name, idx, NULL, NULL ) )
+        {
+            // search_ldcache() relies on fd >= 0 iff we succeeded
+            assert( target->ldlibs->needed[idx].fd < 0 );
+            assert( target->ldlibs->needed[idx].name == NULL );
+            return 0;
+        }
+
+        // search_ldcache() relies on fd >= 0 iff we succeeded
+        assert( target->ldlibs->needed[idx].fd >= 0 );
+        assert( target->ldlibs->needed[idx].name != NULL );
+        return 1;
     }
 
     return 0;

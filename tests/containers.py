@@ -624,6 +624,13 @@ class TestContainers(BaseTest):
                             '/run/host/usr/lib/{}/gconv'.format(multiarch),
                         )
 
+                    if os.path.isdir('/usr/share/libdrm'):
+                        link = os.path.join(
+                            tree, 'usr', 'share', 'libdrm',
+                        )
+                        target = os.readlink(link)
+                        self.assertEqual(target, '/run/host/usr/share/libdrm')
+
         if is_scout:
             if os.path.isdir('/usr/lib/locale'):
                 link = os.path.join(tree, 'usr', 'lib', 'locale')

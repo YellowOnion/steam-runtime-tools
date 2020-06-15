@@ -5,6 +5,7 @@
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -79,32 +80,69 @@ class BaseTest(unittest.TestCase):
     Base class with some useful test setup.
     """
 
-    def setUp(self) -> None:
-        self.G_TEST_SRCDIR = os.getenv(
+    G_TEST_BUILDDIR = ''
+    G_TEST_SRCDIR = ''
+    artifacts = ''
+    tmpdir = None       # type: tempfile.TemporaryDirectory
+    top_builddir = ''
+    top_srcdir = ''
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.G_TEST_SRCDIR = os.getenv(
             'G_TEST_SRCDIR',
             os.path.abspath(os.path.dirname(__file__)),
         )
-        self.top_srcdir = os.path.dirname(self.G_TEST_SRCDIR)
-        self.G_TEST_BUILDDIR = os.getenv(
+        cls.top_srcdir = os.path.dirname(cls.G_TEST_SRCDIR)
+        cls.G_TEST_BUILDDIR = os.getenv(
             'G_TEST_BUILDDIR',
             os.path.abspath(
                 os.path.join(os.path.dirname(__file__), '..', '_build'),
             ),
         )
-        self.top_builddir = os.path.dirname(self.G_TEST_BUILDDIR)
+        cls.top_builddir = os.path.dirname(cls.G_TEST_BUILDDIR)
 
-        self.tmpdir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmpdir.cleanup)
+        cls.tmpdir = tempfile.TemporaryDirectory()
 
         artifacts = os.getenv('AUTOPKGTEST_ARTIFACTS')
 
         if artifacts is not None:
-            self.artifacts = artifacts
+            cls.artifacts = os.path.abspath(artifacts)
         else:
-            self.artifacts = self.tmpdir.name
+            cls.artifacts = cls.tmpdir.name
+
+    def setUp(self) -> None:
+        cls = self.__class__
+        self.G_TEST_BUILDDIR = cls.G_TEST_BUILDDIR
+        self.G_TEST_SRCDIR = cls.G_TEST_SRCDIR
+        self.artifacts = cls.artifacts
+        self.top_builddir = cls.top_builddir
+        self.top_srcdir = cls.top_srcdir
+
+        # Class and each test get separate temp directories
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
 
     def tearDown(self) -> None:
         pass
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.tmpdir.cleanup()
+
+
+def tee_file_and_stderr(path: str) -> subprocess.Popen:
+    """
+    Return a context manager with a stdin attribute.
+    Anything written to its stdin will be written to `path`
+    and also to stderr.
+    """
+    return subprocess.Popen(
+        ['tee', '--', path],
+        stdin=subprocess.PIPE,
+        stdout=2,
+        stderr=2,
+    )
 
 
 def test_main():
@@ -132,5 +170,6 @@ def test_main():
                 'not ok 1 - %r (tap module not available)'
                 % program.result
             )
+            sys.exit(1)
 
 # vi: set sw=4 sts=4 et:

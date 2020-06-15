@@ -1,4 +1,5 @@
 option('man', type : 'boolean', value : false, description : 'enable man pages')
 option('python', type : 'string', value : '')
 option('srcdir', type : 'string', value : '')
+option('test_containers_dir', type : 'string', value : '')
 option('version', type : 'string', value : 'auto')

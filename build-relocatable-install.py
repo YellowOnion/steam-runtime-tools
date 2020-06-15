@@ -220,7 +220,9 @@ def main():
 
     if args.destdir:
         args.prefix = args.destdir + args.prefix
-        args.srcdir = args.destdir + args.srcdir
+
+        if os.path.exists(args.destdir + args.srcdir):
+            args.srcdir = args.destdir + args.srcdir
 
     if args.archive is None and args.output is None:
         parser.error('Either --archive or --output is required')

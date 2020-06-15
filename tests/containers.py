@@ -404,6 +404,7 @@ class TestContainers(BaseTest):
                     '--',
                     'env',
                     'TEST_INSIDE_SCOUT_ARTIFACTS=' + artifacts,
+                    'TEST_INSIDE_SCOUT_IS_COPY=' + ('1' if copy else ''),
                     'TEST_INSIDE_SCOUT_LOCALES=' + ('1' if locales else ''),
                     'python3.5',
                     os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),

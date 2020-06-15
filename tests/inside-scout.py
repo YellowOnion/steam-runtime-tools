@@ -5,6 +5,7 @@
 
 import contextlib
 import ctypes
+import errno
 import json
 import logging
 import os
@@ -540,6 +541,44 @@ class TestInsideScout(BaseTest):
                     expect_library_issues,
                     set(arch_info['library-issues-summary']),
                 )
+
+    def test_read_only(self) -> None:
+        for read_only_place in (
+            '/bin',
+            '/etc/ld.so.conf.d',
+            '/lib',
+            '/overrides',
+            '/overrides/lib',
+            '/run/host/bin',
+            '/run/host/lib',
+            '/run/host/usr',
+            '/run/host/usr/bin',
+            '/run/host/usr/lib',
+            '/run/pressure-vessel/pv-from-host',
+            '/run/pressure-vessel/pv-from-host/bin',
+            '/sbin',
+            '/usr',
+            '/usr/lib',
+            '/usr/lib/pressure-vessel/from-host/bin',
+        ):
+            with self.subTest(read_only_place):
+                if (
+                    read_only_place.startswith('/overrides')
+                    and not os.getenv('TEST_INSIDE_SCOUT_IS_COPY')
+                ):
+                    # If we aren't working from a temporary copy of the
+                    # runtime, /overrides is on a tmpfs
+                    continue
+
+                with self.assertRaises(OSError) as raised:
+                    open(os.path.join(read_only_place, 'hello'), 'w')
+
+                if isinstance(raised.exception, FileNotFoundError):
+                    # Some of these paths don't exist under all
+                    # circumstances
+                    continue
+
+                self.assertEqual(raised.exception.errno, errno.EROFS)
 
 
 if __name__ == '__main__':

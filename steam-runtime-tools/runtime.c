@@ -23,8 +23,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/runtime.h"
 #include "steam-runtime-tools/runtime-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 #include <errno.h>
 #include <string.h>
@@ -160,11 +162,10 @@ _srt_runtime_check (const char *bin32,
   GStrv my_environ = NULL;
 
   g_return_val_if_fail (version_out == NULL || *version_out == NULL,
-                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+                        SRT_RUNTIME_ISSUES_UNKNOWN);
   g_return_val_if_fail (path_out == NULL || *path_out == NULL,
-                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
-  g_return_val_if_fail (_srt_check_not_setuid (),
-                        SRT_RUNTIME_ISSUES_INTERNAL_ERROR);
+                        SRT_RUNTIME_ISSUES_UNKNOWN);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_RUNTIME_ISSUES_UNKNOWN);
 
   if (custom_environ == NULL)
     my_environ = g_get_environ ();
@@ -466,4 +467,27 @@ out:
   g_strfreev (my_environ);
   g_clear_error (&error);
   return issues;
+}
+
+/**
+ * _srt_runtime_get_issues_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "issues"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "issues" member, or it is
+ * malformed, %SRT_RUNTIME_ISSUES_UNKNOWN will be returned.
+ * If @json_obj has some elements that we can't parse,
+ * %SRT_RUNTIME_ISSUES_UNKNOWN will be added to the returned #SrtRuntimeIssues.
+ *
+ * Returns: The #SrtRuntimeIssues that has been found
+ */
+SrtRuntimeIssues
+_srt_runtime_get_issues_from_report (JsonObject *json_obj)
+{
+  g_return_val_if_fail (json_obj != NULL, SRT_RUNTIME_ISSUES_UNKNOWN);
+
+  return srt_get_flags_from_json_array (SRT_TYPE_RUNTIME_ISSUES,
+                                        json_obj,
+                                        "issues",
+                                        SRT_RUNTIME_ISSUES_UNKNOWN);
 }

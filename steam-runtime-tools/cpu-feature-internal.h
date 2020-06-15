@@ -31,5 +31,10 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <json-glib/json-glib.h>
+
 G_GNUC_INTERNAL
-SrtX86FeatureFlags _srt_feature_get_x86_flags (void);
+SrtX86FeatureFlags _srt_feature_get_x86_flags (SrtX86FeatureFlags *known);
+
+SrtX86FeatureFlags _srt_feature_get_x86_flags_from_report (JsonObject *json_obj,
+                                                           SrtX86FeatureFlags *known);

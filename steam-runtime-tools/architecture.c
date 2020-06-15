@@ -158,3 +158,24 @@ srt_architecture_can_run_x86_64 (void)
 {
   return _srt_architecture_can_run (NULL, SRT_ABI_X86_64);
 }
+
+/**
+ * _srt_architecture_can_run_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "can-run"
+ *  property
+ *
+ * Returns: %TRUE if the provided @json_obj has the "can-run" member with a
+ *  positive boolean value.
+ */
+gboolean
+_srt_architecture_can_run_from_report (JsonObject *json_obj)
+{
+  gboolean can_run = FALSE;
+
+  g_return_val_if_fail (json_obj != NULL, FALSE);
+
+  if (json_object_has_member (json_obj, "can-run"))
+    can_run = json_object_get_boolean_member (json_obj, "can-run");
+
+  return can_run;
+}

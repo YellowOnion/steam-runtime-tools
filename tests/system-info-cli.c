@@ -686,6 +686,76 @@ steam_issues (Fixture *f,
   g_clear_error (&error);
 }
 
+typedef struct
+{
+  const gchar *description;
+  const gchar *input_name;
+  const gchar *output_name;
+} JsonTest;
+
+static const JsonTest json_test[] =
+{
+  {
+    .description = "full JSON parsing",
+    .input_name = "full-good-report.json",
+    .output_name = "full-good-report.json",
+  },
+};
+
+static void
+json_parsing (Fixture *f,
+              gconstpointer context)
+{
+  for (gsize i = 0; i < G_N_ELEMENTS (json_test); i++)
+    {
+      const JsonTest *test = &json_test[i];
+      gboolean result;
+      int exit_status = -1;
+      gchar *input_json;
+      gchar *output_json;
+      gchar *output = NULL;
+      gchar *expectation = NULL;
+      gchar **envp;
+      GError *error = NULL;
+      const gchar *argv[] = { "steam-runtime-system-info", NULL };
+
+      g_test_message ("%s: input=%s output=%s", test->description, test->input_name, test->output_name);
+
+      input_json = g_build_filename (f->srcdir, "json-report", test->input_name, NULL);
+      output_json = g_build_filename (f->srcdir, "json-report", test->output_name, NULL);
+
+      envp = g_get_environ ();
+      envp = g_environ_setenv (envp, "SRT_TEST_PARSE_JSON", input_json, TRUE);
+
+      result = g_spawn_sync (NULL,    /* working directory */
+                             (gchar **) argv,
+                             envp,    /* envp */
+                             G_SPAWN_SEARCH_PATH,
+                             NULL,    /* child setup */
+                             NULL,    /* user data */
+                             &output, /* stdout */
+                             NULL,    /* stderr */
+                             &exit_status,
+                             &error);
+      g_assert_no_error (error);
+      g_assert_true (result);
+      g_assert_cmpint (exit_status, ==, 0);
+      g_assert_nonnull (output);
+
+      g_assert_true (g_file_get_contents (output_json, &expectation, NULL, &error));
+      g_assert_no_error (error);
+
+      g_assert_cmpstr (output, ==, expectation);
+
+      g_free (input_json);
+      g_free (output_json);
+      g_free (output);
+      g_free (expectation);
+      g_strfreev (envp);
+      g_clear_error (&error);
+    }
+}
+
 /*
  * Test `steam-runtime-system-info --help` and `--version`.
  */
@@ -852,6 +922,8 @@ main (int argc,
               setup, steam_presence, teardown);
   g_test_add ("/system-info-cli/steam_issues", Fixture, NULL,
               setup, steam_issues, teardown);
+  g_test_add ("/system-info-cli/json_parsing", Fixture, NULL,
+              setup, json_parsing, teardown);
   g_test_add ("/system-info-cli/help-and-version", Fixture, NULL,
               setup, test_help_and_version, teardown);
   g_test_add ("/system-info-cli/unblocks_sigchld", Fixture, NULL,

@@ -390,3 +390,66 @@ _srt_list_steam_desktop_entries (void)
 
   return g_list_reverse (ret);
 }
+
+/**
+ * _srt_get_steam_desktop_entries_from_json_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "desktop-entries"
+ *  property
+ *
+ * If the provided @json_obj doesn't have a "desktop-entries" member, or it is
+ * malformed, %NULL will be returned.
+ *
+ * Returns: A list with all the #SrtDesktopEntry that have been found, or %NULL
+ *  if none has been found.
+ */
+GList *
+_srt_get_steam_desktop_entries_from_json_report (JsonObject *json_obj)
+{
+  JsonArray *array;
+  JsonObject *json_sub_obj;
+  GList *desktop_entries = NULL;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "desktop-entries"))
+    {
+      array = json_object_get_array_member (json_obj, "desktop-entries");
+
+      if (array == NULL)
+        goto out;
+
+      guint length = json_array_get_length (array);
+      for (guint i = 0; i < length; i++)
+        {
+          const gchar *id = NULL;
+          const gchar *commandline = NULL;
+          const gchar *filename = NULL;
+          gboolean is_default = FALSE;
+          gboolean is_steam_handler = FALSE;
+          json_sub_obj = json_array_get_object_element (array, i);
+          if (json_object_has_member (json_sub_obj, "id"))
+            id = json_object_get_string_member (json_sub_obj, "id");
+
+          if (json_object_has_member (json_sub_obj, "commandline"))
+            commandline = json_object_get_string_member (json_sub_obj, "commandline");
+
+          if (json_object_has_member (json_sub_obj, "filename"))
+            filename = json_object_get_string_member (json_sub_obj, "filename");
+
+          if (json_object_has_member (json_sub_obj, "default_steam_uri_handler"))
+            is_default = json_object_get_boolean_member (json_sub_obj, "default_steam_uri_handler");
+
+          if (json_object_has_member (json_sub_obj, "steam_uri_handler"))
+            is_steam_handler = json_object_get_boolean_member (json_sub_obj, "steam_uri_handler");
+
+          desktop_entries = g_list_prepend (desktop_entries, _srt_desktop_entry_new (id,
+                                                                                     commandline,
+                                                                                     filename,
+                                                                                     is_default,
+                                                                                     is_steam_handler));
+        }
+    }
+
+out:
+  return desktop_entries;
+}

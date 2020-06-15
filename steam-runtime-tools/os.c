@@ -230,3 +230,94 @@ _srt_os_release_clear (SrtOsRelease *self)
   g_clear_pointer (&self->version_id, g_free);
   self->populated = FALSE;
 }
+
+/**
+ * _srt_os_release_populate_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for "os-release"
+ *  property
+ * @self: (not nullable): A #SrtOsRelease object to populate
+ *
+ * If the provided @json_obj doesn't have a "os-release" member,
+ * @self will be left untouched.
+ */
+void
+_srt_os_release_populate_from_report (JsonObject *json_obj,
+                                      SrtOsRelease *self)
+{
+  JsonObject *json_sub_obj;
+  JsonArray *array;
+
+  g_return_if_fail (json_obj != NULL);
+  g_return_if_fail (self != NULL);
+  g_return_if_fail (self->build_id == NULL);
+  g_return_if_fail (self->id == NULL);
+  g_return_if_fail (self->id_like == NULL);
+  g_return_if_fail (self->name == NULL);
+  g_return_if_fail (self->pretty_name == NULL);
+  g_return_if_fail (self->variant == NULL);
+  g_return_if_fail (self->variant_id == NULL);
+  g_return_if_fail (self->version_codename == NULL);
+  g_return_if_fail (self->version_id == NULL);
+
+  if (json_object_has_member (json_obj, "os-release"))
+    {
+      json_sub_obj = json_object_get_object_member (json_obj, "os-release");
+
+      if (json_sub_obj == NULL)
+        {
+          g_debug ("'os-release' is not a JSON object as expected");
+          return;
+        }
+
+      self->populated = TRUE;
+
+      if (json_object_has_member (json_sub_obj, "id"))
+        self->id = g_strdup (json_object_get_string_member (json_sub_obj, "id"));
+
+      if (json_object_has_member (json_sub_obj, "id_like"))
+        {
+          array = json_object_get_array_member (json_sub_obj, "id_like");
+          /* We are expecting an array of OS IDs here */
+          if (array == NULL)
+            {
+              g_debug ("'id_like' in 'os-release' is not an array as expected");
+            }
+          else
+            {
+              GString *str = g_string_new ("");
+              guint length = json_array_get_length (array);
+              for (guint i = 0; i < length; i++)
+                {
+                  const char *temp_id = json_array_get_string_element (array, i);
+
+                  if (str->len > 0)
+                    g_string_append_c (str, ' ');
+
+                  g_string_append (str, temp_id);
+                }
+              self->id_like = g_string_free (str, FALSE);
+            }
+        }
+
+      if (json_object_has_member (json_sub_obj, "name"))
+        self->name = g_strdup (json_object_get_string_member (json_sub_obj, "name"));
+
+      if (json_object_has_member (json_sub_obj, "pretty_name"))
+        self->pretty_name = g_strdup (json_object_get_string_member (json_sub_obj, "pretty_name"));
+
+      if (json_object_has_member (json_sub_obj, "version_id"))
+        self->version_id = g_strdup (json_object_get_string_member (json_sub_obj, "version_id"));
+
+      if (json_object_has_member (json_sub_obj, "version_codename"))
+        self->version_codename = g_strdup (json_object_get_string_member (json_sub_obj, "version_codename"));
+
+      if (json_object_has_member (json_sub_obj, "build_id"))
+        self->build_id = g_strdup (json_object_get_string_member (json_sub_obj, "build_id"));
+
+      if (json_object_has_member (json_sub_obj, "variant_id"))
+        self->variant_id = g_strdup (json_object_get_string_member (json_sub_obj, "variant_id"));
+
+      if (json_object_has_member (json_sub_obj, "variant"))
+        self->variant = g_strdup (json_object_get_string_member (json_sub_obj, "variant"));
+    }
+}

@@ -29,11 +29,16 @@
 #error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
 #endif
 
+/* Backward compatibility with previous steam-runtime-tools naming */
+#define SRT_RUNTIME_ISSUES_INTERNAL_ERROR SRT_RUNTIME_ISSUES_UNKNOWN
+
 /**
  * SrtRuntimeIssues:
  * @SRT_RUNTIME_ISSUES_NONE: There are no problems
- * @SRT_RUNTIME_ISSUES_INTERNAL_ERROR: Unable to detect the status of the
- *  `LD_LIBRARY_PATH`-based Steam Runtime
+ * @SRT_RUNTIME_ISSUES_UNKNOWN: A generic internal error occurred while
+ *  trying to detect the status of the `LD_LIBRARY_PATH`-based Steam Runtime,
+ *  or, while reading a report, either an unknown issue flag was encountered
+ *  or the runtime issues field was missing
  * @SRT_RUNTIME_ISSUES_DISABLED: The Steam Runtime has been disabled
  * @SRT_RUNTIME_ISSUES_NOT_RUNTIME: The Steam Runtime does not appear to
  *  have the correct structure
@@ -62,7 +67,7 @@
  */
 typedef enum
 {
-  SRT_RUNTIME_ISSUES_INTERNAL_ERROR = (1 << 0),
+  SRT_RUNTIME_ISSUES_UNKNOWN = (1 << 0),
   SRT_RUNTIME_ISSUES_DISABLED = (1 << 1),
   SRT_RUNTIME_ISSUES_NOT_RUNTIME = (1 << 2),
   SRT_RUNTIME_ISSUES_UNOFFICIAL = (1 << 3),

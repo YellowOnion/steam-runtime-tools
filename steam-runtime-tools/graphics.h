@@ -44,10 +44,14 @@ typedef struct _SrtGraphicsClass SrtGraphicsClass;
 
 GType srt_graphics_get_type (void);
 
+/* Backward compatibility with previous steam-runtime-tools naming */
+#define SRT_GRAPHICS_ISSUES_INTERNAL_ERROR SRT_GRAPHICS_ISSUES_UNKNOWN
+
 /**
  * SrtGraphicsIssues:
  * @SRT_GRAPHICS_ISSUES_NONE: There are no problems
- * @SRT_GRAPHICS_ISSUES_INTERNAL_ERROR: An internal error of some kind has occurred
+ * @SRT_GRAPHICS_ISSUES_UNKNOWN: An internal error occurred while checking
+ *  graphics, or an unknown issue flag was encountered while reading a report
  * @SRT_GRAPHICS_ISSUES_CANNOT_LOAD: Unable to load the necessary libraries and create rendering context
  * @SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING: The graphics renderer is software based
  * @SRT_GRAPHICS_ISSUES_TIMEOUT: The check for this graphics stack took
@@ -64,11 +68,11 @@ GType srt_graphics_get_type (void);
 typedef enum
 {
   SRT_GRAPHICS_ISSUES_NONE = 0,
-  SRT_GRAPHICS_ISSUES_INTERNAL_ERROR = (1 << 0),
+  SRT_GRAPHICS_ISSUES_UNKNOWN = (1 << 0),
   SRT_GRAPHICS_ISSUES_CANNOT_LOAD = (1 << 1),
   SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING = (1 << 2),
   SRT_GRAPHICS_ISSUES_TIMEOUT = (1 << 3),
-  SRT_GRAPHICS_ISSUES_CANNOT_DRAW = (1 << 4)
+  SRT_GRAPHICS_ISSUES_CANNOT_DRAW = (1 << 4),
 } SrtGraphicsIssues;
 
 /**

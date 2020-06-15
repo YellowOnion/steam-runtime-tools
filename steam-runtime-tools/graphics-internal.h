@@ -29,6 +29,8 @@
 #include "steam-runtime-tools/steam-runtime-tools.h"
 #include "steam-runtime-tools/utils-internal.h"
 
+#include <json-glib/json-glib.h>
+
 /*
  * _srt_graphics_new:
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386,
@@ -129,6 +131,46 @@ _srt_graphics_window_system_string (SrtWindowSystem window_system)
   return "unknown window system";
 }
 
+/**
+ * _srt_graphics_window_system_nick_to_enum:
+ * @nick: (not nullable): Nick of the window system enum
+ * @window_system_out: (not nullable): Used to return the #SrtWindowSystem
+ *  associated with the provided @nick
+ * @error: Used to return an error on failure
+ *
+ * Returns: %TRUE on success
+ */
+static inline gboolean
+_srt_graphics_window_system_nick_to_enum (const gchar *nick,
+                                          SrtWindowSystem *window_system_out,
+                                          GError **error)
+{
+  g_return_val_if_fail (nick != NULL, FALSE);
+  g_return_val_if_fail (window_system_out != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (g_strcmp0 (nick, "egl_x11") == 0)
+    {
+      *window_system_out = SRT_WINDOW_SYSTEM_EGL_X11;
+      return TRUE;
+    }
+
+  G_STATIC_ASSERT (sizeof (SrtWindowSystem) == sizeof (gint));
+
+  return srt_enum_from_nick (SRT_TYPE_WINDOW_SYSTEM,
+                             nick,
+                             (gint *) window_system_out,
+                             error);
+}
+
+/**
+ * _srt_graphics_rendering_interface_string:
+ * @rendering_interface: A #SrtRenderingInterface
+ *
+ * Returns: The string (nick) associated with the provided
+ *  @rendering_interface, or "unknown rendering interface" if nothing was
+ *  found.
+ */
 static inline const gchar *
 _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interface)
 {
@@ -138,6 +180,32 @@ _srt_graphics_rendering_interface_string (SrtRenderingInterface rendering_interf
     return result;
 
   return "unknown rendering interface";
+}
+
+/**
+ * _srt_graphics_rendering_interface_nick_to_enum:
+ * @nick: (not nullable): Nick of the rendering interface enum
+ * @rendering_interface_out: (not nullable): Used to return the #SrtRenderingInterface
+ *  associated with the provided @nick
+ * @error: Used to return an error on failure
+ *
+ * Returns: %TRUE on success
+ */
+static inline gboolean
+_srt_graphics_rendering_interface_nick_to_enum (const gchar *nick,
+                                                SrtRenderingInterface *rendering_interface_out,
+                                                GError **error)
+{
+  g_return_val_if_fail (nick != NULL, FALSE);
+  g_return_val_if_fail (rendering_interface_out != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  G_STATIC_ASSERT (sizeof (SrtRenderingInterface) == sizeof (gint));
+
+  return srt_enum_from_nick (SRT_TYPE_RENDERING_INTERFACE,
+                             nick,
+                             (gint *) rendering_interface_out,
+                             error);
 }
 
 #endif
@@ -174,3 +242,14 @@ GList *_srt_list_graphics_modules (const gchar *sysroot,
                                    const char *helpers_path,
                                    const char *multiarch_tuple,
                                    SrtGraphicsModule which);
+
+void _srt_graphics_get_from_report (JsonObject *json_obj,
+                                    const gchar *multiarch_tuple,
+                                    GHashTable **cached_graphics);
+
+GList *_srt_get_egl_from_json_report (JsonObject *json_obj);
+GList *_srt_get_vulkan_from_json_report (JsonObject *json_obj);
+GList *_srt_dri_driver_get_from_report (JsonObject *json_obj);
+GList *_srt_va_api_driver_get_from_report (JsonObject *json_obj);
+GList *_srt_vdpau_driver_get_from_report (JsonObject *json_obj);
+GList *_srt_glx_icd_get_from_report (JsonObject *json_obj);

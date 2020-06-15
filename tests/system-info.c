@@ -2276,6 +2276,911 @@ test_containers (Fixture *f,
     }
 }
 
+/* For the purpose of this test an array that is NULL, and one with just one
+ * NULL element, are considered to be equal */
+static void
+assert_equal_strings_arrays (const gchar * const *array1,
+                             const gchar * const *array2)
+{
+  gsize i = 0;
+
+  if (array1 == NULL)
+    {
+      if (array2 != NULL)
+        g_assert_cmpstr (array2[0], ==, NULL);
+      return;
+    }
+
+  if (array2 == NULL)
+    {
+      if (array1 != NULL)
+        g_assert_cmpstr (array1[0], ==, NULL);
+      return;
+    }
+
+  for (i = 0; array1[i] != NULL; i++)
+    g_assert_cmpstr (array1[i], ==, array2[i]);
+
+  g_assert_cmpstr (array2[i], ==, NULL);
+}
+
+static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
+
+typedef struct
+{
+  const gchar *path;
+  const gchar *data_path;
+  SrtSteamIssues issues;
+} SteamInstallationTest;
+
+typedef struct
+{
+  const gchar *path;
+  const gchar *version;
+  SrtRuntimeIssues issues;
+  const gchar *pinned_libs_32[5];
+  const gchar *pinned_libs_64[5];
+  const gchar *messages_32[5];
+  const gchar *messages_64[5];
+} RuntimeTest;
+
+typedef struct
+{
+  const gchar *build_id;
+  const gchar *id;
+  const gchar *id_like[5];
+  const gchar *name;
+  const gchar *pretty_name;
+} OsReleaseTest;
+
+typedef struct
+{
+  SrtContainerType type;
+  const gchar *host_path;
+} ContTest;
+
+typedef struct
+{
+  const gchar *library_path;
+  const gchar *library_link;
+  const gchar *library_soname;
+  gboolean is_extra;
+} DriverTest;
+
+typedef struct
+{
+  SrtWindowSystem window_system;
+  SrtRenderingInterface rendering_interface;
+  const gchar *renderer;
+  const gchar *version;
+  SrtGraphicsLibraryVendor library_vendor;
+  SrtGraphicsIssues issues;
+  const gchar *messages;
+  int exit_status;
+  int terminating_signal;
+  gboolean is_available;
+} GraphicsTest;
+
+typedef struct
+{
+  gboolean can_run;
+  SrtLibraryIssues issues;
+  DriverTest dri_drivers[5];
+  DriverTest va_api_drivers[5];
+  DriverTest vdpau_drivers[5];
+  DriverTest glx_drivers[5];
+  GraphicsTest graphics[10];
+} ArchitectureTest;
+
+typedef struct
+{
+  const gchar *name;
+  const gchar *resulting_name;
+  const gchar *charset;
+  gboolean is_utf8;
+  const gchar *error_domain;
+  const gchar *error_message;
+  int error_code;
+} LocaleTest;
+
+typedef struct
+{
+  const gchar *json_path;
+  const gchar *library_path;
+  const gchar *api_version;
+  const gchar *error_domain;
+  const gchar *error_message;
+  int error_code;
+} IcdTest;
+
+typedef struct
+{
+  const gchar *id;
+  const gchar *commandline;
+  const gchar *filename;
+  gboolean default_handler;
+  gboolean steam_handler;
+} DesktopEntryTest;
+
+typedef struct
+{
+  const gchar *description;
+  const gchar *input_name;
+  gboolean can_write_uinput;
+  SteamInstallationTest steam_installation;
+  RuntimeTest runtime;
+  OsReleaseTest os_release;
+  ContTest container;
+  const gchar *driver_environment[5];
+  ArchitectureTest architecture[G_N_ELEMENTS (multiarch_tuples)];
+  SrtLocaleIssues locale_issues;
+  LocaleTest locale[5];
+  IcdTest egl_icd[3];
+  IcdTest vulkan_icd[3];
+  DesktopEntryTest desktop_entry[3];
+  SrtX86FeatureFlags x86_features;
+  SrtX86FeatureFlags x86_known;
+} JsonTest;
+
+static const JsonTest json_test[] =
+{
+  { /* Begin Full JSON report */
+    .description = "full JSON parsing",
+    .input_name = "full-good-report.json",
+    .can_write_uinput = TRUE,
+    .steam_installation =
+    {
+      .path = "/home/me/.local/share/Steam",
+      .data_path = "/home/me/.local/share/Steam",
+      .issues = SRT_STEAM_ISSUES_STEAMSCRIPT_NOT_IN_ENVIRONMENT,
+    },
+
+    .runtime =
+    {
+      .path = "/home/me/.steam/root/ubuntu12_32/steam-runtime",
+      .version = "0.20200123.4",
+      .issues = SRT_RUNTIME_ISSUES_NONE,
+      .pinned_libs_32 =
+      {
+        " 13902790      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_32",
+        " 13902813      4 -rw-r--r--   1 me  me        50 Apr 24 21:32 pinned_libs_32/system_libGLU.so.1",
+        " 13902814      4 lrwxrwxrwx   1 me  me       107 Apr 24 21:32 pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13",
+        NULL,
+      },
+      .pinned_libs_64 =
+      {
+        " 13902791      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_64",
+        " 13902805      4 -rw-r--r--   1 me  me        46 Apr 24 21:32 pinned_libs_64/system_libGLU.so.1",
+        " 13902795      4 lrwxrwxrwx   1 me  me       100 Apr 24 21:32 pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0",
+        NULL,
+      },
+    },
+
+    .os_release =
+    {
+      .id = "arch",
+      .id_like = {"ubuntu", "debian", NULL},
+      .name = "Arch Linux",
+      .pretty_name = "Arch Linux",
+      .build_id = "rolling",
+    },
+
+    .container =
+    {
+      .type = SRT_CONTAINER_TYPE_DOCKER,
+      .host_path = "/the/host/path",
+    },
+
+    .architecture =
+    {
+      {
+        .can_run = FALSE,
+        .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+        .graphics =
+        {
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+            .messages = "ERROR: [Loader Message] Code 0 : /usr/lib/amdvlk64.so: wrong ELF class: ELFCLASS64\nCannot create Vulkan instance.\n",
+            .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD | SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+            .exit_status = 1,
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+            .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VAAPI,
+            .renderer = "Mesa Gallium driver 20.0.5 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)\n",
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_GLX,
+            .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+            .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+            .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_GLESV2,
+            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+            .version = "OpenGL ES 3.2 Mesa 20.0.5",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+            .is_available = TRUE,
+          },
+        },
+        .dri_drivers =
+        {
+          {
+            .library_path = "/usr/lib32/dri/radeonsi_dri.so",
+          },
+          {
+            .library_path = "/usr/lib32/dri/vmwgfx_dri.so",
+          },
+        },
+        .va_api_drivers =
+        {
+          {
+            .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/dri/dummy_drv_video.so",
+          },
+        },
+        .vdpau_drivers =
+        {
+          {
+            .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/vdpau/libvdpau_trace.so.1",
+            .library_link = "libvdpau_trace.so.1.0.0",
+          },
+        },
+        .glx_drivers =
+        {
+          {
+            .library_soname = "libGLX_indirect.so.0",
+            .library_path = "/usr/lib32/libGLX_mesa.so.0.0.0",
+          },
+          {
+            .library_soname = "libGLX_mesa.so.0",
+            .library_path = "/usr/lib32/libGLX_mesa.so.0.0.0",
+          },
+        },
+      },
+
+      {
+        .can_run = TRUE,
+        .graphics =
+        {
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+            .renderer = "AMD Radeon RX 5700 XT",
+            .version = "1.2.136 (device 1002:731f) (driver 2.0.140)",
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+            .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VAAPI,
+            .renderer = "Mesa Gallium driver 20.0.5 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)\n",
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_GLX,
+            .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+            .messages = "libGL: Can't open configuration file /etc/drirc: No such file or directory.\n/usr/share/libdrm/amdgpu.ids version: 1.0.0\nlibGL: Using DRI3 for screen 0\n",
+            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+            .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+            .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+            .terminating_signal = 6,
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+            .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+            .is_available = TRUE,
+          },
+          {
+            .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_GLESV2,
+            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+            .version = "OpenGL ES 3.2 Mesa 20.0.5",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+            .is_available = TRUE,
+          },
+        },
+        .dri_drivers =
+        {
+          {
+            .library_path = "/usr/lib/dri/i915_dri.so",
+          },
+          {
+            .library_path = "/usr/lib/dri/radeonsi_dri.so",
+          },
+        },
+        .va_api_drivers =
+        {
+          {
+            .library_path = "/usr/lib/dri/vdpau_drv_video.so",
+          },
+          {
+            .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/dri/dummy_drv_video.so",
+          },
+        },
+        .vdpau_drivers =
+        {
+          {
+            .library_path = "/usr/lib/vdpau/libvdpau_radeonsi.so",
+            .library_link = "libvdpau_radeonsi.so.1.0.0",
+          },
+          {
+            .library_path = "/usr/lib/vdpau/libvdpau_radeonsi.so.1",
+            .library_link = "libvdpau_radeonsi.so.1.0.0",
+          },
+        },
+        .glx_drivers =
+        {
+          {
+            .library_soname = "libGLX_indirect.so.0",
+            .library_path = "/usr/lib/libGLX_mesa.so.0.0.0",
+          },
+          {
+            .library_soname = "libGLX_mesa.so.0",
+            .library_path = "/usr/lib/libGLX_mesa.so.0.0.0",
+          },
+        },
+      },
+    },
+
+    .locale_issues = SRT_LOCALE_ISSUES_C_UTF8_MISSING | SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING,
+    .locale =
+    {
+      {
+        .name = "", // <default>
+        .resulting_name = "en_US.UTF-8",
+        .charset = "UTF-8",
+        .is_utf8 = TRUE,
+      },
+      {
+        .name = "C",
+        .resulting_name = "C",
+        .charset = "ANSI_X3.4-1968",
+        .is_utf8 = FALSE,
+      },
+      {
+        .name = "C.UTF-8",
+        .error_domain = "srt-locale-error-quark",
+        .error_code = 0,
+        .error_message = "No such file or directory",
+      },
+      {
+        .name = "en_US.UTF-8",
+        .resulting_name = "en_US.UTF-8",
+        .charset = "UTF-8",
+        .is_utf8 = TRUE,
+      },
+    },
+
+    .egl_icd =
+    {
+      {
+        .json_path = "/usr/share/glvnd/egl_vendor.d/51_mesa.json",
+        .library_path = "libEGL_mesa.so.0",
+      },
+    },
+
+    .vulkan_icd =
+    {
+      {
+        .json_path = "/usr/share/vulkan/icd.d/amd_icd64.json",
+        .library_path = "/usr/lib/amdvlk64.so",
+        .api_version = "1.2.136",
+      },
+    },
+
+    .desktop_entry =
+    {
+      {
+        .id = "steam.desktop",
+        .commandline = "/usr/bin/steam-runtime %U",
+        .filename = "/usr/share/applications/steam.desktop",
+        .default_handler = TRUE,
+        .steam_handler = TRUE,
+      },
+    },
+
+    .x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_CMPXCHG16B,
+    .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B,
+
+  }, /* End Full JSON report */
+
+  { /* Begin Partial JSON report */
+    .description = "partial JSON parsing",
+    .input_name = "partial-report.json",
+    .steam_installation =
+    {
+      .issues = SRT_STEAM_ISSUES_UNKNOWN,
+    },
+    .runtime =
+    {
+      .issues = SRT_RUNTIME_ISSUES_UNKNOWN,
+    },
+    .container =
+    {
+      .type = SRT_CONTAINER_TYPE_FLATPAK,
+    },
+    .driver_environment =
+    {
+      "LIBVA_DRIVER_NAME=vava",
+      "<invalid>",
+      "MESA_LOADER_DRIVER_OVERRIDE=radeonsi",
+    },
+    .architecture =
+    {
+      {
+        .can_run = FALSE,
+        .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+        .graphics =
+        {
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+            .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
+            .is_available = TRUE,
+          },
+        },
+      },
+      {
+        .can_run = TRUE,
+        .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+      },
+    },
+    .locale_issues = SRT_LOCALE_ISSUES_UNKNOWN,
+    .locale =
+    {
+      {
+        .name = "", // <default>
+        .resulting_name = "en_US.UTF-8",
+        .charset = "UTF-8",
+        .is_utf8 = TRUE,
+      },
+      {
+        .name = "C",
+        .error_domain = "srt-locale-error-quark",
+        .error_code = 1,
+        .error_message = "Information about the requested locale is missing",
+      },
+    },
+    .vulkan_icd =
+    {
+      {
+        .json_path = "/usr/share/vulkan/icd.d/amd_icd64.json",
+        .error_domain = "g-io-error-quark", /* Default domain */
+        .error_code = G_IO_ERROR_FAILED, /* Default error code */
+        .error_message = "Something went wrong",
+      },
+    },
+    .x86_features = SRT_X86_FEATURE_NONE,
+    .x86_known = SRT_X86_FEATURE_NONE,
+  }, /* End Partial JSON report */
+
+  { /* Begin Partial-2 JSON report */
+    .description = "partial-2 JSON parsing",
+    .input_name = "partial-report-2.json",
+    .steam_installation =
+    {
+      .path = "/home/me/.local/share/Steam",
+      .issues = SRT_STEAM_ISSUES_UNKNOWN,
+    },
+    .runtime =
+    {
+      .path = "/home/me/.steam/root/ubuntu12_32/steam-runtime",
+    },
+    .os_release =
+    {
+      .id = "arch",
+    },
+    .container =
+    {
+      .type = SRT_CONTAINER_TYPE_DOCKER,
+    },
+    .architecture =
+    {
+      {
+        /* i386 */
+        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
+      },
+      {
+        .can_run = TRUE,
+        .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+      },
+    },
+    .locale_issues = SRT_LOCALE_ISSUES_UNKNOWN,
+    .locale =
+    {
+      {
+        .name = "", // <default>
+        /* Missing the required "charset" */
+        .error_domain = "g-io-error-quark", /* Default domain */
+        .error_code = G_IO_ERROR_FAILED, /* Default error code */
+        .error_message = "(missing error message)",
+      },
+    },
+    .x86_features = SRT_X86_FEATURE_NONE,
+    .x86_known = SRT_X86_FEATURE_NONE,
+  }, /* End Partial-2 JSON report */
+
+  { /* Begin Empty JSON report */
+    .description = "empty JSON parsing",
+    .input_name = "empty-report.json",
+    .steam_installation =
+    {
+      .issues = SRT_STEAM_ISSUES_UNKNOWN,
+    },
+    .runtime =
+    {
+      .issues = SRT_RUNTIME_ISSUES_UNKNOWN,
+    },
+    .container =
+    {
+      .type = SRT_CONTAINER_TYPE_UNKNOWN,
+    },
+    .architecture =
+    {
+      {
+        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
+      },
+      {
+        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
+      },
+    },
+    .locale_issues = SRT_LOCALE_ISSUES_UNKNOWN,
+    .x86_features = SRT_X86_FEATURE_NONE,
+    .x86_known = SRT_X86_FEATURE_NONE,
+  }, /* End Empty JSON report */
+
+  { /* Begin Newer JSON report */
+    .description = "newer JSON parsing",
+    .input_name = "newer-report.json",
+    .steam_installation =
+    {
+      .issues = SRT_STEAM_ISSUES_UNKNOWN,
+    },
+    .runtime =
+    {
+      .issues = SRT_RUNTIME_ISSUES_UNKNOWN,
+    },
+    .container =
+    {
+      .type = SRT_CONTAINER_TYPE_UNKNOWN,
+    },
+    .architecture =
+    {
+      {
+        .can_run = FALSE,
+        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD | SRT_LIBRARY_ISSUES_UNKNOWN,
+        .graphics =
+        {
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+            .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
+            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN,
+            .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW | SRT_GRAPHICS_ISSUES_UNKNOWN,
+            .is_available = TRUE,
+          },
+        },
+      },
+      {
+        /* x86_64 */
+        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
+      }
+    },
+    .locale_issues = SRT_LOCALE_ISSUES_C_UTF8_MISSING | SRT_LOCALE_ISSUES_UNKNOWN,
+    .x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_UNKNOWN,
+    .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_UNKNOWN,
+  }, /* End Newer JSON report */
+};
+
+static void
+json_parsing (Fixture *f,
+              gconstpointer context)
+{
+  for (gsize i = 0; i < G_N_ELEMENTS (json_test); i++)
+    {
+      const JsonTest *t = &json_test[i];
+      SrtSystemInfo *info;
+      gchar *input_json;
+      gchar **driver_environment_list;
+      gsize j;
+      gsize jj;
+      GList *icds;
+      GList *iter;
+      GList *desktop_entries;
+      gchar *steam_path = NULL;
+      gchar *steam_data_path = NULL;
+      gchar *runtime_path = NULL;
+      gchar *runtime_v = NULL;
+      gchar *build_id;
+      gchar *id;
+      gchar *name;
+      gchar *pretty_name;
+      gchar *host_directory;
+      gchar **pinned_32 = NULL;
+      gchar **messages_32 = NULL;
+      gchar **pinned_64 = NULL;
+      gchar **messages_64 = NULL;
+      gchar **id_like = NULL;
+      GError *error = NULL;
+
+      g_test_message ("%s: %s", t->input_name, t->description);
+
+      input_json = g_build_filename (f->srcdir, "json-report", t->input_name, NULL);
+
+      info = srt_system_info_new_from_json (input_json, &error);
+
+      g_assert_no_error (error);
+
+      g_assert_cmpint (t->can_write_uinput, ==, srt_system_info_can_write_to_uinput (info));
+
+      steam_path = srt_system_info_dup_steam_installation_path (info);
+      steam_data_path = srt_system_info_dup_steam_data_path (info);
+      g_assert_cmpstr (t->steam_installation.path, ==, steam_path);
+      g_assert_cmpstr (t->steam_installation.data_path, ==, steam_data_path);
+      g_assert_cmpint (t->steam_installation.issues, ==, srt_system_info_get_steam_issues (info));
+
+      runtime_path = srt_system_info_dup_runtime_path (info);
+      runtime_v = srt_system_info_dup_runtime_version (info);
+      pinned_32 = srt_system_info_list_pinned_libs_32 (info, &messages_32);
+      pinned_64 = srt_system_info_list_pinned_libs_64 (info, &messages_64);
+      g_assert_cmpstr (t->runtime.path, ==, runtime_path);
+      g_assert_cmpstr (t->runtime.version, ==, runtime_v);
+      g_assert_cmpint (t->runtime.issues, ==, srt_system_info_get_runtime_issues (info));
+      assert_equal_strings_arrays (t->runtime.pinned_libs_32, (const gchar * const *)pinned_32);
+      assert_equal_strings_arrays (t->runtime.pinned_libs_64, (const gchar * const *)pinned_64);
+      assert_equal_strings_arrays (t->runtime.messages_32, (const gchar * const *)messages_32);
+      assert_equal_strings_arrays (t->runtime.messages_64, (const gchar * const *)messages_64);
+
+      build_id = srt_system_info_dup_os_build_id (info);
+      id = srt_system_info_dup_os_id (info);
+      id_like = srt_system_info_dup_os_id_like (info, FALSE);
+      name = srt_system_info_dup_os_name (info);
+      pretty_name = srt_system_info_dup_os_pretty_name (info);
+      g_assert_cmpstr (t->os_release.build_id, ==, build_id);
+      g_assert_cmpstr (t->os_release.id, ==, id);
+      assert_equal_strings_arrays (t->os_release.id_like, (const gchar * const *)id_like);
+      g_assert_cmpstr (t->os_release.name, ==, name);
+      g_assert_cmpstr (t->os_release.pretty_name, ==, pretty_name);
+
+      host_directory = srt_system_info_dup_container_host_directory (info);
+      g_assert_cmpint (t->container.type, ==, srt_system_info_get_container_type (info));
+      g_assert_cmpstr (t->container.host_path, ==, host_directory);
+
+      driver_environment_list = srt_system_info_list_driver_environment (info);
+      assert_equal_strings_arrays (t->driver_environment,
+                                   (const gchar * const *)driver_environment_list);
+
+      for (j = 0; j < G_N_ELEMENTS (multiarch_tuples); j++)
+        {
+          ArchitectureTest this_arch = t->architecture[j];
+          GList *dri_list;
+          GList *va_api_list;
+          GList *vdpau_list;
+          GList *glx_list;
+
+          g_assert_cmpint (this_arch.can_run, ==, srt_system_info_can_run (info, multiarch_tuples[j]));
+          if (this_arch.can_run)
+            {
+              g_assert_cmpint (this_arch.issues, ==,
+                               srt_system_info_check_libraries (info, multiarch_tuples[j], NULL));
+            }
+
+          g_assert_cmpint (this_arch.issues, ==,
+                           srt_system_info_check_libraries (info, multiarch_tuples[j], NULL));
+
+          for (jj = 0; this_arch.graphics[jj].is_available; jj++)
+            {
+              SrtGraphics *graphics = NULL;
+              SrtGraphicsLibraryVendor library_vendor;
+              srt_system_info_check_graphics (info,
+                                              multiarch_tuples[j],
+                                              this_arch.graphics[jj].window_system,
+                                              this_arch.graphics[jj].rendering_interface,
+                                              &graphics);
+              g_assert_cmpstr (this_arch.graphics[jj].messages, ==,
+                               srt_graphics_get_messages (graphics));
+              g_assert_cmpstr (this_arch.graphics[jj].renderer, ==,
+                               srt_graphics_get_renderer_string (graphics));
+              g_assert_cmpstr (this_arch.graphics[jj].version, ==,
+                               srt_graphics_get_version_string (graphics));
+              g_assert_cmpint (this_arch.graphics[jj].issues, ==,
+                               srt_graphics_get_issues (graphics));
+              srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
+              g_assert_cmpint (this_arch.graphics[jj].library_vendor, ==, library_vendor);
+              g_assert_cmpint (this_arch.graphics[jj].exit_status, ==,
+                               srt_graphics_get_exit_status (graphics));
+              g_assert_cmpint (this_arch.graphics[jj].terminating_signal, ==,
+                               srt_graphics_get_terminating_signal (graphics));
+              g_object_unref (graphics);
+            }
+
+          dri_list = srt_system_info_list_dri_drivers (info, multiarch_tuples[j],
+                                                       SRT_DRIVER_FLAGS_INCLUDE_ALL);
+          for (jj = 0, iter = dri_list; iter != NULL; iter = iter->next, jj++)
+            {
+              g_assert_cmpstr (this_arch.dri_drivers[jj].library_path, ==,
+                               srt_dri_driver_get_library_path (iter->data));
+              g_assert_cmpint (this_arch.dri_drivers[jj].is_extra, ==,
+                               srt_dri_driver_is_extra (iter->data));
+            }
+          g_assert_cmpstr (this_arch.dri_drivers[jj].library_path, ==, NULL);
+
+          va_api_list = srt_system_info_list_va_api_drivers (info, multiarch_tuples[j],
+                                                             SRT_DRIVER_FLAGS_INCLUDE_ALL);
+          for (jj = 0, iter = va_api_list; iter != NULL; iter = iter->next, jj++)
+            {
+              g_assert_cmpstr (this_arch.va_api_drivers[jj].library_path, ==,
+                               srt_va_api_driver_get_library_path (iter->data));
+              g_assert_cmpint (this_arch.va_api_drivers[jj].is_extra, ==,
+                               srt_va_api_driver_is_extra (iter->data));
+            }
+          g_assert_cmpstr (this_arch.va_api_drivers[jj].library_path, ==, NULL);
+
+          vdpau_list = srt_system_info_list_vdpau_drivers (info, multiarch_tuples[j],
+                                                           SRT_DRIVER_FLAGS_INCLUDE_ALL);
+          for (jj = 0, iter = vdpau_list; iter != NULL; iter = iter->next, jj++)
+            {
+              g_assert_cmpstr (this_arch.vdpau_drivers[jj].library_path, ==,
+                               srt_vdpau_driver_get_library_path (iter->data));
+              g_assert_cmpstr (this_arch.vdpau_drivers[jj].library_link, ==,
+                               srt_vdpau_driver_get_library_link (iter->data));
+              g_assert_cmpint (this_arch.va_api_drivers[jj].is_extra, ==,
+                               srt_vdpau_driver_is_extra (iter->data));
+            }
+          g_assert_cmpstr (this_arch.vdpau_drivers[jj].library_path, ==, NULL);
+          g_assert_cmpstr (this_arch.vdpau_drivers[jj].library_link, ==, NULL);
+
+          glx_list = srt_system_info_list_glx_icds (info, multiarch_tuples[j], SRT_DRIVER_FLAGS_INCLUDE_ALL);
+          for (jj = 0, iter = glx_list; iter != NULL; iter = iter->next, jj++)
+            {
+              g_assert_cmpstr (this_arch.glx_drivers[jj].library_path, ==,
+                               srt_glx_icd_get_library_path (iter->data));
+              g_assert_cmpstr (this_arch.glx_drivers[jj].library_soname, ==,
+                               srt_glx_icd_get_library_soname (iter->data));
+            }
+          g_assert_cmpstr (this_arch.glx_drivers[jj].library_path, ==, NULL);
+          g_assert_cmpstr (this_arch.glx_drivers[jj].library_soname, ==, NULL);
+
+          g_list_free_full (dri_list, g_object_unref);
+          g_list_free_full (va_api_list, g_object_unref);
+          g_list_free_full (vdpau_list, g_object_unref);
+          g_list_free_full (glx_list, g_object_unref);
+        }
+
+      g_assert_cmpint (t->locale_issues, ==, srt_system_info_get_locale_issues (info));
+      for (j = 0; t->locale[j].name != NULL; j++)
+        {
+          error = NULL;
+          SrtLocale *this_locale = srt_system_info_check_locale (info, t->locale[j].name, &error);
+          if (this_locale != NULL)
+            {
+              g_assert_cmpstr (t->locale[j].resulting_name, ==,
+                               srt_locale_get_resulting_name (this_locale));
+              g_assert_cmpstr (t->locale[j].charset, ==,
+                               srt_locale_get_charset (this_locale));
+              g_assert_cmpint (t->locale[j].is_utf8, ==,
+                               srt_locale_is_utf8 (this_locale));
+            }
+          else
+            {
+              g_assert_cmpstr (t->locale[j].error_domain, ==,
+                               g_quark_to_string (error->domain));
+              g_assert_cmpint (t->locale[j].error_code, ==, error->code);
+              g_assert_cmpstr (t->locale[j].error_message, ==, error->message);
+            }
+          g_clear_object (&this_locale);
+          g_clear_error (&error);
+        }
+
+      icds = srt_system_info_list_egl_icds (info, multiarch_tuples);
+      for (j = 0, iter = icds; iter != NULL; iter = iter->next, j++)
+        {
+          error = NULL;
+          g_assert_cmpstr (t->egl_icd[j].json_path, ==, srt_egl_icd_get_json_path (iter->data));
+          if (srt_egl_icd_check_error (iter->data, &error))
+            {
+              g_assert_cmpstr (t->egl_icd[j].library_path, ==, srt_egl_icd_get_library_path (iter->data));
+            }
+          else
+            {
+              g_assert_cmpstr (t->egl_icd[j].error_domain, ==,
+                               g_quark_to_string (error->domain));
+              g_assert_cmpint (t->egl_icd[j].error_code, ==, error->code);
+              g_assert_cmpstr (t->egl_icd[j].error_message, ==, error->message);
+            }
+          g_clear_error (&error);
+        }
+      g_list_free_full (icds, g_object_unref);
+
+      icds = srt_system_info_list_vulkan_icds (info, multiarch_tuples);
+      for (j = 0, iter = icds; iter != NULL; iter = iter->next, j++)
+        {
+          error = NULL;
+          g_assert_cmpstr (t->vulkan_icd[j].json_path, ==, srt_vulkan_icd_get_json_path (iter->data));
+          if (srt_vulkan_icd_check_error (iter->data, &error))
+            {
+              g_assert_cmpstr (t->vulkan_icd[j].library_path, ==,
+                               srt_vulkan_icd_get_library_path (iter->data));
+              g_assert_cmpstr (t->vulkan_icd[j].api_version, ==,
+                               srt_vulkan_icd_get_api_version (iter->data));
+            }
+          else
+            {
+              g_assert_cmpstr (t->vulkan_icd[j].error_domain, ==,
+                               g_quark_to_string (error->domain));
+              g_assert_cmpint (t->vulkan_icd[j].error_code, ==, error->code);
+              g_assert_cmpstr (t->vulkan_icd[j].error_message, ==, error->message);
+            }
+        }
+
+      desktop_entries = srt_system_info_list_desktop_entries (info);
+      for (j = 0, iter = desktop_entries; iter != NULL; iter = iter->next, j++)
+        {
+          g_assert_cmpstr (t->desktop_entry[j].id, ==, srt_desktop_entry_get_id (iter->data));
+          g_assert_cmpstr (t->desktop_entry[j].commandline, ==,
+                           srt_desktop_entry_get_commandline (iter->data));
+          g_assert_cmpstr (t->desktop_entry[j].filename, ==, srt_desktop_entry_get_filename (iter->data));
+          g_assert_cmpint (t->desktop_entry[j].default_handler, ==,
+                           srt_desktop_entry_is_default_handler (iter->data));
+          g_assert_cmpint (t->desktop_entry[j].steam_handler, ==,
+                           srt_desktop_entry_is_steam_handler (iter->data));
+        }
+
+      g_assert_cmpint (t->x86_features, ==, srt_system_info_get_x86_features (info));
+      g_assert_cmpint (t->x86_known, ==, srt_system_info_get_known_x86_features (info));
+
+      g_list_free_full (icds, g_object_unref);
+      g_free (steam_path);
+      g_free (steam_data_path);
+      g_free (runtime_path);
+      g_free (runtime_v);
+      g_free (build_id);
+      g_free (id);
+      g_free (name);
+      g_free (pretty_name);
+      g_free (host_directory);
+      g_strfreev (pinned_32);
+      g_strfreev (pinned_64);
+      g_strfreev (messages_32);
+      g_strfreev (messages_64);
+      g_strfreev (id_like);
+      g_strfreev (driver_environment_list);
+      g_free (input_json);
+      g_clear_error (&error);
+      g_object_unref (info);
+    }
+}
+
 int
 main (int argc,
       char **argv)
@@ -2355,6 +3260,9 @@ main (int argc,
 
   g_test_add ("/system-info/containers", Fixture, NULL,
               setup, test_containers, teardown);
+
+  g_test_add ("/system-info/json_parsing", Fixture, NULL,
+              setup, json_parsing, teardown);
 
   status = g_test_run ();
 

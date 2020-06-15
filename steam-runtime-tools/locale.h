@@ -63,10 +63,14 @@ typedef enum
 
 GQuark srt_locale_error_quark (void);
 
+/* Backward compatibility with previous steam-runtime-tools naming */
+#define SRT_LOCALE_ISSUES_INTERNAL_ERROR SRT_LOCALE_ISSUES_UNKNOWN
+
 /**
  * SrtLocaleIssues:
  * @SRT_LOCALE_ISSUES_NONE: There are no problems
- * @SRT_LOCALE_ISSUES_INTERNAL_ERROR: An internal error of some kind has occurred
+ * @SRT_LOCALE_ISSUES_UNKNOWN: An internal error of some kind has occurred,
+ *  or an unknown issue flag was encountered while reading a report.
  * @SRT_LOCALE_ISSUES_DEFAULT_MISSING: `setlocale (LC_ALL, "")` fails.
  *  This indicates that environment variables like LANGUAGE and LC_ALL
  *  are set to values that do not match the locales available on the
@@ -101,12 +105,13 @@ GQuark srt_locale_error_quark (void);
  * %SRT_LOCALE_ISSUES_NONE (which is numerically zero) if no problems
  * were detected.
  *
- * In general, more bits set means more problems.
+ * In general, more bits set means more problems, with the only exception
+ * for %SRT_LOCALE_ISSUES_UNKNOWN.
  */
 typedef enum
 {
   SRT_LOCALE_ISSUES_NONE = 0,
-  SRT_LOCALE_ISSUES_INTERNAL_ERROR = (1 << 0),
+  SRT_LOCALE_ISSUES_UNKNOWN = (1 << 0),
   SRT_LOCALE_ISSUES_DEFAULT_MISSING = (1 << 1),
   SRT_LOCALE_ISSUES_DEFAULT_NOT_UTF8 = (1 << 2),
   SRT_LOCALE_ISSUES_C_UTF8_MISSING = (1 << 3),

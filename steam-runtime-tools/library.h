@@ -44,6 +44,9 @@ typedef struct _SrtLibraryClass SrtLibraryClass;
 
 GType srt_library_get_type (void);
 
+/* Backward compatibility with previous steam-runtime-tools naming */
+#define SRT_LIBRARY_ISSUES_INTERNAL_ERROR SRT_LIBRARY_ISSUES_UNKNOWN
+
 /**
  * SrtLibraryIssues:
  * @SRT_LIBRARY_ISSUES_NONE: There are no problems
@@ -52,8 +55,8 @@ GType srt_library_get_type (void);
  *  were not present
  * @SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS: Some of the expected symbols
  *  were available with a different version
- * @SRT_LIBRARY_ISSUES_INTERNAL_ERROR: Generic internal error, for example
- *  a function has been called with a missing required parameter
+ * @SRT_LIBRARY_ISSUES_UNKNOWN: A generic internal error occurred, or an
+ *  unknown issue flag was encountered while reading a report
  * @SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS: No directory containing
  *  expected ABIs has been set, so we cannot know which libraries we are
  *  meant to have found
@@ -70,7 +73,7 @@ typedef enum
   SRT_LIBRARY_ISSUES_CANNOT_LOAD = (1 << 0),
   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS = (1 << 1),
   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS = (1 << 2),
-  SRT_LIBRARY_ISSUES_INTERNAL_ERROR = (1 << 3),
+  SRT_LIBRARY_ISSUES_UNKNOWN = (1 << 3),
   SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS = (1 << 4),
   SRT_LIBRARY_ISSUES_TIMEOUT = (1 << 5),
   SRT_LIBRARY_ISSUES_NONE = 0

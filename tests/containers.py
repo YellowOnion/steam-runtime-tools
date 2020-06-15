@@ -647,6 +647,16 @@ class TestContainers(BaseTest):
             # Might not be /sbin/ldconfig, for example on non-Debian hosts
             self.assertRegex(target, r'^/run/host/')
 
+            if os.path.isfile('/usr/bin/locale'):
+                link = os.path.join(tree, 'usr', 'bin', 'locale')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/bin/locale')
+
+            if os.path.isfile('/usr/bin/localedef'):
+                link = os.path.join(tree, 'usr', 'bin', 'localedef')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/bin/localedef')
+
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')
 

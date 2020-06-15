@@ -595,7 +595,7 @@ class TestContainers(BaseTest):
                         link = os.path.join(libdir, 'dri', k)
                         target = os.readlink(link)
                         self.assertEqual(target[:10], '/run/host/')
-                        target = target[10:]
+                        target = target[9:]     # includes the / after host/
 
                         # Again, take the realpath() on non-Debian-derived
                         # hosts, but be more strict on Debian.
@@ -604,6 +604,33 @@ class TestContainers(BaseTest):
                                 target = os.path.realpath(target)
 
                         self.assertIn(target, vs)
+
+                if is_scout:
+                    if self.host_is_debian_derived:
+                        link = os.path.join(
+                            tree, 'usr', 'lib', multiarch, 'gconv',
+                        )
+                        target = os.readlink(link)
+                        self.assertEqual(
+                            target,
+                            '/run/host/usr/lib/{}/gconv'.format(multiarch),
+                        )
+
+        if is_scout:
+            if os.path.isdir('/usr/lib/locale'):
+                link = os.path.join(tree, 'usr', 'lib', 'locale')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/lib/locale')
+
+            if os.path.isdir('/usr/share/i18n'):
+                link = os.path.join(tree, 'usr', 'share', 'i18n')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/share/i18n')
+
+            link = os.path.join(tree, 'sbin', 'ldconfig')
+            target = os.readlink(link)
+            # Might not be /sbin/ldconfig, for example on non-Debian hosts
+            self.assertRegex(target, r'^/run/host/')
 
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')

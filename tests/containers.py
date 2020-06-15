@@ -517,6 +517,14 @@ class TestContainers(BaseTest):
         self.assertTrue(
             os.path.isdir(os.path.join(tree, 'overrides', 'lib')),
         )
+        self.assertTrue(
+            os.path.isfile(
+                os.path.join(
+                    tree, 'usr', 'lib', 'pressure-vessel', 'from-host',
+                    'bin', 'pressure-vessel-with-lock',
+                )
+            )
+        )
 
         for multiarch, arch_info in self.host_srsi_parsed.get(
             'architectures', {}

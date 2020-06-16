@@ -1284,6 +1284,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
             return FALSE;
 
           flatpak_bwrap_add_args (temp_bwrap,
+                                  "env", "PATH=/usr/bin:/bin",
                                   "readlink", "-e", arch->ld_so,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
@@ -2078,15 +2079,7 @@ pv_runtime_set_search_paths (PvRuntime *self,
                              FlatpakBwrap *bwrap)
 {
   g_autoptr(GString) ld_library_path = g_string_new ("");
-  g_autoptr(GString) bin_path = g_string_new ("");
   gsize i;
-
-  pv_search_path_append (bin_path, "/overrides/bin");
-  pv_search_path_append (bin_path, g_getenv ("PATH"));
-  flatpak_bwrap_add_args (bwrap,
-                          "--setenv", "PATH",
-                          bin_path->str,
-                          NULL);
 
   /* TODO: Adapt the use_ld_so_cache code from Flatpak instead
    * of setting LD_LIBRARY_PATH, for better robustness against
@@ -2107,6 +2100,11 @@ pv_runtime_set_search_paths (PvRuntime *self,
   /* This would be filtered out by a setuid bwrap, so we have to go
    * via --setenv. */
   flatpak_bwrap_add_args (bwrap,
+                          /* The PATH from outside the container doesn't
+                           * really make sense inside the container:
+                           * in principle the layout could be totally
+                           * different. */
+                          "--setenv", "PATH", "/overrides/bin:/usr/bin:/bin",
                           "--setenv", "LD_LIBRARY_PATH",
                           ld_library_path->str,
                           NULL);

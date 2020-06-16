@@ -52,6 +52,8 @@ AX_COMPILER_FLAGS([], [], [], [], [ \
     -Wno-pointer-arith \
     -Wno-declaration-after-statement \
 ])
+WARN_CFLAGS=$(echo "$WARN_CFLAGS" | sed -Ee 's,-W(error=)?declaration-after-statement,,')
+WARN_CFLAGS=$(echo "$WARN_CFLAGS" | sed -Ee 's,-W(error=)?pointer-arith,,')
 
 AC_CHECK_FUNCS_ONCE([secure_getenv])
 

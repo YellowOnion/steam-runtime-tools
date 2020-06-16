@@ -791,6 +791,28 @@ class TestContainers(BaseTest):
                 target = os.readlink(link)
                 self.assertEqual(target, '/run/host/usr/bin/localedef')
 
+            for ldso, scout_impl in (
+                (
+                    '/lib/ld-linux.so.2',
+                    '/lib/i386-linux-gnu/ld-2.15.so',
+                ),
+                (
+                    '/lib64/ld-linux-x86-64.so.2',
+                    '/lib/x86_64-linux-gnu/ld-2.15.so',
+                ),
+            ):
+                try:
+                    host_path = os.path.realpath(ldso)
+                except OSError:
+                    pass
+                else:
+                    link = os.path.join(tree, './' + ldso)
+                    target = os.readlink(link)
+                    self.assertEqual(target, '/run/host' + host_path)
+                    link = os.path.join(tree, './' + scout_impl)
+                    target = os.readlink(link)
+                    self.assertEqual(target, '/run/host' + host_path)
+
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')
 

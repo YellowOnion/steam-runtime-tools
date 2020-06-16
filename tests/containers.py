@@ -79,6 +79,7 @@ SteamOS 2 'brewmaster', Debian 8 'jessie', Ubuntu 14.04 'trusty'.
 
 import contextlib
 import fcntl
+import glob
 import json
 import logging
 import os
@@ -530,10 +531,26 @@ class TestContainers(BaseTest):
         for multiarch, arch_info in self.host_srsi_parsed.get(
             'architectures', {}
         ).items():
-            libdir = os.path.join(tree, 'overrides', 'lib', multiarch)
+            overrides_libdir = os.path.join(
+                tree, 'overrides', 'lib', multiarch,
+            )
+            root_libdir = os.path.join(
+                tree, 'lib', multiarch,
+            )
+            usr_libdir = os.path.join(
+                tree, 'usr', 'lib', multiarch,
+            )
+            host_root_libdir = os.path.join(
+                '/', 'lib', multiarch,
+            )
+            host_usr_libdir = os.path.join(
+                '/', 'usr', 'lib', multiarch,
+            )
             with self.subTest(arch=multiarch):
 
-                self.assertTrue(os.path.isdir(libdir))
+                self.assertTrue(os.path.isdir(overrides_libdir))
+                self.assertTrue(os.path.isdir(root_libdir))
+                self.assertTrue(os.path.isdir(usr_libdir))
 
                 if is_scout:
                     for soname in (
@@ -554,9 +571,123 @@ class TestContainers(BaseTest):
                         # in every supported version of the Steam Runtime.
                         with self.subTest(soname=soname):
                             target = os.readlink(
-                                os.path.join(libdir, soname)
+                                os.path.join(overrides_libdir, soname)
                             )
                             self.assertRegex(target, r'^/run/host/')
+
+                            devlib = soname.split('.so.', 1)[0] + '.so'
+
+                            # It was deleted from /lib, if present...
+                            with self.assertRaises(FileNotFoundError):
+                                print(
+                                    '#',
+                                    os.path.join(root_libdir, soname),
+                                    '->',
+                                    os.readlink(
+                                        os.path.join(root_libdir, soname)
+                                    ),
+                                )
+                            # ... and /usr/lib, if present
+                            with self.assertRaises(FileNotFoundError):
+                                print(
+                                    '#',
+                                    os.path.join(usr_libdir, soname),
+                                    '->',
+                                    os.readlink(
+                                        os.path.join(usr_libdir, soname)
+                                    ),
+                                )
+
+                            # In most cases we expect the development
+                            # symlink to be removed, too - but some of
+                            # them are actually linker scripts or other
+                            # non-ELF things
+                            if soname not in (
+                                'libc.so.6',
+                                'libpthread.so.0',
+                            ):
+                                with self.assertRaises(FileNotFoundError):
+                                    print(
+                                        '#',
+                                        os.path.join(usr_libdir, devlib),
+                                        '->',
+                                        os.readlink(
+                                            os.path.join(usr_libdir, devlib)
+                                        ),
+                                    )
+                                with self.assertRaises(FileNotFoundError):
+                                    print(
+                                        '#',
+                                        os.path.join(root_libdir, devlib),
+                                        '->',
+                                        os.readlink(
+                                            os.path.join(root_libdir, devlib)
+                                        ),
+                                    )
+
+                    for soname in (
+                        # These are some examples of libraries in the
+                        # graphics stack that we don't upgrade, so we
+                        # expect the host version to be newer (or possibly
+                        # absent if the host graphics stack doesn't use
+                        # them, for example static linking or something).
+                        'libdrm.so.2',
+                        'libudev.so.0',
+                    ):
+                        with self.subTest(soname=soname):
+                            if (
+                                not os.path.exists(
+                                    os.path.join(host_usr_libdir, soname)
+                                )
+                                and not os.path.exists(
+                                    os.path.join(host_root_libdir, soname)
+                                )
+                            ):
+                                self.assertTrue(
+                                    os.path.exists(
+                                        os.path.join(usr_libdir, soname)
+                                    )
+                                    or os.path.exists(
+                                        os.path.join(root_libdir, soname)
+                                    )
+                                )
+                                continue
+
+                            devlib = soname.split('.so.', 1)[0] + '.so'
+                            pattern = soname + '.*'
+
+                            target = os.readlink(
+                                os.path.join(overrides_libdir, soname)
+                            )
+                            self.assertRegex(target, r'^/run/host/')
+
+                            # It was deleted from /lib, if present...
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(root_libdir, soname)
+                                )
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(root_libdir, devlib)
+                                )
+                            self.assertEqual(
+                                glob.glob(os.path.join(root_libdir, pattern)),
+                                [],
+                            )
+
+                            # ... and /usr/lib, if present
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(usr_libdir, soname)
+                                )
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(usr_libdir, devlib)
+                                )
+                            self.assertEqual(
+                                glob.glob(os.path.join(usr_libdir, pattern)),
+                                [],
+                            )
 
                     for soname in (
                         'libSDL-1.2.so.0',
@@ -564,7 +695,9 @@ class TestContainers(BaseTest):
                     ):
                         with self.subTest(soname=soname):
                             with self.assertRaises(FileNotFoundError):
-                                os.readlink(os.path.join(libdir, soname))
+                                os.readlink(
+                                    os.path.join(overrides_libdir, soname),
+                                )
 
                 # Keys are the basename of a DRI driver.
                 # Values are lists of paths to DRI drivers of that name
@@ -601,7 +734,7 @@ class TestContainers(BaseTest):
 
                 for k, vs in expect_symlinks.items():
                     with self.subTest(dri_symlink=k):
-                        link = os.path.join(libdir, 'dri', k)
+                        link = os.path.join(overrides_libdir, 'dri', k)
                         target = os.readlink(link)
                         self.assertEqual(target[:10], '/run/host/')
                         target = target[9:]     # includes the / after host/

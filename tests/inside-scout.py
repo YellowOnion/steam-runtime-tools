@@ -363,12 +363,13 @@ class TestInsideScout(BaseTest):
                 arch=multiarch,
             ):
                 self.assertTrue(arch_info['can-run'])
-                self.assertEqual([], arch_info['library-issues-summary'])
                 # Graphics driver support depends on the host system, so we
                 # don't assert that everything is fine, only that we have
                 # the information.
                 self.assertIn('graphics-details', arch_info)
                 self.assertIn('glx/gl', arch_info['graphics-details'])
+
+            expect_library_issues = set()
 
             for soname, details in arch_info['library-details'].items():
                 with self.catch(
@@ -377,6 +378,15 @@ class TestInsideScout(BaseTest):
                     arch=multiarch,
                     soname=soname,
                 ):
+                    if soname == 'libldap-2.4.so.2':
+                        # On Debian, libldap-2.4.so.2 is really an alias
+                        # for libldap_r-2.4.so.2; but on Arch Linux they
+                        # are separate libraries, and this causes trouble
+                        # for our library-loading. Ignore failure to load
+                        # the former.
+                        expect_library_issues |= set(details.get('issues', []))
+                        continue
+
                     self.assertIn('path', details)
                     self.assertEqual(
                         [],
@@ -520,6 +530,16 @@ class TestInsideScout(BaseTest):
                                         host_details[key],
                                         details.get(key),
                                     )
+
+            with self.catch(
+                'per-architecture information',
+                diagnostic=arch_info,
+                arch=multiarch,
+            ):
+                self.assertEqual(
+                    expect_library_issues,
+                    set(arch_info['library-issues-summary']),
+                )
 
 
 if __name__ == '__main__':

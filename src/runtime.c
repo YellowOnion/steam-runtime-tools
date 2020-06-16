@@ -1603,13 +1603,18 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               all_libdrm_from_host = FALSE;
             }
 
+          /* Order matters: drivers from a later entry will overwrite
+           * drivers from an earlier entry. Because we don't know whether
+           * /lib and /usr/lib are 32- or 64-bit, we need to prioritize
+           * libQUAL higher. Prioritize Debian-style multiarch higher
+           * still, because it's completely unambiguous. */
           dirs = g_new0 (gchar *, 7);
-          dirs[0] = g_build_filename ("/lib", arch->tuple, NULL);
-          dirs[1] = g_build_filename ("/usr", "lib", arch->tuple, NULL);
-          dirs[2] = g_strdup ("/lib");
-          dirs[3] = g_strdup ("/usr/lib");
-          dirs[4] = g_build_filename ("/", arch->libqual, NULL);
-          dirs[5] = g_build_filename ("/usr", arch->libqual, NULL);
+          dirs[0] = g_strdup ("/lib");
+          dirs[1] = g_strdup ("/usr/lib");
+          dirs[2] = g_build_filename ("/", arch->libqual, NULL);
+          dirs[3] = g_build_filename ("/usr", arch->libqual, NULL);
+          dirs[4] = g_build_filename ("/lib", arch->tuple, NULL);
+          dirs[5] = g_build_filename ("/usr", "lib", arch->tuple, NULL);
 
           for (j = 0; j < 6; j++)
             {

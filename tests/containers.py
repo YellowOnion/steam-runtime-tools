@@ -516,6 +516,8 @@ class TestContainers(BaseTest):
         )
         self.assertTrue(os.path.isdir(os.path.join(tree, 'sbin')))
 
+        target = os.readlink(os.path.join(tree, 'overrides'))
+        self.assertEqual(target, 'usr/lib/pressure-vessel/overrides')
         self.assertTrue(
             os.path.isdir(os.path.join(tree, 'overrides', 'lib')),
         )
@@ -524,6 +526,13 @@ class TestContainers(BaseTest):
                 os.path.join(
                     tree, 'usr', 'lib', 'pressure-vessel', 'from-host',
                     'bin', 'pressure-vessel-with-lock',
+                )
+            )
+        )
+        self.assertTrue(
+            os.path.isdir(
+                os.path.join(
+                    tree, 'usr', 'lib', 'pressure-vessel', 'overrides', 'lib',
                 )
             )
         )

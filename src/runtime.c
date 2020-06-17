@@ -57,6 +57,7 @@ struct _PvRuntime
   gchar *mutable_sysroot;
   gchar *tmpdir;
   gchar *overrides;
+  const gchar *overrides_in_container;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
@@ -183,8 +184,8 @@ runtime_architecture_init (RuntimeArchitecture *self,
                                                  NULL);
   self->libdir_on_host = g_build_filename (runtime->overrides, "lib",
                                            self->tuple, NULL);
-  self->libdir_in_container = g_build_filename ("/overrides", "lib",
-                                                self->tuple, NULL);
+  self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
+                                                "lib", self->tuple, NULL);
 
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the host system. */
@@ -705,8 +706,9 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (self->mutable_sysroot != NULL)
     {
+      self->overrides_in_container = "/usr/lib/pressure-vessel/overrides";
       self->overrides = g_build_filename (self->mutable_sysroot,
-                                          "overrides", NULL);
+                                          self->overrides_in_container, NULL);
       self->runtime_files = self->mutable_sysroot;
     }
   else
@@ -719,6 +721,7 @@ pv_runtime_initable_init (GInitable *initable,
         return FALSE;
 
       self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
+      self->overrides_in_container = "/overrides";
       self->runtime_files = self->source_files;
     }
 
@@ -1122,6 +1125,8 @@ ensure_locales (PvRuntime *self,
   g_autoptr(FlatpakBwrap) run_locale_gen = NULL;
   g_autofree gchar *locale_gen = NULL;
   g_autofree gchar *locales = g_build_filename (self->overrides, "locales", NULL);
+  g_autofree gchar *locales_in_container = g_build_filename (self->overrides_in_container,
+                                                             "locales", NULL);
   g_autoptr(GDir) dir = NULL;
   int exit_status;
 
@@ -1154,7 +1159,8 @@ ensure_locales (PvRuntime *self,
 
       flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
       flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", self->overrides, "/overrides",
+                              "--ro-bind", self->overrides,
+                              self->overrides_in_container,
                               NULL);
 
       if (!flatpak_bwrap_bundle_args (run_locale_gen, 1, -1, FALSE,
@@ -1167,9 +1173,9 @@ ensure_locales (PvRuntime *self,
 
       flatpak_bwrap_add_args (run_locale_gen,
                               "--ro-bind", self->tools_dir, "/run/host/tools",
-                              "--bind", locales, "/overrides/locales",
+                              "--bind", locales, locales_in_container,
                               locale_gen,
-                              "--output-dir", "/overrides/locales",
+                              "--output-dir", locales_in_container,
                               "--verbose",
                               NULL);
     }
@@ -1201,7 +1207,7 @@ ensure_locales (PvRuntime *self,
 
       g_debug ("%s is non-empty", locales);
 
-      locpath = g_string_new ("/overrides/locales");
+      locpath = g_string_new (locales_in_container);
       pv_search_path_append (locpath, g_getenv ("LOCPATH"));
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LOCPATH", locpath->str,
@@ -1444,13 +1450,30 @@ bind_runtime (PvRuntime *self,
   if (!pv_bwrap_bind_usr (bwrap, self->runtime_files, "/", error))
     return FALSE;
 
-  /* In the case where we have a mutable sysroot, we can mount all of
-   * /overrides in one go, because we will be keeping it intact as long
-   * as the container is running (along with the rest of mutable_sysroot). */
+  /* In the case where we have a mutable sysroot, we mount the overrides
+   * as part of /usr. Make /overrides a symbolic link, to be nice to
+   * older steam-runtime-tools versions. */
+
   if (self->mutable_sysroot != NULL)
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", self->overrides, "/overrides",
-                            NULL);
+    {
+      g_assert (self->overrides_in_container[0] == '/');
+      g_assert (g_strcmp0 (self->overrides_in_container, "/overrides") != 0);
+      flatpak_bwrap_add_args (bwrap,
+                              "--symlink",
+                              &self->overrides_in_container[1],
+                              "/overrides",
+                              NULL);
+
+      /* Also make a matching symbolic link on disk, to make it easier
+       * to inspect the sysroot. */
+      if (TEMP_FAILURE_RETRY (symlinkat (&self->overrides_in_container[1],
+                                         self->mutable_sysroot_fd,
+                                         "overrides")) != 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to create symlink \"%s/overrides\" -> \"%s\"",
+                                        self->mutable_sysroot,
+                                        &self->overrides_in_container[1]);
+    }
 
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
@@ -1573,7 +1596,7 @@ bind_runtime (PvRuntime *self,
        * it into a series of --dir and --symlink instructions.
        *
        * We have to do this late, because it adds data fds. */
-      pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
+      pv_bwrap_copy_tree (bwrap, self->overrides, self->overrides_in_container);
     }
 
   /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
@@ -2733,8 +2756,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
                                            j, multiarch_tuples[i]);
               json_on_host = g_build_filename (dir_on_host, json_base, NULL);
-              json_in_container = g_build_filename ("/overrides", "share",
-                                                    "glvnd", "egl_vendor.d",
+              json_in_container = g_build_filename (self->overrides_in_container,
+                                                    "share", "glvnd",
+                                                    "egl_vendor.d",
                                                     json_base, NULL);
 
               replacement = srt_egl_icd_new_replace_library_path (icd,
@@ -2759,8 +2783,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           const char *json_on_host = srt_egl_icd_get_json_path (icd);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
-          json_in_container = g_build_filename ("/overrides", "share",
-                                                "glvnd", "egl_vendor.d",
+          json_in_container = g_build_filename (self->overrides_in_container,
+                                                "share", "glvnd",
+                                                "egl_vendor.d",
                                                 json_base, NULL);
 
           if (!pv_runtime_take_from_host (self, bwrap,
@@ -2811,8 +2836,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
                                            j, multiarch_tuples[i]);
               json_on_host = g_build_filename (dir_on_host, json_base, NULL);
-              json_in_container = g_build_filename ("/overrides", "share",
-                                                    "vulkan", "icd.d",
+              json_in_container = g_build_filename (self->overrides_in_container,
+                                                    "share", "vulkan", "icd.d",
                                                     json_base, NULL);
 
               replacement = srt_vulkan_icd_new_replace_library_path (icd,
@@ -2837,8 +2862,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           const char *json_on_host = srt_vulkan_icd_get_json_path (icd);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
-          json_in_container = g_build_filename ("/overrides", "share",
-                                                "vulkan", "icd.d",
+          json_in_container = g_build_filename (self->overrides_in_container,
+                                                "share", "vulkan", "icd.d",
                                                 json_base, NULL);
 
           if (!pv_runtime_take_from_host (self, bwrap,
@@ -2927,8 +2952,10 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
    * already. */
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "VDPAU_DRIVER_PATH",
-                          "/overrides/lib/${PLATFORM}-linux-gnu/vdpau",
                           NULL);
+  flatpak_bwrap_add_arg_printf (bwrap,
+                                "%s/lib/${PLATFORM}-linux-gnu/vdpau",
+                                self->overrides_in_container);
 
   static const char * const extra_multiarch_tuples[] =
   {
@@ -3046,8 +3073,8 @@ pv_runtime_set_search_paths (PvRuntime *self,
       {
         g_autofree gchar *ld_path = NULL;
 
-        ld_path = g_build_filename ("/overrides", "lib",
-                                   multiarch_tuples[i], NULL);
+        ld_path = g_build_filename (self->overrides_in_container, "lib",
+                                    multiarch_tuples[i], NULL);
 
         pv_search_path_append (ld_library_path, ld_path);
       }

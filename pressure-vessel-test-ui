@@ -97,7 +97,7 @@ class Gui:
                 continue
 
             source_of_runtimes = os.path.join(
-                os.path.dirname(sys.argv[0]),
+                os.path.dirname(__file__),
                 search,
             )
 
@@ -295,7 +295,7 @@ class Gui:
         subproc = subprocess.Popen(
             [
                 os.path.join(
-                    os.path.dirname(sys.argv[0]),
+                    os.path.dirname(__file__),
                     'pressure-vessel-wrap'
                 ),
                 '--version-only',
@@ -437,7 +437,7 @@ class Gui:
             'env',
             'G_MESSAGES_DEBUG=all',
             os.path.join(
-                os.path.dirname(sys.argv[0]),
+                os.path.dirname(__file__),
                 'pressure-vessel-wrap'
             ),
         ]

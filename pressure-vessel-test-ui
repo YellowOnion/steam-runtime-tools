@@ -25,6 +25,7 @@
 
 import logging
 import os
+import shlex
 import subprocess
 import sys
 
@@ -84,6 +85,7 @@ class Gui:
     def __init__(self):
         # type: (...) -> None
 
+        self.failed = False
         self.home = GLib.get_home_dir()
 
         self.container_runtimes = {}    # type: typing.Dict[str, str]
@@ -292,18 +294,21 @@ class Gui:
 
         row += 1
 
-        subproc = subprocess.Popen(
-            [
-                os.path.join(
-                    os.path.dirname(__file__),
-                    'pressure-vessel-wrap'
-                ),
-                '--version-only',
-            ],
-            stdout=subprocess.PIPE,
-        )
-        stdout, _ = subproc.communicate()
-        version = stdout.decode('utf-8', errors='replace')
+        try:
+            subproc = subprocess.Popen(
+                [
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        'pressure-vessel-wrap'
+                    ),
+                    '--version-only',
+                ],
+                stdout=subprocess.PIPE,
+            )
+            stdout, _ = subproc.communicate()
+            version = stdout.decode('utf-8', errors='replace')
+        except Exception:
+            version = ''
 
         if version:
             label = Gtk.Label.new('')
@@ -434,8 +439,6 @@ class Gui:
         # type: (typing.Any) -> None
 
         argv = [
-            'env',
-            'G_MESSAGES_DEBUG=all',
             os.path.join(
                 os.path.dirname(__file__),
                 'pressure-vessel-wrap'
@@ -487,12 +490,23 @@ class Gui:
         argv.append('--verbose')
         argv.extend(sys.argv[1:])
 
-        os.execvp(argv[0], argv)
+        os.environ['G_MESSAGES_DEBUG'] = 'all'
+
+        try:
+            os.execvp(argv[0], argv)
+        except OSError:
+            logger.error('Unable to run: %s', ' '.join(map(shlex.quote, argv)))
+            Gtk.main_quit()
+            self.failed = True
+            raise
 
     def run(self):
         # type: (...) -> None
         self.window.show_all()
         Gtk.main()
+
+        if self.failed:
+            sys.exit(1)
 
 
 if __name__ == '__main__':

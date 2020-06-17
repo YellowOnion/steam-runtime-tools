@@ -446,6 +446,32 @@ configured.
     The interactive shell's current working directory matches the game's.
     As with the xterm, run `"$@"` in the interactive shell to run the game.
 
+* To get a modifiable copy of the runtime, use something like:
+
+        mkdir -p $HOME/.steam/steam/steamapps/common/SteamLinuxRuntime/var
+        /opt/pressure-vessel/bin/pressure-vessel-unruntime \
+            --runtime=$HOME/.steam/steam/steamapps/common/SteamLinuxRuntime/scout/files \
+            --copy-runtime-into=$HOME/.steam/steam/steamapps/common/SteamLinuxRuntime/var \
+            -- %command%
+
+    You will find a temporary copy of the runtime in the directory you
+    chose, in this example something like
+    `.../SteamLinuxRuntime/var/tmp-1234567`. You can modify it in-place.
+    For example, if you want to replace `libdbus-1.so.3` with an
+    instrumented version, you can do something like this:
+
+        cd .../SteamLinuxRuntime/var/tmp-1234567
+        rm -f overrides/lib/x86_64-linux-gnu/libdbus-1.so.3*
+        rm -f usr/lib/x86_64-linux-gnu/libdbus-1.so.3*
+        cp --dereference ~/dbus/dbus/.libs/libdbus-1.so.3 \
+            overrides/lib/x86_64-linux-gnu/libdbus-1.so.3
+
+    To avoid temporary copies building up forever, they will be deleted
+    *next* time you run a game in a container (assuming there is no longer
+    anything running in the previous container), unless you create a file
+    like `.../var/tmp-1234567/keep` to flag this root directory to be kept
+    for future reference.
+
 ### More options
 
 Use `pressure-vessel-unruntime` or `pressure-vessel-unruntime-test-ui`

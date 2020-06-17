@@ -32,8 +32,10 @@
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
+#include "elf-utils.h"
 #include "enumtypes.h"
 #include "flatpak-run-private.h"
+#include "resolve-in-sysroot.h"
 #include "utils.h"
 
 /*
@@ -51,14 +53,20 @@ struct _PvRuntime
   gchar *tools_dir;
   PvBwrapLock *runtime_lock;
 
+  gchar *mutable_parent;
+  gchar *mutable_sysroot;
   gchar *tmpdir;
   gchar *overrides;
-  gchar *overrides_bin;
+  const gchar *overrides_in_container;
   gchar *container_access;
   FlatpakBwrap *container_access_adverb;
-  gchar *runtime_usr;           /* either source_files or that + "/usr" */
+  const gchar *runtime_files;   /* either source_files or mutable_sysroot */
+  gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
+  const gchar *with_lock_in_container;
 
   PvRuntimeFlags flags;
+  int mutable_parent_fd;
+  int mutable_sysroot_fd;
   gboolean any_libc_from_host;
   gboolean all_libc_from_host;
   gboolean runtime_is_just_usr;
@@ -73,6 +81,7 @@ enum {
   PROP_0,
   PROP_BUBBLEWRAP,
   PROP_FLAGS,
+  PROP_MUTABLE_PARENT,
   PROP_SOURCE_FILES,
   PROP_TOOLS_DIRECTORY,
   N_PROPERTIES
@@ -86,6 +95,38 @@ static void pv_runtime_initable_iface_init (GInitableIface *iface,
 G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 pv_runtime_initable_iface_init))
+
+/*
+ * Return whether @path is likely to be visible in /run/host.
+ * This needs to be kept approximately in sync with pv_bwrap_bind_usr()
+ * and Flatpak's --filesystem=host-os special keyword.
+ *
+ * This doesn't currently handle /etc: we make the pessimistic assumption
+ * that /etc/ld.so.cache, etc., are not shared.
+ */
+static gboolean
+path_visible_in_run_host (const char *path)
+{
+  while (path[0] == '/')
+    path++;
+
+  if (g_str_has_prefix (path, "usr") &&
+      (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
+
+  if (g_str_has_prefix (path, "lib"))
+    return TRUE;
+
+  if (g_str_has_prefix (path, "bin") &&
+      (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
+
+  if (g_str_has_prefix (path, "sbin") ||
+      (path[4] == '\0' || path[4] == '/'))
+    return TRUE;
+
+  return FALSE;
+}
 
 /*
  * Supported Debian-style multiarch tuples
@@ -143,8 +184,8 @@ runtime_architecture_init (RuntimeArchitecture *self,
                                                  NULL);
   self->libdir_on_host = g_build_filename (runtime->overrides, "lib",
                                            self->tuple, NULL);
-  self->libdir_in_container = g_build_filename ("/overrides", "lib",
-                                                self->tuple, NULL);
+  self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
+                                                "lib", self->tuple, NULL);
 
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the host system. */
@@ -201,6 +242,8 @@ pv_runtime_init (PvRuntime *self)
 {
   self->any_libc_from_host = FALSE;
   self->all_libc_from_host = FALSE;
+  self->mutable_parent_fd = -1;
+  self->mutable_sysroot_fd = -1;
 }
 
 static void
@@ -219,6 +262,10 @@ pv_runtime_get_property (GObject *object,
 
       case PROP_FLAGS:
         g_value_set_flags (value, self->flags);
+        break;
+
+      case PROP_MUTABLE_PARENT:
+        g_value_set_string (value, self->mutable_parent);
         break;
 
       case PROP_SOURCE_FILES:
@@ -241,6 +288,7 @@ pv_runtime_set_property (GObject *object,
                          GParamSpec *pspec)
 {
   PvRuntime *self = PV_RUNTIME (object);
+  const char *path;
 
   switch (prop_id)
     {
@@ -254,10 +302,42 @@ pv_runtime_set_property (GObject *object,
         self->flags = g_value_get_flags (value);
         break;
 
+      case PROP_MUTABLE_PARENT:
+        /* Construct-only */
+        g_return_if_fail (self->mutable_parent == NULL);
+        path = g_value_get_string (value);
+
+        if (path != NULL)
+          {
+            self->mutable_parent = realpath (path, NULL);
+
+            if (self->mutable_parent == NULL)
+              {
+                /* It doesn't exist. Keep the non-canonical path so we
+                 * can warn about it later */
+                self->mutable_parent = g_strdup (path);
+              }
+          }
+
+        break;
+
       case PROP_SOURCE_FILES:
         /* Construct-only */
         g_return_if_fail (self->source_files == NULL);
-        self->source_files = g_value_dup_string (value);
+        path = g_value_get_string (value);
+
+        if (path != NULL)
+          {
+            self->source_files = realpath (path, NULL);
+
+            if (self->source_files == NULL)
+              {
+                /* It doesn't exist. Keep the non-canonical path so we
+                 * can warn about it later */
+                self->source_files = g_strdup (path);
+              }
+          }
+
         break;
 
       case PROP_TOOLS_DIRECTORY:
@@ -284,6 +364,292 @@ pv_runtime_constructed (GObject *object)
 }
 
 static gboolean
+pv_runtime_garbage_collect (PvRuntime *self,
+                            PvBwrapLock *mutable_parent_lock,
+                            GError **error)
+{
+  g_auto(GLnxDirFdIterator) iter = { FALSE };
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->mutable_parent != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  /* We don't actually *use* this: it just acts as an assertion that
+   * we are holding the lock on the parent directory. */
+  g_return_val_if_fail (mutable_parent_lock != NULL, FALSE);
+
+  if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->mutable_parent,
+                                    TRUE, &iter, error))
+    return FALSE;
+
+  while (TRUE)
+    {
+      g_autoptr(GError) local_error = NULL;
+      g_autoptr(PvBwrapLock) temp_lock = NULL;
+      g_autofree gchar *keep = NULL;
+      g_autofree gchar *ref = NULL;
+      struct dirent *dent;
+      struct stat ignore;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent,
+                                                       NULL, error))
+        return FALSE;
+
+      if (dent == NULL)
+        break;
+
+      switch (dent->d_type)
+        {
+          case DT_DIR:
+            break;
+
+          case DT_BLK:
+          case DT_CHR:
+          case DT_FIFO:
+          case DT_LNK:
+          case DT_REG:
+          case DT_SOCK:
+          case DT_UNKNOWN:
+          default:
+            g_debug ("Ignoring %s/%s: not a directory",
+                     self->mutable_parent, dent->d_name);
+            continue;
+        }
+
+      if (!g_str_has_prefix (dent->d_name, "tmp-"))
+        {
+          g_debug ("Ignoring %s/%s: not tmp-*",
+                   self->mutable_parent, dent->d_name);
+          continue;
+        }
+
+      g_debug ("Found temporary runtime %s/%s, considering whether to "
+               "delete it...",
+               self->mutable_parent, dent->d_name);
+
+      keep = g_build_filename (dent->d_name, "keep", NULL);
+
+      if (glnx_fstatat (self->mutable_parent_fd, keep, &ignore,
+                        AT_SYMLINK_NOFOLLOW, &local_error))
+        {
+          g_debug ("Not deleting \"%s/%s\": ./keep exists",
+                   self->mutable_parent, dent->d_name);
+          continue;
+        }
+      else if (!g_error_matches (local_error, G_IO_ERROR,
+                                 G_IO_ERROR_NOT_FOUND))
+        {
+          /* EACCES or something? Give it the benefit of the doubt */
+          g_warning ("Not deleting \"%s/%s\": unable to stat ./keep: %s",
+                   self->mutable_parent, dent->d_name, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_clear_error (&local_error);
+
+      ref = g_build_filename (dent->d_name, ".ref", NULL);
+      temp_lock = pv_bwrap_lock_new (self->mutable_parent_fd, ref,
+                                     (PV_BWRAP_LOCK_FLAGS_CREATE |
+                                      PV_BWRAP_LOCK_FLAGS_WRITE),
+                                     &local_error);
+
+      if (temp_lock == NULL)
+        {
+          g_debug ("Ignoring \"%s/%s\": unable to get lock: %s",
+                   self->mutable_parent, dent->d_name,
+                   local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_debug ("Deleting \"%s/%s\"...", self->mutable_parent, dent->d_name);
+
+      /* We have the lock, which would not have happened if someone was
+       * still using the runtime, so we can safely delete it. */
+      if (!glnx_shutil_rm_rf_at (self->mutable_parent_fd, dent->d_name,
+                                 NULL, &local_error))
+        {
+          g_debug ("Unable to delete %s/%s: %s",
+                   self->mutable_parent, dent->d_name, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
+pv_runtime_init_mutable (PvRuntime *self,
+                         GError **error)
+{
+  g_autofree gchar *dest_usr = NULL;
+  g_autofree gchar *source_usr_subdir = NULL;
+  g_autofree gchar *temp_dir = NULL;
+  g_autoptr(GDir) dir = NULL;
+  g_autoptr(PvBwrapLock) copy_lock = NULL;
+  g_autoptr(PvBwrapLock) mutable_lock = NULL;
+  g_autoptr(PvBwrapLock) source_lock = NULL;
+  const char *member;
+  const char *source_usr;
+  glnx_autofd int temp_dir_fd = -1;
+  gboolean is_just_usr;
+
+  /* Nothing to do in this case */
+  if (self->mutable_parent == NULL)
+    return TRUE;
+
+  if (g_mkdir_with_parents (self->mutable_parent, 0700) != 0)
+    return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                    self->mutable_parent);
+
+  if (!glnx_opendirat (AT_FDCWD, self->mutable_parent, TRUE,
+                       &self->mutable_parent_fd, error))
+    return FALSE;
+
+  /* Lock the parent directory. Anything that directly manipulates the
+   * temporary runtimes is expected to do the same, so that
+   * it cannot be deleting temporary runtimes at the same time we're
+   * creating them.
+   *
+   * This is a read-mode lock: it's OK to create more than one temporary
+   * runtime in parallel, as long as nothing is deleting them
+   * concurrently. */
+  mutable_lock = pv_bwrap_lock_new (self->mutable_parent_fd, ".ref",
+                                    PV_BWRAP_LOCK_FLAGS_CREATE,
+                                    error);
+
+  if (mutable_lock == NULL)
+    return glnx_prefix_error (error, "Unable to lock \"%s/%s\"",
+                              self->mutable_parent, ".ref");
+
+  /* GC old runtimes (if they have become unused) before we create a
+   * new one. This means we should only ever have one temporary runtime
+   * copy per game that is run concurrently. */
+  if ((self->flags & PV_RUNTIME_FLAGS_GC_RUNTIMES) != 0 &&
+      !pv_runtime_garbage_collect (self, mutable_lock, error))
+    return FALSE;
+
+  temp_dir = g_build_filename (self->mutable_parent, "tmp-XXXXXX", NULL);
+
+  if (g_mkdtemp (temp_dir) == NULL)
+    return glnx_throw_errno_prefix (error,
+                                    "Cannot create temporary directory \"%s\"",
+                                    temp_dir);
+
+  source_usr_subdir = g_build_filename (self->source_files, "usr", NULL);
+  dest_usr = g_build_filename (temp_dir, "usr", NULL);
+
+  is_just_usr = !g_file_test (source_usr_subdir, G_FILE_TEST_IS_DIR);
+
+  if (is_just_usr)
+    {
+      /* ${source_files}/usr does not exist, so assume it's a merged /usr,
+       * for example ./scout/files. Copy ${source_files}/bin to
+       * ${temp_dir}/usr/bin, etc. */
+      source_usr = self->source_files;
+
+      if (!pv_cheap_tree_copy (self->source_files, dest_usr, error))
+        return FALSE;
+    }
+  else
+    {
+      /* ${source_files}/usr exists, so assume it's a complete sysroot.
+       * Copy ${source_files}/bin to ${temp_dir}/bin, etc. */
+      source_usr = source_usr_subdir;
+
+      if (!pv_cheap_tree_copy (self->source_files, temp_dir, error))
+        return FALSE;
+    }
+
+  if (!glnx_opendirat (-1, temp_dir, FALSE, &temp_dir_fd, error))
+    return FALSE;
+
+  /* Create the copy in a pre-locked state. After the lock on the parent
+   * directory is released, the copy continues to have a read lock,
+   * preventing it from being modified or deleted while in use (even if
+   * a cleanup process successfully obtains a write lock on the parent).
+   *
+   * Because we control the structure of the runtime in this case, we
+   * actually lock /usr/.ref instead of /.ref, and ensure that /.ref
+   * is a symlink to it. This might become important if we pass the
+   * runtime's /usr to Flatpak, which normally takes out a lock on
+   * /usr/.ref (obviously this will only work if the runtime happens
+   * to be merged-/usr). */
+  copy_lock = pv_bwrap_lock_new (temp_dir_fd, "usr/.ref",
+                                 PV_BWRAP_LOCK_FLAGS_CREATE,
+                                 error);
+
+  if (copy_lock == NULL)
+    return glnx_prefix_error (error,
+                              "Unable to lock \"%s/.ref\" in temporary runtime",
+                              dest_usr);
+
+  if (is_just_usr)
+    {
+      g_autofree gchar *in_root = g_build_filename (temp_dir, ".ref", NULL);
+
+      if (unlink (in_root) != 0 && errno != ENOENT)
+        return glnx_throw_errno_prefix (error,
+                                        "Cannot remove \"%s\"", in_root);
+
+      if (symlink ("usr/.ref", in_root) != 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Cannot create symlink \"%s\" -> usr/.ref",
+                                        in_root);
+    }
+
+  dir = g_dir_open (source_usr, 0, error);
+
+  if (dir == NULL)
+    return FALSE;
+
+  for (member = g_dir_read_name (dir);
+       member != NULL;
+       member = g_dir_read_name (dir))
+    {
+      /* Create symlinks ${temp_dir}/bin -> usr/bin, etc. if missing.
+       *
+       * Also make ${temp_dir}/etc, ${temp_dir}/var symlinks to etc
+       * and var, for the benefit of tools like capsule-capture-libs
+       * accessing /etc/ld.so.cache in the incomplete container (for the
+       * final container command-line they get merged by bind_runtime()
+       * instead). */
+      if (g_str_equal (member, "bin") ||
+          g_str_equal (member, "etc") ||
+          (g_str_has_prefix (member, "lib") &&
+           !g_str_equal (member, "libexec")) ||
+          g_str_equal (member, "sbin") ||
+          g_str_equal (member, "var"))
+        {
+          g_autofree gchar *dest = g_build_filename (temp_dir, member, NULL);
+          g_autofree gchar *target = g_build_filename ("usr", member, NULL);
+
+          if (symlink (target, dest) != 0)
+            {
+              /* Ignore EEXIST in the case where it was not just /usr:
+               * it's fine if the runtime we copied from source_files
+               * already had either directories or symlinks in its root
+               * directory */
+              if (is_just_usr || errno != EEXIST)
+                return glnx_throw_errno_prefix (error,
+                                                "Cannot create symlink \"%s\" -> %s",
+                                                dest, target);
+            }
+        }
+    }
+
+  /* Hand over from holding a lock on the source to just holding a lock
+   * on the copy. We'll release source_lock when we leave this scope */
+  source_lock = g_steal_pointer (&self->runtime_lock);
+  self->runtime_lock = g_steal_pointer (&copy_lock);
+  self->mutable_sysroot = g_steal_pointer (&temp_dir);
+  self->mutable_sysroot_fd = glnx_steal_fd (&temp_dir_fd);
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_initable_init (GInitable *initable,
                           GCancellable *cancellable G_GNUC_UNUSED,
                           GError **error)
@@ -300,6 +666,13 @@ pv_runtime_initable_init (GInitable *initable,
                          self->bubblewrap);
     }
 
+  if (self->mutable_parent != NULL
+      && !g_file_test (self->mutable_parent, G_FILE_TEST_IS_DIR))
+    {
+      return glnx_throw (error, "\"%s\" is not a directory",
+                         self->mutable_parent);
+    }
+
   if (!g_file_test (self->source_files, G_FILE_TEST_IS_DIR))
     {
       return glnx_throw (error, "\"%s\" is not a directory",
@@ -313,7 +686,12 @@ pv_runtime_initable_init (GInitable *initable,
     }
 
   /* Take a lock on the runtime until we're finished with setup,
-   * to make sure it doesn't get deleted. */
+   * to make sure it doesn't get deleted.
+   *
+   * If the runtime is mounted read-only in the container, it will
+   * continue to be locked until all processes in the container exit.
+   * If we make a temporary mutable copy, we only hold this lock until
+   * setup has finished. */
   files_ref = g_build_filename (self->source_files, ".ref", NULL);
   self->runtime_lock = pv_bwrap_lock_new (AT_FDCWD, files_ref,
                                           PV_BWRAP_LOCK_FLAGS_CREATE,
@@ -323,20 +701,33 @@ pv_runtime_initable_init (GInitable *initable,
   if (self->runtime_lock == NULL)
     return FALSE;
 
-  g_debug ("Creating temporary directories...");
-
-  /* Using a runtime requires a temporary directory */
-  self->tmpdir = g_dir_make_tmp ("pressure-vessel-wrap.XXXXXX", error);
-
-  if (self->tmpdir == NULL)
+  if (!pv_runtime_init_mutable (self, error))
     return FALSE;
 
-  self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
-  g_mkdir (self->overrides, 0700);
-  self->overrides_bin = g_build_filename (self->overrides, "bin", NULL);
-  g_mkdir (self->overrides_bin, 0700);
+  if (self->mutable_sysroot != NULL)
+    {
+      self->overrides_in_container = "/usr/lib/pressure-vessel/overrides";
+      self->overrides = g_build_filename (self->mutable_sysroot,
+                                          self->overrides_in_container, NULL);
+      self->runtime_files = self->mutable_sysroot;
+    }
+  else
+    {
+      /* We currently only need a temporary directory if we don't have
+       * a mutable sysroot to work with. */
+      self->tmpdir = g_dir_make_tmp ("pressure-vessel-wrap.XXXXXX", error);
 
-  self->runtime_usr = g_build_filename (self->source_files, "usr", NULL);
+      if (self->tmpdir == NULL)
+        return FALSE;
+
+      self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
+      self->overrides_in_container = "/overrides";
+      self->runtime_files = self->source_files;
+    }
+
+  g_mkdir (self->overrides, 0700);
+
+  self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
 
   if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
     {
@@ -344,10 +735,10 @@ pv_runtime_initable_init (GInitable *initable,
     }
   else
     {
-      /* source_files is just a merged /usr. */
+      /* runtime_files is just a merged /usr. */
       self->runtime_is_just_usr = TRUE;
       g_free (self->runtime_usr);
-      self->runtime_usr = g_strdup (self->source_files);
+      self->runtime_usr = g_strdup (self->runtime_files);
     }
 
   return TRUE;
@@ -367,7 +758,6 @@ pv_runtime_cleanup (PvRuntime *self)
                  local_error->message);
     }
 
-  g_clear_pointer (&self->overrides_bin, g_free);
   g_clear_pointer (&self->overrides, g_free);
   g_clear_pointer (&self->container_access, g_free);
   g_clear_pointer (&self->container_access_adverb, flatpak_bwrap_free);
@@ -381,6 +771,10 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  glnx_close_fd (&self->mutable_parent_fd);
+  g_free (self->mutable_parent);
+  glnx_close_fd (&self->mutable_sysroot_fd);
+  g_free (self->mutable_sysroot);
   g_free (self->runtime_usr);
   g_free (self->source_files);
   g_free (self->tools_dir);
@@ -415,6 +809,14 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_MUTABLE_PARENT] =
+    g_param_spec_string ("mutable-parent", "Mutable parent",
+                         ("Path to a directory in which to create a "
+                          "mutable copy of source-files, or NULL"),
+                         NULL,
+                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS));
+
   properties[PROP_SOURCE_FILES] =
     g_param_spec_string ("source-files", "Source files",
                          ("Path to read-only runtime files (merged-/usr "
@@ -435,6 +837,7 @@ pv_runtime_class_init (PvRuntimeClass *cls)
 
 PvRuntime *
 pv_runtime_new (const char *source_files,
+                const char *mutable_parent,
                 const char *bubblewrap,
                 const char *tools_dir,
                 PvRuntimeFlags flags,
@@ -449,6 +852,7 @@ pv_runtime_new (const char *source_files,
                          NULL,
                          error,
                          "bubblewrap", bubblewrap,
+                         "mutable-parent", mutable_parent,
                          "source-files", source_files,
                          "tools-directory", tools_dir,
                          "flags", flags,
@@ -467,9 +871,11 @@ pv_runtime_append_lock_adverb (PvRuntime *self,
 {
   g_return_if_fail (PV_IS_RUNTIME (self));
   g_return_if_fail (!pv_bwrap_was_finished (bwrap));
+  /* This will be true if pv_runtime_bind() was successfully called. */
+  g_return_if_fail (self->with_lock_in_container != NULL);
 
   flatpak_bwrap_add_args (bwrap,
-                          "/run/pressure-vessel/bin/pressure-vessel-with-lock",
+                          self->with_lock_in_container,
                           "--subreaper",
                           NULL);
 
@@ -541,12 +947,11 @@ pv_runtime_provide_container_access (PvRuntime *self,
        * shape" that the final system is going to be.
        *
        * In particular, if we are working with a writeable copy of a runtime
-       * that we are editing in-place, we can arrange that it's always
-       * like that. */
+       * that we are editing in-place, it's always like that. */
       g_debug ("%s: Setting up runtime without using bwrap",
                G_STRFUNC);
       self->container_access_adverb = flatpak_bwrap_new (NULL);
-      self->container_access = g_strdup (self->source_files);
+      self->container_access = g_strdup (self->runtime_files);
 
       /* This is going to go poorly for us if the runtime is not complete.
        * !self->runtime_is_just_usr means we know it has a /usr subdirectory,
@@ -563,7 +968,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
        * so we don't check for it. */
       for (i = 0; i < G_N_ELEMENTS (need_top_level); i++)
         {
-          g_autofree gchar *path = g_build_filename (self->source_files,
+          g_autofree gchar *path = g_build_filename (self->runtime_files,
                                                      need_top_level[i],
                                                      NULL);
 
@@ -579,6 +984,11 @@ pv_runtime_provide_container_access (PvRuntime *self,
       g_debug ("%s: Using bwrap to set up runtime that is just /usr",
                G_STRFUNC);
 
+      /* By design, writeable copies of the runtime never need this:
+       * the writeable copy is a complete sysroot, not just a merged /usr. */
+      g_assert (self->mutable_sysroot == NULL);
+      g_assert (self->tmpdir != NULL);
+
       self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
       g_mkdir (self->container_access, 0700);
 
@@ -590,7 +1000,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
                               "--tmpfs", self->container_access,
                               NULL);
       if (!pv_bwrap_bind_usr (self->container_access_adverb,
-                              self->source_files,
+                              self->runtime_files,
                               self->container_access,
                               error))
         return FALSE;
@@ -715,6 +1125,8 @@ ensure_locales (PvRuntime *self,
   g_autoptr(FlatpakBwrap) run_locale_gen = NULL;
   g_autofree gchar *locale_gen = NULL;
   g_autofree gchar *locales = g_build_filename (self->overrides, "locales", NULL);
+  g_autofree gchar *locales_in_container = g_build_filename (self->overrides_in_container,
+                                                             "locales", NULL);
   g_autoptr(GDir) dir = NULL;
   int exit_status;
 
@@ -746,7 +1158,10 @@ ensure_locales (PvRuntime *self,
                                      NULL);
 
       flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
-      pv_bwrap_copy_tree (run_locale_gen, self->overrides, "/overrides");
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind", self->overrides,
+                              self->overrides_in_container,
+                              NULL);
 
       if (!flatpak_bwrap_bundle_args (run_locale_gen, 1, -1, FALSE,
                                       &local_error))
@@ -758,9 +1173,9 @@ ensure_locales (PvRuntime *self,
 
       flatpak_bwrap_add_args (run_locale_gen,
                               "--ro-bind", self->tools_dir, "/run/host/tools",
-                              "--bind", locales, "/overrides/locales",
+                              "--bind", locales, locales_in_container,
                               locale_gen,
-                              "--output-dir", "/overrides/locales",
+                              "--output-dir", locales_in_container,
                               "--verbose",
                               NULL);
     }
@@ -792,7 +1207,7 @@ ensure_locales (PvRuntime *self,
 
       g_debug ("%s is non-empty", locales);
 
-      locpath = g_string_new ("/overrides/locales");
+      locpath = g_string_new (locales_in_container);
       pv_search_path_append (locpath, g_getenv ("LOCPATH"));
       flatpak_bwrap_add_args (bwrap,
                               "--setenv", "LOCPATH", locpath->str,
@@ -1032,8 +1447,33 @@ bind_runtime (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, self->source_files, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, self->runtime_files, "/", error))
     return FALSE;
+
+  /* In the case where we have a mutable sysroot, we mount the overrides
+   * as part of /usr. Make /overrides a symbolic link, to be nice to
+   * older steam-runtime-tools versions. */
+
+  if (self->mutable_sysroot != NULL)
+    {
+      g_assert (self->overrides_in_container[0] == '/');
+      g_assert (g_strcmp0 (self->overrides_in_container, "/overrides") != 0);
+      flatpak_bwrap_add_args (bwrap,
+                              "--symlink",
+                              &self->overrides_in_container[1],
+                              "/overrides",
+                              NULL);
+
+      /* Also make a matching symbolic link on disk, to make it easier
+       * to inspect the sysroot. */
+      if (TEMP_FAILURE_RETRY (symlinkat (&self->overrides_in_container[1],
+                                         self->mutable_sysroot_fd,
+                                         "overrides")) != 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to create symlink \"%s/overrides\" -> \"%s\"",
+                                        self->mutable_sysroot,
+                                        &self->overrides_in_container[1]);
+    }
 
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
@@ -1048,7 +1488,7 @@ bind_runtime (PvRuntime *self,
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
     {
-      g_autofree gchar *path = g_build_filename (self->source_files,
+      g_autofree gchar *path = g_build_filename (self->runtime_files,
                                                  bind_mutable[i],
                                                  NULL);
       g_autoptr(GDir) dir = NULL;
@@ -1070,7 +1510,7 @@ bind_runtime (PvRuntime *self,
           if (g_strv_contains (dont_bind, dest))
             continue;
 
-          full = g_build_filename (self->source_files,
+          full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],
                                    member,
                                    NULL);
@@ -1148,7 +1588,16 @@ bind_runtime (PvRuntime *self,
   flatpak_run_add_pulseaudio_args (bwrap);
   flatpak_run_add_session_dbus_args (bwrap);
   flatpak_run_add_system_dbus_args (bwrap);
-  pv_bwrap_copy_tree (bwrap, self->overrides, "/overrides");
+
+  if (self->mutable_sysroot == NULL)
+    {
+      /* self->overrides is in a temporary directory that will be
+       * cleaned up before we enter the container, so we need to convert
+       * it into a series of --dir and --symlink instructions.
+       *
+       * We have to do this late, because it adds data fds. */
+      pv_bwrap_copy_tree (bwrap, self->overrides, self->overrides_in_container);
+    }
 
   /* /etc/localtime and /etc/resolv.conf can not exist (or be symlinks to
    * non-existing targets), in which case we don't want to attempt to create
@@ -1197,6 +1646,425 @@ bind_runtime (PvRuntime *self,
   return TRUE;
 }
 
+typedef enum
+{
+  TAKE_FROM_HOST_FLAGS_IF_DIR = (1 << 0),
+  TAKE_FROM_HOST_FLAGS_IF_EXISTS = (1 << 1),
+  TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
+  TAKE_FROM_HOST_FLAGS_COPY_FALLBACK = (1 << 3),
+  TAKE_FROM_HOST_FLAGS_NONE = 0
+} TakeFromHostFlags;
+
+static gboolean
+pv_runtime_take_from_host (PvRuntime *self,
+                           FlatpakBwrap *bwrap,
+                           const char *source_in_host,
+                           const char *dest_in_container,
+                           TakeFromHostFlags flags,
+                           GError **error)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (flags & TAKE_FROM_HOST_FLAGS_IF_DIR)
+    {
+      if (!g_file_test (source_in_host, G_FILE_TEST_IS_DIR))
+        return TRUE;
+    }
+
+  if (flags & TAKE_FROM_HOST_FLAGS_IF_EXISTS)
+    {
+      if (!g_file_test (source_in_host, G_FILE_TEST_EXISTS))
+        return TRUE;
+    }
+
+  if (self->mutable_sysroot != NULL)
+    {
+      /* Replace ${mutable_sysroot}/usr/lib/locale with a symlink to
+       * /run/host/usr/lib/locale, or similar */
+      g_autofree gchar *parent_in_container = NULL;
+      g_autofree gchar *target = NULL;
+      const char *base;
+      glnx_autofd int parent_dirfd = -1;
+
+      parent_in_container = g_path_get_dirname (dest_in_container);
+      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                            parent_in_container,
+                                            PV_RESOLVE_FLAGS_MKDIR_P,
+                                            NULL, error);
+
+      if (parent_dirfd < 0)
+        return FALSE;
+
+      base = glnx_basename (dest_in_container);
+
+      if (!glnx_shutil_rm_rf_at (parent_dirfd, base, NULL, error))
+        return FALSE;
+
+      /* If it isn't in /usr, /lib, etc., then the symlink will be
+       * dangling and this probably isn't going to work. */
+      if (!path_visible_in_run_host (source_in_host))
+        {
+          if (flags & TAKE_FROM_HOST_FLAGS_COPY_FALLBACK)
+            {
+              return glnx_file_copy_at (AT_FDCWD, source_in_host, NULL,
+                                        parent_dirfd, base,
+                                        GLNX_FILE_COPY_OVERWRITE,
+                                        NULL, error);
+            }
+          else
+            {
+              g_warning ("\"%s\" is unlikely to appear in /run/host",
+                         source_in_host);
+              /* ... but try it anyway, it can't hurt */
+            }
+        }
+
+      target = g_build_filename ("/run/host", source_in_host, NULL);
+
+      if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to create symlink \"%s/%s\" -> \"%s\"",
+                                        self->mutable_sysroot,
+                                        dest_in_container, target);
+    }
+  else
+    {
+      /* We can't edit the runtime in-place, so tell bubblewrap to mount
+       * a new version over the top */
+
+      if (flags & TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE)
+        {
+          g_autofree gchar *dest = NULL;
+
+          if (g_str_has_prefix (dest_in_container, "/usr/"))
+            dest = g_build_filename (self->runtime_usr,
+                                     dest_in_container + strlen ("/usr/"),
+                                     NULL);
+          else
+            dest = g_build_filename (self->runtime_files,
+                                     dest_in_container,
+                                     NULL);
+
+          if (g_file_test (source_in_host, G_FILE_TEST_IS_DIR))
+            {
+              if (!g_file_test (dest, G_FILE_TEST_IS_DIR))
+                {
+                  g_warning ("Not mounting \"%s\" over non-directory file or "
+                             "nonexistent path \"%s\"",
+                             source_in_host, dest);
+                  return TRUE;
+                }
+            }
+          else
+            {
+              if (!(g_file_test (dest, G_FILE_TEST_EXISTS) &&
+                    g_file_test (dest, G_FILE_TEST_IS_DIR)))
+                {
+                  g_warning ("Not mounting \"%s\" over directory or "
+                             "nonexistent path \"%s\"",
+                             source_in_host, dest);
+                  return TRUE;
+                }
+            }
+        }
+
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind", source_in_host, dest_in_container,
+                              NULL);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+pv_runtime_remove_overridden_libraries (PvRuntime *self,
+                                        RuntimeArchitecture *arch,
+                                        GError **error)
+{
+  static const char * const libdirs[] = { "lib", "usr/lib", "usr/lib/mesa" };
+  GHashTable *delete[G_N_ELEMENTS (libdirs)] = { NULL };
+  GLnxDirFdIterator iters[G_N_ELEMENTS (libdirs)] = { { FALSE } };
+  gchar *multiarch_libdirs[G_N_ELEMENTS (libdirs)] = { NULL };
+  gboolean ret = FALSE;
+  gsize i;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (arch != NULL, FALSE);
+  g_return_val_if_fail (arch->ld_so != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* Not applicable/possible if we don't have a mutable sysroot */
+  g_return_val_if_fail (self->mutable_sysroot != NULL, FALSE);
+
+  /* We have to figure out what we want to delete before we delete anything,
+   * because we can't tell whether a symlink points to a library of a
+   * particular SONAME if we already deleted the library. */
+  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+    {
+      glnx_autofd int libdir_fd = -1;
+      struct dirent *dent;
+
+      multiarch_libdirs[i] = g_build_filename (libdirs[i], arch->tuple, NULL);
+
+      /* Mostly ignore error: if the library directory cannot be opened,
+       * presumably we don't need to do anything with it... */
+        {
+          g_autoptr(GError) local_error = NULL;
+
+          libdir_fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                             multiarch_libdirs[i],
+                                             PV_RESOLVE_FLAGS_READABLE,
+                                             NULL, &local_error);
+
+          if (libdir_fd < 0)
+            {
+              g_debug ("Cannot resolve \"%s\" in \"%s\", so no need to delete "
+                       "libraries from it: %s",
+                       multiarch_libdirs[i], self->mutable_sysroot,
+                       local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+        }
+
+      g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
+               arch->tuple, multiarch_libdirs[i], self->mutable_sysroot);
+
+      if (!glnx_dirfd_iterator_init_take_fd (&libdir_fd, &iters[i], error))
+        {
+          glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
+                             self->mutable_sysroot,
+                             multiarch_libdirs[i]);
+          goto out;
+        }
+
+      delete[i] = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                         g_free, g_free);
+
+      while (TRUE)
+        {
+          g_autoptr(Elf) elf = NULL;
+          g_autoptr(GError) local_error = NULL;
+          glnx_autofd int libfd = -1;
+          g_autofree gchar *path = NULL;
+          g_autofree gchar *soname = NULL;
+          g_autofree gchar *target = NULL;
+
+          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
+                                                           NULL, error))
+            return glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+                                      self->mutable_sysroot,
+                                      multiarch_libdirs[i]);
+
+          if (dent == NULL)
+            break;
+
+          switch (dent->d_type)
+            {
+              case DT_REG:
+              case DT_LNK:
+                break;
+
+              case DT_BLK:
+              case DT_CHR:
+              case DT_DIR:
+              case DT_FIFO:
+              case DT_SOCK:
+              case DT_UNKNOWN:
+              default:
+                continue;
+            }
+
+          if (!g_str_has_prefix (dent->d_name, "lib"))
+            continue;
+
+          if (!g_str_has_suffix (dent->d_name, ".so") &&
+              strstr (dent->d_name, ".so.") == NULL)
+            continue;
+
+          path = g_build_filename (multiarch_libdirs[i], dent->d_name, NULL);
+
+          /* scope for soname_link */
+            {
+              g_autofree gchar *soname_link = NULL;
+
+              soname_link = g_build_filename (arch->libdir_on_host,
+                                              dent->d_name, NULL);
+
+              /* If we found libfoo.so.1 in the container, and libfoo.so.1
+               * also exists among the overrides, delete it. */
+              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+
+          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+                                           NULL, NULL);
+
+          if (target != NULL)
+            {
+              g_autofree gchar *soname_link = NULL;
+
+              soname_link = g_build_filename (arch->libdir_on_host,
+                                              glnx_basename (target),
+                                              NULL);
+
+              /* If the symlink in the container points to
+               * /foo/bar/libfoo.so.1, and libfoo.so.1 also exists among
+               * the overrides, delete it. */
+              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+
+          libfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd, path,
+                                         PV_RESOLVE_FLAGS_READABLE, NULL,
+                                         &local_error);
+
+          if (libfd < 0)
+            {
+              g_warning ("Unable to open %s/%s for reading: %s",
+                         self->mutable_sysroot, path, local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+
+          elf = pv_elf_open_fd (libfd, &local_error);
+
+          if (elf != NULL)
+            soname = pv_elf_get_soname (elf, &local_error);
+
+          if (soname == NULL)
+            {
+              g_warning ("Unable to get SONAME of %s/%s: %s",
+                         self->mutable_sysroot, path, local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+
+          /* If we found a library with SONAME libfoo.so.1 in the
+           * container, and libfoo.so.1 also exists among the overrides,
+           * delete it. */
+            {
+              g_autofree gchar *soname_link = NULL;
+
+              soname_link = g_build_filename (arch->libdir_on_host, soname,
+                                              NULL);
+
+              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+        }
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+    {
+      if (delete[i] == NULL)
+        continue;
+
+      g_assert (iters[i].initialized);
+      g_assert (iters[i].fd >= 0);
+
+      GLNX_HASH_TABLE_FOREACH_KV (delete[i],
+                                  const char *, name,
+                                  const char *, reason)
+        {
+          g_autoptr(GError) local_error = NULL;
+
+          g_debug ("Deleting %s/%s/%s because %s replaces it",
+                   self->mutable_sysroot, multiarch_libdirs[i], name, reason);
+
+          if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
+            {
+              g_warning ("Unable to delete %s/%s/%s: %s",
+                         self->mutable_sysroot, multiarch_libdirs[i],
+                         name, local_error->message);
+              g_clear_error (&local_error);
+            }
+        }
+    }
+
+  ret = TRUE;
+
+out:
+  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+    {
+      g_clear_pointer (&delete[i], g_hash_table_unref);
+      glnx_dirfd_iterator_clear (&iters[i]);
+      g_free (multiarch_libdirs[i]);
+    }
+
+  return ret;
+}
+
+static gboolean
+pv_runtime_take_ld_so_from_host (PvRuntime *self,
+                                 RuntimeArchitecture *arch,
+                                 const gchar *ld_so_in_runtime,
+                                 FlatpakBwrap *bwrap,
+                                 GError **error)
+{
+  g_autofree gchar *ld_so_in_host = NULL;
+
+  g_debug ("Making host ld.so visible in container");
+
+  ld_so_in_host = realpath (arch->ld_so, NULL);
+
+  if (ld_so_in_host == NULL)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to determine host path to %s",
+                                    arch->ld_so);
+
+  g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
+  /* Might be either absolute, or relative to the root */
+  g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
+
+  /* If we have a mutable sysroot, we can delete the interoperable path
+   * and replace it with a symlink to what we want.
+   * For example, overwrite /lib/ld-linux.so.2 with a symlink to
+   * /run/host/lib/i386-linux-gnu/ld-2.30.so, or similar. This avoids
+   * having to dereference a long chain of symlinks every time we run
+   * an executable. */
+  if (self->mutable_sysroot != NULL &&
+      !pv_runtime_take_from_host (self, bwrap, ld_so_in_host,
+                                  arch->ld_so, TAKE_FROM_HOST_FLAGS_NONE,
+                                  error))
+    return FALSE;
+
+  /* If we don't have a mutable sysroot, we cannot replace symlinks,
+   * and we also cannot mount onto symlinks (they get dereferenced),
+   * so our only choice is to bind-mount
+   * /lib/i386-linux-gnu/ld-2.30.so onto
+   * /lib/i386-linux-gnu/ld-2.15.so and so on.
+   *
+   * In the mutable sysroot case, we don't strictly need to
+   * overwrite /lib/i386-linux-gnu/ld-2.15.so with a symlink to
+   * /run/host/lib/i386-linux-gnu/ld-2.30.so, but we might as well do
+   * it anyway, for extra robustness: if we ever run a ld.so that
+   * doesn't match the libc we are using (perhaps via an OS-specific,
+   * non-standard path), that's pretty much a disaster, because it will
+   * just crash. However, all of those (chains of) non-standard symlinks
+   * will end up pointing to ld_so_in_runtime. */
+  return pv_runtime_take_from_host (self, bwrap, ld_so_in_host,
+                                    ld_so_in_runtime,
+                                    TAKE_FROM_HOST_FLAGS_NONE, error);
+}
+
 static gboolean
 pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                     FlatpakBwrap *bwrap,
@@ -1226,7 +2094,6 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                                        g_free, NULL);
   g_autoptr(GHashTable) gconv_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                  g_free, NULL);
-  g_autofree gchar *libdrm_data_in_runtime = NULL;
   g_autofree gchar *best_libdrm_data_from_host = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
@@ -1319,32 +2186,55 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
+          /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
-          temp_bwrap = flatpak_bwrap_new (NULL);
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  self->bubblewrap,
-                                  NULL);
+          if (self->mutable_sysroot != NULL)
+            {
+              glnx_autofd int fd = -1;
 
-          if (!pv_bwrap_bind_usr (temp_bwrap,
-                                  self->source_files,
-                                  "/",
-                                  error))
-            return FALSE;
+              fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                          arch->ld_so,
+                                          PV_RESOLVE_FLAGS_NONE,
+                                          &ld_so_in_runtime,
+                                          error);
 
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  "env", "PATH=/usr/bin:/bin",
-                                  "readlink", "-e", arch->ld_so,
-                                  NULL);
-          flatpak_bwrap_finish (temp_bwrap);
+              if (fd < 0)
+                return FALSE;
+            }
+          else
+            {
+              /* Do it the hard way, by asking a process running in the
+               * container (or at least a container resembling the one we
+               * are going to use) to resolve it for us */
+              temp_bwrap = flatpak_bwrap_new (NULL);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      self->bubblewrap,
+                                      NULL);
 
-          ld_so_in_runtime = pv_capture_output ((const char * const *) temp_bwrap->argv->pdata,
-                                                NULL);
+              if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      self->runtime_files,
+                                      "/",
+                                      error))
+                return FALSE;
 
-          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+              if (!pv_bwrap_bind_usr (temp_bwrap, "/", "/run/host", error))
+                return FALSE;
+
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      "env", "PATH=/usr/bin:/bin",
+                                      "readlink", "-e", arch->ld_so,
+                                      NULL);
+              flatpak_bwrap_finish (temp_bwrap);
+
+              ld_so_in_runtime = pv_capture_output (
+                  (const char * const *) temp_bwrap->argv->pdata, NULL);
+
+              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+            }
 
           if (ld_so_in_runtime == NULL)
             {
@@ -1511,30 +2401,22 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
             }
 
+          if (self->mutable_sysroot != NULL &&
+              !pv_runtime_remove_overridden_libraries (self, arch, error))
+            return FALSE;
+
           libc = g_build_filename (arch->libdir_on_host, "libc.so.6", NULL);
 
           /* If we are going to use the host system's libc6 (likely)
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autofree gchar *ld_so_in_host = NULL;
               g_autofree char *libc_target = NULL;
 
-              g_debug ("Making host ld.so visible in container");
-
-              ld_so_in_host = realpath (arch->ld_so, NULL);
-
-              if (ld_so_in_host == NULL)
-                return glnx_throw_errno_prefix (error,
-                                                "Unable to determine host path to %s",
-                                                arch->ld_so);
-
-              g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
-              g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
-              flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", ld_so_in_host,
-                                      ld_so_in_runtime,
-                                      NULL);
+              if (!pv_runtime_take_ld_so_from_host (self, arch,
+                                                    ld_so_in_runtime,
+                                                    bwrap, error))
+                return FALSE;
 
               /* Collect miscellaneous libraries that libc might dlopen.
                * At the moment this is just libidn2. */
@@ -1720,17 +2602,19 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       g_debug ("Making host locale data visible in container");
 
-      if (g_file_test ("/usr/lib/locale", G_FILE_TEST_EXISTS))
-        flatpak_bwrap_add_args (bwrap,
-                                "--ro-bind", "/usr/lib/locale",
-                                "/usr/lib/locale",
-                                NULL);
+      if (!pv_runtime_take_from_host (self, bwrap,
+                                      "/usr/lib/locale",
+                                      "/usr/lib/locale",
+                                      TAKE_FROM_HOST_FLAGS_IF_EXISTS,
+                                      error))
+        return FALSE;
 
-      if (g_file_test ("/usr/share/i18n", G_FILE_TEST_EXISTS))
-        flatpak_bwrap_add_args (bwrap,
-                                "--ro-bind", "/usr/share/i18n",
-                                "/usr/share/i18n",
-                                NULL);
+      if (!pv_runtime_take_from_host (self, bwrap,
+                                      "/usr/share/i18n",
+                                      "/usr/share/i18n",
+                                      TAKE_FROM_HOST_FLAGS_IF_EXISTS,
+                                      error))
+        return FALSE;
 
       localedef = g_find_program_in_path ("localedef");
 
@@ -1738,15 +2622,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_warning ("Cannot find localedef in PATH");
         }
-      else
+      else if (!pv_runtime_take_from_host (self, bwrap, localedef,
+                                           "/usr/bin/localedef",
+                                           TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                           error))
         {
-          g_autofree gchar *target = g_build_filename ("/run/host",
-                                                       localedef, NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", target,
-                                  "/overrides/bin/localedef",
-                                  NULL);
+          return FALSE;
         }
 
       locale = g_find_program_in_path ("locale");
@@ -1755,15 +2636,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_warning ("Cannot find locale in PATH");
         }
-      else
+      else if (!pv_runtime_take_from_host (self, bwrap, locale,
+                                           "/usr/bin/locale",
+                                           TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                           error))
         {
-          g_autofree gchar *target = g_build_filename ("/run/host",
-                                                       locale, NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", target,
-                                  "/overrides/bin/locale",
-                                  NULL);
+          return FALSE;
         }
 
       ldconfig = g_find_program_in_path ("ldconfig");
@@ -1780,11 +2658,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_warning ("Cannot find ldconfig in PATH, /sbin or /usr/sbin");
         }
-      else
+      else if (!pv_runtime_take_from_host (self, bwrap,
+                                           ldconfig,
+                                           "/sbin/ldconfig",
+                                           TAKE_FROM_HOST_FLAGS_NONE,
+                                           error))
         {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", ldconfig, "/sbin/ldconfig",
-                                  NULL);
+          return FALSE;
         }
 
       g_debug ("Making host gconv modules visible in container");
@@ -1792,19 +2672,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       g_hash_table_iter_init (&iter, gconv_from_host);
       while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
         {
-          g_autofree gchar *gconv_in_runtime = NULL;
-
-          if (g_str_has_prefix (gconv_path, "/usr/"))
-            gconv_in_runtime = g_build_filename (self->runtime_usr, gconv_path + strlen ("/usr"), NULL);
-          else
-            gconv_in_runtime = g_build_filename (self->runtime_usr, gconv_path, NULL);
-
-          if (g_file_test (gconv_in_runtime, G_FILE_TEST_IS_DIR))
-            {
-              flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", gconv_path, gconv_path,
-                                      NULL);
-            }
+          if (!pv_runtime_take_from_host (self, bwrap,
+                                          gconv_path,
+                                          gconv_path,
+                                          TAKE_FROM_HOST_FLAGS_IF_DIR,
+                                          error))
+            return FALSE;
         }
     }
   else
@@ -1836,14 +2709,14 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
     }
 
-  libdrm_data_in_runtime = g_build_filename (self->runtime_usr, "share", "libdrm", NULL);
-
-  if (best_libdrm_data_from_host != NULL &&
-      g_file_test (libdrm_data_in_runtime, G_FILE_TEST_IS_DIR))
+  if (best_libdrm_data_from_host != NULL)
     {
-      flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", best_libdrm_data_from_host, "/usr/share/libdrm",
-                              NULL);
+      if (!pv_runtime_take_from_host (self, bwrap,
+                                      best_libdrm_data_from_host,
+                                      "/usr/share/libdrm",
+                                      TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                      error))
+        return FALSE;
     }
 
   g_debug ("Setting up EGL ICD JSON...");
@@ -1883,8 +2756,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
                                            j, multiarch_tuples[i]);
               json_on_host = g_build_filename (dir_on_host, json_base, NULL);
-              json_in_container = g_build_filename ("/overrides", "share",
-                                                    "glvnd", "egl_vendor.d",
+              json_in_container = g_build_filename (self->overrides_in_container,
+                                                    "share", "glvnd",
+                                                    "egl_vendor.d",
                                                     json_base, NULL);
 
               replacement = srt_egl_icd_new_replace_library_path (icd,
@@ -1909,13 +2783,18 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           const char *json_on_host = srt_egl_icd_get_json_path (icd);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
-          json_in_container = g_build_filename ("/overrides", "share",
-                                                "glvnd", "egl_vendor.d",
+          json_in_container = g_build_filename (self->overrides_in_container,
+                                                "share", "glvnd",
+                                                "egl_vendor.d",
                                                 json_base, NULL);
 
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", json_on_host, json_in_container,
-                                  NULL);
+          if (!pv_runtime_take_from_host (self, bwrap,
+                                          json_on_host,
+                                          json_in_container,
+                                          TAKE_FROM_HOST_FLAGS_COPY_FALLBACK,
+                                          error))
+            return FALSE;
+
           pv_search_path_append (egl_path, json_in_container);
         }
     }
@@ -1957,8 +2836,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
                                            j, multiarch_tuples[i]);
               json_on_host = g_build_filename (dir_on_host, json_base, NULL);
-              json_in_container = g_build_filename ("/overrides", "share",
-                                                    "vulkan", "icd.d",
+              json_in_container = g_build_filename (self->overrides_in_container,
+                                                    "share", "vulkan", "icd.d",
                                                     json_base, NULL);
 
               replacement = srt_vulkan_icd_new_replace_library_path (icd,
@@ -1983,13 +2862,17 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
           const char *json_on_host = srt_vulkan_icd_get_json_path (icd);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
-          json_in_container = g_build_filename ("/overrides", "share",
-                                                "vulkan", "icd.d",
+          json_in_container = g_build_filename (self->overrides_in_container,
+                                                "share", "vulkan", "icd.d",
                                                 json_base, NULL);
 
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", json_on_host, json_in_container,
-                                  NULL);
+          if (!pv_runtime_take_from_host (self, bwrap,
+                                          json_on_host,
+                                          json_in_container,
+                                          TAKE_FROM_HOST_FLAGS_COPY_FALLBACK,
+                                          error))
+            return FALSE;
+
           pv_search_path_append (vulkan_path, json_in_container);
         }
     }
@@ -2069,8 +2952,10 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
    * already. */
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "VDPAU_DRIVER_PATH",
-                          "/overrides/lib/${PLATFORM}-linux-gnu/vdpau",
                           NULL);
+  flatpak_bwrap_add_arg_printf (bwrap,
+                                "%s/lib/${PLATFORM}-linux-gnu/vdpau",
+                                self->overrides_in_container);
 
   static const char * const extra_multiarch_tuples[] =
   {
@@ -2123,14 +3008,48 @@ pv_runtime_bind (PvRuntime *self,
   if (!bind_runtime (self, bwrap, error))
     return FALSE;
 
+  /* steam-runtime-system-info uses this to detect pressure-vessel, so we
+   * need to create it even if it will be empty */
+  flatpak_bwrap_add_args (bwrap,
+                          "--dir",
+                          "/run/pressure-vessel",
+                          NULL);
+
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);
 
   /* Make sure pressure-vessel itself is visible there. */
-  flatpak_bwrap_add_args (bwrap,
-                          "--ro-bind",
-                          pressure_vessel_prefix,
-                          "/run/pressure-vessel",
-                          NULL);
+  if (self->mutable_sysroot != NULL)
+    {
+      g_autofree gchar *dest = NULL;
+      glnx_autofd int parent_dirfd = -1;
+
+      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                            "/usr/lib/pressure-vessel",
+                                            PV_RESOLVE_FLAGS_MKDIR_P,
+                                            NULL, error);
+
+      if (parent_dirfd < 0)
+        return FALSE;
+
+      if (!glnx_shutil_rm_rf_at (parent_dirfd, "from-host", NULL, error))
+        return FALSE;
+
+      dest = glnx_fdrel_abspath (parent_dirfd, "from-host");
+
+      if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest, error))
+        return FALSE;
+
+      self->with_lock_in_container = "/usr/lib/pressure-vessel/from-host/bin/pressure-vessel-with-lock";
+    }
+  else
+    {
+      flatpak_bwrap_add_args (bwrap,
+                              "--ro-bind",
+                              pressure_vessel_prefix,
+                              "/run/pressure-vessel/pv-from-host",
+                              NULL);
+      self->with_lock_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-with-lock";
+    }
 
   pv_runtime_set_search_paths (self, bwrap);
 
@@ -2154,8 +3073,8 @@ pv_runtime_set_search_paths (PvRuntime *self,
       {
         g_autofree gchar *ld_path = NULL;
 
-        ld_path = g_build_filename ("/overrides", "lib",
-                                   multiarch_tuples[i], NULL);
+        ld_path = g_build_filename (self->overrides_in_container, "lib",
+                                    multiarch_tuples[i], NULL);
 
         pv_search_path_append (ld_library_path, ld_path);
       }
@@ -2167,7 +3086,7 @@ pv_runtime_set_search_paths (PvRuntime *self,
                            * really make sense inside the container:
                            * in principle the layout could be totally
                            * different. */
-                          "--setenv", "PATH", "/overrides/bin:/usr/bin:/bin",
+                          "--setenv", "PATH", "/usr/bin:/bin",
                           "--setenv", "LD_LIBRARY_PATH",
                           ld_library_path->str,
                           NULL);

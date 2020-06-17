@@ -100,7 +100,8 @@ find_bwrap (const char *tools_dir)
 }
 
 static gchar *
-check_bwrap (const char *tools_dir)
+check_bwrap (const char *tools_dir,
+             gboolean only_prepare)
 {
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
@@ -118,6 +119,14 @@ check_bwrap (const char *tools_dir)
   if (bwrap_executable == NULL)
     {
       g_warning ("Cannot find bwrap");
+    }
+  else if (only_prepare)
+    {
+      /* With --only-prepare we don't necessarily expect to be able to run
+       * it anyway (we are probably in a Docker container that doesn't allow
+       * creation of nested user namespaces), so just assume that it's the
+       * right one. */
+      return g_steal_pointer (&bwrap_executable);
     }
   else
     {
@@ -316,14 +325,17 @@ typedef enum
   TRISTATE_MAYBE
 } Tristate;
 
+static char *opt_copy_runtime_into = NULL;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
+static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
 static gboolean opt_host_graphics = TRUE;
+static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
@@ -495,6 +507,11 @@ opt_share_home_cb (const gchar *option_name,
 
 static GOptionEntry options[] =
 {
+  { "copy-runtime-into", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_copy_runtime_into,
+    "If a --runtime is used, copy it into DIR and edit the copy in-place. "
+    "[Default: $PRESSURE_VESSEL_COPY_RUNTIME_INTO or empty]",
+    "DIR" },
   { "env-if-host", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
@@ -509,6 +526,15 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $SteamAppId]", "N" },
+  { "gc-runtimes", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
+    "If using --copy-runtime-into, garbage-collect old temporary "
+    "runtimes. [Default, unless $PRESSURE_VESSEL_GC_RUNTIMES is 0]",
+    NULL },
+  { "no-gc-runtimes", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
+    "If using --copy-runtime-into, don't garbage-collect old "
+    "temporary runtimes.", NULL },
   { "generate-locales", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
     "If using --runtime, attempt to generate any missing locales. "
@@ -626,6 +652,9 @@ static GOptionEntry options[] =
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
     "Smoke test pressure-vessel-wrap and exit.", NULL },
+  { "only-prepare", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_only_prepare,
+    "Prepare runtime, but do not actually run anything.", NULL },
   { NULL }
 };
 
@@ -734,6 +763,7 @@ main (int argc,
   opt_remove_game_overlay = boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
                                                  FALSE);
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
+  opt_gc_runtimes = boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
   opt_host_graphics = boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
                                            TRUE);
@@ -773,6 +803,13 @@ main (int argc,
       opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
     }
 
+  if (opt_copy_runtime_into == NULL)
+    opt_copy_runtime_into = g_strdup (g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"));
+
+  if (opt_copy_runtime_into != NULL
+      && opt_copy_runtime_into[0] == '\0')
+    opt_copy_runtime_into = NULL;
+
   if (opt_version_only)
     {
       g_print ("%s\n", VERSION);
@@ -790,7 +827,7 @@ main (int argc,
       goto out;
     }
 
-  if (argc < 2 && !opt_test)
+  if (argc < 2 && !opt_test && !opt_only_prepare)
     {
       g_printerr ("%s: An executable to run is required\n",
                   g_get_prgname ());
@@ -873,6 +910,13 @@ main (int argc,
               goto out;
             }
         }
+    }
+
+  if (opt_only_prepare && opt_test)
+    {
+      g_printerr ("%s: --only-prepare and --test are mutually exclusive",
+                  g_get_prgname ());
+      goto out;
     }
 
   /* Finished parsing arguments, so any subsequent failures will make
@@ -993,7 +1037,7 @@ main (int argc,
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
 
   g_debug ("Checking for bwrap...");
-  bwrap_executable = check_bwrap (tools_dir);
+  bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
 
   if (opt_test)
     {
@@ -1070,6 +1114,9 @@ main (int argc,
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
 
+      if (opt_gc_runtimes)
+        flags |= PV_RUNTIME_FLAGS_GC_RUNTIMES;
+
       if (opt_generate_locales)
         flags |= PV_RUNTIME_FLAGS_GENERATE_LOCALES;
 
@@ -1079,6 +1126,7 @@ main (int argc,
       g_debug ("Configuring runtime %s...", opt_runtime);
 
       runtime = pv_runtime_new (opt_runtime,
+                                opt_copy_runtime_into,
                                 bwrap_executable,
                                 tools_dir,
                                 flags,
@@ -1308,7 +1356,11 @@ main (int argc,
     pv_runtime_cleanup (runtime);
 
   flatpak_bwrap_finish (bwrap);
-  pv_bwrap_execve (bwrap, error);
+
+  if (opt_only_prepare)
+    ret = 0;
+  else
+    pv_bwrap_execve (bwrap, error);
 
 out:
   if (local_error != NULL)

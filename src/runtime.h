@@ -33,6 +33,7 @@
  * PvRuntimeFlags:
  * @PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK: Use host system graphics stack
  * @PV_RUNTIME_FLAGS_GENERATE_LOCALES: Generate missing locales
+ * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -41,12 +42,14 @@ typedef enum
 {
   PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK = (1 << 0),
   PV_RUNTIME_FLAGS_GENERATE_LOCALES = (1 << 1),
+  PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
 #define PV_RUNTIME_FLAGS_MASK \
   (PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK \
    | PV_RUNTIME_FLAGS_GENERATE_LOCALES \
+   | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    )
 
 typedef struct _PvRuntime PvRuntime;
@@ -61,6 +64,7 @@ typedef struct _PvRuntimeClass PvRuntimeClass;
 GType pv_runtime_get_type (void);
 
 PvRuntime *pv_runtime_new (const char *source_files,
+                           const char *mutable_parent,
                            const char *bubblewrap,
                            const char *tools_dir,
                            PvRuntimeFlags flags,

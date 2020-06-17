@@ -5,6 +5,7 @@
 
 import contextlib
 import ctypes
+import errno
 import json
 import logging
 import os
@@ -146,6 +147,14 @@ class TestInsideScout(BaseTest):
         )
         # No actual *tests* here just yet - we just log what's there.
 
+    def test_overrides(self) -> None:
+        if os.getenv('TEST_INSIDE_SCOUT_IS_COPY'):
+            target = os.readlink('/overrides')
+            self.assertEqual(target, 'usr/lib/pressure-vessel/overrides')
+
+        self.assertTrue(Path('/overrides').is_dir())
+        self.assertTrue(Path('/overrides/lib').is_dir())
+
     def test_glibc(self) -> None:
         """
         Assert that we took the glibc version from the host OS.
@@ -155,6 +164,8 @@ class TestInsideScout(BaseTest):
         and in cases where our glibc is the same version as the glibc of
         the host OS, we prefer the host.
         """
+        overrides = Path('/overrides').resolve()
+
         glibc = ctypes.cdll.LoadLibrary('libc.so.6')
         gnu_get_libc_version = glibc.gnu_get_libc_version
         gnu_get_libc_version.restype = ctypes.c_char_p
@@ -167,7 +178,10 @@ class TestInsideScout(BaseTest):
         # closely enough. On x86_64 it does, and on i386 we have
         # symlinks /overrides/lib/i[456]86-linux-gnu.
         host_glibc = ctypes.cdll.LoadLibrary(
-            '/overrides/lib/{}-linux-gnu/libc.so.6'.format(os.uname().machine),
+            '/{}/lib/{}-linux-gnu/libc.so.6'.format(
+                overrides,
+                os.uname().machine,
+            ),
         )
         gnu_get_libc_version = host_glibc.gnu_get_libc_version
         gnu_get_libc_version.restype = ctypes.c_char_p
@@ -214,6 +228,8 @@ class TestInsideScout(BaseTest):
                 self.assertEqual(really_stat.st_ino, expected_stat.st_ino)
 
     def test_srsi(self) -> None:
+        overrides = Path('/overrides').resolve()
+
         if 'HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON' in os.environ:
             with open(
                 os.environ['HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON'],
@@ -416,7 +432,7 @@ class TestInsideScout(BaseTest):
                 # version of the Steam Runtime.
                 self.assertEqual(
                     arch_info['library-details'][soname]['path'],
-                    '/overrides/lib/{}/{}'.format(multiarch, soname),
+                    '{}/lib/{}/{}'.format(overrides, multiarch, soname),
                 )
 
             for soname in (
@@ -461,7 +477,9 @@ class TestInsideScout(BaseTest):
 
                 for k, vs in expect_symlinks.items():
                     with self.subTest(dri_symlink=k):
-                        link = '/overrides/lib/{}/dri/{}'.format(multiarch, k)
+                        link = '{}/lib/{}/dri/{}'.format(
+                            overrides, multiarch, k,
+                        )
                         logger.info('Target of %s should be in %s', link, vs)
                         target = os.readlink(link)
 
@@ -540,6 +558,46 @@ class TestInsideScout(BaseTest):
                     expect_library_issues,
                     set(arch_info['library-issues-summary']),
                 )
+
+    def test_read_only(self) -> None:
+        for read_only_place in (
+            '/bin',
+            '/etc/ld.so.conf.d',
+            '/lib',
+            '/overrides',
+            '/overrides/lib',
+            '/run/host/bin',
+            '/run/host/lib',
+            '/run/host/usr',
+            '/run/host/usr/bin',
+            '/run/host/usr/lib',
+            '/run/pressure-vessel/pv-from-host',
+            '/run/pressure-vessel/pv-from-host/bin',
+            '/sbin',
+            '/usr',
+            '/usr/lib',
+            '/usr/lib/pressure-vessel/from-host/bin',
+            '/usr/lib/pressure-vessel/overrides',
+            '/usr/lib/pressure-vessel/overrides/lib',
+        ):
+            with self.subTest(read_only_place):
+                if (
+                    read_only_place.startswith('/overrides')
+                    and not os.getenv('TEST_INSIDE_SCOUT_IS_COPY')
+                ):
+                    # If we aren't working from a temporary copy of the
+                    # runtime, /overrides is on a tmpfs
+                    continue
+
+                with self.assertRaises(OSError) as raised:
+                    open(os.path.join(read_only_place, 'hello'), 'w')
+
+                if isinstance(raised.exception, FileNotFoundError):
+                    # Some of these paths don't exist under all
+                    # circumstances
+                    continue
+
+                self.assertEqual(raised.exception.errno, errno.EROFS)
 
 
 if __name__ == '__main__':

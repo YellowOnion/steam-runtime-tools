@@ -78,11 +78,16 @@ SteamOS 2 'brewmaster', Debian 8 'jessie', Ubuntu 14.04 'trusty'.
 """
 
 import contextlib
+import fcntl
+import glob
+import json
 import logging
 import os
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
 import unittest
 
 try:
@@ -105,6 +110,7 @@ logger = logging.getLogger('test-containers')
 class TestContainers(BaseTest):
     bwrap = None            # type: typing.Optional[str]
     containers_dir = ''
+    host_srsi_parsed = {}   # type: typing.Dict[str, typing.Any]
     pv_dir = ''
     pv_wrap = ''
 
@@ -122,9 +128,8 @@ class TestContainers(BaseTest):
             stdout=2,
             stderr=2,
         ).returncode != 0:
-            # Right now this means we will skip all the tests, but in
-            # future we will be able to do some tests that just do the
-            # setup and do not actually go as far as running the container.
+            # We can only do tests that just do setup and don't actually
+            # try to run the container.
             cls.bwrap = None
         else:
             cls.bwrap = bwrap
@@ -270,8 +275,15 @@ class TestContainers(BaseTest):
             os.environ['HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON'] = os.path.join(
                 cls.artifacts, 'host-srsi.json',
             )
+
+            with open(
+                os.path.join(cls.artifacts, 'host-srsi.json'),
+                'r',
+            ) as reader:
+                cls.host_srsi_parsed = json.load(reader)
         else:
             os.environ.pop('HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON', None)
+            cls.host_srsi_parsed = {}
 
         try:
             os.environ['HOST_LD_LINUX_SO_REALPATH'] = os.path.realpath(
@@ -292,6 +304,7 @@ class TestContainers(BaseTest):
         cls = self.__class__
         self.bwrap = cls.bwrap
         self.containers_dir = cls.containers_dir
+        self.host_srsi_parsed = cls.host_srsi_parsed
         self.pv_dir = cls.pv_dir
         self.pv_wrap = cls.pv_wrap
 
@@ -305,6 +318,21 @@ class TestContainers(BaseTest):
                 os.path.join(cls.G_TEST_SRCDIR, f),
                 os.path.join(cls.artifacts, 'tmp', f),
             )
+
+        # This parsing is sufficiently "cheap" that we repeat it for
+        # each test-case rather than introducing more class variables.
+
+        self.host_os_release = cls.host_srsi_parsed.get('os-release', {})
+
+        if self.host_os_release.get('id') == 'debian':
+            logger.info('Host OS is Debian')
+            self.host_is_debian_derived = True
+        elif 'debian' in self.host_os_release.get('id_like', []):
+            logger.info('Host OS is Debian-derived')
+            self.host_is_debian_derived = True
+        else:
+            logger.info('Host OS is not Debian-derived')
+            self.host_is_debian_derived = False
 
     def tearDown(self) -> None:
         with contextlib.suppress(FileNotFoundError):
@@ -334,9 +362,12 @@ class TestContainers(BaseTest):
         test_name: str,
         scout: str,
         *,
-        locales: bool = False
+        copy: bool = False,
+        gc: bool = True,
+        locales: bool = False,
+        only_prepare: bool = False
     ) -> None:
-        if self.bwrap is None:
+        if self.bwrap is None and not only_prepare:
             self.skipTest('Unable to run bwrap (in a container?)')
 
         if not os.path.isdir(scout):
@@ -354,30 +385,442 @@ class TestContainers(BaseTest):
             '--verbose',
         ]
 
+        var = os.path.join(self.containers_dir, 'var')
+        os.makedirs(var, exist_ok=True)
+
         if not locales:
             argv.append('--no-generate-locales')
 
-        argv.extend([
-            '--',
-            'env',
-            'TEST_INSIDE_SCOUT_ARTIFACTS=' + artifacts,
-            'TEST_INSIDE_SCOUT_LOCALES=' + ('1' if locales else ''),
-            'python3.5',
-            os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),
-        ])
+        with tempfile.TemporaryDirectory(prefix='test-', dir=var) as temp:
+            if copy:
+                argv.extend(['--copy-runtime-into', temp])
 
-        with tee_file_and_stderr(
-            os.path.join(artifacts, 'inside-scout.log')
-        ) as tee:
-            completed = self.run_subprocess(
-                argv,
-                cwd=self.artifacts,
-                stdout=tee.stdin,
-                stderr=tee.stdin,
-                universal_newlines=True,
+                if not gc:
+                    argv.append('--no-gc-runtimes')
+
+            if only_prepare:
+                argv.append('--only-prepare')
+            else:
+                argv.extend([
+                    '--',
+                    'env',
+                    'TEST_INSIDE_SCOUT_ARTIFACTS=' + artifacts,
+                    'TEST_INSIDE_SCOUT_IS_COPY=' + ('1' if copy else ''),
+                    'TEST_INSIDE_SCOUT_LOCALES=' + ('1' if locales else ''),
+                    'python3.5',
+                    os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),
+                ])
+
+            # Create directories representing previous runs of
+            # pressure-vessel-wrap, so that we can assert that they are
+            # GC'd (or not) as desired.
+
+            # Do not delete because its name does not start with tmp-
+            os.makedirs(os.path.join(temp, 'donotdelete'), exist_ok=True)
+            # Delete
+            os.makedirs(os.path.join(temp, 'tmp-deleteme'), exist_ok=True)
+            # Delete, and assert that it is recursive
+            os.makedirs(
+                os.path.join(temp, 'tmp-deleteme2', 'usr', 'lib'),
+                exist_ok=True,
             )
+            # Do not delete because it has ./keep
+            os.makedirs(os.path.join(temp, 'tmp-keep', 'keep'), exist_ok=True)
+            # Do not delete because we will read-lock .ref
+            os.makedirs(os.path.join(temp, 'tmp-rlock'), exist_ok=True)
+            # Do not delete because we will write-lock .ref
+            os.makedirs(os.path.join(temp, 'tmp-wlock'), exist_ok=True)
 
-        self.assertEqual(completed.returncode, 0)
+            with open(
+                os.path.join(temp, 'tmp-rlock', '.ref'), 'w+'
+            ) as rlock_writer, open(
+                os.path.join(temp, 'tmp-wlock', '.ref'), 'w'
+            ) as wlock_writer, tee_file_and_stderr(
+                os.path.join(artifacts, 'inside-scout.log')
+            ) as tee:
+                lockdata = struct.pack('hhlli', fcntl.F_RDLCK, 0, 0, 0, 0)
+                fcntl.fcntl(rlock_writer.fileno(), fcntl.F_SETLKW, lockdata)
+                lockdata = struct.pack('hhlli', fcntl.F_WRLCK, 0, 0, 0, 0)
+                fcntl.fcntl(wlock_writer.fileno(), fcntl.F_SETLKW, lockdata)
+
+                # Put this in a subtest so that if it fails, we still get
+                # to inspect the copied sysroot
+                with self.subTest('run', copy=copy, scout=scout):
+                    completed = self.run_subprocess(
+                        argv,
+                        cwd=self.artifacts,
+                        stdout=tee.stdin,
+                        stderr=tee.stdin,
+                        universal_newlines=True,
+                    )
+                    self.assertEqual(completed.returncode, 0)
+
+            if copy:
+                members = set(os.listdir(temp))
+
+                self.assertIn('.ref', members)
+                self.assertIn('donotdelete', members)
+                self.assertIn('tmp-keep', members)
+                self.assertIn('tmp-rlock', members)
+                self.assertIn('tmp-wlock', members)
+                if gc:
+                    self.assertNotIn('tmp-deleteme', members)
+                    self.assertNotIn('tmp-deleteme2', members)
+                else:
+                    # These would have been deleted if not for --no-gc-runtimes
+                    self.assertIn('tmp-deleteme', members)
+                    self.assertIn('tmp-deleteme2', members)
+
+                members.discard('.ref')
+                members.discard('donotdelete')
+                members.discard('tmp-deleteme')
+                members.discard('tmp-deleteme2')
+                members.discard('tmp-keep')
+                members.discard('tmp-rlock')
+                members.discard('tmp-wlock')
+                # After discarding those, there should be exactly one left:
+                # the one we just created
+                self.assertEqual(len(members), 1)
+                tree = os.path.join(temp, members.pop())
+
+                with self.subTest('mutable sysroot'):
+                    self._assert_mutable_sysroot(
+                        tree,
+                        artifacts,
+                        is_scout=True,
+                    )
+
+    def _assert_mutable_sysroot(
+        self,
+        tree: str,
+        artifacts: str,
+        *,
+        is_scout: bool = True
+    ) -> None:
+        with open(
+            os.path.join(artifacts, 'contents.txt'),
+            'w',
+        ) as writer:
+            self.run_subprocess([
+                'find',
+                '.',
+                '-ls',
+            ], cwd=tree, stderr=2, stdout=writer)
+
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'bin')))
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'etc')))
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'lib')))
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'usr')))
+        self.assertFalse(
+            os.path.isdir(os.path.join(tree, 'usr', 'usr'))
+        )
+        self.assertTrue(os.path.isdir(os.path.join(tree, 'sbin')))
+
+        target = os.readlink(os.path.join(tree, 'overrides'))
+        self.assertEqual(target, 'usr/lib/pressure-vessel/overrides')
+        self.assertTrue(
+            os.path.isdir(os.path.join(tree, 'overrides', 'lib')),
+        )
+        self.assertTrue(
+            os.path.isfile(
+                os.path.join(
+                    tree, 'usr', 'lib', 'pressure-vessel', 'from-host',
+                    'bin', 'pressure-vessel-with-lock',
+                )
+            )
+        )
+        self.assertTrue(
+            os.path.isdir(
+                os.path.join(
+                    tree, 'usr', 'lib', 'pressure-vessel', 'overrides', 'lib',
+                )
+            )
+        )
+
+        for multiarch, arch_info in self.host_srsi_parsed.get(
+            'architectures', {}
+        ).items():
+            overrides_libdir = os.path.join(
+                tree, 'overrides', 'lib', multiarch,
+            )
+            root_libdir = os.path.join(
+                tree, 'lib', multiarch,
+            )
+            usr_libdir = os.path.join(
+                tree, 'usr', 'lib', multiarch,
+            )
+            host_root_libdir = os.path.join(
+                '/', 'lib', multiarch,
+            )
+            host_usr_libdir = os.path.join(
+                '/', 'usr', 'lib', multiarch,
+            )
+            with self.subTest(arch=multiarch):
+
+                self.assertTrue(os.path.isdir(overrides_libdir))
+                self.assertTrue(os.path.isdir(root_libdir))
+                self.assertTrue(os.path.isdir(usr_libdir))
+
+                if is_scout:
+                    for soname in (
+                        'libBrokenLocale.so.1',
+                        'libanl.so.1',
+                        'libc.so.6',
+                        'libcrypt.so.1',
+                        'libdl.so.2',
+                        'libm.so.6',
+                        'libnsl.so.1',
+                        'libpthread.so.0',
+                        'libresolv.so.2',
+                        'librt.so.1',
+                        'libutil.so.1',
+                    ):
+                        # These are from glibc, which is depended on by
+                        # Mesa, and is at least as new as scout's version
+                        # in every supported version of the Steam Runtime.
+                        with self.subTest(soname=soname):
+                            target = os.readlink(
+                                os.path.join(overrides_libdir, soname)
+                            )
+                            self.assertRegex(target, r'^/run/host/')
+
+                            devlib = soname.split('.so.', 1)[0] + '.so'
+
+                            # It was deleted from /lib, if present...
+                            with self.assertRaises(FileNotFoundError):
+                                print(
+                                    '#',
+                                    os.path.join(root_libdir, soname),
+                                    '->',
+                                    os.readlink(
+                                        os.path.join(root_libdir, soname)
+                                    ),
+                                )
+                            # ... and /usr/lib, if present
+                            with self.assertRaises(FileNotFoundError):
+                                print(
+                                    '#',
+                                    os.path.join(usr_libdir, soname),
+                                    '->',
+                                    os.readlink(
+                                        os.path.join(usr_libdir, soname)
+                                    ),
+                                )
+
+                            # In most cases we expect the development
+                            # symlink to be removed, too - but some of
+                            # them are actually linker scripts or other
+                            # non-ELF things
+                            if soname not in (
+                                'libc.so.6',
+                                'libpthread.so.0',
+                            ):
+                                with self.assertRaises(FileNotFoundError):
+                                    print(
+                                        '#',
+                                        os.path.join(usr_libdir, devlib),
+                                        '->',
+                                        os.readlink(
+                                            os.path.join(usr_libdir, devlib)
+                                        ),
+                                    )
+                                with self.assertRaises(FileNotFoundError):
+                                    print(
+                                        '#',
+                                        os.path.join(root_libdir, devlib),
+                                        '->',
+                                        os.readlink(
+                                            os.path.join(root_libdir, devlib)
+                                        ),
+                                    )
+
+                    for soname in (
+                        # These are some examples of libraries in the
+                        # graphics stack that we don't upgrade, so we
+                        # expect the host version to be newer (or possibly
+                        # absent if the host graphics stack doesn't use
+                        # them, for example static linking or something).
+                        'libdrm.so.2',
+                        'libudev.so.0',
+                    ):
+                        with self.subTest(soname=soname):
+                            if (
+                                not os.path.exists(
+                                    os.path.join(host_usr_libdir, soname)
+                                )
+                                and not os.path.exists(
+                                    os.path.join(host_root_libdir, soname)
+                                )
+                            ):
+                                self.assertTrue(
+                                    os.path.exists(
+                                        os.path.join(usr_libdir, soname)
+                                    )
+                                    or os.path.exists(
+                                        os.path.join(root_libdir, soname)
+                                    )
+                                )
+                                continue
+
+                            devlib = soname.split('.so.', 1)[0] + '.so'
+                            pattern = soname + '.*'
+
+                            target = os.readlink(
+                                os.path.join(overrides_libdir, soname)
+                            )
+                            self.assertRegex(target, r'^/run/host/')
+
+                            # It was deleted from /lib, if present...
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(root_libdir, soname)
+                                )
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(root_libdir, devlib)
+                                )
+                            self.assertEqual(
+                                glob.glob(os.path.join(root_libdir, pattern)),
+                                [],
+                            )
+
+                            # ... and /usr/lib, if present
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(usr_libdir, soname)
+                                )
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(usr_libdir, devlib)
+                                )
+                            self.assertEqual(
+                                glob.glob(os.path.join(usr_libdir, pattern)),
+                                [],
+                            )
+
+                    for soname in (
+                        'libSDL-1.2.so.0',
+                        'libfltk.so.1.1',
+                    ):
+                        with self.subTest(soname=soname):
+                            with self.assertRaises(FileNotFoundError):
+                                os.readlink(
+                                    os.path.join(overrides_libdir, soname),
+                                )
+
+                # Keys are the basename of a DRI driver.
+                # Values are lists of paths to DRI drivers of that name
+                # on the host. We assert that for each name, an arbitrary
+                # one of the DRI drivers of that name appears in the
+                # container.
+                expect_symlinks = {
+                }    # type: typing.Dict[str, typing.List[str]]
+
+                for dri in arch_info.get('dri_drivers', ()):
+                    path = dri['library_path']
+
+                    if path.startswith((    # any of:
+                        '/usr/lib/dri/',
+                        '/usr/lib32/dri/',
+                        '/usr/lib64/dri/',
+                        '/usr/lib/{}/dri/'.format(multiarch),
+                    )):
+                        # We don't make any assertion about the search
+                        # order here.
+
+                        # Take the realpath() on non-Debian-derived hosts,
+                        # because on Arch Linux, we find drivers in
+                        # /usr/lib64 that are physically in /usr/lib.
+                        # Be more strict on Debian because we know more
+                        # about the canonical paths there.
+                        if not self.host_is_debian_derived:
+                            with contextlib.suppress(OSError):
+                                path = os.path.realpath(path)
+
+                        expect_symlinks.setdefault(
+                            os.path.basename(path), []
+                        ).append(path)
+
+                for k, vs in expect_symlinks.items():
+                    with self.subTest(dri_symlink=k):
+                        link = os.path.join(overrides_libdir, 'dri', k)
+                        target = os.readlink(link)
+                        self.assertEqual(target[:10], '/run/host/')
+                        target = target[9:]     # includes the / after host/
+
+                        # Again, take the realpath() on non-Debian-derived
+                        # hosts, but be more strict on Debian.
+                        if not self.host_is_debian_derived:
+                            with contextlib.suppress(OSError):
+                                target = os.path.realpath(target)
+
+                        self.assertIn(target, vs)
+
+                if is_scout:
+                    if self.host_is_debian_derived:
+                        link = os.path.join(
+                            tree, 'usr', 'lib', multiarch, 'gconv',
+                        )
+                        target = os.readlink(link)
+                        self.assertEqual(
+                            target,
+                            '/run/host/usr/lib/{}/gconv'.format(multiarch),
+                        )
+
+                    if os.path.isdir('/usr/share/libdrm'):
+                        link = os.path.join(
+                            tree, 'usr', 'share', 'libdrm',
+                        )
+                        target = os.readlink(link)
+                        self.assertEqual(target, '/run/host/usr/share/libdrm')
+
+        if is_scout:
+            if os.path.isdir('/usr/lib/locale'):
+                link = os.path.join(tree, 'usr', 'lib', 'locale')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/lib/locale')
+
+            if os.path.isdir('/usr/share/i18n'):
+                link = os.path.join(tree, 'usr', 'share', 'i18n')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/share/i18n')
+
+            link = os.path.join(tree, 'sbin', 'ldconfig')
+            target = os.readlink(link)
+            # Might not be /sbin/ldconfig, for example on non-Debian hosts
+            self.assertRegex(target, r'^/run/host/')
+
+            if os.path.isfile('/usr/bin/locale'):
+                link = os.path.join(tree, 'usr', 'bin', 'locale')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/bin/locale')
+
+            if os.path.isfile('/usr/bin/localedef'):
+                link = os.path.join(tree, 'usr', 'bin', 'localedef')
+                target = os.readlink(link)
+                self.assertEqual(target, '/run/host/usr/bin/localedef')
+
+            for ldso, scout_impl in (
+                (
+                    '/lib/ld-linux.so.2',
+                    '/lib/i386-linux-gnu/ld-2.15.so',
+                ),
+                (
+                    '/lib64/ld-linux-x86-64.so.2',
+                    '/lib/x86_64-linux-gnu/ld-2.15.so',
+                ),
+            ):
+                try:
+                    host_path = os.path.realpath(ldso)
+                except OSError:
+                    pass
+                else:
+                    link = os.path.join(tree, './' + ldso)
+                    target = os.readlink(link)
+                    self.assertEqual(target, '/run/host' + host_path)
+                    link = os.path.join(tree, './' + scout_impl)
+                    target = os.readlink(link)
+                    self.assertEqual(target, '/run/host' + host_path)
 
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')
@@ -385,12 +828,29 @@ class TestContainers(BaseTest):
         if os.path.isdir(os.path.join(scout, 'files')):
             scout = os.path.join(scout, 'files')
 
-        self._test_scout('scout_sysroot', scout, locales=True)
+        with self.subTest('only-prepare'):
+            self._test_scout(
+                'scout_sysroot_prep', scout,
+                copy=True, only_prepare=True,
+            )
+
+        with self.subTest('copy'):
+            self._test_scout('scout_sysroot_copy', scout, copy=True, gc=False)
+
+        with self.subTest('transient'):
+            self._test_scout('scout_sysroot', scout, locales=True)
 
     def test_scout_usr(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout', 'files')
 
-        self._test_scout('scout', scout, locales=True)
+        with self.subTest('only-prepare'):
+            self._test_scout('scout_prep', scout, copy=True, only_prepare=True)
+
+        with self.subTest('copy'):
+            self._test_scout('scout_copy', scout, copy=True, locales=True)
+
+        with self.subTest('transient'):
+            self._test_scout('scout', scout)
 
 
 if __name__ == '__main__':

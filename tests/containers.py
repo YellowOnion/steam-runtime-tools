@@ -117,7 +117,7 @@ class TestContainers(BaseTest):
 
         bwrap = os.environ.get('BWRAP', shutil.which('bwrap'))
 
-        if bwrap is not None and subprocess.run(
+        if bwrap is not None and run_subprocess(
             [bwrap, '--dev-bind', '/', '/', 'sh', '-c', 'true'],
             stdout=2,
             stderr=2,
@@ -256,7 +256,7 @@ class TestContainers(BaseTest):
                 os.path.join(cls.artifacts, 'host-srsi.json'),
                 'w',
             ) as writer:
-                subprocess.run(
+                run_subprocess(
                     [
                         host_srsi,
                         '--verbose',
@@ -369,7 +369,7 @@ class TestContainers(BaseTest):
         with tee_file_and_stderr(
             os.path.join(artifacts, 'inside-scout.log')
         ) as tee:
-            completed = subprocess.run(
+            completed = self.run_subprocess(
                 argv,
                 cwd=self.artifacts,
                 stdout=tee.stdin,

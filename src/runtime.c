@@ -61,6 +61,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   gboolean any_libc_from_host;
   gboolean all_libc_from_host;
+  gboolean runtime_is_just_usr;
 };
 
 struct _PvRuntimeClass
@@ -337,9 +338,14 @@ pv_runtime_initable_init (GInitable *initable,
 
   self->runtime_usr = g_build_filename (self->source_files, "usr", NULL);
 
-  if (!g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
+  if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
+    {
+      self->runtime_is_just_usr = FALSE;
+    }
+  else
     {
       /* source_files is just a merged /usr. */
+      self->runtime_is_just_usr = TRUE;
       g_free (self->runtime_usr);
       self->runtime_usr = g_strdup (self->source_files);
     }
@@ -516,22 +522,65 @@ static gboolean
 pv_runtime_provide_container_access (PvRuntime *self,
                                      GError **error)
 {
-  /* TODO: Avoid using bwrap if we don't need to: when run from inside
-   * a Flatpak, it won't work.
-   *
-   * If we are working with a non-merged-/usr runtime, we can just
-   * set self->container_access to its path.
-   *
-   * Similarly, if we are working with a writeable copy of a runtime
-   * that we are editing in-place, we can set self->container_access to
-   * that. */
+  if (self->container_access_adverb != NULL)
+    return TRUE;
 
-  if (self->container_access_adverb == NULL)
+  if (!self->runtime_is_just_usr)
     {
-      self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
+      static const char * const need_top_level[] =
+      {
+        "bin",
+        "etc",
+        "lib",
+        "sbin",
+      };
+      gsize i;
 
+      /* If we are working with a runtime that has a root directory containing
+       * /etc and /usr, we can just access it via its path - that's "the same
+       * shape" that the final system is going to be.
+       *
+       * In particular, if we are working with a writeable copy of a runtime
+       * that we are editing in-place, we can arrange that it's always
+       * like that. */
+      g_debug ("%s: Setting up runtime without using bwrap",
+               G_STRFUNC);
+      self->container_access_adverb = flatpak_bwrap_new (NULL);
+      self->container_access = g_strdup (self->source_files);
+
+      /* This is going to go poorly for us if the runtime is not complete.
+       * !self->runtime_is_just_usr means we know it has a /usr subdirectory,
+       * but that doesn't guarantee that it has /bin, /lib, /sbin (either
+       * in the form of real directories or symlinks into /usr) and /etc
+       * (for at least /etc/alternatives and /etc/ld.so.cache).
+       *
+       * This check is not intended to be exhaustive, merely something
+       * that will catch obvious mistakes like completely forgetting to
+       * add the merged-/usr symlinks.
+       *
+       * In practice we also need /lib64 for 64-bit-capable runtimes,
+       * but a pure 32-bit runtime would legitimately not have that,
+       * so we don't check for it. */
+      for (i = 0; i < G_N_ELEMENTS (need_top_level); i++)
+        {
+          g_autofree gchar *path = g_build_filename (self->source_files,
+                                                     need_top_level[i],
+                                                     NULL);
+
+          if (!g_file_test (path, G_FILE_TEST_IS_DIR))
+            g_warning ("%s does not exist, this probably won't work",
+                       path);
+        }
+    }
+  else
+    {
+      /* Otherwise, will we need to use bwrap to build a directory hierarchy
+       * that is the same shape as the final system. */
+      g_debug ("%s: Using bwrap to set up runtime that is just /usr",
+               G_STRFUNC);
+
+      self->container_access = g_build_filename (self->tmpdir, "mnt", NULL);
       g_mkdir (self->container_access, 0700);
-      self->container_access = self->container_access;
 
       self->container_access_adverb = flatpak_bwrap_new (NULL);
       flatpak_bwrap_add_args (self->container_access_adverb,
@@ -564,9 +613,10 @@ try_bind_dri (PvRuntime *self,
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
-      g_autofree gchar *host_dri = NULL;
-      g_autofree gchar *dest_dri = NULL;
+      g_autoptr(GDir) dir = NULL;
+      const char *member;
 
+      g_debug ("Collecting dependencies of DRI drivers in \"%s\"...", dri);
       expr = g_strdup_printf ("only-dependencies:if-exists:path-match:%s/dri/*.so",
                               libdir);
 
@@ -589,28 +639,34 @@ try_bind_dri (PvRuntime *self,
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-      /* TODO: If we're already in a container, rely on /run/host
-       * already being mounted, so we don't need to re-enter a container
-       * here. */
-      host_dri = g_build_filename ("/run/host", libdir, "dri", NULL);
-      dest_dri = g_build_filename (arch->libdir_on_host, "dri", NULL);
-      temp_bwrap = flatpak_bwrap_new (NULL);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              self->bubblewrap,
-                              "--ro-bind", "/", "/",
-                              "--tmpfs", "/run",
-                              "--ro-bind", "/", "/run/host",
-                              "--bind", self->overrides, self->overrides,
-                              "sh", "-c",
-                              "ln -fns \"$1\"/* \"$2\"",
-                              "sh",   /* $0 */
-                              host_dri,
-                              dest_dri,
-                              NULL);
-      flatpak_bwrap_finish (temp_bwrap);
+      dir = g_dir_open (dri, 0, error);
 
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+      if (dir == NULL)
         return FALSE;
+
+      for (member = g_dir_read_name (dir);
+           member != NULL;
+           member = g_dir_read_name (dir))
+        {
+          g_autofree gchar *target = g_build_filename ("/run/host", dri,
+                                                      member, NULL);
+          g_autofree gchar *dest = g_build_filename (arch->libdir_on_host,
+                                                     "dri", member, NULL);
+
+          g_debug ("Creating symbolic link \"%s\" -> \"%s\" for \"%s\" DRI driver",
+                   dest, target, arch->tuple);
+
+          /* Delete an existing symlink if any, like ln -f */
+          if (unlink (dest) != 0 && errno != ENOENT)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to remove \"%s\"",
+                                            dest);
+
+          if (symlink (target, dest) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink \"%s\" -> \"%s\"",
+                                            dest, target);
+        }
     }
 
   if (g_file_test (s2tc, G_FILE_TEST_EXISTS))
@@ -618,6 +674,7 @@ try_bind_dri (PvRuntime *self,
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
 
+      g_debug ("Collecting s2tc \"%s\" and its dependencies...", s2tc);
       expr = g_strdup_printf ("path-match:%s", s2tc);
 
       if (!pv_runtime_provide_container_access (self, error))
@@ -674,16 +731,11 @@ ensure_locales (PvRuntime *self,
       locale_gen = g_build_filename (self->tools_dir,
                                      "pressure-vessel-locale-gen",
                                      NULL);
-
+      /* We don't actually need to use bwrap when we're just running on
+       * the host system. */
       flatpak_bwrap_add_args (run_locale_gen,
-                              self->bubblewrap,
-                              "--ro-bind", "/", "/",
-                              NULL);
-      pv_bwrap_add_api_filesystems (run_locale_gen);
-      flatpak_bwrap_add_args (run_locale_gen,
-                              "--bind", locales, locales,
-                              "--chdir", locales,
                               locale_gen,
+                              "--output-dir", locales,
                               "--verbose",
                               NULL);
     }
@@ -707,8 +759,8 @@ ensure_locales (PvRuntime *self,
       flatpak_bwrap_add_args (run_locale_gen,
                               "--ro-bind", self->tools_dir, "/run/host/tools",
                               "--bind", locales, "/overrides/locales",
-                              "--chdir", "/overrides/locales",
                               locale_gen,
+                              "--output-dir", "/overrides/locales",
                               "--verbose",
                               NULL);
     }
@@ -1284,6 +1336,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
             return FALSE;
 
           flatpak_bwrap_add_args (temp_bwrap,
+                                  "env", "PATH=/usr/bin:/bin",
                                   "readlink", "-e", arch->ld_so,
                                   NULL);
           flatpak_bwrap_finish (temp_bwrap);
@@ -1469,7 +1522,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
               g_debug ("Making host ld.so visible in container");
 
-              ld_so_in_host = flatpak_canonicalize_filename (arch->ld_so);
+              ld_so_in_host = realpath (arch->ld_so, NULL);
+
+              if (ld_so_in_host == NULL)
+                return glnx_throw_errno_prefix (error,
+                                                "Unable to determine host path to %s",
+                                                arch->ld_so);
+
               g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
               g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
               flatpak_bwrap_add_args (bwrap,
@@ -1596,13 +1655,18 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               all_libdrm_from_host = FALSE;
             }
 
+          /* Order matters: drivers from a later entry will overwrite
+           * drivers from an earlier entry. Because we don't know whether
+           * /lib and /usr/lib are 32- or 64-bit, we need to prioritize
+           * libQUAL higher. Prioritize Debian-style multiarch higher
+           * still, because it's completely unambiguous. */
           dirs = g_new0 (gchar *, 7);
-          dirs[0] = g_build_filename ("/lib", arch->tuple, NULL);
-          dirs[1] = g_build_filename ("/usr", "lib", arch->tuple, NULL);
-          dirs[2] = g_strdup ("/lib");
-          dirs[3] = g_strdup ("/usr/lib");
-          dirs[4] = g_build_filename ("/", arch->libqual, NULL);
-          dirs[5] = g_build_filename ("/usr", arch->libqual, NULL);
+          dirs[0] = g_strdup ("/lib");
+          dirs[1] = g_strdup ("/usr/lib");
+          dirs[2] = g_build_filename ("/", arch->libqual, NULL);
+          dirs[3] = g_build_filename ("/usr", arch->libqual, NULL);
+          dirs[4] = g_build_filename ("/lib", arch->tuple, NULL);
+          dirs[5] = g_build_filename ("/usr", "lib", arch->tuple, NULL);
 
           for (j = 0; j < 6; j++)
             {
@@ -2078,15 +2142,7 @@ pv_runtime_set_search_paths (PvRuntime *self,
                              FlatpakBwrap *bwrap)
 {
   g_autoptr(GString) ld_library_path = g_string_new ("");
-  g_autoptr(GString) bin_path = g_string_new ("");
   gsize i;
-
-  pv_search_path_append (bin_path, "/overrides/bin");
-  pv_search_path_append (bin_path, g_getenv ("PATH"));
-  flatpak_bwrap_add_args (bwrap,
-                          "--setenv", "PATH",
-                          bin_path->str,
-                          NULL);
 
   /* TODO: Adapt the use_ld_so_cache code from Flatpak instead
    * of setting LD_LIBRARY_PATH, for better robustness against
@@ -2107,6 +2163,11 @@ pv_runtime_set_search_paths (PvRuntime *self,
   /* This would be filtered out by a setuid bwrap, so we have to go
    * via --setenv. */
   flatpak_bwrap_add_args (bwrap,
+                          /* The PATH from outside the container doesn't
+                           * really make sense inside the container:
+                           * in principle the layout could be totally
+                           * different. */
+                          "--setenv", "PATH", "/overrides/bin:/usr/bin:/bin",
                           "--setenv", "LD_LIBRARY_PATH",
                           ld_library_path->str,
                           NULL);

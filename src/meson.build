@@ -23,6 +23,7 @@
 
 # Headers to scan for enum/flags types.
 headers = [
+  'resolve-in-sysroot.h',
   'runtime.h',
 ]
 
@@ -36,17 +37,22 @@ pressure_vessel_utils = static_library(
   sources : [
     'bwrap-lock.c',
     'bwrap-lock.h',
+    'elf-utils.c',
+    'elf-utils.h',
     'flatpak-utils-base.c',
     'flatpak-utils-base-private.h',
     'flatpak-utils.c',
     'flatpak-utils-private.h',
     'glib-backports.c',
     'glib-backports.h',
+    'resolve-in-sysroot.c',
+    'resolve-in-sysroot.h',
     'utils.c',
     'utils.h',
   ],
   dependencies : [
     gio_unix,
+    libelf,
     libglnx.get_variable('libglnx_dep'),
   ],
   include_directories : project_include_dirs,

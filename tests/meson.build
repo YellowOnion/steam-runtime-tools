@@ -43,6 +43,7 @@ tests = [
 
 compiled_tests = [
   'bwrap-lock',
+  'resolve-in-sysroot',
   'utils',
 ]
 
@@ -101,20 +102,28 @@ foreach test_name : tests
   endif
 endforeach
 
-executable(
-  'test-cheap-copy',
-  sources : [
-    'cheap-copy.c',
-  ],
-  dependencies : [
-    gio_unix,
-    libglnx.get_variable('libglnx_dep'),
-  ],
-  link_with : [
-    pressure_vessel_utils,
-  ],
-  include_directories : project_include_dirs,
-  install : false,
-)
+# Helper programs and manual tests
+helpers = [
+  'cheap-copy',
+  'elf-get-soname',
+]
+
+foreach helper : helpers
+  executable(
+    'test-' + helper,
+    sources : [
+      helper + '.c',
+    ],
+    dependencies : [
+      gio_unix,
+      libglnx.get_variable('libglnx_dep'),
+    ],
+    link_with : [
+      pressure_vessel_utils,
+    ],
+    include_directories : project_include_dirs,
+    install : false,
+  )
+endforeach
 
 # vim:set sw=2 sts=2 et:

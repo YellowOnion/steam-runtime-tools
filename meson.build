@@ -150,6 +150,11 @@ glib_tap_support = dependency(
   required : false,
 )
 xau = dependency('xau', required : true)
+libelf = dependency('libelf', required : false)
+
+if not libelf.found()
+  libelf = declare_dependency(link_args : ['-lelf'])
+endif
 
 scripts = [
   'pressure-vessel-locale-gen',

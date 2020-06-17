@@ -46,6 +46,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--srcdir', default='.')
     parser.add_argument('--builddir', default='_build')
+    parser.add_argument('--rw', action='append', default=[])
     parser.add_argument('--sysroot', default=None)
     parser.add_argument('--tarball', default=None)
     parser.add_argument('command')
@@ -94,27 +95,48 @@ def main():
     os.makedirs(
         os.path.join(abs_sysroot, './' + abs_builddir), exist_ok=True)
 
-    os.execvp(
+    argv = [
         'bwrap',
-        [
-            'bwrap',
-            '--ro-bind', abs_sysroot, '/',
-            '--bind',
-            os.path.join(abs_sysroot, 'var', 'lib', 'apt'),
-            '/var/lib/apt',
-            '--dev-bind', '/dev', '/dev',
-            '--ro-bind', '/etc/resolv.conf', '/etc/resolv.conf',
-            '--proc', '/proc',
-            '--tmpfs', '/tmp',
-            '--tmpfs', '/var/tmp',
-            '--tmpfs', '/home',
-            '--bind', abs_srcdir, abs_srcdir,
-            '--bind', abs_builddir, abs_builddir,
-            '--chdir', os.getcwd(),
-            '--setenv', 'LC_ALL', 'C.UTF-8',
-            args.command,
-        ] + args.args,
-    )
+        '--ro-bind', abs_sysroot, '/',
+        '--bind',
+        os.path.join(abs_sysroot, 'var', 'lib', 'apt'),
+        '/var/lib/apt',
+        '--dev-bind', '/dev', '/dev',
+        '--ro-bind', '/etc/resolv.conf', '/etc/resolv.conf',
+        '--proc', '/proc',
+        '--tmpfs', '/tmp',
+        '--tmpfs', '/var/tmp',
+        '--tmpfs', '/home',
+        '--bind', abs_srcdir, abs_srcdir,
+        '--bind', abs_builddir, abs_builddir,
+    ]
+
+    for var in (
+        'AUTOPKGTEST_ARTIFACTS',
+        'DESTDIR',
+        'G_TEST_BUILDDIR',
+        'G_TEST_SRCDIR',
+        'PRESSURE_VESSEL_TEST_CONTAINERS',
+    ):
+        if var in os.environ:
+            val = os.environ[var]
+            argv.extend([
+                '--bind', val, val,
+            ])
+
+    for rw in args.rw:
+        argv.extend([
+            '--bind', rw, rw,
+        ])
+
+    argv.extend([
+        '--chdir', os.getcwd(),
+        '--setenv', 'LC_ALL', 'C.UTF-8',
+        args.command,
+    ])
+    argv.extend(args.args)
+
+    os.execvp('bwrap', argv)
 
 
 if __name__ == '__main__':

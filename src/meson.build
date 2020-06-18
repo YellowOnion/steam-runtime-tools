@@ -54,6 +54,8 @@ pressure_vessel_utils = static_library(
     'glib-backports.h',
     'resolve-in-sysroot.c',
     'resolve-in-sysroot.h',
+    'tree-copy.c',
+    'tree-copy.h',
     'utils.c',
     'utils.h',
   ],

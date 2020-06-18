@@ -36,6 +36,7 @@
 #include "enumtypes.h"
 #include "flatpak-run-private.h"
 #include "resolve-in-sysroot.h"
+#include "tree-copy.h"
 #include "utils.h"
 
 /*

@@ -26,6 +26,7 @@
 #include "libglnx/libglnx.h"
 
 #include "glib-backports.h"
+#include "tree-copy.h"
 #include "utils.h"
 
 static GOptionEntry options[] =

@@ -565,6 +565,21 @@ pv_runtime_init_mutable (PvRuntime *self,
   if (!glnx_opendirat (-1, temp_dir, FALSE, &temp_dir_fd, error))
     return FALSE;
 
+  /* We need to break the hard link for the lock file, otherwise the
+   * temporary copy will share its locked/unlocked state with the
+   * original. */
+  if (TEMP_FAILURE_RETRY (unlinkat (temp_dir_fd, ".ref", 0)) != 0
+      && errno != ENOENT)
+    return glnx_throw_errno_prefix (error,
+                                    "Cannot remove \"%s/.ref\"",
+                                    temp_dir);
+
+  if (TEMP_FAILURE_RETRY (unlinkat (temp_dir_fd, "usr/.ref", 0)) != 0
+      && errno != ENOENT)
+    return glnx_throw_errno_prefix (error,
+                                    "Cannot remove \"%s/usr/.ref\"",
+                                    temp_dir);
+
   /* Create the copy in a pre-locked state. After the lock on the parent
    * directory is released, the copy continues to have a read lock,
    * preventing it from being modified or deleted while in use (even if
@@ -587,16 +602,12 @@ pv_runtime_init_mutable (PvRuntime *self,
 
   if (is_just_usr)
     {
-      g_autofree gchar *in_root = g_build_filename (temp_dir, ".ref", NULL);
-
-      if (unlink (in_root) != 0 && errno != ENOENT)
+      if (TEMP_FAILURE_RETRY (symlinkat ("usr/.ref",
+                                         temp_dir_fd,
+                                         ".ref")) != 0)
         return glnx_throw_errno_prefix (error,
-                                        "Cannot remove \"%s\"", in_root);
-
-      if (symlink ("usr/.ref", in_root) != 0)
-        return glnx_throw_errno_prefix (error,
-                                        "Cannot create symlink \"%s\" -> usr/.ref",
-                                        in_root);
+                                        "Cannot create symlink \"%s/.ref\" -> usr/.ref",
+                                        temp_dir);
     }
 
   dir = g_dir_open (source_usr, 0, error);

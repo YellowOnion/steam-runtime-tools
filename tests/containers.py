@@ -85,7 +85,6 @@ import logging
 import os
 import shutil
 import struct
-import subprocess
 import sys
 import tempfile
 import unittest

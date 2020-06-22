@@ -435,7 +435,7 @@ class TestContainers(BaseTest):
             ) as rlock_writer, open(
                 os.path.join(temp, 'tmp-wlock', '.ref'), 'w'
             ) as wlock_writer, tee_file_and_stderr(
-                os.path.join(artifacts, 'inside-scout.log')
+                os.path.join(artifacts, 'pressure-vessel.log')
             ) as tee:
                 lockdata = struct.pack('hhlli', fcntl.F_RDLCK, 0, 0, 0, 0)
                 fcntl.fcntl(rlock_writer.fileno(), fcntl.F_SETLKW, lockdata)

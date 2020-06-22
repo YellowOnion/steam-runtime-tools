@@ -94,3 +94,9 @@ guint my_g_unix_fd_add_full (int priority,
 GSource *my_g_unix_fd_source_new (int fd,
                                   GIOCondition condition);
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 58, 0)
+#define g_canonicalize_filename(f, r) my_g_canonicalize_filename (f, r)
+gchar *my_g_canonicalize_filename (const gchar *filename,
+                                   const gchar *relative_to);
+#endif

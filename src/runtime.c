@@ -2452,18 +2452,22 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                   /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
                    * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
                    * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
-                   * had its default value "$(libdir)/gconv". */
-                  gconv_dir_in_host = g_build_filename (dir, "gconv", NULL);
-
-                  if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
+                   * had its default value "$(libdir)/gconv".
+                   * We check /usr first because otherwise, if the host is merged-/usr and the
+                   * container is not, we might end up binding /lib instead of /usr/lib
+                   * and that could cause issues. */
+                  if (!g_str_has_prefix (dir, "/usr/"))
                     {
-                      g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
-                      found = TRUE;
-                    }
-                  else if (!g_str_has_prefix (dir, "/usr/"))
-                    {
-                      g_free (gconv_dir_in_host);
                       gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
+                      if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
+                        {
+                          g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
+                          found = TRUE;
+                        }
+                    }
+                  else
+                    {
+                      gconv_dir_in_host = g_build_filename (dir, "gconv", NULL);
                       if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
                         {
                           g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
@@ -2474,8 +2478,8 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                   if (!found)
                     {
                       g_debug ("We were expecting to have the gconv modules directory in the "
-                               "host to be located in \"%s\", but instead it is missing",
-                               gconv_dir_in_host);
+                               "host to be located in \"%s/gconv\", but instead it is missing",
+                               dir);
                     }
                 }
 

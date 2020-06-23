@@ -167,10 +167,12 @@ build:scout:
 # These packaging-oriented jobs need a suitable steam-runtime-tools version
 # available via apt
 build:
-  only:
-    variables:
-      - $CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ''
+    only:
+        variables:
+            - $CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ''
 autopkgtest:
-  only:
-    variables:
-      - $CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ''
+    only:
+        variables:
+            - $CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ''
+
+# vim:set sw=4 sts=4 et:

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20200624.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200624.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * Add automated graphics verification for VDPAU
@@ -9,7 +9,7 @@ steam-runtime-tools (0.20200624.0) UNRELEASED; urgency=medium
   * Add missing "x11/vaapi" to the s-r-s-i report
   * Add ability to load info from JSON output report (T16565)
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 17:35:11 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 19:04:53 +0100
 
 steam-runtime-tools (0.20200415.0) scout; urgency=medium
 

@@ -109,6 +109,41 @@ usage (int code)
   exit (code);
 }
 
+static const char *
+find_dyn_entry (const ElfW(Dyn) *entries,
+                const ElfW(Addr) base,
+                const ElfW(Sxword) tag)
+{
+  const ElfW(Dyn) *entry;
+  ElfW(Addr) stab = 0;
+
+  for (entry = entries; entry->d_tag != DT_NULL; entry++)
+    {
+      if (entry->d_tag == tag)
+        stab = entry->d_un.d_ptr;
+    }
+
+  if (stab == 0)
+    return NULL;
+  else if (stab < base)
+    return (const char *) base + stab;
+  else
+    return (const char *) stab;
+}
+
+static size_t
+find_tag_value (const ElfW(Dyn) *dyn,
+                const ElfW(Sxword) tag)
+{
+  for (; dyn->d_tag != DT_NULL; dyn++)
+    {
+      if (dyn->d_tag == tag)
+        return dyn->d_un.d_val;
+    }
+
+  return (size_t) -1;
+}
+
 int
 main (int argc,
       char **argv)
@@ -227,6 +262,24 @@ main (int argc,
       clean_exit (handle);
       return 1;
     }
+
+  const ElfW(Dyn) * const dyn_start = the_library->l_ld;
+  const ElfW(Addr) load_addr = the_library->l_addr;
+  const char *strtab = find_dyn_entry (dyn_start, load_addr, DT_STRTAB);
+  size_t soname_val = find_tag_value (dyn_start, DT_SONAME);
+  if (strtab != NULL && soname_val != (size_t) -1)
+    {
+      printf ("\n    \"SONAME\": \"");
+      print_json_string_content (&strtab[soname_val]);
+      printf("\",");
+    }
+  else
+    {
+      fprintf (stderr,
+               "Warning: we were not able to get the SONAME of \"%s\"\n",
+               soname);
+    }
+
   printf ("\n    \"path\": \"");
   print_json_string_content (the_library->l_name);
   printf ("\"");

@@ -1,3 +1,16 @@
+steam-runtime-tools (0.20200624.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Add automated graphics verification for VDPAU
+  * Add automated graphics verification for VA-API
+  * Add a function to return the absolute path to "ubuntu12_32" directory.
+    We already stored the path to "ubuntu12_32" but this information wasn't
+    in the public API or the JSON report.
+  * Add missing "x11/vaapi" to the s-r-s-i report
+  * Add ability to load info from JSON output report (T16565)
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 17:35:11 +0100
+
 steam-runtime-tools (0.20200415.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

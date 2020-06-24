@@ -1,4 +1,4 @@
-pressure-vessel (0.20200624.0) UNRELEASED; urgency=medium
+pressure-vessel (0.20200624.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * Bind VDPAU drivers.
@@ -77,7 +77,7 @@ pressure-vessel (0.20200624.0) UNRELEASED; urgency=medium
   * CI: Move artifacts adjacent to the job that would produce them
   * CI: Consistently indent with 4 spaces
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 16:54:45 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 19:05:13 +0100
 
 pressure-vessel (0.20200331.0) scout; urgency=medium
 

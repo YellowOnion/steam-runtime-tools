@@ -4,8 +4,10 @@ libcapsule (0.20200612.0-0co1) UNRELEASED; urgency=medium
     fixing mishandling of libraries that are newer in the container but
     only for one architecture
   * build: Check that the compiler and --host are consistent
+  * build: Silence unwanted warnings
   * Add basic Gitlab-CI on Debian (with deb-build-snapshot) and Arch Linux
   * capture-libs: Expand list of known ld.so names
+  * capture-libs: Allow patterns to be read from a file
   * tests: Fix Debianisms
   * tests/capture-libs: Tolerate path to ld.so not being fully resolved
   * capsule-malloc: Remove duplicate typedef for mstate, for clang 8
@@ -14,9 +16,9 @@ libcapsule (0.20200612.0-0co1) UNRELEASED; urgency=medium
     libraries, even if libcapsule itself is not built.
   * tests: Make older linkers happy with one of our test libraries
   * tests: Cope with newer versions of GNU make
-  * capture-libs: Allow patterns to be read from a file
+  * debian: Tell git-version-gen that we are behaving as an upstream
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 12 Jun 2020 16:34:02 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 14:53:53 +0100
 
 libcapsule (0.20190926.0-0co1) upstream; urgency=medium
 

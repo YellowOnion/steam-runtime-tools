@@ -1,4 +1,4 @@
-libcapsule (0.20200612.0-0co1) UNRELEASED; urgency=medium
+libcapsule (0.20200624.0-0co1) upstream; urgency=medium
 
   * ld-libs: Always clear ldlibs->needed entry if ld_lib_open() fails,
     fixing mishandling of libraries that are newer in the container but
@@ -18,7 +18,7 @@ libcapsule (0.20200612.0-0co1) UNRELEASED; urgency=medium
   * tests: Cope with newer versions of GNU make
   * debian: Tell git-version-gen that we are behaving as an upstream
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 14:53:53 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 19:06:02 +0100
 
 libcapsule (0.20190926.0-0co1) upstream; urgency=medium
 

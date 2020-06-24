@@ -1,3 +1,84 @@
+pressure-vessel (0.20200624.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Bind VDPAU drivers.
+    If available, and newer, we bind VDPAU drivers from the host system.
+  * Bind VA-API drivers and loaders.
+    If available, and newer, we bind VA-API drivers and loaders from the
+    host system.
+  * runtime: handle merged-/usr host OS with non merged-/usr container.
+    Prioritize "/usr/" over "/lib/" if it is available to avoid issues when
+    we use a non merged-/usr container with a host system that is
+    merged-/usr. (T22125)
+
+  [ Simon McVittie ]
+  * Update libglnx subproject from upstream
+  * runtime: Look for ldconfig in /sbin, /usr/sbin.
+    If we are on an OS where /sbin is not normally in unprivileged users'
+    PATHs (for example Debian), we won't find ldconfig in PATH and will
+    need to try harder.
+  * runtime: Reset PATH in the container.
+    The PATH from outside the container doesn't really make sense inside
+    the container, because the directory hierarchy could be totally different
+    (particularly on unusual host systems like GoboLinux and Exherbo).
+    Resetting it also makes sure we don't pick up local installations in
+    ~/bin or ~/.local/bin, which could have dependencies that are
+    unsatisfied in the container.
+    Conversely, the PATH from the host might not include everything we need
+    in the container.
+  * runtime: Don't critical if we were unable to lock the runtime
+  * runtime: Add an option to skip generating missing locales.
+    This is one of the slower parts of the whole process, and not all
+    games (or automated tests) even need it.
+  * runtime: Factor out a struct to hold architecture-specific details
+  * runtime: Save a bwrap invocation and a shell by not using globbing
+  * runtime: Sort DRI "search path" more carefully.
+    As noted in the comment, the order matters.
+  * runtime: Access runtime without using bwrap if possible
+  * runtime: Optionally copy the runtime, and bind-mount the copy.
+    This is good for two reasons. In a Flatpak runtime, we will not be able
+    to do tricks with arbitrary bind-mounts; if we want the host library
+    stack, we will have to rewrite the mutable copy of the runtime to
+    replace container libraries with symlinks into /run/host. Also, when
+    not in a Flatpak runtime, having a mutable copy of the immutable runtime
+    gives developers a chance to edit the runtime to inject workarounds or
+    things they're testing. (T18688, T22035)
+  * bwrap: When we bind /usr, also bind /etc/ld.so.conf*
+    We'll need those if we want to run ldconfig.
+  * wrap: Add the ability to unshare the pid namespace.
+    We can use this to test whether it can be done without breaking Steam
+    (currently it cannot, unless you unload the gameoverlayrenderer.so
+    module).
+  * wrap: Really fail on invalid --env-if-host argument
+  * locale-gen: Add --output-dir option
+  * wrap-interactive: Fix display of pressure-vessel-wrap's name
+  * wrap-interactive: Print exit status before --shell=after
+  * wrap-interactive: Print exit status before "Enter to continue" prompt
+  * utils: Preserve permissions when copying, and fall back to reflink or
+    copy if hard link fails
+  * scripts: Assert that we have the desired Python version.
+    We require Python 3.5 (backports exist in both Steam Runtime 1 'scout'
+    and Steam Runtime 1½ 'heavy'), except for scripts that are meant to run
+    on test machines or non-developer Steam users' machines, which require
+    Python 3.4 (SteamOS 2, Debian 8, Ubuntu 14.04).
+  * build: Only instantiate libglnx subproject once
+  * build: Disable optional features of steam-runtime-tools subproject
+  * build: Disable -Wunused-local-typedefs globally
+  * build: Centralize dependency checking
+  * build: Convert parts of pressure-vessel into a static library
+  * build: Split into subdirectories
+  * tests: Improve coverage
+  * test-ui: Fix pyflakes warning for unnecessary blank line
+  * tests/relocatable-install.py: Silence a mypy warning
+  * sysroot: Add a way to mount more directories rw.
+    This will make it easier to install a new pressure-vessel build into a
+    relocatable directory hierarchy for testing.
+  * CI: Enable man pages for devel build
+  * CI: Move artifacts adjacent to the job that would produce them
+  * CI: Consistently indent with 4 spaces
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 16:54:45 +0100
+
 pressure-vessel (0.20200331.0) scout; urgency=medium
 
   [ Jeremy Whiting ]

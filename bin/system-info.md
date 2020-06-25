@@ -376,6 +376,11 @@ keys:
         **path**
         :   The absolute path to the library.
 
+        **soname**
+        :   The real SONAME of the library, which might be different from
+            the name that was requested if it is a compatibility alias,
+            or **null** if it could not be determined.
+
         **issues**
         :   Problems with the library, as arrays of the same strings
             described in **library-issues-summary** above.

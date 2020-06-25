@@ -102,6 +102,7 @@ SrtLibraryIssues srt_library_get_issues (SrtLibrary *self);
 const char * const *srt_library_get_missing_symbols (SrtLibrary *self);
 const char * const *srt_library_get_misversioned_symbols (SrtLibrary *self);
 const char * const *srt_library_get_dependencies (SrtLibrary *self);
+const char *srt_library_get_real_soname (SrtLibrary *self);
 SrtLibraryIssues srt_check_library_presence (const char *requested_name,
                                              const char *multiarch,
                                              const char *symbols_path,

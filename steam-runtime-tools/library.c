@@ -59,6 +59,7 @@ struct _SrtLibrary
   SrtLibraryIssues issues;
   int exit_status;
   int terminating_signal;
+  gchar *real_soname;
 };
 
 struct _SrtLibraryClass
@@ -66,7 +67,6 @@ struct _SrtLibraryClass
   /*< private >*/
   GObjectClass parent_class;
 };
-
 enum {
   PROP_0,
   PROP_ABSOLUTE_PATH,
@@ -76,6 +76,7 @@ enum {
   PROP_MISSING_SYMBOLS,
   PROP_MULTIARCH_TUPLE,
   PROP_SONAME,
+  PROP_REAL_SONAME,
   PROP_REQUESTED_NAME,
   PROP_MISVERSIONED_SYMBOLS,
   PROP_EXIT_STATUS,
@@ -122,6 +123,10 @@ srt_library_get_property (GObject *object,
 
       case PROP_MULTIARCH_TUPLE:
         g_value_set_static_string (value, g_quark_to_string (self->multiarch_tuple));
+        break;
+
+      case PROP_REAL_SONAME:
+        g_value_set_string (value, self->real_soname);
         break;
 
       case PROP_REQUESTED_NAME:
@@ -225,6 +230,12 @@ srt_library_set_property (GObject *object,
           }
         break;
 
+      case PROP_REAL_SONAME:
+        /* Construct-only */
+        g_return_if_fail (self->real_soname == NULL);
+        self->real_soname = g_value_dup_string (value);
+        break;
+
       case PROP_MISVERSIONED_SYMBOLS:
         /* Construct-only */
         g_return_if_fail (self->misversioned_symbols == NULL);
@@ -257,6 +268,7 @@ srt_library_finalize (GObject *object)
   g_free (self->absolute_path);
   g_free (self->messages);
   g_free (self->requested_name);
+  g_free (self->real_soname);
   g_strfreev (self->dependencies);
   g_strfreev (self->missing_symbols);
   g_strfreev (self->misversioned_symbols);
@@ -327,6 +339,12 @@ srt_library_class_init (SrtLibraryClass *cls)
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
+  properties[PROP_REAL_SONAME] =
+    g_param_spec_string ("real-soname", "Real SONAME",
+                         "ELF DT_SONAME found when loading the library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
   properties[PROP_MISVERSIONED_SYMBOLS] =
     g_param_spec_boxed ("misversioned-symbols", "Misversioned symbols",
                         "Symbols that were expected to be in this library, "
@@ -408,6 +426,8 @@ srt_library_get_requested_name (SrtLibrary *self)
  * @self: a library
  *
  * Deprecated alias for srt_library_get_requested_name().
+ * See also srt_library_get_real_soname(), which might be what you
+ * thought this did.
  *
  * Returns: A string like `libz.so.1`, which is valid as long as @self
  *  is not destroyed.
@@ -416,6 +436,24 @@ const char *
 srt_library_get_soname (SrtLibrary *self)
 {
   return srt_library_get_requested_name (self);
+}
+
+/**
+ * srt_library_get_real_soname:
+ * @self: a library
+ *
+ * Return the ELF `DT_SONAME` found by parsing the loaded library.
+ * This is often the same as srt_library_get_requested_name(),
+ * but can differ when compatibility aliases are involved.
+ *
+ * Returns: A string like `libz.so.1`, which is valid as long as @self
+ *  is not destroyed, or %NULL if the SONAME could not be determined.
+ */
+const char *
+srt_library_get_real_soname (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return self->real_soname;
 }
 
 /**
@@ -593,6 +631,7 @@ _srt_check_library_presence (const char *helpers_path,
   gchar *output = NULL;
   gchar *child_stderr = NULL;
   gchar *absolute_path = NULL;
+  gchar *real_soname = NULL;
   int wait_status = -1;
   int exit_status = -1;
   int terminating_signal = 0;
@@ -742,6 +781,9 @@ _srt_check_library_presence (const char *helpers_path,
 
   absolute_path = g_strdup (json_object_get_string_member (json, "path"));
 
+  if (json_object_has_member (json, "SONAME"))
+    real_soname = g_strdup (json_object_get_string_member (json, "SONAME"));
+
   if (json_object_has_member (json, "missing_symbols"))
     missing_array = json_object_get_array_member (json, "missing_symbols");
   if (missing_array != NULL)
@@ -796,6 +838,7 @@ out:
                                           (const char **) missing_symbols,
                                           (const char **) misversioned_symbols,
                                           (const char **) dependencies,
+                                          real_soname,
                                           exit_status,
                                           terminating_signal);
 
@@ -810,6 +853,7 @@ out:
   g_free (absolute_path);
   g_free (child_stderr);
   g_free (output);
+  g_free (real_soname);
   g_free (filtered_preload);
   g_clear_error (&error);
   return issues;

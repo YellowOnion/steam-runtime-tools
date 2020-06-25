@@ -61,6 +61,7 @@ static inline SrtLibrary *_srt_library_new (const char *multiarch_tuple,
                                             const char * const *missing_symbols,
                                             const char * const *misversioned_symbols,
                                             const char * const *dependencies,
+                                            const char *real_soname,
                                             int exit_status,
                                             int terminating_signal);
 
@@ -74,6 +75,7 @@ _srt_library_new (const char *multiarch_tuple,
                   const char * const *missing_symbols,
                   const char * const *misversioned_symbols,
                   const char * const *dependencies,
+                  const char *real_soname,
                   int exit_status,
                   int terminating_signal)
 {
@@ -88,6 +90,7 @@ _srt_library_new (const char *multiarch_tuple,
                        "multiarch-tuple", multiarch_tuple,
                        "misversioned-symbols", misversioned_symbols,
                        "exit-status", exit_status,
+                       "real-soname", real_soname,
                        "requested-name", requested_name,
                        "terminating-signal", terminating_signal,
                        NULL);

@@ -178,7 +178,7 @@ check_libraries_result (GList *libraries)
    * which one it should be. */
   library = l->data;
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libgio-2.0.so.0");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libgio-2.0.so.0");
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);
   g_assert_cmpstr (missing_symbols[0], ==, NULL);
@@ -208,7 +208,7 @@ check_libraries_result (GList *libraries)
   l = g_list_next (l);
   library = l->data;
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libglib-2.0.so.0");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libglib-2.0.so.0");
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);
   g_assert_cmpstr (missing_symbols[0], ==, NULL);
@@ -238,7 +238,7 @@ check_libraries_result (GList *libraries)
   l = g_list_next (l);
   library = l->data;
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libtheoraenc.so.1");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libtheoraenc.so.1");
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);
   g_assert_cmpstr (missing_symbols[0], ==, NULL);
@@ -268,7 +268,7 @@ check_libraries_result (GList *libraries)
   l = g_list_next (l);
   library = l->data;
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libz.so.1");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libz.so.1");
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);
   g_assert_cmpstr (missing_symbols[0], ==, NULL);
@@ -383,7 +383,7 @@ check_library_result (SrtLibrary *library)
   const char * const *dependencies;
   gboolean seen_libc;
 
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libz.so.1");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libz.so.1");
 
   missing_symbols = srt_library_get_missing_symbols (library);
   g_assert_nonnull (missing_symbols);
@@ -463,7 +463,7 @@ check_library_libz_missing_sym_result (SrtLibrary *library)
   gboolean seen_libc;
 
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libz.so.1");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libz.so.1");
   g_debug ("path to libz.so.1 is %s", srt_library_get_absolute_path (library));
   g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
   g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
@@ -513,7 +513,7 @@ check_missing_libraries_result (GList *libraries)
    * which one it should be. */
   library = l->data;
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libgio-MISSING-2.0.so.0");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libgio-MISSING-2.0.so.0");
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
 
   g_assert_cmpint (srt_library_get_issues (library), ==, SRT_LIBRARY_ISSUES_CANNOT_LOAD);
@@ -534,7 +534,7 @@ check_missing_libraries_result (GList *libraries)
   l = g_list_next (l);
   library = l->data;
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libglib-2.0.so.0");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libglib-2.0.so.0");
   g_debug ("path to libglib-2.0.so.0 is %s", srt_library_get_absolute_path (library));
   g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
   g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
@@ -612,7 +612,7 @@ check_library_missing_lib_result (SrtLibrary *library)
   const char * const *dependencies;
 
   g_assert_nonnull (library);
-  g_assert_cmpstr (srt_library_get_soname (library), ==, "libMISSING.so.62");
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==, "libMISSING.so.62");
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
 
   missing_symbols = srt_library_get_missing_symbols (library);

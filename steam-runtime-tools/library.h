@@ -92,7 +92,9 @@ typedef enum
   SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS
 } SrtLibrarySymbolsFormat;
 
+const char *srt_library_get_requested_name (SrtLibrary *self);
 const char *srt_library_get_absolute_path (SrtLibrary *self);
+G_DEPRECATED_FOR(srt_library_get_requested_name)
 const char *srt_library_get_soname (SrtLibrary *self);
 const char *srt_library_get_messages (SrtLibrary *self);
 const char *srt_library_get_multiarch_tuple (SrtLibrary *self);
@@ -100,7 +102,7 @@ SrtLibraryIssues srt_library_get_issues (SrtLibrary *self);
 const char * const *srt_library_get_missing_symbols (SrtLibrary *self);
 const char * const *srt_library_get_misversioned_symbols (SrtLibrary *self);
 const char * const *srt_library_get_dependencies (SrtLibrary *self);
-SrtLibraryIssues srt_check_library_presence (const char *soname,
+SrtLibraryIssues srt_check_library_presence (const char *requested_name,
                                              const char *multiarch,
                                              const char *symbols_path,
                                              SrtLibrarySymbolsFormat symbols_format,

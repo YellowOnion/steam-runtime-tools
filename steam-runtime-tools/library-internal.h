@@ -34,17 +34,17 @@
  * _srt_library_new:
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386,
  *  representing an ABI
- * @absolute_path: (nullable) Absolute path of @soname
- * @soname: A SONAME like libz.so.1
+ * @absolute_path: (nullable) Absolute path of @requested_name
+ * @requested_name: A SONAME like libz.so.1
  * @issues: Problems found when loading a @multiarch_tuple copy
- *  of @soname
+ *  of @requested_name
  * @missing_symbols: (nullable) (array zero-terminated=1) (element-type utf8):
- *  Symbols we expected to find in @soname but did not
+ *  Symbols we expected to find in @requested_name but did not
  * @misversioned_symbols: (nullable) (array zero-terminated=1) (element-type utf8):
- *  Symbols we expected to find in @soname but were available with a different
- *  version
+ *  Symbols we expected to find in @requested_name but were available with a
+ *  different version
  * @dependencies: (nullable) (array zero-terminated=1) (element-type utf8):
- *  Dependencies of @soname
+ *  Dependencies of @requested_name
  * @exit_status: exit status of helper, or -1 if it did not exit normally
  * @terminating_signal: signal that terminated the helper, or 0
  *
@@ -55,7 +55,7 @@
  */
 static inline SrtLibrary *_srt_library_new (const char *multiarch_tuple,
                                             const char *absolute_path,
-                                            const char *soname,
+                                            const char *requested_name,
                                             SrtLibraryIssues issues,
                                             const char *messages,
                                             const char * const *missing_symbols,
@@ -68,7 +68,7 @@ static inline SrtLibrary *_srt_library_new (const char *multiarch_tuple,
 static inline SrtLibrary *
 _srt_library_new (const char *multiarch_tuple,
                   const char *absolute_path,
-                  const char *soname,
+                  const char *requested_name,
                   SrtLibraryIssues issues,
                   const char *messages,
                   const char * const *missing_symbols,
@@ -78,7 +78,7 @@ _srt_library_new (const char *multiarch_tuple,
                   int terminating_signal)
 {
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
-  g_return_val_if_fail (soname != NULL, NULL);
+  g_return_val_if_fail (requested_name != NULL, NULL);
   return g_object_new (SRT_TYPE_LIBRARY,
                        "absolute-path", absolute_path,
                        "dependencies", dependencies,
@@ -86,9 +86,9 @@ _srt_library_new (const char *multiarch_tuple,
                        "messages", messages,
                        "missing-symbols", missing_symbols,
                        "multiarch-tuple", multiarch_tuple,
-                       "soname", soname,
                        "misversioned-symbols", misversioned_symbols,
                        "exit-status", exit_status,
+                       "requested-name", requested_name,
                        "terminating-signal", terminating_signal,
                        NULL);
 }
@@ -96,7 +96,7 @@ _srt_library_new (const char *multiarch_tuple,
 
 G_GNUC_INTERNAL
 SrtLibraryIssues _srt_check_library_presence (const char *helpers_path,
-                                              const char *soname,
+                                              const char *requested_name,
                                               const char *multiarch,
                                               const char *symbols_path,
                                               const char * const *hidden_deps,

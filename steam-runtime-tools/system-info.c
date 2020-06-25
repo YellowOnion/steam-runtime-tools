@@ -826,7 +826,8 @@ srt_system_info_can_write_to_uinput (SrtSystemInfo *self)
 static gint
 library_compare (SrtLibrary *a, SrtLibrary *b)
 {
-  return g_strcmp0 (srt_library_get_soname (a), srt_library_get_soname (b));
+  return g_strcmp0 (srt_library_get_requested_name (a),
+                    srt_library_get_requested_name (b));
 }
 
 static gint
@@ -1486,13 +1487,14 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
  * srt_system_info_check_library:
  * @self: The #SrtSystemInfo object to use.
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
- * @soname: (type filename): The `SONAME` of a shared library, for example `libjpeg.so.62`.
+ * @requested_name: (type filename): The `SONAME` of a shared library, for
+ *  example `libjpeg.so.62`.
  * @more_details_out: (out) (optional) (transfer full): Used to return an
- *  #SrtLibrary object representing the shared library provided by @soname.
- *  Free with `g_object_unref()`.
+ *  #SrtLibrary object representing the shared library provided
+ *  by @requested_name. Free with `g_object_unref()`.
  *
- * Check if @soname is available in the running system and whether it conforms
- * to the `deb-symbols(5)` files `*.symbols` in the @multiarch
+ * Check if @requested_name is available in the running system and whether
+ * it conforms to the `deb-symbols(5)` files `*.symbols` in the @multiarch
  * subdirectory of #SrtSystemInfo:expectations.
  *
  * Returns: A bitfield containing problems, or %SRT_LIBRARY_ISSUES_NONE
@@ -1501,7 +1503,7 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
 SrtLibraryIssues
 srt_system_info_check_library (SrtSystemInfo *self,
                                const gchar *multiarch_tuple,
-                               const gchar *soname,
+                               const gchar *requested_name,
                                SrtLibrary **more_details_out)
 {
   Abi *abi = NULL;
@@ -1520,7 +1522,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
 
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (multiarch_tuple != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
-  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (requested_name != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
                         SRT_LIBRARY_ISSUES_UNKNOWN);
 
@@ -1530,7 +1532,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
     return SRT_LIBRARY_ISSUES_CANNOT_LOAD;
 
   /* If we have the result already in cache, we return it */
-  library = g_hash_table_lookup (abi->cached_results, soname);
+  library = g_hash_table_lookup (abi->cached_results, requested_name);
   if (library != NULL)
     {
       if (more_details_out != NULL)
@@ -1584,9 +1586,9 @@ srt_system_info_check_library (SrtSystemInfo *self,
               /* This line introduces a new SONAME, which might
                 * be the one we are interested in. */
               char *soname_found = g_strdup (strsep (&pointer_into_line, " \t"));
-              if (g_strcmp0 (soname_found, soname) == 0)
+              if (g_strcmp0 (soname_found, requested_name) == 0)
                 {
-                  gchar **hidden_deps = g_hash_table_lookup (self->cached_hidden_deps, soname);
+                  gchar **hidden_deps = g_hash_table_lookup (self->cached_hidden_deps, requested_name);
                   issues = _srt_check_library_presence (self->helpers_path,
                                                         soname_found,
                                                         multiarch_tuple,
@@ -1614,14 +1616,14 @@ srt_system_info_check_library (SrtSystemInfo *self,
   /* The SONAME's symbols file is not available.
    * We do instead a simple absence/presence check. */
   issues = _srt_check_library_presence (self->helpers_path,
-                                        soname,
+                                        requested_name,
                                         multiarch_tuple,
                                         NULL,
                                         NULL,
                                         NULL,
                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                         &library);
-  g_hash_table_insert (abi->cached_results, g_strdup (soname), library);
+  g_hash_table_insert (abi->cached_results, g_strdup (requested_name), library);
   abi->cached_combined_issues |= issues;
   if (more_details_out != NULL)
     *more_details_out = g_object_ref (library);

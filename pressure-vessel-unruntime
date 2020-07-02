@@ -97,6 +97,20 @@ for word in $ld_preload; do
 done
 IFS="$old_IFS"
 
+for word in "$@"; do
+    case "$word" in
+        (--batch)
+            unset PRESSURE_VESSEL_WRAP_GUI
+            ;;
+    esac
+done
+
+case "${PRESSURE_VESSEL_BATCH-}" in
+    (1)
+        unset PRESSURE_VESSEL_WRAP_GUI
+        ;;
+esac
+
 if [ -n "${PRESSURE_VESSEL_WRAP_GUI+set}" ]; then
     if ! result="$("${here}/pressure-vessel-test-ui" --check-gui-dependencies 2>&1)"; then
         result="$(printf '%s' "$result" | sed -e 's/&/\&amp;/' -e 's/</\&lt;/' -e 's/>/\&gt;/')"

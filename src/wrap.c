@@ -325,6 +325,7 @@ typedef enum
   TRISTATE_MAYBE
 } Tristate;
 
+static gboolean opt_batch = FALSE;
 static char *opt_copy_runtime_into = NULL;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
@@ -507,6 +508,10 @@ opt_share_home_cb (const gchar *option_name,
 
 static GOptionEntry options[] =
 {
+  { "batch", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_batch,
+    "Disable all interactivity and redirection: ignore --shell*, "
+    "--terminal, --xterm, --tty. [Default: if $PRESSURE_VESSEL_BATCH]", NULL },
   { "copy-runtime-into", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_copy_runtime_into,
     "If a --runtime is used, copy it into DIR and edit the copy in-place. "
@@ -750,6 +755,8 @@ main (int argc,
     }
 
   /* Set defaults */
+  opt_batch = boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+
   opt_freedesktop_app_id = g_strdup (g_getenv ("PRESSURE_VESSEL_FDO_APP_ID"));
 
   if (opt_freedesktop_app_id != NULL && opt_freedesktop_app_id[0] == '\0')
@@ -847,6 +854,13 @@ main (int argc,
       g_printerr ("%s: --terminal=none is incompatible with --shell\n",
                   g_get_prgname ());
       goto out;
+    }
+
+  if (opt_batch)
+    {
+      /* --batch or PRESSURE_VESSEL_BATCH=1 overrides these */
+      opt_shell = PV_SHELL_NONE;
+      opt_terminal = PV_TERMINAL_NONE;
     }
 
   if (argc > 1 && strcmp (argv[1], "--") == 0)

@@ -1169,6 +1169,8 @@ main (int argc,
                             "--tmpfs", "/home",
                             NULL);
 
+  g_debug ("Making home directory available...");
+
   if (opt_fake_home == NULL)
     {
       flatpak_bwrap_add_args (bwrap,
@@ -1263,8 +1265,6 @@ main (int argc,
 
   /* Make sure the current working directory (the game we are going to
    * run) is available. Some games write here. */
-
-  g_debug ("Making home directory available...");
 
   if (pv_is_same_file (home, cwd_p))
     {

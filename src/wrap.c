@@ -168,6 +168,32 @@ check_bwrap (const char *tools_dir,
   return NULL;
 }
 
+static void
+bind_from_environ (const char *variable,
+                   FlatpakBwrap *bwrap)
+{
+  const char *value = g_getenv (variable);
+
+  if (value == NULL)
+    return;
+
+  if (!g_file_test (value, G_FILE_TEST_EXISTS))
+    {
+      g_debug ("Not bind-mounting %s=\"%s\" because it does not exist",
+               variable, value);
+      return;
+    }
+
+  g_debug ("Bind-mounting %s=\"%s\"", variable, value);
+
+  /* TODO: If it's a symbolic link, ideally we should jump through the
+   * same hoops as Flatpak to bind-mount the *target* of the symlink
+   * instead, and then create the same symlink in the container. */
+  flatpak_bwrap_add_args (bwrap,
+                          "--bind", value, value,
+                          NULL);
+}
+
 /* Order matters here: root, steam and steambeta are or might be symlinks
  * to the root of the Steam installation, so we want to bind-mount their
  * targets before we deal with the rest. */
@@ -1263,8 +1289,14 @@ main (int argc,
                               "--unsetenv", "LD_PRELOAD",
                               NULL);
 
+  g_debug ("Making Steam compat tools available if required...");
+  bind_from_environ ("STEAM_COMPAT_CLIENT_INSTALL_PATH", bwrap);
+  bind_from_environ ("STEAM_COMPAT_DATA_PATH", bwrap);
+  bind_from_environ ("STEAM_COMPAT_TOOL_PATH", bwrap);
+
   /* Make sure the current working directory (the game we are going to
    * run) is available. Some games write here. */
+  g_debug ("Making current working directory available...");
 
   if (pv_is_same_file (home, cwd_p))
     {

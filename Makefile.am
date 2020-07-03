@@ -462,7 +462,11 @@ if HAVE_GLIB
 test_programs                       += tests/utils.t
 endif
 
-tests_utils_t_SOURCES                = tests/utils.c
+tests_utils_t_SOURCES                = tests/utils.c        \
+                                       tests/test-helpers.c \
+                                       tests/test-helpers.h \
+                                       utils/library-cmp.c  \
+                                       utils/library-cmp.h
 tests_utils_t_LDADD                  = utils/libutils.la $(GLIB_LIBS)
 
 test_scripts                         = tests/capture-libs.pl                   \

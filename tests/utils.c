@@ -15,11 +15,33 @@
 // You should have received a copy of the GNU Lesser General Public
 // License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <glib.h>
+#include <glib/gstdio.h>
 
+#include "tests/test-helpers.h"
+#include "utils/library-cmp.h"
 #include "utils/utils.h"
+
+#define assert_with_errno(expr) \
+  do { \
+    errno = 0; \
+    \
+    if (!(expr)) \
+      g_error ("Assertion failed: %s: %s", #expr, g_strerror (errno)); \
+  } while (0)
+
+static void
+touch (const char *path)
+{
+  FILE *fh;
+
+  assert_with_errno((fh = fopen (path, "w")) != NULL);
+  fclose (fh);
+}
 
 typedef struct
 {
@@ -134,6 +156,133 @@ test_build_filename (Fixture *f,
     }
 }
 
+typedef struct
+{
+  const char *soname;
+  const char *in_container;
+  char cmp;
+  const char *in_provider;
+} CmpByNameTest;
+
+static const CmpByNameTest cmp_by_name_tests[] =
+{
+  { "libdbus-1.so.3", "libdbus-1.so.3.1", '<', "libdbus-1.so.3.2" },
+  { "libdbus-1.so.3", "libdbus-1.so.3.1.2", '>', "libdbus-1.so.3.1.1" },
+  { "libdbus-1.so.3", "libdbus-1.so.3.1", '=', "libdbus-1.so.3.1" },
+  { "libc.so.6", "libc-2.19.so", '<', "libc-2.22.so" },
+  { "libgcc_s.so.1", "libgcc_s-20200703.so.1", '>', "libgcc_s-20120401.so.1" },
+  { "libgcc_s.so.1", "libgcc_s-20200703.so.1", '=', NULL },
+  { "libgcc_s.so.1", NULL, '=', "libgcc_s-20200703.so.1" },
+  { "libgcc_s.so.1", NULL, '=', NULL },
+};
+
+static void
+test_library_cmp_by_name (Fixture *f,
+                          gconstpointer data)
+{
+  GError *error = NULL;
+  gchar *tmpdir = g_dir_make_tmp ("libcapsule.XXXXXX", &error);
+  gchar *container;
+  gchar *provider;
+  gsize i;
+
+  g_assert_no_error (error);
+  g_assert_nonnull (tmpdir);
+
+  container = g_build_filename (tmpdir, "c", NULL);
+  provider = g_build_filename (tmpdir, "p", NULL);
+
+  assert_with_errno (g_mkdir (container, 0755) == 0);
+  assert_with_errno (g_mkdir (provider, 0755) == 0);
+
+  for (i = 0; i < G_N_ELEMENTS (cmp_by_name_tests); i++)
+    {
+      const CmpByNameTest *test = &cmp_by_name_tests[i];
+      gchar *container_file = NULL;
+      gchar *container_lib = g_build_filename (container, test->soname, NULL);
+      gchar *provider_file = NULL;
+      gchar *provider_lib = g_build_filename (provider, test->soname, NULL);
+      int result;
+
+      assert_with_errno (g_unlink (container_lib) == 0 || errno == ENOENT);
+      assert_with_errno (g_unlink (provider_lib) == 0 || errno == ENOENT);
+
+      if (test->in_container == NULL)
+        {
+          touch (container_lib);
+        }
+      else
+        {
+          container_file = g_build_filename (container, test->in_container, NULL);
+          assert_with_errno (g_unlink (container_file) == 0 || errno == ENOENT);
+          touch (container_file);
+          assert_with_errno (symlink (test->in_container, container_lib) == 0);
+        }
+
+      if (test->in_provider == NULL)
+        {
+          touch (provider_lib);
+        }
+      else
+        {
+          provider_file = g_build_filename (provider, test->in_provider, NULL);
+          assert_with_errno (g_unlink (provider_file) == 0 || errno == ENOENT);
+          touch (provider_file);
+          assert_with_errno (symlink (test->in_provider, provider_lib) == 0);
+        }
+
+      result = library_cmp_by_name (test->soname,
+                                    container_lib, container,
+                                    provider_lib, provider);
+
+      switch (test->cmp)
+        {
+          case '<':
+            if (result >= 0)
+              g_error ("Expected %s (%s) < %s (%s), got %d",
+                       container_lib,
+                       container_file ? container_file : "regular file",
+                       provider_lib,
+                       provider_file ? provider_file : "regular file",
+                       result);
+            break;
+
+          case '>':
+            if (result <= 0)
+              g_error ("Expected %s (%s) > %s (%s), got %d",
+                       container_lib,
+                       container_file ? container_file : "regular file",
+                       provider_lib,
+                       provider_file ? provider_file : "regular file",
+                       result);
+            break;
+
+          case '=':
+            if (result != 0)
+              g_error ("Expected %s (%s) == %s (%s), got %d",
+                       container_lib,
+                       container_file ? container_file : "regular file",
+                       provider_lib,
+                       provider_file ? provider_file : "regular file",
+                       result);
+            break;
+
+          default:
+            g_assert_not_reached ();
+        }
+
+      g_free (container_file);
+      g_free (container_lib);
+      g_free (provider_file);
+      g_free (provider_lib);
+    }
+
+  assert_with_errno (rm_rf (tmpdir));
+  g_free (container);
+  g_free (provider);
+  g_free (tmpdir);
+}
+
 static void
 test_ptr_list (Fixture *f,
                gconstpointer data)
@@ -191,6 +340,8 @@ main (int argc,
 
   g_test_add ("/build-filename", Fixture, NULL, setup,
               test_build_filename, teardown);
+  g_test_add ("/library-cmp/name", Fixture, NULL,
+              setup, test_library_cmp_by_name, teardown);
   g_test_add ("/ptr-list", Fixture, NULL, setup, test_ptr_list, teardown);
 
   return g_test_run ();

@@ -462,6 +462,41 @@ ptr_list_alloc(size_t size)
     return list;
 }
 
+/*
+ * ptr_list_free_to_array:
+ * @list: (transfer full): list to free
+ * @n: (out) (optional): if not %NULL, used to return the number of
+ *  items that were in @list
+ *
+ * Add an extra %NULL entry to @list, then return an array with the
+ * same contents as @list, freeing @list. If @n is not %NULL, set it
+ * to the number of elements in the returned array before the %NULL
+ * added by this function.
+ */
+void **
+ptr_list_free_to_array (ptr_list *list, size_t *n)
+{
+    void *ret;
+
+    // Without these assertions, it's unsafe to assign a ptr_item *
+    // to a void **
+    static_assert( alignof( void * ) == alignof( ptr_item ),
+                   "union {void *, ElfW(Addr)} assumed to be same size "
+                   "as void *");
+    static_assert( sizeof( void * ) == sizeof( ptr_item ),
+                   "union {void *, ElfW(Addr)} assumed to be same "
+                   "alignment as void *");
+
+    if( n != NULL )
+        *n = list->next;
+
+    ptr_list_push_ptr( list, NULL );
+    ret = list->loc;
+    list->loc = NULL;
+    ptr_list_free (list);
+    return ret;
+}
+
 void
 ptr_list_free (ptr_list *list)
 {

@@ -135,6 +135,48 @@ test_build_filename (Fixture *f,
 }
 
 static void
+test_ptr_list (Fixture *f,
+               gconstpointer data)
+{
+  size_t n;
+  ptr_list *list;
+  void **array;
+
+  list = ptr_list_alloc (0);
+  ptr_list_push_ptr (list, (char *) "hello");
+  ptr_list_add_ptr (list, (char *) "world", g_str_equal);
+  ptr_list_add_ptr (list, (char *) "hello", g_str_equal);    // duplicate, not added
+  ptr_list_add_ptr (list, (char *) "world", g_str_equal);    // duplicate, not added
+  ptr_list_push_ptr (list, (char *) "hello");
+  ptr_list_push_ptr (list, NULL);
+  ptr_list_push_addr (list, 23);
+
+  g_assert_cmpstr (ptr_list_nth_ptr (list, 0), ==, "hello");
+  g_assert_cmpstr (ptr_list_nth_ptr (list, 1), ==, "world");
+  g_assert_cmpstr (ptr_list_nth_ptr (list, 2), ==, "hello");
+  g_assert_cmpstr (ptr_list_nth_ptr (list, 3), ==, NULL);
+  g_assert_cmpuint (GPOINTER_TO_SIZE (ptr_list_nth_ptr (list, 4)), ==, 23);
+  g_assert_cmpstr (ptr_list_nth_ptr (list, 5), ==, NULL);
+  g_assert_cmpstr (ptr_list_nth_ptr (list, 47), ==, NULL);
+  g_assert_true (ptr_list_contains (list, 23));
+  g_assert_true (ptr_list_contains (list, (ElfW(Addr)) ptr_list_nth_ptr (list, 1)));
+  g_assert_false (ptr_list_contains (list, 1));
+
+  array = ptr_list_free_to_array (list, &n);
+  g_assert_cmpint (n, ==, 5);
+  g_assert_cmpstr (array[0], ==, "hello");
+  g_assert_cmpstr (array[1], ==, "world");
+  g_assert_cmpstr (array[2], ==, "hello");
+  g_assert_cmpstr (array[3], ==, NULL);
+  g_assert_cmpuint (GPOINTER_TO_SIZE (array[4]), ==, 23);
+  g_assert_cmpstr (array[5], ==, NULL);
+  free (array);
+
+  list = ptr_list_alloc (0);
+  ptr_list_free (list);
+}
+
+static void
 teardown (Fixture *f,
           gconstpointer data)
 {
@@ -149,6 +191,7 @@ main (int argc,
 
   g_test_add ("/build-filename", Fixture, NULL, setup,
               test_build_filename, teardown);
+  g_test_add ("/ptr-list", Fixture, NULL, setup, test_ptr_list, teardown);
 
   return g_test_run ();
 }

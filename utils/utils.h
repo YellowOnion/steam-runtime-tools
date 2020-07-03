@@ -75,6 +75,7 @@ typedef int (*ptrcmp) (const void *a, const void *b);
 ptr_list *ptr_list_alloc (size_t size);
 void *ptr_list_nth_ptr (ptr_list *list, size_t nth);
 void ptr_list_free (ptr_list *list);
+void **ptr_list_free_to_array (ptr_list *list, size_t *n);
 void ptr_list_push_ptr  (ptr_list *list, void *ptr);
 void ptr_list_push_addr (ptr_list *list, ElfW(Addr) addr);
 int  ptr_list_contains  (ptr_list *list, ElfW(Addr) addr);

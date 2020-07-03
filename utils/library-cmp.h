@@ -22,3 +22,15 @@ int library_cmp_by_name( const char *soname,
                          const char *container_root,
                          const char *provider_path,
                          const char *provider_root );
+
+int library_cmp_by_symbols( const char *soname,
+                            const char *container_path,
+                            const char *container_root,
+                            const char *provider_path,
+                            const char *provider_root );
+
+int library_cmp_by_versions( const char *soname,
+                             const char *container_path,
+                             const char *container_root,
+                             const char *provider_path,
+                             const char *provider_root );

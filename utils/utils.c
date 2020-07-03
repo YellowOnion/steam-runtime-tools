@@ -680,3 +680,28 @@ _capsule_set_error( int *code_dest, char **message_dest,
         va_end( ap );
     }
 }
+
+/*
+ * _capsule_basename:
+ * @path: A path
+ *
+ * Return the part of @path after the last directory separator, or @path
+ * if there is no directory separator at all, or an empty string if @path
+ * ends with a directory separator.
+ *
+ * Equivalent to GNU basename(3) from string.h, but not POSIX
+ * basename(3) from libgen.h.
+ *
+ * Returns: (transfer none): A pointer into @path
+ */
+const char *
+_capsule_basename (const char *path)
+{
+  const char *ret = strrchr( path, '/' );
+
+  if( ret == NULL )
+      return path;
+
+  assert( ret[0] == '/' );
+  return ret + 1;
+}

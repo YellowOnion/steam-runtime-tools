@@ -230,3 +230,5 @@ _capsule_clear( void *pp )
 #ifndef static_assert
 # define static_assert(expr, message) _Static_assert(expr, message)
 #endif
+
+const char *_capsule_basename (const char *path);

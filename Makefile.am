@@ -106,7 +106,11 @@ capsule_elf_dump_LDADD          = utils/libutils.la -ldl
 capsule_elf_dump_CFLAGS         = $(AM_CFLAGS)
 capsule_elf_dump_LDFLAGS        = $(AM_LDFLAGS) $(tools_ldflags)
 
-capsule_capture_libs_SOURCES = utils/capture-libs.c utils/tools.c utils/tools.h
+capsule_capture_libs_SOURCES = utils/capture-libs.c \
+                               utils/library-cmp.c  \
+                               utils/library-cmp.h  \
+                               utils/tools.c        \
+                               utils/tools.h
 capsule_capture_libs_LDADD   = utils/libld.la
 capsule_capture_libs_LDFLAGS = $(AM_LDFLAGS) $(tools_ldflags)
 

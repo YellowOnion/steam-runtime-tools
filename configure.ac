@@ -56,6 +56,7 @@ WARN_CFLAGS=$(echo "$WARN_CFLAGS" | sed -Ee 's,-W(error=)?declaration-after-stat
 WARN_CFLAGS=$(echo "$WARN_CFLAGS" | sed -Ee 's,-W(error=)?pointer-arith,,')
 
 AC_CHECK_FUNCS_ONCE([secure_getenv])
+AC_CHECK_HEADERS_ONCE([stdalign.h])
 
 AM_CONDITIONAL([ENABLE_SHARED], [test "x$enable_shared" = xyes])
 

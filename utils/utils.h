@@ -1,4 +1,4 @@
-// Copyright © 2017 Collabora Ltd
+// Copyright © 2017-2020 Collabora Ltd
 
 // This file is part of libcapsule.
 
@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <assert.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -25,6 +26,10 @@
 #include <link.h> // for __ELF_NATIVE_CLASS
 
 #include "debug.h"
+
+#ifdef HAVE_STDALIGN_H
+#include <stdalign.h>
+#endif
 
 #define UNLIKELY(x) __builtin_expect(x, 0)
 #define LIKELY(x)   __builtin_expect(x, 1)
@@ -187,3 +192,40 @@ _capsule_clear( void *pp )
  * on exit from its scope.
  */
 #define _capsule_autofree _capsule_cleanup(_capsule_clear)
+
+/*
+ * alignof:
+ * @type: A type
+ *
+ * The same as in Standard C: return the minimal alignment of a type.
+ *
+ * Note that this is not the same as gcc __alignof__, which returns the
+ * type's *preferred* alignment, which is sometimes greater than the
+ * *minimal* alignment returned by this macro.
+ */
+#ifndef alignof
+# define alignof(type) (__builtin_offsetof(struct { char a; type b; }, b))
+#endif
+
+/*
+ * offsetof:
+ * @t: A `struct` type
+ * @m: A member
+ *
+ * The same as in Standard C: return the offset of @m within @t.
+ */
+#ifndef offsetof
+# define offsetof(t, m) (__builtin_offsetof(t, m))
+#endif
+
+/*
+ * static_assert:
+ * @expr: An expression to evaluate at compile-time
+ * @message: A diagnostic message used if @expr is not true
+ *
+ * The same as in Standard C: evaluate @expr as a compile-time constant
+ * expression, and fail to build if it is zero.
+ */
+#ifndef static_assert
+# define static_assert(expr, message) _Static_assert(expr, message)
+#endif

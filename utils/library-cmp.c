@@ -1063,3 +1063,154 @@ out:
     close_elf( &provider_elf, &provider_fd );
     return cmp_result;
 }
+
+static int
+library_cmp_choose_container( const char *soname,
+                              const char *container_path,
+                              const char *container_root,
+                              const char *provider_path,
+                              const char *provider_root )
+{
+    DEBUG( DEBUG_TOOL,
+           "Choosing %s from container \"%s\", ignoring provider \"%s\"",
+           soname, container_root, provider_root );
+    return 1;
+}
+
+static int
+library_cmp_choose_provider( const char *soname,
+                             const char *container_path,
+                             const char *container_root,
+                             const char *provider_path,
+                             const char *provider_root )
+{
+    DEBUG( DEBUG_TOOL,
+           "Choosing %s from provider \"%s\", ignoring container \"%s\"",
+           soname, provider_root, container_root );
+    return -1;
+}
+
+typedef struct
+{
+    const char *name;
+    library_cmp_function comparator;
+} named_comparator;
+
+static const named_comparator named_comparators[] =
+{
+    { "name", library_cmp_by_name },
+    { "symbols", library_cmp_by_symbols },
+    { "versions", library_cmp_by_versions },
+    { "container", library_cmp_choose_container },
+    { "provider", library_cmp_choose_provider },
+};
+
+/*
+ * library_cmp_list_from_string:
+ * @spec: A string of tokens separated by @delimiters
+ * @delimiters: Any character from this set separates tokens
+ * @code: (out) (optional): Set to an errno value on error
+ * @message: (out) (optional): Set to a string error message on error
+ *
+ * Parse a list of comparators into an array of functions.
+ *
+ * Returns: (free-function free): An array of comparators
+ */
+library_cmp_function *
+library_cmp_list_from_string( const char *spec,
+                              const char *delimiters,
+                              int *code,
+                              char **message )
+{
+    library_cmp_function *ret = NULL;
+    char *buf = xstrdup( spec );
+    char *saveptr = NULL;
+    char *token;
+    ptr_list *list;
+
+    static_assert( sizeof( void * ) == sizeof( library_cmp_function ),
+                   "Function pointer assumed to be same size as void *");
+    static_assert( alignof( void * ) == alignof( library_cmp_function ),
+                   "Function pointer assumed to be same alignment as void *");
+
+    list = ptr_list_alloc( N_ELEMENTS( named_comparators ) );
+
+    for( token = strtok_r( buf, delimiters, &saveptr );
+         token != NULL;
+         token = strtok_r( NULL, delimiters, &saveptr ) )
+    {
+        library_cmp_function comparator = NULL;
+        size_t i;
+
+        if( token[0] == '\0' )
+            continue;
+
+        for( i = 0; i < N_ELEMENTS( named_comparators ); i++ )
+        {
+            if( strcmp( token, named_comparators[i].name ) == 0 )
+            {
+                comparator = named_comparators[i].comparator;
+                break;
+            }
+        }
+
+        if( comparator == NULL )
+        {
+            _capsule_set_error( code, message,
+                                EINVAL, "Unknown library comparison mode \"%s\"",
+                                token );
+            goto out;
+        }
+
+        ptr_list_push_ptr( list, (void *) comparator );
+    }
+
+    ret = (library_cmp_function *) ptr_list_free_to_array( _capsule_steal_pointer( &list ), NULL );
+
+out:
+    if( list != NULL )
+        ptr_list_free( list );
+
+    free( buf );
+    return ret;
+}
+
+/*
+ * library_cmp_list_iterate:
+ * @comparators: (array zero-terminated=1): Functions to compare the libraries
+ * @soname: The name under which we searched for the library
+ * @container_path: The path to the library in the container
+ * @container_root: The path to the top-level directory of the container
+ * @provider_path: The path to the library in the provider
+ * @provider_root: The path to the top-level directory of the provider
+ *
+ * Iterate through a %NULL-terminated array of comparators,
+ * highest-precedence first, calling each one in turn until one of them
+ * returns a nonzero value. If none of them return nonzero, return 0.
+ *
+ * Returns: Negative if the container version appears newer, zero if they
+ *  appear the same or we cannot tell, or positive if the provider version
+ *  appears newer.
+ */
+int
+library_cmp_list_iterate( const library_cmp_function *comparators,
+                          const char *soname,
+                          const char *container_path,
+                          const char *container_root,
+                          const char *provider_path,
+                          const char *provider_root )
+{
+    const library_cmp_function *iter;
+
+    for( iter = comparators; iter != NULL && *iter != NULL; iter++ )
+    {
+        int decision = (*iter)( soname,
+                                container_path, container_root,
+                                provider_path, provider_root );
+
+        if( decision != 0 )
+            return decision;
+    }
+
+    return 0;
+}

@@ -61,6 +61,14 @@ my $libdir = "${test_tempdir}/libdir";
     print $fh "soname:libc.so.6";  # deliberately no trailing newline
     close $fh;
 }
+{
+    open(my $fh, '>', "${test_tempdir}/capture-libs.ini");
+    print $fh "[Library /opt/libversionedsymbols.so.1]\n";
+    print $fh "CompareBy=versions;name;symbols;\n";
+    print $fh "[Library /opt/libversionedlikedbus.so.1]\n";
+    print $fh "CompareBy=container;\n";
+    close $fh;
+}
 
 run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
@@ -570,6 +578,33 @@ SKIP: {
        "should not take provider's version when container's numeric tail is newer");
     ok(! -l "$libdir/libversionednumber.so.1",
        "should not take provider's version when container's numeric tail is newer");
+
+    run_ok(['rm', '-fr', $libdir]);
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / /),
+                           '--tmpfs', $host,
+                           bind_usr('/', $host),
+                           '--tmpfs', $container,
+                           bind_usr('/', $container),
+                           '--ro-bind', $version1, "$host/opt",
+                           '--ro-bind', $version2, "$container/opt",
+                           '--ro-bind', "$test_tempdir/capture-libs.ini",
+                                        "$test_tempdir/capture-libs.ini",
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           'env', 'CAPSULE_DEBUG=all',
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+                           "--dest=$libdir", "--provider=$host",
+                           "--container=$container",
+                           "--library-knowledge=$test_tempdir/capture-libs.ini",
+                           'path-match:/opt/lib*.so.1'],
+                           '2>', \$stderr, '>&2');
+    diag $stderr;
+    ok($result);
+    ok(! -l "$libdir/libversionedsymbols.so.1",
+       "should not take provider's version when told to look at container's symbols");
+    ok(! -l "$libdir/libversionedlikedbus.so.1",
+       "should not take provider's version when forced to use container's");
 }
 
 done_testing;

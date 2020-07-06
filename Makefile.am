@@ -354,6 +354,7 @@ tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols d
 endif
 
 if ENABLE_SHARED
+AM_CPPFLAGS                         += -DENABLE_SHARED
 nobase_insttests_LTLIBRARIES        += tests/version1/libunversionedabibreak.la \
                                        tests/version2/libunversionedabibreak.la \
                                        tests/version1/libunversionednumber.la \

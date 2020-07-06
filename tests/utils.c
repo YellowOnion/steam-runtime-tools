@@ -26,6 +26,8 @@
 #include "utils/library-cmp.h"
 #include "utils/utils.h"
 
+static const char *argv0;
+
 #define assert_with_errno(expr) \
   do { \
     errno = 0; \
@@ -45,13 +47,25 @@ touch (const char *path)
 
 typedef struct
 {
-  int dummy;
+  gchar *srcdir;
+  gchar *builddir;
+  gboolean uninstalled;
 } Fixture;
 
 static void
 setup (Fixture *f,
        gconstpointer data)
 {
+  f->srcdir = g_strdup (g_getenv ("G_TEST_SRCDIR"));
+  f->builddir = g_strdup (g_getenv ("G_TEST_BUILDDIR"));
+
+  if (f->srcdir == NULL)
+    f->srcdir = g_path_get_dirname (argv0);
+
+  if (f->builddir == NULL)
+    f->builddir = g_path_get_dirname (argv0);
+
+  f->uninstalled = (g_getenv ("CAPSULE_TESTS_UNINSTALLED") != NULL);
 }
 
 static struct
@@ -283,6 +297,181 @@ test_library_cmp_by_name (Fixture *f,
   g_free (tmpdir);
 }
 
+typedef struct
+{
+  const char *soname;
+  char cmp;   // it compares such that "version1 cmp version2" is true
+} CmpBySymbolsTest;
+
+#ifdef ENABLE_SHARED
+static const CmpBySymbolsTest cmp_by_symbols_tests[] =
+{
+  /* This adds one symbol and removes one symbol, so we can't tell which
+   * was meant to be newer */
+  { "libunversionedabibreak.so.1", '=' },
+  { "libversionedabibreak.so.1", '=' },
+
+  /* The only difference here is the tail of the filename, which this
+   * comparator doesn't look at */
+  { "libunversionednumber.so.1", '=' },
+  { "libversionednumber.so.1", '=' },
+
+  /* This is the situation this comparator handles */
+  { "libunversionedsymbols.so.1", '<' },
+  { "libversionedsymbols.so.1", '<' },
+  { "libversionedupgrade.so.1", '<' },
+  { "libversionedlikeglibc.so.1", '<' },
+
+  /* We can't currently tell which one is newer because the private symbols
+   * confuse us */
+  { "libversionedlikedbus.so.1", '=' },
+
+  { NULL }
+};
+
+static const CmpBySymbolsTest cmp_by_versions_tests[] =
+{
+  /* All of these have no symbol-versioning, so we can't tell a
+   * difference with this comparator */
+  { "libunversionedabibreak.so.1", '=' },
+  { "libunversionednumber.so.1", '=' },
+  { "libunversionedsymbols.so.1", '=' },
+
+  /* This adds one verdef and removes one verdef, so we can't tell which
+   * was meant to be newer */
+  { "libversionedabibreak.so.1", '=' },
+
+  /* The only difference here is the tail of the filename, which this
+   * comparator doesn't look at */
+  { "libversionednumber.so.1", '=' },
+
+  /* This is simple "version ~= SONAME" symbol-versioning, like in libtiff
+   * and libpng, so this comparator can't tell any difference */
+  { "libversionedsymbols.so.1", '=' },
+
+  /* This one has version-specific verdefs like libmount, libgcab, OpenSSL,
+   * telepathy-glib etc., so we can tell it's an upgrade */
+  { "libversionedupgrade.so.1", '<' },
+
+  /* This one has the same symbol listed in more than one verdef,
+   * like glibc - we can tell this is an upgrade */
+  { "libversionedlikeglibc.so.1", '<' },
+
+  /* We can't currently tell which one is newer because the private verdefs
+   * confuse us */
+  { "libversionedlikedbus.so.1", '=' },
+
+  { NULL }
+};
+
+/* We use the same code to test cmp_by_symbols and cmp_by_versions,
+ * just with a different table. */
+static void
+test_library_cmp_by_symbols (Fixture *f,
+                             gconstpointer data)
+{
+  const CmpBySymbolsTest *tests = data;
+  gsize i;
+
+  for (i = 0; tests[i].soname != NULL; i++)
+    {
+      const CmpBySymbolsTest *test = &tests[i];
+      gchar *v1;
+      gchar *v1_lib;
+      gchar *v2;
+      gchar *v2_lib;
+      int result;
+      const char *how;
+
+      v1 = g_build_filename (f->builddir, "tests", "version1", NULL);
+      v1_lib = g_build_filename (v1, f->uninstalled ? ".libs" : ".",
+                                 test->soname, NULL);
+      v2 = g_build_filename (f->builddir, "tests", "version2", NULL);
+      v2_lib = g_build_filename (v2, f->uninstalled ? ".libs" : ".",
+                                 test->soname, NULL);
+
+      if (tests == cmp_by_versions_tests)
+        {
+          how = "by symbol-versions";
+          result = library_cmp_by_versions (test->soname,
+                                            v1_lib, v1,
+                                            v2_lib, v2);
+        }
+      else
+        {
+          how = "by symbols";
+          result = library_cmp_by_symbols (test->soname,
+                                           v1_lib, v1,
+                                           v2_lib, v2);
+        }
+
+      switch (test->cmp)
+        {
+          case '<':
+            if (result >= 0)
+              g_error ("Expected %s < %s %s, got %d",
+                       v1_lib, v2_lib, how, result);
+            break;
+
+          case '>':
+            if (result <= 0)
+              g_error ("Expected %s > %s %s, got %d",
+                       v1_lib, v2_lib, how, result);
+            break;
+
+          case '=':
+            if (result != 0)
+              g_error ("Expected %s == %s %s, got %d",
+                       v1_lib, v2_lib, how, result);
+            break;
+
+          default:
+            g_assert_not_reached ();
+        }
+
+      /* We get the reverse result when we do it the other way round. */
+      if (tests == cmp_by_versions_tests)
+        result = library_cmp_by_versions (test->soname,
+                                          v2_lib, v2,
+                                          v1_lib, v1);
+      else
+        result = library_cmp_by_symbols (test->soname,
+                                         v2_lib, v2,
+                                         v1_lib, v1);
+
+      switch (test->cmp)
+        {
+          case '>':   // v1 > v2, i.e. v2 < v1
+            if (result >= 0)
+              g_error ("Expected %s < %s %s, got %d",
+                       v2_lib, v1_lib, how, result);
+            break;
+
+          case '<':   // v1 < v2, i.e. v2 > v1
+            if (result <= 0)
+              g_error ("Expected %s > %s %s, got %d",
+                       v2_lib, v1_lib, how, result);
+            break;
+
+          case '=':
+            if (result != 0)
+              g_error ("Expected %s == %s %s, got %d",
+                       v2_lib, v1_lib, how, result);
+            break;
+
+          default:
+            g_assert_not_reached ();
+        }
+
+
+      g_free (v1);
+      g_free (v1_lib);
+      g_free (v2);
+      g_free (v2_lib);
+    }
+}
+#endif
+
 static void
 test_ptr_list (Fixture *f,
                gconstpointer data)
@@ -329,19 +518,30 @@ static void
 teardown (Fixture *f,
           gconstpointer data)
 {
+  g_free (f->srcdir);
+  g_free (f->builddir);
 }
 
 int
 main (int argc,
       char **argv)
 {
+  argv0 = argv[0];
   g_test_init (&argc, &argv, NULL);
   g_test_set_nonfatal_assertions ();
+
+  set_debug_flags (g_getenv("CAPSULE_DEBUG"));
 
   g_test_add ("/build-filename", Fixture, NULL, setup,
               test_build_filename, teardown);
   g_test_add ("/library-cmp/name", Fixture, NULL,
               setup, test_library_cmp_by_name, teardown);
+#ifdef ENABLE_SHARED
+  g_test_add ("/library-cmp/symbols", Fixture, cmp_by_symbols_tests,
+              setup, test_library_cmp_by_symbols, teardown);
+  g_test_add ("/library-cmp/versions", Fixture, cmp_by_versions_tests,
+              setup, test_library_cmp_by_symbols, teardown);
+#endif
   g_test_add ("/ptr-list", Fixture, NULL, setup, test_ptr_list, teardown);
 
   return g_test_run ();

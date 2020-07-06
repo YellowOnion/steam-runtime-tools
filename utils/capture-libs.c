@@ -102,6 +102,7 @@ static const char * const libc_patterns[] = {
 
 enum
 {
+  OPTION_COMPARE_BY,
   OPTION_CONTAINER,
   OPTION_DEST,
   OPTION_LINK_TARGET,
@@ -121,6 +122,7 @@ static bool option_glibc = true;
 
 static struct option long_options[] =
 {
+    { "compare-by", required_argument, NULL, OPTION_COMPARE_BY },
     { "container", required_argument, NULL, OPTION_CONTAINER },
     { "dest", required_argument, NULL, OPTION_DEST },
     { "help", no_argument, NULL, 'h' },
@@ -219,6 +221,16 @@ static void usage (int code)
   fprintf( fh, "\tShow this help.\n" );
   fprintf( fh, "\n" );
   fprintf( fh, "Options:\n" );
+  fprintf( fh, "--compare-by=METHOD[,METHOD2...]\n"
+               "\tUse METHOD by default to decide which library is newer.\n"
+               "\tIf unable to decide, use METHOD2, and so on.\n"
+               "\tIf unable to decide by any method, choose PROVIDER.\n"
+               "\tThe default is 'name,provider'.\n"
+               "\t\tname: Use library name: libfoo.so.1.0 < libfoo.so.1.2\n"
+               "\t\tversions: The one with a superset of DT_VERDEF is newer\n"
+               "\t\tsymbols: The one with a superset of symbols is newer\n"
+               "\t\tcontainer: The one in CONTAINER is newer\n"
+               "\t\tprovider: The one in PROVIDER is newer\n" );
   fprintf( fh, "--container=CONTAINER\n"
                "\tAssume the container will look like CONTAINER when\n"
                "\tdeciding which libraries are needed [default: /]\n" );
@@ -292,6 +304,7 @@ typedef enum
 typedef struct
 {
     capture_flags flags;
+    library_cmp_function *comparators;
 } capture_options;
 
 static bool
@@ -457,31 +470,37 @@ capture_one( const char *soname, const capture_options *options,
                                   &local_code, &local_message ) )
             {
                 const char *needed_path_in_container = container.needed[0].path;
+                int decision;
 
-                /* TODO: Ideally we would actually dlopen the libraries and
-                 * inspect their symbol tables, either in ambiguous cases
-                 * or always - but that's easier said than done, because
-                 * private symbols exist. For now we just use
-                 * library_cmp_by_name(). */
+                decision = library_cmp_list_iterate( options->comparators,
+                                                     needed_name,
+                                                     needed_path_in_container,
+                                                     option_container,
+                                                     needed_path_in_provider,
+                                                     option_provider);
 
-                /* If equal, we prefer the provider over the container */
-                if( library_cmp_by_name( needed_name,
-                                         needed_path_in_container,
-                                         option_container,
-                                         needed_path_in_provider,
-                                         option_provider) > 0 )
+                if( decision > 0 )
                 {
                     /* Version in container is strictly newer: don't
                      * symlink in the one from the provider */
                     DEBUG( DEBUG_TOOL,
-                           "%s is strictly newer in the container",
+                           "Choosing %s from container",
                            needed_name );
                     continue;
                 }
-                else
+                else if( decision < 0 )
                 {
                     DEBUG( DEBUG_TOOL,
-                           "%s is newer or equal in the provider",
+                           "Choosing %s from provider",
+                           needed_name );
+                }
+                else
+                {
+                    /* If equal, we prefer the provider over the container
+                     * (this is equivalent to having "...,provider" at the
+                     * end of the comparison specification) */
+                    DEBUG( DEBUG_TOOL,
+                           "Falling back to choosing %s from provider",
                            needed_name );
                 }
             }
@@ -1075,9 +1094,11 @@ int
 main (int argc, char **argv)
 {
     capture_options options = {
+        .comparators = NULL,
         .flags = (CAPTURE_FLAG_LIBRARY_ITSELF |
                   CAPTURE_FLAG_DEPENDENCIES ),
     };
+    const char *option_compare_by = "name,provider";
     int code = 0;
     char *message = NULL;
 
@@ -1102,6 +1123,10 @@ main (int argc, char **argv)
             case 'h':
                 usage( 0 );
                 break;  // not reached
+
+            case OPTION_COMPARE_BY:
+                option_compare_by = optarg;
+                break;
 
             case OPTION_CONTAINER:
                 option_container = optarg;
@@ -1165,6 +1190,14 @@ main (int argc, char **argv)
         err( 1, "creating \"%s\"", option_dest );
     }
 
+    options.comparators = library_cmp_list_from_string( option_compare_by, ",",
+                                                        &code, &message );
+
+    if( options.comparators == NULL )
+    {
+        errx( 1, "code %d: %s", code, message );
+    }
+
     dest_fd = open( option_dest, O_RDWR|O_DIRECTORY|O_CLOEXEC|O_PATH );
 
     if( dest_fd < 0 )
@@ -1178,6 +1211,7 @@ main (int argc, char **argv)
     }
 
     close( dest_fd );
+    free( options.comparators );
 
     return 0;
 }

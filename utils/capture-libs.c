@@ -105,6 +105,7 @@ enum
   OPTION_COMPARE_BY,
   OPTION_CONTAINER,
   OPTION_DEST,
+  OPTION_LIBRARY_KNOWLEDGE,
   OPTION_LINK_TARGET,
   OPTION_NO_GLIBC,
   OPTION_PRINT_LD_SO,
@@ -126,6 +127,7 @@ static struct option long_options[] =
     { "container", required_argument, NULL, OPTION_CONTAINER },
     { "dest", required_argument, NULL, OPTION_DEST },
     { "help", no_argument, NULL, 'h' },
+    { "library-knowledge", required_argument, NULL, OPTION_LIBRARY_KNOWLEDGE },
     { "link-target", required_argument, NULL, OPTION_LINK_TARGET },
     { "no-glibc", no_argument, NULL, OPTION_NO_GLIBC },
     { "print-ld.so", no_argument, NULL, OPTION_PRINT_LD_SO },
@@ -233,6 +235,9 @@ static void usage (int code)
                "\tdeciding which libraries are needed [default: /]\n" );
   fprintf( fh, "--dest=LIBDIR\n"
                "\tCreate symlinks in LIBDIR [default: .]\n" );
+  fprintf( fh, "--library-knowledge=FILE\n"
+               "\tLoad information about known libraries from a"
+               "\t.desktop-style file at FILE, overriding --compare-by.\n" );
   fprintf( fh, "--link-target=PATH\n"
                "\tAssume PROVIDER will be mounted at PATH when the\n"
                "\tcontainer is used [default: PROVIDER]\n" );
@@ -302,6 +307,7 @@ typedef struct
 {
     capture_flags flags;
     library_cmp_function *comparators;
+    library_knowledge knowledge;
 } capture_options;
 
 static bool
@@ -468,8 +474,24 @@ capture_one( const char *soname, const capture_options *options,
             {
                 const char *needed_path_in_container = container.needed[0].path;
                 int decision;
+                const library_cmp_function *comparators = options->comparators;
+                const library_details *details = NULL;
 
-                decision = library_cmp_list_iterate( options->comparators,
+                details = library_knowledge_lookup( &options->knowledge,
+                                                    needed_name );
+
+                if( details != NULL )
+                    DEBUG( DEBUG_TOOL, "Found library-specific details for \"%s\"",
+                           needed_name );
+
+                if( details != NULL && details->comparators != NULL)
+                {
+                    DEBUG( DEBUG_TOOL, "Found library-specific comparators for \"%s\"",
+                           needed_name );
+                    comparators = details->comparators;
+                }
+
+                decision = library_cmp_list_iterate( comparators,
                                                      needed_name,
                                                      needed_path_in_container,
                                                      option_container,
@@ -1094,8 +1116,10 @@ main (int argc, char **argv)
         .comparators = NULL,
         .flags = (CAPTURE_FLAG_LIBRARY_ITSELF |
                   CAPTURE_FLAG_DEPENDENCIES ),
+        .knowledge = LIBRARY_KNOWLEDGE_INIT,
     };
     const char *option_compare_by = "name,provider";
+    const char *option_library_knowledge = NULL;
     int code = 0;
     char *message = NULL;
 
@@ -1131,6 +1155,13 @@ main (int argc, char **argv)
 
             case OPTION_DEST:
                 option_dest = optarg;
+                break;
+
+            case OPTION_LIBRARY_KNOWLEDGE:
+                if( option_library_knowledge != NULL )
+                    errx( 1, "--library-knowledge can only be used once" );
+
+                option_library_knowledge = optarg;
                 break;
 
             case OPTION_LINK_TARGET:
@@ -1195,6 +1226,25 @@ main (int argc, char **argv)
         errx( 1, "code %d: %s", code, message );
     }
 
+    if( option_library_knowledge != NULL )
+    {
+        FILE *fh = fopen( option_library_knowledge, "re" );
+
+        if( fh == NULL)
+        {
+            err( 1, "opening \"%s\"", option_library_knowledge );
+        }
+
+        if( !library_knowledge_load_from_stream( &options.knowledge,
+                                                 fh, option_library_knowledge,
+                                                 &code, &message ) )
+        {
+            errx( 1, "code %d: %s", code, message );
+        }
+
+        fclose( fh );
+    }
+
     dest_fd = open( option_dest, O_RDWR|O_DIRECTORY|O_CLOEXEC|O_PATH );
 
     if( dest_fd < 0 )
@@ -1209,6 +1259,7 @@ main (int argc, char **argv)
 
     close( dest_fd );
     free( options.comparators );
+    library_knowledge_clear( &options.knowledge );
 
     return 0;
 }

@@ -199,9 +199,13 @@ test_library_cmp_by_name (Fixture *f,
   gchar *container;
   gchar *provider;
   gsize i;
+  library_cmp_function *comparators;
 
   g_assert_no_error (error);
   g_assert_nonnull (tmpdir);
+
+  comparators = library_cmp_list_from_string ("name", ",", NULL, NULL);
+  g_assert_nonnull (comparators);
 
   container = g_build_filename (tmpdir, "c", NULL);
   provider = g_build_filename (tmpdir, "p", NULL);
@@ -245,9 +249,10 @@ test_library_cmp_by_name (Fixture *f,
           assert_with_errno (symlink (test->in_provider, provider_lib) == 0);
         }
 
-      result = library_cmp_by_name (test->soname,
-                                    container_lib, container,
-                                    provider_lib, provider);
+      result = library_cmp_list_iterate (comparators,
+                                         test->soname,
+                                         container_lib, container,
+                                         provider_lib, provider);
 
       switch (test->cmp)
         {
@@ -295,93 +300,136 @@ test_library_cmp_by_name (Fixture *f,
   g_free (container);
   g_free (provider);
   g_free (tmpdir);
+  free (comparators);
 }
 
 typedef struct
 {
   const char *soname;
-  char cmp;   // it compares such that "version1 cmp version2" is true
-} CmpBySymbolsTest;
+  const char *spec;
+  /* It compares such that "version1 cmp version2" is true, except for
+   * the special case that "c" and "p" mean we choose the container version
+   * and provider version respectively */
+  char cmp;
+} CmpTest;
 
 #ifdef ENABLE_SHARED
-static const CmpBySymbolsTest cmp_by_symbols_tests[] =
+static const CmpTest cmp_tests[] =
 {
+  /* BY SYMBOLS */
+
   /* This adds one symbol and removes one symbol, so we can't tell which
    * was meant to be newer */
-  { "libunversionedabibreak.so.1", '=' },
-  { "libversionedabibreak.so.1", '=' },
+  { "libunversionedabibreak.so.1", "symbols", '=' },
+  { "libversionedabibreak.so.1", "symbols", '=' },
 
   /* The only difference here is the tail of the filename, which this
    * comparator doesn't look at */
-  { "libunversionednumber.so.1", '=' },
-  { "libversionednumber.so.1", '=' },
+  { "libunversionednumber.so.1", "symbols", '=' },
+  { "libversionednumber.so.1", "symbols", '=' },
 
   /* This is the situation this comparator handles */
-  { "libunversionedsymbols.so.1", '<' },
-  { "libversionedsymbols.so.1", '<' },
-  { "libversionedupgrade.so.1", '<' },
-  { "libversionedlikeglibc.so.1", '<' },
+  { "libunversionedsymbols.so.1", "symbols", '<' },
+  { "libversionedsymbols.so.1", "symbols", '<' },
+  { "libversionedupgrade.so.1", "symbols", '<' },
+  { "libversionedlikeglibc.so.1", "symbols", '<' },
 
   /* We can't currently tell which one is newer because the private symbols
    * confuse us */
-  { "libversionedlikedbus.so.1", '=' },
+  { "libversionedlikedbus.so.1", "symbols", '=' },
 
-  { NULL }
-};
+  /* BY VERSION DEFINITIONS */
 
-static const CmpBySymbolsTest cmp_by_versions_tests[] =
-{
   /* All of these have no symbol-versioning, so we can't tell a
    * difference with this comparator */
-  { "libunversionedabibreak.so.1", '=' },
-  { "libunversionednumber.so.1", '=' },
-  { "libunversionedsymbols.so.1", '=' },
+  { "libunversionedabibreak.so.1", "versions", '=' },
+  { "libunversionednumber.so.1", "versions", '=' },
+  { "libunversionedsymbols.so.1", "versions", '=' },
 
   /* This adds one verdef and removes one verdef, so we can't tell which
    * was meant to be newer */
-  { "libversionedabibreak.so.1", '=' },
+  { "libversionedabibreak.so.1", "versions", '=' },
 
   /* The only difference here is the tail of the filename, which this
    * comparator doesn't look at */
-  { "libversionednumber.so.1", '=' },
+  { "libversionednumber.so.1", "versions", '=' },
 
   /* This is simple "version ~= SONAME" symbol-versioning, like in libtiff
    * and libpng, so this comparator can't tell any difference */
-  { "libversionedsymbols.so.1", '=' },
+  { "libversionedsymbols.so.1", "versions", '=' },
 
   /* This one has version-specific verdefs like libmount, libgcab, OpenSSL,
    * telepathy-glib etc., so we can tell it's an upgrade */
-  { "libversionedupgrade.so.1", '<' },
+  { "libversionedupgrade.so.1", "versions", '<' },
 
   /* This one has the same symbol listed in more than one verdef,
    * like glibc - we can tell this is an upgrade */
-  { "libversionedlikeglibc.so.1", '<' },
+  { "libversionedlikeglibc.so.1", "versions", '<' },
 
   /* We can't currently tell which one is newer because the private verdefs
    * confuse us */
-  { "libversionedlikedbus.so.1", '=' },
+  { "libversionedlikedbus.so.1", "versions", '=' },
 
-  { NULL }
+  /* BY NAME */
+
+  /* These have the version number in the filename. */
+  { "libunversionednumber.so.1", "name", '<' },
+  { "libversionedlikedbus.so.1", "name", '<' },
+  { "libversionednumber.so.1", "name", '<' },
+
+  /* These have the same filename in both versions, so we can't tell. */
+  { "libunversionedabibreak.so.1", "name", '=' },
+  { "libunversionedsymbols.so.1", "name", '=' },
+  { "libversionedabibreak.so.1", "name", '=' },
+  { "libversionedsymbols.so.1", "name", '=' },
+  { "libversionedupgrade.so.1", "name", '=' },
+  { "libversionedlikeglibc.so.1", "name", '=' },
+
+  /* BY MORE THAN ONE FACTOR */
+
+  { "libversionedlikeglibc.so.1", "name,versions", '<' },
+  { "libversionedlikeglibc.so.1", "name,container", 'c' },
+  { "libversionedlikeglibc.so.1", "name,container,provider", 'c' },
+  { "libversionedlikeglibc.so.1", "name,provider", 'p' },
+  { "libversionedlikeglibc.so.1", "name,provider,container", 'p' },
+  { "libversionedlikeglibc.so.1", "versions,name", '<' },
+  { "libversionedlikeglibc.so.1", "versions,container", '<' },
+  { "libversionedlikeglibc.so.1", "versions,provider", '<' },
+  { "libversionedlikeglibc.so.1", "name,symbols", '<' },
+  { "libversionedlikeglibc.so.1", "symbols,provider", '<' },
+
+  /* This one is a stand-in for libgcc_s.so.1 */
+  { "libversionedupgrade.so.1", "name", '=' },
+  { "libversionedupgrade.so.1", "versions,name,symbols", '<' },
+  { "libversionedupgrade.so.1", "name,versions", '<' },
+
+  /* These are obviously silly - just assert that they don't crash. */
+  { "libversionedupgrade.so.1", "", '=' },
+  { "libversionedupgrade.so.1", ",,,,,,", '=' },
+  { "libversionedupgrade.so.1", "name,,,,,,name,,,,,,,,,,,,,,,,,,,", '=' },
+  { "libversionedupgrade.so.1",
+    "name,name,name,name,name,name,name,name,name,name,name,name,name,name",
+    '=' },
 };
 
-/* We use the same code to test cmp_by_symbols and cmp_by_versions,
- * just with a different table. */
 static void
-test_library_cmp_by_symbols (Fixture *f,
-                             gconstpointer data)
+test_library_cmp (Fixture *f,
+                  gconstpointer data)
 {
-  const CmpBySymbolsTest *tests = data;
   gsize i;
 
-  for (i = 0; tests[i].soname != NULL; i++)
+  for (i = 0; i < G_N_ELEMENTS (cmp_tests); i++)
     {
-      const CmpBySymbolsTest *test = &tests[i];
+      const CmpTest *test = &cmp_tests[i];
+      library_cmp_function *comparators;
       gchar *v1;
       gchar *v1_lib;
       gchar *v2;
       gchar *v2_lib;
       int result;
-      const char *how;
+
+      comparators = library_cmp_list_from_string (test->spec, ",", NULL, NULL);
+      g_assert_nonnull (comparators);
 
       v1 = g_build_filename (f->builddir, "tests", "version1", NULL);
       v1_lib = g_build_filename (v1, f->uninstalled ? ".libs" : ".",
@@ -390,73 +438,66 @@ test_library_cmp_by_symbols (Fixture *f,
       v2_lib = g_build_filename (v2, f->uninstalled ? ".libs" : ".",
                                  test->soname, NULL);
 
-      if (tests == cmp_by_versions_tests)
-        {
-          how = "by symbol-versions";
-          result = library_cmp_by_versions (test->soname,
-                                            v1_lib, v1,
-                                            v2_lib, v2);
-        }
-      else
-        {
-          how = "by symbols";
-          result = library_cmp_by_symbols (test->soname,
-                                           v1_lib, v1,
-                                           v2_lib, v2);
-        }
+      result = library_cmp_list_iterate (comparators,
+                                         test->soname,
+                                         v1_lib, v1,
+                                         v2_lib, v2);
 
       switch (test->cmp)
         {
-          case '<':
+          case '<':   // v1 < v2
+          case 'p':   // choose provider, i.e. v2 here
             if (result >= 0)
-              g_error ("Expected %s < %s %s, got %d",
-                       v1_lib, v2_lib, how, result);
+              g_error ("Expected %s < %s by (%s), got %d",
+                       v1_lib, v2_lib, test->spec, result);
             break;
 
-          case '>':
+          case '>':   // v1 > v2
+          case 'c':   // choose container, i.e. v1 here
             if (result <= 0)
-              g_error ("Expected %s > %s %s, got %d",
-                       v1_lib, v2_lib, how, result);
+              g_error ("Expected %s > %s by (%s), got %d",
+                       v1_lib, v2_lib, test->spec, result);
             break;
 
           case '=':
             if (result != 0)
-              g_error ("Expected %s == %s %s, got %d",
-                       v1_lib, v2_lib, how, result);
+              g_error ("Expected %s == %s by (%s), got %d",
+                       v1_lib, v2_lib, test->spec, result);
             break;
 
           default:
             g_assert_not_reached ();
         }
 
-      /* We get the reverse result when we do it the other way round. */
-      if (tests == cmp_by_versions_tests)
-        result = library_cmp_by_versions (test->soname,
-                                          v2_lib, v2,
-                                          v1_lib, v1);
-      else
-        result = library_cmp_by_symbols (test->soname,
+      /* We get the reverse result when we do it the other way round -
+       * unless the expected result is "c" or "p", in which case we
+       * get the same result, because those results are determined by
+       * the position of the arguments rather than by their content. */
+      result = library_cmp_list_iterate (comparators,
+                                         test->soname,
                                          v2_lib, v2,
                                          v1_lib, v1);
 
       switch (test->cmp)
         {
           case '>':   // v1 > v2, i.e. v2 < v1
+          case 'p':   // choose provider, i.e. v1 here
             if (result >= 0)
-              g_error ("Expected %s < %s %s, got %d",
-                       v2_lib, v1_lib, how, result);
+              g_error ("Expected %s < %s by (%s), got %d",
+                       v2_lib, v1_lib, test->spec, result);
             break;
 
           case '<':   // v1 < v2, i.e. v2 > v1
+          case 'c':   // choose container, i.e. v2 here
             if (result <= 0)
-              g_error ("Expected %s > %s %s, got %d",
-                       v2_lib, v1_lib, how, result);
+              g_error ("Expected %s > %s by (%s), got %d",
+                       v2_lib, v1_lib, test->spec, result);
             break;
 
           case '=':
             if (result != 0)
-              g_error ("Expected %s == %s %s, got %d",
-                       v2_lib, v1_lib, how, result);
+              g_error ("Expected %s == %s by (%s), got %d",
+                       v2_lib, v1_lib, test->spec, result);
             break;
 
           default:
@@ -468,6 +509,7 @@ test_library_cmp_by_symbols (Fixture *f,
       g_free (v1_lib);
       g_free (v2);
       g_free (v2_lib);
+      free (comparators);
     }
 }
 #endif
@@ -534,14 +576,12 @@ main (int argc,
 
   g_test_add ("/build-filename", Fixture, NULL, setup,
               test_build_filename, teardown);
+#ifdef ENABLE_SHARED
+  g_test_add ("/library-cmp/configurable", Fixture, NULL,
+              setup, test_library_cmp, teardown);
+#endif
   g_test_add ("/library-cmp/name", Fixture, NULL,
               setup, test_library_cmp_by_name, teardown);
-#ifdef ENABLE_SHARED
-  g_test_add ("/library-cmp/symbols", Fixture, cmp_by_symbols_tests,
-              setup, test_library_cmp_by_symbols, teardown);
-  g_test_add ("/library-cmp/versions", Fixture, cmp_by_versions_tests,
-              setup, test_library_cmp_by_symbols, teardown);
-#endif
   g_test_add ("/ptr-list", Fixture, NULL, setup, test_ptr_list, teardown);
 
   return g_test_run ();

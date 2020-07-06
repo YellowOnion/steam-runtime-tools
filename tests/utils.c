@@ -514,6 +514,174 @@ test_library_cmp (Fixture *f,
 }
 #endif
 
+char library_ini_part_1[] =
+"# Configuration for capsule-capture-libs\n"
+"\n"
+"[Library libc.so.6]\n"
+"CompareBy=versions;symbols;name;\n"
+"\n"
+"[Library libgcc_s.so.1]\n"
+"CompareBy=versions;\n"
+"\n"
+"[Library libwhatsmynameagain.so.0]\n"
+"CompareBy=name;\n"
+"\n"
+"[Library libcountmysymbols.so.0]\n"
+"CompareBy=symbols;\n"
+"\n"
+"[Not a library]\n"
+"# Ignore this\n"
+"CompareBy=By guesswork; by magic; randomly\n"
+"whatever=Whatever\n"
+"\n"
+"[Library libdbus-1.so.3]\n"
+"\n"
+"[Library libdbus-1.so.3]\n"
+"CompareBy=provider;container;\n"
+"";
+
+char library_ini_part_2[] =
+"[Library libglib-2.0.so.0]\n"
+"\n"
+"[Library libdbus-1.so.3]\n"
+"CompareBy=versions;name;symbols;\n"
+"private-symbols=_*;dbus_internal_do_not_use_*;\n"
+"private-versions=LIBDBUS_PRIVATE_*;\n"
+"";
+
+static void
+test_library_knowledge_good (Fixture *f,
+                             gconstpointer data)
+{
+  library_knowledge knowledge = LIBRARY_KNOWLEDGE_INIT;
+  const library_details *libc;
+  const library_details *libgcc;
+  const library_details *name;
+  const library_details *symbols;
+  const library_details *libdbus;
+  const library_details *glib;
+  const library_details *nope;
+  int code = -1;
+  char *message = NULL;
+  FILE *fh;
+
+  assert_with_errno ((fh = fmemopen ((char *) library_ini_part_1,
+                                     sizeof (library_ini_part_1), "r")) != NULL);
+
+  if (!library_knowledge_load_from_stream (&knowledge, fh, "library.ini.1",
+                                           &code, &message))
+    g_error ("%s", message);
+
+  g_assert_cmpstr (message, ==, NULL);
+  g_assert_cmpuint (code, ==, -1);
+  assert_with_errno (fclose (fh) == 0);
+
+  assert_with_errno ((fh = fmemopen ((char *) library_ini_part_2,
+                                     sizeof (library_ini_part_2), "r")) != NULL);
+
+  if (!library_knowledge_load_from_stream (&knowledge, fh, "library.ini.2",
+                                           &code, &message))
+    g_error ("%s", message);
+
+  g_assert_cmpstr (message, ==, NULL);
+  g_assert_cmpuint (code, ==, -1);
+  assert_with_errno (fclose (fh) == 0);
+
+  libc = library_knowledge_lookup (&knowledge, "libc.so.6");
+  g_assert_nonnull (libc);
+  g_assert_cmpstr (libc->name, ==, "libc.so.6");
+  libgcc = library_knowledge_lookup (&knowledge, "libgcc_s.so.1");
+  g_assert_nonnull (libgcc);
+  g_assert_cmpstr (libgcc->name, ==, "libgcc_s.so.1");
+  name = library_knowledge_lookup (&knowledge, "libwhatsmynameagain.so.0");
+  g_assert_nonnull (name);
+  g_assert_cmpstr (name->name, ==, "libwhatsmynameagain.so.0");
+  symbols = library_knowledge_lookup (&knowledge, "libcountmysymbols.so.0");
+  g_assert_nonnull (symbols);
+  g_assert_cmpstr (symbols->name, ==, "libcountmysymbols.so.0");
+  libdbus = library_knowledge_lookup (&knowledge, "libdbus-1.so.3");
+  g_assert_nonnull (libdbus);
+  g_assert_cmpstr (libdbus->name, ==, "libdbus-1.so.3");
+  glib = library_knowledge_lookup (&knowledge, "libglib-2.0.so.0");
+  g_assert_nonnull (glib);
+  g_assert_cmpstr (libdbus->name, ==, "libdbus-1.so.3");
+  nope = library_knowledge_lookup (&knowledge, "libdbus-glib-1.so.2");
+  g_assert_null (nope);
+
+  g_assert_null (glib->comparators);
+  g_assert_nonnull (name->comparators);
+  g_assert_nonnull (name->comparators[0]);
+  g_assert_null (name->comparators[1]);
+  g_assert_nonnull (symbols->comparators);
+  g_assert_nonnull (symbols->comparators[0]);
+  g_assert_null (symbols->comparators[1]);
+  g_assert_nonnull (libgcc->comparators);
+  g_assert_nonnull (libgcc->comparators[0]);
+  g_assert_null (libgcc->comparators[1]);
+
+  g_assert_nonnull (libc->comparators);
+  g_assert_true (libc->comparators[0] == libgcc->comparators[0]);
+  g_assert_true (libc->comparators[1] == symbols->comparators[0]);
+  g_assert_true (libc->comparators[2] == name->comparators[0]);
+  g_assert_null (libc->comparators[3]);
+
+  g_assert_nonnull (libdbus->comparators);
+  g_assert_true (libdbus->comparators[0] == libgcc->comparators[0]);
+  g_assert_true (libdbus->comparators[1] == name->comparators[0]);
+  g_assert_true (libdbus->comparators[2] == symbols->comparators[0]);
+  g_assert_null (libdbus->comparators[3]);
+
+  library_knowledge_clear (&knowledge);
+}
+
+static const char * const library_knowledge_bad_strings[] =
+{
+  "nope",
+  "[nope",
+  "foo=bar",
+  "[nope]\n[no",
+};
+
+static void
+test_library_knowledge_bad (Fixture *f,
+                            gconstpointer data)
+{
+  gsize i;
+  library_knowledge knowledge = LIBRARY_KNOWLEDGE_INIT;
+
+  for (i = 0; i < G_N_ELEMENTS (library_knowledge_bad_strings); i++)
+    {
+      const char *s = library_knowledge_bad_strings[i];
+      int code = -1;
+      char *message = NULL;
+      FILE *fh;
+      gchar *description;
+      bool ok;
+
+      description = g_strescape (s, NULL);
+      assert_with_errno ((fh = fmemopen ((char *) s, strlen (s), "r")) != NULL);
+
+      ok = library_knowledge_load_from_stream (&knowledge, fh, description,
+                                               &code, &message);
+      g_assert_cmpstr (message, !=, NULL);
+      g_assert_cmpuint (code, !=, -1);
+      g_assert_false (ok);
+      g_test_message ("code %d: %s", code, message);
+      free (message);
+      assert_with_errno (fclose (fh) == 0);
+      library_knowledge_clear (&knowledge);
+
+      assert_with_errno ((fh = fmemopen ((char *) s, strlen (s), "r")) != NULL);
+      ok = library_knowledge_load_from_stream (&knowledge, fh, description,
+                                               NULL, NULL);
+      g_assert_false (ok);
+      assert_with_errno (fclose (fh) == 0);
+      library_knowledge_clear (&knowledge);
+
+      g_free (description);
+    }
+}
+
 static void
 test_ptr_list (Fixture *f,
                gconstpointer data)
@@ -582,6 +750,10 @@ main (int argc,
 #endif
   g_test_add ("/library-cmp/name", Fixture, NULL,
               setup, test_library_cmp_by_name, teardown);
+  g_test_add ("/library-knowledge/bad", Fixture, NULL,
+              setup, test_library_knowledge_bad, teardown);
+  g_test_add ("/library-knowledge/good", Fixture, NULL,
+              setup, test_library_knowledge_good, teardown);
   g_test_add ("/ptr-list", Fixture, NULL, setup, test_ptr_list, teardown);
 
   return g_test_run ();

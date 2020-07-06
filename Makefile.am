@@ -18,11 +18,15 @@
 AUTOMAKE_OPTIONS        = subdir-objects
 ACLOCAL_AMFLAGS         = -I m4 --install
 AM_CPPFLAGS             = -DHOST_PREFIX=\"$(HOST_PREFIX)\"
-AM_CFLAGS               = -fvisibility=hidden \
+common_cflags           = -fvisibility=hidden \
                           --std=c99 \
                           $(WARN_CFLAGS) \
                           $(LIBELF_CFLAGS) \
                           $(GLIB_CFLAGS)
+# Used for production code and tests, but not for test fixtures
+AM_CFLAGS               = $(common_cflags) $(SANITIZE_CFLAGS)
+# Used for test fixtures only
+test_fixture_cflags     = $(common_cflags)
 AM_LDFLAGS              = $(WARN_LDFLAGS)
 static_docs             = Building Debugging Limitations Quick-Start Capsules
 
@@ -261,18 +265,21 @@ if ENABLE_LIBRARY
 tests_lib_libnotgl_la_SOURCES        = tests/notgl-ref.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
+tests_lib_libnotgl_la_CFLAGS         = $(test_fixture_cflags)
 tests_lib_libnotgl_la_LDFLAGS        = -shared -version-number 0:42:23
 tests_lib_libnotgl_la_LIBADD         = tests/helper/libhelper.la
 
 tests_lib_libnotgles_la_SOURCES      = tests/notgles-ref.c                     \
                                        tests/notgles.h                         \
                                        tests/notgl-helper.h
+tests_lib_libnotgles_la_CFLAGS       = $(test_fixture_cflags)
 tests_lib_libnotgles_la_LDFLAGS      = -shared -version-number 1:42:23
 tests_lib_libnotgles_la_LIBADD       = tests/helper/libhelper.la
 
 tests_red_libnotgl_la_SOURCES        = tests/notgl-red.c                       \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
+tests_red_libnotgl_la_CFLAGS         = $(test_fixture_cflags)
 # Give it a gratuitously higher version number
 tests_red_libnotgl_la_LDFLAGS        = -shared -version-number 0:123:456
 # We want the RUNPATH or RPATH to point to tests/helper here, so we can
@@ -283,12 +290,14 @@ tests_red_libnotgl_la_LIBADD         = tests/helper/libhelper.la
 tests_red_libnotgles_la_SOURCES      = tests/notgles-red.c                     \
                                        tests/notgles.h                         \
                                        tests/notgl-helper.h
+tests_red_libnotgles_la_CFLAGS       = $(test_fixture_cflags)
 tests_red_libnotgles_la_LDFLAGS      = -shared -version-number 1:123:456
 tests_red_libnotgles_la_LIBADD       = tests/helper/libhelper.la
 
 tests_green_libnotgl_la_SOURCES      = tests/notgl-green.c                     \
                                        tests/notgl.h                           \
                                        tests/notgl-helper.h
+tests_green_libnotgl_la_CFLAGS       = $(test_fixture_cflags)
 # Give this one a gratuitously *lower* version number
 tests_green_libnotgl_la_LDFLAGS      = -shared -version-number 0:23:42
 # Again, we want the RUNPATH or RPATH to point to tests/helper here
@@ -297,27 +306,33 @@ tests_green_libnotgl_la_LIBADD       = tests/helper/libhelper.la
 tests_green_libnotgles_la_SOURCES    = tests/notgles-green.c                   \
                                        tests/notgles.h                         \
                                        tests/notgl-helper.h
+tests_green_libnotgles_la_CFLAGS     = $(test_fixture_cflags)
 tests_green_libnotgles_la_LDFLAGS    = -shared -version-number 1:23:42
 tests_green_libnotgles_la_LIBADD     = tests/helper/libhelper.la
 
 tests_helper_libhelper_la_SOURCES    = tests/notgl-helper-ref.c                \
                                        tests/notgl-helper.h
+tests_helper_libhelper_la_CFLAGS     = $(test_fixture_cflags)
 tests_helper_libhelper_la_LDFLAGS    = -shared -version-number 0:42:23
 
 tests_red_libhelper_la_SOURCES       = tests/notgl-helper-red.c                \
                                        tests/notgl-helper.h
+tests_red_libhelper_la_CFLAGS        = $(test_fixture_cflags)
 tests_red_libhelper_la_LDFLAGS       = -shared -version-number 0:123:456
 
 tests_green_libhelper_la_SOURCES     = tests/notgl-helper-green.c              \
                                        tests/notgl-helper.h
+tests_green_libhelper_la_CFLAGS      = $(test_fixture_cflags)
 tests_green_libhelper_la_LDFLAGS     = -shared -version-number 0:23:42
 
 nodist_tests_shim_libnotgl_la_SOURCES = tests/shim/libnotgl.so.0.c
 tests_shim_libnotgl_la_LIBADD        = libcapsule.la
+tests_shim_libnotgl_la_CFLAGS        = $(test_fixture_cflags)
 tests_shim_libnotgl_la_LDFLAGS       = -shared -version-number 0:0:0
 
 nodist_tests_shim_libnotgles_la_SOURCES = tests/shim/libnotgles.so.1.c
 tests_shim_libnotgles_la_LIBADD        = libcapsule.la
+tests_shim_libnotgles_la_CFLAGS        = $(test_fixture_cflags)
 tests_shim_libnotgles_la_LDFLAGS       = -shared -version-number 1:0:0
 
 tests/shim/%.c: tests/shim/%.excluded tests/shim/%.shared tests/shim/%.symbols data/capsule-mkstublib Makefile
@@ -353,34 +368,52 @@ nobase_insttests_LTLIBRARIES        += tests/version1/libunversionedabibreak.la 
                                        tests/version2/libversionedsymbols.la \
                                        tests/version1/libversionedupgrade.la \
                                        tests/version2/libversionedupgrade.la
+tests_version1_libunversionedabibreak_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libunversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version2_libunversionedabibreak_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libunversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version1_libunversionednumber_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libunversionednumber_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version2_libunversionednumber_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libunversionednumber_la_LDFLAGS = -shared -version-number 1:2:3
+tests_version1_libunversionedsymbols_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libunversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version2_libunversionedsymbols_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libunversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0
+tests_version1_libversionedabibreak_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                  -Wl,--version-script=$(srcdir)/tests/version1/libversionedabibreak.map
+tests_version2_libversionedabibreak_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                  -Wl,--version-script=$(srcdir)/tests/version2/libversionedabibreak.map
+tests_version1_libversionedlikedbus_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionedlikedbus_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                  -Wl,--version-script=$(srcdir)/tests/version1/libversionedlikedbus.map
+tests_version2_libversionedlikedbus_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionedlikedbus_la_LDFLAGS = -shared -version-number 1:2:0 \
                                                  -Wl,--version-script=$(srcdir)/tests/version2/libversionedlikedbus.map
+tests_version1_libversionedlikeglibc_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionedlikeglibc_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                   -Wl,--version-script=$(srcdir)/tests/version1/libversionedlikeglibc.map
+tests_version2_libversionedlikeglibc_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionedlikeglibc_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                   -Wl,--version-script=$(srcdir)/tests/version2/libversionedlikeglibc.map
+tests_version1_libversionednumber_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionednumber_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version2_libversionednumber_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionednumber_la_LDFLAGS = -shared -version-number 1:2:3 \
                                                -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version1_libversionedsymbols_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                 -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version2_libversionedsymbols_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                 -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version1_libversionedupgrade_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionedupgrade_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                 -Wl,--version-script=$(srcdir)/tests/version1/libversionedupgrade.map
+tests_version2_libversionedupgrade_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionedupgrade_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                 -Wl,--version-script=$(srcdir)/tests/version2/libversionedupgrade.map
 endif

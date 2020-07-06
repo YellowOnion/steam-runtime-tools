@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <stdio.h>
+
 /*
  * library_cmp_function:
  * @soname: The name under which we searched for the library
@@ -49,3 +52,36 @@ int library_cmp_list_iterate( const library_cmp_function *comparators,
                               const char *container_root,
                               const char *provider_path,
                               const char *provider_root );
+
+/*
+ * library_knowledge:
+ * @tree: (element-type library_details): A tsearch(3) tree
+ *
+ * Details of all known libraries.
+ */
+typedef struct
+{
+    /*< private >*/
+    void *tree;
+} library_knowledge;
+
+#define LIBRARY_KNOWLEDGE_INIT { NULL }
+
+/*
+ * library_details:
+ * @name: The name we look for the library under, normally a SONAME
+ * @comparators: Functions to use to compare versions, or %NULL for
+ *  default behaviour
+ */
+typedef struct
+{
+    char *name;
+    library_cmp_function *comparators;
+} library_details;
+
+bool library_knowledge_load_from_stream( library_knowledge *self,
+                                         FILE *stream, const char *name,
+                                         int *code, char **message );
+const library_details *library_knowledge_lookup( const library_knowledge *self,
+                                                 const char *library );
+void library_knowledge_clear( library_knowledge *self );

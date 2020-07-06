@@ -20,6 +20,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <search.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -243,6 +244,211 @@ print_debug_string_list( char **list, const char *begin_message )
 
     for( size_t i = 0; list[i] != NULL; i++ )
         DEBUG( DEBUG_ELF, "%s", list[i] );
+}
+
+static int
+library_details_cmp( const void *pa, const void *pb )
+{
+    const library_details *a = pa;
+    const library_details *b = pb;
+
+    return strcmp( a->name, b->name );
+}
+
+static void
+library_details_free( library_details *self )
+{
+  free( self->comparators );
+  free( self->name );
+  free( self );
+}
+
+static void
+library_details_free_generic( void *p )
+{
+    library_details_free( p );
+}
+
+void
+library_knowledge_clear( library_knowledge *self )
+{
+    if( self->tree != NULL )
+        tdestroy( self->tree, library_details_free_generic );
+
+    self->tree = NULL;
+}
+
+/*
+ * library_knowledge_lookup:
+ * @self: Details of all known libraries
+ * @library: The name of a library, normally the SONAME
+ *
+ * Returns: Details of @library, or %NULL if nothing is known about it
+ */
+const library_details *
+library_knowledge_lookup( const library_knowledge *self,
+                          const char *library )
+{
+    const library_details key = { (char *) library, NULL };
+    library_details **node;
+
+    node = tfind( &key, &self->tree, library_details_cmp );
+
+    if( node == NULL )
+        return NULL;
+
+    return *node;
+}
+
+/*
+ * library_knowledge_load_from_stream:
+ * @stream: A stream
+ * @name: The filename of @stream or a placeholder, for diagnostic messages
+ * @code: (out) (optional): Set to an `errno` value on failure
+ * @message: (out) (optional): Set to an error message on failure
+ *
+ * Load knowledge of libraries from a stream. It is merged with anything
+ * previously known by @self, with the new version preferred (so if there
+ * are multiple files containing library knowledge, they should be loaded
+ * in least-important-first order).
+ *
+ * Returns: true on success
+ */
+bool
+library_knowledge_load_from_stream( library_knowledge *self,
+                                    FILE *stream, const char *name,
+                                    int *code, char **message )
+{
+    library_details *current = NULL;
+    bool in_a_section = false;
+    bool ok = false;
+    int line_number = 0;
+    char *line = NULL;
+    size_t buf_len = 0;
+    ssize_t len;
+
+    while( ( len = getline( &line, &buf_len, stream ) ) >= 0 )
+    {
+        line_number++;
+
+        if( len == 0 || *line == '\0' || *line == '\n' || *line == '#' )
+            continue;
+
+        if( line[len - 1] == '\n' )
+        {
+            line[--len] = '\0';
+        }
+
+        if( *line == '[' )
+        {
+            library_details **node;
+
+            // new section
+            if( line[len - 1] != ']' )
+            {
+                _capsule_set_error( code, message, EINVAL,
+                                    "%s:%d: Invalid section heading \"%s\"",
+                                    name, line_number, line );
+                goto out;
+            }
+
+            // Wipe out the ']'
+            line[--len] = '\0';
+
+            if( strstarts( line, "[Library " ) )
+            {
+                current = xcalloc( 1, sizeof( library_details ) );
+                current->name = xstrdup( line + strlen( "[Library " ) );
+                current->comparators = NULL;
+
+                node = tsearch( current, &self->tree, library_details_cmp );
+
+                if( node == NULL )
+                {
+                    oom();
+                }
+                else if( *node != current )
+                {
+                    // we have seen this one before: keep the existing version
+                    library_details_free( current );
+                    current = *node;
+                }
+                // else self->tree takes ownership of current
+            }
+            // TODO: Future expansion: we could have glob matches if we
+            // want them, for example [Match libGLX_*.so.0]
+            else
+            {
+                DEBUG( DEBUG_TOOL, "Ignoring unknown section heading \"%s\"", line + 1 );
+                current = NULL;
+            }
+
+            in_a_section = true;
+        }
+        else if( !in_a_section )
+        {
+            _capsule_set_error( code, message, EINVAL,
+                                "%s:%d: Unexpected line not in a section: \"%s\"",
+                                name, line_number, line );
+           goto out;
+        }
+        else if( current != NULL && strstarts( line, "CompareBy=" ) )
+        {
+            char *values = line + strlen( "CompareBy=" );
+
+            free( current->comparators );
+            current->comparators = library_cmp_list_from_string( values, ";",
+                                                                 code, message );
+
+            if( current->comparators == NULL )
+            {
+                if( message != NULL )
+                {
+                    // Prepend file:line: before failing
+                    char *tmp = *message;
+
+                    *message = NULL;
+
+                    if( asprintf( message, "%s:%d: %s", name, line_number, tmp ) < 0 )
+                        oom();
+
+                    free( tmp );
+                }
+
+                goto out;
+            }
+        }
+        // TODO: Future expansion: private-symbols=? public-symbols=?
+        // TODO: Future expansion: private-versions=? public-versions=?
+        else if( strchr( line, '=' ) != NULL )
+        {
+            DEBUG( DEBUG_TOOL, "%s:%d: Ignoring unknown key/value pair \"%s\"",
+                   name, line_number, line );
+        }
+        else
+        {
+            _capsule_set_error( code, message, EINVAL,
+                                "%s:%d: Unexpected line not a key/value pair: \"%s\"",
+                                name, line_number, line );
+            goto out;
+        }
+    }
+
+    ok = true;
+
+out:
+    free( line );
+
+    if( ok )
+    {
+        DEBUG( DEBUG_TOOL, "Loaded library knowledge from \"%s\"", name );
+    }
+    else
+    {
+        DEBUG( DEBUG_TOOL, "Failed to load library knowledge from \"%s\"", name );
+    }
+
+    return ok;
 }
 
 /*

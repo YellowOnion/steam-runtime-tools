@@ -22,6 +22,11 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 variables:
+    BUILD_IMAGE: 'debian:buster-slim'
+    CI_DISABLE_LIBRARY: ''
+    CI_DISTCHECK: ''
+    CI_MAKE_J: '-j -l2'
+
     # A known-good version of deb-build-snapshot
     DEB_BUILD_SNAPSHOT_TAG: v0.20190828.0
 
@@ -61,6 +66,39 @@ before_script:
     image: ${BUILD_IMAGE}
     script: |
         set -eux
+        NOCONFIGURE=1 ./autogen.sh
+        ./configure \
+            CC=${CC-cc} \
+            ${CI_DISABLE_LIBRARY+--disable-library} \
+            SANITIZE_CFLAGS="${SANITIZE_CFLAGS-}" \
+            ${NULL+}
+        make ${CI_MAKE_J}
+        make ${CI_MAKE_J} check
+        if [ -n "$CI_DISTCHECK" ]; then
+            make ${CI_MAKE_J} distcheck
+        fi
+    artifacts:
+        paths:
+            - config.log
+            - test-suite.log
+
+build:ubsan:
+    extends: .build
+    variables:
+        SANITIZE_CFLAGS: "-fsanitize=undefined -fno-sanitize=alignment -static-libubsan"
+
+build:asan:
+    extends: .build
+    variables:
+        # The actual libcapsule library doesn't work with AddressSanitizer,
+        # but at least we can unit-test utility code and test the tools
+        CI_DISABLE_LIBRARY: "yes"
+        SANITIZE_CFLAGS: "-fsanitize-recover=all -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fPIE -pie"
+
+.deb-build-snapshot:
+    image: ${BUILD_IMAGE}
+    script: |
+        set -eux
 
         set -- --upstream --source
 
@@ -80,26 +118,26 @@ before_script:
             - debian/tmp/artifacts/${CI_JOB_NAME}
 
 build:stretch:
-    extends: .build
+    extends: .deb-build-snapshot
     variables:
         BUILD_IMAGE: 'debian:stretch-slim'
 
 build:buster:
-    extends: .build
+    extends: .deb-build-snapshot
     variables:
         BUILD_IMAGE: 'debian:buster-slim'
 
 build:bionic:
-    extends: .build
+    extends: .deb-build-snapshot
     variables:
         BUILD_IMAGE: 'ubuntu:bionic'
         LIBJPEG62: 'libjpeg62'
 
 build:arch:
     when: manual
+    extends: .build
     variables:
         BUILD_IMAGE: 'archlinux'
-    image: ${BUILD_IMAGE}
     before_script:
         # bubblewrap-suid instead of bubblewrap will be necessary on some
         # kernels.
@@ -128,9 +166,3 @@ build:arch:
             pkgconf \
             sudo \
             ${NULL+}
-    script: |
-        NOCONFIGURE=1 ./autogen.sh
-        ./configure
-        make
-        make check
-        make distcheck

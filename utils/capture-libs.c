@@ -289,6 +289,11 @@ typedef enum
   CAPTURE_FLAG_IF_SAME_ABI = ( 1 << 4 ),
 } capture_flags;
 
+typedef struct
+{
+    capture_flags flags;
+} capture_options;
+
 static bool
 init_with_target( ld_libs *ldlibs, const char *tree, const char *target,
                   int *code, char **message )
@@ -315,15 +320,16 @@ fail:
     return false;
 }
 
-static bool capture_pattern( const char *pattern, capture_flags flags,
+static bool capture_pattern( const char *pattern,
+                             const capture_options *options,
                              int *code, char **message );
 
 static bool capture_patterns( const char * const *patterns,
-                              capture_flags flags,
+                              const capture_options *options,
                               int *code, char **message );
 
 static bool
-capture_one( const char *soname, capture_flags flags,
+capture_one( const char *soname, const capture_options *options,
              int *code, char **message )
 {
     unsigned int i;
@@ -334,14 +340,14 @@ capture_one( const char *soname, capture_flags flags,
     if( !init_with_target( &provider, option_provider, soname,
                            &local_code, &local_message ) )
     {
-        if( ( flags & CAPTURE_FLAG_IF_EXISTS ) && local_code == ENOENT )
+        if( ( options->flags & CAPTURE_FLAG_IF_EXISTS ) && local_code == ENOENT )
         {
             DEBUG( DEBUG_TOOL, "%s not found, ignoring", soname );
             _capsule_clear( &local_message );
             return true;
         }
 
-        if( ( flags & CAPTURE_FLAG_IF_SAME_ABI ) && local_code == ENOEXEC )
+        if( ( options->flags & CAPTURE_FLAG_IF_SAME_ABI ) && local_code == ENOEXEC )
         {
             DEBUG( DEBUG_TOOL, "%s is a different ABI: %s", soname, local_message );
             _capsule_clear( &local_message );
@@ -371,14 +377,14 @@ capture_one( const char *soname, capture_flags flags,
             continue;
         }
 
-        if( i == 0 && !( flags & CAPTURE_FLAG_LIBRARY_ITSELF ) )
+        if( i == 0 && !( options->flags & CAPTURE_FLAG_LIBRARY_ITSELF ) )
         {
             DEBUG( DEBUG_TOOL, "Not capturing \"%s\" itself as requested",
                    needed_name );
             continue;
         }
 
-        if( i > 0 && !( flags & CAPTURE_FLAG_DEPENDENCIES ) )
+        if( i > 0 && !( options->flags & CAPTURE_FLAG_DEPENDENCIES ) )
         {
             DEBUG( DEBUG_TOOL,
                    "Not capturing dependencies of \"%s\" as requested",
@@ -436,7 +442,7 @@ capture_one( const char *soname, capture_flags flags,
                    "\"%s\": assuming provider version is newer",
                    needed_path_in_provider );
         }
-        else if( i == 0 && ( flags & CAPTURE_FLAG_EVEN_IF_OLDER ) )
+        else if( i == 0 && ( options->flags & CAPTURE_FLAG_EVEN_IF_OLDER ) )
         {
             DEBUG( DEBUG_TOOL,
                    "Explicitly requested %s from %s even if older: \"%s\"",
@@ -553,16 +559,20 @@ capture_one( const char *soname, capture_flags flags,
 
         if( strcmp( needed_basename, "libc.so.6" ) == 0 )
         {
+            capture_options new_options;
+
             /* Having captured libc, we need to capture the rest of
              * the related libraries from the same place */
             DEBUG( DEBUG_TOOL,
                    "Capturing the rest of glibc to go with %s",
                    needed_name );
 
-            if( !capture_patterns( libc_patterns,
-                                  ( flags | CAPTURE_FLAG_IF_EXISTS |
-                                    CAPTURE_FLAG_EVEN_IF_OLDER ),
-                                  code, message ) )
+            new_options = *options;
+            new_options.flags |= CAPTURE_FLAG_IF_EXISTS;
+            new_options.flags |= CAPTURE_FLAG_EVEN_IF_OLDER;
+
+            if( !capture_patterns( libc_patterns, &new_options,
+                                   code, message ) )
             {
                 return false;
             }
@@ -575,7 +585,7 @@ capture_one( const char *soname, capture_flags flags,
 typedef struct
 {
     const char *pattern;
-    capture_flags flags;
+    const capture_options *options;
     bool found;
     ld_cache cache;
     int *code;
@@ -599,12 +609,16 @@ cache_foreach_cb (const char *name, int flag, unsigned int osv,
   // we'll just skip it.
   if( fnmatch( ctx->pattern, name, 0 ) == 0 )
   {
+      capture_options new_options;
+
       DEBUG( DEBUG_TOOL, "%s matches %s", name, ctx->pattern );
 
       ctx->found = true;
 
-      if( !capture_one( name, ctx->flags | CAPTURE_FLAG_IF_EXISTS,
-                        ctx->code, ctx->message ) )
+      new_options = *ctx->options;
+      new_options.flags |= CAPTURE_FLAG_IF_EXISTS;
+
+      if( !capture_one( name, &new_options, ctx->code, ctx->message ) )
           return 1;
   }
 
@@ -612,13 +626,13 @@ cache_foreach_cb (const char *name, int flag, unsigned int osv,
 }
 
 static bool
-capture_soname_match( const char *pattern, capture_flags flags,
+capture_soname_match( const char *pattern, const capture_options *options,
                       int *code, char **message )
 {
     _capsule_autofree char *cache_path = NULL;
     cache_foreach_context ctx = {
         .pattern = pattern,
-        .flags = flags,
+        .options = options,
         .cache = { .is_open = 0 },
         .found = false,
         .code = code,
@@ -637,7 +651,7 @@ capture_soname_match( const char *pattern, capture_flags flags,
     if( ld_cache_foreach( &ctx.cache, cache_foreach_cb, &ctx ) != 0 )
         goto out;
 
-    if( !ctx.found && !( flags & CAPTURE_FLAG_IF_EXISTS ) )
+    if( !ctx.found && !( options->flags & CAPTURE_FLAG_IF_EXISTS ) )
     {
         _capsule_set_error( code, message, ENOENT,
                             "no matches found for glob pattern \"%s\" "
@@ -656,7 +670,7 @@ out:
 }
 
 static bool
-capture_path_match( const char *pattern, capture_flags flags,
+capture_path_match( const char *pattern, const capture_options *options,
                     int *code, char **message )
 {
     char *abs_path = NULL;
@@ -677,6 +691,7 @@ capture_path_match( const char *pattern, capture_flags flags,
             for( i = 0; i < buffer.gl_pathc; i++)
             {
                 const char *path = buffer.gl_pathv[i];
+                capture_options new_options;
 
                 if( option_provider != NULL &&
                     strcmp( option_provider, "/" ) != 0 &&
@@ -691,9 +706,11 @@ capture_path_match( const char *pattern, capture_flags flags,
                   return false;
                 }
 
+                new_options = *options;
+                new_options.flags |= CAPTURE_FLAG_IF_SAME_ABI;
+
                 if( !capture_one( path + strlen( option_provider ),
-                                  flags | CAPTURE_FLAG_IF_SAME_ABI,
-                                  code, message ) )
+                                  &new_options, code, message ) )
                 {
                     ret = false;
                     break;
@@ -703,7 +720,7 @@ capture_path_match( const char *pattern, capture_flags flags,
             break;
 
         case GLOB_NOMATCH:
-            if( flags & CAPTURE_FLAG_IF_EXISTS )
+            if( options->flags & CAPTURE_FLAG_IF_EXISTS )
             {
                 ret = true;
             }
@@ -737,7 +754,7 @@ capture_path_match( const char *pattern, capture_flags flags,
 }
 
 static bool
-capture_lines( const char *filename, capture_flags flags,
+capture_lines( const char *filename, const capture_options *options,
                int *code, char **message )
 {
   FILE *fp = NULL;
@@ -769,7 +786,7 @@ capture_lines( const char *filename, capture_flags flags,
       if( line[chars - 1] == '\n' )
           line[chars - 1] = '\0';
 
-      if( !capture_pattern( line, flags, code, message ) )
+      if( !capture_pattern( line, options, code, message ) )
       {
           ret = false;
           break;
@@ -785,13 +802,13 @@ capture_lines( const char *filename, capture_flags flags,
 }
 
 static bool
-capture_pattern( const char *pattern, capture_flags flags,
+capture_pattern( const char *pattern, const capture_options *options,
                  int *code, char **message )
 {
     DEBUG( DEBUG_TOOL, "%s", pattern );
 
-    if ( ( flags & ( CAPTURE_FLAG_LIBRARY_ITSELF |
-                     CAPTURE_FLAG_DEPENDENCIES ) ) == 0 )
+    if ( ( options->flags & ( CAPTURE_FLAG_LIBRARY_ITSELF |
+                              CAPTURE_FLAG_DEPENDENCIES ) ) == 0 )
     {
         _capsule_set_error( code, message, EINVAL,
                             "combining no-dependencies: with "
@@ -813,60 +830,70 @@ capture_pattern( const char *pattern, capture_flags flags,
         }
 
         return capture_one( pattern + strlen( "path:" ),
-                            flags, code, message );
+                            options, code, message );
     }
 
     if( strstarts( pattern, "soname:" ) )
     {
         return capture_one( pattern + strlen( "soname:" ),
-                            flags, code, message );
+                            options, code, message );
     }
 
     if( strstarts( pattern, "soname-match:" ) )
     {
         return capture_soname_match( pattern + strlen( "soname-match:" ),
-                                     flags, code, message );
+                                     options, code, message );
     }
 
     if( strstarts( pattern, "path-match:" ) )
     {
         return capture_path_match( pattern + strlen( "path-match:" ),
-                                   flags, code, message );
+                                   options, code, message );
     }
 
     if( strstarts( pattern, "if-exists:" ) )
     {
+        capture_options new_options = *options;
+
+        new_options.flags |= CAPTURE_FLAG_IF_EXISTS;
         return capture_pattern( pattern + strlen( "if-exists:" ),
-                                flags | CAPTURE_FLAG_IF_EXISTS,
-                                code, message );
+                                &new_options, code, message );
     }
 
     if( strstarts( pattern, "if-same-abi:" ) )
     {
+        capture_options new_options = *options;
+
+        new_options.flags |= CAPTURE_FLAG_IF_SAME_ABI;
         return capture_pattern( pattern + strlen( "if-same-abi:" ),
-                                flags | CAPTURE_FLAG_IF_SAME_ABI,
-                                code, message );
+                                &new_options, code, message );
     }
 
     if( strstarts( pattern, "even-if-older:" ) )
     {
+        capture_options new_options = *options;
+
+        new_options.flags |= CAPTURE_FLAG_EVEN_IF_OLDER;
         return capture_pattern( pattern + strlen( "even-if-older:" ),
-                                flags | CAPTURE_FLAG_EVEN_IF_OLDER,
-                                code, message );
+                                &new_options, code, message );
     }
 
     if( strstarts( pattern, "only-dependencies:" ) )
     {
+        capture_options new_options = *options;
+
+        new_options.flags &= ~CAPTURE_FLAG_LIBRARY_ITSELF;
         return capture_pattern( pattern + strlen( "only-dependencies:" ),
-                                flags & ~CAPTURE_FLAG_LIBRARY_ITSELF,
-                                code, message );
+                                &new_options, code, message );
     }
 
     if( strstarts( pattern, "no-dependencies:" ) )
     {
+        capture_options new_options = *options;
+
+        new_options.flags &= ~CAPTURE_FLAG_DEPENDENCIES;
         return capture_pattern( pattern + strlen( "no-dependencies:" ),
-                                flags & ~CAPTURE_FLAG_DEPENDENCIES,
-                                code, message );
+                                &new_options, code, message );
     }
 
     if( strcmp( pattern, "gl:" ) == 0 )
@@ -925,13 +952,14 @@ capture_pattern( const char *pattern, capture_flags flags,
             // again it will be pulled in via dependencies.
             NULL
         };
+        capture_options new_options = *options;
 
+        new_options.flags |= CAPTURE_FLAG_IF_EXISTS;
         /* We usually want to capture the host GL stack even if it
          * appears older than what's in the container. */
-        return capture_patterns( gl_patterns,
-                                ( flags | CAPTURE_FLAG_IF_EXISTS |
-                                  CAPTURE_FLAG_EVEN_IF_OLDER ),
-                                code, message );
+        new_options.flags |= CAPTURE_FLAG_EVEN_IF_OLDER;
+
+        return capture_patterns( gl_patterns, &new_options, code, message );
     }
 
     if( strcmp( pattern, "nvidia:" ) == 0 )
@@ -964,20 +992,21 @@ capture_pattern( const char *pattern, capture_flags flags,
             "soname-match:libvdpau_nvidia.so.*",
             NULL
         };
+        capture_options new_options = *options;
 
+        new_options.flags |= CAPTURE_FLAG_IF_EXISTS;
         /* We certainly want to capture the host GL stack even if it
          * appears older than what's in the container: the NVIDIA
          * proprietary drivers have to be in lockstep with the kernel. */
-        return capture_patterns( gl_patterns,
-                                ( flags | CAPTURE_FLAG_IF_EXISTS |
-                                  CAPTURE_FLAG_EVEN_IF_OLDER ),
-                                code, message );
+        new_options.flags |= CAPTURE_FLAG_EVEN_IF_OLDER;
+
+        return capture_patterns( gl_patterns, &new_options, code, message );
     }
 
     if( strstarts( pattern, "from:" ) )
     {
         return capture_lines( pattern + strlen( "from:" ),
-                              flags, code, message );
+                              options, code, message );
     }
 
     if( strchr( pattern, ':' ) != NULL )
@@ -998,11 +1027,11 @@ capture_pattern( const char *pattern, capture_flags flags,
             strchr( pattern, '[' ) != NULL )
         {
             // Interpret as if path-match:
-            return capture_path_match( pattern, flags, code, message );
+            return capture_path_match( pattern, options, code, message );
         }
         else
         {
-            return capture_one( pattern, flags, code, message );
+            return capture_one( pattern, options, code, message );
         }
     }
 
@@ -1019,22 +1048,23 @@ capture_pattern( const char *pattern, capture_flags flags,
         strchr( pattern, '[' ) != NULL )
     {
         // Interpret as if soname-match:
-        return capture_soname_match( pattern, flags, code, message );
+        return capture_soname_match( pattern, options, code, message );
     }
 
     // Default: interpret as if soname:
-    return capture_one( pattern, flags, code, message );
+    return capture_one( pattern, options, code, message );
 }
 
 static bool
-capture_patterns( const char * const *patterns, capture_flags flags,
+capture_patterns( const char * const *patterns,
+                  const capture_options *options,
                   int *code, char **message )
 {
     unsigned int i;
 
     for( i = 0; patterns[i] != NULL; i++ )
     {
-        if( !capture_pattern( patterns[i], flags, code, message ) )
+        if( !capture_pattern( patterns[i], options, code, message ) )
             return false;
     }
 
@@ -1044,8 +1074,10 @@ capture_patterns( const char * const *patterns, capture_flags flags,
 int
 main (int argc, char **argv)
 {
-    capture_flags flags = (CAPTURE_FLAG_LIBRARY_ITSELF |
-                           CAPTURE_FLAG_DEPENDENCIES );
+    capture_options options = {
+        .flags = (CAPTURE_FLAG_LIBRARY_ITSELF |
+                  CAPTURE_FLAG_DEPENDENCIES ),
+    };
     int code = 0;
     char *message = NULL;
 
@@ -1140,7 +1172,7 @@ main (int argc, char **argv)
         err( 1, "opening \"%s\"", option_dest );
     }
 
-    if( !capture_patterns( arg_patterns, flags, &code, &message ) )
+    if( !capture_patterns( arg_patterns, &options, &code, &message ) )
     {
         errx( 1, "code %d: %s", code, message );
     }

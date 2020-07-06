@@ -137,9 +137,6 @@ static struct option long_options[] =
 
 static int dest_fd = -1;
 
-#define strstarts(str, start) \
-  (strncmp( str, start, strlen( start ) ) == 0)
-
 static bool resolve_ld_so ( const char *prefix,
                             char path[PATH_MAX],
                             const char **within_prefix,

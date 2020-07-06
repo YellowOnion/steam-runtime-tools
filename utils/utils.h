@@ -81,6 +81,9 @@ void ptr_list_push_addr (ptr_list *list, ElfW(Addr) addr);
 int  ptr_list_contains  (ptr_list *list, ElfW(Addr) addr);
 int  ptr_list_add_ptr   (ptr_list *list, void *ptr, ptrcmp equals);
 
+#define strstarts(str, start) \
+  (strncmp( str, start, strlen( start ) ) == 0)
+
 char *safe_strncpy (char *dest, const char *src, size_t n);
 int   resolve_link (const char *prefix, char path[PATH_MAX]);
 int soname_matches_path (const char *soname, const char *path);

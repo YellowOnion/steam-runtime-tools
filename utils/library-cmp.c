@@ -727,7 +727,7 @@ get_symbols ( Elf *elf, size_t *symbols_number, int *code, char **message )
  * positive if left > right, zero if left == right or if left and right
  * are non-comparable.
  */
-int
+static int
 library_cmp_by_name( const char *soname,
                      const char *left_path,
                      const char *left_from,
@@ -806,7 +806,7 @@ library_cmp_by_name( const char *soname,
  * positive if container > provider, zero if container == provider
  * or if container and provider are non-comparable.
  */
-int
+static int
 library_cmp_by_symbols( const char *soname,
                         const char *container_path,
                         const char *container_root,
@@ -944,7 +944,7 @@ out:
  * positive if container > provider, zero if container == provider
  * or if container and provider are non-comparable.
  */
-int
+static int
 library_cmp_by_versions( const char *soname,
                          const char *container_path,
                          const char *container_root,

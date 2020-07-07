@@ -53,6 +53,7 @@ struct _PvRuntime
   gchar *tools_dir;
   PvBwrapLock *runtime_lock;
 
+  gchar *libcapsule_knowledge;
   gchar *mutable_parent;
   gchar *mutable_sysroot;
   gchar *tmpdir;
@@ -752,6 +753,14 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_usr = g_strdup (self->runtime_files);
     }
 
+  self->libcapsule_knowledge = g_build_filename (self->runtime_usr,
+                                                 "lib", "steamrt",
+                                                 "libcapsule-knowledge.keyfile",
+                                                 NULL);
+
+  if (!g_file_test (self->libcapsule_knowledge, G_FILE_TEST_EXISTS))
+    g_clear_pointer (&self->libcapsule_knowledge, g_free);
+
   return TRUE;
 }
 
@@ -782,6 +791,7 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  g_free (self->libcapsule_knowledge);
   glnx_close_fd (&self->mutable_parent_fd);
   g_free (self->mutable_parent);
   glnx_close_fd (&self->mutable_sysroot_fd);
@@ -1032,6 +1042,11 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                           "--link-target", "/run/host",
                           "--provider", "/",
                           NULL);
+
+  if (self->libcapsule_knowledge)
+    flatpak_bwrap_add_args (ret,
+                            "--library-knowledge", self->libcapsule_knowledge,
+                            NULL);
 
   return ret;
 }

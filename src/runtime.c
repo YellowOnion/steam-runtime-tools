@@ -1020,6 +1020,22 @@ pv_runtime_provide_container_access (PvRuntime *self,
   return TRUE;
 }
 
+static FlatpakBwrap *
+pv_runtime_get_capsule_capture_libs (PvRuntime *self,
+                                     RuntimeArchitecture *arch)
+{
+  FlatpakBwrap *ret = pv_bwrap_copy (self->container_access_adverb);
+
+  flatpak_bwrap_add_args (ret,
+                          arch->capsule_capture_libs,
+                          "--container", self->container_access,
+                          "--link-target", "/run/host",
+                          "--provider", "/",
+                          NULL);
+
+  return ret;
+}
+
 static gboolean
 try_bind_dri (PvRuntime *self,
               RuntimeArchitecture *arch,
@@ -1044,13 +1060,9 @@ try_bind_dri (PvRuntime *self,
       if (!pv_runtime_provide_container_access (self, error))
         return FALSE;
 
-      temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
+      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
       flatpak_bwrap_add_args (temp_bwrap,
-                              arch->capsule_capture_libs,
-                              "--container", self->container_access,
-                              "--link-target", "/run/host",
                               "--dest", arch->libdir_on_host,
-                              "--provider", "/",
                               expr,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
@@ -1101,13 +1113,9 @@ try_bind_dri (PvRuntime *self,
       if (!pv_runtime_provide_container_access (self, error))
         return FALSE;
 
-      temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
+      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
       flatpak_bwrap_add_args (temp_bwrap,
-                              arch->capsule_capture_libs,
-                              "--container", self->container_access,
-                              "--link-target", "/run/host",
                               "--dest", arch->libdir_on_host,
-                              "--provider", "/",
                               expr,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
@@ -1365,14 +1373,10 @@ bind_icd (PvRuntime *self,
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
-  temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
   flatpak_bwrap_add_args (temp_bwrap,
-                          arch->capsule_capture_libs,
-                          "--container", self->container_access,
-                          "--link-target", "/run/host",
                           "--dest",
                             on_host == NULL ? arch->libdir_on_host : on_host,
-                          "--provider", "/",
                           pattern,
                           NULL);
   flatpak_bwrap_finish (temp_bwrap);
@@ -1395,13 +1399,9 @@ bind_icd (PvRuntime *self,
         }
     }
 
-  temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
   flatpak_bwrap_add_args (temp_bwrap,
-                          arch->capsule_capture_libs,
-                          "--container", self->container_access,
-                          "--link-target", "/run/host",
                           "--dest", arch->libdir_on_host,
-                          "--provider", "/",
                           dependency_pattern,
                           NULL);
   flatpak_bwrap_finish (temp_bwrap);
@@ -2266,13 +2266,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           g_debug ("Collecting graphics drivers from host system...");
 
-          temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
+          temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
           flatpak_bwrap_add_args (temp_bwrap,
-                                  arch->capsule_capture_libs,
-                                  "--container", self->container_access,
-                                  "--link-target", "/run/host",
                                   "--dest", arch->libdir_on_host,
-                                  "--provider", "/",
                                   /* Mesa GLX, etc. */
                                   "gl:",
                                   /* Vulkan */
@@ -2432,13 +2428,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               /* Collect miscellaneous libraries that libc might dlopen.
                * At the moment this is just libidn2. */
               g_assert (temp_bwrap == NULL);
-              temp_bwrap = pv_bwrap_copy (self->container_access_adverb);
+              temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      arch->capsule_capture_libs,
-                                      "--container", self->container_access,
-                                      "--link-target", "/run/host",
                                       "--dest", arch->libdir_on_host,
-                                      "--provider", "/",
                                       "if-exists:libidn2.so.0",
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);

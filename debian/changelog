@@ -1,3 +1,23 @@
+libcapsule (0.20200707.0-0co1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis, Simon McVittie ]
+  * utils: Add functions to compare symbols and versions with libelf.
+    When two libraries have the same numeric tail we were not able to
+    reliably determine which one was the newer. In particular, many
+    distributions install libgcc_s.so.1 as a regular file, rather than
+    a symlink to a versioned name, so library_cmp_by_name() can't work.
+
+  [ Simon McVittie ]
+  * ci: Run CI with UndefinedBehaviourSanitizer and AddressSanitizer
+  * tests: Work around a binutils behaviour change (see #964457)
+  * capture-libs: Make library comparison configurable on the command-line.
+    This is primarily useful for testing and experimenting.
+  * capture-libs: Add --library-knowledge option.
+    This gives capsule-capture-libs a source of library-specific knowledge,
+    which we can use to choose the correct library. (T16562)
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 07 Jul 2020 17:05:36 +0100
+
 libcapsule (0.20200624.0-0co1) upstream; urgency=medium
 
   * ld-libs: Always clear ldlibs->needed entry if ld_lib_open() fails,

@@ -1,4 +1,4 @@
-#!/usr/bin/python3.5
+#!/usr/bin/python3
 # Copyright 2020 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
@@ -21,11 +21,11 @@ from testutils import (
 )
 
 """
-Test script intended to be run inside a SteamRT 1 'scout' container,
+Test script intended to be run inside a SteamRT container
 to assert that everything is as it should be.
 """
 
-logger = logging.getLogger('test-inside-scout')
+logger = logging.getLogger('test-inside-runtime')
 
 
 class HostInfo:
@@ -70,12 +70,12 @@ class HostInfo:
                 break
 
 
-class TestInsideScout(BaseTest):
+class TestInsideRuntime(BaseTest):
     def setUp(self) -> None:
         super().setUp()
         self.host = HostInfo()
 
-        artifacts = os.getenv('TEST_INSIDE_SCOUT_ARTIFACTS')
+        artifacts = os.getenv('TEST_INSIDE_RUNTIME_ARTIFACTS')
 
         if artifacts is not None:
             self.artifacts = Path(artifacts)
@@ -135,9 +135,16 @@ class TestInsideScout(BaseTest):
                     assert len(tokens) == 1, tokens
                     data[key] = tokens[0]
 
-            self.assertEqual(data.get('VERSION_ID'), '1')
-            self.assertEqual(data.get('ID'), 'steamrt')
-            self.assertEqual(data.get('ID_LIKE'), 'ubuntu')
+            if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+                self.assertEqual(data.get('VERSION_ID'), '1')
+                self.assertEqual(data.get('ID'), 'steamrt')
+                self.assertEqual(data.get('ID_LIKE'), 'ubuntu')
+
+            elif os.environ.get('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+                self.assertEqual(data.get('VERSION_ID'), '2')
+                self.assertEqual(data.get('ID'), 'steamrt')
+                self.assertEqual(data.get('ID_LIKE'), 'debian')
+
             self.assertIsNotNone(data.get('BUILD_ID'))
 
     def test_environ(self) -> None:
@@ -148,7 +155,7 @@ class TestInsideScout(BaseTest):
         # No actual *tests* here just yet - we just log what's there.
 
     def test_overrides(self) -> None:
-        if os.getenv('TEST_INSIDE_SCOUT_IS_COPY'):
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
             target = os.readlink('/overrides')
             self.assertEqual(target, 'usr/lib/pressure-vessel/overrides')
 
@@ -156,76 +163,64 @@ class TestInsideScout(BaseTest):
         self.assertTrue(Path('/overrides/lib').is_dir())
 
     def test_glibc(self) -> None:
-        """
-        Assert that we took the glibc version from the host OS.
-
-        We assume this will always be true for scout, because scout
-        is based on Ubuntu 12.04, the oldest operating system we support;
-        and in cases where our glibc is the same version as the glibc of
-        the host OS, we prefer the host.
-        """
-        overrides = Path('/overrides').resolve()
-
         glibc = ctypes.cdll.LoadLibrary('libc.so.6')
         gnu_get_libc_version = glibc.gnu_get_libc_version
         gnu_get_libc_version.restype = ctypes.c_char_p
         glibc_version = gnu_get_libc_version().decode('ascii')
         logger.info('glibc version in use: %s', glibc_version)
         major, minor, *rest = glibc_version.split('.')
-        self.assertGreaterEqual((int(major), int(minor)), (2, 15))
 
-        # This assumes that uname -m matches the multiarch tuple
-        # closely enough. On x86_64 it does, and on i386 we have
-        # symlinks /overrides/lib/i[456]86-linux-gnu.
-        host_glibc = ctypes.cdll.LoadLibrary(
-            '/{}/lib/{}-linux-gnu/libc.so.6'.format(
-                overrides,
-                os.uname().machine,
-            ),
-        )
-        gnu_get_libc_version = host_glibc.gnu_get_libc_version
-        gnu_get_libc_version.restype = ctypes.c_char_p
-        host_glibc_version = gnu_get_libc_version().decode('ascii')
-        logger.info('host glibc version: %s', host_glibc_version)
-        self.assertEqual(host_glibc_version, glibc_version)
+        if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+            # Assert that we took the glibc version from the host OS.
+            #
+            # We assume this will always be true for scout, because scout
+            # is based on Ubuntu 12.04, the oldest operating system we support;
+            # and in cases where our glibc is the same version as the glibc of
+            # the host OS, we prefer the host.
 
-        if (
-            'HOST_LD_LINUX_SO_REALPATH' in os.environ
-            and Path('/usr/lib/i386-linux-gnu').is_dir()
-        ):
-            host_path = os.environ['HOST_LD_LINUX_SO_REALPATH']
-            expected = self.host.path / host_path.lstrip('/')
-            expected_stat = expected.stat()
-            logger.info('host ld-linux.so.2: %s', host_path)
-
-            for really in (
-                '/lib/ld-linux.so.2',
-                '/lib/i386-linux-gnu/ld-linux.so.2',
-                '/lib/i386-linux-gnu/ld-2.15.so',
+            if (
+                'HOST_LD_LINUX_SO_REALPATH' in os.environ
+                and Path('/usr/lib/i386-linux-gnu').is_dir()
             ):
-                really_stat = Path(really).stat()
-                # Either it's a symlink to the same file, or the same file
-                # was mounted over it
-                self.assertEqual(really_stat.st_dev, expected_stat.st_dev)
-                self.assertEqual(really_stat.st_ino, expected_stat.st_ino)
+                host_path = os.environ['HOST_LD_LINUX_SO_REALPATH']
+                expected = self.host.path / host_path.lstrip('/')
+                expected_stat = expected.stat()
+                logger.info('host ld-linux.so.2: %s', host_path)
 
-        if (
-            'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
-            and Path('/usr/lib/x86_64-linux-gnu').is_dir()
-        ):
-            host_path = os.environ['HOST_LD_LINUX_X86_64_SO_REALPATH']
-            expected = self.host.path / host_path.lstrip('/')
-            expected_stat = expected.stat()
-            logger.info('host ld-linux-x86-64.so.2: %s', host_path)
+                for really in (
+                    '/lib/ld-linux.so.2',
+                    '/lib/i386-linux-gnu/ld-linux.so.2',
+                    '/lib/i386-linux-gnu/ld-2.15.so',
+                ):
+                    really_stat = Path(really).stat()
+                    # Either it's a symlink to the same file, or the same file
+                    # was mounted over it
+                    self.assertEqual(really_stat.st_dev, expected_stat.st_dev)
+                    self.assertEqual(really_stat.st_ino, expected_stat.st_ino)
 
-            for really in (
-                '/lib64/ld-linux-x86-64.so.2',
-                '/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2',
-                '/lib/x86_64-linux-gnu/ld-2.15.so',
+            if (
+                'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
+                and Path('/usr/lib/x86_64-linux-gnu').is_dir()
             ):
-                really_stat = Path(really).stat()
-                self.assertEqual(really_stat.st_dev, expected_stat.st_dev)
-                self.assertEqual(really_stat.st_ino, expected_stat.st_ino)
+                host_path = os.environ['HOST_LD_LINUX_X86_64_SO_REALPATH']
+                expected = self.host.path / host_path.lstrip('/')
+                expected_stat = expected.stat()
+                logger.info('host ld-linux-x86-64.so.2: %s', host_path)
+
+                for really in (
+                    '/lib64/ld-linux-x86-64.so.2',
+                    '/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2',
+                    '/lib/x86_64-linux-gnu/ld-2.15.so',
+                ):
+                    really_stat = Path(really).stat()
+                    self.assertEqual(really_stat.st_dev, expected_stat.st_dev)
+                    self.assertEqual(really_stat.st_ino, expected_stat.st_ino)
+
+        elif os.environ.get('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+            # We don't know whether it's soldier's glibc 2.28 or something
+            # newer from the host, but it should definitely be at least
+            # soldier's version
+            self.assertGreaterEqual((int(major), int(minor)), (2, 28))
 
     def test_srsi(self) -> None:
         overrides = Path('/overrides').resolve()
@@ -324,9 +319,20 @@ class TestInsideScout(BaseTest):
             self.assertIn('name', parsed['os-release'])
             self.assertIn('pretty_name', parsed['os-release'])
             self.assertIn('version_id', parsed['os-release'])
-            self.assertEqual('1', parsed['os-release']['version_id'])
-            self.assertEqual('scout', parsed['os-release']['version_codename'])
             self.assertIn('build_id', parsed['os-release'])
+
+            if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+                self.assertEqual('1', parsed['os-release']['version_id'])
+                self.assertEqual(
+                    'scout',
+                    parsed['os-release']['version_codename'],
+                )
+            elif os.environ.get('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+                self.assertEqual('2', parsed['os-release']['version_id'])
+                self.assertEqual(
+                    'soldier',
+                    parsed['os-release']['version_codename'],
+                )
 
         with self.catch(
             'container info',
@@ -342,7 +348,7 @@ class TestInsideScout(BaseTest):
                 host_parsed['os-release'],
             )
 
-            if os.environ.get('TEST_INSIDE_SCOUT_LOCALES'):
+            if os.environ.get('TEST_INSIDE_RUNTIME_LOCALES'):
                 for locale, host_details in host_parsed.get(
                     'locales', {}
                 ).items():
@@ -414,37 +420,53 @@ class TestInsideScout(BaseTest):
                     )
                     self.assertEqual([], details.get('issues', []))
 
-            for soname in (
-                'libBrokenLocale.so.1',
-                'libanl.so.1',
-                'libc.so.6',
-                'libcrypt.so.1',
-                'libdl.so.2',
-                'libm.so.6',
-                'libnsl.so.1',
-                'libpthread.so.0',
-                'libresolv.so.2',
-                'librt.so.1',
-                'libutil.so.1',
-            ):
-                # These are from glibc, which is depended on by Mesa, and
-                # is at least as new as scout's version in every supported
-                # version of the Steam Runtime.
-                self.assertEqual(
-                    arch_info['library-details'][soname]['path'],
-                    '{}/lib/{}/{}'.format(overrides, multiarch, soname),
-                )
+            if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+                for soname in (
+                    'libBrokenLocale.so.1',
+                    'libanl.so.1',
+                    'libc.so.6',
+                    'libcrypt.so.1',
+                    'libdl.so.2',
+                    'libm.so.6',
+                    'libnsl.so.1',
+                    'libpthread.so.0',
+                    'libresolv.so.2',
+                    'librt.so.1',
+                    'libutil.so.1',
+                ):
+                    # These are from glibc, which is depended on by Mesa, and
+                    # is at least as new as scout's version in every supported
+                    # version of the Steam Runtime.
+                    self.assertEqual(
+                        arch_info['library-details'][soname]['path'],
+                        '{}/lib/{}/{}'.format(overrides, multiarch, soname),
+                    )
 
-            for soname in (
-                'libSDL-1.2.so.0',
-                'libfltk.so.1.1',
-            ):
+            if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+                not_graphics_drivers = [
+                    'libSDL-1.2.so.0',
+                    'libfltk.so.1.1',
+                ]
+            elif os.environ.get('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+                not_graphics_drivers = [
+                    'libfltk.so.1.1',
+                    'libgdk-3.so.0',
+                    'libSDL2-2.0.so.0',
+                ]
+            else:
+                not_graphics_drivers = []
+
+            for soname in not_graphics_drivers:
                 # These libraries are definitely not part of the graphics
                 # driver stack
-                self.assertEqual(
-                    arch_info['library-details'][soname]['path'],
-                    '/usr/lib/{}/{}'.format(multiarch, soname),
-                )
+                if (
+                    arch_info['library-details'][soname]['path']
+                    != '/lib/{}/{}'.format(multiarch, soname)
+                ):
+                    self.assertEqual(
+                        arch_info['library-details'][soname]['path'],
+                        '/usr/lib/{}/{}'.format(multiarch, soname),
+                    )
 
             if host_info:
                 expect_symlinks = {
@@ -583,7 +605,7 @@ class TestInsideScout(BaseTest):
             with self.subTest(read_only_place):
                 if (
                     read_only_place.startswith('/overrides')
-                    and not os.getenv('TEST_INSIDE_SCOUT_IS_COPY')
+                    and not os.getenv('TEST_INSIDE_RUNTIME_IS_COPY')
                 ):
                     # If we aren't working from a temporary copy of the
                     # runtime, /overrides is on a tmpfs

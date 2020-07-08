@@ -102,6 +102,8 @@ def main():
         os.path.join(abs_sysroot, 'var', 'lib', 'apt'),
         '/var/lib/apt',
         '--dev-bind', '/dev', '/dev',
+        '--ro-bind', '/etc/group', '/etc/group',
+        '--ro-bind', '/etc/passwd', '/etc/passwd',
         '--ro-bind', '/etc/resolv.conf', '/etc/resolv.conf',
         '--proc', '/proc',
         '--tmpfs', '/tmp',

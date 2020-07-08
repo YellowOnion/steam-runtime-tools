@@ -1,3 +1,40 @@
+pressure-vessel (0.20200708.0) scout; urgency=medium
+
+  * unruntime, wrap: Add a way to disable all interactivity.
+    This is desirable if we are running something other than the main game,
+    for example steam-runtime-system-info or various preparatory steps
+    involved in running Proton.
+  * wrap: Import Steam compat tool data. (T22360)
+    This is necessary for Steam "compat tools" such as Proton.
+    STEAM_COMPAT_DATA_PATH points to data associated with the current
+    (compat tool, game) pair, for example the ${WINEPREFIX}.
+    STEAM_COMPAT_TOOL_PATH doesn't exist yet, but I'm assuming that it will
+    be set by some later version of the Steam client to point to Proton
+    itself.
+    STEAM_COMPAT_CLIENT_INSTALL_PATH points to the Steam installation. This
+    is hopefully in the home directory, so hopefully we bind-mount it anyway;
+    but if we don't, we should.
+  * runtime: Add arguments to the right bwrap invocation.
+    When we're entering the container to generate locales, we need to
+    bind-mount the staging area for /overrides in *that* bwrap invocation,
+    not add it as a bind-mount to the bwrap invocation that will actually
+    run the game. (T22534)
+  * runtime: Factor out beginning of capsule-capture-libs command-line.
+    This doesn't currently include the --dest because that varies - it's
+    usually arch->libdir_on_host, but not always.
+  * runtime: Pass --library-knowledge to capsule-capture-libs if possible.
+    For runtimes that support it, this gives us a way to override library
+    comparisons. In particular, we can make sure libgcc_s.so.1 is compared
+    by its version-definitions and symbols. (T16561, T16562)
+  * run-in-sysroot: Copy host /etc/passwd, /etc/group.
+    Otherwise, any test that refers to the username or home directory will
+    fail with a warning. Prior to GLib 2.35.9 (in particular, in GLib 2.32)
+    this happens in g_get_any_init_do(), which is also called to get the
+    TMPDIR, so any test that wants to create a temporary directory will
+    fail like this.
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 08 Jul 2020 18:43:05 +0100
+
 pressure-vessel (0.20200624.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

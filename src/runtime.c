@@ -2474,18 +2474,40 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                    * We check /usr first because otherwise, if the host is merged-/usr and the
                    * container is not, we might end up binding /lib instead of /usr/lib
                    * and that could cause issues. */
-                  if (!g_str_has_prefix (dir, "/usr/"))
+                  if (g_str_has_prefix (dir, "/usr/"))
+                    memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
+
+                  gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
+
+                  if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
                     {
-                      gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
-                      if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
-                        {
-                          g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
-                          found = TRUE;
-                        }
+                      g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
+                      found = TRUE;
                     }
-                  else
+
+                  if (!found)
                     {
-                      gconv_dir_in_host = g_build_filename (dir, "gconv", NULL);
+                      /* Try again without hwcaps subdirectories.
+                       * For example, libc6-i386 on SteamOS 2 'brewmaster'
+                       * contains /lib/i386-linux-gnu/i686/cmov/libc.so.6,
+                       * for which we want gconv modules from
+                       * /usr/lib/i386-linux-gnu/gconv, not from
+                       * /usr/lib/i386-linux-gnu/i686/cmov/gconv. */
+                      while (g_str_has_suffix (dir, "/cmov") ||
+                             g_str_has_suffix (dir, "/i686") ||
+                             g_str_has_suffix (dir, "/sse2") ||
+                             g_str_has_suffix (dir, "/tls") ||
+                             g_str_has_suffix (dir, "/x86_64"))
+                        {
+                          char *slash = strrchr (dir, '/');
+
+                          g_assert (slash != NULL);
+                          *slash = '\0';
+                        }
+
+                      g_clear_pointer (&gconv_dir_in_host, g_free);
+                      gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
+
                       if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
                         {
                           g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));

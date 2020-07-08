@@ -1,4 +1,4 @@
-libcapsule (0.20200707.0-0co1) UNRELEASED; urgency=medium
+libcapsule (0.20200708.0-0co1) upstream; urgency=medium
 
   [ Ludovico de Nittis, Simon McVittie ]
   * utils: Add functions to compare symbols and versions with libelf.
@@ -16,7 +16,7 @@ libcapsule (0.20200707.0-0co1) UNRELEASED; urgency=medium
     This gives capsule-capture-libs a source of library-specific knowledge,
     which we can use to choose the correct library. (T16562)
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 07 Jul 2020 17:05:36 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 08 Jul 2020 13:49:28 +0100
 
 libcapsule (0.20200624.0-0co1) upstream; urgency=medium
 

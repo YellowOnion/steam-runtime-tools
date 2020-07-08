@@ -409,6 +409,12 @@ class TestInsideRuntime(BaseTest):
                         expect_library_issues |= set(details.get('issues', []))
                         continue
 
+                    if soname == 'libOSMesa.so.8':
+                        # T22540: C++ ABI issues around std::string in the
+                        # ABI of libLLVM-7.so.1
+                        expect_library_issues |= set(details.get('issues', []))
+                        continue
+
                     self.assertIn('path', details)
                     self.assertEqual(
                         [],

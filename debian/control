@@ -24,7 +24,7 @@ Architecture: amd64 i386
 Multi-Arch: foreign
 Depends:
  bubblewrap,
- libcapsule-tools-relocatable,
+ libcapsule-tools-relocatable (>= 0.20200707.0~),
  python3 (>= 3.5) | python3.5,
  steam-runtime-tools-bin,
  ${misc:Depends},
@@ -41,8 +41,8 @@ Package: pressure-vessel-libs-amd64
 Architecture: amd64
 Multi-Arch: foreign
 Depends:
- libcapsule-tools-relocatable,
- libsteam-runtime-tools-0-helpers,
+ libcapsule-tools-relocatable (>= 0.20200707.0~),
+ libsteam-runtime-tools-0-helpers (>= 0.20200707.0~),
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam container launcher - cross-architecture dependencies
@@ -54,8 +54,8 @@ Package: pressure-vessel-libs-i386
 Architecture: i386
 Multi-Arch: foreign
 Depends:
- libcapsule-tools-relocatable,
- libsteam-runtime-tools-0-helpers,
+ libcapsule-tools-relocatable (>= 0.20200707.0~),
+ libsteam-runtime-tools-0-helpers (>= 0.20200707.0~),
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam container launcher - cross-architecture dependencies

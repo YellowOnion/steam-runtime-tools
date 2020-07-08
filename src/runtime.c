@@ -1169,7 +1169,7 @@ ensure_locales (PvRuntime *self,
                                      NULL);
 
       flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
-      flatpak_bwrap_add_args (bwrap,
+      flatpak_bwrap_add_args (run_locale_gen,
                               "--ro-bind", self->overrides,
                               self->overrides_in_container,
                               NULL);

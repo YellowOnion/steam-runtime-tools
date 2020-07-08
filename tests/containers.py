@@ -264,6 +264,8 @@ class TestContainers(BaseTest):
             ) as writer:
                 run_subprocess(
                     [
+                        'env',
+                        'LD_BIND_NOW=1',
                         host_srsi,
                         '--verbose',
                     ],

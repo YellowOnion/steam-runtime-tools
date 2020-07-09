@@ -21,7 +21,9 @@ ideally contains at least:
     on the host system
 * scout/files:
     The Platform merged-/usr from the SteamLinuxRuntime depot
-* scout_sysroot:
+* soldier/files:
+    The Platform merged-/usr from the SteamLinuxRuntime depot
+* scout_sysroot, soldier_sysroot:
     An SDK sysroot like the one recommended for the Docker container
 
 and run (for example) 'meson test -v -C _build' as usual.
@@ -262,6 +264,8 @@ class TestContainers(BaseTest):
             ) as writer:
                 run_subprocess(
                     [
+                        'env',
+                        'LD_BIND_NOW=1',
                         host_srsi,
                         '--verbose',
                     ],
@@ -312,7 +316,7 @@ class TestContainers(BaseTest):
         # need into that directory.
         os.makedirs(os.path.join(cls.artifacts, 'tmp'), exist_ok=True)
 
-        for f in ('testutils.py', 'inside-scout.py'):
+        for f in ('testutils.py', 'inside-runtime.py'):
             shutil.copy2(
                 os.path.join(cls.G_TEST_SRCDIR, f),
                 os.path.join(cls.artifacts, 'tmp', f),
@@ -359,18 +363,60 @@ class TestContainers(BaseTest):
     def _test_scout(
         self,
         test_name: str,
-        scout: str,
+        runtime: str,
         *,
         copy: bool = False,
         gc: bool = True,
         locales: bool = False,
         only_prepare: bool = False
     ) -> None:
+        self._test_container(
+            test_name,
+            runtime,
+            copy=copy,
+            gc=gc,
+            is_scout=True,
+            locales=locales,
+            only_prepare=only_prepare,
+        )
+
+    def _test_soldier(
+        self,
+        test_name: str,
+        runtime: str,
+        *,
+        copy: bool = False,
+        gc: bool = True,
+        locales: bool = False,
+        only_prepare: bool = False
+    ) -> None:
+        self._test_container(
+            test_name,
+            runtime,
+            copy=copy,
+            gc=gc,
+            is_soldier=True,
+            locales=locales,
+            only_prepare=only_prepare,
+        )
+
+    def _test_container(
+        self,
+        test_name: str,
+        runtime: str,
+        *,
+        copy: bool = False,
+        gc: bool = True,
+        is_scout: bool = False,
+        is_soldier: bool = False,
+        locales: bool = False,
+        only_prepare: bool = False
+    ) -> None:
         if self.bwrap is None and not only_prepare:
             self.skipTest('Unable to run bwrap (in a container?)')
 
-        if not os.path.isdir(scout):
-            self.skipTest('{} not found'.format(scout))
+        if not os.path.isdir(runtime):
+            self.skipTest('{} not found'.format(runtime))
 
         artifacts = os.path.join(
             self.artifacts,
@@ -380,7 +426,7 @@ class TestContainers(BaseTest):
 
         argv = [
             self.pv_wrap,
-            '--runtime', scout,
+            '--runtime', runtime,
             '--verbose',
         ]
 
@@ -397,17 +443,28 @@ class TestContainers(BaseTest):
                 if not gc:
                     argv.append('--no-gc-runtimes')
 
+            if is_scout:
+                python = 'python3.5'
+            else:
+                python = 'python3'
+
             if only_prepare:
                 argv.append('--only-prepare')
             else:
                 argv.extend([
                     '--',
                     'env',
-                    'TEST_INSIDE_SCOUT_ARTIFACTS=' + artifacts,
-                    'TEST_INSIDE_SCOUT_IS_COPY=' + ('1' if copy else ''),
-                    'TEST_INSIDE_SCOUT_LOCALES=' + ('1' if locales else ''),
-                    'python3.5',
-                    os.path.join(self.artifacts, 'tmp', 'inside-scout.py'),
+                    'TEST_INSIDE_RUNTIME_ARTIFACTS=' + artifacts,
+                    'TEST_INSIDE_RUNTIME_IS_COPY=' + ('1' if copy else ''),
+                    'TEST_INSIDE_RUNTIME_IS_SCOUT=' + (
+                        '1' if is_scout else ''
+                    ),
+                    'TEST_INSIDE_RUNTIME_IS_SOLDIER=' + (
+                        '1' if is_soldier else ''
+                    ),
+                    'TEST_INSIDE_RUNTIME_LOCALES=' + ('1' if locales else ''),
+                    python,
+                    os.path.join(self.artifacts, 'tmp', 'inside-runtime.py'),
                 ])
 
             # Create directories representing previous runs of
@@ -444,7 +501,7 @@ class TestContainers(BaseTest):
 
                 # Put this in a subtest so that if it fails, we still get
                 # to inspect the copied sysroot
-                with self.subTest('run', copy=copy, scout=scout):
+                with self.subTest('run', copy=copy, runtime=runtime):
                     completed = self.run_subprocess(
                         argv,
                         cwd=self.artifacts,
@@ -486,7 +543,8 @@ class TestContainers(BaseTest):
                     self._assert_mutable_sysroot(
                         tree,
                         artifacts,
-                        is_scout=True,
+                        is_scout=is_scout,
+                        is_soldier=is_soldier,
                     )
 
     def _assert_mutable_sysroot(
@@ -494,7 +552,8 @@ class TestContainers(BaseTest):
         tree: str,
         artifacts: str,
         *,
-        is_scout: bool = True
+        is_scout: bool = False,
+        is_soldier: bool = False
     ) -> None:
         with open(
             os.path.join(artifacts, 'contents.txt'),
@@ -850,6 +909,42 @@ class TestContainers(BaseTest):
 
         with self.subTest('transient'):
             self._test_scout('scout', scout)
+
+    def test_soldier_sysroot(self) -> None:
+        soldier = os.path.join(self.containers_dir, 'soldier_sysroot')
+
+        if os.path.isdir(os.path.join(soldier, 'files')):
+            soldier = os.path.join(soldier, 'files')
+
+        with self.subTest('only-prepare'):
+            self._test_soldier(
+                'soldier_sysroot_prep', soldier,
+                copy=True, only_prepare=True,
+            )
+
+        with self.subTest('copy'):
+            self._test_soldier(
+                'soldier_sysroot_copy', soldier, copy=True, gc=False,
+            )
+
+        with self.subTest('transient'):
+            self._test_soldier('soldier_sysroot', soldier, locales=True)
+
+    def test_soldier_usr(self) -> None:
+        soldier = os.path.join(self.containers_dir, 'soldier', 'files')
+
+        with self.subTest('only-prepare'):
+            self._test_soldier(
+                'soldier_prep', soldier, copy=True, only_prepare=True,
+            )
+
+        with self.subTest('copy'):
+            self._test_soldier(
+                'soldier_copy', soldier, copy=True, locales=True,
+            )
+
+        with self.subTest('transient'):
+            self._test_soldier('soldier', soldier)
 
 
 if __name__ == '__main__':

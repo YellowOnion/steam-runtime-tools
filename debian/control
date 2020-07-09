@@ -42,7 +42,7 @@ Architecture: amd64
 Multi-Arch: foreign
 Depends:
  libcapsule-tools-relocatable (>= 0.20200707.0~),
- libsteam-runtime-tools-0-helpers (>= 0.20200707.0~),
+ libsteam-runtime-tools-0-helpers,
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam container launcher - cross-architecture dependencies
@@ -55,7 +55,7 @@ Architecture: i386
 Multi-Arch: foreign
 Depends:
  libcapsule-tools-relocatable (>= 0.20200707.0~),
- libsteam-runtime-tools-0-helpers (>= 0.20200707.0~),
+ libsteam-runtime-tools-0-helpers,
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam container launcher - cross-architecture dependencies

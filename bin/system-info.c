@@ -388,12 +388,17 @@ print_libraries_details (JsonBuilder *builder,
   json_builder_begin_object (builder);
   for (GList *l = libraries; l != NULL; l = l->next)
     {
-      if (verbose || srt_library_get_issues (l->data) != SRT_LIBRARY_ISSUES_NONE)
+      const char *name = srt_library_get_requested_name (l->data);
+      const char *soname = srt_library_get_real_soname (l->data);
+
+      if (verbose ||
+          srt_library_get_issues (l->data) != SRT_LIBRARY_ISSUES_NONE ||
+          g_strcmp0 (name, soname) != 0)
         {
           const char *messages;
           const char * const *missing_symbols;
           const char * const *misversioned_symbols;
-          json_builder_set_member_name (builder, srt_library_get_soname (l->data));
+          json_builder_set_member_name (builder, name);
           json_builder_begin_object (builder);
 
           messages = srt_library_get_messages (l->data);
@@ -403,6 +408,9 @@ print_libraries_details (JsonBuilder *builder,
               json_builder_set_member_name (builder, "messages");
               json_builder_add_string_value (builder, messages);
             }
+
+          json_builder_set_member_name (builder, "soname");
+          json_builder_add_string_value (builder, soname);
 
           json_builder_set_member_name (builder, "path");
           json_builder_add_string_value (builder, srt_library_get_absolute_path (l->data));

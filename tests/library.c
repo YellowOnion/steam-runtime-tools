@@ -72,7 +72,9 @@ test_object (Fixture *f,
   SrtLibraryIssues issues;
   gchar *messages;
   gchar *tuple;
-  gchar *soname;
+  gchar *requested_name;
+  gchar *compat_soname;
+  gchar *real_soname;
   gchar *absolute_path;
   GStrv missing_mutable;
   GStrv misversioned_mutable;
@@ -89,6 +91,7 @@ test_object (Fixture *f,
                               NULL,
                               NULL,
                               NULL,
+                              "libz_special.so.1",
                               0,
                               0);
   g_assert_cmpint (srt_library_get_issues (library), ==,
@@ -96,8 +99,14 @@ test_object (Fixture *f,
   g_assert_cmpstr (srt_library_get_messages (library), ==, NULL);
   g_assert_cmpstr (srt_library_get_multiarch_tuple (library), ==,
                    "arm-linux-gnueabihf");
-  g_assert_cmpstr (srt_library_get_soname (library), ==,
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==,
                    "libz.so.1");
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+  g_assert_cmpstr (srt_library_get_soname (library), ==,
+                   srt_library_get_requested_name (library));
+  G_GNUC_END_IGNORE_DEPRECATIONS
+  g_assert_cmpstr (srt_library_get_real_soname (library), ==,
+                   "libz_special.so.1");
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==,
                    "/usr/lib/libz.so.1");
   missing = srt_library_get_missing_symbols (library);
@@ -112,17 +121,21 @@ test_object (Fixture *f,
   g_object_get (library,
                 "messages", &messages,
                 "multiarch-tuple", &tuple,
-                "soname", &soname,
+                "requested-name", &requested_name,
+                "real-soname", &real_soname,
                 "absolute-path", &absolute_path,
                 "missing-symbols", &missing_mutable,
                 "misversioned-symbols", &misversioned_mutable,
                 "dependencies", &dependencies_mutable,
                 "issues", &issues,
+                "soname", &compat_soname,
                 NULL);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
   g_assert_cmpstr (messages, ==, NULL);
   g_assert_cmpstr (tuple, ==, "arm-linux-gnueabihf");
-  g_assert_cmpstr (soname, ==, "libz.so.1");
+  g_assert_cmpstr (requested_name, ==, "libz.so.1");
+  g_assert_cmpstr (compat_soname, ==, requested_name);
+  g_assert_cmpstr (real_soname, ==, "libz_special.so.1");
   g_assert_cmpstr (absolute_path, ==, "/usr/lib/libz.so.1");
   g_assert_nonnull (missing_mutable);
   g_assert_cmpstr (missing_mutable[0], ==, NULL);
@@ -132,7 +145,9 @@ test_object (Fixture *f,
   g_assert_cmpstr (dependencies_mutable[0], ==, NULL);
   g_free (messages);
   g_free (tuple);
-  g_free (soname);
+  g_free (requested_name);
+  g_free (compat_soname);
+  g_free (real_soname);
   g_free (absolute_path);
   g_strfreev (missing_mutable);
   g_strfreev (misversioned_mutable);
@@ -148,6 +163,7 @@ test_object (Fixture *f,
                               one_missing,
                               one_misversioned,
                               two_deps,
+                              NULL,
                               0,
                               0);
   g_assert_cmpint (srt_library_get_issues (library) &
@@ -158,8 +174,9 @@ test_object (Fixture *f,
                    "ld.so: libjpeg.so.62: nope\n");
   g_assert_cmpstr (srt_library_get_multiarch_tuple (library), ==,
                    "s390x-linux-gnu");
-  g_assert_cmpstr (srt_library_get_soname (library), ==,
+  g_assert_cmpstr (srt_library_get_requested_name (library), ==,
                    "libjpeg.so.62");
+  g_assert_cmpstr (srt_library_get_real_soname (library), ==, NULL);
   g_assert_cmpstr (srt_library_get_absolute_path (library), ==,
                    "/usr/lib/libjpeg.so.62");
   missing = srt_library_get_missing_symbols (library);
@@ -178,7 +195,8 @@ test_object (Fixture *f,
   g_object_get (library,
                 "messages", &messages,
                 "multiarch-tuple", &tuple,
-                "soname", &soname,
+                "requested-name", &requested_name,
+                "real-soname", &real_soname,
                 "absolute-path", &absolute_path,
                 "missing-symbols", &missing_mutable,
                 "misversioned-symbols", &misversioned_mutable,
@@ -189,7 +207,8 @@ test_object (Fixture *f,
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS, !=, 0);
   g_assert_cmpstr (messages, ==, "ld.so: libjpeg.so.62: nope\n");
   g_assert_cmpstr (tuple, ==, "s390x-linux-gnu");
-  g_assert_cmpstr (soname, ==, "libjpeg.so.62");
+  g_assert_cmpstr (requested_name, ==, "libjpeg.so.62");
+  g_assert_cmpstr (real_soname, ==, NULL);
   g_assert_cmpstr (absolute_path, ==, "/usr/lib/libjpeg.so.62");
   g_assert_nonnull (missing_mutable);
   g_assert_cmpstr (missing_mutable[0], ==, one_missing[0]);
@@ -203,7 +222,8 @@ test_object (Fixture *f,
   g_assert_cmpstr (dependencies_mutable[2], ==, NULL);
   g_free (messages);
   g_free (tuple);
-  g_free (soname);
+  g_free (real_soname);
+  g_free (requested_name);
   g_free (absolute_path);
   g_strfreev (missing_mutable);
   g_strfreev (misversioned_mutable);

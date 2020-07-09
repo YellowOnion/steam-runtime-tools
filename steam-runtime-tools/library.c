@@ -51,7 +51,7 @@ struct _SrtLibrary
   GObject parent;
   gchar *absolute_path;
   gchar *messages;
-  gchar *soname;
+  gchar *requested_name;
   GStrv dependencies;
   GStrv missing_symbols;
   GStrv misversioned_symbols;
@@ -59,6 +59,7 @@ struct _SrtLibrary
   SrtLibraryIssues issues;
   int exit_status;
   int terminating_signal;
+  gchar *real_soname;
 };
 
 struct _SrtLibraryClass
@@ -66,7 +67,6 @@ struct _SrtLibraryClass
   /*< private >*/
   GObjectClass parent_class;
 };
-
 enum {
   PROP_0,
   PROP_ABSOLUTE_PATH,
@@ -76,6 +76,8 @@ enum {
   PROP_MISSING_SYMBOLS,
   PROP_MULTIARCH_TUPLE,
   PROP_SONAME,
+  PROP_REAL_SONAME,
+  PROP_REQUESTED_NAME,
   PROP_MISVERSIONED_SYMBOLS,
   PROP_EXIT_STATUS,
   PROP_TERMINATING_SIGNAL,
@@ -123,8 +125,13 @@ srt_library_get_property (GObject *object,
         g_value_set_static_string (value, g_quark_to_string (self->multiarch_tuple));
         break;
 
-      case PROP_SONAME:
-        g_value_set_string (value, self->soname);
+      case PROP_REAL_SONAME:
+        g_value_set_string (value, self->real_soname);
+        break;
+
+      case PROP_REQUESTED_NAME:
+      case PROP_SONAME:   /* deprecated alias */
+        g_value_set_string (value, self->requested_name);
         break;
 
       case PROP_MISVERSIONED_SYMBOLS:
@@ -208,10 +215,25 @@ srt_library_set_property (GObject *object,
         self->multiarch_tuple = g_quark_from_string (g_value_get_string (value));
         break;
 
-      case PROP_SONAME:
+      case PROP_REQUESTED_NAME:
+      case PROP_SONAME:   /* deprecated alias */
+        tmp = g_value_get_string (value);
+
+        /* We have to ignore NULL, because the deprecated soname
+         * property will be explicitly set to NULL during construction,
+         * even if the non-deprecated requested-name property is also set. */
+        if (tmp != NULL)
+          {
+            /* Construct-only, mutually exclusive */
+            g_return_if_fail (self->requested_name == NULL);
+            self->requested_name = g_strdup (tmp);
+          }
+        break;
+
+      case PROP_REAL_SONAME:
         /* Construct-only */
-        g_return_if_fail (self->soname == NULL);
-        self->soname = g_value_dup_string (value);
+        g_return_if_fail (self->real_soname == NULL);
+        self->real_soname = g_value_dup_string (value);
         break;
 
       case PROP_MISVERSIONED_SYMBOLS:
@@ -245,7 +267,8 @@ srt_library_finalize (GObject *object)
 
   g_free (self->absolute_path);
   g_free (self->messages);
-  g_free (self->soname);
+  g_free (self->requested_name);
+  g_free (self->real_soname);
   g_strfreev (self->dependencies);
   g_strfreev (self->missing_symbols);
   g_strfreev (self->misversioned_symbols);
@@ -304,9 +327,21 @@ srt_library_class_init (SrtLibraryClass *cls)
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
+  properties[PROP_REQUESTED_NAME] =
+    g_param_spec_string ("requested-name", "Requested name",
+                         "The name that was loaded, for example libz.so.1",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
   properties[PROP_SONAME] =
-    g_param_spec_string ("soname", "SONAME",
-                         "The name of this library, for example libz.so.1",
+    g_param_spec_string ("soname", "Requested SONAME",
+                         "Deprecated alias for requested-name",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
+  properties[PROP_REAL_SONAME] =
+    g_param_spec_string ("real-soname", "Real SONAME",
+                         "ELF DT_SONAME found when loading the library",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -371,10 +406,28 @@ srt_library_get_messages (SrtLibrary *self)
 }
 
 /**
+ * srt_library_get_requested_name:
+ * @self: a library
+ *
+ * Return the name that was requested to be loaded when checking @self.
+ *
+ * Returns: A string like `libz.so.1`, which is valid as long as @self
+ *  is not destroyed.
+ */
+const char *
+srt_library_get_requested_name (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return self->requested_name;
+}
+
+/**
  * srt_library_get_soname:
  * @self: a library
  *
- * Return the SONAME (machine-readable runtime name) of @self.
+ * Deprecated alias for srt_library_get_requested_name().
+ * See also srt_library_get_real_soname(), which might be what you
+ * thought this did.
  *
  * Returns: A string like `libz.so.1`, which is valid as long as @self
  *  is not destroyed.
@@ -382,8 +435,25 @@ srt_library_get_messages (SrtLibrary *self)
 const char *
 srt_library_get_soname (SrtLibrary *self)
 {
+  return srt_library_get_requested_name (self);
+}
+
+/**
+ * srt_library_get_real_soname:
+ * @self: a library
+ *
+ * Return the ELF `DT_SONAME` found by parsing the loaded library.
+ * This is often the same as srt_library_get_requested_name(),
+ * but can differ when compatibility aliases are involved.
+ *
+ * Returns: A string like `libz.so.1`, which is valid as long as @self
+ *  is not destroyed, or %NULL if the SONAME could not be determined.
+ */
+const char *
+srt_library_get_real_soname (SrtLibrary *self)
+{
   g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
-  return self->soname;
+  return self->real_soname;
 }
 
 /**
@@ -509,18 +579,19 @@ srt_library_get_misversioned_symbols (SrtLibrary *self)
 
 /**
  * srt_check_library_presence:
- * @soname: (type filename): The `SONAME` of a shared library, for example `libjpeg.so.62`
+ * @requested_name: (type filename): The `SONAME` or absolute or relative
+ *  path of a shared library, for example `libjpeg.so.62`
  * @multiarch: A multiarch tuple like %SRT_ABI_I386, representing an ABI.
  * @symbols_path: (nullable) (type filename): The filename of a file listing
  *  symbols, or %NULL if we do not know which symbols the library is meant to
  *  contain.
  * @symbols_format: The format of @symbols_path.
  * @more_details_out: (out) (optional) (transfer full): Used to return an
- *  #SrtLibrary object representing the shared library provided by @soname.
- *  Free with `g_object_unref()`.
+ *  #SrtLibrary object representing the shared library provided
+ *  by @requested_name. Free with `g_object_unref()`.
  *
- * Attempt to load @soname into a helper subprocess, and check whether it conforms
- * to the ABI provided in `symbols_path`.
+ * Attempt to load @requested_name into a helper subprocess, and check whether
+ * it conforms to the ABI provided in `symbols_path`.
  *
  * If @symbols_format is %SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, @symbols_path must
  * list one symbol per line, in the format `jpeg_input_complete@LIBJPEG_6.2`
@@ -529,26 +600,26 @@ srt_library_get_misversioned_symbols (SrtLibrary *self)
  *
  * If @symbols_format is %SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS, @symbols_path
  * must be in deb-symbols(5) format. It may list symbols for more SONAMEs than
- * just @soname; if so, they are ignored.
+ * just @requested_name; if so, they are ignored.
  *
  * Returns: A bitfield containing problems, or %SRT_LIBRARY_ISSUES_NONE
  *  if no problems were found.
  */
 SrtLibraryIssues
-srt_check_library_presence (const char *soname,
+srt_check_library_presence (const char *requested_name,
                             const char *multiarch,
                             const char *symbols_path,
                             SrtLibrarySymbolsFormat symbols_format,
                             SrtLibrary **more_details_out)
 {
-  return _srt_check_library_presence (NULL, soname, multiarch,
+  return _srt_check_library_presence (NULL, requested_name, multiarch,
                                       symbols_path, NULL, NULL,
                                       symbols_format, more_details_out);
 }
 
 SrtLibraryIssues
 _srt_check_library_presence (const char *helpers_path,
-                             const char *soname,
+                             const char *requested_name,
                              const char *multiarch,
                              const char *symbols_path,
                              const char * const *hidden_deps,
@@ -560,6 +631,7 @@ _srt_check_library_presence (const char *helpers_path,
   gchar *output = NULL;
   gchar *child_stderr = NULL;
   gchar *absolute_path = NULL;
+  gchar *real_soname = NULL;
   int wait_status = -1;
   int exit_status = -1;
   int terminating_signal = 0;
@@ -580,7 +652,7 @@ _srt_check_library_presence (const char *helpers_path,
   SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
   GString *log_args = NULL;
 
-  g_return_val_if_fail (soname != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (requested_name != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
                         SRT_LIBRARY_ISSUES_UNKNOWN);
@@ -612,19 +684,20 @@ _srt_check_library_presence (const char *helpers_path,
       g_string_append (log_args, g_ptr_array_index (argv, i));
     }
 
-  g_debug ("Checking library %s integrity with %s ", soname, log_args->str);
+  g_debug ("Checking library %s integrity with %s ", requested_name,
+           log_args->str);
   g_string_free (log_args, TRUE);
 
   switch (symbols_format)
     {
       case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
-        g_ptr_array_add (argv, g_strdup (soname));
+        g_ptr_array_add (argv, g_strdup (requested_name));
         g_ptr_array_add (argv, g_strdup (symbols_path));
         break;
 
       case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
         g_ptr_array_add (argv, g_strdup ("--deb-symbols"));
-        g_ptr_array_add (argv, g_strdup (soname));
+        g_ptr_array_add (argv, g_strdup (requested_name));
         g_ptr_array_add (argv, g_strdup (symbols_path));
         break;
 
@@ -697,15 +770,19 @@ _srt_check_library_presence (const char *helpers_path,
 
   node = json_parser_get_root (parser);
   json = json_node_get_object (node);
-  if (!json_object_has_member (json, soname))
+  if (!json_object_has_member (json, requested_name))
     {
-      g_debug ("The helper output is missing the expected soname %s", soname);
+      g_debug ("The helper output is missing the expected SONAME %s",
+               requested_name);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
       goto out;
     }
-  json = json_object_get_object_member (json, soname);
+  json = json_object_get_object_member (json, requested_name);
 
   absolute_path = g_strdup (json_object_get_string_member (json, "path"));
+
+  if (json_object_has_member (json, "SONAME"))
+    real_soname = g_strdup (json_object_get_string_member (json, "SONAME"));
 
   if (json_object_has_member (json, "missing_symbols"))
     missing_array = json_object_get_array_member (json, "missing_symbols");
@@ -755,12 +832,13 @@ out:
   if (more_details_out != NULL)
     *more_details_out = _srt_library_new (multiarch,
                                           absolute_path,
-                                          soname,
+                                          requested_name,
                                           issues,
                                           child_stderr,
                                           (const char **) missing_symbols,
                                           (const char **) misversioned_symbols,
                                           (const char **) dependencies,
+                                          real_soname,
                                           exit_status,
                                           terminating_signal);
 
@@ -775,6 +853,7 @@ out:
   g_free (absolute_path);
   g_free (child_stderr);
   g_free (output);
+  g_free (real_soname);
   g_free (filtered_preload);
   g_clear_error (&error);
   return issues;

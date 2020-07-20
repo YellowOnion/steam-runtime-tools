@@ -206,6 +206,13 @@ else
     ln -fns "${name}_${current_build_id}" "${here}/${name}"
 fi
 
+adverb="$here/pressure-vessel/bin/pressure-vessel-adverb"
+
+# Fallback to the old name
+if ! [ -x "$adverb" ]; then
+    adverb="$here/pressure-vessel/bin/pressure-vessel-with-lock"
+fi
+
 # GC old runtimes
 for deployment in "${here}/${name}"_before_* "${here}/${name}"_[0-9].* "${here}/.${name}"_*_unpack-temp; do
     if ! [ -d "$deployment" ]; then
@@ -231,7 +238,7 @@ for deployment in "${here}/${name}"_before_* "${here}/${name}"_[0-9].* "${here}/
     # file for some reason, or because rm -fr fails) we waste a bit of
     # disk space and continue to launch the game. The old runtime will
     # get deleted eventually, so no harm done.
-    "$here/pressure-vessel/bin/pressure-vessel-with-lock" \
+    "$adverb" \
         --create --write \
         --lock-file "$lockfile" \
         -- \

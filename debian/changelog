@@ -1,3 +1,38 @@
+pressure-vessel (0.20200709.0) scout; urgency=medium
+
+  * d/control: Fix wrong dependencies.
+    I'd only intended to bump the version on the libcapsule dependency,
+    not the steam-runtime-tools dependency.
+  * runtime: Remove hwcaps subdirectories when looking for gconv modules.
+    tests/containers.py was failing on SteamOS 2 'brewmaster' with the
+    libc6-i686 package installed, because that package contains an
+    optimized i686 glibc in /lib/i386-linux-gnu/i686/cmov/libc.so.6, which
+    is used in preference to the baseline i586 glibc in
+    /lib/i386-linux-gnu/libc.so.6. There are no corresponding optimized
+    gconv modules, only /usr/lib/i386-linux-gnu/gconv/*.
+  * tests: Add support for basic testing on a soldier container.
+    For the moment, this is basically scout with fewer guarantees: we
+    can't assume whether the host glibc is newer (like Arch Linux or
+    Ubuntu 20.04) or older (like SteamOS 2 'brewmaster'). (T22544)
+  * tests: Run s-r-s-i on host with LD_BIND_NOW=1.
+    If we allow lazy binding, we can succeed in loading a GIO module from
+    the host (which depends on a newer GObject than the one bundled with
+    pressure-vessel), then find that a symbol reference fails at the time
+    that we try to actually use it. Make it fail early, instead.
+    In particular, this is helpful on SteamOS 2 'brewmaster'.
+  * tests: Ignore inability to load libOSMesa.so.8.
+    This is included in prerelease versions of SteamRT 2 'soldier',
+    but because it uses the post-gcc-5 C++ ABI of libLLVM-7.so.1, it's
+    incompatible with versions of libLLVM-7.so.1 that were compiled to be
+    compatible with the gcc 4 C++ ABI, and in particular the one in
+    SteamOS 2 'brewmaster'.
+    This and the previous commit are sufficient to make tests/containers.py
+    pass on SteamOS 2 'brewmaster', if we also configure libxcb.so.1 to
+    be chosen by counting symbols (T22538) and libgcc_s.so.1 to be chosen
+    by counting verdefs (T16561).
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 09 Jul 2020 11:43:09 +0100
+
 pressure-vessel (0.20200708.0) scout; urgency=medium
 
   * unruntime, wrap: Add a way to disable all interactivity.

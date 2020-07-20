@@ -157,12 +157,10 @@ build:scout:
                 "$(pwd)/_build/relocatable-install"
             fi
 
-# Artifacts are currently disabled because uploading them to the
-# coordinator results in HTTP 413 Request Entity Too Large.
-#   artifacts:
-#       paths:
-#           - _build/pressure-vessel-*-bin.tar.gz
-#           - _build/pressure-vessel-*-bin+src.tar.gz
+    artifacts:
+        paths:
+            - _build/pressure-vessel-*-bin.tar.gz
+            - _build/pressure-vessel-*-bin+src.tar.gz
 
 # These packaging-oriented jobs need a suitable steam-runtime-tools version
 # available via apt

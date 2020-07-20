@@ -1369,7 +1369,7 @@ main (int argc,
     goto out;
 
   if (runtime != NULL)
-    pv_runtime_append_lock_adverb (runtime, bwrap);
+    pv_runtime_append_adverbs (runtime, bwrap);
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);

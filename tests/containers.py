@@ -162,8 +162,8 @@ class TestContainers(BaseTest):
                 )
 
             for exe in (
+                'pressure-vessel-adverb',
                 'pressure-vessel-try-setlocale',
-                'pressure-vessel-with-lock',
             ):
                 in_containers_dir = os.path.join(
                     cls.containers_dir,
@@ -583,7 +583,7 @@ class TestContainers(BaseTest):
             os.path.isfile(
                 os.path.join(
                     tree, 'usr', 'lib', 'pressure-vessel', 'from-host',
-                    'bin', 'pressure-vessel-with-lock',
+                    'bin', 'pressure-vessel-adverb',
                 )
             )
         )

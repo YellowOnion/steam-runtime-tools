@@ -408,3 +408,34 @@ pv_cheap_tree_copy (const char *source_root,
   g_assert (nftw_data.error == NULL);
   return (res == 0);
 }
+
+static gint
+ftw_remove (const gchar *path,
+            const struct stat *sb,
+            gint typeflags,
+            struct FTW *ftwbuf)
+{
+  if (remove (path) < 0)
+    return -1;
+
+  return 0;
+}
+
+/*
+ * @directory: (type filename): The directory to remove.
+ *
+ * Recursively delete @directory within the same file system and
+ * without following symbolic links.
+ *
+ * Returns: %TRUE if the removal was successful
+ */
+gboolean
+pv_rm_rf (const char *directory)
+{
+  g_return_val_if_fail (directory != NULL, FALSE);
+
+  if (nftw (directory, ftw_remove, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS) < 0)
+    return FALSE;
+
+  return TRUE;
+}

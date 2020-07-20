@@ -60,9 +60,9 @@ pressure_vessel_utils = static_library(
 )
 
 executable(
-  'pressure-vessel-with-lock',
+  'pressure-vessel-adverb',
   sources : [
-    'with-lock.c',
+    'adverb.c',
   ],
   dependencies : [
     gio_unix,

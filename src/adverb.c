@@ -1,8 +1,9 @@
-/* pressure-vessel-with-lock — run a command with a lock held.
- * Basically flock(1), but using fcntl locks compatible with those used
- * by bubblewrap and Flatpak.
+/* pressure-vessel-adverb — run a command with an altered execution environment,
+ * e.g. holding a lock.
+ * The lock is basically flock(1), but using fcntl locks compatible with
+ * those used by bubblewrap and Flatpak.
  *
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -46,6 +47,7 @@
 
 static GPtrArray *global_locks = NULL;
 static gboolean opt_create = FALSE;
+static gboolean opt_generate_locales = FALSE;
 static gboolean opt_subreaper = FALSE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
@@ -126,6 +128,93 @@ opt_lock_file_cb (const char *name,
   return TRUE;
 }
 
+static gboolean
+generate_locales (gchar **locpath_out,
+                  GError **error)
+{
+  g_autofree gchar *temp_dir = NULL;
+  g_autoptr(GDir) dir = NULL;
+  int wait_status;
+  g_autofree gchar *child_stdout = NULL;
+  g_autofree gchar *child_stderr = NULL;
+  g_autofree gchar *pvlg = NULL;
+  g_autofree gchar *this_path = NULL;
+  g_autofree gchar *this_dir = NULL;
+
+  g_return_val_if_fail (locpath_out == NULL || *locpath_out == NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
+
+  if (temp_dir == NULL)
+    {
+      if (error != NULL)
+        glnx_prefix_error (error,
+                           "Cannot create temporary directory for locales");
+      return FALSE;
+    }
+
+  this_path = g_file_read_link ("/proc/self/exe", NULL);
+  this_dir = g_dirname (this_path);
+  pvlg = g_build_filename (this_dir, "pressure-vessel-locale-gen", NULL);
+
+  const char *locale_gen_argv[] =
+  {
+    pvlg,
+    "--output-dir", temp_dir,
+    "--verbose",
+    NULL
+  };
+
+  if (!g_spawn_sync (NULL,  /* cwd */
+                     (gchar **) locale_gen_argv,
+                     NULL,  /* environ */
+                     G_SPAWN_DEFAULT,
+                     NULL, NULL,    /* child setup */
+                     &child_stdout,
+                     &child_stderr,
+                     &wait_status,
+                     error))
+    {
+      if (error != NULL)
+        glnx_prefix_error (error, "Cannot run pressure-vessel-locale-gen");
+      return FALSE;
+    }
+
+  if (child_stdout != NULL && child_stdout[0] != '\0')
+    g_debug ("Output:\n%s", child_stdout);
+
+  if (child_stderr != NULL && child_stderr[0] != '\0')
+    g_debug ("Diagnostic output:\n%s", child_stderr);
+
+  if (WIFEXITED (wait_status) && WEXITSTATUS (wait_status) == EX_OSFILE)
+    {
+      /* locale-gen exits 72 (EX_OSFILE) if it had to correct for
+       * missing locales at OS level. This is not an error. */
+      g_debug ("pressure-vessel-locale-gen created missing locales");
+    }
+  else if (!g_spawn_check_exit_status (wait_status, error))
+    {
+      if (error != NULL)
+        glnx_prefix_error (error, "Unable to generate locales");
+      return FALSE;
+    }
+  /* else all locales were already present (exit status 0) */
+
+  dir = g_dir_open (temp_dir, 0, error);
+  
+  if (dir == NULL || g_dir_read_name (dir) == NULL)
+    {
+      g_debug ("No locales have been generated");
+      return TRUE;
+    }
+
+  if (locpath_out != NULL)
+    *locpath_out = g_steal_pointer (&temp_dir);
+
+  return TRUE;
+}
+
 static GOptionEntry options[] =
 {
   { "fd", '\0',
@@ -142,6 +231,13 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_create,
     "Don't create subsequent nonexistent lock files [default].",
     NULL },
+
+  { "generate-locales", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
+    "Attempt to generate any missing locales.", NULL },
+  { "no-generate-locales", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_generate_locales,
+    "Don't generate any missing locales [default].", NULL },
 
   { "write", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_write,
@@ -206,6 +302,8 @@ main (int argc,
   char **command_and_args;
   GPid child_pid;
   int wait_status = -1;
+  g_autofree gchar *locales_temp_dir = NULL;
+  g_auto(GStrv) my_environ = NULL;
 
   setlocale (LC_ALL, "");
   pv_avoid_gvfs ();
@@ -213,7 +311,7 @@ main (int argc,
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
 
-  g_set_prgname ("pressure-vessel-with-lock");
+  g_set_prgname ("pressure-vessel-adverb");
 
   g_log_set_handler (G_LOG_DOMAIN,
                      G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
@@ -278,11 +376,27 @@ main (int argc,
       goto out;
     }
 
+  my_environ = g_get_environ ();
+
+  if (opt_generate_locales)
+    {
+      /* If this fails, it is not fatal - carry on anyway */
+      if (!generate_locales (&locales_temp_dir, error))
+        {
+          g_warning ("%s", local_error->message);
+          g_clear_error (error);
+        }
+      else if (locales_temp_dir != NULL)
+        {
+          my_environ = g_environ_setenv (my_environ, "LOCPATH", locales_temp_dir, TRUE);
+        }
+    }
+
   g_debug ("Launching child process...");
 
   if (!g_spawn_async (NULL,   /* working directory */
                       command_and_args,
-                      NULL,   /* environment */
+                      my_environ,
                       G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
                       NULL, NULL,   /* child setup + user_data */
                       &child_pid,
@@ -342,6 +456,9 @@ main (int argc,
 
 out:
   global_locks = NULL;
+
+  if (locales_temp_dir != NULL)
+    pv_rm_rf (locales_temp_dir);
 
   if (local_error != NULL)
     g_warning ("%s", local_error->message);

@@ -108,8 +108,8 @@ SCRIPTS = [
     'pressure-vessel-unruntime-test-ui',
 ]
 EXECUTABLES = [
+    'pressure-vessel-adverb',
     'pressure-vessel-try-setlocale',
-    'pressure-vessel-with-lock',
     'pressure-vessel-wrap',
 ]
 LIBCAPSULE_TOOLS = [

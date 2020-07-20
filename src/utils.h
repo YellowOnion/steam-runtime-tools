@@ -46,3 +46,5 @@ gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);
 gboolean pv_cheap_tree_copy (const char *source_root,
                              const char *dest_root,
                              GError **error);
+
+gboolean pv_rm_rf (const char *directory);

@@ -7,7 +7,7 @@ process-oriented `F_SETLK` locks on older kernels. See `src/bwrap-lock.c`
 for full details.
 
 Do not use `flock(2)`, `flock(1)` or `lockf(3)` to interact with
-pressure-vessel. `bwrap --lock-file` or `pressure-vessel-with-lock`
+pressure-vessel. `bwrap --lock-file` or `pressure-vessel-adverb`
 can be used.
 
 Runtimes

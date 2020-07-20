@@ -63,7 +63,7 @@ struct _PvRuntime
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
   gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
-  const gchar *with_lock_in_container;
+  const gchar *adverb_in_container;
 
   PvRuntimeFlags flags;
   int mutable_parent_fd;
@@ -880,32 +880,37 @@ pv_runtime_new (const char *source_files,
                          NULL);
 }
 
-/* If we are using a runtime, pass the lock fd to the executed process,
+/* If we are using a runtime, ensure the locales to be generated,
+ * pass the lock fd to the executed process,
  * and make it act as a subreaper for the game itself.
  *
  * If we were using --unshare-pid then we could use bwrap --sync-fd
  * and rely on bubblewrap's init process for this, but we currently
- * can't do that without breaking gameoverlayrender.so's assumptions. */
+ * can't do that without breaking gameoverlayrender.so's assumptions,
+ * and we want -adverb for its locale functionality anyway. */
 void
-pv_runtime_append_lock_adverb (PvRuntime *self,
-                               FlatpakBwrap *bwrap)
+pv_runtime_append_adverbs (PvRuntime *self,
+                           FlatpakBwrap *bwrap)
 {
   g_return_if_fail (PV_IS_RUNTIME (self));
   g_return_if_fail (!pv_bwrap_was_finished (bwrap));
   /* This will be true if pv_runtime_bind() was successfully called. */
-  g_return_if_fail (self->with_lock_in_container != NULL);
+  g_return_if_fail (self->adverb_in_container != NULL);
 
   flatpak_bwrap_add_args (bwrap,
-                          self->with_lock_in_container,
+                          self->adverb_in_container,
                           "--subreaper",
                           NULL);
+
+  if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
+    flatpak_bwrap_add_args (bwrap, "--generate-locales", NULL);
 
   if (pv_bwrap_lock_is_ofd (self->runtime_lock))
     {
       int fd = pv_bwrap_lock_steal_fd (self->runtime_lock);
       g_autofree gchar *fd_str = NULL;
 
-      g_debug ("Passing lock fd %d down to with-lock", fd);
+      g_debug ("Passing lock fd %d down to adverb", fd);
       flatpak_bwrap_add_fd (bwrap, fd);
       fd_str = g_strdup_printf ("%d", fd);
       flatpak_bwrap_add_args (bwrap,
@@ -916,10 +921,10 @@ pv_runtime_append_lock_adverb (PvRuntime *self,
     {
       /*
        * We were unable to take out an open file descriptor lock,
-       * so it will be released on fork(). Tell the with-lock process
+       * so it will be released on fork(). Tell the adverb process
        * to take out its own compatible lock instead. There will be
        * a short window during which we have lost our lock but the
-       * with-lock process has not taken its lock - that's unavoidable
+       * adverb process has not taken its lock - that's unavoidable
        * if we want to use exec() to replace ourselves with the
        * container.
        *
@@ -1140,117 +1145,6 @@ try_bind_dri (PvRuntime *self,
     }
 
   return TRUE;
-}
-
-/*
- * Try to make sure we have all the locales we need, by running
- * the helper from steam-runtime-tools in the container. If this
- * fails, it isn't fatal - carry on anyway.
- *
- * @bwrap must be set up to have the same libc that we will be using
- * for the container.
- */
-static void
-ensure_locales (PvRuntime *self,
-                gboolean on_host,
-                FlatpakBwrap *bwrap)
-{
-  g_autoptr(GError) local_error = NULL;
-  g_autoptr(FlatpakBwrap) run_locale_gen = NULL;
-  g_autofree gchar *locale_gen = NULL;
-  g_autofree gchar *locales = g_build_filename (self->overrides, "locales", NULL);
-  g_autofree gchar *locales_in_container = g_build_filename (self->overrides_in_container,
-                                                             "locales", NULL);
-  g_autoptr(GDir) dir = NULL;
-  int exit_status;
-
-  /* bwrap can't own any fds yet, because if it did,
-   * flatpak_bwrap_append_bwrap() would steal them. */
-  g_return_if_fail (bwrap->fds == NULL || bwrap->fds->len == 0);
-
-  g_mkdir (locales, 0700);
-
-  run_locale_gen = flatpak_bwrap_new (NULL);
-
-  if (on_host)
-    {
-      locale_gen = g_build_filename (self->tools_dir,
-                                     "pressure-vessel-locale-gen",
-                                     NULL);
-      /* We don't actually need to use bwrap when we're just running on
-       * the host system. */
-      flatpak_bwrap_add_args (run_locale_gen,
-                              locale_gen,
-                              "--output-dir", locales,
-                              "--verbose",
-                              NULL);
-    }
-  else
-    {
-      locale_gen = g_build_filename ("/run/host/tools",
-                                     "pressure-vessel-locale-gen",
-                                     NULL);
-
-      flatpak_bwrap_append_bwrap (run_locale_gen, bwrap);
-      flatpak_bwrap_add_args (run_locale_gen,
-                              "--ro-bind", self->overrides,
-                              self->overrides_in_container,
-                              NULL);
-
-      if (!flatpak_bwrap_bundle_args (run_locale_gen, 1, -1, FALSE,
-                                      &local_error))
-        {
-          g_warning ("Unable to set up locale-gen command: %s",
-                     local_error->message);
-          g_clear_error (&local_error);
-        }
-
-      flatpak_bwrap_add_args (run_locale_gen,
-                              "--ro-bind", self->tools_dir, "/run/host/tools",
-                              "--bind", locales, locales_in_container,
-                              locale_gen,
-                              "--output-dir", locales_in_container,
-                              "--verbose",
-                              NULL);
-    }
-
-  flatpak_bwrap_finish (run_locale_gen);
-
-  /* locale-gen exits 72 (EX_OSFILE) if it had to correct for
-   * missing locales at OS level. This is not an error. */
-  if (!pv_bwrap_run_sync (run_locale_gen, &exit_status, &local_error))
-    {
-      if (exit_status == EX_OSFILE)
-        g_debug ("pressure-vessel-locale-gen created missing locales");
-      else
-        g_warning ("Unable to generate locales: %s", local_error->message);
-
-      g_clear_error (&local_error);
-    }
-  else
-    {
-      g_debug ("No locales generated");
-    }
-
-  dir = g_dir_open (locales, 0, NULL);
-
-  /* If the directory is not empty, make it the container's LOCPATH */
-  if (dir != NULL && g_dir_read_name (dir) != NULL)
-    {
-      g_autoptr(GString) locpath = NULL;
-
-      g_debug ("%s is non-empty", locales);
-
-      locpath = g_string_new (locales_in_container);
-      pv_search_path_append (locpath, g_getenv ("LOCPATH"));
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "LOCPATH", locpath->str,
-                              NULL);
-    }
-  else
-    {
-      g_debug ("%s is empty", locales);
-    }
 }
 
 typedef enum
@@ -1596,11 +1490,6 @@ bind_runtime (PvRuntime *self,
       if (!pv_runtime_use_host_graphics_stack (self, bwrap, error))
         return FALSE;
     }
-
-  /* This needs to be done after pv_runtime_use_host_graphics_stack()
-   * has decided whether to bring in the host system's libc. */
-  if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
-    ensure_locales (self, self->any_libc_from_host, bwrap);
 
   /* These can add data fds to @bwrap, so they must come last - after
    * other functions stop using @bwrap as a basis for their own bwrap
@@ -3083,7 +2972,7 @@ pv_runtime_bind (PvRuntime *self,
       if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest, error))
         return FALSE;
 
-      self->with_lock_in_container = "/usr/lib/pressure-vessel/from-host/bin/pressure-vessel-with-lock";
+      self->adverb_in_container = "/usr/lib/pressure-vessel/from-host/bin/pressure-vessel-adverb";
     }
   else
     {
@@ -3092,7 +2981,7 @@ pv_runtime_bind (PvRuntime *self,
                               pressure_vessel_prefix,
                               "/run/pressure-vessel/pv-from-host",
                               NULL);
-      self->with_lock_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-with-lock";
+      self->adverb_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-adverb";
     }
 
   pv_runtime_set_search_paths (self, bwrap);

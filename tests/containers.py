@@ -424,10 +424,13 @@ class TestContainers(BaseTest):
         )
         os.makedirs(artifacts, exist_ok=True)
 
+        bwrap_temp_file = tempfile.NamedTemporaryFile()
+
         argv = [
             self.pv_wrap,
             '--runtime', runtime,
             '--verbose',
+            '--write-bwrap-arguments', bwrap_temp_file.name
         ]
 
         var = os.path.join(self.containers_dir, 'var')
@@ -510,6 +513,14 @@ class TestContainers(BaseTest):
                         universal_newlines=True,
                     )
                     self.assertEqual(completed.returncode, 0)
+
+            bwrap_arguments = bwrap_temp_file.read().decode().split("\0")
+            if locales:
+                self.assertIn("--generate-locales", bwrap_arguments)
+            else:
+                self.assertNotIn("--generate-locales", bwrap_arguments)
+
+            bwrap_temp_file.close()
 
             if copy:
                 members = set(os.listdir(temp))

@@ -111,6 +111,11 @@ class Runtime:
             self.architecture,
             self.suite,
         )
+        self.sdk_build_id_file = '{}-{}-{}-buildid.txt'.format(
+            self.sdk,
+            self.architecture,
+            self.suite,
+        )
         self.sources = '{}-{}-{}-sources.deb822.gz'.format(
             self.sdk,
             self.architecture,
@@ -458,6 +463,12 @@ class Main:
         ) as writer:
             writer.write(f'{runtime.version}\n')
 
+        if runtime.include_sdk:
+            with open(
+                os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+            ) as writer:
+                writer.write(f'{runtime.version}\n')
+
         if self.unpack_sources:
             with open(
                 os.path.join(runtime.path, runtime.sources), 'rb',
@@ -509,6 +520,12 @@ class Main:
             os.path.join(self.depot, runtime.build_id_file), 'w',
         ) as writer:
             writer.write(f'{pinned}\n')
+
+        if runtime.include_sdk:
+            with open(
+                os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+            ) as writer:
+                writer.write(f'{pinned}\n')
 
         if self.unpack_sources:
             with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:

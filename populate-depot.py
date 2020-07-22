@@ -91,6 +91,16 @@ class Runtime:
             self.architecture,
             self.suite,
         )
+        self.sdk_tarball = '{}-{}-{}-runtime.tar.gz'.format(
+            self.sdk,
+            self.architecture,
+            self.suite,
+        )
+        self.debug_tarball = '{}-{}-{}-debug.tar.gz'.format(
+            self.sdk,
+            self.architecture,
+            self.suite,
+        )
         self.sysroot_tarball = '{}-{}-{}-sysroot.tar.gz'.format(
             self.sdk,
             self.architecture,
@@ -110,8 +120,10 @@ class Runtime:
         self.runtime_files = [self.tarball]
 
         if self.include_sdk:
-            self.runtime_files.append(self.sysroot_tarball)
+            self.runtime_files.append(self.debug_tarball)
             self.runtime_files.append(self.dockerfile)
+            self.runtime_files.append(self.sdk_tarball)
+            self.runtime_files.append(self.sysroot_tarball)
 
     def __str__(self) -> str:
         return self.name

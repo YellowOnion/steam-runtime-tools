@@ -1,5 +1,6 @@
 /depot/.ref
 /depot/com.valvesoftware.SteamRuntime.*-buildid.txt
+/depot/com.valvesoftware.SteamRuntime.*-debug.tar.gz
 /depot/com.valvesoftware.SteamRuntime.*-runtime.tar.gz
 /depot/com.valvesoftware.SteamRuntime.*-sysroot.Dockerfile
 /depot/com.valvesoftware.SteamRuntime.*-sysroot.tar.gz
@@ -9,10 +10,18 @@
 /depot/scout
 /depot/scout_*-0.20*.*/
 /depot/scout_0.20*.*/
+/depot/scout_sysroot/
+/depot/soldier/
+/depot/soldier_*-0.20*.*/
+/depot/soldier_0.20*.*/
+/depot/soldier_sysroot/
+/depot/steam-runtime/
 /local/
 /pressure-vessel-*-bin+src.tar.gz
 /pressure-vessel-*-bin.tar.gz
 /pressure-vessel-bin+src.tar.gz
 /pressure-vessel-bin.tar.gz
+/sources/scout/steamrt/
+/sources/soldier/steamrt/
 /test-logs/
 __pycache__/

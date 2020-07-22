@@ -471,19 +471,25 @@ class Main:
                             name = f['name']
 
                             if name.endswith('.dsc'):
+                                dest = os.path.join(
+                                    self.unpack_sources_into,
+                                    runtime.name,
+                                    stanza['package'],
+                                )
+
+                                with suppress(FileNotFoundError):
+                                    logger.info('Removing %r', dest)
+                                    shutil.rmtree(dest)
+
                                 subprocess.run(
                                     [
                                         'dpkg-source',
                                         '-x',
+                                        dest,
                                         os.path.join(
                                             runtime.path,
                                             'sources',
                                             f['name'],
-                                        ),
-                                        os.path.join(
-                                            self.unpack_sources_into,
-                                            runtime.name,
-                                            stanza['package'],
                                         ),
                                     ],
                                     check=True,
@@ -537,16 +543,22 @@ class Main:
                                 name = f['name']
 
                                 if name.endswith('.dsc'):
+                                    dest = os.path.join(
+                                        self.unpack_sources_into,
+                                        runtime.name,
+                                        stanza['package'],
+                                    )
+
+                                    with suppress(FileNotFoundError):
+                                        logger.info('Removing %r', dest)
+                                        shutil.rmtree(dest)
+
                                     subprocess.run(
                                         [
                                             'dpkg-source',
                                             '-x',
                                             os.path.join(tmp, 'sources', name),
-                                            os.path.join(
-                                                self.unpack_sources_into,
-                                                runtime.name,
-                                                stanza['package'],
-                                            ),
+                                            dest,
                                         ],
                                         check=True,
                                     )

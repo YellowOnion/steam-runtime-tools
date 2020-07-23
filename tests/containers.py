@@ -209,9 +209,6 @@ class TestContainers(BaseTest):
                 for tool in ('capsule-capture-libs', 'capsule-symbols'):
                     exe = multiarch + '-' + tool
                     tool_path = os.path.join(cls.pv_dir, 'bin', exe)
-
-                    exe = multiarch + '-' + tool
-                    tool_path = os.path.join(cls.pv_dir, 'bin', exe)
                     found = shutil.which(exe)
                     relocatable = os.path.join(
                         os.environ.get(

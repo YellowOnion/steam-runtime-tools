@@ -375,6 +375,7 @@ static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
 static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
+static char *opt_write_bwrap = NULL;
 
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
@@ -680,6 +681,10 @@ static GOptionEntry options[] =
     "If using --runtime, don't use the host graphics stack. "
     "This is likely to result in software rendering or a crash.",
     NULL },
+  { "write-bwrap-arguments", '\0',
+    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_bwrap,
+    "Write the final bwrap arguments, as null terminated strings, to the "
+    "given file path.", "PATH" },
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
     "Smoke test pressure-vessel-wrap and exit.", NULL },
@@ -1369,7 +1374,7 @@ main (int argc,
     goto out;
 
   if (runtime != NULL)
-    pv_runtime_append_lock_adverb (runtime, bwrap);
+    pv_runtime_append_adverbs (runtime, bwrap);
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
@@ -1402,6 +1407,24 @@ main (int argc,
     pv_runtime_cleanup (runtime);
 
   flatpak_bwrap_finish (bwrap);
+
+  if (opt_write_bwrap != NULL)
+    {
+      FILE *file = fopen (opt_write_bwrap, "w");
+      if (file == NULL)
+        {
+          g_warning ("An error occurred trying to write the bwrap arguments: %s",
+                    g_strerror (errno));
+          /* This is not a fatal error, try to continue */
+        }
+      else
+        {
+          for (i = 0; i < bwrap->argv->len; i++)
+            fprintf (file, "%s%c", (gchar *)g_ptr_array_index (bwrap->argv, i), '\0');
+
+          fclose (file);
+        }
+    }
 
   if (opt_only_prepare)
     ret = 0;

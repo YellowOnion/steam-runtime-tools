@@ -162,8 +162,8 @@ class TestContainers(BaseTest):
                 )
 
             for exe in (
+                'pressure-vessel-adverb',
                 'pressure-vessel-try-setlocale',
-                'pressure-vessel-with-lock',
             ):
                 in_containers_dir = os.path.join(
                     cls.containers_dir,
@@ -421,10 +421,13 @@ class TestContainers(BaseTest):
         )
         os.makedirs(artifacts, exist_ok=True)
 
+        bwrap_temp_file = tempfile.NamedTemporaryFile()
+
         argv = [
             self.pv_wrap,
             '--runtime', runtime,
             '--verbose',
+            '--write-bwrap-arguments', bwrap_temp_file.name
         ]
 
         var = os.path.join(self.containers_dir, 'var')
@@ -508,6 +511,14 @@ class TestContainers(BaseTest):
                     )
                     self.assertEqual(completed.returncode, 0)
 
+            bwrap_arguments = bwrap_temp_file.read().decode().split("\0")
+            if locales:
+                self.assertIn("--generate-locales", bwrap_arguments)
+            else:
+                self.assertNotIn("--generate-locales", bwrap_arguments)
+
+            bwrap_temp_file.close()
+
             if copy:
                 members = set(os.listdir(temp))
 
@@ -580,7 +591,7 @@ class TestContainers(BaseTest):
             os.path.isfile(
                 os.path.join(
                     tree, 'usr', 'lib', 'pressure-vessel', 'from-host',
-                    'bin', 'pressure-vessel-with-lock',
+                    'bin', 'pressure-vessel-adverb',
                 )
             )
         )

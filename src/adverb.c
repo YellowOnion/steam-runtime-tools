@@ -155,7 +155,7 @@ generate_locales (gchar **locpath_out,
     }
 
   this_path = g_file_read_link ("/proc/self/exe", NULL);
-  this_dir = g_dirname (this_path);
+  this_dir = g_path_get_dirname (this_path);
   pvlg = g_build_filename (this_dir, "pressure-vessel-locale-gen", NULL);
 
   const char *locale_gen_argv[] =

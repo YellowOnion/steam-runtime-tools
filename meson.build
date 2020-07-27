@@ -129,6 +129,19 @@ c_compiler = meson.get_compiler('c')
 supported_warning_cflags = c_compiler.get_supported_arguments(warning_cflags)
 add_global_arguments(supported_warning_cflags, language : 'c')
 
+# gdbus-codegen in scout generates code that has many warnings
+silence_gdbus_codegen_warnings = c_compiler.get_supported_arguments([
+  '-Wno-error',
+  '-Wno-error=discarded-qualifiers',
+  '-Wno-error=redundant-decls',
+  '-Wno-error=shadow',
+  '-Wno-error=write-strings',
+  '-Wno-discarded-qualifiers',
+  '-Wno-redundant-decls',
+  '-Wno-shadow',
+  '-Wno-write-strings',
+])
+
 foreach flag : no_warning_cflags
   supported_no_warning_cflags = c_compiler.get_supported_arguments([
     '-Wno-error=' + flag,
@@ -142,6 +155,7 @@ add_project_arguments(supported_warning_cflags, language : 'c')
 
 libglnx = subproject('libglnx')
 
+threads = dependency('threads')
 steam_runtime_tools = dependency(
   'steam-runtime-tools-0',
   version : '>=0.20200331.1',

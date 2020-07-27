@@ -4,7 +4,7 @@
  *  Copyright 1995-1997 Peter Mattis, Spencer Kimball and Josh MacDonald
  *  Copyright 1997-2000 GLib team
  *  Copyright 2000 Red Hat, Inc.
- *  Copyright 2019 Collabora Ltd.
+ *  Copyright 2013-2019 Collabora Ltd.
  *  g_execvpe implementation based on GNU libc execvp:
  *   Copyright 1991, 92, 95, 96, 97, 98, 99 Free Software Foundation, Inc.
  *
@@ -203,5 +203,54 @@ my_g_ptr_array_insert (GPtrArray *arr,
                (arr->len - 1 - index_) * sizeof (gpointer));
       arr->pdata[index_] = data;
     }
+}
+#endif
+
+#if !GLIB_CHECK_VERSION (2, 36, 0)
+/**
+ * g_dbus_address_escape_value:
+ * @string: an unescaped string to be included in a D-Bus address
+ *     as the value in a key-value pair
+ *
+ * Escape @string so it can appear in a D-Bus address as the value
+ * part of a key-value pair.
+ *
+ * For instance, if @string is `/run/bus-for-:0`,
+ * this function would return `/run/bus-for-%3A0`,
+ * which could be used in a D-Bus address like
+ * `unix:nonce-tcp:host=127.0.0.1,port=42,noncefile=/run/bus-for-%3A0`.
+ *
+ * Returns: (transfer full): a copy of @string with all
+ *     non-optionally-escaped bytes escaped
+ *
+ * Since: 2.36
+ */
+gchar *
+my_g_dbus_address_escape_value (const gchar *string)
+{
+  GString *s;
+  gsize i;
+
+  g_return_val_if_fail (string != NULL, NULL);
+
+  /* There will often not be anything needing escaping at all. */
+  s = g_string_sized_new (strlen (string));
+
+  /* D-Bus address escaping is mostly the same as URI escaping... */
+  g_string_append_uri_escaped (s, string, "\\/", FALSE);
+
+  /* ... but '~' is an unreserved character in URIs, but a
+   * non-optionally-escaped character in D-Bus addresses. */
+  for (i = 0; i < s->len; i++)
+    {
+      if (G_UNLIKELY (s->str[i] == '~'))
+        {
+          s->str[i] = '%';
+          g_string_insert (s, i + 1, "7E");
+          i += 2;
+        }
+    }
+
+  return g_string_free (s, FALSE);
 }
 #endif

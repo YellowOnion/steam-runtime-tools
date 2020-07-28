@@ -357,6 +357,7 @@ static gboolean opt_batch = FALSE;
 static char *opt_copy_runtime_into = NULL;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
+static char **opt_filesystems = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
 static gboolean opt_gc_runtimes = TRUE;
@@ -550,6 +551,11 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
     "but not if it is run with /usr from RUNTIME.", "VAR=VAL" },
+  { "filesystem", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME_ARRAY, &opt_filesystems,
+    "Share filesystem directories with the container. "
+    "They must currently be given as absolute paths.",
+    "PATH" },
   { "freedesktop-app-id", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_freedesktop_app_id,
     "Make --unshare-home use ~/.var/app/ID as home directory, where ID "
@@ -958,6 +964,28 @@ main (int argc,
       goto out;
     }
 
+  if (opt_filesystems != NULL)
+    {
+      for (i = 0; opt_filesystems[i] != NULL; i++)
+        {
+          if (strchr (opt_filesystems[i], ':') != NULL ||
+              strchr (opt_filesystems[i], '\\') != NULL)
+            {
+              g_printerr ("%s: ':' and '\\' in --filesystem argument "
+                          "not handled yet\n",
+                          g_get_prgname ());
+              goto out;
+            }
+          else if (!g_path_is_absolute (opt_filesystems[i]))
+            {
+              g_printerr ("%s: --filesystem argument must be an absolute "
+                          "path, not \"%s\"\n",
+                          g_get_prgname (), opt_filesystems[i]);
+              goto out;
+            }
+        }
+    }
+
   /* Finished parsing arguments, so any subsequent failures will make
    * us exit 1. */
   ret = 1;
@@ -1295,6 +1323,25 @@ main (int argc,
   bind_from_environ ("STEAM_COMPAT_CLIENT_INSTALL_PATH", bwrap);
   bind_from_environ ("STEAM_COMPAT_DATA_PATH", bwrap);
   bind_from_environ ("STEAM_COMPAT_TOOL_PATH", bwrap);
+
+  /* Make arbitrary filesystems available. This is not as complete as
+   * Flatpak yet. */
+  if (opt_filesystems != NULL)
+    {
+      g_debug ("Processing --filesystem arguments...");
+
+      for (i = 0; opt_filesystems[i] != NULL; i++)
+        {
+          /* We already checked this */
+          g_assert (g_path_is_absolute (opt_filesystems[i]));
+
+          g_debug ("Bind-mounting \"%s\"", opt_filesystems[i]);
+          flatpak_bwrap_add_args (bwrap,
+                                  "--bind", opt_filesystems[i],
+                                  opt_filesystems[i],
+                                  NULL);
+        }
+    }
 
   /* Make sure the current working directory (the game we are going to
    * run) is available. Some games write here. */

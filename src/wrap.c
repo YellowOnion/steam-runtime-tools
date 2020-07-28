@@ -1168,6 +1168,9 @@ main (int argc,
       if (opt_host_graphics)
         flags |= PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK;
 
+      if (opt_verbose)
+        flags |= PV_RUNTIME_FLAGS_VERBOSE;
+
       g_debug ("Configuring runtime %s...", opt_runtime);
 
       runtime = pv_runtime_new (opt_runtime,

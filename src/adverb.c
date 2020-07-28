@@ -290,6 +290,24 @@ cli_log_func (const gchar *log_domain,
   g_printerr ("%s: %s\n", (const char *) user_data, message);
 }
 
+static gboolean
+boolean_environment (const gchar *name,
+                     gboolean def)
+{
+  const gchar *value = g_getenv (name);
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRUE;
+
+  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
+    return FALSE;
+
+  if (value != NULL)
+    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
+
+  return def;
+}
+
 int
 main (int argc,
       char *argv[])
@@ -322,6 +340,8 @@ main (int argc,
       "Run COMMAND [ARG...] with a lock held, a subreaper, or similar.\n");
 
   g_option_context_add_main_entries (context, options, NULL);
+
+  opt_verbose = boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     {
@@ -380,6 +400,8 @@ main (int argc,
 
   if (opt_generate_locales)
     {
+      g_debug ("Making sure locales are available");
+
       /* If this fails, it is not fatal - carry on anyway */
       if (!generate_locales (&locales_temp_dir, error))
         {
@@ -388,7 +410,12 @@ main (int argc,
         }
       else if (locales_temp_dir != NULL)
         {
+          g_debug ("Generated locales in %s", locales_temp_dir);
           my_environ = g_environ_setenv (my_environ, "LOCPATH", locales_temp_dir, TRUE);
+        }
+      else
+        {
+          g_debug ("No locales were missing");
         }
     }
 

@@ -905,6 +905,9 @@ pv_runtime_append_adverbs (PvRuntime *self,
   if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
     flatpak_bwrap_add_args (bwrap, "--generate-locales", NULL);
 
+  if (self->flags & PV_RUNTIME_FLAGS_VERBOSE)
+    flatpak_bwrap_add_args (bwrap, "--verbose", NULL);
+
   if (pv_bwrap_lock_is_ofd (self->runtime_lock))
     {
       int fd = pv_bwrap_lock_steal_fd (self->runtime_lock);

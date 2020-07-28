@@ -58,6 +58,24 @@ static gboolean opt_write = FALSE;
 static void
 child_setup_cb (gpointer user_data)
 {
+  int *fd = user_data;
+
+  /* Put back the original stdout for the child process */
+  if (fd != NULL &&
+      dup2 (*fd, STDOUT_FILENO) != STDOUT_FILENO)
+    {
+      /* There's not much we can do about that: most error reporting
+       * is not async-signal-safe */
+      const char message[] =
+        "pressure-vessel-adverb: Unable to reinstate original stdout\n";
+
+      if (write (STDERR_FILENO, message, sizeof (message) - 1) < 0)
+        {
+          /* do nothing, how else would we report this? */
+        }
+    }
+
+  /* Make all other file descriptors close-on-exec */
   flatpak_close_fds_workaround (3);
 }
 
@@ -331,6 +349,8 @@ main (int argc,
   int wait_status = -1;
   g_autofree gchar *locales_temp_dir = NULL;
   g_auto(GStrv) my_environ = NULL;
+  g_autoptr(FILE) original_stdout = NULL;
+  int original_stdout_fd;
 
   setlocale (LC_ALL, "");
   pv_avoid_gvfs ();
@@ -378,6 +398,14 @@ main (int argc,
     g_log_set_handler (G_LOG_DOMAIN,
                        G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
                        cli_log_func, (void *) g_get_prgname ());
+
+  original_stdout = pv_divert_stdout_to_stderr (error);
+
+  if (original_stdout == NULL)
+    {
+      ret = 1;
+      goto out;
+    }
 
   if (argc >= 2 && strcmp (argv[1], "--") == 0)
     {
@@ -429,6 +457,8 @@ main (int argc,
     }
 
   g_debug ("Launching child process...");
+  fflush (stdout);
+  original_stdout_fd = fileno (original_stdout);
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
@@ -437,7 +467,7 @@ main (int argc,
                       my_environ,
                       (G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD |
                        G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
-                      child_setup_cb, NULL,
+                      child_setup_cb, &original_stdout_fd,
                       &child_pid,
                       &local_error))
     {

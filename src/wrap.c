@@ -762,6 +762,7 @@ main (int argc,
   g_autofree gchar *tools_dir = NULL;
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   g_autoptr(PvRuntime) runtime = NULL;
+  g_autoptr(FILE) original_stdout = NULL;
 
   setlocale (LC_ALL, "");
   pv_avoid_gvfs ();
@@ -864,6 +865,14 @@ main (int argc,
                " Version: %s\n",
                argv[0], VERSION);
       ret = 0;
+      goto out;
+    }
+
+  original_stdout = pv_divert_stdout_to_stderr (error);
+
+  if (original_stdout == NULL)
+    {
+      ret = 1;
       goto out;
     }
 
@@ -1434,7 +1443,7 @@ main (int argc,
   if (opt_only_prepare)
     ret = 0;
   else
-    pv_bwrap_execve (bwrap, error);
+    pv_bwrap_execve (bwrap, fileno (original_stdout), error);
 
 out:
   if (local_error != NULL)

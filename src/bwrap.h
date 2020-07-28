@@ -31,6 +31,7 @@ gboolean pv_bwrap_run_sync (FlatpakBwrap *bwrap,
                             int *exit_status_out,
                             GError **error);
 gboolean pv_bwrap_execve (FlatpakBwrap *bwrap,
+                          int original_stdout,
                           GError **error);
 gboolean pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
                             const char *host_path,

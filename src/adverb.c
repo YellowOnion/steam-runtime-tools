@@ -39,6 +39,7 @@
 #include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"
+#include "flatpak-utils-base-private.h"
 #include "utils.h"
 
 #ifndef PR_SET_CHILD_SUBREAPER
@@ -53,6 +54,12 @@ static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_wait = FALSE;
 static gboolean opt_write = FALSE;
+
+static void
+child_setup_cb (gpointer user_data)
+{
+  flatpak_close_fds_workaround (3);
+}
 
 static gboolean
 opt_fd_cb (const char *name,
@@ -166,11 +173,13 @@ generate_locales (gchar **locpath_out,
     NULL
   };
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (gchar **) locale_gen_argv,
                      NULL,  /* environ */
-                     G_SPAWN_DEFAULT,
-                     NULL, NULL,    /* child setup */
+                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                     child_setup_cb, NULL,
                      &child_stdout,
                      &child_stderr,
                      &wait_status,
@@ -421,11 +430,14 @@ main (int argc,
 
   g_debug ("Launching child process...");
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_async (NULL,   /* working directory */
                       command_and_args,
                       my_environ,
-                      G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
-                      NULL, NULL,   /* child setup + user_data */
+                      (G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD |
+                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                      child_setup_cb, NULL,
                       &child_pid,
                       &local_error))
     {

@@ -35,6 +35,12 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
+static void
+child_setup_cb (gpointer user_data)
+{
+  flatpak_close_fds_workaround (3);
+}
+
 /**
  * pv_avoid_gvfs:
  *
@@ -228,11 +234,14 @@ pv_capture_output (const char * const * argv,
 
   g_debug ("run:%s", command->str);
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) argv,
                      NULL,  /* env */
-                     G_SPAWN_SEARCH_PATH,
-                     NULL, NULL,    /* child setup */
+                     (G_SPAWN_SEARCH_PATH |
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                     child_setup_cb, NULL,
                      &output,
                      &errors,
                      &wait_status,

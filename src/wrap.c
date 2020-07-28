@@ -136,11 +136,13 @@ check_bwrap (const char *tools_dir,
 
       bwrap_test_argv[0] = bwrap_executable;
 
+      /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+       * see flatpak_close_fds_workaround */
       if (!g_spawn_sync (NULL,  /* cwd */
                          (gchar **) bwrap_test_argv,
                          NULL,  /* environ */
-                         G_SPAWN_DEFAULT,
-                         NULL, NULL,    /* child setup */
+                         G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                         flatpak_bwrap_child_setup_cb, NULL,
                          &child_stdout,
                          &child_stderr,
                          &wait_status,

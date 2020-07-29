@@ -256,6 +256,7 @@ class Main:
     def __init__(
         self,
         architecture: str = 'amd64,i386',
+        cache: str = '',
         credential_envs: Sequence[str] = (),
         depot: str = 'depot',
         include_sdk: bool = False,
@@ -303,6 +304,7 @@ class Main:
 
         self.opener = urllib.request.build_opener(*openers)
 
+        self.cache = cache
         self.default_architecture = architecture
         self.default_include_sdk = include_sdk
         self.default_suite = suite
@@ -314,6 +316,9 @@ class Main:
         self.unpack_ld_library_path = unpack_ld_library_path
         self.unpack_sources = unpack_sources
         self.unpack_sources_into = unpack_sources_into
+
+        if cache:
+            os.makedirs(self.cache, exist_ok=True)
 
         for runtime in runtimes:
             if '=' in runtime:
@@ -434,13 +439,18 @@ class Main:
         runtime.pin_version(self.opener, ssh=self.ssh)
 
         with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
-            runtime.fetch(filename, tmp, self.opener, ssh=self.ssh)
+            runtime.fetch(
+                filename,
+                self.cache or tmp,
+                self.opener,
+                ssh=self.ssh,
+            )
 
             os.makedirs(self.depot, exist_ok=True)
             subprocess.run(
                 [
                     'tar', '-C', self.depot, '-xvf',
-                    os.path.join(tmp, filename),
+                    os.path.join(self.cache or tmp, filename),
                 ],
                 check=True,
             )
@@ -530,8 +540,16 @@ class Main:
         if self.unpack_sources:
             with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
                 want = set(self.unpack_sources)
-                runtime.fetch(runtime.sources, tmp, self.opener, ssh=self.ssh)
-                with open(os.path.join(tmp, runtime.sources), 'rb') as reader:
+                runtime.fetch(
+                    runtime.sources,
+                    self.cache or tmp,
+                    self.opener,
+                    ssh=self.ssh,
+                )
+                with open(
+                    os.path.join(self.cache or tmp, runtime.sources),
+                    'rb'
+                ) as reader:
                     for stanza in Sources.iter_paragraphs(
                         sequence=reader,
                         use_apt_pkg=True,
@@ -543,7 +561,7 @@ class Main:
                             )
                             want.discard(stanza['package'])
                             os.makedirs(
-                                os.path.join(tmp, 'sources'),
+                                os.path.join(self.cache or tmp, 'sources'),
                                 exist_ok=True,
                             )
 
@@ -551,7 +569,7 @@ class Main:
                                 name = f['name']
                                 runtime.fetch(
                                     os.path.join('sources', name),
-                                    tmp,
+                                    self.cache or tmp,
                                     self.opener,
                                     ssh=self.ssh,
                                 )
@@ -574,7 +592,11 @@ class Main:
                                         [
                                             'dpkg-source',
                                             '-x',
-                                            os.path.join(tmp, 'sources', name),
+                                            os.path.join(
+                                                self.cache or tmp,
+                                                'sources',
+                                                name,
+                                            ),
                                             dest,
                                         ],
                                         check=True,
@@ -598,11 +620,16 @@ class Main:
         os.makedirs(self.unpack_ld_library_path, exist_ok=True)
 
         with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
-            runtime.fetch(filename, tmp, self.opener, ssh=self.ssh)
+            runtime.fetch(
+                filename,
+                self.cache or tmp,
+                self.opener,
+                ssh=self.ssh,
+            )
             subprocess.run(
                 [
                     'tar', '-C', self.unpack_ld_library_path, '-xvf',
-                    os.path.join(tmp, filename),
+                    os.path.join(self.cache or tmp, filename),
                 ],
                 check=True,
             )
@@ -637,6 +664,12 @@ def main() -> None:
         )
     )
 
+    parser.add_argument(
+        '--cache', default='',
+        help=(
+            'Cache downloaded files that are not in --depot here'
+        ),
+    )
     parser.add_argument(
         '--credential-env',
         action='append',

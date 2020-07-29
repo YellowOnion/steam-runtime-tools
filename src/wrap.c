@@ -747,7 +747,6 @@ main (int argc,
   g_autoptr(FILE) original_stdout = NULL;
 
   setlocale (LC_ALL, "");
-  pv_avoid_gvfs ();
 
   g_set_prgname ("pressure-vessel-wrap");
 
@@ -857,6 +856,8 @@ main (int argc,
       ret = 1;
       goto out;
     }
+
+  pv_avoid_gvfs ();
 
   if (argc < 2 && !opt_test && !opt_only_prepare)
     {

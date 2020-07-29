@@ -335,7 +335,6 @@ main (int argc,
   int original_stdout_fd;
 
   setlocale (LC_ALL, "");
-  pv_avoid_gvfs ();
 
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
@@ -388,6 +387,8 @@ main (int argc,
       ret = 1;
       goto out;
     }
+
+  pv_avoid_gvfs ();
 
   if (argc >= 2 && strcmp (argv[1], "--") == 0)
     {

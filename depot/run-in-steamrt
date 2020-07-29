@@ -244,6 +244,10 @@ if [ -n "$deploy" ]; then
     fi
 fi
 
+if [ -d "${here}/var" ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then
+    export PRESSURE_VESSEL_COPY_RUNTIME_INTO="${here}/var"
+fi
+
 export PRESSURE_VESSEL_RUNTIME_BASE="${here}"
 export PRESSURE_VESSEL_RUNTIME="${name}/files"
 exec "$here/pressure-vessel/bin/pressure-vessel-unruntime" "$@"

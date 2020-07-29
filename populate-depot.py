@@ -265,6 +265,7 @@ class Main:
         ssh: bool = False,
         suite: str = '',
         unpack_ld_library_path: str = '',
+        unpack_runtimes: bool = False,
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
         version: str = 'latest',
@@ -314,6 +315,7 @@ class Main:
         self.runtimes = []      # type: List[Runtime]
         self.ssh = ssh
         self.unpack_ld_library_path = unpack_ld_library_path
+        self.unpack_runtimes = unpack_runtimes
         self.unpack_sources = unpack_sources
         self.unpack_sources_into = unpack_sources_into
 
@@ -408,6 +410,79 @@ class Main:
                     'Downloading runtime from %s',
                     runtime)
                 self.download_runtime(runtime)
+
+            if self.unpack_runtimes:
+                dest = os.path.join(self.depot, runtime.name)
+
+                with suppress(FileNotFoundError):
+                    shutil.rmtree(dest)
+
+                os.makedirs(dest, exist_ok=True)
+                argv = [
+                    'tar',
+                    '-C', dest,
+                    '-xvf',
+                    os.path.join(self.depot, runtime.tarball),
+                ]
+                logger.info('%r', argv)
+                subprocess.run(argv, check=True)
+
+                if runtime.include_sdk:
+                    dest = os.path.join(self.depot, runtime.name + '_sdk')
+
+                    with suppress(FileNotFoundError):
+                        shutil.rmtree(os.path.join(dest, 'files'))
+
+                    with suppress(FileNotFoundError):
+                        os.remove(os.path.join(dest, 'metadata'))
+
+                    os.makedirs(
+                        os.path.join(dest, 'files', 'lib', 'debug'),
+                        exist_ok=True,
+                    )
+                    argv = [
+                        'tar',
+                        '-C', dest,
+                        '-xvf', os.path.join(self.depot, runtime.sdk_tarball),
+                    ]
+                    logger.info('%r', argv)
+                    subprocess.run(argv, check=True)
+
+                    argv = [
+                        'tar',
+                        '-C', os.path.join(dest, 'files', 'lib', 'debug'),
+                        '--transform', r's,^\(\./\)\?files\(/\|$\),,',
+                        '-xvf',
+                        os.path.join(self.depot, runtime.debug_tarball),
+                    ]
+                    logger.info('%r', argv)
+                    subprocess.run(argv, check=True)
+
+                    sysroot = os.path.join(
+                        self.depot, runtime.name + '_sysroot',
+                    )
+
+                    with suppress(FileNotFoundError):
+                        shutil.rmtree(sysroot)
+
+                    os.makedirs(os.path.join(sysroot, 'files'), exist_ok=True)
+                    argv = [
+                        'tar',
+                        '-C', os.path.join(sysroot, 'files'),
+                        '--exclude', 'dev/*',
+                        '-xvf',
+                        os.path.join(self.depot, runtime.sysroot_tarball),
+                    ]
+                    logger.info('%r', argv)
+                    subprocess.run(argv, check=True)
+                    argv = [
+                        'cp',
+                        '-al',
+                        os.path.join(dest, 'files', 'lib', 'debug'),
+                        os.path.join(sysroot, 'files', 'usr', 'lib'),
+                    ]
+                    logger.info('%r', argv)
+                    subprocess.run(argv, check=True)
 
             with open(
                 os.path.join(self.depot, 'run-in-' + runtime.name), 'w'
@@ -710,6 +785,13 @@ def main() -> None:
             'Get the steam-runtime.tar.xz from the same place as '
             'pressure-vessel and unpack it into the given PATH, '
             'for use in regression testing.'
+        )
+    )
+    parser.add_argument(
+        '--unpack-runtimes', action='store_true', default=False,
+        help=(
+            "Unpack the runtimes into the --depot, for use with "
+            "pressure-vessel's tests/containers.py."
         )
     )
     parser.add_argument(

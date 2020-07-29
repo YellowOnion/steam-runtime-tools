@@ -10,10 +10,12 @@
 /depot/scout
 /depot/scout_*-0.20*.*/
 /depot/scout_0.20*.*/
+/depot/scout_sdk/
 /depot/scout_sysroot/
 /depot/soldier/
 /depot/soldier_*-0.20*.*/
 /depot/soldier_0.20*.*/
+/depot/soldier_sdk/
 /depot/soldier_sysroot/
 /depot/steam-runtime/
 /local/

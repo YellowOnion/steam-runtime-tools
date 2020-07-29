@@ -1,3 +1,4 @@
+/.cache/
 /depot/.ref
 /depot/com.valvesoftware.SteamRuntime.*-buildid.txt
 /depot/com.valvesoftware.SteamRuntime.*-debug.tar.gz

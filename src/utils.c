@@ -449,6 +449,24 @@ pv_rm_rf (const char *directory)
   return TRUE;
 }
 
+gboolean
+pv_boolean_environment (const gchar *name,
+                        gboolean def)
+{
+  const gchar *value = g_getenv (name);
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRUE;
+
+  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
+    return FALSE;
+
+  if (value != NULL)
+    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
+
+  return def;
+}
+
 /**
  * pv_divert_stdout_to_stderr:
  * @error: Used to raise an error on failure

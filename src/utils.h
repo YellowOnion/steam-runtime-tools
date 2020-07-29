@@ -51,4 +51,7 @@ gboolean pv_cheap_tree_copy (const char *source_root,
 
 gboolean pv_rm_rf (const char *directory);
 
+gboolean pv_boolean_environment (const gchar *name,
+                                 gboolean def);
+
 FILE *pv_divert_stdout_to_stderr (GError **error);

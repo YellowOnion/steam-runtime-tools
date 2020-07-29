@@ -696,24 +696,6 @@ static GOptionEntry options[] =
   { NULL }
 };
 
-static gboolean
-boolean_environment (const gchar *name,
-                     gboolean def)
-{
-  const gchar *value = g_getenv (name);
-
-  if (g_strcmp0 (value, "1") == 0)
-    return TRUE;
-
-  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
-    return FALSE;
-
-  if (value != NULL)
-    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
-
-  return def;
-}
-
 static Tristate
 tristate_environment (const gchar *name)
 {
@@ -789,7 +771,7 @@ main (int argc,
     }
 
   /* Set defaults */
-  opt_batch = boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+  opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
 
   opt_freedesktop_app_id = g_strdup (g_getenv ("PRESSURE_VESSEL_FDO_APP_ID"));
 
@@ -801,15 +783,15 @@ main (int argc,
   if (opt_home != NULL && opt_home[0] == '\0')
     g_clear_pointer (&opt_home, g_free);
 
-  opt_remove_game_overlay = boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
-                                                 FALSE);
+  opt_remove_game_overlay = pv_boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
+                                                    FALSE);
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
-  opt_gc_runtimes = boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
-  opt_generate_locales = boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
-  opt_host_graphics = boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
-                                           TRUE);
-  opt_share_pid = boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
-  opt_verbose = boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
+  opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
+  opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
+  opt_host_graphics = pv_boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
+                                              TRUE);
+  opt_share_pid = pv_boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
+  opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
                      g_getenv ("PRESSURE_VESSEL_SHELL"), NULL, error))

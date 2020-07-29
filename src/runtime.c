@@ -1686,8 +1686,8 @@ pv_runtime_take_from_host (PvRuntime *self,
             }
           else
             {
-              if (!(g_file_test (dest, G_FILE_TEST_EXISTS) &&
-                    g_file_test (dest, G_FILE_TEST_IS_DIR)))
+              if (g_file_test (dest, G_FILE_TEST_IS_DIR) ||
+                  !g_file_test (dest, G_FILE_TEST_EXISTS))
                 {
                   g_warning ("Not mounting \"%s\" over directory or "
                              "nonexistent path \"%s\"",

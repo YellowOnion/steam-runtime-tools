@@ -1403,6 +1403,18 @@ bind_runtime (PvRuntime *self,
                           "--symlink", "../run", "/var/run",
                           NULL);
 
+  /* https://github.com/flatpak/flatpak/pull/3733 */
+  if (g_file_test ("/etc/os-release", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--ro-bind", "/etc/os-release",
+                            "/run/host/os-release",
+                            NULL);
+  else if (g_file_test ("/usr/lib/os-release", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--ro-bind", "/usr/lib/os-release",
+                            "/run/host/os-release",
+                            NULL);
+
   if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
     return FALSE;
 

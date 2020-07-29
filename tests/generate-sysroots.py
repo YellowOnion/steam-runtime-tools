@@ -253,8 +253,12 @@ BUG_REPORT_URL="https://bugs.debian.org/"
 with open('debian10/run/systemd/container', 'w') as writer:
     writer.write('whatever\n')
 
-with open('debian-unstable/etc/os-release', 'w') as writer:
-    writer.write('''\
+for name in (
+    'debian-unstable/etc/os-release',
+    'flatpak-example/run/host/os-release',
+):
+    with open(name, 'w') as writer:
+        writer.write('''\
 PRETTY_NAME="Debian GNU/Linux bullseye/sid"
 NAME="Debian GNU/Linux"
 ID=debian

@@ -1344,12 +1344,13 @@ static void
 os_debian_unstable (Fixture *f,
                     gconstpointer context)
 {
+  const char *sysroot_name = context;
   SrtSystemInfo *info;
   gchar **strv;
   gchar *sysroot;
   gchar *s;
 
-  sysroot = g_build_filename (f->sysroots, "debian-unstable", NULL);
+  sysroot = g_build_filename (f->sysroots, sysroot_name, NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
@@ -3231,7 +3232,11 @@ main (int argc,
 
   g_test_add ("/system-info/os/debian10", Fixture, NULL,
               setup, os_debian10, teardown);
-  g_test_add ("/system-info/os/debian-unstable", Fixture, NULL,
+  g_test_add ("/system-info/os/debian-unstable", Fixture,
+              "debian-unstable",
+              setup, os_debian_unstable, teardown);
+  g_test_add ("/system-info/os/flatpak-on-debian-unstable", Fixture,
+              "flatpak-example/run/host",
               setup, os_debian_unstable, teardown);
   g_test_add ("/system-info/os/steamrt", Fixture, NULL,
               setup, os_steamrt, teardown);

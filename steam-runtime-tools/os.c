@@ -48,10 +48,17 @@ _srt_os_release_init (SrtOsRelease *self)
   self->populated = FALSE;
 }
 
-static const char * const os_release_paths[] =
+static const struct
 {
-  "/etc/os-release",
-  "/usr/lib/os-release"
+  const char *path;
+  gboolean only_in_run_host;
+}
+os_release_paths[] =
+{
+  { "/etc/os-release", FALSE },
+  { "/usr/lib/os-release", FALSE },
+  /* https://github.com/flatpak/flatpak/pull/3733 */
+  { "/os-release", TRUE }
 };
 
 static void
@@ -150,22 +157,23 @@ _srt_os_release_populate (SrtOsRelease *self,
 
   for (i = 0; i < G_N_ELEMENTS (os_release_paths); i++)
     {
+      const char *path = os_release_paths[i].path;
+      gboolean only_in_run_host = os_release_paths[i].only_in_run_host;
       gchar *built_path = NULL;
       gchar *contents = NULL;
-      const char *path = NULL;
       char *beginning_of_line;
       GError *local_error = NULL;
       gsize len;
       gsize j;
 
+      if (only_in_run_host
+          && (sysroot == NULL || !g_str_has_suffix (sysroot, "/run/host")))
+        continue;
+
       if (sysroot != NULL)
         {
-          built_path = g_build_filename (sysroot, os_release_paths[i], NULL);
+          built_path = g_build_filename (sysroot, path, NULL);
           path = built_path;
-        }
-      else
-        {
-          path = os_release_paths[i];
         }
 
       if (!g_file_get_contents (path, &contents, &len, &local_error))

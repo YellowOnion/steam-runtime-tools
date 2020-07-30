@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <stdio.h>
+
 #include <glib.h>
 
 void pv_avoid_gvfs (void);
@@ -48,3 +50,8 @@ gboolean pv_cheap_tree_copy (const char *source_root,
                              GError **error);
 
 gboolean pv_rm_rf (const char *directory);
+
+gboolean pv_boolean_environment (const gchar *name,
+                                 gboolean def);
+
+FILE *pv_divert_stdout_to_stderr (GError **error);

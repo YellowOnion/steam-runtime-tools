@@ -35,6 +35,12 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
+static void
+child_setup_cb (gpointer user_data)
+{
+  flatpak_close_fds_workaround (3);
+}
+
 /**
  * pv_avoid_gvfs:
  *
@@ -228,11 +234,14 @@ pv_capture_output (const char * const * argv,
 
   g_debug ("run:%s", command->str);
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) argv,
                      NULL,  /* env */
-                     G_SPAWN_SEARCH_PATH,
-                     NULL, NULL,    /* child setup */
+                     (G_SPAWN_SEARCH_PATH |
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                     child_setup_cb, NULL,
                      &output,
                      &errors,
                      &wait_status,
@@ -438,4 +447,79 @@ pv_rm_rf (const char *directory)
     return FALSE;
 
   return TRUE;
+}
+
+gboolean
+pv_boolean_environment (const gchar *name,
+                        gboolean def)
+{
+  const gchar *value = g_getenv (name);
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRUE;
+
+  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
+    return FALSE;
+
+  if (value != NULL)
+    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
+
+  return def;
+}
+
+/**
+ * pv_divert_stdout_to_stderr:
+ * @error: Used to raise an error on failure
+ *
+ * Duplicate file descriptors so that functions that would write to
+ * `stdout` instead write to a copy of the original `stderr`. Return
+ * a file handle that can be used to print structured output to the
+ * original `stdout`.
+ *
+ * Returns: (transfer full): A libc file handle for the original `stdout`,
+ *  or %NULL on error. Free with `fclose()`.
+ */
+FILE *
+pv_divert_stdout_to_stderr (GError **error)
+{
+  g_autoptr(FILE) original_stdout = NULL;
+  glnx_autofd int original_stdout_fd = -1;
+  int flags;
+
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* Duplicate the original stdout so that we still have a way to write
+   * machine-readable output. */
+  original_stdout_fd = dup (STDOUT_FILENO);
+
+  if (original_stdout_fd < 0)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to duplicate fd %d",
+                                         STDOUT_FILENO);
+
+  flags = fcntl (original_stdout_fd, F_GETFD, 0);
+
+  if (flags < 0)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to get flags of new fd");
+
+  fcntl (original_stdout_fd, F_SETFD, flags|FD_CLOEXEC);
+
+  /* If something like g_debug writes to stdout, make it come out of
+   * our original stderr. */
+  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to make fd %d a copy of fd %d",
+                                         STDOUT_FILENO, STDERR_FILENO);
+
+  original_stdout = fdopen (original_stdout_fd, "w");
+
+  if (original_stdout == NULL)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to create a stdio wrapper for fd %d",
+                                         original_stdout_fd);
+  else
+    original_stdout_fd = -1;    /* ownership taken, do not close */
+
+  return g_steal_pointer (&original_stdout);
 }

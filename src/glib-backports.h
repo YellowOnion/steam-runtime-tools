@@ -71,3 +71,8 @@ void my_g_ptr_array_insert (GPtrArray *arr,
 #if !GLIB_CHECK_VERSION (2, 42, 0)
 #define G_OPTION_FLAG_NONE 0
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 36, 0)
+#define g_dbus_address_escape_value my_g_dbus_address_escape_value
+gchar *my_g_dbus_address_escape_value (const gchar *string);
+#endif

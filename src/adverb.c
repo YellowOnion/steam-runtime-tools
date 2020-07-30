@@ -39,6 +39,7 @@
 #include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"
+#include "flatpak-utils-base-private.h"
 #include "utils.h"
 
 #ifndef PR_SET_CHILD_SUBREAPER
@@ -53,6 +54,30 @@ static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_wait = FALSE;
 static gboolean opt_write = FALSE;
+
+static void
+child_setup_cb (gpointer user_data)
+{
+  int *fd = user_data;
+
+  /* Put back the original stdout for the child process */
+  if (fd != NULL &&
+      dup2 (*fd, STDOUT_FILENO) != STDOUT_FILENO)
+    {
+      /* There's not much we can do about that: most error reporting
+       * is not async-signal-safe */
+      const char message[] =
+        "pressure-vessel-adverb: Unable to reinstate original stdout\n";
+
+      if (write (STDERR_FILENO, message, sizeof (message) - 1) < 0)
+        {
+          /* do nothing, how else would we report this? */
+        }
+    }
+
+  /* Make all other file descriptors close-on-exec */
+  flatpak_close_fds_workaround (3);
+}
 
 static gboolean
 opt_fd_cb (const char *name,
@@ -166,11 +191,13 @@ generate_locales (gchar **locpath_out,
     NULL
   };
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (gchar **) locale_gen_argv,
                      NULL,  /* environ */
-                     G_SPAWN_DEFAULT,
-                     NULL, NULL,    /* child setup */
+                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                     child_setup_cb, NULL,
                      &child_stdout,
                      &child_stderr,
                      &wait_status,
@@ -304,9 +331,10 @@ main (int argc,
   int wait_status = -1;
   g_autofree gchar *locales_temp_dir = NULL;
   g_auto(GStrv) my_environ = NULL;
+  g_autoptr(FILE) original_stdout = NULL;
+  int original_stdout_fd;
 
   setlocale (LC_ALL, "");
-  pv_avoid_gvfs ();
 
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
@@ -322,6 +350,8 @@ main (int argc,
       "Run COMMAND [ARG...] with a lock held, a subreaper, or similar.\n");
 
   g_option_context_add_main_entries (context, options, NULL);
+
+  opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     {
@@ -349,6 +379,16 @@ main (int argc,
     g_log_set_handler (G_LOG_DOMAIN,
                        G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
                        cli_log_func, (void *) g_get_prgname ());
+
+  original_stdout = pv_divert_stdout_to_stderr (error);
+
+  if (original_stdout == NULL)
+    {
+      ret = 1;
+      goto out;
+    }
+
+  pv_avoid_gvfs ();
 
   if (argc >= 2 && strcmp (argv[1], "--") == 0)
     {
@@ -380,6 +420,8 @@ main (int argc,
 
   if (opt_generate_locales)
     {
+      g_debug ("Making sure locales are available");
+
       /* If this fails, it is not fatal - carry on anyway */
       if (!generate_locales (&locales_temp_dir, error))
         {
@@ -388,17 +430,27 @@ main (int argc,
         }
       else if (locales_temp_dir != NULL)
         {
+          g_debug ("Generated locales in %s", locales_temp_dir);
           my_environ = g_environ_setenv (my_environ, "LOCPATH", locales_temp_dir, TRUE);
+        }
+      else
+        {
+          g_debug ("No locales were missing");
         }
     }
 
   g_debug ("Launching child process...");
+  fflush (stdout);
+  original_stdout_fd = fileno (original_stdout);
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_async (NULL,   /* working directory */
                       command_and_args,
                       my_environ,
-                      G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
-                      NULL, NULL,   /* child setup + user_data */
+                      (G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD |
+                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                      child_setup_cb, &original_stdout_fd,
                       &child_pid,
                       &local_error))
     {

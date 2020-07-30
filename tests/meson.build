@@ -39,6 +39,7 @@ tests = [
   'pyflakes.sh',
   'shellcheck.sh',
   'test-locale-gen.sh',
+  'utils.py',
 ]
 
 compiled_tests = [
@@ -106,6 +107,7 @@ endforeach
 helpers = [
   'cheap-copy',
   'elf-get-soname',
+  'helper',
 ]
 
 foreach helper : helpers

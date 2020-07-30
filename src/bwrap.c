@@ -45,8 +45,7 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
   g_autofree gchar *errors = NULL;
   guint i;
   g_autoptr(GString) command = g_string_new ("");
-  void (*child_setup) (gpointer) = NULL;
-  gpointer child_setup_data = NULL;
+  GArray *child_setup_data = NULL;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (bwrap->argv->len >= 2, FALSE);
@@ -69,18 +68,19 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
     }
 
   if (bwrap->fds != NULL && bwrap->fds->len > 0)
-    {
-      child_setup = flatpak_bwrap_child_setup_cb;
-      child_setup_data = bwrap->fds;
-    }
+    child_setup_data = bwrap->fds;
 
   g_debug ("run:%s", command->str);
 
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) bwrap->argv->pdata,
                      bwrap->envp,
-                     G_SPAWN_SEARCH_PATH,
-                     child_setup, child_setup_data,
+                     (G_SPAWN_SEARCH_PATH |
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                     flatpak_bwrap_child_setup_cb,
+                     child_setup_data,
                      &output,
                      &errors,
                      &exit_status,
@@ -105,6 +105,7 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
 /**
  * pv_bwrap_execve:
  * @bwrap: A #FlatpakBwrap on which flatpak_bwrap_finish() has been called
+ * @original_stdout: If > 0, `dup2()` this file descriptor onto stdout
  * @error: Used to raise an error on failure
  *
  * Attempt to replace the current process with the given bwrap command.
@@ -114,6 +115,7 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
  */
 gboolean
 pv_bwrap_execve (FlatpakBwrap *bwrap,
+                 int original_stdout,
                  GError **error)
 {
   int saved_errno;
@@ -127,6 +129,15 @@ pv_bwrap_execve (FlatpakBwrap *bwrap,
 
   if (bwrap->fds != NULL && bwrap->fds->len > 0)
     flatpak_bwrap_child_setup_cb (bwrap->fds);
+
+  fflush (stdout);
+  fflush (stderr);
+
+  if (original_stdout > 0 &&
+      dup2 (original_stdout, STDOUT_FILENO) != STDOUT_FILENO)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to make fd %d a copy of fd %d",
+                                    STDOUT_FILENO, original_stdout);
 
   execve (bwrap->argv->pdata[0],
           (char * const *) bwrap->argv->pdata,

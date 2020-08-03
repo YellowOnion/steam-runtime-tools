@@ -202,6 +202,7 @@ class TestLauncher(BaseTest):
 
     def test_socket(self) -> None:
         with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            need_terminate = True
             proc = subprocess.Popen(
                 self.launcher + [
                     '--socket', os.path.join(temp, 'socket'),
@@ -365,8 +366,23 @@ class TestLauncher(BaseTest):
                                 'Process %d did not exit' % pid
                             )
 
+                    conn.call_sync(
+                        None,
+                        LAUNCHER_PATH,
+                        LAUNCHER_IFACE,
+                        'Terminate',
+                        GLib.Variant('()', ()),
+                        GLib.VariantType('()'),
+                        Gio.DBusCallFlags.NONE,
+                        -1,
+                        None,
+                    )
+                    need_terminate = False
+
             finally:
-                proc.terminate()
+                if need_terminate:
+                    proc.terminate()
+
                 proc.wait()
                 self.assertEqual(proc.returncode, 0)
 

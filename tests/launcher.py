@@ -461,6 +461,41 @@ class TestLauncher(BaseTest):
             proc.wait()
             self.assertEqual(proc.returncode, 0)
 
+    def test_exit_on_readable(self, use_stdin=False) -> None:
+        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            if not use_stdin:
+                read_end, write_end = os.pipe2(os.O_CLOEXEC)
+                pass_fds = [read_end]
+                fd = read_end
+            else:
+                pass_fds = []
+                fd = 0
+                read_end = 0
+
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--socket', os.path.join(temp, 'socket'),
+                    '--exit-on-readable=%d' % fd,
+                ],
+                pass_fds=pass_fds,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            os.close(read_end)
+
+            if use_stdin:
+                proc.stdin.close()
+            else:
+                os.close(write_end)
+
+            proc.wait()
+            self.assertEqual(proc.returncode, 0)
+
+    def test_exit_on_stdin(self) -> None:
+        self.test_exit_on_readable(use_stdin=True)
+
     def tearDown(self) -> None:
         super().tearDown()
 

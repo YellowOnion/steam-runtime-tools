@@ -544,3 +544,34 @@ pv_async_signal_safe_error (const char *message,
 
   _exit (exit_status);
 }
+
+#define PROC_SYS_KERNEL_RANDOM_UUID "/proc/sys/kernel/random/uuid"
+
+/**
+ * pv_get_random_uuid:
+ * @error: Used to raise an error on failure
+ *
+ * Return a random UUID (RFC 4122 version 4) as a string.
+ * It is a 128-bit quantity, with 122 bits of entropy, and 6 fixed bits
+ * indicating the "variant" (type, 0b10) and "version" (subtype, 0b0100).
+ *
+ * Returns: (transfer full): A random UUID, or %NULL on error
+ */
+gchar *
+pv_get_random_uuid (GError **error)
+{
+  g_autofree gchar *contents = NULL;
+
+  if (!g_file_get_contents (PROC_SYS_KERNEL_RANDOM_UUID,
+                            &contents, NULL, error))
+    return NULL;
+
+  g_strchomp (contents);    /* delete trailing newline */
+
+  /* Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
+  if (strlen (contents) != 36)
+    return glnx_null_throw (error, "%s not in expected format",
+                            PROC_SYS_KERNEL_RANDOM_UUID);
+
+  return g_steal_pointer (&contents);
+}

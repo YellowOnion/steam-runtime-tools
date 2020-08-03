@@ -853,7 +853,103 @@ connect_to_signals (void)
   return g_unix_fd_add (sfd, G_IO_IN, signal_handler, NULL);
 }
 
+/*
+ * If @fd is `stdin`, make `stdin` point to /dev/null and return a
+ * new fd that is a duplicate of the original `stdin`, so that the
+ * `stdin` inherited by child processes will not collide with the fd
+ * we are using for some other purpose.
+ */
+static int
+avoid_stdin (int fd,
+             GError **error)
+{
+  g_return_val_if_fail (fd >= 0, FALSE);
+
+  if (fd == STDIN_FILENO)
+    {
+      glnx_autofd int old_stdin = -1;
+      glnx_autofd int new_stdin = -1;
+      int fd_flags;
+
+      old_stdin = dup (STDIN_FILENO);
+
+      if (old_stdin < 0)
+        {
+          glnx_throw_errno_prefix (error,
+                                   "Unable to duplicate standard input");
+          return -1;
+        }
+
+      fd_flags = fcntl (old_stdin, F_GETFD);
+
+      if (fd_flags < 0 ||
+          fcntl (old_stdin, F_SETFD, fd_flags | FD_CLOEXEC) != 0)
+        {
+          glnx_throw_errno_prefix (error, "Unable to set flags on fd %d",
+                                   old_stdin);
+          return -1;
+        }
+
+      new_stdin = open ("/dev/null", O_RDONLY | O_CLOEXEC);
+
+      if (new_stdin < 0)
+        {
+          glnx_throw_errno_prefix (error, "Unable to open /dev/null");
+          return -1;
+        }
+
+      if (dup2 (new_stdin, STDIN_FILENO) != STDIN_FILENO)
+        {
+          glnx_throw_errno_prefix (error,
+                                   "Unable to make stdin point to /dev/null");
+          return -1;
+        }
+
+      fd = glnx_steal_fd (&old_stdin);
+    }
+
+  return fd;
+}
+
+static gboolean
+exit_on_readable_cb (int fd,
+                     GIOCondition condition,
+                     gpointer user_data)
+{
+  guint *id_p = user_data;
+
+  terminate_children (SIGTERM);
+  g_main_loop_quit (main_loop);
+  *id_p = 0;
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean
+set_up_exit_on_readable (int fd,
+                         guint *id_p,
+                         GError **error)
+{
+  g_return_val_if_fail (fd >= 0, FALSE);
+  g_return_val_if_fail (id_p != NULL, FALSE);
+  g_return_val_if_fail (*id_p == 0, FALSE);
+
+  if (fd == STDOUT_FILENO || fd == STDERR_FILENO)
+    {
+      return glnx_throw (error,
+                         "--exit-on-readable fd cannot be stdout or stderr");
+    }
+
+  fd = avoid_stdin (fd, error);
+
+  if (fd < 0)
+    return FALSE;
+
+  *id_p = g_unix_fd_add (fd, G_IO_IN|G_IO_ERR|G_IO_HUP, exit_on_readable_cb, id_p);
+  return TRUE;
+}
+
 static gchar *opt_bus_name = NULL;
+static gint opt_exit_on_readable_fd = -1;
 static gboolean opt_replace = FALSE;
 static gchar *opt_socket = NULL;
 static gchar *opt_socket_directory = NULL;
@@ -866,6 +962,11 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_bus_name,
     "Use this well-known name on the D-Bus session bus.",
     "NAME" },
+  { "exit-on-readable", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_exit_on_readable_fd,
+    "Exit when data is available for reading or when end-of-file is "
+    "reached on this fd, usually 0 for stdin.",
+    "FD" },
   { "replace", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_replace,
     "Replace a previous instance with the same bus name. "
@@ -907,6 +1008,7 @@ main (int argc,
   g_autoptr(AutoDBusServer) server = NULL;
   g_autoptr(GOptionContext) context = NULL;
   guint signals_id = 0;
+  guint exit_on_readable_id = 0;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   gsize i;
@@ -955,6 +1057,16 @@ main (int argc,
     {
       ret = EX_OSERR;
       goto out;
+    }
+
+  if (opt_exit_on_readable_fd >= 0)
+    {
+      if (!set_up_exit_on_readable (opt_exit_on_readable_fd,
+                                    &exit_on_readable_id, error))
+        {
+          ret = EX_OSERR;
+          goto out;
+        }
     }
 
   /* We have to block the signals we want to forward before we start any
@@ -1153,6 +1265,9 @@ main (int argc,
 out:
   if (local_error != NULL)
     g_warning ("%s", local_error->message);
+
+  if (exit_on_readable_id > 0)
+    g_source_remove (exit_on_readable_id);
 
   if (signals_id > 0)
     g_source_remove (signals_id);

@@ -47,6 +47,11 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 :   Connect to the well-known D-Bus session bus, request the given name
     and listen for commands there.
 
+**--exit-on-readable** *FD*
+:   Exit when file descriptor *FD* (typically 0, for **stdin**) becomes
+    readable, meaning either data is available or end-of-file has been
+    reached.
+
 **--replace**
 :   When used with **--bus-name**, allow other
     **pressure-vessel-launcher** processes to take over the bus name,
@@ -196,19 +201,29 @@ Listen on the session bus, and run two commands, and exit:
     kill -TERM "$launcher_pid"
     wait "$launcher_pid"
 
-Listen on a socket in a temporary directory:
+Listen on a socket in a temporary directory, and use `--exit-with-fd`.
+Production code would be more likely to invoke **pressure-vessel-launch**
+from C, C++ or Python code rather than a shell script, and use pipes
+instead of fifos.
 
     tmpdir="$(mktemp -d)"
-    mkfifo "${tmpdir}/fifo"
+    mkfifo "${tmpdir}/exit-fifo"
+    mkfifo "${tmpdir}/ready-fifo"
     pressure-vessel-wrap \
         --filesystem="${tmpdir}" \
         ... \
         -- \
         pressure-vessel-launcher \
-            --socket="${tmpdir}/launcher" > "${tmpdir}/fifo" &
+            --exit-on-readable=0 \
+            --socket="${tmpdir}/launcher" \
+        < "${tmpdir}/exit-fifo" \
+        > "${tmpdir}/ready-fifo" \
+        &
     launcher_pid="$!"
+    sleep infinity > "${tmpdir}/exit-fifo" &
+    sleep_pid="$!"
     # Wait for EOF so we know the socket is available
-    cat "${tmpdir}/fifo" > /dev/null
+    cat "${tmpdir}/ready-fifo" > /dev/null
 
     pressure-vessel-launch \
         --socket="${tmpdir}/launcher" \
@@ -218,9 +233,17 @@ Listen on a socket in a temporary directory:
         --socket="${tmpdir}/launcher" \
         -- \
         id
+    pressure-vessel-launch \
+        --socket="${tmpdir}/launcher" \
+        -- \
+        sleep infinity &
+    launch_sleep_pid="$!"
 
-    kill -TERM "$launcher_pid"
-    wait "$launcher_pid"
+    # Make pressure-vessel-launcher's stdin become readable, which
+    # will make it exit due to --exit-on-readable
+    kill "$sleep_pid"
+    wait "$launcher_pid" || echo "launcher exit status: $?"
+    wait "$launch_sleep_pid" || echo "launched process exit status: $?"
     rm -fr "$tmpdir"
 
 <!-- vim:set sw=4 sts=4 et: -->

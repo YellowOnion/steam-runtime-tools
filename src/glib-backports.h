@@ -76,3 +76,17 @@ void my_g_ptr_array_insert (GPtrArray *arr,
 #define g_dbus_address_escape_value my_g_dbus_address_escape_value
 gchar *my_g_dbus_address_escape_value (const gchar *string);
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 36, 0)
+#define g_unix_fd_add(fd, cond, cb, ud) \
+  my_g_unix_fd_add_full (G_PRIORITY_DEFAULT, fd, cond, cb, ud, NULL)
+#define g_unix_fd_add_full(prio, fd, cond, cb, ud, destroy) \
+  my_g_unix_fd_add_full (prio, fd, cond, cb, ud, destroy)
+typedef gboolean (*MyGUnixFDSourceFunc) (gint, GIOCondition, gpointer);
+guint my_g_unix_fd_add_full (int priority,
+                             int fd,
+                             GIOCondition condition,
+                             MyGUnixFDSourceFunc func,
+                             gpointer user_data,
+                             GDestroyNotify destroy);
+#endif

@@ -19,6 +19,11 @@ pressure-vessel-launch - client to launch processes in a container
 [**--**]
 *COMMAND* [*ARGUMENTS...*]
 
+**pressure-vessel-launch**
+[**--verbose**]
+{**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
+**--terminate**
+
 # DESCRIPTION
 
 **pressure-vessel-launch** connects to an `AF_UNIX` socket established
@@ -70,6 +75,9 @@ as a subprocess of **pressure-vessel-launcher**.
     (standard input, standard output and standard error) are always
     forwarded.
 
+**--terminate**
+:   Instead of running a *COMMAND*, terminate the Launcher server.
+
 **--verbose**
 :   Be more verbose.
 
@@ -86,7 +94,8 @@ on standard error.
 The exit status is similar to **env**(1):
 
 0
-:   The *COMMAND* exited successfully with status 0.
+:   The *COMMAND* exited successfully with status 0,
+    or **--terminate** succeeded.
 
 125
 :   Invalid arguments were given, or **pressure-vessel-launch** failed

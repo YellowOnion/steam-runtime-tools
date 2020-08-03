@@ -292,6 +292,7 @@ static gchar *opt_dbus_address = NULL;
 static gchar *opt_directory = NULL;
 static gchar *opt_socket = NULL;
 static gchar **opt_envs = NULL;
+static gboolean opt_terminate = FALSE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 
@@ -323,6 +324,9 @@ static const GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Connect to a Launcher server listening on this AF_UNIX socket.",
     "ABSPATH|@ABSTRACT" },
+  { "terminate", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_terminate,
+    "Terminate the Launcher server.", NULL },
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
@@ -408,17 +412,20 @@ main (int argc,
       goto out;
     }
 
-  /* We have to block the signals we want to forward before we start any
-   * other thread, and in particular the GDBus worker thread, because
-   * the signal mask is per-thread. We need all threads to have the same
-   * mask, otherwise a thread that doesn't have the mask will receive
-   * process-directed signals, causing the whole process to exit. */
-  signal_source = forward_signals ();
-
-  if (signal_source == 0)
+  if (!opt_terminate)
     {
-      launch_exit_status = LAUNCH_EX_FAILED;
-      goto out;
+      /* We have to block the signals we want to forward before we start any
+       * other thread, and in particular the GDBus worker thread, because
+       * the signal mask is per-thread. We need all threads to have the same
+       * mask, otherwise a thread that doesn't have the mask will receive
+       * process-directed signals, causing the whole process to exit. */
+      signal_source = forward_signals ();
+
+      if (signal_source == 0)
+        {
+          launch_exit_status = LAUNCH_EX_FAILED;
+          goto out;
+        }
     }
 
   pv_avoid_gvfs ();
@@ -435,7 +442,15 @@ main (int argc,
       argc--;
     }
 
-  if (argc < 2)
+  if (opt_terminate)
+    {
+      if (argc != 1)
+        {
+          glnx_throw (error, "--terminate cannot be combined with a COMMAND");
+          goto out;
+        }
+    }
+  else if (argc < 2)
     {
       glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
                   g_get_prgname ());
@@ -533,6 +548,25 @@ main (int argc,
     }
 
   g_assert (bus_or_peer_connection != NULL);
+
+  if (opt_terminate)
+    {
+      reply = g_dbus_connection_call_sync (bus_or_peer_connection,
+                                           service_bus_name,
+                                           service_obj_path,
+                                           service_iface,
+                                           "Terminate",
+                                           g_variant_new ("()"),
+                                           G_VARIANT_TYPE ("()"),
+                                           G_DBUS_CALL_FLAGS_NONE,
+                                           -1,
+                                           NULL, error);
+
+      if (local_error != NULL)
+        g_dbus_error_strip_remote_error (local_error);
+
+      goto out;
+    }
 
   g_dbus_connection_signal_subscribe (bus_or_peer_connection,
                                       service_bus_name,   /* NULL if p2p */

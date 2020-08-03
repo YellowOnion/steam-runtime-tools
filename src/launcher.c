@@ -418,6 +418,16 @@ handle_send_signal (PvLauncher1           *object,
   return TRUE;
 }
 
+static gboolean
+handle_terminate (PvLauncher1           *object,
+                  GDBusMethodInvocation *invocation)
+{
+  terminate_children (SIGTERM);
+  pv_launcher1_complete_terminate (object, invocation);
+  unref_skeleton_in_timeout ();
+  return TRUE;    /* handled */
+}
+
 static void
 name_owner_changed (GDBusConnection *connection,
                     const gchar     *sender_name,
@@ -480,6 +490,8 @@ export_launcher (GDBusConnection *connection,
                         G_CALLBACK (handle_launch), NULL);
       g_signal_connect (launcher, "handle-send-signal",
                         G_CALLBACK (handle_send_signal), NULL);
+      g_signal_connect (launcher, "handle-terminate",
+                        G_CALLBACK (handle_terminate), NULL);
     }
 
   if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (launcher),

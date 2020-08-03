@@ -138,6 +138,15 @@
       <arg type='u' name='wait_status'/>
     </signal>
 
+    <!--
+        Terminate:
+
+        Stop listening for Launch and SendSignal requests, terminate
+        child processes if any, and shut down gracefully.
+    -->
+    <method name="Terminate">
+    </method>
+
   </interface>
 
 </node>

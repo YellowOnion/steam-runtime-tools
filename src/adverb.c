@@ -450,6 +450,9 @@ main (int argc,
       goto out;
     }
 
+  /* If the child writes to stdout and closes it, don't interfere */
+  g_clear_pointer (&original_stdout, fclose);
+
   while (1)
     {
       pid_t died = wait (&wait_status);

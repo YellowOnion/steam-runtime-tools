@@ -31,6 +31,7 @@ test_env.set(
 test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 tests = [
+  'adverb.py',
   'cheap-copy.py',
   'containers.py',
   'invocation.py',

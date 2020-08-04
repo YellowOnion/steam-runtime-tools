@@ -440,7 +440,8 @@ main (int argc,
                       command_and_args,
                       my_environ,
                       (G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD |
-                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN |
+                       G_SPAWN_CHILD_INHERITS_STDIN),
                       child_setup_cb, &original_stdout_fd,
                       &child_pid,
                       &local_error))

@@ -40,6 +40,7 @@
 
 #include "bwrap-lock.h"
 #include "flatpak-utils-base-private.h"
+#include "launcher.h"
 #include "utils.h"
 
 #ifndef PR_SET_CHILD_SUBREAPER
@@ -63,17 +64,7 @@ child_setup_cb (gpointer user_data)
   /* Put back the original stdout for the child process */
   if (fd != NULL &&
       dup2 (*fd, STDOUT_FILENO) != STDOUT_FILENO)
-    {
-      /* There's not much we can do about that: most error reporting
-       * is not async-signal-safe */
-      const char message[] =
-        "pressure-vessel-adverb: Unable to reinstate original stdout\n";
-
-      if (write (STDERR_FILENO, message, sizeof (message) - 1) < 0)
-        {
-          /* do nothing, how else would we report this? */
-        }
-    }
+    pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
 
   /* Make all other file descriptors close-on-exec */
   flatpak_close_fds_workaround (3);

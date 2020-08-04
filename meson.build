@@ -32,6 +32,8 @@ project(
 )
 
 gnome = import('gnome')
+
+dbus_run_session = find_program('dbus-run-session', required : false)
 prove = find_program('prove', required : false)
 sh = find_program('sh', required : true)
 

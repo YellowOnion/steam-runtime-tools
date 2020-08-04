@@ -95,12 +95,21 @@ foreach test_name : tests
   endif
 
   if prove.found()
-    test(
-      test_name, prove,
-      args : test_args,
-      env : test_env,
-      timeout : timeout,
-    )
+    if dbus_run_session.found()
+      test(
+        test_name, dbus_run_session,
+        args : ['--', 'prove'] + test_args,
+        env : test_env,
+        timeout : timeout,
+      )
+    else
+      test(
+        test_name, prove,
+        args : test_args,
+        env : test_env,
+        timeout : timeout,
+      )
+    endif
   endif
 endforeach
 

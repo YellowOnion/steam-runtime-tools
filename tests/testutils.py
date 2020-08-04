@@ -123,6 +123,29 @@ class BaseTest(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
 
+        if 'PRESSURE_VESSEL_TEST_MEMCHECK' in os.environ:
+            self.command_prefix = [
+                'valgrind',
+                '--child-silent-after-fork=yes',
+                '--gen-suppressions=all',
+                '--leak-check=full',
+                '--leak-resolution=high',
+                '--num-callers=20',
+                '--tool=memcheck',
+                '--verbose',
+            ]
+
+            for supp in (
+                os.path.join(self.top_srcdir, 'tests', 'pressure-vessel.supp'),
+                '/usr/share/glib-2.0/valgrind/glib.supp',
+            ):
+                if os.path.isfile(supp):
+                    self.command_prefix.append(
+                        '--suppressions=' + supp,
+                    )
+        else:
+            self.command_prefix = []
+
     def tearDown(self) -> None:
         pass
 

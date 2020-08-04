@@ -1,0 +1,34 @@
+{
+	Class initialization
+	Memcheck:Leak
+	match-leak-kinds:possible
+	...
+	fun:g_type_class_ref
+}
+{
+	GDBus thread
+	Memcheck:Leak
+	match-leak-kinds:possible
+	...
+	fun:pthread_create@*
+	...
+	fun:g_bus_get_sync
+}
+{
+	Thread stack
+	Memcheck:Leak
+	match-leak-kinds:possible
+	...
+	fun:allocate_stack
+	fun:pthread_create@*
+}
+{
+	GObject library init
+	Memcheck:Leak
+	match-leak-kinds:possible
+	...
+	obj:/usr/lib*/libgobject-2.0.so.0.*
+	...
+	fun:call_init
+	fun:_dl_init
+}

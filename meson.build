@@ -46,6 +46,15 @@ else
   python = find_program(get_option('python'), required : true)
 endif
 
+if get_option('fully_featured_python') == ''
+  full_python = find_program('python3', required : false)
+else
+  full_python = find_program(
+    get_option('fully_featured_python'),
+    required : false,
+  )
+endif
+
 version = get_option('version')
 if version == 'auto'
   git_version_gen = run_command(

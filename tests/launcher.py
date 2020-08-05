@@ -5,6 +5,7 @@
 
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -56,6 +57,9 @@ class TestLauncher(BaseTest):
 
     def test_socket_directory(self) -> None:
         with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            printf_symlink = os.path.join(temp, 'printf=symlink')
+            os.symlink(shutil.which('printf'), printf_symlink)
+
             proc = subprocess.Popen(
                 [
                     'env',
@@ -132,7 +136,8 @@ class TestLauncher(BaseTest):
 
                 completed = run_subprocess(
                     [
-                        'env', 'PV_TEST_VAR=not-inherited',
+                        'env',
+                        'PV_TEST_VAR=not-inherited',
                     ] + self.launch + [
                         '--socket', socket,
                         '--',
@@ -143,6 +148,74 @@ class TestLauncher(BaseTest):
                     stderr=2,
                 )
                 self.assertEqual(completed.stdout, b'from-launcher')
+
+                completed = run_subprocess(
+                    [
+                        'env',
+                        '-u', 'PV_TEST_VAR',
+                        'PV_TEST_VAR_ONE=one',
+                        'PV_TEST_VAR_TWO=two',
+                    ] + self.launch + [
+                        '--pass-env=PV_TEST_VAR',
+                        '--pass-env-matching=PV_TEST_VAR_*',
+                        '--socket', socket,
+                        '--',
+                        'sh', '-euc',
+                        'printf \'%s\' '
+                        '"'
+                        '${PV_TEST_VAR-cleared}'
+                        '${PV_TEST_VAR_ONE}'
+                        '${PV_TEST_VAR_TWO}'
+                        '"',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'clearedonetwo')
+
+                completed = run_subprocess(
+                    [
+                        'env', '-u', 'PV_TEST_VAR',
+                    ] + self.launch + [
+                        '--env=PV_TEST_VAR=nope',
+                        '--pass-env=PV_TEST_VAR',
+                        '--socket', socket,
+                        '--',
+                        'sh', '-euc', 'printf \'%s\' "${PV_TEST_VAR-cleared}"',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'cleared')
+
+                completed = run_subprocess(
+                    self.launch + [
+                        '--env=PV_TEST_VAR=nope',
+                        '--unset-env=PV_TEST_VAR',
+                        '--socket', socket,
+                        '--',
+                        'sh', '-euc', 'printf \'%s\' "${PV_TEST_VAR-cleared}"',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'cleared')
+
+                completed = run_subprocess(
+                    self.launch + [
+                        '--unset-env=PV_TEST_VAR',
+                        '--socket', socket,
+                        '--',
+                        printf_symlink, 'hello',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'hello')
 
                 completed = run_subprocess(
                     self.launch + [
@@ -158,7 +231,12 @@ class TestLauncher(BaseTest):
                 self.assertEqual(completed.stdout, b'cleared')
 
                 completed = run_subprocess(
-                    self.launch + [
+                    [
+                        'env',
+                        'PV_TEST_VAR=not-inherited',
+                    ] + self.launch + [
+                        '--pass-env=PV_TEST_VAR',
+                        '--env=PV_TEST_VAR=nope',
                         '--env=PV_TEST_VAR=overridden',
                         '--socket', socket,
                         '--',

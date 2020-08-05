@@ -1,3 +1,46 @@
+pressure-vessel (0.20200805.0) scout; urgency=medium
+
+  [ Simon McVittie ]
+  * wrap: Bind-mount /run/host/os-release if available.
+    Recent versions of Flatpak and systemd-nspawn can mount the host's
+    os-release at /run/host/os-release, even if the rest of the host's
+    /etc and /usr are not exposed to the container. For feature parity
+    we should try to do the same.
+  * runtime: Fix logic for whether to mount over an executable.
+    When using a scout sysroot with a newer-than-scout host, we were not
+    overwriting locale(1) and localedef(1) with the host copy, causing
+    mismatches.
+    Resolves: T22877
+  * wrap: Add a minimal implementation of --filesystem.
+    This is like `flatpak run --filesystem`, but for now much, much simpler;
+    callers are responsible for not giving us paths that will be a problem.
+    However, it's enough to bind-mount subdirectories of /tmp, which is
+    what we need if we want to use them as IPC rendezvous points.
+  * launcher: Add ability to run multiple commands in one container.
+    See the new pressure-vessel-launcher(1) man page for details.
+    We need this for Proton games, where running a game takes several
+    steps. At the moment each step is its own container, which means
+    they can't share locks, IPC sockets and other state.
+    Partially resolves: T22770
+  * all: Consistently work around glib!490 like Flatpak does
+  * adverb, wrap: Don't interfere with child process's stdin, stdout
+  * adverb, wrap: Pass verbosity down to adverb
+  * adverb, wrap: Share pv_boolean_environment()
+
+  [ Ludovico de Nittis ]
+  * gitlab-ci: Re-enable artifacts upload.
+    By increasing the CI upload limit we should be able to store the
+    pressure-vessel artifacts.
+  * Move locale generation to pressure-vessel-adverb
+    pressure-vessel-with-lock has been renamed to pressure-vessel-adverb
+    because now it has more capabilities than just taking a lock.
+    This change should help the environments that are not able to normally
+    run `bwrap`, like if we are in a Docker container or in a Flatpak app.
+  * Test that --generate-locales is in the bwrap arguments when expected
+  * tests/containers.py: Remove duplicated code
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 05 Aug 2020 18:51:16 +0100
+
 pressure-vessel (0.20200709.0) scout; urgency=medium
 
   * d/control: Fix wrong dependencies.

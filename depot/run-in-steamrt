@@ -202,11 +202,13 @@ check_ok_for_filename NAME "$name"
 check_ok_for_filename RUNTIME "$runtime"
 check_ok_for_filename SUITE "$suite"
 
-adverb="$here/pressure-vessel/bin/pressure-vessel-adverb"
+pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
+
+adverb="$pressure_vessel/bin/pressure-vessel-adverb"
 
 # Fallback to the old name
 if ! [ -x "$adverb" ]; then
-    adverb="$here/pressure-vessel/bin/pressure-vessel-with-lock"
+    adverb="$pressure_vessel/bin/pressure-vessel-with-lock"
 fi
 
 if [ -n "$deploy" ]; then
@@ -254,6 +256,6 @@ fi
 
 export PRESSURE_VESSEL_RUNTIME_BASE="${here}"
 export PRESSURE_VESSEL_RUNTIME="${name}/files"
-exec "$here/pressure-vessel/bin/pressure-vessel-unruntime" "$@"
+exec "$pressure_vessel/bin/pressure-vessel-unruntime" "$@"
 
 # vim:set sw=4 sts=4 et:

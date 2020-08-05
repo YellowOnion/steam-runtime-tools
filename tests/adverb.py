@@ -83,6 +83,30 @@ class TestAdverb(BaseTest):
                 (128 + signal.SIGTERM, -signal.SIGTERM),
             )
 
+    def test_fd_passthrough(self) -> None:
+        read_end, write_end = os.pipe2(os.O_CLOEXEC)
+
+        proc = subprocess.Popen(
+            self.adverb + [
+                '--pass-fd=%d' % write_end,
+                '--',
+                'sh', '-euc', 'echo hello >&%d' % write_end,
+            ],
+            pass_fds=[write_end],
+            stdout=2,
+            stderr=2,
+            universal_newlines=True,
+        )
+
+        try:
+            os.close(write_end)
+
+            with os.fdopen(read_end, 'rb') as reader:
+                self.assertEqual(reader.read(), b'hello\n')
+        finally:
+            proc.wait()
+            self.assertEqual(proc.returncode, 0)
+
     def tearDown(self) -> None:
         super().tearDown()
 

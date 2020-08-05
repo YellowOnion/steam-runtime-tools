@@ -55,3 +55,8 @@ gboolean pv_boolean_environment (const gchar *name,
                                  gboolean def);
 
 FILE *pv_divert_stdout_to_stderr (GError **error);
+
+void pv_async_signal_safe_error (const char *message,
+                                 int exit_status) G_GNUC_NORETURN;
+
+gchar *pv_get_random_uuid (GError **error);

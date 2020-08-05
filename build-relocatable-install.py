@@ -109,6 +109,8 @@ SCRIPTS = [
 ]
 EXECUTABLES = [
     'pressure-vessel-adverb',
+    'pressure-vessel-launch',
+    'pressure-vessel-launcher',
     'pressure-vessel-try-setlocale',
     'pressure-vessel-wrap',
 ]

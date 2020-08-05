@@ -27,6 +27,13 @@ headers = [
   'runtime.h',
 ]
 
+launcher1 = gnome.gdbus_codegen(
+  'launcher1',
+  sources : 'com.steampowered.PressureVessel.Launcher1.xml',
+  interface_prefix : 'com.steampowered.PressureVessel.',
+  namespace : 'Pv',
+)
+
 enums = gnome.mkenums_simple(
   'enumtypes',
   sources : headers,
@@ -59,6 +66,17 @@ pressure_vessel_utils = static_library(
   install: false,
 )
 
+launcher_codegen = static_library(
+  'pressure-vessel-launcher-codegen',
+  sources : launcher1,
+  dependencies : [
+    gio_unix,
+  ],
+  c_args : silence_gdbus_codegen_warnings,
+  include_directories : project_include_dirs,
+  install: false,
+)
+
 executable(
   'pressure-vessel-adverb',
   sources : [
@@ -69,6 +87,47 @@ executable(
     libglnx.get_variable('libglnx_dep'),
   ],
   link_with : [
+    pressure_vessel_utils,
+  ],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : get_option('bindir'),
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
+)
+
+executable(
+  'pressure-vessel-launch',
+  sources: [
+    'launch.c',
+  ],
+  dependencies : [
+    threads,
+    gio_unix,
+    libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    pressure_vessel_utils,
+  ],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : get_option('bindir'),
+  build_rpath : '${ORIGIN}/../' + get_option('libdir'),
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
+)
+
+executable(
+  'pressure-vessel-launcher',
+  sources: [
+    'launcher.c',
+  ],
+  dependencies : [
+    threads,
+    gio_unix,
+    libglnx.get_variable('libglnx_dep'),
+  ],
+  link_with : [
+    launcher_codegen,
     pressure_vessel_utils,
   ],
   include_directories : project_include_dirs,

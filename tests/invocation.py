@@ -48,6 +48,55 @@ class TestInvocation(BaseTest):
     def tearDown(self) -> None:
         super().tearDown()
 
+    def test_filesystem_home_rel_not_allowed(self) -> None:
+        """
+        We don't implement Flatpak's "~/" yet.
+        """
+        completed = run_subprocess(
+            [self.pv_wrap, '--filesystem=~/Games', 'true'],
+            stdout=2,
+            stderr=2,
+        )
+        self.assertEqual(completed.returncode, 2)
+
+    def test_filesystem_special_not_allowed(self) -> None:
+        """
+        We don't implement Flatpak's various special filesystems yet.
+        """
+        completed = run_subprocess(
+            [self.pv_wrap, '--filesystem=xdg-download/Games', 'true'],
+            stdout=2,
+            stderr=2,
+        )
+        self.assertEqual(completed.returncode, 2)
+
+    def test_filesystem_ro_not_allowed(self) -> None:
+        """
+        We don't implement :ro, :create suffixes yet.
+        We reject all paths containing : so that their meaning will not
+        change when we implement the Flatpak-style suffixes in future.
+        """
+        completed = run_subprocess(
+            [self.pv_wrap, '--filesystem=/media:ro', 'true'],
+            stdout=2,
+            stderr=2,
+        )
+        self.assertEqual(completed.returncode, 2)
+
+    def test_filesystem_backslash_not_allowed(self) -> None:
+        """
+        We don't implement escaped backslashes or backslash-escaped colons.
+        We reject all paths containing backslashes so that their meaning
+        will not change when we implement the Flatpak-style behaviour
+        in future.
+        """
+        completed = run_subprocess(
+            [self.pv_wrap, '--filesystem=/media/silly\\name', 'true'],
+            stdout=2,
+            stderr=2,
+        )
+        self.assertEqual(completed.returncode, 2)
+
     def test_help(self) -> None:
         completed = run_subprocess(
             [self.pv_wrap, '--help'],

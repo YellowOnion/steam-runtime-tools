@@ -1,0 +1,152 @@
+<!DOCTYPE node PUBLIC
+"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+<!--
+ Copyright (C) 2018 Red Hat, Inc.
+ Copyright (C) 2020 Collabora Ltd.
+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or (at your option) any later version.
+
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General
+ Public License along with this library; if not, write to the
+ Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ Boston, MA 02110-1301, USA.
+
+ Based on org.freedesktop.portal.Flatpak.
+ Author: Alexander Larsson <alexl@redhat.com>
+-->
+
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+  <!--
+      com.steampowered.PressureVessel.Launcher1:
+      @short_description: Interface for process-launching
+
+      Methods on this interface can be invoked by processes outside
+      the game's container (and in particular Steam), to start and
+      control programs inside the container.
+
+      This documentation describes version 0 of this interface.
+  -->
+  <interface name='com.steampowered.PressureVessel.Launcher1'>
+
+    <property name="Version" type="u" access="read"/>
+
+    <!--
+        SupportedLaunchFlags:
+
+        A bitmask containing all the flags that can be passed to
+        the Launch() method.
+    -->
+    <property name="SupportedLaunchFlags" type="u" access="read"/>
+
+    <!--
+        Launch:
+        @cwd_path: the working directory for the new process, resolved
+          in the container's filesystem namespace. The empty string means
+          use whatever is the launcher's current working directory.
+        @argv: the argv for the new process, starting with the executable to launch
+        @fds: an array of file descriptors to pass to the new process
+        @envs: an array of variable/value pairs for the environment of the new process
+        @flags: flags
+        @options: Vardict with optional further information
+        @pid: the PID of the new process inside pressure-vessel's container
+
+        Start a new program in the container.
+
+        The following flags values are supported:
+
+        <variablelist>
+          <varlistentry>
+            <term>1</term>
+            <listitem><para>
+              Clear the environment. If set, the environment will be
+              exactly @envs, similar to `env - X=1 Y=2 COMMAND`.
+              If unset, @envs are used to override environment variables
+              and any environment variable that is not overridden is
+              left unchanged, similar to `env X=1 Y=2 COMMAND`.
+            </para></listitem>
+          </varlistentry>
+        </variablelist>
+
+        Unknown (unsupported) flags are an error and will cause Launch()
+        to fail.
+
+        No options are currently known. Unknown (unsupported) options
+        are ignored.
+
+        This method returns as soon as the process ID of the new process
+        is known, and before the process exits. If you need to know when
+        the process exits, subscribe to the ProcessExited signal before
+        calling this method, and use the returned process ID to correlate
+        signals with method calls.
+    -->
+    <method name="Launch">
+      <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
+      <arg type='ay' name='cwd_path' direction='in'/>
+      <arg type='aay' name='argv' direction='in'/>
+      <arg type='a{uh}' name='fds' direction='in'/>
+      <arg type='a{ss}' name='envs' direction='in'/>
+      <arg type='u' name='flags' direction='in'/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type='u' name='pid' direction='out'/>
+    </method>
+
+    <!--
+        SendSignal:
+        @pid: the PID inside the container to signal
+        @signal: the signal to send (see `signal(7)`)
+        @to_process_group: whether to send the signal to the process group
+
+        This methods let you send a Unix signal to a process
+        that was started with com.steampowered.PressureVessel.Launcher1.Launch().
+        The @pid argument here should be the PID that is returned
+        by the Launch() call: it is not necessarily valid in the caller's
+        PID namespace.
+      -->
+    <method name="SendSignal">
+      <arg type='u' name='pid' direction='in'/>
+      <arg type='u' name='signal' direction='in'/>
+      <arg type='b' name='to_process_group' direction='in'/>
+    </method>
+
+    <!--
+        ProcessExited:
+        @pid: the PID of the process that has ended
+        @wait_status: the wait status (see waitpid(2))
+
+        Emitted when a process started by
+        com.steampowered.PressureVessel.Launcher1.Launch() exits.
+        Use g_spawn_check_exit_status(), or the macros such as
+        `WIFEXITED` documented in `waitpid(2)`, to interpret
+        the @wait_status.
+
+        This signal is not emitted for processes that were not launched
+        directly by Launch(), for example if a process launched by
+        Launch() runs foreground or background child processes.
+    -->
+    <signal name="ProcessExited">
+      <arg type='u' name='pid'/>
+      <arg type='u' name='wait_status'/>
+    </signal>
+
+    <!--
+        Terminate:
+
+        Stop listening for Launch and SendSignal requests, terminate
+        child processes if any, and shut down gracefully.
+    -->
+    <method name="Terminate">
+    </method>
+
+  </interface>
+
+</node>

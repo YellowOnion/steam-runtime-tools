@@ -31,9 +31,11 @@ test_env.set(
 test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 tests = [
+  'adverb.py',
   'cheap-copy.py',
   'containers.py',
   'invocation.py',
+  'launcher.py',
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
@@ -94,12 +96,38 @@ foreach test_name : tests
   endif
 
   if prove.found()
-    test(
-      test_name, prove,
-      args : test_args,
-      env : test_env,
-      timeout : timeout,
-    )
+    if dbus_run_session.found()
+      test(
+        test_name, dbus_run_session,
+        args : ['--', 'prove'] + test_args,
+        env : test_env,
+        timeout : timeout,
+      )
+
+      # Re-run launcher.py with the default python3 version (if any)
+      # to try the code path involving gi.repository.Gio
+      if test_name == 'launcher.py' and full_python.found()
+        test(
+          'full-python-' + test_name,
+          dbus_run_session,
+          args : [
+            '--',
+            'prove',
+            '-v', files(test_name),
+            '-e', full_python.path(),
+          ],
+          env : test_env,
+          timeout : timeout,
+        )
+      endif
+    else
+      test(
+        test_name, prove,
+        args : test_args,
+        env : test_env,
+        timeout : timeout,
+      )
+    endif
   endif
 endforeach
 

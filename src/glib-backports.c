@@ -254,3 +254,79 @@ my_g_dbus_address_escape_value (const gchar *string)
   return g_string_free (s, FALSE);
 }
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 36, 0)
+/*
+ * Reimplement GUnixFDSourceFunc API in terms of GIOChannel
+ */
+
+typedef struct
+{
+  MyGUnixFDSourceFunc func;
+  gpointer user_data;
+  GDestroyNotify destroy;
+} MyGUnixFDClosure;
+
+static void
+my_g_unix_fd_closure_free (gpointer p)
+{
+  MyGUnixFDClosure *closure = p;
+
+  if (closure->destroy != NULL)
+    closure->destroy (closure->user_data);
+
+  g_free (closure);
+}
+
+static gboolean
+my_g_unix_fd_wrapper (GIOChannel *source,
+                      GIOCondition condition,
+                      gpointer user_data)
+{
+  MyGUnixFDClosure *closure = user_data;
+  int fd;
+
+  fd = g_io_channel_unix_get_fd (source);
+  g_return_val_if_fail (fd >= 0, G_SOURCE_REMOVE);
+
+  return closure->func (fd, condition, closure->user_data);
+}
+
+guint
+my_g_unix_fd_add_full (int priority,
+                       int fd,
+                       GIOCondition condition,
+                       MyGUnixFDSourceFunc func,
+                       gpointer user_data,
+                       GDestroyNotify destroy)
+{
+  GIOChannel *channel;
+  MyGUnixFDClosure *closure;
+  guint ret;
+
+  g_return_val_if_fail (fd >= 0, 0);
+  g_return_val_if_fail (func != NULL, 0);
+
+  closure = g_new0 (MyGUnixFDClosure, 1);
+  closure->func = func;
+  closure->user_data = user_data;
+  closure->destroy = destroy;
+
+  /* POLLERR, POLLHUP and POLLNVAL are implicitly returned by poll()
+   * and hence by Unix fd watches, but GIOChannel applies its own
+   * filtering */
+  condition |= (G_IO_ERR|G_IO_HUP|G_IO_NVAL);
+
+  channel = g_io_channel_unix_new (fd);
+  /* Disable text recoding, treat it as a bytestream */
+  g_io_channel_set_encoding (channel, NULL, NULL);
+  ret = g_io_add_watch_full (channel,
+                             priority,
+                             condition,
+                             my_g_unix_fd_wrapper,
+                             closure,
+                             my_g_unix_fd_closure_free);
+  g_io_channel_unref (channel);
+  return ret;
+}
+#endif

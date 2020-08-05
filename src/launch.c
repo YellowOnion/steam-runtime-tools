@@ -28,6 +28,7 @@
 #include "config.h"
 #include "subprojects/libglnx/config.h"
 
+#include <fnmatch.h>
 #include <locale.h>
 #include <sysexits.h>
 #include <sys/signalfd.h>
@@ -291,10 +292,98 @@ static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
 static gchar *opt_directory = NULL;
 static gchar *opt_socket = NULL;
-static gchar **opt_envs = NULL;
+static GHashTable *opt_env = NULL;
+static GHashTable *opt_unsetenv = NULL;
 static gboolean opt_terminate = FALSE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
+
+static gboolean
+opt_env_cb (const char *option_name,
+            const gchar *value,
+            G_GNUC_UNUSED gpointer data,
+            GError **error)
+{
+  g_assert (opt_env != NULL);
+  g_assert (opt_unsetenv != NULL);
+
+  if (g_strcmp0 (option_name, "--env") == 0)
+    {
+      g_auto(GStrv) split = g_strsplit (value, "=", 2);
+
+      if (split == NULL ||
+          split[0] == NULL ||
+          split[0][0] == 0 ||
+          split[1] == NULL)
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                       "Invalid env format %s", value);
+          return FALSE;
+        }
+
+      g_hash_table_remove (opt_unsetenv, split[0]);
+      g_hash_table_replace (opt_env,
+                            g_steal_pointer (&split[0]),
+                            g_steal_pointer (&split[1]));
+      return TRUE;
+    }
+
+  if (g_strcmp0 (option_name, "--pass-env") == 0)
+    {
+      const gchar *env = g_getenv (value);
+
+      if (env != NULL)
+        {
+          g_hash_table_remove (opt_unsetenv, value);
+          g_hash_table_replace (opt_env, g_strdup (value), g_strdup (env));
+        }
+      else
+        {
+          g_hash_table_remove (opt_env, value);
+          g_hash_table_add (opt_unsetenv, g_strdup (value));
+        }
+
+      return TRUE;
+    }
+
+  if (g_strcmp0 (option_name, "--pass-env-matching") == 0)
+    {
+      char **iter;
+
+      if (environ == NULL)
+        return TRUE;
+
+      for (iter = environ; *iter != NULL; iter++)
+        {
+          g_auto(GStrv) split = g_strsplit (*iter, "=", 2);
+
+          if (split == NULL ||
+              split[0] == NULL ||
+              split[0][0] == 0 ||
+              split[1] == NULL)
+            continue;
+
+          if (fnmatch (value, split[0], 0) == 0)
+            {
+              g_hash_table_remove (opt_unsetenv, split[0]);
+              g_hash_table_replace (opt_env,
+                                    g_steal_pointer (&split[0]),
+                                    g_steal_pointer (&split[1]));
+            }
+        }
+
+      return TRUE;
+    }
+
+  if (g_strcmp0 (option_name, "--unset-env") == 0)
+    {
+      g_hash_table_remove (opt_env, value);
+      g_hash_table_add (opt_unsetenv, g_strdup (value));
+      return TRUE;
+    }
+
+  g_return_val_if_reached (FALSE);
+}
 
 static const GOptionEntry options[] =
 {
@@ -313,13 +402,20 @@ static const GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_directory,
     "Working directory in which to run the command.", "DIR" },
   { "env", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_envs,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Set environment variable.", "VAR=VALUE" },
   { "forward-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &forward_fds,
     "Connect a file descriptor to the launched process. "
     "fds 0, 1 and 2 are automatically forwarded.",
     "FD" },
+  { "pass-env", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Pass environment variable through, or unset if set.", "VAR" },
+  { "pass-env-matching", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Pass environment variables matching a shell-style wildcard.",
+    "WILDCARD" },
   { "socket", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Connect to a Launcher server listening on this AF_UNIX socket.",
@@ -327,6 +423,9 @@ static const GOptionEntry options[] =
   { "terminate", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_terminate,
     "Terminate the Launcher server.", NULL },
+  { "unset-env", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Unset environment variable, like env -u.", "VAR" },
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
@@ -353,6 +452,7 @@ main (int argc,
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
+  g_autoptr(GPtrArray) env_prefix = NULL;
   char **command_and_args;
   guint forward_signals_id = 0;
   g_autoptr(FILE) original_stdout = NULL;
@@ -369,6 +469,8 @@ main (int argc,
   PvLaunchFlags spawn_flags = 0;
   guint signal_source = 0;
   gsize i;
+  GHashTableIter iter;
+  gpointer key, value;
 
   setlocale (LC_ALL, "");
 
@@ -384,6 +486,8 @@ main (int argc,
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);
+  opt_env = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  opt_unsetenv = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -633,18 +737,10 @@ main (int argc,
       g_variant_builder_add (&fd_builder, "{uh}", fd, handle);
     }
 
-  for (i = 0; opt_envs != NULL && opt_envs[i] != NULL; i++)
-    {
-      const char *opt_env = opt_envs[i];
-      g_auto(GStrv) split = g_strsplit (opt_env, "=", 2);
+  g_hash_table_iter_init (&iter, opt_env);
 
-      if (split == NULL || split[0] == NULL || split[0][0] == 0 || split[1] == NULL)
-        {
-          glnx_throw (error, "Invalid env format %s", opt_env);
-          goto out;
-        }
-      g_variant_builder_add (&env_builder, "{ss}", split[0], split[1]);
-    }
+  while (g_hash_table_iter_next (&iter, &key, &value))
+    g_variant_builder_add (&env_builder, "{ss}", key, value);
 
   spawn_flags = 0;
 
@@ -671,10 +767,48 @@ main (int argc,
                                         g_main_loop_ref (loop),
                                         (GDestroyNotify) g_main_loop_unref);
 
+  /* Prepend "env -u" if necessary */
+  if (g_hash_table_size (opt_unsetenv) > 0)
+    {
+      env_prefix = g_ptr_array_new_full (2 * g_hash_table_size (opt_unsetenv) + 6,
+                                         g_free);
+      g_ptr_array_add (env_prefix, g_strdup ("env"));
+
+      g_hash_table_iter_init (&iter, opt_unsetenv);
+
+      while (g_hash_table_iter_next (&iter, &key, NULL))
+        {
+          g_ptr_array_add (env_prefix, g_strdup ("-u"));
+          g_ptr_array_add (env_prefix, g_strdup (key));
+        }
+
+      /* If command_and_args[0] contains '=', env(1) can't deal with
+       * that, so use the standard workaround */
+      if (strchr (command_and_args[0], '=') != NULL)
+        {
+          g_ptr_array_add (env_prefix, g_strdup ("sh"));
+          g_ptr_array_add (env_prefix, g_strdup ("-euc"));
+          g_ptr_array_add (env_prefix, g_strdup ("exec \"$@\""));
+          g_ptr_array_add (env_prefix, g_strdup ("sh"));    /* argv[0] */
+        }
+
+      for (i = 0; command_and_args[i] != NULL; i++)
+        g_ptr_array_add (env_prefix, g_strdup (command_and_args[i]));
+
+      g_ptr_array_add (env_prefix, NULL);
+
+      command_and_args = (char **) env_prefix->pdata;
+    }
+
   {
     g_autoptr(GVariant) fds = NULL;
     g_autoptr(GVariant) env = NULL;
     g_autoptr(GVariant) opts = NULL;
+
+    g_debug ("Forwarding command:");
+
+    for (i = 0; command_and_args[i] != NULL; i++)
+      g_debug ("\t%s", command_and_args[i]);
 
     fds = g_variant_ref_sink (g_variant_builder_end (&fd_builder));
     env = g_variant_ref_sink (g_variant_builder_end (&env_builder));
@@ -725,7 +859,8 @@ out:
   g_strfreev (forward_fds);
   g_free (opt_directory);
   g_free (opt_socket);
-  g_strfreev (opt_envs);
+  g_hash_table_unref (opt_env);
+  g_hash_table_unref (opt_unsetenv);
 
   return launch_exit_status;
 }

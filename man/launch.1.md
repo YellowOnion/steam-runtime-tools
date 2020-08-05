@@ -14,6 +14,9 @@ pressure-vessel-launch - client to launch processes in a container
 [**--directory** *DIR*]
 [**--env** _VAR_**=**_VALUE_]
 [**--forward-fd** *FD*]
+[**--pass-env** *VAR*]
+[**--pass-env-matching** *WILDCARD*]
+[**--unset-env** *VAR*]
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 [**--**]
@@ -54,20 +57,15 @@ as a subprocess of **pressure-vessel-launcher**.
 
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment
-    variables set by **--env**. By default, it inherits environment
-    variables from **pressure-vessel-launcher**, with **--env**
-    overriding individual variables.
+    variables set by **--env** and similar options.
+    By default, it inherits environment variables from
+    **pressure-vessel-launcher**, with **--env** and
+    similar options overriding or unsetting individual variables.
 
 **--directory** *DIR*
 :   Arrange for the *COMMAND* to run in *DIR*.
     By default, it inherits the current working directory from
     **pressure-vessel-launcher**.
-
-**--env** _VAR=VALUE_
-:   Set environment variable _VAR_ to _VALUE_.
-    This is mostly equivalent to using
-    **env** _VAR=VALUE_ *COMMAND* *ARGUMENTS...*
-    as the command.
 
 **--forward-fd** *FD*
 :   Arrange for the *COMMAND* to receive file descriptor number *FD*
@@ -80,6 +78,41 @@ as a subprocess of **pressure-vessel-launcher**.
 
 **--verbose**
 :   Be more verbose.
+
+# ENVIRONMENT OPTIONS
+
+Options from this group are processed in order, with each option taking
+precedence over any earlier options that affect the same environment variable.
+For example,
+**--pass-env-matching="FO&#x2a;" --env=FOO=bar --unset-env=FOCUS**
+will set **FOO** to **bar**, unset **FOCUS** even if the caller has
+it set, and pass through **FONTS** from the caller.
+
+**--env** _VAR=VALUE_
+:   Set environment variable _VAR_ to _VALUE_.
+    This is mostly equivalent to using
+    **env** _VAR=VALUE_ *COMMAND* *ARGUMENTS...*
+    as the command.
+
+**--pass-env** *VAR*
+:   If the environment variable *VAR* is set, pass its current value
+    into the container as if via **--env**. Otherwise, unset it as if
+    via **--unset-env**.
+
+**--pass-env-matching** *WILDCARD*
+:   For each environment variable that is set and has a name matching
+    the **fnmatch**(3) pattern *WILDCARD*, pass its current value
+    into the container as if via **--env**.
+    For example, **--pass-env-matching=Steam&#x2a;** copies Steam-related
+    environment variables.
+    If this command is run from a shell, the wildcard will usually need
+    to be quoted, for example **--pass-env-matching="Steam&#x2a;"**.
+
+**--unset-env** *VAR*
+:   Unset *VAR* when running the command.
+    This is mostly equivalent to using
+    **env -u** *VAR* *COMMAND* *ARGUMENTS...*
+    as the command.
 
 # OUTPUT
 

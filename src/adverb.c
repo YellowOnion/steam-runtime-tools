@@ -48,6 +48,7 @@
 #endif
 
 static GPtrArray *global_locks = NULL;
+static GArray *global_pass_fds = NULL;
 static gboolean opt_create = FALSE;
 static gboolean opt_generate_locales = FALSE;
 static gboolean opt_subreaper = FALSE;
@@ -56,18 +57,47 @@ static gboolean opt_version = FALSE;
 static gboolean opt_wait = FALSE;
 static gboolean opt_write = FALSE;
 
+typedef struct
+{
+  int original_stdout_fd;
+  int *pass_fds;
+} ChildSetupData;
+
 static void
 child_setup_cb (gpointer user_data)
 {
-  int *fd = user_data;
+  ChildSetupData *data = user_data;
+  const int *iter;
 
   /* Put back the original stdout for the child process */
-  if (fd != NULL &&
-      dup2 (*fd, STDOUT_FILENO) != STDOUT_FILENO)
+  if (data != NULL &&
+      data->original_stdout_fd > 0 &&
+      dup2 (data->original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
     pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
 
   /* Make all other file descriptors close-on-exec */
   flatpak_close_fds_workaround (3);
+
+  /* Make the fds we pass through *not* be close-on-exec */
+  if (data != NULL && data->pass_fds)
+    {
+      for (iter = data->pass_fds; *iter >= 0; iter++)
+        {
+          int fd = *iter;
+          int fd_flags;
+
+          fd_flags = fcntl (fd, F_GETFD);
+
+          if (fd_flags < 0)
+            pv_async_signal_safe_error ("pressure-vessel-adverb: Invalid fd?\n",
+                                        LAUNCH_EX_FAILED);
+
+          if ((fd_flags & FD_CLOEXEC) != 0
+              && fcntl (fd, F_SETFD, fd_flags & ~FD_CLOEXEC) != 0)
+            pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to clear close-on-exec\n",
+                                        LAUNCH_EX_FAILED);
+        }
+    }
 }
 
 static gboolean
@@ -110,6 +140,41 @@ opt_fd_cb (const char *name,
    * it won't change our behaviour either way, and if it was passed
    * to us across a fork(), it had better be an OFD. */
   g_ptr_array_add (global_locks, pv_bwrap_lock_new_take (fd, TRUE));
+  return TRUE;
+}
+
+static gboolean
+opt_pass_fd_cb (const char *name,
+                const char *value,
+                gpointer data,
+                GError **error)
+{
+  char *endptr;
+  gint64 i64 = g_ascii_strtoll (value, &endptr, 10);
+  int fd;
+  int fd_flags;
+
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_val_if_fail (value != NULL, FALSE);
+
+  if (i64 < 0 || i64 > G_MAXINT || endptr == value || *endptr != '\0')
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                   "Integer out of range or invalid: %s", value);
+      return FALSE;
+    }
+
+  fd = (int) i64;
+
+  fd_flags = fcntl (fd, F_GETFD);
+
+  if (fd_flags < 0)
+    return glnx_throw_errno_prefix (error, "Unable to receive --fd %d", fd);
+
+  if (global_pass_fds == NULL)
+    global_pass_fds = g_array_new (FALSE, FALSE, sizeof (int));
+
+  g_array_append_val (global_pass_fds, fd);
   return TRUE;
 }
 
@@ -281,6 +346,11 @@ static GOptionEntry options[] =
     "earlier on the command-line. May be repeated.",
     NULL },
 
+  { "pass-fd", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_pass_fd_cb,
+    "Let the launched process inherit the given fd.",
+    NULL },
+
   { "subreaper", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_subreaper,
     "Do not exit until all child processes have exited.",
@@ -323,7 +393,7 @@ main (int argc,
   g_autofree gchar *locales_temp_dir = NULL;
   g_auto(GStrv) my_environ = NULL;
   g_autoptr(FILE) original_stdout = NULL;
-  int original_stdout_fd;
+  ChildSetupData child_setup_data = { -1, NULL };
 
   setlocale (LC_ALL, "");
 
@@ -432,7 +502,16 @@ main (int argc,
 
   g_debug ("Launching child process...");
   fflush (stdout);
-  original_stdout_fd = fileno (original_stdout);
+  child_setup_data.original_stdout_fd = fileno (original_stdout);
+
+  if (global_pass_fds != NULL)
+    {
+      int terminator = -1;
+
+      g_array_append_val (global_pass_fds, terminator);
+      child_setup_data.pass_fds = (int *) g_array_free (g_steal_pointer (&global_pass_fds),
+                                                        FALSE);
+    }
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
@@ -442,13 +521,15 @@ main (int argc,
                       (G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD |
                        G_SPAWN_LEAVE_DESCRIPTORS_OPEN |
                        G_SPAWN_CHILD_INHERITS_STDIN),
-                      child_setup_cb, &original_stdout_fd,
+                      child_setup_cb, &child_setup_data,
                       &child_pid,
                       &local_error))
     {
       ret = 127;
       goto out;
     }
+
+  g_free (child_setup_data.pass_fds);
 
   /* If the child writes to stdout and closes it, don't interfere */
   g_clear_pointer (&original_stdout, fclose);
@@ -503,6 +584,7 @@ main (int argc,
 
 out:
   global_locks = NULL;
+  g_clear_pointer (&global_pass_fds, g_array_unref);
 
   if (locales_temp_dir != NULL)
     pv_rm_rf (locales_temp_dir);

@@ -371,13 +371,21 @@ class Main:
                 pressure_vessel_runtime = self.new_runtime(
                     'scout', {'path': self.pressure_vessel},
                 )
-            else:
+            elif os.path.isfile(self.pressure_vessel):
                 logger.info(
                     'Downloading pressure-vessel using JSON from %r',
                     self.pressure_vessel)
                 with open(self.pressure_vessel, 'rb') as reader:
                     details = json.load(reader)
                 pressure_vessel_runtime = self.new_runtime('scout', details)
+                self.download_pressure_vessel(pressure_vessel_runtime)
+            else:
+                logger.info(
+                    'Assuming %r is a suite containing pressure-vessel',
+                    self.pressure_vessel)
+                pressure_vessel_runtime = self.new_runtime(
+                    self.pressure_vessel, {},
+                )
                 self.download_pressure_vessel(pressure_vessel_runtime)
 
         if self.unpack_ld_library_path:

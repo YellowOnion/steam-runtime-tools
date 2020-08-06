@@ -500,6 +500,23 @@ class Main:
                 )
             os.chmod(os.path.join(self.depot, 'run-in-' + runtime.name), 0o755)
 
+        for runtime in self.runtimes[0:]:
+            with open(
+                os.path.join(self.depot, 'run'), 'w'
+            ) as writer:
+                writer.write(
+                    RUN_IN_WHATEVER_SOURCE.format(
+                        escaped_arch=shlex.quote(runtime.architecture),
+                        escaped_name=shlex.quote(runtime.name),
+                        escaped_runtime=shlex.quote(runtime.platform),
+                        escaped_suite=shlex.quote(runtime.suite),
+                        source_for_generated_file=(
+                            'Generated file, do not edit'
+                        ),
+                    )
+                )
+            os.chmod(os.path.join(self.depot, 'run'), 0o755)
+
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         os.makedirs(self.depot, exist_ok=True)
         argv = [

@@ -1,4 +1,4 @@
 "manifest"
 {
-  "commandline" "/run-in-scout -- "
+  "commandline" "/run -- "
 }

@@ -1506,19 +1506,6 @@ bind_runtime (PvRuntime *self,
         return FALSE;
     }
 
-  /* These can add data fds to @bwrap, so they must come last - after
-   * other functions stop using @bwrap as a basis for their own bwrap
-   * invocations with flatpak_bwrap_append_bwrap().
-   * Otherwise, when flatpak_bwrap_append_bwrap() calls
-   * flatpak_bwrap_steal_fds(), it will make the original FlatpakBwrap
-   * unusable. */
-
-  flatpak_run_add_wayland_args (bwrap);
-  flatpak_run_add_x11_args (bwrap, TRUE);
-  flatpak_run_add_pulseaudio_args (bwrap);
-  flatpak_run_add_session_dbus_args (bwrap);
-  flatpak_run_add_system_dbus_args (bwrap);
-
   if (self->mutable_sysroot == NULL)
     {
       /* self->overrides is in a temporary directory that will be

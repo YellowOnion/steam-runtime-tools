@@ -35,6 +35,7 @@
 #include "bwrap.h"
 #include "bwrap-lock.h"
 #include "flatpak-bwrap-private.h"
+#include "flatpak-run-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 #include "runtime.h"
@@ -1358,6 +1359,18 @@ main (int argc,
       flatpak_bwrap_add_args (bwrap,
                               "--bind", cwd_p, cwd_p,
                               NULL);
+    }
+
+  /* We need to set up IPC rendezvous points relatively late, so that
+   * even if we are sharing /tmp via --filesystem=/tmp, we'll still
+   * mount our own /tmp/.X11-unix over the top of the OS's. */
+  if (runtime != NULL)
+    {
+      flatpak_run_add_wayland_args (bwrap);
+      flatpak_run_add_x11_args (bwrap, TRUE);
+      flatpak_run_add_pulseaudio_args (bwrap);
+      flatpak_run_add_session_dbus_args (bwrap);
+      flatpak_run_add_system_dbus_args (bwrap);
     }
 
   flatpak_bwrap_add_args (bwrap,

@@ -210,11 +210,6 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 
 adverb="$pressure_vessel/bin/pressure-vessel-adverb"
 
-# Fallback to the old name
-if ! [ -x "$adverb" ]; then
-    adverb="$pressure_vessel/bin/pressure-vessel-with-lock"
-fi
-
 # GC old runtimes
 for deployment in "${here}/${name}"_before_* "${here}/${name}"_[0-9].* "${here}/.${name}"_*_unpack-temp; do
     if ! [ -d "$deployment" ]; then

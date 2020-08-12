@@ -206,11 +206,6 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 
 adverb="$pressure_vessel/bin/pressure-vessel-adverb"
 
-# Fallback to the old name
-if ! [ -x "$adverb" ]; then
-    adverb="$pressure_vessel/bin/pressure-vessel-with-lock"
-fi
-
 if [ -n "$deploy" ]; then
     if ! current_build_id="$(cat "${here}/${basename}-buildid.txt")"; then
         # Ignore: there is no build ID in the depot. We'll just use a

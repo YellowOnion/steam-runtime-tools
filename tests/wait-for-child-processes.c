@@ -24,6 +24,9 @@
  */
 
 #include <stdlib.h>
+#include <sys/prctl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <glib.h>
@@ -50,6 +53,9 @@ setup (Fixture *f,
        gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  /* Assert we initially have no child processes */
+  g_assert_cmpint (waitpid (-1, NULL, WNOHANG) >= 0 ? 0 : errno, ==, ECHILD);
 }
 
 static void
@@ -57,12 +63,117 @@ teardown (Fixture *f,
           gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  /* Assert we end up with no child processes */
+  g_assert_cmpint (waitpid (-1, NULL, WNOHANG) >= 0 ? 0 : errno, ==, ECHILD);
 }
 
 #define SPAWN_FLAGS \
   (G_SPAWN_SEARCH_PATH \
    | G_SPAWN_LEAVE_DESCRIPTORS_OPEN \
    | G_SPAWN_DO_NOT_REAP_CHILD)
+
+static void
+test_terminate_nothing (Fixture *f,
+                        gconstpointer context)
+{
+  g_autoptr(GError) error = NULL;
+  gboolean ret;
+
+  ret = pv_terminate_all_child_processes (0, 0, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+
+  ret = pv_terminate_all_child_processes (0, 100 * G_TIME_SPAN_MILLISECOND, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+
+  ret = pv_terminate_all_child_processes (100 * G_TIME_SPAN_MILLISECOND, 0, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+
+  ret = pv_terminate_all_child_processes (100 * G_TIME_SPAN_MILLISECOND,
+                                          100 * G_TIME_SPAN_MILLISECOND, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+}
+
+static void
+test_terminate_sigterm (Fixture *f,
+                        gconstpointer context)
+{
+  g_autoptr(GError) error = NULL;
+  gboolean ret;
+  const char * const argv[] = { "sh", "-c", "sleep 3600", NULL };
+
+  ret = g_spawn_async (NULL,  /* cwd */
+                       (char **) argv,
+                       NULL,  /* envp */
+                       SPAWN_FLAGS,
+                       NULL, NULL,    /* child setup */
+                       NULL,  /* pid */
+                       &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+
+  ret = pv_terminate_all_child_processes (0, 60 * G_TIME_SPAN_SECOND, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+}
+
+static void
+test_terminate_sigkill (Fixture *f,
+                        gconstpointer context)
+{
+  g_autoptr(GError) error = NULL;
+  gboolean ret;
+  const char * const argv[] =
+  {
+    "sh", "-c", "trap 'echo Ignoring SIGTERM >&2' TERM; sleep 3600", NULL
+  };
+
+  ret = g_spawn_async (NULL,  /* cwd */
+                       (char **) argv,
+                       NULL,  /* envp */
+                       SPAWN_FLAGS,
+                       NULL, NULL,    /* child setup */
+                       NULL,  /* pid */
+                       &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+
+  /* We give it 100ms before SIGTERM to let it put the trap in place */
+  ret = pv_terminate_all_child_processes (100 * G_TIME_SPAN_MILLISECOND,
+                                          100 * G_TIME_SPAN_MILLISECOND, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+}
+
+static void
+test_terminate_sigkill_immediately (Fixture *f,
+                                    gconstpointer context)
+{
+  g_autoptr(GError) error = NULL;
+  gboolean ret;
+  const char * const argv[] =
+  {
+    "sh", "-c", "trap 'echo Ignoring SIGTERM >&2' TERM; sleep 3600", NULL
+  };
+
+  ret = g_spawn_async (NULL,  /* cwd */
+                       (char **) argv,
+                       NULL,  /* envp */
+                       SPAWN_FLAGS,
+                       NULL, NULL,    /* child setup */
+                       NULL,  /* pid */
+                       &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+
+  ret = pv_terminate_all_child_processes (0, 0, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
+}
 
 static void
 test_wait_for_all (Fixture *f,
@@ -163,6 +274,11 @@ test_wait_for_main_plus (Fixture *f,
   g_assert_true (ret);
   g_assert_true (WIFSIGNALED (wstat));
   g_assert_cmpint (WTERMSIG (wstat), ==, SIGTERM);
+
+  /* Don't leak the other processes, if any (probably after_argv) */
+  ret = pv_wait_for_child_processes (0, &wstat, &error);
+  g_assert_no_error (error);
+  g_assert_true (ret);
 }
 
 static void
@@ -197,9 +313,27 @@ int
 main (int argc,
       char **argv)
 {
+  sigset_t mask;
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+
+  /* Must be called before we start any threads */
+  if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
+    g_error ("pthread_sigmask: %s", g_strerror (errno));
+
+  prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
   pv_avoid_gvfs ();
 
   g_test_init (&argc, &argv, NULL);
+  g_test_add ("/terminate/nothing", Fixture, NULL,
+              setup, test_terminate_nothing, teardown);
+  g_test_add ("/terminate/sigterm", Fixture, NULL,
+              setup, test_terminate_sigterm, teardown);
+  g_test_add ("/terminate/sigkill", Fixture, NULL,
+              setup, test_terminate_sigkill, teardown);
+  g_test_add ("/terminate/sigkill-immediately", Fixture, NULL,
+              setup, test_terminate_sigkill_immediately, teardown);
   g_test_add ("/wait/for-all", Fixture, NULL,
               setup, test_wait_for_all, teardown);
   g_test_add ("/wait/for-main", Fixture, NULL,

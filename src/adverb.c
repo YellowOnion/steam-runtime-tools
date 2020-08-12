@@ -43,10 +43,6 @@
 #include "launcher.h"
 #include "utils.h"
 
-#ifndef PR_SET_CHILD_SUBREAPER
-#define PR_SET_CHILD_SUBREAPER 36
-#endif
-
 static GPtrArray *global_locks = NULL;
 static GArray *global_pass_fds = NULL;
 static gboolean opt_create = FALSE;

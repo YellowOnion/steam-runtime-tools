@@ -27,6 +27,14 @@
 
 #include <glib.h>
 
+#ifndef PR_GET_CHILD_SUBREAPER
+#define PR_GET_CHILD_SUBREAPER 37
+#endif
+
+#ifndef PR_SET_CHILD_SUBREAPER
+#define PR_SET_CHILD_SUBREAPER 36
+#endif
+
 void pv_avoid_gvfs (void);
 
 int pv_envp_cmp (const void *p1,
@@ -65,3 +73,7 @@ gchar *pv_get_random_uuid (GError **error);
 gboolean pv_wait_for_child_processes (pid_t main_process,
                                       int *wait_status_out,
                                       GError **error);
+
+gboolean pv_terminate_all_child_processes (GTimeSpan wait_period,
+                                           GTimeSpan grace_period,
+                                           GError **error);

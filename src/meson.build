@@ -58,6 +58,7 @@ pressure_vessel_utils = static_library(
     'utils.h',
   ],
   dependencies : [
+    threads,
     gio_unix,
     libelf,
     libglnx.get_variable('libglnx_dep'),

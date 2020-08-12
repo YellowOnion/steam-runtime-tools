@@ -243,9 +243,10 @@ fi
 
 if [ -e /.flatpak-info ]; then
     mkdir -p "${here}/var"
+    touch "${here}/var/copy-runtime"
 fi
 
-if [ -d "${here}/var" ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then
+if [ -e "${here}/var/copy-runtime" ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then
     export PRESSURE_VESSEL_COPY_RUNTIME_INTO="${here}/var"
 fi
 

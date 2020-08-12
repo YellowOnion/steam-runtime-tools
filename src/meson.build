@@ -84,6 +84,7 @@ executable(
     'adverb.c',
   ],
   dependencies : [
+    threads,
     gio_unix,
     libglnx.get_variable('libglnx_dep'),
   ],

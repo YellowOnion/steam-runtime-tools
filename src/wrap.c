@@ -374,6 +374,8 @@ static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_share_pid = TRUE;
+static double opt_terminate_idle_timeout = 0.0;
+static double opt_terminate_timeout = -1.0;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
@@ -673,6 +675,19 @@ static GOptionEntry options[] =
   { "xterm", '\0',
     G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
     "Equivalent to --terminal=xterm", NULL },
+  { "terminate-idle-timeout", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_idle_timeout,
+    "If --terminate-timeout is used, wait this many seconds before "
+    "sending SIGTERM. [default: 0.0]"
+    "SECONDS" },
+  { "terminate-timeout", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_timeout,
+    "Send SIGTERM and SIGCONT to descendant processes that didn't "
+    "exit within --terminate-idle-timeout. If they don't all exit within "
+    "this many seconds, send SIGKILL and SIGCONT to survivors. If 0.0, "
+    "skip SIGTERM and use SIGKILL immediately. Implies --subreaper. "
+    "[Default: -1.0, meaning don't signal].",
+    "SECONDS" },
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
@@ -741,6 +756,8 @@ main (int argc,
   g_auto(GStrv) original_argv = NULL;
   int original_argc = argc;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
+  g_autoptr(FlatpakBwrap) adverb_args = NULL;
+  g_autofree gchar *adverb_in_container = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
@@ -1430,8 +1447,44 @@ main (int argc,
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     goto out;
 
+  adverb_args = flatpak_bwrap_new (NULL);
+
   if (runtime != NULL)
-    pv_runtime_append_adverbs (runtime, bwrap);
+    adverb_in_container = pv_runtime_get_adverb (runtime, adverb_args);
+
+  if (opt_terminate_timeout >= 0.0)
+    {
+      if (opt_terminate_idle_timeout > 0.0)
+        flatpak_bwrap_add_arg_printf (adverb_args,
+                                      "--terminate-idle-timeout=%f",
+                                      opt_terminate_idle_timeout);
+
+      flatpak_bwrap_add_arg_printf (adverb_args,
+                                    "--terminate-timeout=%f",
+                                    opt_terminate_timeout);
+    }
+
+  if (adverb_args->argv->len > 0)
+    {
+      /* If not using a runtime, the adverb in the container has the
+       * same path as outside */
+      if (adverb_in_container == NULL)
+        adverb_in_container = g_build_filename (tools_dir,
+                                                "pressure-vessel-adverb",
+                                                NULL);
+
+      flatpak_bwrap_add_args (bwrap,
+                              adverb_in_container,
+                              "--subreaper",
+                              NULL);
+
+      if (opt_verbose)
+        flatpak_bwrap_add_arg (bwrap, "--verbose");
+
+      flatpak_bwrap_append_bwrap (bwrap, adverb_args);
+      flatpak_bwrap_add_arg (bwrap, "--");
+    }
+  /* else just run the wrapped command directly */
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);

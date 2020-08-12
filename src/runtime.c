@@ -888,25 +888,18 @@ pv_runtime_new (const char *source_files,
  * and rely on bubblewrap's init process for this, but we currently
  * can't do that without breaking gameoverlayrender.so's assumptions,
  * and we want -adverb for its locale functionality anyway. */
-void
-pv_runtime_append_adverbs (PvRuntime *self,
-                           FlatpakBwrap *bwrap)
+gchar *
+pv_runtime_get_adverb (PvRuntime *self,
+                       FlatpakBwrap *bwrap)
 {
-  g_return_if_fail (PV_IS_RUNTIME (self));
-  g_return_if_fail (!pv_bwrap_was_finished (bwrap));
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
   /* This will be true if pv_runtime_bind() was successfully called. */
-  g_return_if_fail (self->adverb_in_container != NULL);
-
-  flatpak_bwrap_add_args (bwrap,
-                          self->adverb_in_container,
-                          "--subreaper",
-                          NULL);
+  g_return_val_if_fail (self->adverb_in_container != NULL, NULL);
+  g_return_val_if_fail (bwrap != NULL, NULL);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), NULL);
 
   if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
     flatpak_bwrap_add_args (bwrap, "--generate-locales", NULL);
-
-  if (self->flags & PV_RUNTIME_FLAGS_VERBOSE)
-    flatpak_bwrap_add_args (bwrap, "--verbose", NULL);
 
   if (pv_bwrap_lock_is_ofd (self->runtime_lock))
     {
@@ -942,9 +935,7 @@ pv_runtime_append_adverbs (PvRuntime *self,
                               NULL);
     }
 
-  flatpak_bwrap_add_args (bwrap,
-                          "--",
-                          NULL);
+  return g_strdup (self->adverb_in_container);
 }
 
 /*

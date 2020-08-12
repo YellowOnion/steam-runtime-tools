@@ -48,6 +48,8 @@ static GArray *global_pass_fds = NULL;
 static gboolean opt_create = FALSE;
 static gboolean opt_generate_locales = FALSE;
 static gboolean opt_subreaper = FALSE;
+static double opt_terminate_idle_timeout = 0.0;
+static double opt_terminate_timeout = -1.0;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_wait = FALSE;
@@ -63,7 +65,22 @@ static void
 child_setup_cb (gpointer user_data)
 {
   ChildSetupData *data = user_data;
+  sigset_t set;
   const int *iter;
+  int i;
+
+  /* Unblock all signals */
+  sigemptyset (&set);
+  if (pthread_sigmask (SIG_SETMASK, &set, NULL) == -1)
+    pv_async_signal_safe_error ("Failed to unblock signals when starting child\n",
+                                LAUNCH_EX_FAILED);
+
+  /* Reset the handlers for all signals to their defaults. */
+  for (i = 1; i < NSIG; i++)
+    {
+      if (i != SIGSTOP && i != SIGKILL)
+        signal (i, SIG_DFL);
+    }
 
   /* Put back the original stdout for the child process */
   if (data != NULL &&
@@ -217,9 +234,16 @@ generate_locales (gchar **locpath_out,
   g_autofree gchar *pvlg = NULL;
   g_autofree gchar *this_path = NULL;
   g_autofree gchar *this_dir = NULL;
+  gboolean ret;
+  sigset_t mask;
+  sigset_t old_mask;
 
   g_return_val_if_fail (locpath_out == NULL || *locpath_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  sigemptyset (&mask);
+  sigemptyset (&old_mask);
+  sigaddset (&mask, SIGCHLD);
 
   temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
 
@@ -243,17 +267,26 @@ generate_locales (gchar **locpath_out,
     NULL
   };
 
+  /* Unblock SIGCHLD in case g_spawn_sync() needs it in some version */
+  if (pthread_sigmask (SIG_UNBLOCK, &mask, &old_mask) != 0)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (gchar **) locale_gen_argv,
-                     NULL,  /* environ */
-                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                     child_setup_cb, NULL,
-                     &child_stdout,
-                     &child_stderr,
-                     &wait_status,
-                     error))
+  ret = g_spawn_sync (NULL,  /* cwd */
+                      (gchar **) locale_gen_argv,
+                      NULL,  /* environ */
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                      child_setup_cb, NULL,
+                      &child_stdout,
+                      &child_stderr,
+                      &wait_status,
+                      error);
+
+  if (pthread_sigmask (SIG_SETMASK, &old_mask, NULL) != 0)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
+  if (!ret)
     {
       if (error != NULL)
         glnx_prefix_error (error, "Cannot run pressure-vessel-locale-gen");
@@ -349,12 +382,26 @@ static GOptionEntry options[] =
 
   { "subreaper", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_subreaper,
-    "Do not exit until all child processes have exited.",
+    "Do not exit until all descendant processes have exited.",
     NULL },
   { "no-subreaper", '\0',
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_subreaper,
     "Only wait for a direct child process [default].",
     NULL },
+
+  { "terminate-idle-timeout", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_idle_timeout,
+    "If --terminate-timeout is used, wait this many seconds before "
+    "sending SIGTERM. [default: 0.0]",
+    "SECONDS" },
+  { "terminate-timeout", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_timeout,
+    "Send SIGTERM and SIGCONT to descendant processes that didn't "
+    "exit within --terminate-idle-timeout. If they don't all exit within "
+    "this many seconds, send SIGKILL and SIGCONT to survivors. If 0.0, "
+    "skip SIGTERM and use SIGKILL immediately. Implies --subreaper. "
+    "[Default: -1.0, meaning don't signal].",
+    "SECONDS" },
 
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
@@ -390,6 +437,19 @@ main (int argc,
   g_auto(GStrv) my_environ = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   ChildSetupData child_setup_data = { -1, NULL };
+  sigset_t mask;
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+
+  /* Must be called before we start any threads */
+  if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
+    {
+      ret = EX_UNAVAILABLE;
+      glnx_throw_errno_prefix (error, "pthread_sigmask");
+      goto out;
+    }
+
 
   setlocale (LC_ALL, "");
 
@@ -465,7 +525,7 @@ main (int argc,
 
   command_and_args = argv + 1;
 
-  if (opt_subreaper
+  if ((opt_subreaper || opt_terminate_timeout >= 0)
       && prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0)
     {
       glnx_throw_errno_prefix (error,
@@ -551,9 +611,22 @@ main (int argc,
                wait_status);
     }
 
-  /* Wait for the other child processes, if any */
-  if (!pv_wait_for_child_processes (0, NULL, error))
-    goto out;
+  if (opt_terminate_idle_timeout < 0.0)
+    opt_terminate_idle_timeout = 0.0;
+
+  /* Wait for the other child processes, if any, possibly killing them */
+  if (opt_terminate_timeout >= 0.0)
+    {
+      if (!pv_terminate_all_child_processes (opt_terminate_idle_timeout * G_TIME_SPAN_SECOND,
+                                             opt_terminate_timeout * G_TIME_SPAN_SECOND,
+                                             error))
+        goto out;
+    }
+  else
+    {
+      if (!pv_wait_for_child_processes (0, NULL, error))
+        goto out;
+    }
 
 out:
   global_locks = NULL;

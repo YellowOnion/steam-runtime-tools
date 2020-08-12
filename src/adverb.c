@@ -534,53 +534,30 @@ main (int argc,
   /* If the child writes to stdout and closes it, don't interfere */
   g_clear_pointer (&original_stdout, fclose);
 
-  while (1)
-    {
-      pid_t died = wait (&wait_status);
+  /* Reap child processes until child_pid exits */
+  if (!pv_wait_for_child_processes (child_pid, &wait_status, error))
+    goto out;
 
-      if (died < 0)
-        {
-          if (errno == EINTR)
-            {
-              continue;
-            }
-          else if (errno == ECHILD)
-            {
-              g_debug ("No more child processes, exiting");
-              break;
-            }
-          else
-            {
-              glnx_throw_errno_prefix (error, "wait");
-              goto out;
-            }
-        }
-      else if (died == child_pid)
-        {
-          if (WIFEXITED (wait_status))
-            {
-              ret = WEXITSTATUS (wait_status);
-              g_debug ("Command exited with status %d", ret);
-            }
-          else if (WIFSIGNALED (wait_status))
-            {
-              ret = 128 + WTERMSIG (wait_status);
-              g_debug ("Command killed by signal %d", ret - 128);
-            }
-          else
-            {
-              ret = EX_SOFTWARE;
-              g_debug ("Command terminated in an unknown way (wait status %d)",
-                       wait_status);
-            }
-        }
-      else
-        {
-          g_debug ("Indirect child %lld exited with wait status %d",
-                   (long long) died, wait_status);
-          g_warn_if_fail (opt_subreaper);
-        }
+  if (WIFEXITED (wait_status))
+    {
+      ret = WEXITSTATUS (wait_status);
+      g_debug ("Command exited with status %d", ret);
     }
+  else if (WIFSIGNALED (wait_status))
+    {
+      ret = 128 + WTERMSIG (wait_status);
+      g_debug ("Command killed by signal %d", ret - 128);
+    }
+  else
+    {
+      ret = EX_SOFTWARE;
+      g_debug ("Command terminated in an unknown way (wait status %d)",
+               wait_status);
+    }
+
+  /* Wait for the other child processes, if any */
+  if (!pv_wait_for_child_processes (0, NULL, error))
+    goto out;
 
 out:
   global_locks = NULL;

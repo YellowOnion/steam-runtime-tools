@@ -23,6 +23,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <sys/types.h>
 
 #include <glib.h>
 
@@ -60,3 +61,7 @@ void pv_async_signal_safe_error (const char *message,
                                  int exit_status) G_GNUC_NORETURN;
 
 gchar *pv_get_random_uuid (GError **error);
+
+gboolean pv_wait_for_child_processes (pid_t main_process,
+                                      int *wait_status_out,
+                                      GError **error);

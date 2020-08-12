@@ -23,6 +23,8 @@
 #include "utils.h"
 
 #include <ftw.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -574,4 +576,89 @@ pv_get_random_uuid (GError **error)
                             PROC_SYS_KERNEL_RANDOM_UUID);
 
   return g_steal_pointer (&contents);
+}
+
+/**
+ * pv_wait_for_child_processes:
+ * @main_process: process for which we will report wait-status;
+ *  zero or negative if there is no main process
+ * @wait_status_out: (out): Used to store the wait status of `@main_process`,
+ *  as if from `wait()`, on success
+ * @error: Used to raise an error on failure
+ *
+ * Wait for child processes of this process to exit, until the @main_process
+ * has exited. If there is no main process, wait until there are no child
+ * processes at all.
+ *
+ * If the process is a subreaper (`PR_SET_CHILD_SUBREAPER`),
+ * indirect child processes whose parents have exited will be reparented
+ * to it, so this will have the effect of waiting for all descendants.
+ *
+ * If @main_process is positive, return when @main_process has exited.
+ * Child processes that exited before @main_process will also have been
+ * "reaped", but child processes that exit after @main_process will not
+ * (use `pv_wait_for_child_processes (0, &error)` to resume waiting).
+ *
+ * If @main_process is zero or negative, wait for all child processes
+ * to exit.
+ *
+ * This function cannot be called in a process that is using
+ * g_child_watch_source_new() or similar functions, because it waits
+ * for all child processes regardless of their process IDs, and that is
+ * incompatible with waiting for individual child processes.
+ *
+ * Returns: %TRUE when @main_process has exited, or if @main_process
+ *  is zero or negative and all child processes have exited
+ */
+gboolean
+pv_wait_for_child_processes (pid_t main_process,
+                             int *wait_status_out,
+                             GError **error)
+{
+  if (wait_status_out != NULL)
+    *wait_status_out = -1;
+
+  while (1)
+    {
+      int wait_status = -1;
+      pid_t died = wait (&wait_status);
+
+      if (died < 0)
+        {
+          if (errno == EINTR)
+            {
+              continue;
+            }
+          else if (errno == ECHILD)
+            {
+              g_debug ("No more child processes");
+              break;
+            }
+          else
+            {
+              return glnx_throw_errno_prefix (error, "wait");
+            }
+        }
+
+      g_debug ("Child %lld exited with wait status %d",
+               (long long) died, wait_status);
+
+      if (died == main_process)
+        {
+          if (wait_status_out != NULL)
+            *wait_status_out = wait_status;
+
+          return TRUE;
+        }
+    }
+
+  if (main_process > 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Process %lld was not seen to exit",
+                   (long long) main_process);
+      return FALSE;
+    }
+
+  return TRUE;
 }

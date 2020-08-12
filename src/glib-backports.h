@@ -78,6 +78,8 @@ gchar *my_g_dbus_address_escape_value (const gchar *string);
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 36, 0)
+#define g_unix_fd_source_new(fd, cond) \
+  my_g_unix_fd_source_new (fd, cond)
 #define g_unix_fd_add(fd, cond, cb, ud) \
   my_g_unix_fd_add_full (G_PRIORITY_DEFAULT, fd, cond, cb, ud, NULL)
 #define g_unix_fd_add_full(prio, fd, cond, cb, ud, destroy) \
@@ -89,4 +91,6 @@ guint my_g_unix_fd_add_full (int priority,
                              MyGUnixFDSourceFunc func,
                              gpointer user_data,
                              GDestroyNotify destroy);
+GSource *my_g_unix_fd_source_new (int fd,
+                                  GIOCondition condition);
 #endif

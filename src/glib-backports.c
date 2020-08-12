@@ -29,6 +29,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <glib-object.h>
+
 /* We have no internationalization */
 #define _(x) x
 
@@ -257,39 +259,73 @@ my_g_dbus_address_escape_value (const gchar *string)
 
 #if !GLIB_CHECK_VERSION(2, 36, 0)
 /*
- * Reimplement GUnixFDSourceFunc API in terms of GIOChannel
+ * Reimplement GUnixFDSourceFunc API in terms of older GLib versions
  */
 
 typedef struct
 {
-  MyGUnixFDSourceFunc func;
-  gpointer user_data;
-  GDestroyNotify destroy;
-} MyGUnixFDClosure;
+  GSource parent;
+  GPollFD pollfd;
+} MyUnixFDSource;
 
-static void
-my_g_unix_fd_closure_free (gpointer p)
+static gboolean
+my_unix_fd_source_prepare (GSource *source,
+                           int *timeout_out)
 {
-  MyGUnixFDClosure *closure = p;
+  if (timeout_out != NULL)
+    *timeout_out = -1;
 
-  if (closure->destroy != NULL)
-    closure->destroy (closure->user_data);
-
-  g_free (closure);
+  /* We don't know we're ready to be dispatched until we have polled. */
+  return FALSE;
 }
 
 static gboolean
-my_g_unix_fd_wrapper (GIOChannel *source,
-                      GIOCondition condition,
-                      gpointer user_data)
+my_unix_fd_source_check (GSource *source)
 {
-  MyGUnixFDClosure *closure = user_data;
-  int fd;
+  MyUnixFDSource *self = (MyUnixFDSource *) source;
 
-  fd = g_io_channel_unix_get_fd (source);
-  g_return_val_if_fail (fd >= 0, G_SOURCE_REMOVE);
+  /* We're ready to be dispatched if an event occurred. */
+  return (self->pollfd.revents != 0);
+}
 
-  return closure->func (fd, condition, closure->user_data);
+static gboolean
+my_unix_fd_source_dispatch (GSource *source,
+                            GSourceFunc callback,
+                            gpointer user_data)
+{
+  MyUnixFDSource *self = (MyUnixFDSource *) source;
+  MyGUnixFDSourceFunc func = (MyGUnixFDSourceFunc) G_CALLBACK (callback);
+
+  g_return_val_if_fail (func != NULL, G_SOURCE_REMOVE);
+  return func (self->pollfd.fd, self->pollfd.revents, user_data);
+}
+
+static void
+my_unix_fd_source_finalize (GSource *source)
+{
+}
+
+static GSourceFuncs my_unix_fd_source_funcs =
+{
+  my_unix_fd_source_prepare,
+  my_unix_fd_source_check,
+  my_unix_fd_source_dispatch,
+  my_unix_fd_source_finalize
+};
+
+GSource *
+my_g_unix_fd_source_new (int fd,
+                         GIOCondition condition)
+{
+  GSource *source = g_source_new (&my_unix_fd_source_funcs,
+                                  sizeof (MyUnixFDSource));
+  MyUnixFDSource *self = (MyUnixFDSource *) source;
+
+  self->pollfd.fd = fd;
+  self->pollfd.events = condition;
+
+  g_source_add_poll (source, &self->pollfd);
+  return source;
 }
 
 guint
@@ -300,33 +336,18 @@ my_g_unix_fd_add_full (int priority,
                        gpointer user_data,
                        GDestroyNotify destroy)
 {
-  GIOChannel *channel;
-  MyGUnixFDClosure *closure;
+  GSource *source;
   guint ret;
 
   g_return_val_if_fail (fd >= 0, 0);
   g_return_val_if_fail (func != NULL, 0);
 
-  closure = g_new0 (MyGUnixFDClosure, 1);
-  closure->func = func;
-  closure->user_data = user_data;
-  closure->destroy = destroy;
-
-  /* POLLERR, POLLHUP and POLLNVAL are implicitly returned by poll()
-   * and hence by Unix fd watches, but GIOChannel applies its own
-   * filtering */
-  condition |= (G_IO_ERR|G_IO_HUP|G_IO_NVAL);
-
-  channel = g_io_channel_unix_new (fd);
-  /* Disable text recoding, treat it as a bytestream */
-  g_io_channel_set_encoding (channel, NULL, NULL);
-  ret = g_io_add_watch_full (channel,
-                             priority,
-                             condition,
-                             my_g_unix_fd_wrapper,
-                             closure,
-                             my_g_unix_fd_closure_free);
-  g_io_channel_unref (channel);
+  source = my_g_unix_fd_source_new (fd, condition);
+  g_source_set_callback (source, (GSourceFunc) G_CALLBACK (func),
+                         user_data, destroy);
+  g_source_set_priority (source, priority);
+  ret = g_source_attach (source, NULL);
+  g_source_unref (source);
   return ret;
 }
 #endif

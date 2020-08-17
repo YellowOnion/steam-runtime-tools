@@ -474,7 +474,7 @@ main (int argc,
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("pressure-vessel-launcher");
+  g_set_prgname ("pressure-vessel-launch");
 
   g_log_set_handler (G_LOG_DOMAIN,
                      G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,

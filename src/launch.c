@@ -422,7 +422,8 @@ static const GOptionEntry options[] =
     "ABSPATH|@ABSTRACT" },
   { "terminate", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_terminate,
-    "Terminate the Launcher server.", NULL },
+    "Terminate the Launcher server after the COMMAND (if any) has run.",
+    NULL },
   { "unset-env", '\0',
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Unset environment variable, like env -u.", "VAR" },
@@ -515,7 +516,7 @@ main (int argc,
       goto out;
     }
 
-  if (!opt_terminate)
+  if (argc > 1)
     {
       /* We have to block the signals we want to forward before we start any
        * other thread, and in particular the GDBus worker thread, because
@@ -545,22 +546,21 @@ main (int argc,
       argc--;
     }
 
-  if (opt_terminate)
+  if (argc < 2)
     {
-      if (argc != 1)
+      if (!opt_terminate)
         {
-          glnx_throw (error, "--terminate cannot be combined with a COMMAND");
+          glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
+                      g_get_prgname ());
           goto out;
         }
-    }
-  else if (argc < 2)
-    {
-      glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
-                  g_get_prgname ());
-      goto out;
-    }
 
-  command_and_args = argv + 1;
+      command_and_args = NULL;
+    }
+  else
+    {
+      command_and_args = argv + 1;
+    }
 
   launch_exit_status = LAUNCH_EX_FAILED;
   loop = g_main_loop_new (NULL, FALSE);
@@ -652,8 +652,10 @@ main (int argc,
 
   g_assert (bus_or_peer_connection != NULL);
 
-  if (opt_terminate)
+  if (command_and_args == NULL)
     {
+      g_assert (opt_terminate);   /* already checked */
+
       reply = g_dbus_connection_call_sync (bus_or_peer_connection,
                                            service_bus_name,
                                            service_obj_path,
@@ -671,6 +673,7 @@ main (int argc,
       goto out;
     }
 
+  g_assert (command_and_args != NULL);
   g_dbus_connection_signal_subscribe (bus_or_peer_connection,
                                       service_bus_name,   /* NULL if p2p */
                                       service_iface,
@@ -746,8 +749,11 @@ main (int argc,
   if (opt_clear_env)
     spawn_flags |= PV_LAUNCH_FLAGS_CLEAR_ENV;
 
-  /* There are no options yet, so just leave this empty */
   g_variant_builder_init (&options_builder, G_VARIANT_TYPE ("a{sv}"));
+
+  if (opt_terminate)
+    g_variant_builder_add (&options_builder, "{s@v}", "terminate-after",
+                           g_variant_new_variant (g_variant_new_boolean (TRUE)));
 
   if (!opt_directory)
     {

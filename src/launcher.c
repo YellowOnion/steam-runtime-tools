@@ -99,6 +99,7 @@ typedef struct
   GPid pid;
   gchar *client;
   guint child_watch;
+  gboolean terminate_after;
 } PidData;
 
 static void
@@ -134,6 +135,7 @@ child_watch_died (GPid     pid,
 {
   PidData *pid_data = user_data;
   g_autoptr(GVariant) signal_variant = NULL;
+  gboolean terminate_after = pid_data->terminate_after;
 
   g_debug ("Child %d died: wait status %d", pid_data->pid, status);
 
@@ -148,6 +150,13 @@ child_watch_died (GPid     pid,
 
   /* This frees the pid_data, so be careful */
   g_hash_table_remove (client_pid_data_hash, GUINT_TO_POINTER (pid_data->pid));
+
+  if (terminate_after)
+    {
+      g_debug ("Main pid %d died, terminating...", pid);
+      terminate_children (SIGTERM);
+      unref_skeleton_in_timeout ();
+    }
 }
 
 typedef struct
@@ -241,6 +250,7 @@ handle_launch (PvLauncher1           *object,
   g_autofree FdMapEntry *fd_map = NULL;
   g_auto(GStrv) env = NULL;
   gint32 max_fd;
+  gboolean terminate_after = FALSE;
 
   if (fd_list != NULL)
     fds = g_unix_fd_list_peek_fds (fd_list, &fds_len);
@@ -262,6 +272,8 @@ handle_launch (PvLauncher1           *object,
                                              "Unsupported flags enabled: 0x%x", arg_flags & ~PV_LAUNCH_FLAGS_MASK);
       return TRUE;
     }
+
+  g_variant_lookup (arg_options, "terminate-after", "b", &terminate_after);
 
   g_debug ("Running spawn command %s", arg_argv[0]);
 
@@ -369,6 +381,7 @@ handle_launch (PvLauncher1           *object,
   pid_data->connection = g_object_ref (g_dbus_method_invocation_get_connection (invocation));
   pid_data->pid = pid;
   pid_data->client = g_strdup (g_dbus_method_invocation_get_sender (invocation));
+  pid_data->terminate_after = terminate_after;
   pid_data->child_watch = g_child_watch_add_full (G_PRIORITY_DEFAULT,
                                                   pid,
                                                   child_watch_died,

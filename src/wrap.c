@@ -1464,27 +1464,24 @@ main (int argc,
                                     opt_terminate_timeout);
     }
 
-  if (adverb_args->argv->len > 0)
-    {
-      /* If not using a runtime, the adverb in the container has the
-       * same path as outside */
-      if (adverb_in_container == NULL)
-        adverb_in_container = g_build_filename (tools_dir,
-                                                "pressure-vessel-adverb",
-                                                NULL);
+  /* If not using a runtime, the adverb in the container has the
+   * same path as outside */
+  if (adverb_in_container == NULL)
+    adverb_in_container = g_build_filename (tools_dir,
+                                            "pressure-vessel-adverb",
+                                            NULL);
 
-      flatpak_bwrap_add_args (bwrap,
-                              adverb_in_container,
-                              "--subreaper",
-                              NULL);
+  flatpak_bwrap_add_args (bwrap,
+                          adverb_in_container,
+                          "--exit-with-parent",
+                          "--subreaper",
+                          NULL);
 
-      if (opt_verbose)
-        flatpak_bwrap_add_arg (bwrap, "--verbose");
+  if (opt_verbose)
+    flatpak_bwrap_add_arg (bwrap, "--verbose");
 
-      flatpak_bwrap_append_bwrap (bwrap, adverb_args);
-      flatpak_bwrap_add_arg (bwrap, "--");
-    }
-  /* else just run the wrapped command directly */
+  flatpak_bwrap_append_bwrap (bwrap, adverb_args);
+  flatpak_bwrap_add_arg (bwrap, "--");
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);

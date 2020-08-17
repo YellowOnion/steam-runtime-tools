@@ -46,6 +46,7 @@
 static GPtrArray *global_locks = NULL;
 static GArray *global_pass_fds = NULL;
 static gboolean opt_create = FALSE;
+static gboolean opt_exit_with_parent = FALSE;
 static gboolean opt_generate_locales = FALSE;
 static gboolean opt_subreaper = FALSE;
 static double opt_terminate_idle_timeout = 0.0;
@@ -344,6 +345,16 @@ static GOptionEntry options[] =
     "Don't create subsequent nonexistent lock files [default].",
     NULL },
 
+  { "exit-with-parent", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_exit_with_parent,
+    "Terminate child process and self with SIGTERM when parent process "
+    "exits.",
+    NULL },
+  { "no-exit-with-parent", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_exit_with_parent,
+    "Don't do anything special when parent process exits [default].",
+    NULL },
+
   { "generate-locales", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
     "Attempt to generate any missing locales.", NULL },
@@ -524,6 +535,18 @@ main (int argc,
   ret = EX_UNAVAILABLE;
 
   command_and_args = argv + 1;
+
+  if (opt_exit_with_parent)
+    {
+      g_debug ("Setting up to exit when parent does");
+
+      if (prctl (PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) != 0)
+        {
+          glnx_throw_errno_prefix (error,
+                                   "Unable to set parent death signal");
+          goto out;
+        }
+    }
 
   if ((opt_subreaper || opt_terminate_timeout >= 0)
       && prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0)

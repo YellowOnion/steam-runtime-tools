@@ -58,7 +58,9 @@ class TestLauncher(BaseTest):
     def test_socket_directory(self) -> None:
         with tempfile.TemporaryDirectory(prefix='test-') as temp:
             printf_symlink = os.path.join(temp, 'printf=symlink')
-            os.symlink(shutil.which('printf'), printf_symlink)
+            printf = shutil.which('printf')
+            assert printf is not None
+            os.symlink(printf, printf_symlink)
 
             proc = subprocess.Popen(
                 [
@@ -561,10 +563,12 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stdin = proc.stdin
+            assert stdin is not None
             os.close(read_end)
 
             if use_stdin:
-                proc.stdin.close()
+                stdin.close()
             else:
                 os.close(write_end)
 

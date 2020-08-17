@@ -57,6 +57,7 @@ class TestLauncher(BaseTest):
 
     def test_socket_directory(self) -> None:
         with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            need_terminate = True
             printf_symlink = os.path.join(temp, 'printf=symlink')
             printf = shutil.which('printf')
             assert printf is not None
@@ -264,8 +265,24 @@ class TestLauncher(BaseTest):
                     launch.wait(),
                     (128 + signal.SIGINT, -signal.SIGINT),
                 )
+
+                completed = run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--terminate',
+                        '--',
+                        'sh', '-euc', 'echo Goodbye',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                need_terminate = False
+                self.assertEqual(completed.stdout, b'Goodbye\n')
             finally:
-                proc.terminate()
+                if need_terminate:
+                    proc.terminate()
+
                 proc.wait()
                 self.assertEqual(proc.returncode, 0)
 

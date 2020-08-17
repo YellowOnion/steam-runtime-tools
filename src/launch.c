@@ -205,7 +205,7 @@ forward_signal_handler (int sfd,
 }
 
 static guint
-forward_signals (void)
+forward_signals (GError **error)
 {
   static int forward[] = {
     SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGCONT, SIGTSTP, SIGUSR1, SIGUSR2
@@ -223,7 +223,7 @@ forward_signals (void)
 
   if (sfd < 0)
     {
-      g_warning ("Unable to watch signals: %s", g_strerror (errno));
+      glnx_throw_errno_prefix (error, "Unable to watch signals");
       return 0;
     }
 
@@ -237,7 +237,11 @@ forward_signals (void)
    *   of blocking them, they would no longer be pending by the time the
    *   main loop wakes up and reads from the signalfd.
    */
-  pthread_sigmask (SIG_BLOCK, &mask, NULL);
+  if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
+    {
+      glnx_throw_errno_prefix (error, "Unable to block signals");
+      return 0;
+    }
 
   return g_unix_fd_add (sfd, G_IO_IN, forward_signal_handler, NULL);
 }
@@ -523,7 +527,7 @@ main (int argc,
        * the signal mask is per-thread. We need all threads to have the same
        * mask, otherwise a thread that doesn't have the mask will receive
        * process-directed signals, causing the whole process to exit. */
-      signal_source = forward_signals ();
+      signal_source = forward_signals (error);
 
       if (signal_source == 0)
         {

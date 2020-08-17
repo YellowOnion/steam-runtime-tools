@@ -2965,6 +2965,12 @@ pv_runtime_bind (PvRuntime *self,
       if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest, error))
         return FALSE;
 
+      flatpak_bwrap_add_args (bwrap,
+                              "--symlink",
+                              "/usr/lib/pressure-vessel/from-host",
+                              "/run/pressure-vessel/pv-from-host",
+                              NULL);
+
       self->adverb_in_container = "/usr/lib/pressure-vessel/from-host/bin/pressure-vessel-adverb";
     }
   else

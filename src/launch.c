@@ -454,7 +454,6 @@ main (int argc,
   GError **error = &local_error;
   g_autoptr(GPtrArray) env_prefix = NULL;
   char **command_and_args;
-  guint forward_signals_id = 0;
   g_autoptr(FILE) original_stdout = NULL;
   g_autoptr(GDBusConnection) session_bus = NULL;
   g_autoptr(GDBusConnection) peer_connection = NULL;
@@ -853,8 +852,8 @@ out:
   if (local_error != NULL)
     g_warning ("%s", local_error->message);
 
-  if (forward_signals_id > 0)
-    g_source_remove (forward_signals_id);
+  if (signal_source > 0)
+    g_source_remove (signal_source);
 
   g_strfreev (forward_fds);
   g_free (opt_directory);

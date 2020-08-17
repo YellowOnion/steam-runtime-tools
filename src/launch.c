@@ -67,23 +67,23 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
 {
   GMainLoop *loop = user_data;
   guint32 client_pid = 0;
-  guint32 exit_status = 0;
+  guint32 wait_status = 0;
 
   if (!g_variant_is_of_type (parameters, G_VARIANT_TYPE ("(uu)")))
     return;
 
-  g_variant_get (parameters, "(uu)", &client_pid, &exit_status);
-  g_debug ("child exited %d: %d", client_pid, exit_status);
+  g_variant_get (parameters, "(uu)", &client_pid, &wait_status);
+  g_debug ("child %d exited: wait status %d", client_pid, wait_status);
 
   if (child_pid == client_pid)
     {
       int exit_code = 0;
 
-      if (WIFEXITED (exit_status))
+      if (WIFEXITED (wait_status))
         {
-          exit_code = WEXITSTATUS (exit_status);
+          exit_code = WEXITSTATUS (wait_status);
         }
-      else if (WIFSIGNALED (exit_status))
+      else if (WIFSIGNALED (wait_status))
         {
           /* Smush the signal into an unsigned byte, as the shell does. This is
            * not quite right from the perspective of whatever ran flatpak-spawn
@@ -91,7 +91,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
            *  alternative is to disconnect all signal() handlers then send this
            *  signal to ourselves and hope it kills us.
            */
-          exit_code = 128 + WTERMSIG (exit_status);
+          exit_code = 128 + WTERMSIG (wait_status);
         }
       else
         {
@@ -100,7 +100,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
            * of WIFEXITED() or WIFSIGNALED() will be true.
            */
           g_warning ("exit status %d is neither WIFEXITED() nor WIFSIGNALED()",
-                     exit_status);
+                     wait_status);
           exit_code = LAUNCH_EX_CANNOT_REPORT;
         }
 

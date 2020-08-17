@@ -135,7 +135,7 @@ child_watch_died (GPid     pid,
   PidData *pid_data = user_data;
   g_autoptr(GVariant) signal_variant = NULL;
 
-  g_debug ("Client Pid %d died", pid_data->pid);
+  g_debug ("Child %d died: wait status %d", pid_data->pid, status);
 
   signal_variant = g_variant_ref_sink (g_variant_new ("(uu)", pid, status));
   g_dbus_connection_emit_signal (pid_data->connection,

@@ -55,6 +55,7 @@ static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_wait = FALSE;
 static gboolean opt_write = FALSE;
+static GPid child_pid;
 
 typedef struct
 {
@@ -69,6 +70,16 @@ child_setup_cb (gpointer user_data)
   sigset_t set;
   const int *iter;
   int i;
+
+  /* The adverb should wait for its child before it exits, but if it
+   * gets terminated prematurely, we want the child to terminate too.
+   * The child could reset this, but we assume it usually won't.
+   * This makes it exit even if we are killed by SIGKILL, unless it
+   * takes steps not to be. */
+  if (opt_exit_with_parent
+      && prctl (PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) != 0)
+    pv_async_signal_safe_error ("Failed to set up parent-death signal\n",
+                                LAUNCH_EX_FAILED);
 
   /* Unblock all signals */
   sigemptyset (&set);
@@ -328,6 +339,23 @@ generate_locales (gchar **locpath_out,
   return TRUE;
 }
 
+/* Only do async-signal-safe things here: see signal-safety(7) */
+static void
+terminate_child_cb (int signum)
+{
+  if (child_pid != 0)
+    {
+      /* pass it on to the child we're going to wait for */
+      kill (child_pid, signum);
+    }
+  else
+    {
+      /* guess I'll just die, then */
+      signal (signum, SIG_DFL);
+      raise (signum);
+    }
+}
+
 static GOptionEntry options[] =
 {
   { "fd", '\0',
@@ -442,13 +470,13 @@ main (int argc,
   GError **error = &local_error;
   int ret = EX_USAGE;
   char **command_and_args;
-  GPid child_pid;
   int wait_status = -1;
   g_autofree gchar *locales_temp_dir = NULL;
   g_auto(GStrv) my_environ = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   ChildSetupData child_setup_data = { -1, NULL };
   sigset_t mask;
+  struct sigaction terminate_child_action = {};
 
   sigemptyset (&mask);
   sigaddset (&mask, SIGCHLD);
@@ -579,6 +607,16 @@ main (int argc,
         }
     }
 
+  /* Respond to common termination signals by killing the child instead of
+   * ourselves */
+  terminate_child_action.sa_handler = terminate_child_cb;
+  sigaction (SIGHUP, &terminate_child_action, NULL);
+  sigaction (SIGINT, &terminate_child_action, NULL);
+  sigaction (SIGQUIT, &terminate_child_action, NULL);
+  sigaction (SIGTERM, &terminate_child_action, NULL);
+  sigaction (SIGUSR1, &terminate_child_action, NULL);
+  sigaction (SIGUSR2, &terminate_child_action, NULL);
+
   g_debug ("Launching child process...");
   fflush (stdout);
   child_setup_data.original_stdout_fd = fileno (original_stdout);
@@ -616,6 +654,8 @@ main (int argc,
   /* Reap child processes until child_pid exits */
   if (!pv_wait_for_child_processes (child_pid, &wait_status, error))
     goto out;
+
+  child_pid = 0;
 
   if (WIFEXITED (wait_status))
     {

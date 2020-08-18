@@ -110,6 +110,10 @@ build:scout:
                 apt-get -y update
             fi
 
+            # We need up-to-date packages for the relocatable install to
+            # be able to get its source code
+            apt-get -y dist-upgrade
+
             apt-get -y --no-install-recommends install \
             bubblewrap \
             libcapsule0 \
@@ -169,7 +173,13 @@ build:scout:
 build:
     rules:
         - if: '$CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ""'
+
 autopkgtest:
+    variables:
+        STEAM_CI_INSTALL_SCRIPT: |
+            # We need up-to-date packages for the relocatable install to
+            # be able to get its source code
+            apt-get -y dist-upgrade
     rules:
         - if: '$CI_NEED_NEWER_STEAM_RUNTIME_TOOLS == ""'
 

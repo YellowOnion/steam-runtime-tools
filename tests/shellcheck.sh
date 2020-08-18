@@ -24,6 +24,8 @@ for shell_script in \
         debian/tests/depot \
         depot/deploy-runtime \
         depot/run-in-steamrt \
+        depot/_start-container-in-background \
+        depot/_v2-entry-point \
         tests/*.sh \
         ; do
     n=$((n + 1))

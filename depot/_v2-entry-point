@@ -1,0 +1,362 @@
+#!/bin/bash
+
+set -eu
+me="$(readlink -f "$0")"
+here="${me%/*}"
+me="${me##*/}"
+
+# This is a prototype and will probably not survive in its current form.
+# Don't rely on it.
+
+deploy=
+is_main=yes
+suite=scout
+verbose=
+
+if [ "${PRESSURE_VESSEL_VERBOSE-}" = 1 ]; then
+    verbose=yes
+fi
+
+log () {
+    printf '%s\n' "${me}[$$]: $*" >&2
+}
+
+verbose () {
+    if [ -n "$verbose" ]; then
+        log "$@"
+    fi
+}
+
+verbose "argv: $(printf '%q ' "$@")"
+
+usage () {
+    local code="$1"
+    shift
+
+    if [ "$code" -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo "Usage:"
+    echo "$me [OPTIONS] COMMAND [ARGS...]"
+    echo
+    echo "Run a command in a container that is shared with other"
+    echo "invocations of the same Steam game."
+    echo
+    echo "Required arguments"
+    echo "COMMAND [ARGS...] Run this."
+    echo
+    echo "Options"
+    echo "--deploy=DIR      Deploy to this directory [default=SUITE]."
+    echo "--suite=SUITE     Run in this runtime [default=scout]."
+    echo "--verb=%verb%     Mode to operate in [default=waitforexitandrun]."
+    echo "--verbose         Be more verbose."
+
+    exit "${code}"
+}
+
+getopt_temp="help"
+getopt_temp="${getopt_temp},deploy:"
+getopt_temp="${getopt_temp},suite:"
+getopt_temp="${getopt_temp},verb:"
+getopt_temp="${getopt_temp},verbose"
+
+getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
+eval "set -- $getopt_temp"
+unset getopt_temp
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        (--help)
+            usage 0
+            # not reached
+            ;;
+
+        (--deploy)
+            deploy="$2"
+            shift 2
+            ;;
+
+        (--suite)
+            suite="$2"
+            shift 2
+            ;;
+
+        (--verb)
+            case "$2" in
+                (waitforexitandrun)
+                    is_main=yes
+                    ;;
+                (*)
+                    is_main=
+                    ;;
+            esac
+            shift 2
+            ;;
+
+        (--verbose)
+            verbose=yes
+            shift
+            ;;
+
+        (--)
+            shift
+            break
+            ;;
+
+        (-*)
+            log "Unknown option: $1"
+            usage 125   # EX_USAGE from sysexits.h
+            # not reached
+            ;;
+
+        (*)
+            break
+            ;;
+    esac
+done
+
+if [ -z "$deploy" ]; then
+    deploy="$suite"
+fi
+
+if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
+    log "Error: A command to run is required"
+    usage 125
+fi
+
+# Steam App ID of this app or game
+log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID:?}"
+
+# Absolute path to the steamapps or SteamApps directory in the library
+# where this app or game is installed (even if Proton or SteamLinuxRuntime
+# is in a different library)
+log "STEAM_COMPAT_APP_LIBRARY_PATH=${STEAM_COMPAT_APP_LIBRARY_PATH:?}"
+
+# All library paths, ":"-separated
+log "STEAM_COMPAT_APP_LIBRARY_PATHS=${STEAM_COMPAT_APP_LIBRARY_PATHS:="$STEAM_COMPAT_APP_LIBRARY_PATH"}"
+
+# TODO: What is this for?
+log "STEAM_COMPAT_CONFIG=${STEAM_COMPAT_CONFIG-}"
+
+# Absolute path to the variable compat-data directory, used by Proton
+# for its ${WINEPREFIX}.
+log "STEAM_COMPAT_DATA_PATH=${STEAM_COMPAT_DATA_PATH:?}"
+
+# ':'-separated list of paths to Steam compat tools that need to be available
+# in the container
+log "STEAM_COMPAT_TOOL_PATHS=${STEAM_COMPAT_TOOL_PATHS:?}"
+
+# Session ID used for coordination between processes involving the same game.
+# If unset/empty, only execute a single command.
+log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
+
+# Used to create sockets.
+# A future version will fall back to /tmp, but only when this can be
+# done securely.
+log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:?}"
+
+if ! [ -O "$XDG_RUNTIME_DIR" ]; then
+    log "XDG_RUNTIME_DIR is owned by someone else"
+    exit 125
+fi
+
+unset LD_LIBRARY_PATH
+unset STEAM_RUNTIME
+
+pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
+
+declare -a container_args=()
+
+container_args=("${container_args[@]}" --filesystem="/tmp")
+container_args=("${container_args[@]}" --filesystem="${STEAM_COMPAT_CLIENT_INSTALL_PATH}")
+container_args=("${container_args[@]}" --steam-app-id="${STEAM_COMPAT_APP_ID}")
+
+oldIFS="$IFS"
+IFS=":"
+
+for fs in ${STEAM_COMPAT_TOOL_PATHS-}; do
+    if [ -n "$fs" ]; then
+        container_args=("${container_args[@]}" --filesystem="${fs}")
+    fi
+done
+
+for fs in ${STEAM_COMPAT_APP_LIBRARY_PATHS-}; do
+    if [ -n "$fs" ]; then
+        container_args=("${container_args[@]}" --filesystem="${fs}")
+    fi
+done
+
+IFS="$oldIFS"
+
+container_args=("${container_args[@]}" --filesystem="${STEAM_COMPAT_DATA_PATH}")
+
+if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
+    # Run as a single command
+    exec "$here/run-in-steamrt" \
+        --arch=amd64,i386 \
+        --deploy \
+        --runtime=com.valvesoftware.SteamRuntime.Platform \
+        --suite="${suite}" \
+        "${deploy}" \
+        -- \
+        "${container_args[@]}" \
+        -- \
+        "$@" \
+        ${NULL+}
+    exit 125
+    # not reached
+fi
+
+rendezvous="${XDG_RUNTIME_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
+
+if mkdir -m700 "$rendezvous" 2>/dev/null; then
+    :
+elif [ -d "$rendezvous" ] && [ -O "$rendezvous" ]; then
+    :
+else
+    log "Unable to create or adopt $rendezvous"
+    exit 125
+fi
+
+terminate_container () {
+    "$pressure_vessel/bin/pressure-vessel-adverb" \
+        --create \
+        --wait \
+        --write \
+        --lock-file "${rendezvous}/.ref" \
+        -- \
+    "$pressure_vessel/bin/pressure-vessel-launch" \
+        --socket="$rendezvous/socket" \
+        --terminate
+}
+
+if [ -n "$is_main" ] && [ -n "$rendezvous" ]; then
+    trap terminate_container EXIT
+fi
+
+# We have to launch pressure-vessel-launcher(1) *without* setting
+# SteamAppId, SteamAppUser, etc., otherwise Steam will think the game
+# is already running and refuse to run it again. (Tested with SteamAppId,
+# just guessing about the others)
+"$pressure_vessel/bin/pressure-vessel-adverb" \
+    --create \
+    --wait \
+    --write \
+    --lock-file "${rendezvous}/.ref" \
+    -- \
+env \
+    -u LD_PRELOAD \
+    -u FONTCONFIG_PATH \
+    -u SteamLauncherUI \
+    -u SteamAppId \
+    -u SteamAppUser \
+    -u SteamClientLaunch \
+    -u SteamEnv \
+    -u SteamGameId \
+    -u SteamOverlayGameId \
+    STEAM_RUNTIME=/ \
+"${here}/_start-container-in-background" \
+    --session="$rendezvous" \
+    --suite="$suite" \
+    -- \
+    "${container_args[@]}" \
+    --terminate-timeout=10 \
+    --steam-app-id="${STEAM_COMPAT_APP_ID}" \
+    ${NULL+}
+
+# TODO: Which arguments should be given unconditionally, which should
+# be given but only for the final game (waitforexitandrun), and which
+# should be ignored?
+#
+# For now we do everything explicitly. --pass-env options that are
+# redundant with --pass-env-matching are intended to illustrate which
+# variables are actually set in practice, and allow unsetting variables
+# if unset in the caller.
+
+launch_args=( \
+)
+
+if [ -n "$is_main" ]; then
+    if [ "${SteamAppId-}" != "$STEAM_COMPAT_APP_ID" ]; then
+        log "Mismatch: SteamAppId=${SteamAppId-}, STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
+        exit 125
+    fi
+
+    launch_args=( \
+        "${launch_args[@]}" \
+        --pass-env-matching 'AMD_VK_*' \
+        --pass-env-matching 'DXVK_*' \
+        --pass-env-matching 'ENABLE_VK_LAYER_*' \
+        --pass-env-matching 'FOSSILIZE_*' \
+        --pass-env-matching 'LC_*' \
+        --pass-env-matching 'MESA_*' \
+        --pass-env-matching 'SDL_*' \
+        --pass-env-matching 'STEAM*' \
+        --pass-env-matching 'Steam*' \
+        --pass-env-matching '__GL_*' \
+        --pass-env AMD_VK_PIPELINE_CACHE_FILENAME \
+        --pass-env AMD_VK_PIPELINE_CACHE_PATH \
+        --pass-env AMD_VK_USE_PIPELINE_CACHE \
+        --pass-env DXVK_STATE_CACHE_PATH \
+        --pass-env ENABLE_VK_LAYER_VALVE_steam_fossilize_1 \
+        --pass-env EnableConfiguratorSupport \
+        --pass-env FOSSILIZE_APPLICATION_INFO_FILTER_PATH \
+        --pass-env LC_ALL \
+        --pass-env LD_PRELOAD \
+        --pass-env MESA_GLSL_CACHE_DIR \
+        --pass-env MESA_GLSL_CACHE_MAX_SIZE \
+        --pass-env SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD \
+        --pass-env SDL_GAMECONTROLLER_USE_BUTTON_LABELS \
+        --pass-env STEAMVIDEOTOKEN \
+        --pass-env STEAM_CLIENT_CONFIG_FILE \
+        --pass-env STEAM_COMPAT_CLIENT_INSTALL_PATH \
+        --pass-env STEAM_COMPAT_DATA_PATH \
+        --pass-env STEAM_COMPAT_MEDIA_PATH \
+        --pass-env STEAM_FOSSILIZE_DUMP_PATH \
+        --pass-env STEAM_FOSSILIZE_DUMP_PATH_READ_ONLY \
+        --pass-env SteamAppId \
+        --pass-env SteamAppUser \
+        --pass-env SteamClientLaunch \
+        --pass-env SteamEnv \
+        --pass-env SteamGameId \
+        --pass-env SteamOverlayGameId \
+        --pass-env SteamStreamingHardwareEncodingAMD \
+        --pass-env SteamStreamingHardwareEncodingIntel \
+        --pass-env SteamStreamingHardwareEncodingNVIDIA \
+        --pass-env __GL_SHADER_DISK_CACHE_APP_NAME \
+        --pass-env __GL_SHADER_DISK_CACHE_PATH \
+        --pass-env __GL_SHADER_DISK_CACHE_READ_ONLY_APP_NAME \
+        --pass-env __GL_SHADER_DISK_CACHE_SKIP_CLEANUP \
+        --terminate \
+    )
+
+    # For the main game we wait for all processes to terminate before
+    # shutting down the container.
+    set -- \
+        "$pressure_vessel/bin/pressure-vessel-adverb" \
+        --subreaper \
+        "$@"
+else
+    launch_args=( \
+        "${launch_args[@]}" \
+        --unset-env LD_PRELOAD \
+    )
+fi
+
+# Stop games trying to relaunch themselves in the Steam Runtime
+launch_args=( \
+    "${launch_args[@]}" \
+    --env STEAM_RUNTIME=/ \
+)
+
+exec "$pressure_vessel/bin/pressure-vessel-launch" \
+    --directory="$(pwd)" \
+    --socket="$rendezvous/socket" \
+    "${launch_args[@]}" \
+    -- \
+    "$@"
+exit 125
+# not reached
+
+# vim:set sw=4 sts=4 et:

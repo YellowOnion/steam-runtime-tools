@@ -1,0 +1,168 @@
+#!/bin/bash
+
+set -eu
+me="$(readlink -f "$0")"
+here="${me%/*}"
+me="${me##*/}"
+
+# This is a prototype and will probably not survive in its current form.
+# Don't rely on it.
+
+deploy=
+rendezvous=
+suite=scout
+verbose=
+
+if [ "${PRESSURE_VESSEL_VERBOSE-}" = 1 ]; then
+    verbose=yes
+fi
+
+log () {
+    printf '%s\n' "${me}[$$]: $*" >&2
+}
+
+verbose () {
+    if [ -n "$verbose" ]; then
+        log "$@"
+    fi
+}
+
+verbose "argv: $(printf '%q ' "$@")"
+
+usage () {
+    local code="$1"
+    shift
+
+    if [ "$code" -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo "Usage:"
+    echo "$me [OPTIONS] [-- [PVL_OPTIONS]]"
+    echo
+    echo "Must be run while holding a lock."
+    echo
+    echo "Options"
+    echo "--deploy=DIR      Deploy to this directory [default=SUITE]."
+    echo "--session=PATH    Directory representing a session."
+    echo "--suite=SUITE     Run in this runtime [default=scout]."
+    echo "--verbose         Be more verbose."
+
+    exit "${code}"
+}
+
+getopt_temp="help"
+getopt_temp="${getopt_temp},deploy:"
+getopt_temp="${getopt_temp},session:"
+getopt_temp="${getopt_temp},suite:"
+getopt_temp="${getopt_temp},verbose"
+
+getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
+eval "set -- $getopt_temp"
+unset getopt_temp
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        (--help)
+            usage 0
+            # not reached
+            ;;
+
+        (--deploy)
+            deploy="$2"
+            shift 2
+            ;;
+
+        (--session)
+            rendezvous="$2"
+            shift 2
+            ;;
+
+        (--suite)
+            suite="$2"
+            shift 2
+            ;;
+
+        (--verbose)
+            verbose=yes
+            shift
+            ;;
+
+        (--)
+            shift
+            break
+            ;;
+
+        (-*)
+            log "Unknown option: $1"
+            usage 64    # EX_USAGE from sysexits.h
+            # not reached
+            ;;
+
+        (*)
+            break
+            ;;
+    esac
+done
+
+run_in_steamrt="${here}/run-in-steamrt"
+pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
+
+if [ -z "$deploy" ]; then
+    deploy="$suite"
+fi
+
+if [ -z "$rendezvous" ]; then
+    log "A session path is required"
+    exit 64
+fi
+
+if [ -S "$rendezvous/socket" ]; then
+    verbose "Session already started in $rendezvous"
+    exit 0
+fi
+
+rm -f "$rendezvous/fifo"
+mkfifo "$rendezvous/fifo"
+
+declare -a redirect_to_fifo
+# TODO: HACK:
+# We're doing this instead of ">" because the bwrap process used
+# by run-in-steamrt would hold stdout open, preventing us from detecting
+# EOF. We can only do this because we're using a fifo rather than a pipe,
+# until we teach pressure-vessel to pass --pass-fd=N through -adverb.
+# shellcheck disable=SC2016
+redirect_to_fifo=(sh -euc 'exec >"$1"; shift; exec "$@"' sh "$rendezvous/fifo")
+
+verbose "Starting pressure-vessel-launcher in background"
+"${run_in_steamrt}" \
+    --arch=amd64,i386 \
+    --deploy \
+    --runtime=com.valvesoftware.SteamRuntime.Platform \
+    --suite="${suite}" \
+    "${deploy}" \
+    -- \
+    --batch \
+    --filesystem="$pressure_vessel" \
+    --filesystem="$rendezvous" \
+    "$@" \
+    -- \
+    "${redirect_to_fifo[@]}" \
+"$pressure_vessel/bin/pressure-vessel-launcher" \
+        --socket-directory="$rendezvous" \
+        < /dev/null >&2 &
+verbose "Started pressure-vessel-launcher in background"
+socket=$(
+    while read -r line; do
+        case "$line" in
+            (socket=*)
+                echo "${line#socket=}"
+                ;;
+        esac
+    done < "$rendezvous/fifo"
+)
+ln -fns "$socket" "$rendezvous/socket"
+verbose "OK, ready to exit"
+exit 0
+
+# vim:set sw=4 sts=4 et:

@@ -35,6 +35,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.request
 from contextlib import suppress
@@ -49,6 +50,19 @@ from typing import (
 from debian.deb822 import (
     Sources,
 )
+
+# git remote add --no-tags python-vdf https://github.com/ValvePython/vdf
+# Update with:
+# git subtree merge -P subprojects/python-vdf python-vdf/master
+sys.path[:0] = [
+    os.path.join(
+        os.path.dirname(__file__),
+        'subprojects',
+        'python-vdf'
+    ),
+]
+
+import vdf      # noqa
 
 
 logger = logging.getLogger('populate-depot')
@@ -517,6 +531,25 @@ class Main:
 
         for runtime in self.runtimes[0:]:
             with open(
+                os.path.join(self.depot, 'toolmanifest.v2.vdf'), 'w'
+            ) as writer:
+                writer.write('// Generated file, do not edit\n')
+                words = [
+                    '/_v2-entry-point',
+                    '--deploy=' + shlex.quote(runtime.name),
+                    '--suite=' + shlex.quote(runtime.suite),
+                    '--verb=%verb%',
+                    '--',
+                ]
+                content = dict(
+                    manifest=dict(
+                        commandline=' '.join(words),
+                        version='2',
+                    )
+                )
+                vdf.dump(content, writer, pretty=True, escaped=True)
+
+            with open(
                 os.path.join(self.depot, 'run'), 'w'
             ) as writer:
                 writer.write(
@@ -531,6 +564,11 @@ class Main:
                     )
                 )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
+
+            shutil.copy2(
+                os.path.join(self.depot, 'toolmanifest.v1.vdf'),
+                os.path.join(self.depot, 'toolmanifest.vdf'),
+            )
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         pv_dir = os.path.join(self.depot, 'pressure-vessel')

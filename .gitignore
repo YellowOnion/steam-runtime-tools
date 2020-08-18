@@ -20,6 +20,8 @@
 /depot/soldier_sdk/
 /depot/soldier_sysroot/
 /depot/steam-runtime/
+/depot/toolmanifest.vdf
+/depot/toolmanifest.v2.vdf
 /local/
 /pressure-vessel-*-bin+src.tar.gz
 /pressure-vessel-*-bin.tar.gz

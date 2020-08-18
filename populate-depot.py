@@ -363,9 +363,16 @@ class Main:
                     'scout', json.loads(self.pressure_vessel),
                 )
                 self.download_pressure_vessel(pressure_vessel_runtime)
-            elif os.path.isdir(self.pressure_vessel):
+            elif (
+                os.path.isdir(self.pressure_vessel)
+                or (
+                    os.path.isfile(self.pressure_vessel)
+                    and self.pressure_vessel.endswith('.tar.gz')
+                )
+            ):
                 logger.info(
-                    'Unpacking pressure-vessel from local directory %s',
+                    'Unpacking pressure-vessel from local file or '
+                    'directory %s',
                     self.pressure_vessel)
                 self.use_local_pressure_vessel(self.pressure_vessel)
                 pressure_vessel_runtime = self.new_runtime(
@@ -526,11 +533,15 @@ class Main:
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
-        os.makedirs(self.depot, exist_ok=True)
-        argv = [
-            'tar', '-C', self.depot, '-xvf',
-            os.path.join(path, 'pressure-vessel-bin.tar.gz'),
-        ]
+        pv_dir = os.path.join(self.depot, 'pressure-vessel')
+        os.makedirs(pv_dir, exist_ok=True)
+        argv = ['tar', '-C', pv_dir, '--strip-components=1', '-xvf']
+
+        if os.path.isfile(path):
+            argv.append(path)
+        else:
+            argv.append(os.path.join(path, 'pressure-vessel-bin.tar.gz'))
+
         logger.info('%r', argv)
         subprocess.run(argv, check=True)
 

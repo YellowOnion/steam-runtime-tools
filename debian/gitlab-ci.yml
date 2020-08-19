@@ -43,6 +43,9 @@ autopkgtest:
 
 ubsan:
     stage: test
+    tags:
+        - docker
+        - linux
     image: "${BUILD_IMAGE}"
     script:
         - |

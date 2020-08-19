@@ -10,6 +10,9 @@ stages:
     - analyze
 
 default:
+    tags:
+        - docker
+        - linux
     image: "${BUILD_IMAGE}"
     interruptible: true
 

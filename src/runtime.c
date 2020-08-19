@@ -551,16 +551,19 @@ pv_runtime_init_mutable (PvRuntime *self,
        * ${temp_dir}/usr/bin, etc. */
       source_usr = self->source_files;
 
-      if (!pv_cheap_tree_copy (self->source_files, dest_usr, error))
+      if (!pv_cheap_tree_copy (self->source_files, dest_usr,
+                               PV_COPY_FLAGS_NONE, error))
         return FALSE;
     }
   else
     {
       /* ${source_files}/usr exists, so assume it's a complete sysroot.
-       * Copy ${source_files}/bin to ${temp_dir}/bin, etc. */
+       * Merge ${source_files}/bin and ${source_files}/usr/bin into
+       * ${temp_dir}/usr/bin, etc. */
       source_usr = source_usr_subdir;
 
-      if (!pv_cheap_tree_copy (self->source_files, temp_dir, error))
+      if (!pv_cheap_tree_copy (self->source_files, temp_dir,
+                               PV_COPY_FLAGS_USRMERGE, error))
         return FALSE;
     }
 
@@ -2963,7 +2966,8 @@ pv_runtime_bind (PvRuntime *self,
 
       dest = glnx_fdrel_abspath (parent_dirfd, "from-host");
 
-      if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest, error))
+      if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest,
+                               PV_COPY_FLAGS_NONE, error))
         return FALSE;
 
       flatpak_bwrap_add_args (bwrap,

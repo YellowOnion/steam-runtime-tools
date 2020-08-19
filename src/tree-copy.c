@@ -35,12 +35,39 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
+/* Enabling debug logging for this is rather too verbose, so only
+ * enable it when actively debugging this module */
+#if 0
+#define trace(...) g_debug (__VA_ARGS__)
+#else
+#define trace(...) do { } while (0)
+#endif
+
+static inline gboolean
+gets_usrmerged (const char *path)
+{
+  while (path[0] == '/')
+    path++;
+
+  if (strcmp (path, "bin") == 0 ||
+      strcmp (path, "sbin") == 0 ||
+      g_str_has_prefix (path, "bin/") ||
+      g_str_has_prefix (path, "sbin/") ||
+      (g_str_has_prefix (path, "lib") &&
+       strcmp (path, "libexec") != 0 &&
+       !g_str_has_prefix (path, "libexec/")))
+    return TRUE;
+
+  return FALSE;
+}
+
 /* nftw() doesn't have a user_data argument so we need to use a global
  * variable :-( */
 static struct
 {
   gchar *source_root;
   gchar *dest_root;
+  PvCopyFlags flags;
   GError *error;
 } nftw_data;
 
@@ -55,6 +82,7 @@ copy_tree_helper (const char *fpath,
   g_autofree gchar *dest = NULL;
   g_autofree gchar *target = NULL;
   GError **error = &nftw_data.error;
+  gboolean usrmerge;
 
   g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.source_root), 1);
 
@@ -76,11 +104,56 @@ copy_tree_helper (const char *fpath,
   len = strlen (nftw_data.source_root);
   g_return_val_if_fail (fpath[len] == '/', 1);
   suffix = &fpath[len + 1];
-  dest = g_build_filename (nftw_data.dest_root, suffix, NULL);
+
+  while (suffix[0] == '/')
+    suffix++;
+
+  trace ("\"%s\": suffix=\"%s\"", fpath, suffix);
+
+  /* If source_root was /path/to/source and fpath was /path/to/source/foo/bar,
+   * then suffix is now foo/bar. */
+
+  if ((nftw_data.flags & PV_COPY_FLAGS_USRMERGE) != 0 &&
+      gets_usrmerged (suffix))
+    {
+      trace ("Transforming to \"usr/%s\" for /usr merge", suffix);
+      usrmerge = TRUE;
+      /* /path/to/dest/usr/foo/bar */
+      dest = g_build_filename (nftw_data.dest_root, "usr", suffix, NULL);
+    }
+  else
+    {
+      usrmerge = FALSE;
+      /* /path/to/dest/foo/bar */
+      dest = g_build_filename (nftw_data.dest_root, suffix, NULL);
+    }
 
   switch (typeflag)
     {
       case FTW_D:
+      trace ("Is a directory");
+
+        /* If merging /usr, replace /bin, /sbin, /lib* with symlinks like
+         * /bin -> usr/bin */
+        if (usrmerge && strchr (suffix, '/') == NULL)
+          {
+            /* /path/to/dest/bin or similar */
+            g_autofree gchar *in_root = g_build_filename (nftw_data.dest_root,
+                                                          suffix, NULL);
+
+            target = g_build_filename ("usr", suffix, NULL);
+
+            if (TEMP_FAILURE_RETRY (symlink (target, in_root)) != 0)
+              {
+                glnx_throw_errno_prefix (error,
+                                         "Unable to create symlink \"%s\" -> \"%s\"",
+                                         dest, target);
+                return 1;
+              }
+
+            /* Fall through to create usr/bin or similar too */
+          }
+
         if (!glnx_shutil_mkdir_p_at (-1, dest, sb->st_mode & 07777,
                                      NULL, error))
           return 1;
@@ -92,16 +165,100 @@ copy_tree_helper (const char *fpath,
         if (target == NULL)
           return 1;
 
-        if (symlink (target, dest) != 0)
+        trace ("Is a symlink to \"%s\"", target);
+
+        if (usrmerge)
+          {
+            trace ("Checking for compat symlinks into /usr");
+
+            /* Ignore absolute compat symlinks /lib/foo -> /usr/lib/foo.
+             * In this case suffix would be lib/foo. (In a Debian-based
+             * source root, Debian Policy §10.5 says this is the only
+             * form of compat symlink that should exist in this
+             * direction.) */
+            if (g_str_has_prefix (target, "/usr/") &&
+                strcmp (target + 5, suffix) == 0)
+              {
+                trace ("Ignoring compat symlink \"%s\" -> \"%s\"",
+                       fpath, target);
+                return 0;
+              }
+
+            /* Ignore relative compat symlinks /lib/foo -> ../usr/lib/foo. */
+            if (target[0] != '/')
+              {
+                g_autofree gchar *dir = g_path_get_dirname (suffix);
+                g_autofree gchar *joined = NULL;
+                g_autofree gchar *canon = NULL;
+
+                joined = g_build_filename (dir, target, NULL);
+                trace ("Joined: \"%s\"", joined);
+                canon = g_canonicalize_filename (joined, "/");
+                trace ("Canonicalized: \"%s\"", canon);
+
+                if (g_str_has_prefix (canon, "/usr/") &&
+                    strcmp (canon + 5, suffix) == 0)
+                  {
+                    trace ("Ignoring compat symlink \"%s\" -> \"%s\"",
+                           fpath, target);
+                    return 0;
+                  }
+              }
+          }
+
+        if ((nftw_data.flags & PV_COPY_FLAGS_USRMERGE) != 0 &&
+             g_str_has_prefix (suffix, "usr/") &&
+             gets_usrmerged (suffix + 4))
+          {
+            trace ("Checking for compat symlinks out of /usr");
+
+            /* Ignore absolute compat symlinks /usr/lib/foo -> /lib/foo.
+             * In this case suffix would be usr/lib/foo. (In a Debian-based
+             * source root, Debian Policy §10.5 says this is the only
+             * form of compat symlink that should exist in this
+             * direction.) */
+            if (strcmp (suffix + 3, target) == 0)
+              {
+                trace ("Ignoring compat symlink \"%s\" -> \"%s\"",
+                       fpath, target);
+                return 0;
+              }
+
+            /* Ignore relative compat symlinks
+             * /usr/lib/foo -> ../../lib/foo. */
+            if (target[0] != '/')
+              {
+                g_autofree gchar *dir = g_path_get_dirname (suffix);
+                g_autofree gchar *joined = NULL;
+                g_autofree gchar *canon = NULL;
+
+                joined = g_build_filename (dir, target, NULL);
+                trace ("Joined: \"%s\"", joined);
+                canon = g_canonicalize_filename (joined, "/");
+                trace ("Canonicalized: \"%s\"", canon);
+                g_assert (canon[0] == '/');
+
+                if (strcmp (suffix + 3, canon) == 0)
+                  {
+                    trace ("Ignoring compat symlink \"%s\" -> \"%s\"",
+                           fpath, target);
+                    return 0;
+                  }
+              }
+          }
+
+        if (TEMP_FAILURE_RETRY (symlink (target, dest)) != 0)
           {
             glnx_throw_errno_prefix (error,
-                                     "Unable to create symlink at \"%s\"",
-                                     dest);
+                                     "Unable to create symlink \"%s\" -> \"%s\"",
+                                     dest, target);
             return 1;
           }
         break;
 
       case FTW_F:
+        trace ("Is a regular file");
+
         /* Fast path: try to make a hard link. */
         if (link (fpath, dest) == 0)
           break;
@@ -139,6 +296,7 @@ copy_tree_helper (const char *fpath,
 gboolean
 pv_cheap_tree_copy (const char *source_root,
                     const char *dest_root,
+                    PvCopyFlags flags,
                     GError **error)
 {
   int res;
@@ -151,6 +309,7 @@ pv_cheap_tree_copy (const char *source_root,
 
   nftw_data.source_root = flatpak_canonicalize_filename (source_root);
   nftw_data.dest_root = flatpak_canonicalize_filename (dest_root);
+  nftw_data.flags = flags;
   nftw_data.error = NULL;
 
   res = nftw (nftw_data.source_root, copy_tree_helper, 100, FTW_PHYS);

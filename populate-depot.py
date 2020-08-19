@@ -566,7 +566,7 @@ class Main:
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
             shutil.copy2(
-                os.path.join(self.depot, 'toolmanifest.v1.vdf'),
+                os.path.join(self.depot, 'toolmanifest.v2.vdf'),
                 os.path.join(self.depot, 'toolmanifest.vdf'),
             )
 

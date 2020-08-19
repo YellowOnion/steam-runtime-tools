@@ -72,7 +72,7 @@ build:devel:
             meson --werror -Dman=true _build
             ninja -C _build
             ninja -C _build install
-            meson test --verbose -C _build
+            meson test --verbose -C _build --suite pressure-vessel
 
             export CC=clang
             export CXX=clang++
@@ -86,7 +86,7 @@ build:devel:
             ninja -C _build
             ninja -C _build scan-build
             ninja -C _build install
-            meson test --verbose -C _build
+            meson test --verbose -C _build --suite pressure-vessel
 
 build:scout:
     stage: build

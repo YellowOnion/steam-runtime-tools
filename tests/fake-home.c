@@ -57,7 +57,9 @@ fake_home_new (const gchar *home)
       g_assert_cmpstr (dirname, !=, "/tmp");
       g_assert_cmpstr (dirname, !=, "/var/tmp");
       fake_home->home = g_strdup (home);
-      g_assert_cmpint (g_mkdir_with_parents (fake_home->home, 0755), ==, 0);
+      g_assert_cmpint (g_mkdir_with_parents (dirname, 0755) == 0 ? 0 : errno, ==, 0);
+      /* It should not already exist */
+      g_assert_cmpint (g_mkdir (fake_home->home, 0755) == 0 ? 0 : errno, ==, 0);
       g_free (dirname);
     }
   else

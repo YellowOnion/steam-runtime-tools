@@ -33,7 +33,16 @@ else
   pandoc_markdown_nosmart = 'markdown'
 endif
 
-foreach tool : ['launch', 'launcher', 'locale-gen', 'try-setlocale']
+foreach tool : [
+  'adverb',
+  'launch',
+  'launcher',
+  'locale-gen',
+  'test-ui',
+  'try-setlocale',
+  'unruntime',
+  'wrap',
+]
   custom_target(
     tool + '.1',
     build_by_default : true,

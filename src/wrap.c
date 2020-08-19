@@ -678,7 +678,7 @@ static GOptionEntry options[] =
   { "terminate-idle-timeout", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_idle_timeout,
     "If --terminate-timeout is used, wait this many seconds before "
-    "sending SIGTERM. [default: 0.0]"
+    "sending SIGTERM. [default: 0.0]",
     "SECONDS" },
   { "terminate-timeout", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_timeout,

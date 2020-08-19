@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 
 try:
@@ -24,6 +25,7 @@ from testutils import (
 class TestCheapCopy(BaseTest):
     def setUp(self) -> None:
         super().setUp()
+        os.environ['G_MESSAGES_DEBUG'] = 'all'
         self.cheap_copy = os.path.join(self.G_TEST_BUILDDIR, 'test-cheap-copy')
 
     def assert_tree_is_superset(
@@ -155,6 +157,79 @@ class TestCheapCopy(BaseTest):
         code paths.
         """
         self.test_populated('/tmp', '/var/tmp', require_hard_links=False)
+
+    def test_usrmerge(self):
+        with tempfile.TemporaryDirectory(
+        ) as source, tempfile.TemporaryDirectory(
+        ) as parent, tempfile.TemporaryDirectory(
+        ) as expected:
+            (Path(source) / 'bin').mkdir(parents=True)
+            (Path(source) / 'lib').mkdir(parents=True)
+            (Path(source) / 'lib/x86_64-linux-gnu').mkdir(parents=True)
+            (Path(source) / 'lib32').mkdir(parents=True)
+            (Path(source) / 'usr/bin').mkdir(parents=True)
+            (Path(source) / 'usr/bin/which').touch()
+            (Path(source) / 'bin/which').symlink_to('/usr/bin/which')
+            (Path(source) / 'bin/less').touch()
+            (Path(source) / 'usr/bin/less').symlink_to('/bin/less')
+            (Path(source) / 'bin/more').touch()
+            (Path(source) / 'usr/bin/more').symlink_to('../../bin/more')
+            (Path(source) / 'usr/bin/env').touch()
+            (Path(source) / 'bin/env').symlink_to('../usr/bin/env')
+            (Path(source) / 'usr/bin/gcc').symlink_to('gcc-9')
+            (Path(source) / 'usr/bin/foo').symlink_to('/bin/foo-1')
+            (Path(source) / 'usr/bin/bar').symlink_to('../../bin/bar-2')
+            (Path(source) / 'usr/lib/x86_64-linux-gnu').mkdir(parents=True)
+            (Path(source) / 'bin/x').symlink_to('/usr/bin/x-1')
+            (Path(source) / 'bin/y').symlink_to('../usr/bin/x-2')
+            (Path(source) / 'lib/x86_64-linux-gnu/libpng12.so.0').symlink_to(
+                'libpng12.so.0.46.0')
+            (Path(source) / 'lib/x86_64-linux-gnu/libpng12.so.0.46.0').touch()
+            (
+                Path(source) / 'usr/lib/x86_64-linux-gnu/libpng12.so.0'
+            ).symlink_to('/lib/x86_64-linux-gnu/libpng12.so.0')
+            (
+                Path(source) / 'usr/lib/x86_64-linux-gnu/libpng12.so'
+            ).symlink_to('libpng12.so.0')
+
+            (Path(expected) / 'bin').symlink_to('usr/bin')
+            (Path(expected) / 'lib').symlink_to('usr/lib')
+            (Path(expected) / 'lib32').symlink_to('usr/lib32')
+            (Path(expected) / 'usr/lib').mkdir(parents=True)
+            (Path(expected) / 'usr/lib/x86_64-linux-gnu').mkdir(parents=True)
+            (Path(expected) / 'usr/lib32').mkdir(parents=True)
+            (Path(expected) / 'usr/bin').mkdir(parents=True)
+            (Path(expected) / 'usr/bin/which').touch()
+            (Path(expected) / 'usr/bin/less').touch()
+            (Path(expected) / 'usr/bin/more').touch()
+            (Path(expected) / 'usr/bin/env').touch()
+            (Path(expected) / 'usr/bin/gcc').symlink_to('gcc-9')
+            (Path(expected) / 'usr/bin/foo').symlink_to('/bin/foo-1')
+            (Path(expected) / 'usr/bin/bar').symlink_to('../../bin/bar-2')
+            (Path(expected) / 'bin/x').symlink_to('/usr/bin/x-1')
+            (Path(expected) / 'bin/y').symlink_to('../usr/bin/x-2')
+            (
+                Path(expected) / 'usr/lib/x86_64-linux-gnu/libpng12.so.0'
+            ).symlink_to('libpng12.so.0.46.0')
+            (
+                Path(expected) / 'usr/lib/x86_64-linux-gnu/libpng12.so.0.46.0'
+            ).touch()
+            (
+                Path(expected) / 'usr/lib/x86_64-linux-gnu/libpng12.so'
+            ).symlink_to('libpng12.so.0')
+
+            dest = os.path.join(parent, 'dest')
+            subprocess.run(
+                [
+                    self.cheap_copy,
+                    '--usrmerge',
+                    source,
+                    dest,
+                ],
+                check=True,
+                stdout=2,
+            )
+            self.assert_tree_is_same(expected, dest, require_hard_links=False)
 
     def tearDown(self) -> None:
         super().tearDown()

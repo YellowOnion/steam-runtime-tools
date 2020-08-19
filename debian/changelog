@@ -1,3 +1,33 @@
+pressure-vessel (0.20200819.0) scout; urgency=medium
+
+  * adverb, wrap: Add --terminate-timeout, --terminate-idle-timeout options.
+    This will let us clean up background processes when sharing a container
+    between multiple commands using -launcher and -launch.
+  * adverb, wrap: Implement --exit-with-parent.
+    -wrap eventually replaces itself with bubblewrap. If the bubblewrap
+    process is killed, we want the adverb command to be terminated, passing
+    the termination signal on to its own child process.
+  * adverb: When sent a common fatal signal, try to pass it on to the child
+  * launch, launcher: Allow terminating commands after a "main" command exits.
+    This can be used when launching Proton games, which consist of zero or
+    more setup commands, which may launch background processes, followed by
+    launching the game itself.
+  * wrap: Don't set up X11, etc. until after --filesystem.
+    If we want to be able to use --filesystem=/tmp, then we can't set up
+    the X11 socket until after we're finished with that.
+  * launch: Improve error handling for forwarding signals
+  * launch: Fix program name in logging
+  * runtime: Always provide adverb at /run/pressure-vessel/pv-from-host
+  * glib-backports: Redo backported Unix fd source in terms of a new GSource
+  * Remove -unruntime-test-ui.
+    We have a straightforward environment-variable-based way to select this.
+  * Remove unruntime-scout.
+    The SteamLinuxRuntime depot has a better implementation of this.
+  * man: Improve documentation
+  * CI fixes
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 19 Aug 2020 16:33:45 +0100
+
 pressure-vessel (0.20200805.0) scout; urgency=medium
 
   [ Simon McVittie ]

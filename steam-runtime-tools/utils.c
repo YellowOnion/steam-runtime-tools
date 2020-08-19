@@ -732,7 +732,10 @@ ftw_remove (const gchar *path,
             struct FTW *ftwbuf)
 {
   if (remove (path) < 0)
-    return -1;
+    {
+      g_debug ("Unable to remove %s: %s", path, g_strerror (errno));
+      return -1;
+    }
 
   return 0;
 }

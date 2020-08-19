@@ -283,7 +283,7 @@ Instructions for testing
 
     - below LastPlayed, add:
 
-            "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
+            "LaunchOptions" "PRESSURE_VESSEL_WRAP_GUI=1 ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 
@@ -309,39 +309,9 @@ Instructions for testing
 
     You can also choose to use the host system `/usr` directly.
 
-* For a more production-ready version without the test UI, set the launch
-    options to:
-
-        "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-scout -- %command%"
-
-    This mode does not require Python 3, PyGI, GTK or a normal
-    window manager, and is probably more suitable for Big Picture mode.
-    It assumes this directory layout:
-
-    ```
-    SteamLinuxRuntime
-    \- pressure-vessel
-        \- bin
-            \- pressure-vessel-unruntime-scout (etc.)
-    \- scout
-        \- files
-        \- metadata
-    ```
-
-    Or for more flexibility, use
-
-        "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
-
-    and then add more options just before the `--` as desired.
-    This mode does not require Python 3, PyGI, GTK or a normal
-    window manager, and is probably more suitable for Big Picture mode.
-
 * The default runtime for `pressure-vessel-unruntime` is the host system,
     with the `LD_LIBRARY_PATH` Steam Runtime overlaid onto it.
-    You can specify a runtime with the `--runtime` option:
-    `pressure-vessel-unruntime-scout` is just a shortcut for using
-    `pressure-vessel-unruntime --runtime DIR/../../scout/files` where *DIR*
-    is the directory containing `pressure-vessel-unruntime-scout` itself.
+    You can specify a runtime with the `--runtime` option.
 
     The runtime can be any of these:
 
@@ -474,7 +444,7 @@ configured.
 
 ### More options
 
-Use `pressure-vessel-unruntime` or `pressure-vessel-unruntime-test-ui`
+Use `pressure-vessel-unruntime`
 if you are in a Steam Runtime environment (the Steam Runtime's `run.sh`
 or a Steam game), and `pressure-vessel-wrap` or `pressure-vessel-test-ui`
 if you are not ("Add non-Steam game" in Steam, or a non-Steam-related

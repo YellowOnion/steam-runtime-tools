@@ -9,20 +9,26 @@ pressure-vessel-locale-gen - generate additional locales
 
 # SYNOPSIS
 
-**pressure-vessel-locale-gen** [*LOCALE*…]
+**pressure-vessel-locale-gen**
+[**--output-directory** *DIR*]
+[*LOCALE*…]
 
 # DESCRIPTION
 
 This tool generates locale files for the locales that might be necessary
-for Steam games. It should be invoked with the current working directory
-set to an empty directory.
+for Steam games. It should be invoked with the **--output-directory**
+(for which the default is the current working directory) set to an
+empty directory.
 
-If the current working directory is non-empty, the behaviour is undefined.
+If the output directory is non-empty, the behaviour is undefined.
 Existing subdirectories corresponding to locales might be overwritten, or
 might be kept. (The current implementation is that they are kept, even if
 they are outdated or invalid.)
 
 # OPTIONS
+
+**--output-directory** *DIR*, **--output-dir** *DIR*, **-o** *DIR*
+:   Output to *DIR* instead of the current working directory.
 
 **--verbose**
 :   Be more verbose.
@@ -42,10 +48,11 @@ they are outdated or invalid.)
 
 The diagnostic output on standard error is not machine-readable.
 
-Locale files are generated in the current working directory. On exit,
-if the current working directory is non-empty (exit status 72 or 73),
+Locale files are generated in the **--output-directory**, or the current
+working directory if not specified. On exit,
+if the output directory is non-empty (exit status 72 or 73),
 its path should be added to the **LOCPATH** environment variable. If
-the current working directory is empty (exit status 0),
+the output directory is empty (exit status 0),
 **LOCPATH** should not be modified.
 
 # EXIT STATUS
@@ -59,12 +66,11 @@ the current working directory is empty (exit status 0),
 
 72 (**EX_OSFILE**)
 :   Not all of the necessary locales were already available, but all
-    were generated in the current working directory.
+    were generated in the output directory.
 
 73 (**EX_CANTCREAT**)
 :   At least one locale was not generated successfully. Some other
-    locales might have been generated in the current working directory
-    as usual.
+    locales might have been generated in the output directory as usual.
 
 78 (**EX_CONFIG**)
 :   One of the locales given was invalid or could lead to path traversal.
@@ -76,7 +82,7 @@ Anything else
 # EXAMPLE
 
     $ mkdir locales
-    $ ( cd locales; pressure-vessel-locale-gen )
+    $ pressure-vessel-locale-gen --output-directory=locales
     $ if [ $? = 0 ]; then \
       ./bin/some-game; \
     else \

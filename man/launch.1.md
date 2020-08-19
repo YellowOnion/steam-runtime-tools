@@ -155,6 +155,8 @@ Any value less than 128
 
 128 + *n*
 :   The *COMMAND* was killed by signal *n*.
+    (This is the same encoding used by **bash**(1), **bwrap**(1) and
+    **env**(1).)
 
 # EXAMPLES
 

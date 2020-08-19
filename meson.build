@@ -185,8 +185,6 @@ scripts = [
   'pressure-vessel-locale-gen',
   'pressure-vessel-test-ui',
   'pressure-vessel-unruntime',
-  'pressure-vessel-unruntime-scout',
-  'pressure-vessel-unruntime-test-ui',
 ]
 
 foreach script : scripts

@@ -67,23 +67,23 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
 {
   GMainLoop *loop = user_data;
   guint32 client_pid = 0;
-  guint32 exit_status = 0;
+  guint32 wait_status = 0;
 
   if (!g_variant_is_of_type (parameters, G_VARIANT_TYPE ("(uu)")))
     return;
 
-  g_variant_get (parameters, "(uu)", &client_pid, &exit_status);
-  g_debug ("child exited %d: %d", client_pid, exit_status);
+  g_variant_get (parameters, "(uu)", &client_pid, &wait_status);
+  g_debug ("child %d exited: wait status %d", client_pid, wait_status);
 
   if (child_pid == client_pid)
     {
       int exit_code = 0;
 
-      if (WIFEXITED (exit_status))
+      if (WIFEXITED (wait_status))
         {
-          exit_code = WEXITSTATUS (exit_status);
+          exit_code = WEXITSTATUS (wait_status);
         }
-      else if (WIFSIGNALED (exit_status))
+      else if (WIFSIGNALED (wait_status))
         {
           /* Smush the signal into an unsigned byte, as the shell does. This is
            * not quite right from the perspective of whatever ran flatpak-spawn
@@ -91,7 +91,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
            *  alternative is to disconnect all signal() handlers then send this
            *  signal to ourselves and hope it kills us.
            */
-          exit_code = 128 + WTERMSIG (exit_status);
+          exit_code = 128 + WTERMSIG (wait_status);
         }
       else
         {
@@ -100,7 +100,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
            * of WIFEXITED() or WIFSIGNALED() will be true.
            */
           g_warning ("exit status %d is neither WIFEXITED() nor WIFSIGNALED()",
-                     exit_status);
+                     wait_status);
           exit_code = LAUNCH_EX_CANNOT_REPORT;
         }
 
@@ -205,7 +205,7 @@ forward_signal_handler (int sfd,
 }
 
 static guint
-forward_signals (void)
+forward_signals (GError **error)
 {
   static int forward[] = {
     SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGCONT, SIGTSTP, SIGUSR1, SIGUSR2
@@ -223,7 +223,7 @@ forward_signals (void)
 
   if (sfd < 0)
     {
-      g_warning ("Unable to watch signals: %s", g_strerror (errno));
+      glnx_throw_errno_prefix (error, "Unable to watch signals");
       return 0;
     }
 
@@ -237,7 +237,11 @@ forward_signals (void)
    *   of blocking them, they would no longer be pending by the time the
    *   main loop wakes up and reads from the signalfd.
    */
-  pthread_sigmask (SIG_BLOCK, &mask, NULL);
+  if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
+    {
+      glnx_throw_errno_prefix (error, "Unable to block signals");
+      return 0;
+    }
 
   return g_unix_fd_add (sfd, G_IO_IN, forward_signal_handler, NULL);
 }
@@ -422,7 +426,8 @@ static const GOptionEntry options[] =
     "ABSPATH|@ABSTRACT" },
   { "terminate", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_terminate,
-    "Terminate the Launcher server.", NULL },
+    "Terminate the Launcher server after the COMMAND (if any) has run.",
+    NULL },
   { "unset-env", '\0',
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Unset environment variable, like env -u.", "VAR" },
@@ -454,7 +459,6 @@ main (int argc,
   GError **error = &local_error;
   g_autoptr(GPtrArray) env_prefix = NULL;
   char **command_and_args;
-  guint forward_signals_id = 0;
   g_autoptr(FILE) original_stdout = NULL;
   g_autoptr(GDBusConnection) session_bus = NULL;
   g_autoptr(GDBusConnection) peer_connection = NULL;
@@ -474,7 +478,7 @@ main (int argc,
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("pressure-vessel-launcher");
+  g_set_prgname ("pressure-vessel-launch");
 
   g_log_set_handler (G_LOG_DOMAIN,
                      G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
@@ -516,14 +520,14 @@ main (int argc,
       goto out;
     }
 
-  if (!opt_terminate)
+  if (argc > 1)
     {
       /* We have to block the signals we want to forward before we start any
        * other thread, and in particular the GDBus worker thread, because
        * the signal mask is per-thread. We need all threads to have the same
        * mask, otherwise a thread that doesn't have the mask will receive
        * process-directed signals, causing the whole process to exit. */
-      signal_source = forward_signals ();
+      signal_source = forward_signals (error);
 
       if (signal_source == 0)
         {
@@ -546,22 +550,21 @@ main (int argc,
       argc--;
     }
 
-  if (opt_terminate)
+  if (argc < 2)
     {
-      if (argc != 1)
+      if (!opt_terminate)
         {
-          glnx_throw (error, "--terminate cannot be combined with a COMMAND");
+          glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
+                      g_get_prgname ());
           goto out;
         }
-    }
-  else if (argc < 2)
-    {
-      glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
-                  g_get_prgname ());
-      goto out;
-    }
 
-  command_and_args = argv + 1;
+      command_and_args = NULL;
+    }
+  else
+    {
+      command_and_args = argv + 1;
+    }
 
   launch_exit_status = LAUNCH_EX_FAILED;
   loop = g_main_loop_new (NULL, FALSE);
@@ -653,8 +656,10 @@ main (int argc,
 
   g_assert (bus_or_peer_connection != NULL);
 
-  if (opt_terminate)
+  if (command_and_args == NULL)
     {
+      g_assert (opt_terminate);   /* already checked */
+
       reply = g_dbus_connection_call_sync (bus_or_peer_connection,
                                            service_bus_name,
                                            service_obj_path,
@@ -672,6 +677,7 @@ main (int argc,
       goto out;
     }
 
+  g_assert (command_and_args != NULL);
   g_dbus_connection_signal_subscribe (bus_or_peer_connection,
                                       service_bus_name,   /* NULL if p2p */
                                       service_iface,
@@ -747,8 +753,11 @@ main (int argc,
   if (opt_clear_env)
     spawn_flags |= PV_LAUNCH_FLAGS_CLEAR_ENV;
 
-  /* There are no options yet, so just leave this empty */
   g_variant_builder_init (&options_builder, G_VARIANT_TYPE ("a{sv}"));
+
+  if (opt_terminate)
+    g_variant_builder_add (&options_builder, "{s@v}", "terminate-after",
+                           g_variant_new_variant (g_variant_new_boolean (TRUE)));
 
   if (!opt_directory)
     {
@@ -853,8 +862,8 @@ out:
   if (local_error != NULL)
     g_warning ("%s", local_error->message);
 
-  if (forward_signals_id > 0)
-    g_source_remove (forward_signals_id);
+  if (signal_source > 0)
+    g_source_remove (signal_source);
 
   g_strfreev (forward_fds);
   g_free (opt_directory);

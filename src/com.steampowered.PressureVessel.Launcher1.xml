@@ -80,8 +80,20 @@
         Unknown (unsupported) flags are an error and will cause Launch()
         to fail.
 
-        No options are currently known. Unknown (unsupported) options
-        are ignored.
+        Unknown (unsupported) options are ignored.
+        The following options are supported:
+
+        <variablelist>
+          <varlistentry>
+            <term>terminate-after b</term>
+            <listitem><para>
+              If present and true, the process groups of any remaining
+              launched commands will be terminated by SIGTERM immediately
+              after this command exits, regardless of whether it exits
+              successfully or unsuccessfully.
+            </para></listitem>
+          </varlistentry>
+        </variablelist>
 
         This method returns as soon as the process ID of the new process
         is known, and before the process exits. If you need to know when

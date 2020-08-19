@@ -72,8 +72,8 @@ PvRuntime *pv_runtime_new (const char *source_files,
                            PvRuntimeFlags flags,
                            GError **error);
 
-void pv_runtime_append_adverbs (PvRuntime *self,
-                                FlatpakBwrap *bwrap);
+gchar *pv_runtime_get_adverb (PvRuntime *self,
+                              FlatpakBwrap *adverb_args);
 gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakBwrap *bwrap,
                           GError **error);

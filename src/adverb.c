@@ -43,19 +43,19 @@
 #include "launcher.h"
 #include "utils.h"
 
-#ifndef PR_SET_CHILD_SUBREAPER
-#define PR_SET_CHILD_SUBREAPER 36
-#endif
-
 static GPtrArray *global_locks = NULL;
 static GArray *global_pass_fds = NULL;
 static gboolean opt_create = FALSE;
+static gboolean opt_exit_with_parent = FALSE;
 static gboolean opt_generate_locales = FALSE;
 static gboolean opt_subreaper = FALSE;
+static double opt_terminate_idle_timeout = 0.0;
+static double opt_terminate_timeout = -1.0;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_wait = FALSE;
 static gboolean opt_write = FALSE;
+static GPid child_pid;
 
 typedef struct
 {
@@ -67,7 +67,32 @@ static void
 child_setup_cb (gpointer user_data)
 {
   ChildSetupData *data = user_data;
+  sigset_t set;
   const int *iter;
+  int i;
+
+  /* The adverb should wait for its child before it exits, but if it
+   * gets terminated prematurely, we want the child to terminate too.
+   * The child could reset this, but we assume it usually won't.
+   * This makes it exit even if we are killed by SIGKILL, unless it
+   * takes steps not to be. */
+  if (opt_exit_with_parent
+      && prctl (PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) != 0)
+    pv_async_signal_safe_error ("Failed to set up parent-death signal\n",
+                                LAUNCH_EX_FAILED);
+
+  /* Unblock all signals */
+  sigemptyset (&set);
+  if (pthread_sigmask (SIG_SETMASK, &set, NULL) == -1)
+    pv_async_signal_safe_error ("Failed to unblock signals when starting child\n",
+                                LAUNCH_EX_FAILED);
+
+  /* Reset the handlers for all signals to their defaults. */
+  for (i = 1; i < NSIG; i++)
+    {
+      if (i != SIGSTOP && i != SIGKILL)
+        signal (i, SIG_DFL);
+    }
 
   /* Put back the original stdout for the child process */
   if (data != NULL &&
@@ -221,9 +246,16 @@ generate_locales (gchar **locpath_out,
   g_autofree gchar *pvlg = NULL;
   g_autofree gchar *this_path = NULL;
   g_autofree gchar *this_dir = NULL;
+  gboolean ret;
+  sigset_t mask;
+  sigset_t old_mask;
 
   g_return_val_if_fail (locpath_out == NULL || *locpath_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  sigemptyset (&mask);
+  sigemptyset (&old_mask);
+  sigaddset (&mask, SIGCHLD);
 
   temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
 
@@ -247,17 +279,26 @@ generate_locales (gchar **locpath_out,
     NULL
   };
 
+  /* Unblock SIGCHLD in case g_spawn_sync() needs it in some version */
+  if (pthread_sigmask (SIG_UNBLOCK, &mask, &old_mask) != 0)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (gchar **) locale_gen_argv,
-                     NULL,  /* environ */
-                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                     child_setup_cb, NULL,
-                     &child_stdout,
-                     &child_stderr,
-                     &wait_status,
-                     error))
+  ret = g_spawn_sync (NULL,  /* cwd */
+                      (gchar **) locale_gen_argv,
+                      NULL,  /* environ */
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                      child_setup_cb, NULL,
+                      &child_stdout,
+                      &child_stderr,
+                      &wait_status,
+                      error);
+
+  if (pthread_sigmask (SIG_SETMASK, &old_mask, NULL) != 0)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
+  if (!ret)
     {
       if (error != NULL)
         glnx_prefix_error (error, "Cannot run pressure-vessel-locale-gen");
@@ -298,6 +339,23 @@ generate_locales (gchar **locpath_out,
   return TRUE;
 }
 
+/* Only do async-signal-safe things here: see signal-safety(7) */
+static void
+terminate_child_cb (int signum)
+{
+  if (child_pid != 0)
+    {
+      /* pass it on to the child we're going to wait for */
+      kill (child_pid, signum);
+    }
+  else
+    {
+      /* guess I'll just die, then */
+      signal (signum, SIG_DFL);
+      raise (signum);
+    }
+}
+
 static GOptionEntry options[] =
 {
   { "fd", '\0',
@@ -313,6 +371,16 @@ static GOptionEntry options[] =
   { "no-create", '\0',
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_create,
     "Don't create subsequent nonexistent lock files [default].",
+    NULL },
+
+  { "exit-with-parent", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_exit_with_parent,
+    "Terminate child process and self with SIGTERM when parent process "
+    "exits.",
+    NULL },
+  { "no-exit-with-parent", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_exit_with_parent,
+    "Don't do anything special when parent process exits [default].",
     NULL },
 
   { "generate-locales", '\0',
@@ -353,12 +421,26 @@ static GOptionEntry options[] =
 
   { "subreaper", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_subreaper,
-    "Do not exit until all child processes have exited.",
+    "Do not exit until all descendant processes have exited.",
     NULL },
   { "no-subreaper", '\0',
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_subreaper,
     "Only wait for a direct child process [default].",
     NULL },
+
+  { "terminate-idle-timeout", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_idle_timeout,
+    "If --terminate-timeout is used, wait this many seconds before "
+    "sending SIGTERM. [default: 0.0]",
+    "SECONDS" },
+  { "terminate-timeout", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_timeout,
+    "Send SIGTERM and SIGCONT to descendant processes that didn't "
+    "exit within --terminate-idle-timeout. If they don't all exit within "
+    "this many seconds, send SIGKILL and SIGCONT to survivors. If 0.0, "
+    "skip SIGTERM and use SIGKILL immediately. Implies --subreaper. "
+    "[Default: -1.0, meaning don't signal].",
+    "SECONDS" },
 
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
@@ -388,12 +470,25 @@ main (int argc,
   GError **error = &local_error;
   int ret = EX_USAGE;
   char **command_and_args;
-  GPid child_pid;
   int wait_status = -1;
   g_autofree gchar *locales_temp_dir = NULL;
   g_auto(GStrv) my_environ = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   ChildSetupData child_setup_data = { -1, NULL };
+  sigset_t mask;
+  struct sigaction terminate_child_action = {};
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+
+  /* Must be called before we start any threads */
+  if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
+    {
+      ret = EX_UNAVAILABLE;
+      glnx_throw_errno_prefix (error, "pthread_sigmask");
+      goto out;
+    }
+
 
   setlocale (LC_ALL, "");
 
@@ -469,7 +564,19 @@ main (int argc,
 
   command_and_args = argv + 1;
 
-  if (opt_subreaper
+  if (opt_exit_with_parent)
+    {
+      g_debug ("Setting up to exit when parent does");
+
+      if (prctl (PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) != 0)
+        {
+          glnx_throw_errno_prefix (error,
+                                   "Unable to set parent death signal");
+          goto out;
+        }
+    }
+
+  if ((opt_subreaper || opt_terminate_timeout >= 0)
       && prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0)
     {
       glnx_throw_errno_prefix (error,
@@ -499,6 +606,16 @@ main (int argc,
           g_debug ("No locales were missing");
         }
     }
+
+  /* Respond to common termination signals by killing the child instead of
+   * ourselves */
+  terminate_child_action.sa_handler = terminate_child_cb;
+  sigaction (SIGHUP, &terminate_child_action, NULL);
+  sigaction (SIGINT, &terminate_child_action, NULL);
+  sigaction (SIGQUIT, &terminate_child_action, NULL);
+  sigaction (SIGTERM, &terminate_child_action, NULL);
+  sigaction (SIGUSR1, &terminate_child_action, NULL);
+  sigaction (SIGUSR2, &terminate_child_action, NULL);
 
   g_debug ("Launching child process...");
   fflush (stdout);
@@ -534,52 +651,44 @@ main (int argc,
   /* If the child writes to stdout and closes it, don't interfere */
   g_clear_pointer (&original_stdout, fclose);
 
-  while (1)
-    {
-      pid_t died = wait (&wait_status);
+  /* Reap child processes until child_pid exits */
+  if (!pv_wait_for_child_processes (child_pid, &wait_status, error))
+    goto out;
 
-      if (died < 0)
-        {
-          if (errno == EINTR)
-            {
-              continue;
-            }
-          else if (errno == ECHILD)
-            {
-              g_debug ("No more child processes, exiting");
-              break;
-            }
-          else
-            {
-              glnx_throw_errno_prefix (error, "wait");
-              goto out;
-            }
-        }
-      else if (died == child_pid)
-        {
-          if (WIFEXITED (wait_status))
-            {
-              ret = WEXITSTATUS (wait_status);
-              g_debug ("Command exited with status %d", ret);
-            }
-          else if (WIFSIGNALED (wait_status))
-            {
-              ret = 128 + WTERMSIG (wait_status);
-              g_debug ("Command killed by signal %d", ret - 128);
-            }
-          else
-            {
-              ret = EX_SOFTWARE;
-              g_debug ("Command terminated in an unknown way (wait status %d)",
-                       wait_status);
-            }
-        }
-      else
-        {
-          g_debug ("Indirect child %lld exited with wait status %d",
-                   (long long) died, wait_status);
-          g_warn_if_fail (opt_subreaper);
-        }
+  child_pid = 0;
+
+  if (WIFEXITED (wait_status))
+    {
+      ret = WEXITSTATUS (wait_status);
+      g_debug ("Command exited with status %d", ret);
+    }
+  else if (WIFSIGNALED (wait_status))
+    {
+      ret = 128 + WTERMSIG (wait_status);
+      g_debug ("Command killed by signal %d", ret - 128);
+    }
+  else
+    {
+      ret = EX_SOFTWARE;
+      g_debug ("Command terminated in an unknown way (wait status %d)",
+               wait_status);
+    }
+
+  if (opt_terminate_idle_timeout < 0.0)
+    opt_terminate_idle_timeout = 0.0;
+
+  /* Wait for the other child processes, if any, possibly killing them */
+  if (opt_terminate_timeout >= 0.0)
+    {
+      if (!pv_terminate_all_child_processes (opt_terminate_idle_timeout * G_TIME_SPAN_SECOND,
+                                             opt_terminate_timeout * G_TIME_SPAN_SECOND,
+                                             error))
+        goto out;
+    }
+  else
+    {
+      if (!pv_wait_for_child_processes (0, NULL, error))
+        goto out;
     }
 
 out:

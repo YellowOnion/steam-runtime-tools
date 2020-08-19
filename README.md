@@ -283,7 +283,7 @@ Instructions for testing
 
     - below LastPlayed, add:
 
-            "LaunchOptions" "~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime-test-ui -- %command%"
+            "LaunchOptions" "PRESSURE_VESSEL_WRAP_GUI=1 ~/.steam/steam/steamapps/common/SteamLinuxRuntime/pressure-vessel/bin/pressure-vessel-unruntime -- %command%"
 
     - restart Steam (on SteamOS use `sudo systemctl restart lightdm`)
 
@@ -474,7 +474,7 @@ configured.
 
 ### More options
 
-Use `pressure-vessel-unruntime` or `pressure-vessel-unruntime-test-ui`
+Use `pressure-vessel-unruntime`
 if you are in a Steam Runtime environment (the Steam Runtime's `run.sh`
 or a Steam game), and `pressure-vessel-wrap` or `pressure-vessel-test-ui`
 if you are not ("Add non-Steam game" in Steam, or a non-Steam-related

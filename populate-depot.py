@@ -547,6 +547,8 @@ class Main:
                         version='2',
                     )
                 )
+                if runtime == 'soldier':
+                    content['unlisted'] = '1'
                 vdf.dump(content, writer, pretty=True, escaped=True)
 
             with open(

@@ -6,7 +6,7 @@ include:
       file: '/steam-gitlab-ci-pipeline.yml'
 
 variables:
-    BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
+    BUILD_IMAGE: registry.gitlab.steamos.cloud/steamrt/scout/sdk:beta
     STEAM_CI_USE_BINARIES_FROM: autopkgtest
     STEAM_CI_DEPENDENCIES: >-
         debhelper
@@ -28,53 +28,112 @@ variables:
         locales
         meson
         pandoc
+        python3
+        python3.5
+
+    DEBIAN_FRONTEND: noninteractive
+
+    SCOUT_DOCKER_REGISTRY: registry.gitlab.steamos.cloud
+    SCOUT_DOCKER_IMAGE: steamrt/scout/sdk:beta
+    SCOUT_APT_SOURCES_FILE: ''
+    DEVEL_DOCKER_REGISTRY: ''
+    DEVEL_DOCKER_IMAGE: ''
+    # Set non-empty to allow
+    CI_ALLOW_MISSING_SOURCES: ''
 
 stages:
     - build
     - test
 
-autopkgtest:
-    stage: test
-    variables:
-        BUILD_IMAGE: docker.internal.steamos.cloud/steamrt/sdk:scout-latest
-        STEAM_CI_INSTALL_SCRIPT: |
-            # Workaround for the build regression described in !88
-            apt-get -y remove libsteam-runtime-tools-0-helpers
-
-ubsan:
-    stage: test
+build:devel:
+    stage: build
     tags:
         - docker
         - linux
-    image: "${BUILD_IMAGE}"
+    rules:
+        - if: '$DEVEL_DOCKER_REGISTRY != "" && $DEVEL_DOCKER_IMAGE != ""'
+    image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
     script:
         - |
             set -eux
-            export DEBIAN_FRONTEND=noninteractive
 
-            apt-get install -y --no-install-recommends \
-                ccache \
-                clang \
-                clang-tools \
-                ${NULL+}
+            apt-get -y --no-install-recommends install \
+            clang \
+            clang-tools \
+            ${NULL+}
 
-            rm -fr builddir
-            meson \
-                -Db_lundef=false \
-                -Db_sanitize=address,undefined \
-                --werror \
-                builddir
-            ninja -C builddir
-            meson test -C builddir -v
+            meson --werror -Dman=true _build-devel
+            ninja -C _build-devel
+            ninja -C _build-devel install
+            meson test --verbose -C _build-devel
 
             export CC=clang
             export CXX=clang++
 
-            rm -fr builddir
             meson \
                 -Db_lundef=false \
                 -Db_sanitize=address,undefined \
                 --werror \
-                builddir
-            ninja -C builddir scan-build
-            meson test -C builddir -v
+                _build-clang-asan
+            ninja -C _build-clang-asan
+            ninja -C _build-clang-asan scan-build
+            ninja -C _build-clang-asan install
+            meson test --verbose -C _build-clang-asan
+
+    artifacts:
+        paths:
+            - _build-devel/meson-logs/*.txt
+            - _build-clang-asan/meson-logs/*.txt
+
+build:scout:
+    stage: build
+    tags:
+        - docker
+        - linux
+    image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}"
+    script:
+        - |
+            set -eux
+
+            if [ -n "${SCOUT_APT_SOURCES_FILE}" ]; then
+                cp "${SCOUT_APT_SOURCES_FILE}" /etc/apt/sources.list
+                echo >> /etc/apt/sources.list
+
+                if [ -n "${STEAM_CI_EXTRA_APT_SOURCES-}" ]; then
+                  echo "${STEAM_CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
+                    if [ "x$first" = xboth ]; then
+                      echo "deb $rest" >> /etc/apt/sources.list
+                      echo "deb-src $rest" >> /etc/apt/sources.list
+                    else
+                      echo "$first $rest" >> /etc/apt/sources.list
+                    fi
+                  done
+                fi
+
+                apt-get -y update
+            fi
+
+            # g++ 4.6 is too old (see also debian/rules)
+            export CXX=g++-4.8
+
+            meson \
+              --prefix="$(pwd)/_build-scout/prefix" \
+              -Dsrcdir=src \
+              --werror \
+              _build-scout
+            ninja -C _build-scout
+            meson test --verbose -C _build-scout
+            ninja -C _build-scout install
+
+    artifacts:
+        paths:
+            - _build-scout/meson-logs/*.txt
+
+autopkgtest:
+    stage: test
+    variables:
+        STEAM_CI_INSTALL_SCRIPT: |
+            # Workaround for the build regression described in !88
+            apt-get -y remove libsteam-runtime-tools-0-helpers
+
+# vim:set sw=4 sts=4 et:

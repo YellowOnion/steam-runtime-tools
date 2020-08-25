@@ -126,7 +126,7 @@ if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
 fi
 
 # Steam App ID of this app or game
-log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID:?}"
+log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
 
 # Session ID used for coordination between processes involving the same game.
 # If unset/empty, only execute a single command.
@@ -149,7 +149,9 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 
 declare -a container_args=()
 
-container_args=("${container_args[@]}" --steam-app-id="${STEAM_COMPAT_APP_ID}")
+if [ -n "${STEAM_COMPAT_APP_ID-}" ]; then
+    container_args=("${container_args[@]}" --steam-app-id="${STEAM_COMPAT_APP_ID}")
+fi
 
 oldIFS="$IFS"
 IFS=":"

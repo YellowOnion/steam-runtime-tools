@@ -128,25 +128,6 @@ fi
 # Steam App ID of this app or game
 log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID:?}"
 
-# Absolute path to the steamapps or SteamApps directory in the library
-# where this app or game is installed (even if Proton or SteamLinuxRuntime
-# is in a different library)
-log "STEAM_COMPAT_APP_LIBRARY_PATH=${STEAM_COMPAT_APP_LIBRARY_PATH:?}"
-
-# All library paths, ":"-separated
-log "STEAM_COMPAT_APP_LIBRARY_PATHS=${STEAM_COMPAT_APP_LIBRARY_PATHS:="$STEAM_COMPAT_APP_LIBRARY_PATH"}"
-
-# TODO: What is this for?
-log "STEAM_COMPAT_CONFIG=${STEAM_COMPAT_CONFIG-}"
-
-# Absolute path to the variable compat-data directory, used by Proton
-# for its ${WINEPREFIX}.
-log "STEAM_COMPAT_DATA_PATH=${STEAM_COMPAT_DATA_PATH:?}"
-
-# ':'-separated list of paths to Steam compat tools that need to be available
-# in the container
-log "STEAM_COMPAT_TOOL_PATHS=${STEAM_COMPAT_TOOL_PATHS:?}"
-
 # Session ID used for coordination between processes involving the same game.
 # If unset/empty, only execute a single command.
 log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
@@ -168,28 +149,27 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 
 declare -a container_args=()
 
-container_args=("${container_args[@]}" --filesystem="/tmp")
-container_args=("${container_args[@]}" --filesystem="${STEAM_COMPAT_CLIENT_INSTALL_PATH}")
 container_args=("${container_args[@]}" --steam-app-id="${STEAM_COMPAT_APP_ID}")
 
 oldIFS="$IFS"
 IFS=":"
 
-for fs in ${STEAM_COMPAT_TOOL_PATHS-}; do
-    if [ -n "$fs" ]; then
-        container_args=("${container_args[@]}" --filesystem="${fs}")
-    fi
-done
-
-for fs in ${STEAM_COMPAT_APP_LIBRARY_PATHS-}; do
-    if [ -n "$fs" ]; then
+# This splits the variables' values at IFS, i.e. ":"
+for fs in \
+    /tmp \
+    ${STEAM_COMPAT_APP_LIBRARY_PATH-} \
+    ${STEAM_COMPAT_APP_LIBRARY_PATHS-} \
+    ${STEAM_COMPAT_CLIENT_INSTALL_PATH-} \
+    ${STEAM_COMPAT_DATA_PATH-} \
+    ${STEAM_COMPAT_MOUNT_PATHS-} \
+    ${STEAM_COMPAT_TOOL_PATHS-} \
+; do
+    if [ -n "$fs" ] && [ -e "$fs" ]; then
         container_args=("${container_args[@]}" --filesystem="${fs}")
     fi
 done
 
 IFS="$oldIFS"
-
-container_args=("${container_args[@]}" --filesystem="${STEAM_COMPAT_DATA_PATH}")
 
 if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     # Run as a single command

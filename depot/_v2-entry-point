@@ -246,7 +246,6 @@ env \
     -- \
     "${container_args[@]}" \
     --terminate-timeout=10 \
-    --steam-app-id="${STEAM_COMPAT_APP_ID}" \
     ${NULL+}
 
 # TODO: Which arguments should be given unconditionally, which should
@@ -262,7 +261,7 @@ launch_args=( \
 )
 
 if [ -n "$is_main" ]; then
-    if [ "${SteamAppId-}" != "$STEAM_COMPAT_APP_ID" ]; then
+    if [ "${SteamAppId-}" != "$STEAM_COMPAT_APP_ID-" ]; then
         log "Mismatch: SteamAppId=${SteamAppId-}, STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
         exit 125
     fi

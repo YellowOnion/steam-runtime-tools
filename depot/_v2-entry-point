@@ -137,11 +137,6 @@ log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
 # done securely.
 log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:?}"
 
-if ! [ -O "$XDG_RUNTIME_DIR" ]; then
-    log "XDG_RUNTIME_DIR is owned by someone else"
-    exit 125
-fi
-
 unset LD_LIBRARY_PATH
 unset STEAM_RUNTIME
 
@@ -188,6 +183,13 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
         ${NULL+}
     exit 125
     # not reached
+fi
+
+# Session mode. The XDG_RUNTIME_DIR is required, for now.
+
+if ! [ -O "$XDG_RUNTIME_DIR" ]; then
+    log "XDG_RUNTIME_DIR is owned by someone else"
+    exit 125
 fi
 
 rendezvous="${XDG_RUNTIME_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"

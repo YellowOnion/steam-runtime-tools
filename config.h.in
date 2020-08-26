@@ -2,4 +2,12 @@
 #define G_LOG_DOMAIN "pressure-vessel"
 #mesondefine VERSION
 
+/* Allow using stuff from Flatpak with minimal modifications */
+#define FLATPAK_EXTERN extern
+#define _(s) s
+#define C_(context, s) s
+#define N_(s) s
+#define NC_(s) s
+#define Q_(s) g_strip_context (s, s)
+
 #include "subprojects/libglnx/config.h"

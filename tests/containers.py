@@ -25,6 +25,8 @@ ideally contains at least:
     The Platform merged-/usr from the SteamLinuxRuntime depot
 * scout_sysroot, soldier_sysroot:
     An SDK sysroot like the one recommended for the Docker container
+* scout_sysroot_usrmerge:
+    The same, but /usr-merged
 
 and run (for example) 'meson test -v -C _build' as usual.
 
@@ -905,6 +907,27 @@ class TestContainers(BaseTest):
 
         with self.subTest('transient'):
             self._test_scout('scout_sysroot', scout, locales=True)
+
+    def test_scout_sysroot_usrmerge(self) -> None:
+        scout = os.path.join(self.containers_dir, 'scout_sysroot_usrmerge')
+
+        if os.path.isdir(os.path.join(scout, 'files')):
+            scout = os.path.join(scout, 'files')
+
+        with self.subTest('only-prepare'):
+            self._test_scout(
+                'scout_sysroot_prep_usrmerge', scout,
+                copy=True, only_prepare=True,
+            )
+
+        with self.subTest('copy'):
+            self._test_scout(
+                'scout_sysroot_copy_usrmerge', scout,
+                copy=True, gc=False,
+            )
+
+        with self.subTest('transient'):
+            self._test_scout('scout_sysroot_usrmerge', scout, locales=True)
 
     def test_scout_usr(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout', 'files')

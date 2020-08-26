@@ -92,6 +92,10 @@ foreach test_name : tests
     test_args += ['-e', python.path()]
   endif
 
+  if test_name.endswith('launcher.py')
+    timeout = 60
+  endif
+
   if test_name.endswith('containers.py')
     timeout = 300
   endif

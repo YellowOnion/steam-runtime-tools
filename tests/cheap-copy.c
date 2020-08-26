@@ -26,10 +26,18 @@
 #include "libglnx/libglnx.h"
 
 #include "glib-backports.h"
+#include "tree-copy.h"
 #include "utils.h"
+
+static gboolean opt_usrmerge = FALSE;
 
 static GOptionEntry options[] =
 {
+  { "usrmerge", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_usrmerge,
+    "Assume SOURCE is a sysroot, and carry out the /usr merge in DEST.",
+    NULL },
+
   { NULL }
 };
 
@@ -40,6 +48,7 @@ main (int argc,
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
+  PvCopyFlags flags = PV_COPY_FLAGS_NONE;
   int ret = EX_USAGE;
 
   setlocale (LC_ALL, "");
@@ -65,7 +74,10 @@ main (int argc,
 
   ret = EX_UNAVAILABLE;
 
-  if (!pv_cheap_tree_copy (argv[1], argv[2], error))
+  if (opt_usrmerge)
+    flags |= PV_COPY_FLAGS_USRMERGE;
+
+  if (!pv_cheap_tree_copy (argv[1], argv[2], flags, error))
     goto out;
 
   ret = 0;

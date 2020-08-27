@@ -547,7 +547,7 @@ class Main:
                         version='2',
                     )
                 )       # type: Dict[str, Any]
-                if runtime == 'soldier':
+                if runtime.suite == 'soldier':
                     content['unlisted'] = '1'
                 vdf.dump(content, writer, pretty=True, escaped=True)
 

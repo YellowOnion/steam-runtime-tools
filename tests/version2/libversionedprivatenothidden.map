@@ -1,0 +1,12 @@
+LIBVERSIONED1 {
+  global:
+    symbol*;
+};
+LIBVERSIONEDPRIVATE_1_4_0 {
+  global:
+    _private1;
+};
+LIBVERSIONEDPRIVATE_2_1_0 {
+  global:
+    _private2;
+};

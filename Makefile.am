@@ -369,6 +369,8 @@ nobase_insttests_LTLIBRARIES        += tests/version1/libunversionedabibreak.la 
                                        tests/version2/libversionedlikeglibc.la \
                                        tests/version1/libversionednumber.la \
                                        tests/version2/libversionednumber.la \
+                                       tests/version1/libversionedprivatenothidden.la \
+                                       tests/version2/libversionedprivatenothidden.la \
                                        tests/version1/libversionedsymbols.la \
                                        tests/version2/libversionedsymbols.la \
                                        tests/version1/libversionedupgrade.la \
@@ -409,6 +411,12 @@ tests_version1_libversionednumber_la_LDFLAGS = -shared -version-number 1:0:0 \
 tests_version2_libversionednumber_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionednumber_la_LDFLAGS = -shared -version-number 1:2:3 \
                                                -Wl,--version-script=$(srcdir)/tests/libversioned.map
+tests_version1_libversionedprivatenothidden_la_CFLAGS  = $(test_fixture_cflags)
+tests_version1_libversionedprivatenothidden_la_LDFLAGS = -shared -version-number 1:1:1 \
+                                                         -Wl,--version-script=$(srcdir)/tests/version1/libversionedprivatenothidden.map
+tests_version2_libversionedprivatenothidden_la_CFLAGS  = $(test_fixture_cflags)
+tests_version2_libversionedprivatenothidden_la_LDFLAGS = -shared -version-number 1:1:1 \
+                                                         -Wl,--version-script=$(srcdir)/tests/version2/libversionedprivatenothidden.map
 tests_version1_libversionedsymbols_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libversionedsymbols_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                 -Wl,--version-script=$(srcdir)/tests/libversioned.map
@@ -574,8 +582,10 @@ EXTRA_DIST             += tests/libversioned.map
 EXTRA_DIST             += tests/version1/libversionedabibreak.map
 EXTRA_DIST             += tests/version1/libversionedlikedbus.map
 EXTRA_DIST             += tests/version1/libversionedlikeglibc.map
+EXTRA_DIST             += tests/version1/libversionedprivatenothidden.map
 EXTRA_DIST             += tests/version1/libversionedupgrade.map
 EXTRA_DIST             += tests/version2/libversionedabibreak.map
 EXTRA_DIST             += tests/version2/libversionedlikedbus.map
 EXTRA_DIST             += tests/version2/libversionedlikeglibc.map
+EXTRA_DIST             += tests/version2/libversionedprivatenothidden.map
 EXTRA_DIST             += tests/version2/libversionedupgrade.map

@@ -220,7 +220,14 @@ test_library_cmp_by_name (Fixture *f,
       gchar *container_lib = g_build_filename (container, test->soname, NULL);
       gchar *provider_file = NULL;
       gchar *provider_lib = g_build_filename (provider, test->soname, NULL);
+      gchar *soname_copy = g_strdup (test->soname);
       int result;
+      const library_details comparator_details = {
+        .name = soname_copy,
+        .comparators = comparators,
+        .public_symbol_versions = NULL,
+        .public_symbols = NULL,
+      };
 
       assert_with_errno (g_unlink (container_lib) == 0 || errno == ENOENT);
       assert_with_errno (g_unlink (provider_lib) == 0 || errno == ENOENT);
@@ -249,8 +256,7 @@ test_library_cmp_by_name (Fixture *f,
           assert_with_errno (symlink (test->in_provider, provider_lib) == 0);
         }
 
-      result = library_cmp_list_iterate (comparators,
-                                         test->soname,
+      result = library_cmp_list_iterate (&comparator_details,
                                          container_lib, container,
                                          provider_lib, provider);
 
@@ -294,6 +300,7 @@ test_library_cmp_by_name (Fixture *f,
       g_free (container_lib);
       g_free (provider_file);
       g_free (provider_lib);
+      g_free (soname_copy);
     }
 
   assert_with_errno (rm_rf (tmpdir));
@@ -307,6 +314,8 @@ typedef struct
 {
   const char *soname;
   const char *spec;
+  const char *public_symbol_versions[8];
+  const char *public_symbols[8];
   /* It compares such that "version1 cmp version2" is true, except for
    * the special case that "c" and "p" mean we choose the container version
    * and provider version respectively */
@@ -320,96 +329,140 @@ static const CmpTest cmp_tests[] =
 
   /* This adds one symbol and removes one symbol, so we can't tell which
    * was meant to be newer */
-  { "libunversionedabibreak.so.1", "symbols", '=' },
-  { "libversionedabibreak.so.1", "symbols", '=' },
+  { "libunversionedabibreak.so.1", "symbols", {}, {}, '=' },
+  { "libversionedabibreak.so.1", "symbols", {}, {}, '=' },
 
   /* The only difference here is the tail of the filename, which this
    * comparator doesn't look at */
-  { "libunversionednumber.so.1", "symbols", '=' },
-  { "libversionednumber.so.1", "symbols", '=' },
+  { "libunversionednumber.so.1", "symbols", {}, {}, '=' },
+  { "libversionednumber.so.1", "symbols", {}, {}, '=' },
 
   /* This is the situation this comparator handles */
-  { "libunversionedsymbols.so.1", "symbols", '<' },
-  { "libversionedsymbols.so.1", "symbols", '<' },
-  { "libversionedupgrade.so.1", "symbols", '<' },
-  { "libversionedlikeglibc.so.1", "symbols", '<' },
+  { "libunversionedsymbols.so.1", "symbols", {}, {}, '<' },
+  { "libversionedsymbols.so.1", "symbols", {}, {}, '<' },
+  { "libversionedupgrade.so.1", "symbols", {}, {}, '<' },
+  { "libversionedlikeglibc.so.1", "symbols", {}, {}, '<' },
+  { "libversionedprivatenothidden.so.1", "symbols", {}, {}, '<' },
 
   /* We can't currently tell which one is newer because the private symbols
    * confuse us */
-  { "libversionedlikedbus.so.1", "symbols", '=' },
+  { "libversionedlikedbus.so.1", "symbols", {}, {}, '=' },
+
+  /* After filtering the private symbols, they have the same symbols */
+  { "libversionedprivatenothidden.so.1", "symbols",
+    {}, { "!_private*", "!LIBVERSIONEDPRIVATE*", "*", NULL }, '=' },
+
+  /* Same as before, but specify the exact symbols name */
+  { "libversionedprivatenothidden.so.1", "symbols",
+    {},
+    { "!_private1", "!_private2", "!LIBVERSIONEDPRIVATE_1_4_0", "!LIBVERSIONEDPRIVATE_2_1_0", "*", NULL },
+    '=' },
+
+  /* Same as above, but test listing public symbol versions */
+  { "libversionedprivatenothidden.so.1", "symbols",
+    {}, { "symbol*", "!*", NULL }, '=' },
+
+  /* Same as above, but use the "after this point is just a guess" special pattern */
+  { "libversionedprivatenothidden.so.1", "symbols",
+    {}, { "symbol*", "!", "!*", NULL }, '=' },
 
   /* BY VERSION DEFINITIONS */
 
   /* All of these have no symbol-versioning, so we can't tell a
    * difference with this comparator */
-  { "libunversionedabibreak.so.1", "versions", '=' },
-  { "libunversionednumber.so.1", "versions", '=' },
-  { "libunversionedsymbols.so.1", "versions", '=' },
+  { "libunversionedabibreak.so.1", "versions", {}, {}, '=' },
+  { "libunversionednumber.so.1", "versions", {}, {}, '=' },
+  { "libunversionedsymbols.so.1", "versions", {}, {}, '=' },
 
   /* This adds one verdef and removes one verdef, so we can't tell which
    * was meant to be newer */
-  { "libversionedabibreak.so.1", "versions", '=' },
+  { "libversionedabibreak.so.1", "versions", {}, {}, '=' },
 
   /* The only difference here is the tail of the filename, which this
    * comparator doesn't look at */
-  { "libversionednumber.so.1", "versions", '=' },
+  { "libversionednumber.so.1", "versions", {}, {}, '=' },
 
   /* This is simple "version ~= SONAME" symbol-versioning, like in libtiff
    * and libpng, so this comparator can't tell any difference */
-  { "libversionedsymbols.so.1", "versions", '=' },
+  { "libversionedsymbols.so.1", "versions", {}, {}, '=' },
 
   /* This one has version-specific verdefs like libmount, libgcab, OpenSSL,
    * telepathy-glib etc., so we can tell it's an upgrade */
-  { "libversionedupgrade.so.1", "versions", '<' },
+  { "libversionedupgrade.so.1", "versions", {}, {}, '<' },
 
   /* This one has the same symbol listed in more than one verdef,
    * like glibc - we can tell this is an upgrade */
-  { "libversionedlikeglibc.so.1", "versions", '<' },
+  { "libversionedlikeglibc.so.1", "versions", {}, {}, '<' },
 
   /* We can't currently tell which one is newer because the private verdefs
    * confuse us */
-  { "libversionedlikedbus.so.1", "versions", '=' },
+  { "libversionedlikedbus.so.1", "versions", {}, {}, '=' },
+
+  /* This one has more private verdefs, but we don't know that they are
+     private */
+  { "libversionedprivatenothidden.so.1", "versions", {}, {}, '<' },
+
+  /* After filtering the private verdefs, they have the same public verdefs */
+  { "libversionedprivatenothidden.so.1", "versions",
+    { "!LIBVERSIONEDPRIVATE*", "*", NULL }, {}, '=' },
+
+  /* Same as above, but test using multiple private symbol versions filters */
+  { "libversionedprivatenothidden.so.1", "versions",
+    { "!LIBVERSIONEDPRIVATE_1_4_0", "!LIBVERSIONEDPRIVATE_2_1_0", "!MISSING*", "*", NULL },
+    {}, '=' },
+
+  /* Same as above, but test listing public symbol versions */
+  { "libversionedprivatenothidden.so.1", "versions",
+    { "LIBVERSIONED1*", "!*", NULL }, {}, '=' },
+
+  /* After partially filtering the private verdefs, we think it's an upgrade
+   * because it has more verdefs */
+  { "libversionedprivatenothidden.so.1", "versions",
+    { "!LIBVERSIONEDPRIVATE_1*", "*", NULL }, {}, '<' },
 
   /* BY NAME */
 
   /* These have the version number in the filename. */
-  { "libunversionednumber.so.1", "name", '<' },
-  { "libversionedlikedbus.so.1", "name", '<' },
-  { "libversionednumber.so.1", "name", '<' },
+  { "libunversionednumber.so.1", "name", {}, {}, '<' },
+  { "libversionedlikedbus.so.1", "name", {}, {}, '<' },
+  { "libversionednumber.so.1", "name", {}, {}, '<' },
 
   /* These have the same filename in both versions, so we can't tell. */
-  { "libunversionedabibreak.so.1", "name", '=' },
-  { "libunversionedsymbols.so.1", "name", '=' },
-  { "libversionedabibreak.so.1", "name", '=' },
-  { "libversionedsymbols.so.1", "name", '=' },
-  { "libversionedupgrade.so.1", "name", '=' },
-  { "libversionedlikeglibc.so.1", "name", '=' },
+  { "libunversionedabibreak.so.1", "name", {}, {}, '=' },
+  { "libunversionedsymbols.so.1", "name", {}, {}, '=' },
+  { "libversionedabibreak.so.1", "name", {}, {}, '=' },
+  { "libversionedsymbols.so.1", "name", {}, {}, '=' },
+  { "libversionedupgrade.so.1", "name", {}, {}, '=' },
+  { "libversionedlikeglibc.so.1", "name", {}, {}, '=' },
 
   /* BY MORE THAN ONE FACTOR */
 
-  { "libversionedlikeglibc.so.1", "name,versions", '<' },
-  { "libversionedlikeglibc.so.1", "name,container", 'c' },
-  { "libversionedlikeglibc.so.1", "name,container,provider", 'c' },
-  { "libversionedlikeglibc.so.1", "name,provider", 'p' },
-  { "libversionedlikeglibc.so.1", "name,provider,container", 'p' },
-  { "libversionedlikeglibc.so.1", "versions,name", '<' },
-  { "libversionedlikeglibc.so.1", "versions,container", '<' },
-  { "libversionedlikeglibc.so.1", "versions,provider", '<' },
-  { "libversionedlikeglibc.so.1", "name,symbols", '<' },
-  { "libversionedlikeglibc.so.1", "symbols,provider", '<' },
+  { "libversionedlikeglibc.so.1", "name,versions", {}, {}, '<' },
+  { "libversionedlikeglibc.so.1", "name,container", {}, {}, 'c' },
+  { "libversionedlikeglibc.so.1", "name,container,provider", {}, {}, 'c' },
+  { "libversionedlikeglibc.so.1", "name,provider", {}, {}, 'p' },
+  { "libversionedlikeglibc.so.1", "name,provider,container", {}, {}, 'p' },
+  { "libversionedlikeglibc.so.1", "versions,name", {}, {}, '<' },
+  { "libversionedlikeglibc.so.1", "versions,container", {}, {}, '<' },
+  { "libversionedlikeglibc.so.1", "versions,provider", {}, {}, '<' },
+  { "libversionedlikeglibc.so.1", "name,symbols", {}, {}, '<' },
+  { "libversionedlikeglibc.so.1", "symbols,provider", {}, {}, '<' },
+  { "libversionedprivatenothidden.so.1", "versions,symbols",
+    { "!LIBVERSIONEDPRIVATE*", "*", NULL },
+    { "!_private*", "!LIBVERSIONED*", "*", NULL }, '=' },
 
   /* This one is a stand-in for libgcc_s.so.1 */
-  { "libversionedupgrade.so.1", "name", '=' },
-  { "libversionedupgrade.so.1", "versions,name,symbols", '<' },
-  { "libversionedupgrade.so.1", "name,versions", '<' },
+  { "libversionedupgrade.so.1", "name", {}, {}, '=' },
+  { "libversionedupgrade.so.1", "versions,name,symbols", {}, {}, '<' },
+  { "libversionedupgrade.so.1", "name,versions", {}, {}, '<' },
 
   /* These are obviously silly - just assert that they don't crash. */
-  { "libversionedupgrade.so.1", "", '=' },
-  { "libversionedupgrade.so.1", ",,,,,,", '=' },
-  { "libversionedupgrade.so.1", "name,,,,,,name,,,,,,,,,,,,,,,,,,,", '=' },
+  { "libversionedupgrade.so.1", "", {}, {}, '=' },
+  { "libversionedupgrade.so.1", ",,,,,,", {}, {}, '=' },
+  { "libversionedupgrade.so.1", "name,,,,,,name,,,,,,,,,,,,,,,,,,,", {}, {}, '=' },
   { "libversionedupgrade.so.1",
     "name,name,name,name,name,name,name,name,name,name,name,name,name,name",
-    '=' },
+    {}, {}, '=' },
 };
 
 static void
@@ -426,10 +479,18 @@ test_library_cmp (Fixture *f,
       gchar *v1_lib;
       gchar *v2;
       gchar *v2_lib;
+      gchar *soname_copy = g_strdup (test->soname);
       int result;
 
       comparators = library_cmp_list_from_string (test->spec, ",", NULL, NULL);
       g_assert_nonnull (comparators);
+
+      const library_details comparator_details = {
+        .name = soname_copy,
+        .comparators = comparators,
+        .public_symbol_versions = test->public_symbol_versions[0] != NULL ? (char **) test->public_symbol_versions: NULL,
+        .public_symbols = test->public_symbols[0] != NULL ? (char **) test->public_symbols: NULL,
+      };
 
       v1 = g_build_filename (f->builddir, "tests", "version1", NULL);
       v1_lib = g_build_filename (v1, f->uninstalled ? ".libs" : ".",
@@ -438,8 +499,7 @@ test_library_cmp (Fixture *f,
       v2_lib = g_build_filename (v2, f->uninstalled ? ".libs" : ".",
                                  test->soname, NULL);
 
-      result = library_cmp_list_iterate (comparators,
-                                         test->soname,
+      result = library_cmp_list_iterate (&comparator_details,
                                          v1_lib, v1,
                                          v2_lib, v2);
 
@@ -473,8 +533,7 @@ test_library_cmp (Fixture *f,
        * unless the expected result is "c" or "p", in which case we
        * get the same result, because those results are determined by
        * the position of the arguments rather than by their content. */
-      result = library_cmp_list_iterate (comparators,
-                                         test->soname,
+      result = library_cmp_list_iterate (&comparator_details,
                                          v2_lib, v2,
                                          v1_lib, v1);
 
@@ -509,6 +568,7 @@ test_library_cmp (Fixture *f,
       g_free (v1_lib);
       g_free (v2);
       g_free (v2_lib);
+      g_free (soname_copy);
       free (comparators);
     }
 }

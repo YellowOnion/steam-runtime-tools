@@ -67,6 +67,9 @@ my $libdir = "${test_tempdir}/libdir";
     print $fh "CompareBy=versions;name;symbols;\n";
     print $fh "[Library /opt/libversionedlikedbus.so.1]\n";
     print $fh "CompareBy=container;\n";
+    print $fh "[Library /opt/libversionedprivatenothidden.so.1]\n";
+    print $fh "CompareBy=versions;\n";
+    print $fh "PublicSymbolVersions=!LIBVERSIONEDPRIVATE*;*;\n";
     close $fh;
 }
 
@@ -605,6 +608,9 @@ SKIP: {
        "should not take provider's version when told to look at container's symbols");
     ok(! -l "$libdir/libversionedlikedbus.so.1",
        "should not take provider's version when forced to use container's");
+    is(tolerant_readlink("$libdir/libversionedprivatenothidden.so.1"),
+       '/run/host/opt/libversionedprivatenothidden.so.1.1.1',
+       "should take provider's version by default when they have the same symbol versions");
 }
 
 done_testing;

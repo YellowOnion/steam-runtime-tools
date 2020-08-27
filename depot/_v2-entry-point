@@ -177,7 +177,7 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     is_main=yes
 fi
 
-if [ -n "${STEAM_COMPAT_INSTALL_PATH}" ]; then
+if [ -n "${STEAM_COMPAT_INSTALL_PATH-}" ]; then
     if ! [ -d "$STEAM_COMPAT_INSTALL_PATH" ]; then
         log "warning: $STEAM_COMPAT_INSTALL_PATH is not a directory"
     elif [ -n "$is_main" ] \
@@ -189,12 +189,12 @@ if [ -n "${STEAM_COMPAT_INSTALL_PATH}" ]; then
     fi
 fi
 
-if [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ] \
+if [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH-}" ] \
     && ! [ -d "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
     log "warning: $STEAM_COMPAT_CLIENT_INSTALL_PATH is not a directory"
 fi
 
-if [ -n "${STEAM_COMPAT_SHADER_PATH}" ] \
+if [ -n "${STEAM_COMPAT_SHADER_PATH-}" ] \
     && ! [ -d "$STEAM_COMPAT_SHADER_PATH" ]; then
     log "warning: $STEAM_COMPAT_SHADER_PATH is not a directory"
 fi

@@ -629,6 +629,25 @@ xasprintf( char **dest, const char *format, ...)
     return ret;
 }
 
+/**
+ * free_strv_full:
+ * @strings_array: (nullable) (array zero-terminated=1): array of strings
+ *  to free
+ *
+ * Completely frees the given @strings_array.
+ * If @strings_array is %NULL, this function simply returns.
+ */
+void
+free_strv_full( char **strings_array )
+{
+    if( strings_array )
+    {
+        for( size_t i = 0; strings_array[i] != NULL; i++ )
+            free( strings_array[i] );
+        free( strings_array );
+    }
+}
+
 /*
  * _capsule_set_error_literal:
  * @code_dest: (out) (optional): used to return an errno value

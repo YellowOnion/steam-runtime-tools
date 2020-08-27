@@ -20,6 +20,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <fnmatch.h>
 #include <search.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -258,9 +259,11 @@ library_details_cmp( const void *pa, const void *pb )
 static void
 library_details_free( library_details *self )
 {
-  free( self->comparators );
-  free( self->name );
-  free( self );
+    free_strv_full( self->public_symbol_versions );
+    free_strv_full( self->public_symbols );
+    free( self->comparators );
+    free( self->name );
+    free( self );
 }
 
 static void
@@ -298,6 +301,44 @@ library_knowledge_lookup( const library_knowledge *self,
         return NULL;
 
     return *node;
+}
+
+/*
+ * library_cmp_split_string_by_delimiters:
+ * @spec: A string of elements separated by @delimiters
+ * @delimiters: Any character from this set separates the elements in @spec
+ *
+ * Parse a string of elements into an array.
+ *
+ * Returns: (transfer full): An array of the elements from @spec
+ */
+static char **
+library_cmp_split_string_by_delimiters( const char *spec,
+                                        const char *delimiters )
+{
+    char **ret = NULL;
+    char *buf = xstrdup( spec );
+    char *saveptr = NULL;
+    char *token;
+    ptr_list *list;
+
+    /* Start with an arbitrary size of 8 */
+    list = ptr_list_alloc( 8 );
+
+    for( token = strtok_r( buf, delimiters, &saveptr );
+         token != NULL;
+         token = strtok_r( NULL, delimiters, &saveptr ) )
+    {
+        if( token[0] == '\0' )
+            continue;
+
+        ptr_list_push_ptr( list, xstrdup( token ) );
+    }
+
+    ret = (char **) ptr_list_free_to_array( _capsule_steal_pointer( &list ), NULL );
+
+    free( buf );
+    return ret;
 }
 
 /*
@@ -418,8 +459,22 @@ library_knowledge_load_from_stream( library_knowledge *self,
                 goto out;
             }
         }
-        // TODO: Future expansion: private-symbols=? public-symbols=?
-        // TODO: Future expansion: private-versions=? public-versions=?
+        else if( current != NULL && strstarts( line, "PublicSymbolVersions=" ) )
+        {
+            char *values = line + strlen( "PublicSymbolVersions=" );
+            free_strv_full( current->public_symbol_versions );
+
+            current->public_symbol_versions = library_cmp_split_string_by_delimiters( values,
+                                                                                      ";" );
+        }
+        else if( current != NULL && strstarts( line, "PublicSymbols=" ) )
+        {
+            char *values = line + strlen( "PublicSymbols=" );
+            free_strv_full( current->public_symbols );
+
+            current->public_symbols = library_cmp_split_string_by_delimiters( values,
+                                                                              ";" );
+        }
         else if( strchr( line, '=' ) != NULL )
         {
             DEBUG( DEBUG_TOOL, "%s:%d: Ignoring unknown key/value pair \"%s\"",
@@ -918,7 +973,7 @@ get_symbols ( Elf *elf, size_t *symbols_number, int *code, char **message )
 
 /*
  * library_cmp_by_name:
- * @soname: The library we are interested in, used in debug logging
+ * @details: The library we are interested in and how to compare it
  * @left_path: The path to the "left" instance of the library
  * @left_from: Arbitrary description of the container/provider/sysroot
  *  where we found @left_path, used in debug logging
@@ -934,7 +989,7 @@ get_symbols ( Elf *elf, size_t *symbols_number, int *code, char **message )
  * are non-comparable.
  */
 static int
-library_cmp_by_name( const char *soname,
+library_cmp_by_name( const library_details *details,
                      const char *left_path,
                      const char *left_from,
                      const char *right_path,
@@ -956,18 +1011,18 @@ library_cmp_by_name( const char *soname,
     DEBUG( DEBUG_TOOL,
            "Comparing %s \"%s\" from \"%s\" with "
            "\"%s\" from \"%s\"",
-           soname, left_basename, left_from, right_basename, right_from );
+           details->name, left_basename, left_from, right_basename, right_from );
 
     if( strcmp( left_basename, right_basename ) == 0 )
     {
         DEBUG( DEBUG_TOOL,
                "Name of %s \"%s\" from \"%s\" compares the same as "
                "\"%s\" from \"%s\"",
-               soname, left_basename, left_from, right_basename, right_from );
+               details->name, left_basename, left_from, right_basename, right_from );
         return 0;
     }
 
-    if( strcmp( soname, left_basename ) == 0 )
+    if( strcmp( details->name, left_basename ) == 0 )
     {
         /* In some distributions (Debian, Ubuntu, Manjaro)
          * libgcc_s.so.1 is a plain file, not a symlink to a
@@ -977,18 +1032,18 @@ library_cmp_by_name( const char *soname,
         DEBUG( DEBUG_TOOL,
                "Unversioned %s \"%s\" from \"%s\" cannot be compared with "
                "\"%s\" from \"%s\"",
-               soname, left_basename, left_from,
+               details->name, left_basename, left_from,
                right_basename, right_from );
         return 0;
     }
 
-    if( strcmp( soname, right_basename ) == 0 )
+    if( strcmp( details->name, right_basename ) == 0 )
     {
         /* The same, but the other way round */
         DEBUG( DEBUG_TOOL,
                "%s \"%s\" from \"%s\" cannot be compared with "
                "unversioned \"%s\" from \"%s\"",
-               soname, left_basename, left_from,
+               details->name, left_basename, left_from,
                right_basename, right_from );
         return 0;
     }
@@ -997,14 +1052,119 @@ library_cmp_by_name( const char *soname,
 }
 
 /*
+ * library_cmp_filter_list:
+ * @filters: The list of patterns that will be checked against @list.
+ *  Patterns that start with '!' are considered negated (privates),
+ *  i.e. the elements in @list, that matches said pattern, will be removed.
+ *  A pattern that is just '!' is used to separate what's known to the
+ *  guessing.
+ * @list: (array zero-terminated=1): The list to filter
+ * @list_number: The number of elements in @list excluding the %NULL
+ *  terminator
+ * @filtered_list_number_out: (out): Used to return the number of elements in
+ *  the newly created filtered list excluding the %NULL terminator
+ *
+ * Creates a new filtered list starting from the given @list and applying the
+ * patterns in @filters.
+ * The patterns are evaluated in order.
+ * If there are elements that don't match any of the provided filters, or they
+ * match a filter after the special '!' pattern, a warning will be printed.
+ * The default filter behavior for elements that don't match any patterns
+ * is to exclude them (treat as private). However it is higly recommended
+ * to be explicit and end @filters with a wildcard allow everything "*",
+ * or reject everything "!*".
+ *
+ * Returns: (array zero-terminated=1) (transfer full): An array with
+ *  the elements that matches the provided @filters.
+ */
+static char **
+library_cmp_filter_list( char ** const filters,
+                         char ** const list,
+                         size_t list_number,
+                         size_t *filtered_list_number_out )
+{
+    ptr_list *filtered_list;
+    size_t i = 0;
+    size_t j = 0;
+    bool guessing = false;
+    char *buf = NULL;
+    char *token;
+    filtered_list = ptr_list_alloc( list_number );
+
+    assert( filters != NULL );
+    assert( list != NULL );
+    assert( filtered_list_number_out != NULL );
+
+    *filtered_list_number_out = 0;
+
+    for( i = 0; list[i] != NULL; i++ )
+    {
+        char *saveptr = NULL;
+        guessing = false;
+
+        free( buf );
+        buf = xstrdup( list[i] );
+        /* If we have a versioned symbol, like "symbol@version", remove the
+         * version part because the filters are just for the symbols name. */
+        token = strtok_r( buf, "@", &saveptr );
+
+        for( j = 0; filters[j] != NULL; j++ )
+        {
+            if( strcmp( filters[j], "!" ) == 0 )
+            {
+                DEBUG( DEBUG_TOOL, "After this point we are just guessing" );
+                guessing = true;
+                continue;
+            }
+
+            if( filters[j][0] == '!' )
+            {
+                if( fnmatch( filters[j] + 1, token, 0 ) == 0 )
+                {
+                    if( guessing )
+                        warnx( "warning: we are assuming \"%s\" to be private, but it's just a guess",
+                               token );
+                    else
+                        DEBUG( DEBUG_TOOL,
+                               "Ignoring \"%s\" because it has been declared as private",
+                               token );
+                    break;
+                }
+            }
+            else
+            {
+                if( fnmatch( filters[j], token, 0 ) == 0 )
+                {
+                    if( guessing )
+                        warnx( "warning: we are assuming \"%s\" to be public, but it's just a guess",
+                               token );
+
+                    ptr_list_push_ptr( filtered_list, xstrdup( list[i] ) );
+                    break;
+                }
+            }
+        }
+        /* If we checked all the patterns and didn't have a match */
+        if( filters[j] == NULL )
+            warnx( "warning: \"%s\" does not have a match in the given filters, treating it as private",
+                   token );
+    }
+
+    free( buf );
+
+    return (char **) ptr_list_free_to_array( _capsule_steal_pointer( &filtered_list ),
+                                            filtered_list_number_out );
+}
+
+/*
  * library_cmp_by_symbols:
- * @soname: (type filename): The library we are interested in, used for debug
- * @container_path: (type filename): The path where the container's @soname is
+ * @details: The library we are interested in and how to compare it
+ * @container_path: (type filename): The path where the container's soname is
  *  located
- * @provider_path: (type filename): The path where the provider's @soname is
+ * @provider_path: (type filename): The path where the provider's soname is
  *  located
  *
- * Attempt to determine whether @soname is older, newer or
+ * Attempt to determine whether soname is older, newer or
  * the same in the container or the provider inspecting their
  * symbols.
  *
@@ -1013,7 +1173,7 @@ library_cmp_by_name( const char *soname,
  * or if container and provider are non-comparable.
  */
 static int
-library_cmp_by_symbols( const char *soname,
+library_cmp_by_symbols( const library_details *details,
                         const char *container_path,
                         const char *container_root,
                         const char *provider_path,
@@ -1048,11 +1208,25 @@ library_cmp_by_symbols( const char *soname,
     if( container_symbols == NULL )
     {
         warnx( "failed to get container versions for %s (%d): %s",
-               soname, code, message );
+               details->name, code, message );
         goto out;
     }
 
-    xasprintf( &symbol_message, "Container Symbols of %s:", soname );
+    if( details->public_symbols != NULL )
+    {
+        char **container_symbols_filtered;
+        size_t container_symbols_number_filtered = 0;
+        container_symbols_filtered = library_cmp_filter_list( details->public_symbols,
+                                                              container_symbols,
+                                                              container_symbols_number,
+                                                              &container_symbols_number_filtered );
+        free_strv_full( container_symbols );
+
+        container_symbols = container_symbols_filtered;
+        container_symbols_number = container_symbols_number_filtered;
+    }
+
+    xasprintf( &symbol_message, "Container Symbols of %s:", details->name );
     print_debug_string_list( container_symbols, symbol_message );
     _capsule_clear( &symbol_message );
 
@@ -1071,11 +1245,25 @@ library_cmp_by_symbols( const char *soname,
     if( provider_symbols == NULL )
     {
         warnx( "failed to get provider versions for %s (%d): %s",
-               soname, code, message );
+               details->name, code, message );
         goto out;
     }
 
-    xasprintf( &symbol_message, "Provider Symbols of %s:", soname );
+    if( details->public_symbols != NULL )
+    {
+        char **provider_symbols_filtered;
+        size_t provider_symbols_number_filtered = 0;
+        provider_symbols_filtered = library_cmp_filter_list( details->public_symbols,
+                                                             provider_symbols,
+                                                             provider_symbols_number,
+                                                             &provider_symbols_number_filtered );
+        free_strv_full( provider_symbols );
+
+        provider_symbols = provider_symbols_filtered;
+        provider_symbols_number = provider_symbols_number_filtered;
+    }
+
+    xasprintf( &symbol_message, "Provider Symbols of %s:", details->name );
     print_debug_string_list( provider_symbols, symbol_message );
     _capsule_clear( &symbol_message );
 
@@ -1088,7 +1276,7 @@ library_cmp_by_symbols( const char *soname,
     {
         DEBUG( DEBUG_TOOL,
                "%s in the container is newer because its symbols are a strict superset",
-               soname );
+               details->name );
         cmp_result = 1;
     }
     /* In provider we have strictly more symbols: create the symlink */
@@ -1096,7 +1284,7 @@ library_cmp_by_symbols( const char *soname,
     {
         DEBUG( DEBUG_TOOL,
                "%s in the provider is newer because its symbols are a strict superset",
-               soname );
+               details->name );
         cmp_result = -1;
     }
     /* With the following two cases we are still unsure which library is newer, so we
@@ -1105,29 +1293,19 @@ library_cmp_by_symbols( const char *soname,
     {
         DEBUG( DEBUG_TOOL,
                "%s in the container and the provider have the same symbols",
-               soname );
+               details->name );
     }
     else
     {
         DEBUG( DEBUG_TOOL,
                "%s in the container and the provider have different symbols and neither is a superset of the other",
-               soname );
+               details->name );
     }
 
 out:
     _capsule_clear( &message );
-    if( container_symbols )
-    {
-        for( size_t i = 0; container_symbols[i] != NULL; i++ )
-            free( container_symbols[i] );
-        free( container_symbols );
-    }
-    if( provider_symbols )
-    {
-        for( size_t i = 0; provider_symbols[i] != NULL; i++ )
-            free( provider_symbols[i] );
-        free( provider_symbols );
-    }
+    free_strv_full( container_symbols );
+    free_strv_full( provider_symbols );
     close_elf( &container_elf, &container_fd );
     close_elf( &provider_elf, &provider_fd );
     return cmp_result;
@@ -1136,13 +1314,13 @@ out:
 
 /*
  * library_cmp_by_versions:
- * @soname: (type filename): The library we are interested in, used for debug
- * @container_path: (type filename): The path where the container's @soname is
+ * @details: The library we are interested in and how to compare it
+ * @container_path: (type filename): The path where the container's soname is
  *  located
- * @provider_path: (type filename): The path where the provider's @soname is
+ * @provider_path: (type filename): The path where the provider's soname is
  *  located
  *
- * Attempt to determine whether @soname is older, newer or
+ * Attempt to determine whether soname is older, newer or
  * the same in the container or the provider inspecting their
  * symbols versions.
  *
@@ -1151,7 +1329,7 @@ out:
  * or if container and provider are non-comparable.
  */
 static int
-library_cmp_by_versions( const char *soname,
+library_cmp_by_versions( const library_details *details,
                          const char *container_path,
                          const char *container_root,
                          const char *provider_path,
@@ -1186,11 +1364,25 @@ library_cmp_by_versions( const char *soname,
     if( container_versions == NULL )
     {
         warnx( "failed to get container versions for %s (%d): %s",
-               soname, code, message );
+               details->name, code, message );
         goto out;
     }
 
-    xasprintf( &version_message, "Container versions of %s:", soname);
+    if( details->public_symbol_versions != NULL )
+    {
+        char **container_versions_filtered;
+        size_t container_versions_number_filtered = 0;
+        container_versions_filtered = library_cmp_filter_list( details->public_symbol_versions,
+                                                               container_versions,
+                                                               container_versions_number,
+                                                               &container_versions_number_filtered );
+        free_strv_full( container_versions );
+
+        container_versions = container_versions_filtered;
+        container_versions_number = container_versions_number_filtered;
+    }
+
+    xasprintf( &version_message, "Container versions of %s:", details->name);
     print_debug_string_list( container_versions, version_message );
     _capsule_clear( &version_message );
 
@@ -1209,11 +1401,25 @@ library_cmp_by_versions( const char *soname,
     if( provider_versions == NULL )
     {
         warnx( "failed to get provider versions for %s (%d): %s",
-               soname, code, message );
+               details->name, code, message );
         goto out;
     }
 
-    xasprintf( &version_message, "Provider versions of %s:", soname);
+    if( details->public_symbol_versions != NULL )
+    {
+        char **provider_versions_filtered;
+        size_t provider_versions_number_filtered = 0;
+        provider_versions_filtered = library_cmp_filter_list( details->public_symbol_versions,
+                                                              provider_versions,
+                                                              provider_versions_number,
+                                                              &provider_versions_number_filtered );
+        free_strv_full( provider_versions );
+
+        provider_versions = provider_versions_filtered;
+        provider_versions_number = provider_versions_number_filtered;
+    }
+
+    xasprintf( &version_message, "Provider versions of %s:", details->name);
     print_debug_string_list( provider_versions, version_message );
     _capsule_clear( &version_message );
 
@@ -1226,7 +1432,7 @@ library_cmp_by_versions( const char *soname,
     {
         DEBUG( DEBUG_TOOL,
                "%s in the container is newer because its version definitions are a strict superset",
-               soname );
+               details->name );
         cmp_result = 1;
     }
     /* Version in the provider is strictly newer: create the symlink */
@@ -1234,7 +1440,7 @@ library_cmp_by_versions( const char *soname,
     {
         DEBUG( DEBUG_TOOL,
                "%s in the provider is newer because its version definitions are a strict superset",
-               soname );
+               details->name );
         cmp_result = -1;
     }
     /* With the following two cases we are still unsure which library is newer */
@@ -1242,36 +1448,26 @@ library_cmp_by_versions( const char *soname,
     {
         DEBUG( DEBUG_TOOL,
                "%s in the container and the provider have the same symbol versions",
-               soname );
+               details->name );
     }
     else
     {
         DEBUG( DEBUG_TOOL,
                "%s in the container and the provider have different symbol versions and neither is a superset of the other",
-               soname );
+               details->name );
     }
 
 out:
     _capsule_clear( &message );
-    if( container_versions )
-    {
-        for( size_t i = 0; container_versions[i] != NULL; i++ )
-            free( container_versions[i] );
-        free( container_versions );
-    }
-    if( provider_versions )
-    {
-        for( size_t i = 0; provider_versions[i] != NULL; i++ )
-            free( provider_versions[i] );
-        free( provider_versions );
-    }
+    free_strv_full( container_versions );
+    free_strv_full( provider_versions );
     close_elf( &container_elf, &container_fd );
     close_elf( &provider_elf, &provider_fd );
     return cmp_result;
 }
 
 static int
-library_cmp_choose_container( const char *soname,
+library_cmp_choose_container( const library_details *details,
                               const char *container_path,
                               const char *container_root,
                               const char *provider_path,
@@ -1279,12 +1475,12 @@ library_cmp_choose_container( const char *soname,
 {
     DEBUG( DEBUG_TOOL,
            "Choosing %s from container \"%s\", ignoring provider \"%s\"",
-           soname, container_root, provider_root );
+           details->name, container_root, provider_root );
     return 1;
 }
 
 static int
-library_cmp_choose_provider( const char *soname,
+library_cmp_choose_provider( const library_details *details,
                              const char *container_path,
                              const char *container_root,
                              const char *provider_path,
@@ -1292,7 +1488,7 @@ library_cmp_choose_provider( const char *soname,
 {
     DEBUG( DEBUG_TOOL,
            "Choosing %s from provider \"%s\", ignoring container \"%s\"",
-           soname, provider_root, container_root );
+           details->name, provider_root, container_root );
     return -1;
 }
 
@@ -1383,24 +1579,22 @@ out:
 
 /*
  * library_cmp_list_iterate:
- * @comparators: (array zero-terminated=1): Functions to compare the libraries
- * @soname: The name under which we searched for the library
+ * @details: The library we are interersted in and how to compare it
  * @container_path: The path to the library in the container
  * @container_root: The path to the top-level directory of the container
  * @provider_path: The path to the library in the provider
  * @provider_root: The path to the top-level directory of the provider
  *
- * Iterate through a %NULL-terminated array of comparators,
- * highest-precedence first, calling each one in turn until one of them
- * returns a nonzero value. If none of them return nonzero, return 0.
+ * Iterate through a %NULL-terminated array of comparators from the given
+ * @details, highest-precedence first, calling each one in turn until one of
+ * them returns a nonzero value. If none of them return nonzero, return 0.
  *
  * Returns: Negative if the container version appears newer, zero if they
  *  appear the same or we cannot tell, or positive if the provider version
  *  appears newer.
  */
 int
-library_cmp_list_iterate( const library_cmp_function *comparators,
-                          const char *soname,
+library_cmp_list_iterate( const library_details *details,
                           const char *container_path,
                           const char *container_root,
                           const char *provider_path,
@@ -1408,9 +1602,11 @@ library_cmp_list_iterate( const library_cmp_function *comparators,
 {
     const library_cmp_function *iter;
 
-    for( iter = comparators; iter != NULL && *iter != NULL; iter++ )
+    assert( details != NULL );
+
+    for( iter = details->comparators; iter != NULL && *iter != NULL; iter++ )
     {
-        int decision = (*iter)( soname,
+        int decision = (*iter)( details,
                                 container_path, container_root,
                                 provider_path, provider_root );
 

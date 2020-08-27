@@ -474,29 +474,30 @@ capture_one( const char *soname, const capture_options *options,
             {
                 const char *needed_path_in_container = container.needed[0].path;
                 int decision;
-                const library_cmp_function *comparators = options->comparators;
-                const library_details *details = NULL;
+                library_details details = {};
+                const library_details *known = NULL;
 
-                details = library_knowledge_lookup( &options->knowledge,
-                                                    needed_name );
+                known = library_knowledge_lookup( &options->knowledge,
+                                                  needed_name );
 
-                if( details != NULL )
+                if( known != NULL )
+                {
                     DEBUG( DEBUG_TOOL, "Found library-specific details for \"%s\"",
                            needed_name );
-
-                if( details != NULL && details->comparators != NULL)
-                {
-                    DEBUG( DEBUG_TOOL, "Found library-specific comparators for \"%s\"",
-                           needed_name );
-                    comparators = details->comparators;
+                    details = *known;
                 }
 
-                decision = library_cmp_list_iterate( comparators,
-                                                     needed_name,
+                /* Not const-correct, but we don't actually modify or free it */
+                details.name = (char *) needed_name;
+
+                if( details.comparators == NULL )
+                    details.comparators = options->comparators;
+
+                decision = library_cmp_list_iterate( &details,
                                                      needed_path_in_container,
                                                      option_container,
                                                      needed_path_in_provider,
-                                                     option_provider);
+                                                     option_provider );
 
                 if( decision > 0 )
                 {

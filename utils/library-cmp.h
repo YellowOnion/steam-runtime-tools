@@ -20,9 +20,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+typedef struct _library_details library_details;
+
 /*
  * library_cmp_function:
- * @soname: The name under which we searched for the library
+ * @details: The details about the library we are interested in and how
+ *  to compare it
  * @container_path: The path to the library in the container
  * @container_root: The path to the top-level directory of the container
  * @provider_path: The path to the library in the provider
@@ -36,18 +39,35 @@
  *  appear the same or we cannot tell, or positive if the provider version
  *  appears newer.
  */
-typedef int ( *library_cmp_function ) ( const char *soname,
+typedef int ( *library_cmp_function ) ( const library_details *details,
                                         const char *container_path,
                                         const char *container_root,
                                         const char *provider_path,
                                         const char *provider_root );
 
+/*
+ * library_details:
+ * @name: The name we look for the library under, normally a SONAME
+ * @comparators: Functions to use to compare versions, or %NULL for
+ *  default behaviour
+ * @public_symbol_versions: An array of patterns to discriminate public
+ *  versions from private versions
+ * @public_symbols: An array of patterns to discriminate public
+ *  symbols from private symbols
+ */
+struct _library_details
+{
+    char *name;
+    library_cmp_function *comparators;
+    char **public_symbol_versions;
+    char **public_symbols;
+};
+
 library_cmp_function *library_cmp_list_from_string( const char *spec,
                                                     const char *delimiters,
                                                     int *code,
                                                     char **message );
-int library_cmp_list_iterate( const library_cmp_function *comparators,
-                              const char *soname,
+int library_cmp_list_iterate( const library_details *details,
                               const char *container_path,
                               const char *container_root,
                               const char *provider_path,
@@ -66,18 +86,6 @@ typedef struct
 } library_knowledge;
 
 #define LIBRARY_KNOWLEDGE_INIT { NULL }
-
-/*
- * library_details:
- * @name: The name we look for the library under, normally a SONAME
- * @comparators: Functions to use to compare versions, or %NULL for
- *  default behaviour
- */
-typedef struct
-{
-    char *name;
-    library_cmp_function *comparators;
-} library_details;
 
 bool library_knowledge_load_from_stream( library_knowledge *self,
                                          FILE *stream, const char *name,

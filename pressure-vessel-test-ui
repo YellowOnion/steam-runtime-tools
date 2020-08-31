@@ -493,9 +493,12 @@ class Gui:
             argv.append(os.path.join(id, 'files'))
 
         if self.host_graphics_check.get_active():
-            argv.append('--with-host-graphics')
+            if os.path.isdir('/run/host'):
+                argv.append('--graphics-provider=/run/host')
+            else:
+                argv.append('--graphics-provider=/')
         else:
-            argv.append('--without-host-graphics')
+            argv.append('--graphics-provider=')
 
         if self.copy_runtime_into_check.get_active():
             os.makedirs(self.var_path, mode=0o755, exist_ok=True)

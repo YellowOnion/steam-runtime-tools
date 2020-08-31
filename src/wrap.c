@@ -365,7 +365,8 @@ static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
-static gboolean opt_host_graphics = TRUE;
+static char *opt_graphics_provider = NULL;
+static char *graphics_provider_mount_point = NULL;
 static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
@@ -539,6 +540,38 @@ opt_share_home_cb (const gchar *option_name,
   return TRUE;
 }
 
+static gboolean
+opt_with_host_graphics_cb (const gchar *option_name,
+                           const gchar *value,
+                           gpointer data,
+                           GError **error)
+{
+  /* This is the old way to get the graphics from the host system */
+  if (g_strcmp0 (option_name, "--with-host-graphics") == 0)
+    {
+      if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+        opt_graphics_provider = g_strdup ("/run/host");
+      else
+        opt_graphics_provider = g_strdup ("/");
+    }
+  /* This is the old way to avoid using graphics from the host */
+  else if (g_strcmp0 (option_name, "--without-host-graphics") == 0)
+    {
+      opt_graphics_provider = g_strdup ("");
+    }
+  else
+    {
+      g_return_val_if_reached (FALSE);
+    }
+
+  g_warning ("\"--with-host-graphics\" and \"--without-host-graphics\" have "
+             "been deprecated and could be removed in future releases. Please use "
+             "use \"--graphics-provider=/\", \"--graphics-provider=/run/host\" or "
+             "\"--graphics-provider=\" instead.");
+
+  return TRUE;
+}
+
 static GOptionEntry options[] =
 {
   { "batch", '\0',
@@ -597,6 +630,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
     "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
     "MODULE" },
+  { "graphics-provider", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_graphics_provider,
+    "If using --runtime, use PATH as the graphics provider. "
+    "The path is assumed to be relative to the current namespace, "
+    "and will be adjusted for use on the host system if pressure-vessel "
+    "is run in a container. The empty string means use the graphics "
+    "stack from container."
+    "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/run/host' or '/']", "PATH" },
   { "remove-game-overlay", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_remove_game_overlay,
     "Disable the Steam Overlay. "
@@ -610,7 +651,7 @@ static GOptionEntry options[] =
   { "runtime", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
-    "it with the host system's graphics stack. The empty string "
+    "it with the provider's graphics stack. The empty string "
     "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
   { "runtime-base", '\0',
@@ -698,13 +739,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_version_only,
     "Print version number (no other information) and exit.", NULL },
   { "with-host-graphics", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_host_graphics,
-    "If using --runtime, use the host graphics stack (default)", NULL },
+    G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    opt_with_host_graphics_cb,
+    "Deprecated alias for \"--graphics-provider=/\" or "
+    "\"--graphics-provider=/run/host\"", NULL },
   { "without-host-graphics", '\0',
-    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_host_graphics,
-    "If using --runtime, don't use the host graphics stack. "
-    "This is likely to result in software rendering or a crash.",
-    NULL },
+    G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    opt_with_host_graphics_cb,
+    "Deprecated alias for \"--graphics-provider=\"", NULL },
   { "write-bwrap-arguments", '\0',
     G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_bwrap,
     "Write the final bwrap arguments, as null terminated strings, to the "
@@ -763,6 +805,7 @@ main (int argc,
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
+  g_autofree gchar *cwd_p_host = NULL;
   const gchar *home;
   g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
@@ -811,8 +854,7 @@ main (int argc,
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
   opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
-  opt_host_graphics = pv_boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
-                                              TRUE);
+
   opt_share_pid = pv_boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
   opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
@@ -855,6 +897,33 @@ main (int argc,
   if (opt_copy_runtime_into != NULL
       && opt_copy_runtime_into[0] == '\0')
     opt_copy_runtime_into = NULL;
+
+  if (opt_graphics_provider == NULL)
+    opt_graphics_provider = g_strdup (g_getenv ("PRESSURE_VESSEL_GRAPHICS_PROVIDER"));
+
+  if (opt_graphics_provider == NULL)
+    {
+      /* Also check the deprecated 'PRESSURE_VESSEL_HOST_GRAPHICS' */
+      if (!pv_boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS", TRUE))
+        opt_graphics_provider = g_strdup ("");
+      else if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+        opt_graphics_provider = g_strdup ("/run/host");
+      else
+        opt_graphics_provider = g_strdup ("/");
+    }
+
+  g_assert (opt_graphics_provider != NULL);
+  if (opt_graphics_provider[0] != '\0' && opt_graphics_provider[0] != '/')
+    {
+      g_printerr ("%s: --graphics-provider path must be absolute, not \"%s\"\n",
+                  g_get_prgname (), opt_graphics_provider);
+      goto out;
+    }
+
+  if (g_strcmp0 (opt_graphics_provider, "/") == 0)
+    graphics_provider_mount_point = g_strdup ("/run/host");
+  else
+    graphics_provider_mount_point = g_strdup ("/run/gfx");
 
   if (opt_version_only)
     {
@@ -1205,8 +1274,8 @@ main (int argc,
       if (opt_generate_locales)
         flags |= PV_RUNTIME_FLAGS_GENERATE_LOCALES;
 
-      if (opt_host_graphics)
-        flags |= PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK;
+      if (opt_graphics_provider != NULL && opt_graphics_provider[0] != '\0')
+        flags |= PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK;
 
       if (opt_verbose)
         flags |= PV_RUNTIME_FLAGS_VERBOSE;
@@ -1217,6 +1286,8 @@ main (int argc,
                                 opt_copy_runtime_into,
                                 bwrap_executable,
                                 tools_dir,
+                                opt_graphics_provider,
+                                graphics_provider_mount_point,
                                 flags,
                                 error);
 
@@ -1365,6 +1436,8 @@ main (int argc,
    * run) is available. Some games write here. */
   g_debug ("Making current working directory available...");
 
+  cwd_p_host = pv_current_namespace_path_to_host_path (cwd_p);
+
   if (pv_is_same_file (home, cwd_p))
     {
       g_debug ("Not making physical working directory \"%s\" available to "
@@ -1374,7 +1447,7 @@ main (int argc,
   else
     {
       flatpak_bwrap_add_args (bwrap,
-                              "--bind", cwd_p, cwd_p,
+                              "--bind", cwd_p_host, cwd_p_host,
                               NULL);
     }
 
@@ -1384,14 +1457,31 @@ main (int argc,
   if (runtime != NULL)
     {
       flatpak_run_add_wayland_args (bwrap);
-      flatpak_run_add_x11_args (bwrap, TRUE);
+
+      /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
+       * but it might be different on the host system. As a workaround we simply
+       * bind the whole "/tmp/.X11-unix" directory and unset the container
+       * "DISPLAY" env.
+       */
+      if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
+                                  NULL);
+          flatpak_bwrap_unset_env (bwrap, "DISPLAY");
+        }
+      else
+        {
+          flatpak_run_add_x11_args (bwrap, TRUE);
+        }
+
       flatpak_run_add_pulseaudio_args (bwrap);
       flatpak_run_add_session_dbus_args (bwrap);
       flatpak_run_add_system_dbus_args (bwrap);
     }
 
   flatpak_bwrap_add_args (bwrap,
-                          "--chdir", cwd_p,
+                          "--chdir", cwd_p_host,
                           "--unsetenv", "PWD",
                           NULL);
 

@@ -31,7 +31,7 @@
 
 /**
  * PvRuntimeFlags:
- * @PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK: Use host system graphics stack
+ * @PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK: Use provider graphics stack
  * @PV_RUNTIME_FLAGS_GENERATE_LOCALES: Generate missing locales
  * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
  * @PV_RUNTIME_FLAGS_NONE: None of the above
@@ -40,7 +40,7 @@
  */
 typedef enum
 {
-  PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK = (1 << 0),
+  PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK = (1 << 0),
   PV_RUNTIME_FLAGS_GENERATE_LOCALES = (1 << 1),
   PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_VERBOSE = (1 << 3),
@@ -48,7 +48,7 @@ typedef enum
 } PvRuntimeFlags;
 
 #define PV_RUNTIME_FLAGS_MASK \
-  (PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK \
+  (PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK \
    | PV_RUNTIME_FLAGS_GENERATE_LOCALES \
    | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    | PV_RUNTIME_FLAGS_VERBOSE \
@@ -69,6 +69,8 @@ PvRuntime *pv_runtime_new (const char *source_files,
                            const char *mutable_parent,
                            const char *bubblewrap,
                            const char *tools_dir,
+                           const char *provider_in_current_namespace,
+                           const char *provider_in_container_namespace,
                            PvRuntimeFlags flags,
                            GError **error);
 

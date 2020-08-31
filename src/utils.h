@@ -74,6 +74,8 @@ gboolean pv_terminate_all_child_processes (GTimeSpan wait_period,
                                            GTimeSpan grace_period,
                                            GError **error);
 
+gchar *pv_current_namespace_path_to_host_path (const gchar *current_env_path);
+
 gboolean pv_file_test_in_sysroot (const char *sysroot,
                                   const char *filename,
                                   GFileTest test);

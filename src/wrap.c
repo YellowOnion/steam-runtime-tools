@@ -1074,7 +1074,7 @@ main (int argc,
 
   g_debug ("Found executable directory: %s", tools_dir);
 
-  wrapped_command = flatpak_bwrap_new (NULL);
+  wrapped_command = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
   switch (opt_terminal)
     {
@@ -1447,7 +1447,7 @@ main (int argc,
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     goto out;
 
-  adverb_args = flatpak_bwrap_new (NULL);
+  adverb_args = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
   if (runtime != NULL)
     adverb_in_container = pv_runtime_get_adverb (runtime, adverb_args);

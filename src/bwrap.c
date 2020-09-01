@@ -429,7 +429,7 @@ pv_bwrap_copy (FlatpakBwrap *bwrap)
    * flatpak_bwrap_append_bwrap() would steal them. */
   g_return_val_if_fail (bwrap->fds == NULL || bwrap->fds->len == 0, NULL);
 
-  ret = flatpak_bwrap_new (NULL);
+  ret = flatpak_bwrap_new (flatpak_bwrap_empty_env);
   flatpak_bwrap_append_bwrap (ret, bwrap);
   return ret;
 }

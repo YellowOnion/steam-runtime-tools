@@ -441,7 +441,6 @@ static int
 search_ldcache (const char *name, ld_libs *ldlibs, int i)
 {
     struct dso_cache_search target;
-    char cachepath[PATH_MAX];
 
     target.idx    = i;
     target.name   = name;
@@ -449,15 +448,7 @@ search_ldcache (const char *name, ld_libs *ldlibs, int i)
 
     if( !ldlibs->ldcache.is_open )
     {
-        if( build_filename( cachepath, sizeof(cachepath),
-                            ldlibs->prefix.path, "/etc/ld.so.cache",
-                            NULL ) >= sizeof(cachepath) )
-        {
-            // TODO: report ENAMETOOLONG?
-            return 0;
-        }
-
-        if( !ld_cache_open( &ldlibs->ldcache, &cachepath[0], NULL, NULL ) )
+        if( !ld_libs_load_cache( ldlibs, "/etc/ld.so.cache", NULL, NULL ) )
         {
             // TODO: report error?
             return 0;

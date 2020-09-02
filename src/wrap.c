@@ -106,7 +106,7 @@ check_bwrap (const char *tools_dir,
 {
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
-  g_autofree gchar *bwrap_executable = find_bwrap (tools_dir);
+  g_autofree gchar *bwrap_executable = NULL;
   const char *bwrap_test_argv[] =
   {
     NULL,
@@ -116,6 +116,8 @@ check_bwrap (const char *tools_dir,
   };
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
+
+  bwrap_executable = find_bwrap (tools_dir);
 
   if (bwrap_executable == NULL)
     {
@@ -166,6 +168,64 @@ check_bwrap (const char *tools_dir,
         {
           return g_steal_pointer (&bwrap_executable);
         }
+    }
+
+  return NULL;
+}
+
+static gchar *
+check_flatpak_spawn (void)
+{
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+  g_autofree gchar *spawn_exec = NULL;
+  g_autofree gchar *child_stdout = NULL;
+  g_autofree gchar *child_stderr = NULL;
+  int wait_status;
+  const char *spawn_test_argv[] =
+  {
+    NULL,
+    "--host",
+    "--directory=/",
+    "true",
+    NULL
+  };
+
+  /* All known Flatpak runtimes have flatpak-spawn in the PATH */
+  spawn_exec = g_find_program_in_path ("flatpak-spawn");
+
+  if (spawn_exec == NULL
+      || !g_file_test (spawn_exec, G_FILE_TEST_IS_EXECUTABLE))
+    return NULL;
+
+  spawn_test_argv[0] = spawn_exec;
+
+  if (!g_spawn_sync (NULL,  /* cwd */
+                     (gchar **) spawn_test_argv,
+                     NULL,  /* environ */
+                     G_SPAWN_DEFAULT,
+                     NULL, NULL,    /* child setup */
+                     &child_stdout,
+                     &child_stderr,
+                     &wait_status,
+                     error))
+    {
+      g_warning ("Cannot run flatpak-spawn: %s", local_error->message);
+      g_clear_error (&local_error);
+    }
+  else if (wait_status != 0)
+    {
+      g_warning ("Cannot run flatpak-spawn: wait status %d", wait_status);
+
+      if (child_stdout != NULL && child_stdout[0] != '\0')
+        g_warning ("Output:\n%s", child_stdout);
+
+      if (child_stderr != NULL && child_stderr[0] != '\0')
+        g_warning ("Diagnostic output:\n%s", child_stderr);
+    }
+  else
+    {
+      return g_steal_pointer (&spawn_exec);
     }
 
   return NULL;
@@ -802,10 +862,12 @@ main (int argc,
   gsize i;
   g_auto(GStrv) original_argv = NULL;
   int original_argc = argc;
+  gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakBwrap) adverb_args = NULL;
   g_autofree gchar *adverb_in_container = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
+  g_autofree gchar *spawn_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
@@ -1201,26 +1263,43 @@ main (int argc,
   g_debug ("Setting arguments for wrapped command");
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
 
-  g_debug ("Checking for bwrap...");
-  bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
+  /* If we are in a Flatpak environment we can't use bwrap directly */
+  if (is_flatpak_env)
+    {
+      g_debug ("Checking for flatpak-spawn...");
+      spawn_executable = check_flatpak_spawn ();
+      /* Assume "bwrap" to exist in the host system and to be in its PATH */
+      bwrap_executable = g_strdup ("bwrap");
+    }
+  else
+    {
+      g_debug ("Checking for bwrap...");
+      bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
+    }
 
   if (opt_test)
     {
-      if (bwrap_executable == NULL)
+      if ((is_flatpak_env && spawn_executable == NULL)
+          || bwrap_executable == NULL)
         {
           ret = 1;
           goto out;
         }
       else
         {
-          g_debug ("OK (%s)", bwrap_executable);
+          if (spawn_executable != NULL)
+            g_debug ("OK (%s) (%s)", spawn_executable, bwrap_executable);
+          else
+            g_debug ("OK (%s)", bwrap_executable);
           ret = 0;
           goto out;
         }
     }
 
-  if (bwrap_executable == NULL)
+  if ((is_flatpak_env && spawn_executable == NULL)
+      || bwrap_executable == NULL)
     {
+      /* TODO in a Flatpak environment, host is not what we expect it to be */
       if (opt_host_fallback)
         {
           g_message ("Falling back to executing wrapped command directly");
@@ -1259,12 +1338,15 @@ main (int argc,
         }
     }
 
-  g_debug ("Checking bwrap features...");
-  bwrap_help_argv[0] = bwrap_executable;
-  bwrap_help = pv_capture_output (bwrap_help_argv, error);
+  if (!is_flatpak_env)
+    {
+      g_debug ("Checking bwrap features...");
+      bwrap_help_argv[0] = bwrap_executable;
+      bwrap_help = pv_capture_output (bwrap_help_argv, error);
 
-  if (bwrap_help == NULL)
-    goto out;
+      if (bwrap_help == NULL)
+        goto out;
+    }
 
   bwrap = flatpak_bwrap_new (NULL);
   flatpak_bwrap_add_arg (bwrap, bwrap_executable);
@@ -1585,6 +1667,29 @@ main (int argc,
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
+
+  if (is_flatpak_env)
+    {
+      /* Just use the envp from @bwrap */
+      g_autoptr(FlatpakBwrap) flatpak_spawn = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      flatpak_bwrap_add_arg (flatpak_spawn, spawn_executable);
+      flatpak_bwrap_add_arg (flatpak_spawn, "--host");
+
+      for (i = 0; i < bwrap->fds->len; i++)
+        {
+          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
+                                                     g_array_index (bwrap->fds, int, i));
+          flatpak_bwrap_add_arg (flatpak_spawn, fd_str);
+        }
+      /* Change the current working directory where flatpak-spawn will run.
+       * Bwrap will then set its directory by itself. For this reason here
+       * we just need a directory that it's known to exist. */
+      flatpak_bwrap_add_arg (flatpak_spawn, "--directory=/");
+
+      flatpak_bwrap_append_bwrap (flatpak_spawn, bwrap);
+      g_clear_pointer (&bwrap, flatpak_bwrap_free);
+      bwrap = g_steal_pointer (&flatpak_spawn);
+    }
 
   if (opt_verbose)
     {

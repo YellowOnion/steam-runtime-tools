@@ -64,13 +64,18 @@ struct _PvRuntime
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
   gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
+  gchar *runtime_files_on_host;
   const gchar *adverb_in_container;
+  gchar *provider_in_current_namespace;
+  gchar *provider_in_host_namespace;
+  gchar *provider_in_container_namespace;
+  const gchar *host_in_current_namespace;
 
   PvRuntimeFlags flags;
   int mutable_parent_fd;
   int mutable_sysroot_fd;
-  gboolean any_libc_from_host;
-  gboolean all_libc_from_host;
+  gboolean any_libc_from_provider;
+  gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
 };
 
@@ -84,6 +89,8 @@ enum {
   PROP_BUBBLEWRAP,
   PROP_FLAGS,
   PROP_MUTABLE_PARENT,
+  PROP_PROVIDER_IN_CURRENT_NAMESPACE,
+  PROP_PROVIDER_IN_CONTAINER_NAMESPACE,
   PROP_SOURCE_FILES,
   PROP_TOOLS_DIRECTORY,
   N_PROPERTIES
@@ -99,7 +106,8 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
                                                 pv_runtime_initable_iface_init))
 
 /*
- * Return whether @path is likely to be visible in /run/host.
+ * Return whether @path is likely to be visible in the provider mount point
+ * (e.g. /run/host).
  * This needs to be kept approximately in sync with pv_bwrap_bind_usr()
  * and Flatpak's --filesystem=host-os special keyword.
  *
@@ -107,7 +115,7 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
  * that /etc/ld.so.cache, etc., are not shared.
  */
 static gboolean
-path_visible_in_run_host (const char *path)
+path_visible_in_provider_namespace (const char *path)
 {
   while (path[0] == '/')
     path++;
@@ -158,7 +166,7 @@ typedef struct
   const char *tuple;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
-  gchar *libdir_on_host;
+  gchar *libdir_in_current_namespace;
   gchar *libdir_in_container;
   const char *libqual;
   gchar *ld_so;
@@ -184,13 +192,15 @@ runtime_architecture_init (RuntimeArchitecture *self,
   self->capsule_capture_libs = g_build_filename (runtime->tools_dir,
                                                  self->capsule_capture_libs_basename,
                                                  NULL);
-  self->libdir_on_host = g_build_filename (runtime->overrides, "lib",
-                                           self->tuple, NULL);
+  self->libdir_in_current_namespace = g_build_filename (runtime->overrides, "lib",
+                                                        self->tuple, NULL);
   self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
                                                 "lib", self->tuple, NULL);
 
   /* This has the side-effect of testing whether we can run binaries
-   * for this architecture on the host system. */
+   * for this architecture on the current environment. We
+   * assume that this is the same as whether we can run them
+   * on the host, if different. */
   argv[0] = self->capsule_capture_libs;
   self->ld_so = pv_capture_output (argv, NULL);
 
@@ -210,7 +220,7 @@ runtime_architecture_check_valid (RuntimeArchitecture *self)
   g_return_val_if_fail (self->tuple == multiarch_tuples[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->capsule_capture_libs_basename != NULL, FALSE);
   g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
-  g_return_val_if_fail (self->libdir_on_host != NULL, FALSE);
+  g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
   g_return_val_if_fail (self->libqual == libquals[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->ld_so != NULL, FALSE);
@@ -225,7 +235,7 @@ runtime_architecture_clear (RuntimeArchitecture *self)
   self->libqual = NULL;
   g_clear_pointer (&self->capsule_capture_libs_basename, g_free);
   g_clear_pointer (&self->capsule_capture_libs, g_free);
-  g_clear_pointer (&self->libdir_on_host, g_free);
+  g_clear_pointer (&self->libdir_in_current_namespace, g_free);
   g_clear_pointer (&self->libdir_in_container, g_free);
   g_clear_pointer (&self->ld_so, g_free);
 }
@@ -233,17 +243,17 @@ runtime_architecture_clear (RuntimeArchitecture *self)
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RuntimeArchitecture,
                                   runtime_architecture_clear)
 
-static gboolean pv_runtime_use_host_graphics_stack (PvRuntime *self,
-                                                    FlatpakBwrap *bwrap,
-                                                    GError **error);
+static gboolean pv_runtime_use_provider_graphics_stack (PvRuntime *self,
+                                                        FlatpakBwrap *bwrap,
+                                                        GError **error);
 static void pv_runtime_set_search_paths (PvRuntime *self,
                                          FlatpakBwrap *bwrap);
 
 static void
 pv_runtime_init (PvRuntime *self)
 {
-  self->any_libc_from_host = FALSE;
-  self->all_libc_from_host = FALSE;
+  self->any_libc_from_provider = FALSE;
+  self->all_libc_from_provider = FALSE;
   self->mutable_parent_fd = -1;
   self->mutable_sysroot_fd = -1;
 }
@@ -268,6 +278,14 @@ pv_runtime_get_property (GObject *object,
 
       case PROP_MUTABLE_PARENT:
         g_value_set_string (value, self->mutable_parent);
+        break;
+
+      case PROP_PROVIDER_IN_CURRENT_NAMESPACE:
+        g_value_set_string (value, self->provider_in_current_namespace);
+        break;
+
+      case PROP_PROVIDER_IN_CONTAINER_NAMESPACE:
+        g_value_set_string (value, self->provider_in_container_namespace);
         break;
 
       case PROP_SOURCE_FILES:
@@ -323,6 +341,18 @@ pv_runtime_set_property (GObject *object,
 
         break;
 
+      case PROP_PROVIDER_IN_CURRENT_NAMESPACE:
+        /* Construct-only */
+        g_return_if_fail (self->provider_in_current_namespace == NULL);
+        self->provider_in_current_namespace = g_value_dup_string (value);
+        break;
+
+      case PROP_PROVIDER_IN_CONTAINER_NAMESPACE:
+        /* Construct-only */
+        g_return_if_fail (self->provider_in_container_namespace == NULL);
+        self->provider_in_container_namespace = g_value_dup_string (value);
+        break;
+
       case PROP_SOURCE_FILES:
         /* Construct-only */
         g_return_if_fail (self->source_files == NULL);
@@ -361,6 +391,8 @@ pv_runtime_constructed (GObject *object)
   G_OBJECT_CLASS (pv_runtime_parent_class)->constructed (object);
 
   g_return_if_fail (self->bubblewrap != NULL);
+  g_return_if_fail (self->provider_in_current_namespace != NULL);
+  g_return_if_fail (self->provider_in_container_namespace != NULL);
   g_return_if_fail (self->source_files != NULL);
   g_return_if_fail (self->tools_dir != NULL);
 }
@@ -676,7 +708,9 @@ pv_runtime_initable_init (GInitable *initable,
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!g_file_test (self->bubblewrap, G_FILE_TEST_IS_EXECUTABLE))
+  /* If we are in Flatpak container we don't expect to have a working bwrap */
+  if (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR)
+      && !g_file_test (self->bubblewrap, G_FILE_TEST_IS_EXECUTABLE))
     {
       return glnx_throw (error, "\"%s\" is not executable",
                          self->bubblewrap);
@@ -741,6 +775,8 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_files = self->source_files;
     }
 
+  self->runtime_files_on_host = pv_current_namespace_path_to_host_path (self->runtime_files);
+
   g_mkdir (self->overrides, 0700);
 
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
@@ -764,6 +800,18 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (!g_file_test (self->libcapsule_knowledge, G_FILE_TEST_EXISTS))
     g_clear_pointer (&self->libcapsule_knowledge, g_free);
+
+  /* Path that, when resolved in the host namespace, points to the provider */
+  self->provider_in_host_namespace =
+    pv_current_namespace_path_to_host_path (self->provider_in_current_namespace);
+
+  /* If we are in a Flatpak environment we expect to have the host system
+   * mounted in `/run/host`. Otherwise we assume that the host system, in the
+   * current namespace, is the root. */
+  if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
+    self->host_in_current_namespace = "/run/host";
+  else
+    self->host_in_current_namespace = "/";
 
   return TRUE;
 }
@@ -800,6 +848,10 @@ pv_runtime_finalize (GObject *object)
   g_free (self->mutable_parent);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
+  g_free (self->provider_in_current_namespace);
+  g_free (self->provider_in_host_namespace);
+  g_free (self->provider_in_container_namespace);
+  g_free (self->runtime_files_on_host);
   g_free (self->runtime_usr);
   g_free (self->source_files);
   g_free (self->tools_dir);
@@ -842,17 +894,35 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_PROVIDER_IN_CURRENT_NAMESPACE] =
+    g_param_spec_string ("provider-in-current-namespace",
+                         "Provider in current namespace",
+                         ("Path that, when resolved in the current namespace, "
+                          "points to the provider"),
+                         NULL,
+                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS));
+
+  properties[PROP_PROVIDER_IN_CONTAINER_NAMESPACE] =
+    g_param_spec_string ("provider-in-container-namespace",
+                         "Provider in container namespace",
+                         ("Path to a directory in which the provider will be "
+                          "accessible from inside the container"),
+                         NULL,
+                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS));
+
   properties[PROP_SOURCE_FILES] =
     g_param_spec_string ("source-files", "Source files",
                          ("Path to read-only runtime files (merged-/usr "
-                          "or sysroot) on host system"),
+                          "or sysroot) in current namespace"),
                          NULL,
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
   properties[PROP_TOOLS_DIRECTORY] =
     g_param_spec_string ("tools-directory", "Tools directory",
-                         "Path to pressure-vessel/bin on host system",
+                         "Path to pressure-vessel/bin in current namespace",
                          NULL,
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
@@ -865,6 +935,8 @@ pv_runtime_new (const char *source_files,
                 const char *mutable_parent,
                 const char *bubblewrap,
                 const char *tools_dir,
+                const char *provider_in_current_namespace,
+                const char *provider_in_container_namespace,
                 PvRuntimeFlags flags,
                 GError **error)
 {
@@ -880,6 +952,10 @@ pv_runtime_new (const char *source_files,
                          "mutable-parent", mutable_parent,
                          "source-files", source_files,
                          "tools-directory", tools_dir,
+                         "provider-in-current-namespace",
+                           provider_in_current_namespace,
+                         "provider-in-container-namespace",
+                           provider_in_container_namespace == NULL ? "/run/host" : provider_in_container_namespace,
                          "flags", flags,
                          NULL);
 }
@@ -1024,6 +1100,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
                               "--tmpfs", self->container_access,
                               NULL);
       if (!pv_bwrap_bind_usr (self->container_access_adverb,
+                              self->runtime_files_on_host,
                               self->runtime_files,
                               self->container_access,
                               error))
@@ -1042,8 +1119,9 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,
                           "--container", self->container_access,
-                          "--link-target", "/run/host",
-                          "--provider", "/",
+                          "--link-target", self->provider_in_container_namespace,
+                          "--provider",
+                            self->provider_in_current_namespace,
                           NULL);
 
   if (self->libcapsule_knowledge)
@@ -1062,9 +1140,17 @@ try_bind_dri (PvRuntime *self,
               GError **error)
 {
   g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
+  g_autofree gchar *dri_in_current_namespace = g_build_filename (
+                                                self->provider_in_container_namespace,
+                                                dri,
+                                                NULL);
   g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
+  g_autofree gchar *s2tc_in_current_namespace = g_build_filename (
+                                                  self->provider_in_container_namespace,
+                                                  s2tc,
+                                                  NULL);
 
-  if (g_file_test (dri, G_FILE_TEST_IS_DIR))
+  if (g_file_test (dri_in_current_namespace, G_FILE_TEST_IS_DIR))
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
@@ -1080,7 +1166,7 @@ try_bind_dri (PvRuntime *self,
 
       temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
       flatpak_bwrap_add_args (temp_bwrap,
-                              "--dest", arch->libdir_on_host,
+                              "--dest", arch->libdir_in_current_namespace,
                               expr,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
@@ -1090,7 +1176,7 @@ try_bind_dri (PvRuntime *self,
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-      dir = g_dir_open (dri, 0, error);
+      dir = g_dir_open (dri_in_current_namespace, 0, error);
 
       if (dir == NULL)
         return FALSE;
@@ -1099,9 +1185,9 @@ try_bind_dri (PvRuntime *self,
            member != NULL;
            member = g_dir_read_name (dir))
         {
-          g_autofree gchar *target = g_build_filename ("/run/host", dri,
-                                                      member, NULL);
-          g_autofree gchar *dest = g_build_filename (arch->libdir_on_host,
+          g_autofree gchar *target = g_build_filename (self->provider_in_container_namespace,
+                                                       dri, member, NULL);
+          g_autofree gchar *dest = g_build_filename (arch->libdir_in_current_namespace,
                                                      "dri", member, NULL);
 
           g_debug ("Creating symbolic link \"%s\" -> \"%s\" for \"%s\" DRI driver",
@@ -1120,7 +1206,7 @@ try_bind_dri (PvRuntime *self,
         }
     }
 
-  if (g_file_test (s2tc, G_FILE_TEST_EXISTS))
+  if (g_file_test (s2tc_in_current_namespace, G_FILE_TEST_EXISTS))
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
@@ -1133,7 +1219,7 @@ try_bind_dri (PvRuntime *self,
 
       temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
       flatpak_bwrap_add_args (temp_bwrap,
-                              "--dest", arch->libdir_on_host,
+                              "--dest", arch->libdir_in_current_namespace,
                               expr,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
@@ -1222,7 +1308,7 @@ bind_icd (PvRuntime *self,
           GError **error)
 {
   static const char options[] = "if-exists:if-same-abi";
-  g_autofree gchar *on_host = NULL;
+  g_autofree gchar *in_current_namespace = NULL;
   g_autofree gchar *pattern = NULL;
   g_autofree gchar *dependency_pattern = NULL;
   g_autofree gchar *seq_str = NULL;
@@ -1252,17 +1338,19 @@ bind_icd (PvRuntime *self,
       if (sequence_number != G_MAXSIZE)
         {
           seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
-          on_host = g_build_filename (arch->libdir_on_host, subdir, seq_str, NULL);
+          in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
+                                                   subdir, seq_str, NULL);
         }
       else
         {
-          on_host = g_build_filename (arch->libdir_on_host, subdir, NULL);
+          in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
+                                                   subdir, NULL);
         }
 
-      g_debug ("Ensuring %s exists", on_host);
+      g_debug ("Ensuring %s exists", in_current_namespace);
 
-      if (g_mkdir_with_parents (on_host, 0700) != 0)
-        return glnx_throw_errno_prefix (error, "Unable to create %s", on_host);
+      if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
+        return glnx_throw_errno_prefix (error, "Unable to create %s", in_current_namespace);
     }
   else
     {
@@ -1283,7 +1371,7 @@ bind_icd (PvRuntime *self,
   temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
   flatpak_bwrap_add_args (temp_bwrap,
                           "--dest",
-                            on_host == NULL ? arch->libdir_on_host : on_host,
+                            in_current_namespace == NULL ? arch->libdir_in_current_namespace : in_current_namespace,
                           pattern,
                           NULL);
   flatpak_bwrap_finish (temp_bwrap);
@@ -1293,13 +1381,13 @@ bind_icd (PvRuntime *self,
 
   g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-  if (on_host != NULL)
+  if (in_current_namespace != NULL)
     {
       /* Try to remove the directory we created. If it succeeds, then we
        * can optimize slightly by not capturing the dependencies: there's
        * no point, because we know we didn't create a symlink to the ICD
        * itself. (It must have been nonexistent or for a different ABI.) */
-      if (g_rmdir (on_host) == 0)
+      if (g_rmdir (in_current_namespace) == 0)
         {
           details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
           return TRUE;
@@ -1308,7 +1396,7 @@ bind_icd (PvRuntime *self,
 
   temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
   flatpak_bwrap_add_args (temp_bwrap,
-                          "--dest", arch->libdir_on_host,
+                          "--dest", arch->libdir_in_current_namespace,
                           dependency_pattern,
                           NULL);
   flatpak_bwrap_finish (temp_bwrap);
@@ -1320,7 +1408,7 @@ bind_icd (PvRuntime *self,
 
   if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
     {
-      g_assert (on_host != NULL);
+      g_assert (in_current_namespace != NULL);
       details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
                                                                        subdir,
                                                                        seq_str ? seq_str : "",
@@ -1365,7 +1453,7 @@ bind_runtime (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, self->runtime_files, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, self->runtime_files_on_host, self->runtime_files, "/", error))
     return FALSE;
 
   /* In the case where we have a mutable sysroot, we mount the overrides
@@ -1402,19 +1490,32 @@ bind_runtime (PvRuntime *self,
                           NULL);
 
   /* https://github.com/flatpak/flatpak/pull/3733 */
-  if (g_file_test ("/etc/os-release", G_FILE_TEST_EXISTS))
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/os-release",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/os-release",
                             "/run/host/os-release",
                             NULL);
-  else if (g_file_test ("/usr/lib/os-release", G_FILE_TEST_EXISTS))
+  else if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/usr/lib/os-release",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/usr/lib/os-release",
                             "/run/host/os-release",
                             NULL);
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
+  if (!pv_bwrap_bind_usr (bwrap, "/", self->host_in_current_namespace, "/run/host", error))
     return FALSE;
+
+  if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
+      || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
+    {
+      if (!pv_bwrap_bind_usr (bwrap,
+                              self->provider_in_host_namespace,
+                              self->provider_in_current_namespace,
+                              self->provider_in_container_namespace,
+                              error))
+        return FALSE;
+    }
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
     {
@@ -1447,13 +1548,24 @@ bind_runtime (PvRuntime *self,
           target = glnx_readlinkat_malloc (-1, full, NULL, NULL);
 
           if (target != NULL)
-            flatpak_bwrap_add_args (bwrap, "--symlink", target, dest, NULL);
+            {
+              flatpak_bwrap_add_args (bwrap, "--symlink", target, dest, NULL);
+            }
           else
-            flatpak_bwrap_add_args (bwrap, "--ro-bind", full, dest, NULL);
+            {
+              /* We will run bwrap in the host system, so translate the path
+               * if necessary */
+              g_autofree gchar *on_host = pv_current_namespace_path_to_host_path (full);
+              flatpak_bwrap_add_args (bwrap, "--ro-bind", on_host, dest, NULL);
+            }
         }
     }
 
-  if (g_file_test ("/etc/machine-id", G_FILE_TEST_EXISTS))
+  /* If we are in a Flatpak environment, we need to test if these files are
+   * available in the host, and not in the current environment, because we will
+   * run bwrap in the host system */
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/machine-id",
+                               G_FILE_TEST_EXISTS))
     {
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", "/etc/machine-id", "/etc/machine-id",
@@ -1461,7 +1573,11 @@ bind_runtime (PvRuntime *self,
                               "/var/lib/dbus/machine-id",
                               NULL);
     }
-  else if (g_file_test ("/var/lib/dbus/machine-id", G_FILE_TEST_EXISTS))
+  /* We leave this for completeness but in practice we do not expect to have
+   * access to the "/var" host directory because Flatpak usually just binds
+   * the host's "etc" and "usr". */
+  else if (pv_file_test_in_sysroot (self->host_in_current_namespace,
+                                    "/var/lib/dbus/machine-id", G_FILE_TEST_EXISTS))
     {
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", "/var/lib/dbus/machine-id",
@@ -1471,33 +1587,41 @@ bind_runtime (PvRuntime *self,
                               NULL);
     }
 
-  if (g_file_test ("/etc/resolv.conf", G_FILE_TEST_EXISTS))
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/resolv.conf",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
                             NULL);
-  if (g_file_test ("/etc/host.conf", G_FILE_TEST_EXISTS))
+
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/host.conf",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/host.conf", "/etc/host.conf",
                             NULL);
-  if (g_file_test ("/etc/hosts", G_FILE_TEST_EXISTS))
+
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/hosts",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/hosts", "/etc/hosts",
                             NULL);
 
   /* TODO: Synthesize a passwd with only the user and nobody,
    * like Flatpak does? */
-  if (g_file_test ("/etc/passwd", G_FILE_TEST_EXISTS))
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/passwd",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/passwd", "/etc/passwd",
                             NULL);
-  if (g_file_test ("/etc/group", G_FILE_TEST_EXISTS))
+
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/group",
+                               G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
 
-  if (self->flags & PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK)
+  if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
     {
-      if (!pv_runtime_use_host_graphics_stack (self, bwrap, error))
+      if (!pv_runtime_use_provider_graphics_stack (self, bwrap, error))
         return FALSE;
     }
 
@@ -1515,14 +1639,17 @@ bind_runtime (PvRuntime *self,
    * non-existing targets), in which case we don't want to attempt to create
    * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
    */
-  if (g_file_test ("/etc/localtime", G_FILE_TEST_EXISTS))
+  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/localtime",
+                               G_FILE_TEST_EXISTS))
     {
       g_autofree char *target = NULL;
       gboolean is_reachable = FALSE;
       g_autofree char *tz = flatpak_get_timezone ();
       g_autofree char *timezone_content = g_strdup_printf ("%s\n", tz);
+      g_autofree char *localtime_in_current_namespace =
+        g_build_filename (self->host_in_current_namespace, "/etc/localtime", NULL);
 
-      target = glnx_readlinkat_malloc (-1, "/etc/localtime", NULL, NULL);
+      target = glnx_readlinkat_malloc (-1, localtime_in_current_namespace, NULL, NULL);
 
       if (target != NULL)
         {
@@ -1560,34 +1687,36 @@ bind_runtime (PvRuntime *self,
 
 typedef enum
 {
-  TAKE_FROM_HOST_FLAGS_IF_DIR = (1 << 0),
-  TAKE_FROM_HOST_FLAGS_IF_EXISTS = (1 << 1),
-  TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
-  TAKE_FROM_HOST_FLAGS_COPY_FALLBACK = (1 << 3),
-  TAKE_FROM_HOST_FLAGS_NONE = 0
-} TakeFromHostFlags;
+  TAKE_FROM_PROVIDER_FLAGS_IF_DIR = (1 << 0),
+  TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS = (1 << 1),
+  TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
+  TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK = (1 << 3),
+  TAKE_FROM_PROVIDER_FLAGS_NONE = 0
+} TakeFromProviderFlags;
 
 static gboolean
-pv_runtime_take_from_host (PvRuntime *self,
-                           FlatpakBwrap *bwrap,
-                           const char *source_in_host,
-                           const char *dest_in_container,
-                           TakeFromHostFlags flags,
-                           GError **error)
+pv_runtime_take_from_provider (PvRuntime *self,
+                               FlatpakBwrap *bwrap,
+                               const char *source_in_provider,
+                               const char *dest_in_container,
+                               TakeFromProviderFlags flags,
+                               GError **error)
 {
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (flags & TAKE_FROM_HOST_FLAGS_IF_DIR)
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_DIR)
     {
-      if (!g_file_test (source_in_host, G_FILE_TEST_IS_DIR))
+      if (!pv_file_test_in_sysroot (self->provider_in_current_namespace,
+                                    source_in_provider, G_FILE_TEST_IS_DIR))
         return TRUE;
     }
 
-  if (flags & TAKE_FROM_HOST_FLAGS_IF_EXISTS)
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS)
     {
-      if (!g_file_test (source_in_host, G_FILE_TEST_EXISTS))
+      if (!pv_file_test_in_sysroot (self->provider_in_current_namespace,
+                                    source_in_provider, G_FILE_TEST_EXISTS))
         return TRUE;
     }
 
@@ -1616,24 +1745,48 @@ pv_runtime_take_from_host (PvRuntime *self,
 
       /* If it isn't in /usr, /lib, etc., then the symlink will be
        * dangling and this probably isn't going to work. */
-      if (!path_visible_in_run_host (source_in_host))
+      if (!path_visible_in_provider_namespace (source_in_provider))
         {
-          if (flags & TAKE_FROM_HOST_FLAGS_COPY_FALLBACK)
+          if (flags & TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK)
             {
-              return glnx_file_copy_at (AT_FDCWD, source_in_host, NULL,
+              glnx_autofd int file_fd = -1;
+              glnx_autofd int sysroot_fd = -1;
+              struct stat stat_buf;
+
+              if (!glnx_opendirat (-1, self->provider_in_current_namespace,
+                                   FALSE, &sysroot_fd, error))
+                return FALSE;
+
+              file_fd = pv_resolve_in_sysroot (sysroot_fd, source_in_provider,
+                                               PV_RESOLVE_FLAGS_READABLE,
+                                               NULL, error);
+              if (file_fd < 0)
+                return FALSE;
+
+              if (fstat (file_fd, &stat_buf) != 0)
+                {
+                  return glnx_throw_errno_prefix (error,
+                                                  "An error occurred using fstat for %s",
+                                                  source_in_provider);
+                }
+
+              g_autofree gchar *proc_fd = g_strdup_printf ("/proc/self/fd/%d", file_fd);
+
+
+              return glnx_file_copy_at (AT_FDCWD, proc_fd, &stat_buf,
                                         parent_dirfd, base,
                                         GLNX_FILE_COPY_OVERWRITE,
                                         NULL, error);
             }
           else
             {
-              g_warning ("\"%s\" is unlikely to appear in /run/host",
-                         source_in_host);
+              g_warning ("\"%s\" is unlikely to appear in \"%s\"",
+                         source_in_provider, self->provider_in_container_namespace);
               /* ... but try it anyway, it can't hurt */
             }
         }
 
-      target = g_build_filename ("/run/host", source_in_host, NULL);
+      target = g_build_filename (self->provider_in_container_namespace, source_in_provider, NULL);
 
       if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
         return glnx_throw_errno_prefix (error,
@@ -1646,7 +1799,7 @@ pv_runtime_take_from_host (PvRuntime *self,
       /* We can't edit the runtime in-place, so tell bubblewrap to mount
        * a new version over the top */
 
-      if (flags & TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE)
+      if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE)
         {
           g_autofree gchar *dest = NULL;
 
@@ -1659,13 +1812,13 @@ pv_runtime_take_from_host (PvRuntime *self,
                                      dest_in_container,
                                      NULL);
 
-          if (g_file_test (source_in_host, G_FILE_TEST_IS_DIR))
+          if (g_file_test (source_in_provider, G_FILE_TEST_IS_DIR))
             {
               if (!g_file_test (dest, G_FILE_TEST_IS_DIR))
                 {
                   g_warning ("Not mounting \"%s\" over non-directory file or "
                              "nonexistent path \"%s\"",
-                             source_in_host, dest);
+                             source_in_provider, dest);
                   return TRUE;
                 }
             }
@@ -1676,14 +1829,14 @@ pv_runtime_take_from_host (PvRuntime *self,
                 {
                   g_warning ("Not mounting \"%s\" over directory or "
                              "nonexistent path \"%s\"",
-                             source_in_host, dest);
+                             source_in_provider, dest);
                   return TRUE;
                 }
             }
         }
 
       flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", source_in_host, dest_in_container,
+                              "--ro-bind", source_in_provider, dest_in_container,
                               NULL);
     }
 
@@ -1802,7 +1955,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               g_autofree gchar *soname_link = NULL;
 
-              soname_link = g_build_filename (arch->libdir_on_host,
+              soname_link = g_build_filename (arch->libdir_in_current_namespace,
                                               dent->d_name, NULL);
 
               /* If we found libfoo.so.1 in the container, and libfoo.so.1
@@ -1823,7 +1976,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               g_autofree gchar *soname_link = NULL;
 
-              soname_link = g_build_filename (arch->libdir_on_host,
+              soname_link = g_build_filename (arch->libdir_in_current_namespace,
                                               glnx_basename (target),
                                               NULL);
 
@@ -1870,8 +2023,8 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               g_autofree gchar *soname_link = NULL;
 
-              soname_link = g_build_filename (arch->libdir_on_host, soname,
-                                              NULL);
+              soname_link = g_build_filename (arch->libdir_in_current_namespace,
+                                              soname, NULL);
 
               if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
                 {
@@ -1925,24 +2078,35 @@ out:
 }
 
 static gboolean
-pv_runtime_take_ld_so_from_host (PvRuntime *self,
-                                 RuntimeArchitecture *arch,
-                                 const gchar *ld_so_in_runtime,
-                                 FlatpakBwrap *bwrap,
-                                 GError **error)
+pv_runtime_take_ld_so_from_provider (PvRuntime *self,
+                                     RuntimeArchitecture *arch,
+                                     const gchar *ld_so_in_runtime,
+                                     FlatpakBwrap *bwrap,
+                                     GError **error)
 {
-  g_autofree gchar *ld_so_in_host = NULL;
+  glnx_autofd int path_fd = -1;
+  glnx_autofd int provider_fd = -1;
+  g_autofree gchar *ld_so_relative_to_provider = NULL;
+  g_autofree gchar *ld_so_in_provider = NULL;
 
-  g_debug ("Making host ld.so visible in container");
+  g_debug ("Making provider's ld.so visible in container");
 
-  ld_so_in_host = realpath (arch->ld_so, NULL);
+  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
+    return FALSE;
 
-  if (ld_so_in_host == NULL)
+  path_fd = pv_resolve_in_sysroot (provider_fd,
+                                   arch->ld_so, PV_RESOLVE_FLAGS_READABLE,
+                                   &ld_so_relative_to_provider, error);
+
+  if (path_fd < 0)
     return glnx_throw_errno_prefix (error,
-                                    "Unable to determine host path to %s",
+                                    "Unable to determine provider path to %s",
                                     arch->ld_so);
 
-  g_debug ("Host path: %s -> %s", arch->ld_so, ld_so_in_host);
+  ld_so_in_provider = g_build_filename (self->provider_in_host_namespace,
+                                        ld_so_relative_to_provider, NULL);
+
+  g_debug ("Provider path: %s -> %s", arch->ld_so, ld_so_relative_to_provider);
   /* Might be either absolute, or relative to the root */
   g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
 
@@ -1953,9 +2117,9 @@ pv_runtime_take_ld_so_from_host (PvRuntime *self,
    * having to dereference a long chain of symlinks every time we run
    * an executable. */
   if (self->mutable_sysroot != NULL &&
-      !pv_runtime_take_from_host (self, bwrap, ld_so_in_host,
-                                  arch->ld_so, TAKE_FROM_HOST_FLAGS_NONE,
-                                  error))
+      !pv_runtime_take_from_provider (self, bwrap, ld_so_in_provider,
+                                      arch->ld_so,
+                                      TAKE_FROM_PROVIDER_FLAGS_NONE, error))
     return FALSE;
 
   /* If we don't have a mutable sysroot, we cannot replace symlinks,
@@ -1972,15 +2136,48 @@ pv_runtime_take_ld_so_from_host (PvRuntime *self,
    * non-standard path), that's pretty much a disaster, because it will
    * just crash. However, all of those (chains of) non-standard symlinks
    * will end up pointing to ld_so_in_runtime. */
-  return pv_runtime_take_from_host (self, bwrap, ld_so_in_host,
-                                    ld_so_in_runtime,
-                                    TAKE_FROM_HOST_FLAGS_NONE, error);
+  return pv_runtime_take_from_provider (self, bwrap, ld_so_in_provider,
+                                        ld_so_in_runtime,
+                                        TAKE_FROM_PROVIDER_FLAGS_NONE, error);
+}
+
+static gchar *
+pv_runtime_search_in_path_and_bin (PvRuntime *self,
+                                   const gchar *program_name)
+{
+  const gchar * const common_bin_dirs[] =
+  {
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+    NULL
+  };
+
+  if (g_strcmp0 (self->host_in_current_namespace, "/") == 0)
+    {
+      gchar *found_path = g_find_program_in_path (program_name);
+      if (found_path != NULL)
+        return found_path;
+    }
+
+  for (gsize i = 0; i < G_N_ELEMENTS (common_bin_dirs) - 1; i++)
+    {
+      g_autofree gchar *test_path = g_build_filename (common_bin_dirs[i],
+                                                      program_name,
+                                                      NULL);
+      if (pv_file_test_in_sysroot (self->host_in_current_namespace,
+                                   test_path, G_FILE_TEST_IS_EXECUTABLE))
+        return g_steal_pointer (&test_path);
+    }
+
+  return NULL;
 }
 
 static gboolean
-pv_runtime_use_host_graphics_stack (PvRuntime *self,
-                                    FlatpakBwrap *bwrap,
-                                    GError **error)
+pv_runtime_use_provider_graphics_stack (PvRuntime *self,
+                                        FlatpakBwrap *bwrap,
+                                        GError **error)
 {
   gsize i, j;
   g_autoptr(GString) dri_path = g_string_new ("");
@@ -2001,14 +2198,22 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   guint n_egl_icds;
   guint n_vulkan_icds;
   const GList *icd_iter;
-  gboolean all_libdrm_from_host = TRUE;
-  g_autoptr(GHashTable) libdrm_data_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                                       g_free, NULL);
-  g_autoptr(GHashTable) gconv_from_host = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                                 g_free, NULL);
-  g_autofree gchar *best_libdrm_data_from_host = NULL;
+  gboolean all_libdrm_from_provider = TRUE;
+  g_autoptr(GHashTable) libdrm_data_in_provider = g_hash_table_new_full (g_str_hash,
+                                                                         g_str_equal,
+                                                                         g_free, NULL);
+  g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                     g_free, NULL);
+  g_autofree gchar *best_libdrm_data_in_provider = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
+  g_autofree gchar *provider_in_container_namespace_guarded = NULL;
+  if (g_str_has_suffix (self->provider_in_container_namespace, "/"))
+    provider_in_container_namespace_guarded =
+      g_strdup (self->provider_in_container_namespace);
+  else
+    provider_in_container_namespace_guarded =
+      g_strdup_printf ("%s/", self->provider_in_container_namespace);
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
@@ -2017,7 +2222,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
-  g_debug ("Enumerating EGL ICDs on host system...");
+  srt_system_info_set_sysroot (system_info, self->provider_in_current_namespace);
+
+  g_debug ("Enumerating EGL ICDs on provider system...");
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
   n_egl_icds = g_list_length (egl_icds);
 
@@ -2046,7 +2253,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       g_ptr_array_add (egl_icd_details, icd_details_new (icd));
     }
 
-  g_debug ("Enumerating Vulkan ICDs on host system...");
+  g_debug ("Enumerating Vulkan ICDs on provider system...");
   vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
                                                   multiarch_tuples);
   n_vulkan_icds = g_list_length (vulkan_icds);
@@ -2076,9 +2283,9 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
     }
 
-  /* We set this FALSE later if we decide not to use the host libc for
-   * some architecture. */
-  self->all_libc_from_host = TRUE;
+  /* We set this FALSE later if we decide not to use the provider libc
+   * for some architecture. */
+  self->all_libc_from_provider = TRUE;
 
   g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
 
@@ -2093,7 +2300,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
         {
           g_auto(GStrv) dirs = NULL;
           g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-          g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_on_host,
+          g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_in_current_namespace,
                                                                       "dri", NULL);
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
@@ -2128,12 +2335,17 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                       NULL);
 
               if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      self->runtime_files_on_host,
                                       self->runtime_files,
                                       "/",
                                       error))
                 return FALSE;
 
-              if (!pv_bwrap_bind_usr (temp_bwrap, "/", "/run/host", error))
+              if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      self->provider_in_host_namespace,
+                                      self->provider_in_current_namespace,
+                                      self->provider_in_container_namespace,
+                                      error))
                 return FALSE;
 
               flatpak_bwrap_add_args (temp_bwrap,
@@ -2162,14 +2374,14 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
 
           pv_search_path_append (dri_path, this_dri_path_in_container);
 
-          g_mkdir_with_parents (arch->libdir_on_host, 0755);
+          g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
 
-          g_debug ("Collecting graphics drivers from host system...");
+          g_debug ("Collecting graphics drivers from provider system...");
 
           temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
           flatpak_bwrap_add_args (temp_bwrap,
-                                  "--dest", arch->libdir_on_host,
+                                  "--dest", arch->libdir_in_current_namespace,
                                   /* Mesa GLX, etc. */
                                   "gl:",
                                   /* Vulkan */
@@ -2313,17 +2525,17 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               !pv_runtime_remove_overridden_libraries (self, arch, error))
             return FALSE;
 
-          libc = g_build_filename (arch->libdir_on_host, "libc.so.6", NULL);
+          libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 
-          /* If we are going to use the host system's libc6 (likely)
+          /* If we are going to use the provider's libc6 (likely)
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
               g_autofree char *libc_target = NULL;
 
-              if (!pv_runtime_take_ld_so_from_host (self, arch,
-                                                    ld_so_in_runtime,
-                                                    bwrap, error))
+              if (!pv_runtime_take_ld_so_from_provider (self, arch,
+                                                        ld_so_in_runtime,
+                                                        bwrap, error))
                 return FALSE;
 
               /* Collect miscellaneous libraries that libc might dlopen.
@@ -2331,7 +2543,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               g_assert (temp_bwrap == NULL);
               temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      "--dest", arch->libdir_on_host,
+                                      "--dest", arch->libdir_in_current_namespace,
                                       "if-exists:libidn2.so.0",
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);
@@ -2345,13 +2557,15 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
               if (libc_target != NULL)
                 {
                   g_autofree gchar *dir = NULL;
-                  g_autofree gchar *gconv_dir_in_host = NULL;
+                  g_autofree gchar *gconv_dir_in_provider = NULL;
                   gboolean found = FALSE;
 
                   dir = g_path_get_dirname (libc_target);
 
-                  if (g_str_has_prefix (dir, "/run/host/"))
-                    memmove (dir, dir + strlen ("/run/host"), strlen (dir) - strlen ("/run/host") + 1);
+                  if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+                    memmove (dir,
+                             dir + strlen (self->provider_in_container_namespace),
+                             strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
 
                   /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
                    * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
@@ -2363,11 +2577,12 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                   if (g_str_has_prefix (dir, "/usr/"))
                     memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
 
-                  gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
+                  gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
-                  if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
+                  if (pv_file_test_in_sysroot (self->provider_in_current_namespace,
+                                               gconv_dir_in_provider, G_FILE_TEST_IS_DIR))
                     {
-                      g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
+                      g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
                       found = TRUE;
                     }
 
@@ -2391,12 +2606,13 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                           *slash = '\0';
                         }
 
-                      g_clear_pointer (&gconv_dir_in_host, g_free);
-                      gconv_dir_in_host = g_build_filename ("/usr", dir, "gconv", NULL);
+                      g_clear_pointer (&gconv_dir_in_provider, g_free);
+                      gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
-                      if (g_file_test (gconv_dir_in_host, G_FILE_TEST_IS_DIR))
+                      if (pv_file_test_in_sysroot (self->provider_in_current_namespace,
+                                                   gconv_dir_in_provider, G_FILE_TEST_IS_DIR))
                         {
-                          g_hash_table_add (gconv_from_host, g_steal_pointer (&gconv_dir_in_host));
+                          g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
                           found = TRUE;
                         }
                     }
@@ -2404,19 +2620,19 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                   if (!found)
                     {
                       g_debug ("We were expecting to have the gconv modules directory in the "
-                               "host to be located in \"%s/gconv\", but instead it is missing",
+                               "provider to be located in \"%s/gconv\", but instead it is missing",
                                dir);
                     }
                 }
 
-              self->any_libc_from_host = TRUE;
+              self->any_libc_from_provider = TRUE;
             }
           else
             {
-              self->all_libc_from_host = FALSE;
+              self->all_libc_from_provider = FALSE;
             }
 
-          libdrm = g_build_filename (arch->libdir_on_host, "libdrm.so.2", NULL);
+          libdrm = g_build_filename (arch->libdir_in_current_namespace, "libdrm.so.2", NULL);
 
           /* If we have libdrm.so.2 in overrides we also want to mount
            * ${prefix}/share/libdrm from the host. ${prefix} is derived from
@@ -2430,7 +2646,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                 {
                   g_autofree gchar *dir = NULL;
                   g_autofree gchar *lib_multiarch = NULL;
-                  g_autofree gchar *libdrm_dir_in_host = NULL;
+                  g_autofree gchar *libdrm_dir_in_provider = NULL;
 
                   dir = g_path_get_dirname (target);
 
@@ -2444,27 +2660,32 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                   else if (g_str_has_suffix (dir, "/lib"))
                     dir[strlen (dir) - strlen ("/lib")] = '\0';
 
-                  if (g_str_has_prefix (dir, "/run/host"))
-                    memmove (dir, dir + strlen ("/run/host"), strlen (dir) - strlen ("/run/host") + 1);
+                  if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+                    memmove (dir,
+                             dir + strlen (self->provider_in_container_namespace),
+                             strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
 
-                  libdrm_dir_in_host = g_build_filename (dir, "share", "libdrm", NULL);
+                  libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
 
-                  if (g_file_test (libdrm_dir_in_host, G_FILE_TEST_IS_DIR))
+                  if (pv_file_test_in_sysroot (self->provider_in_current_namespace,
+                                               libdrm_dir_in_provider, G_FILE_TEST_IS_DIR))
                     {
-                      g_hash_table_add (libdrm_data_from_host, g_steal_pointer (&libdrm_dir_in_host));
+                      g_hash_table_add (libdrm_data_in_provider,
+                                        g_steal_pointer (&libdrm_dir_in_provider));
                     }
                   else
                     {
-                      g_debug ("We were expecting to have the libdrm directory in the host "
-                               "to be located in \"%s\", but instead it is missing",
-                               libdrm_dir_in_host);
+                      g_debug ("We were expecting to have the libdrm directory "
+                               "in the provider to be located in "
+                               "\"%s/share/libdrm\", but instead it is missing",
+                               dir);
                     }
                 }
             }
           else
             {
               /* For at least a single architecture, libdrm is newer in the container */
-              all_libdrm_from_host = FALSE;
+              all_libdrm_from_provider = FALSE;
             }
 
           /* Order matters: drivers from a later entry will overwrite
@@ -2510,103 +2731,95 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       return FALSE;
     }
 
-  if (self->any_libc_from_host && !self->all_libc_from_host)
+  if (self->any_libc_from_provider && !self->all_libc_from_provider)
     {
       /*
        * This shouldn't happen. It would mean that there exist at least
        * two architectures (let's say aaa and bbb) for which we have:
-       * host libc6:aaa < container libc6 < host libc6:bbb
+       * provider libc6:aaa < container libc6 < provider libc6:bbb
        * (we know that the container's libc6:aaa and libc6:bbb are
        * constrained to be the same version because that's how multiarch
        * works).
        *
-       * If the host system locales work OK with both the aaa and bbb
+       * If the provider system locales work OK with both the aaa and bbb
        * versions, let's assume they will also work with the intermediate
        * version from the container...
        */
-      g_warning ("Using glibc from host system for some but not all "
-                 "architectures! Arbitrarily using host locales.");
+      g_warning ("Using glibc from provider system for some but not all "
+                 "architectures! Arbitrarily using provider locales.");
     }
 
-  if (self->any_libc_from_host)
+  if (self->any_libc_from_provider)
     {
-      g_debug ("Making host locale data visible in container");
+      g_debug ("Making provider locale data visible in container");
 
-      if (!pv_runtime_take_from_host (self, bwrap,
-                                      "/usr/lib/locale",
-                                      "/usr/lib/locale",
-                                      TAKE_FROM_HOST_FLAGS_IF_EXISTS,
-                                      error))
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          "/usr/lib/locale",
+                                          "/usr/lib/locale",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                          error))
         return FALSE;
 
-      if (!pv_runtime_take_from_host (self, bwrap,
-                                      "/usr/share/i18n",
-                                      "/usr/share/i18n",
-                                      TAKE_FROM_HOST_FLAGS_IF_EXISTS,
-                                      error))
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          "/usr/share/i18n",
+                                          "/usr/share/i18n",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                          error))
         return FALSE;
 
-      localedef = g_find_program_in_path ("localedef");
+      localedef = pv_runtime_search_in_path_and_bin (self, "localedef");
 
       if (localedef == NULL)
         {
-          g_warning ("Cannot find localedef in PATH");
+          g_warning ("Cannot find localedef");
         }
-      else if (!pv_runtime_take_from_host (self, bwrap, localedef,
-                                           "/usr/bin/localedef",
-                                           TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                           error))
+      else if (!pv_runtime_take_from_provider (self, bwrap, localedef,
+                                               "/usr/bin/localedef",
+                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                               error))
         {
           return FALSE;
         }
 
-      locale = g_find_program_in_path ("locale");
+      locale = pv_runtime_search_in_path_and_bin (self, "locale");
 
       if (locale == NULL)
         {
-          g_warning ("Cannot find locale in PATH");
+          g_warning ("Cannot find locale");
         }
-      else if (!pv_runtime_take_from_host (self, bwrap, locale,
-                                           "/usr/bin/locale",
-                                           TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                           error))
+      else if (!pv_runtime_take_from_provider (self, bwrap, locale,
+                                               "/usr/bin/locale",
+                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                               error))
         {
           return FALSE;
         }
 
-      ldconfig = g_find_program_in_path ("ldconfig");
-
-      if (ldconfig == NULL
-          && g_file_test ("/sbin/ldconfig", G_FILE_TEST_IS_EXECUTABLE))
-        ldconfig = g_strdup ("/sbin/ldconfig");
-
-      if (ldconfig == NULL
-          && g_file_test ("/usr/sbin/ldconfig", G_FILE_TEST_IS_EXECUTABLE))
-        ldconfig = g_strdup ("/usr/sbin/ldconfig");
+      ldconfig = pv_runtime_search_in_path_and_bin (self, "ldconfig");
 
       if (ldconfig == NULL)
         {
-          g_warning ("Cannot find ldconfig in PATH, /sbin or /usr/sbin");
+          g_warning ("Cannot find ldconfig");
         }
-      else if (!pv_runtime_take_from_host (self, bwrap,
-                                           ldconfig,
-                                           "/sbin/ldconfig",
-                                           TAKE_FROM_HOST_FLAGS_NONE,
-                                           error))
+      else if (!pv_runtime_take_from_provider (self, bwrap,
+                                               ldconfig,
+                                               "/sbin/ldconfig",
+                                               TAKE_FROM_PROVIDER_FLAGS_NONE,
+                                               error))
         {
           return FALSE;
         }
 
-      g_debug ("Making host gconv modules visible in container");
+      g_debug ("Making provider gconv modules visible in container");
 
-      g_hash_table_iter_init (&iter, gconv_from_host);
+      g_hash_table_iter_init (&iter, gconv_in_provider);
       while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
         {
-          if (!pv_runtime_take_from_host (self, bwrap,
-                                          gconv_path,
-                                          gconv_path,
-                                          TAKE_FROM_HOST_FLAGS_IF_DIR,
-                                          error))
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              gconv_path,
+                                              gconv_path,
+                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                              error))
             return FALSE;
         }
     }
@@ -2616,36 +2829,38 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
       g_debug ("Using included gconv modules from container");
     }
 
-  if (g_hash_table_size (libdrm_data_from_host) > 0 && !all_libdrm_from_host)
+  if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
     {
-      /* See the explanation in the similar "any_libc_from_host && !all_libc_from_host"
-       * case, above */
-      g_warning ("Using libdrm.so.2 from host system for some but not all "
-                 "architectures! Will take /usr/share/libdrm from host.");
+      /* See the explanation in the similar
+       * "any_libc_from_provider && !all_libc_from_provider" case, above */
+      g_warning ("Using libdrm.so.2 from provider system for some but not all "
+                 "architectures! Will take /usr/share/libdrm from provider.");
     }
 
-  if (g_hash_table_size (libdrm_data_from_host) == 1)
+  if (g_hash_table_size (libdrm_data_in_provider) == 1)
     {
-      best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
+      best_libdrm_data_in_provider = g_strdup (
+        pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
     }
-  else if (g_hash_table_size (libdrm_data_from_host) > 1)
+  else if (g_hash_table_size (libdrm_data_in_provider) > 1)
     {
-      g_warning ("Found more than one possible libdrm data directory from host");
+      g_warning ("Found more than one possible libdrm data directory from provider");
       /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
        * the first directory in the hash table */
-      if (g_hash_table_contains (libdrm_data_from_host, "/usr/share/libdrm"))
-        best_libdrm_data_from_host = g_strdup ("/usr/share/libdrm");
+      if (g_hash_table_contains (libdrm_data_in_provider, "/usr/share/libdrm"))
+        best_libdrm_data_in_provider = g_strdup ("/usr/share/libdrm");
       else
-        best_libdrm_data_from_host = g_strdup (pv_hash_table_get_arbitrary_key (libdrm_data_from_host));
+        best_libdrm_data_in_provider = g_strdup (
+          pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
     }
 
-  if (best_libdrm_data_from_host != NULL)
+  if (best_libdrm_data_in_provider != NULL)
     {
-      if (!pv_runtime_take_from_host (self, bwrap,
-                                      best_libdrm_data_from_host,
-                                      "/usr/share/libdrm",
-                                      TAKE_FROM_HOST_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                      error))
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          best_libdrm_data_in_provider,
+                                          "/usr/share/libdrm",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                          error))
         return FALSE;
     }
 
@@ -2664,7 +2879,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
       SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
-      gboolean need_host_json = FALSE;
+      gboolean need_provider_json = FALSE;
 
       if (!srt_egl_icd_check_error (icd, NULL))
         continue;
@@ -2702,11 +2917,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
             }
           else if (details->kinds[i] == ICD_KIND_SONAME)
             {
-              need_host_json = TRUE;
+              need_provider_json = TRUE;
             }
         }
 
-      if (need_host_json)
+      if (need_provider_json)
         {
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
@@ -2718,11 +2933,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                 "egl_vendor.d",
                                                 json_base, NULL);
 
-          if (!pv_runtime_take_from_host (self, bwrap,
-                                          json_on_host,
-                                          json_in_container,
-                                          TAKE_FROM_HOST_FLAGS_COPY_FALLBACK,
-                                          error))
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              json_on_host,
+                                              json_in_container,
+                                              TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
+                                              error))
             return FALSE;
 
           pv_search_path_append (egl_path, json_in_container);
@@ -2744,7 +2959,7 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     {
       IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
       SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
-      gboolean need_host_json = FALSE;
+      gboolean need_provider_json = FALSE;
 
       if (!srt_vulkan_icd_check_error (icd, NULL))
         continue;
@@ -2781,11 +2996,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
             }
           else if (details->kinds[i] == ICD_KIND_SONAME)
             {
-              need_host_json = TRUE;
+              need_provider_json = TRUE;
             }
         }
 
-      if (need_host_json)
+      if (need_provider_json)
         {
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
@@ -2796,11 +3011,11 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                                 "share", "vulkan", "icd.d",
                                                 json_base, NULL);
 
-          if (!pv_runtime_take_from_host (self, bwrap,
-                                          json_on_host,
-                                          json_in_container,
-                                          TAKE_FROM_HOST_FLAGS_COPY_FALLBACK,
-                                          error))
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              json_on_host,
+                                              json_in_container,
+                                              TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
+                                              error))
             return FALSE;
 
           pv_search_path_append (vulkan_path, json_in_container);
@@ -2895,25 +3110,27 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
     NULL
   };
 
-  g_autofree gchar *i386_libdir_on_host = g_build_filename (self->overrides, "lib",
-                                                            "i386-linux-gnu",
-                                                            NULL);
+  g_autofree gchar *i386_libdir_in_current_namespace = g_build_filename (self->overrides,
+                                                                         "lib",
+                                                                         "i386-linux-gnu",
+                                                                         NULL);
 
   for (i = 0; i < G_N_ELEMENTS (extra_multiarch_tuples) - 1; i++)
     {
-      g_autofree gchar *extra_libdir_on_host = g_build_filename (self->overrides, "lib",
-                                                                 extra_multiarch_tuples[i],
-                                                                 NULL);
+      g_autofree gchar *extra_libdir_in_current_namespace = g_build_filename (self->overrides,
+                                                                              "lib",
+                                                                              extra_multiarch_tuples[i],
+                                                                              NULL);
 
-      if (!g_file_test (extra_libdir_on_host, G_FILE_TEST_EXISTS) &&
-          g_file_test (i386_libdir_on_host, G_FILE_TEST_IS_DIR))
+      if (!g_file_test (extra_libdir_in_current_namespace, G_FILE_TEST_EXISTS) &&
+          g_file_test (i386_libdir_in_current_namespace, G_FILE_TEST_IS_DIR))
         {
-          g_unlink (extra_libdir_on_host);
+          g_unlink (extra_libdir_in_current_namespace);
 
-          if (symlink ("i386-linux-gnu", extra_libdir_on_host) != 0)
+          if (symlink ("i386-linux-gnu", extra_libdir_in_current_namespace) != 0)
             return glnx_throw_errno_prefix (error,
                                             "Unable to create symlink %s -> i386-linux-gnu",
-                                            extra_libdir_on_host);
+                                            extra_libdir_in_current_namespace);
         }
     }
 
@@ -2980,9 +3197,11 @@ pv_runtime_bind (PvRuntime *self,
     }
   else
     {
+      g_autofree gchar *pressure_vessel_prefix_in_host_namespace =
+        pv_current_namespace_path_to_host_path (pressure_vessel_prefix);
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind",
-                              pressure_vessel_prefix,
+                              pressure_vessel_prefix_in_host_namespace,
                               "/run/pressure-vessel/pv-from-host",
                               NULL);
       self->adverb_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-adverb";

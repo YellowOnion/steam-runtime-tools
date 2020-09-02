@@ -106,7 +106,7 @@ check_bwrap (const char *tools_dir,
 {
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
-  g_autofree gchar *bwrap_executable = find_bwrap (tools_dir);
+  g_autofree gchar *bwrap_executable = NULL;
   const char *bwrap_test_argv[] =
   {
     NULL,
@@ -116,6 +116,8 @@ check_bwrap (const char *tools_dir,
   };
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
+
+  bwrap_executable = find_bwrap (tools_dir);
 
   if (bwrap_executable == NULL)
     {
@@ -171,10 +173,69 @@ check_bwrap (const char *tools_dir,
   return NULL;
 }
 
-static void
-bind_from_environ (const char *variable,
-                   FlatpakBwrap *bwrap)
+static gchar *
+check_flatpak_spawn (void)
 {
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+  g_autofree gchar *spawn_exec = NULL;
+  g_autofree gchar *child_stdout = NULL;
+  g_autofree gchar *child_stderr = NULL;
+  int wait_status;
+  const char *spawn_test_argv[] =
+  {
+    NULL,
+    "--host",
+    "--directory=/",
+    "true",
+    NULL
+  };
+
+  /* All known Flatpak runtimes have flatpak-spawn in the PATH */
+  spawn_exec = g_find_program_in_path ("flatpak-spawn");
+
+  if (spawn_exec == NULL
+      || !g_file_test (spawn_exec, G_FILE_TEST_IS_EXECUTABLE))
+    return NULL;
+
+  spawn_test_argv[0] = spawn_exec;
+
+  if (!g_spawn_sync (NULL,  /* cwd */
+                     (gchar **) spawn_test_argv,
+                     NULL,  /* environ */
+                     G_SPAWN_DEFAULT,
+                     NULL, NULL,    /* child setup */
+                     &child_stdout,
+                     &child_stderr,
+                     &wait_status,
+                     error))
+    {
+      g_warning ("Cannot run flatpak-spawn: %s", local_error->message);
+      g_clear_error (&local_error);
+    }
+  else if (wait_status != 0)
+    {
+      g_warning ("Cannot run flatpak-spawn: wait status %d", wait_status);
+
+      if (child_stdout != NULL && child_stdout[0] != '\0')
+        g_warning ("Output:\n%s", child_stdout);
+
+      if (child_stderr != NULL && child_stderr[0] != '\0')
+        g_warning ("Diagnostic output:\n%s", child_stderr);
+    }
+  else
+    {
+      return g_steal_pointer (&spawn_exec);
+    }
+
+  return NULL;
+}
+
+static void
+bind_and_propagate_from_environ (const char *variable,
+                                 FlatpakBwrap *bwrap)
+{
+  g_autofree gchar *value_host = NULL;
   const char *value = g_getenv (variable);
 
   if (value == NULL)
@@ -187,13 +248,17 @@ bind_from_environ (const char *variable,
       return;
     }
 
-  g_debug ("Bind-mounting %s=\"%s\"", variable, value);
+  value_host = pv_current_namespace_path_to_host_path (value);
+
+  g_debug ("Bind-mounting %s=\"%s\" from the current env as %s=\"%s\" in the host",
+           variable, value, variable, value_host);
 
   /* TODO: If it's a symbolic link, ideally we should jump through the
    * same hoops as Flatpak to bind-mount the *target* of the symlink
    * instead, and then create the same symlink in the container. */
   flatpak_bwrap_add_args (bwrap,
-                          "--bind", value, value,
+                          "--bind", value_host, value_host,
+                          "--setenv", variable, value_host,
                           NULL);
 }
 
@@ -365,7 +430,8 @@ static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
-static gboolean opt_host_graphics = TRUE;
+static char *opt_graphics_provider = NULL;
+static char *graphics_provider_mount_point = NULL;
 static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
@@ -539,6 +605,38 @@ opt_share_home_cb (const gchar *option_name,
   return TRUE;
 }
 
+static gboolean
+opt_with_host_graphics_cb (const gchar *option_name,
+                           const gchar *value,
+                           gpointer data,
+                           GError **error)
+{
+  /* This is the old way to get the graphics from the host system */
+  if (g_strcmp0 (option_name, "--with-host-graphics") == 0)
+    {
+      if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+        opt_graphics_provider = g_strdup ("/run/host");
+      else
+        opt_graphics_provider = g_strdup ("/");
+    }
+  /* This is the old way to avoid using graphics from the host */
+  else if (g_strcmp0 (option_name, "--without-host-graphics") == 0)
+    {
+      opt_graphics_provider = g_strdup ("");
+    }
+  else
+    {
+      g_return_val_if_reached (FALSE);
+    }
+
+  g_warning ("\"--with-host-graphics\" and \"--without-host-graphics\" have "
+             "been deprecated and could be removed in future releases. Please use "
+             "use \"--graphics-provider=/\", \"--graphics-provider=/run/host\" or "
+             "\"--graphics-provider=\" instead.");
+
+  return TRUE;
+}
+
 static GOptionEntry options[] =
 {
   { "batch", '\0',
@@ -597,6 +695,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
     "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
     "MODULE" },
+  { "graphics-provider", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_graphics_provider,
+    "If using --runtime, use PATH as the graphics provider. "
+    "The path is assumed to be relative to the current namespace, "
+    "and will be adjusted for use on the host system if pressure-vessel "
+    "is run in a container. The empty string means use the graphics "
+    "stack from container."
+    "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/run/host' or '/']", "PATH" },
   { "remove-game-overlay", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_remove_game_overlay,
     "Disable the Steam Overlay. "
@@ -610,7 +716,7 @@ static GOptionEntry options[] =
   { "runtime", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
-    "it with the host system's graphics stack. The empty string "
+    "it with the provider's graphics stack. The empty string "
     "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
   { "runtime-base", '\0',
@@ -698,13 +804,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_version_only,
     "Print version number (no other information) and exit.", NULL },
   { "with-host-graphics", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_host_graphics,
-    "If using --runtime, use the host graphics stack (default)", NULL },
+    G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    opt_with_host_graphics_cb,
+    "Deprecated alias for \"--graphics-provider=/\" or "
+    "\"--graphics-provider=/run/host\"", NULL },
   { "without-host-graphics", '\0',
-    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_host_graphics,
-    "If using --runtime, don't use the host graphics stack. "
-    "This is likely to result in software rendering or a crash.",
-    NULL },
+    G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    opt_with_host_graphics_cb,
+    "Deprecated alias for \"--graphics-provider=\"", NULL },
   { "write-bwrap-arguments", '\0',
     G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_bwrap,
     "Write the final bwrap arguments, as null terminated strings, to the "
@@ -755,20 +862,29 @@ main (int argc,
   gsize i;
   g_auto(GStrv) original_argv = NULL;
   int original_argc = argc;
+  gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakBwrap) adverb_args = NULL;
   g_autofree gchar *adverb_in_container = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
+  g_autofree gchar *spawn_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
+  g_autofree gchar *cwd_p_host = NULL;
   const gchar *home;
   g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
+  const char * const known_required_env[] =
+    {
+      "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+      "STEAM_COMPAT_DATA_PATH",
+      "STEAM_COMPAT_TOOL_PATH",
+    };
 
   setlocale (LC_ALL, "");
 
@@ -811,8 +927,7 @@ main (int argc,
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
   opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
-  opt_host_graphics = pv_boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS",
-                                              TRUE);
+
   opt_share_pid = pv_boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
   opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
@@ -855,6 +970,33 @@ main (int argc,
   if (opt_copy_runtime_into != NULL
       && opt_copy_runtime_into[0] == '\0')
     opt_copy_runtime_into = NULL;
+
+  if (opt_graphics_provider == NULL)
+    opt_graphics_provider = g_strdup (g_getenv ("PRESSURE_VESSEL_GRAPHICS_PROVIDER"));
+
+  if (opt_graphics_provider == NULL)
+    {
+      /* Also check the deprecated 'PRESSURE_VESSEL_HOST_GRAPHICS' */
+      if (!pv_boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS", TRUE))
+        opt_graphics_provider = g_strdup ("");
+      else if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+        opt_graphics_provider = g_strdup ("/run/host");
+      else
+        opt_graphics_provider = g_strdup ("/");
+    }
+
+  g_assert (opt_graphics_provider != NULL);
+  if (opt_graphics_provider[0] != '\0' && opt_graphics_provider[0] != '/')
+    {
+      g_printerr ("%s: --graphics-provider path must be absolute, not \"%s\"\n",
+                  g_get_prgname (), opt_graphics_provider);
+      goto out;
+    }
+
+  if (g_strcmp0 (opt_graphics_provider, "/") == 0)
+    graphics_provider_mount_point = g_strdup ("/run/host");
+  else
+    graphics_provider_mount_point = g_strdup ("/run/gfx");
 
   if (opt_version_only)
     {
@@ -1121,26 +1263,43 @@ main (int argc,
   g_debug ("Setting arguments for wrapped command");
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
 
-  g_debug ("Checking for bwrap...");
-  bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
+  /* If we are in a Flatpak environment we can't use bwrap directly */
+  if (is_flatpak_env)
+    {
+      g_debug ("Checking for flatpak-spawn...");
+      spawn_executable = check_flatpak_spawn ();
+      /* Assume "bwrap" to exist in the host system and to be in its PATH */
+      bwrap_executable = g_strdup ("bwrap");
+    }
+  else
+    {
+      g_debug ("Checking for bwrap...");
+      bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
+    }
 
   if (opt_test)
     {
-      if (bwrap_executable == NULL)
+      if ((is_flatpak_env && spawn_executable == NULL)
+          || bwrap_executable == NULL)
         {
           ret = 1;
           goto out;
         }
       else
         {
-          g_debug ("OK (%s)", bwrap_executable);
+          if (spawn_executable != NULL)
+            g_debug ("OK (%s) (%s)", spawn_executable, bwrap_executable);
+          else
+            g_debug ("OK (%s)", bwrap_executable);
           ret = 0;
           goto out;
         }
     }
 
-  if (bwrap_executable == NULL)
+  if ((is_flatpak_env && spawn_executable == NULL)
+      || bwrap_executable == NULL)
     {
+      /* TODO in a Flatpak environment, host is not what we expect it to be */
       if (opt_host_fallback)
         {
           g_message ("Falling back to executing wrapped command directly");
@@ -1179,12 +1338,15 @@ main (int argc,
         }
     }
 
-  g_debug ("Checking bwrap features...");
-  bwrap_help_argv[0] = bwrap_executable;
-  bwrap_help = pv_capture_output (bwrap_help_argv, error);
+  if (!is_flatpak_env)
+    {
+      g_debug ("Checking bwrap features...");
+      bwrap_help_argv[0] = bwrap_executable;
+      bwrap_help = pv_capture_output (bwrap_help_argv, error);
 
-  if (bwrap_help == NULL)
-    goto out;
+      if (bwrap_help == NULL)
+        goto out;
+    }
 
   bwrap = flatpak_bwrap_new (NULL);
   flatpak_bwrap_add_arg (bwrap, bwrap_executable);
@@ -1205,8 +1367,8 @@ main (int argc,
       if (opt_generate_locales)
         flags |= PV_RUNTIME_FLAGS_GENERATE_LOCALES;
 
-      if (opt_host_graphics)
-        flags |= PV_RUNTIME_FLAGS_HOST_GRAPHICS_STACK;
+      if (opt_graphics_provider != NULL && opt_graphics_provider[0] != '\0')
+        flags |= PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK;
 
       if (opt_verbose)
         flags |= PV_RUNTIME_FLAGS_VERBOSE;
@@ -1217,6 +1379,8 @@ main (int argc,
                                 opt_copy_runtime_into,
                                 bwrap_executable,
                                 tools_dir,
+                                opt_graphics_provider,
+                                graphics_provider_mount_point,
                                 flags,
                                 error);
 
@@ -1337,10 +1501,9 @@ main (int argc,
                               "--unsetenv", "LD_PRELOAD",
                               NULL);
 
-  g_debug ("Making Steam compat tools available if required...");
-  bind_from_environ ("STEAM_COMPAT_CLIENT_INSTALL_PATH", bwrap);
-  bind_from_environ ("STEAM_COMPAT_DATA_PATH", bwrap);
-  bind_from_environ ("STEAM_COMPAT_TOOL_PATH", bwrap);
+  g_debug ("Making Steam environment variables available if required...");
+  for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
+    bind_and_propagate_from_environ (known_required_env[i], bwrap);
 
   /* Make arbitrary filesystems available. This is not as complete as
    * Flatpak yet. */
@@ -1365,6 +1528,8 @@ main (int argc,
    * run) is available. Some games write here. */
   g_debug ("Making current working directory available...");
 
+  cwd_p_host = pv_current_namespace_path_to_host_path (cwd_p);
+
   if (pv_is_same_file (home, cwd_p))
     {
       g_debug ("Not making physical working directory \"%s\" available to "
@@ -1374,7 +1539,7 @@ main (int argc,
   else
     {
       flatpak_bwrap_add_args (bwrap,
-                              "--bind", cwd_p, cwd_p,
+                              "--bind", cwd_p_host, cwd_p_host,
                               NULL);
     }
 
@@ -1384,14 +1549,31 @@ main (int argc,
   if (runtime != NULL)
     {
       flatpak_run_add_wayland_args (bwrap);
-      flatpak_run_add_x11_args (bwrap, TRUE);
+
+      /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
+       * but it might be different on the host system. As a workaround we simply
+       * bind the whole "/tmp/.X11-unix" directory and unset the container
+       * "DISPLAY" env.
+       */
+      if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
+                                  NULL);
+          flatpak_bwrap_unset_env (bwrap, "DISPLAY");
+        }
+      else
+        {
+          flatpak_run_add_x11_args (bwrap, TRUE);
+        }
+
       flatpak_run_add_pulseaudio_args (bwrap);
       flatpak_run_add_session_dbus_args (bwrap);
       flatpak_run_add_system_dbus_args (bwrap);
     }
 
   flatpak_bwrap_add_args (bwrap,
-                          "--chdir", cwd_p,
+                          "--chdir", cwd_p_host,
                           "--unsetenv", "PWD",
                           NULL);
 
@@ -1485,6 +1667,29 @@ main (int argc,
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
+
+  if (is_flatpak_env)
+    {
+      /* Just use the envp from @bwrap */
+      g_autoptr(FlatpakBwrap) flatpak_spawn = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      flatpak_bwrap_add_arg (flatpak_spawn, spawn_executable);
+      flatpak_bwrap_add_arg (flatpak_spawn, "--host");
+
+      for (i = 0; i < bwrap->fds->len; i++)
+        {
+          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
+                                                     g_array_index (bwrap->fds, int, i));
+          flatpak_bwrap_add_arg (flatpak_spawn, fd_str);
+        }
+      /* Change the current working directory where flatpak-spawn will run.
+       * Bwrap will then set its directory by itself. For this reason here
+       * we just need a directory that it's known to exist. */
+      flatpak_bwrap_add_arg (flatpak_spawn, "--directory=/");
+
+      flatpak_bwrap_append_bwrap (flatpak_spawn, bwrap);
+      g_clear_pointer (&bwrap, flatpak_bwrap_free);
+      bwrap = g_steal_pointer (&flatpak_spawn);
+    }
 
   if (opt_verbose)
     {

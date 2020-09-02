@@ -23,6 +23,8 @@
 
 #include "bwrap.h"
 
+#include "resolve-in-sysroot.h"
+
 /**
  * pv_bwrap_run_sync:
  * @bwrap: A #FlatpakBwrap on which flatpak_bwrap_finish() has been called
@@ -156,9 +158,20 @@ pv_bwrap_execve (FlatpakBwrap *bwrap,
 /**
  * pv_bwrap_bind_usr:
  * @bwrap: The #FlatpakBwrap
- * @host_path: Absolute path to a directory in the host filesystem
- * @mount_point: Absolute path of the location at which to mount @host_path
- *  in the container
+ * @provider_in_host_namespace: The directory we will
+ *  use to provide the container's `/usr`, `/lib*` etc.,
+ *  in the form of an absolute path that can be resolved
+ *  on the host system
+ * @provider_in_current_namespace: The same directory, this time
+ *  in the form of an absolute path that can be resolved
+ *  in the namespace where pressure-vessel-wrap is running.
+ *  For example, if we run in a Flatpak container and we intend
+ *  to mount the host system's `/usr`, then
+ *  @provider_in_host_namespace would be `/`
+ *  but @provider_in_current_namespace would be `/run/host`.
+ * @provider_in_container_namespace: Absolute path of the location
+ *  at which we will mount @provider_in_host_namespace in the
+ *  final container
  * @error: Used to raise an error on failure
  *
  * Append arguments to @bwrap that will bind-mount `/usr` and associated
@@ -182,11 +195,13 @@ pv_bwrap_execve (FlatpakBwrap *bwrap,
  */
 gboolean
 pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
-                   const char *host_path,
-                   const char *mount_point,
+                   const char *provider_in_host_namespace,
+                   const char *provider_in_current_namespace,
+                   const char *provider_in_container_namespace,
                    GError **error)
 {
   g_autofree gchar *usr = NULL;
+  g_autofree gchar *usr_in_current_namespace = NULL;
   g_autofree gchar *dest = NULL;
   gboolean host_path_is_usr = FALSE;
   g_autoptr(GDir) dir = NULL;
@@ -202,16 +217,20 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
-  g_return_val_if_fail (host_path != NULL, FALSE);
-  g_return_val_if_fail (host_path[0] == '/', FALSE);
-  g_return_val_if_fail (mount_point != NULL, FALSE);
-  g_return_val_if_fail (mount_point[0] == '/', FALSE);
+  g_return_val_if_fail (provider_in_host_namespace != NULL, FALSE);
+  g_return_val_if_fail (provider_in_host_namespace[0] == '/', FALSE);
+  g_return_val_if_fail (provider_in_current_namespace != NULL, FALSE);
+  g_return_val_if_fail (provider_in_current_namespace[0] == '/', FALSE);
+  g_return_val_if_fail (provider_in_container_namespace != NULL, FALSE);
+  g_return_val_if_fail (provider_in_container_namespace[0] == '/', FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  usr = g_build_filename (host_path, "usr", NULL);
-  dest = g_build_filename (mount_point, "usr", NULL);
+  usr = g_build_filename (provider_in_host_namespace, "usr", NULL);
+  usr_in_current_namespace = g_build_filename (provider_in_current_namespace,
+                                               "usr", NULL);
+  dest = g_build_filename (provider_in_container_namespace, "usr", NULL);
 
-  if (g_file_test (usr, G_FILE_TEST_IS_DIR))
+  if (g_file_test (usr_in_current_namespace, G_FILE_TEST_IS_DIR))
     {
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", usr, dest,
@@ -222,13 +241,13 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
       /* host_path is assumed to be a merged /usr */
       host_path_is_usr = TRUE;
       flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", host_path, dest,
+                              "--ro-bind", provider_in_host_namespace, dest,
                               NULL);
     }
 
   g_clear_pointer (&dest, g_free);
 
-  dir = g_dir_open (host_path, 0, error);
+  dir = g_dir_open (provider_in_current_namespace, 0, error);
 
   if (dir == NULL)
     return FALSE;
@@ -243,7 +262,7 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
           || g_str_equal (member, "sbin")
           || g_str_equal (member, ".ref"))
         {
-          dest = g_build_filename (mount_point, member, NULL);
+          dest = g_build_filename (provider_in_container_namespace, member, NULL);
 
           if (host_path_is_usr)
             {
@@ -256,9 +275,14 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
             }
           else
             {
-              g_autofree gchar *path = g_build_filename (host_path,
-                                                         member, NULL);
-              g_autofree gchar *target = glnx_readlinkat_malloc (-1, path, NULL, NULL);
+              g_autofree gchar *path_in_host = g_build_filename (provider_in_host_namespace,
+                                                                 member, NULL);
+              g_autofree gchar *path_in_current_namespace =
+                g_build_filename (provider_in_current_namespace, member, NULL);
+
+              g_autofree gchar *target = glnx_readlinkat_malloc (-1,
+                                                                 path_in_current_namespace,
+                                                                 NULL, NULL);
 
               if (target != NULL)
                 {
@@ -269,7 +293,7 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
               else
                 {
                   flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", path, dest,
+                                          "--ro-bind", path_in_host, dest,
                                           NULL);
                 }
             }
@@ -280,12 +304,14 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
 
   for (i = 0; i < G_N_ELEMENTS (bind_etc); i++)
     {
-      g_autofree gchar *path = g_build_filename (host_path, "etc",
+      g_autofree gchar *path = g_build_filename (provider_in_host_namespace, "etc",
                                                  bind_etc[i], NULL);
+      g_autofree gchar *path_in_current_namespace = g_build_filename (provider_in_current_namespace,
+                                                                      "etc", bind_etc[i], NULL);
 
-      if (g_file_test (path, G_FILE_TEST_EXISTS))
+      if (g_file_test (path_in_current_namespace, G_FILE_TEST_EXISTS))
         {
-          dest = g_build_filename (mount_point, "etc", bind_etc[i], NULL);
+          dest = g_build_filename (provider_in_container_namespace, "etc", bind_etc[i], NULL);
 
           flatpak_bwrap_add_args (bwrap,
                                   "--ro-bind", path, dest,

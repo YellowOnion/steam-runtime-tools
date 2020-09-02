@@ -40,6 +40,8 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
+#include "resolve-in-sysroot.h"
+
 static void
 child_setup_cb (gpointer user_data)
 {
@@ -925,4 +927,155 @@ pv_terminate_all_child_processes (GTimeSpan wait_period,
     }
 
   return TRUE;
+}
+
+/**
+ * pv_current_namespace_path_to_host_path:
+ * @current_env_path: a path in the current environment
+ *
+ * Returns: (transfer full): The @current_env_path converted to the host
+ *  system, or a copy of @current_env_path if we are not in a Flatpak
+ *  environment or it's unknown how to convert the given path.
+ */
+gchar *
+pv_current_namespace_path_to_host_path (const gchar *current_env_path)
+{
+  gchar *path_on_host = NULL;
+  g_autofree gchar *home_env_guarded = NULL;
+  const gchar *home_env = g_getenv ("HOME");
+
+  g_return_val_if_fail (g_path_is_absolute (current_env_path),
+                        g_strdup (current_env_path));
+
+  if (home_env == NULL)
+    home_env = g_get_home_dir ();
+
+  if (home_env != NULL)
+    {
+      /* Avoid the edge case where e.g. current_env_path is
+       * '/home/melanie/Games' and home_env is '/home/me' */
+      if (g_str_has_suffix (home_env, "/"))
+        home_env_guarded = g_strdup (home_env);
+      else
+        home_env_guarded = g_strdup_printf ("%s/", home_env);
+    }
+
+  if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
+    {
+      struct stat via_current_env_stat;
+      struct stat via_persist_stat;
+
+      /* If we are inside a Flatpak container, usually, the home
+       * folder is '${HOME}/.var/app/${FLATPAK_ID}' on the host system */
+      if (home_env != NULL
+          && g_str_has_prefix (current_env_path, home_env_guarded))
+        {
+          path_on_host = g_build_filename (home_env,
+                                           ".var",
+                                           "app",
+                                           g_getenv ("FLATPAK_ID"),
+                                           current_env_path + strlen (home_env),
+                                           NULL);
+
+          if (lstat (path_on_host, &via_persist_stat) < 0)
+            {
+              /* The file doesn't exist in ~/.var/app, so assume it was
+               * exposed via --filesystem */
+              g_clear_pointer (&path_on_host, g_free);
+            }
+          else if (lstat (current_env_path, &via_current_env_stat) == 0
+                   && (via_persist_stat.st_dev != via_current_env_stat.st_dev
+                       || via_persist_stat.st_ino != via_current_env_stat.st_ino))
+            {
+              /* The file exists in ~/.var/app, but is not the same there -
+              * presumably a different version was mounted over the top via
+              * --filesystem */
+              g_clear_pointer (&path_on_host, g_free);
+            }
+        }
+
+      /* In a Flatpak container, usually, '/run/host' is the root of the
+       * host system */
+      if (g_str_has_prefix (current_env_path, "/run/host/"))
+        path_on_host = g_strdup (current_env_path + strlen ("/run/host"));
+      else if (g_strcmp0 (current_env_path, "/run/host") == 0)
+        path_on_host = g_strdup ("/");
+    }
+  /* Either we are not in a Flatpak container or it's not obvious how the
+   * container to host translation should happen. Just keep the same path. */
+  if (path_on_host == NULL)
+    path_on_host = g_strdup (current_env_path);
+
+  return path_on_host;
+}
+
+/**
+ * pv_file_test_in_sysroot:
+ * @sysroot: (type filename): A path used as the root
+ * @filename: (type filename): A path below the root directory, either
+ *  absolute or relative (to the root)
+ * @test: The test to perform on the resolved file in @sysroot.
+ *  G_FILE_TEST_IS_SYMLINK is not a valid GFileTest value because the
+ *  path is resolved following symlinks too.
+ *
+ * Returns: %TRUE if the @filename resolved in @sysroot passes the @test.
+ */
+gboolean
+pv_file_test_in_sysroot (const char *sysroot,
+                         const char *filename,
+                         GFileTest test)
+{
+  glnx_autofd int file_fd = -1;
+  glnx_autofd int sysroot_fd = -1;
+  struct stat stat_buf;
+  g_autofree gchar *file_realpath_in_sysroot = NULL;
+  g_autoptr(GError) error = NULL;
+
+  g_return_val_if_fail (sysroot != NULL, FALSE);
+  g_return_val_if_fail (filename != NULL, FALSE);
+  /* We reject G_FILE_TEST_IS_SYMLINK because the provided filename is resolved
+   * in sysroot, following the eventual symlinks too. So it is not possible for
+   * the resolved filename to be a symlink */
+  g_return_val_if_fail ((test & (G_FILE_TEST_EXISTS | G_FILE_TEST_IS_EXECUTABLE
+                                 | G_FILE_TEST_IS_REGULAR
+                                 | G_FILE_TEST_IS_DIR)) == test, FALSE);
+
+  if (!glnx_opendirat (-1, sysroot, FALSE, &sysroot_fd, &error))
+    {
+      g_debug ("An error occurred trying to open %s: %s", sysroot,
+               error->message);
+      return FALSE;
+    }
+
+  file_fd = pv_resolve_in_sysroot (sysroot_fd,
+                                   filename, PV_RESOLVE_FLAGS_NONE,
+                                   &file_realpath_in_sysroot, &error);
+
+  if (file_fd < 0)
+    {
+      g_debug ("An error occurred trying to resolve %s in sysroot: %s",
+               filename, error->message);
+      return FALSE;
+    }
+
+  if (fstat (file_fd, &stat_buf) != 0)
+    {
+      g_debug ("fstat %s/%s: %s",
+               sysroot, file_realpath_in_sysroot, g_strerror (errno));
+      return FALSE;
+    }
+
+  if (test & G_FILE_TEST_EXISTS)
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_EXECUTABLE) && (stat_buf.st_mode & 0111))
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_REGULAR) && S_ISREG (stat_buf.st_mode))
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_DIR) && S_ISDIR (stat_buf.st_mode))
+    return TRUE;
+
+  return FALSE;
 }

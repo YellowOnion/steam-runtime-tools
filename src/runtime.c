@@ -64,6 +64,7 @@ struct _PvRuntime
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
   gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
+  gchar *runtime_files_on_host;
   const gchar *adverb_in_container;
 
   PvRuntimeFlags flags;
@@ -741,6 +742,8 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_files = self->source_files;
     }
 
+  //TODO This will be used in the future.
+  self->runtime_files_on_host = g_strdup (self->runtime_files);
   g_mkdir (self->overrides, 0700);
 
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
@@ -800,6 +803,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->mutable_parent);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
+  g_free (self->runtime_files_on_host);
   g_free (self->runtime_usr);
   g_free (self->source_files);
   g_free (self->tools_dir);
@@ -1024,6 +1028,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
                               "--tmpfs", self->container_access,
                               NULL);
       if (!pv_bwrap_bind_usr (self->container_access_adverb,
+                              self->runtime_files_on_host,
                               self->runtime_files,
                               self->container_access,
                               error))
@@ -1365,7 +1370,7 @@ bind_runtime (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, self->runtime_files, "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, self->runtime_files_on_host, self->runtime_files, "/", error))
     return FALSE;
 
   /* In the case where we have a mutable sysroot, we mount the overrides
@@ -1413,7 +1418,7 @@ bind_runtime (PvRuntime *self,
                             "/run/host/os-release",
                             NULL);
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/run/host", error))
+  if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/run/host", error))
     return FALSE;
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
@@ -2128,12 +2133,17 @@ pv_runtime_use_host_graphics_stack (PvRuntime *self,
                                       NULL);
 
               if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      self->runtime_files_on_host,
                                       self->runtime_files,
                                       "/",
                                       error))
                 return FALSE;
 
-              if (!pv_bwrap_bind_usr (temp_bwrap, "/", "/run/host", error))
+              if (!pv_bwrap_bind_usr (temp_bwrap,
+                                      "/",
+                                      "/",
+                                      "/run/host",
+                                      error))
                 return FALSE;
 
               flatpak_bwrap_add_args (temp_bwrap,

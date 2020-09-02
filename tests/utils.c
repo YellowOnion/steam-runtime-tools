@@ -278,6 +278,107 @@ test_search_path_append (Fixture *f,
   g_assert_cmpstr (str->str, ==, "/bin:/usr/bin:/usr/bin");
 }
 
+typedef struct
+{
+  const char *name;
+  mode_t mode;
+} File;
+
+typedef struct
+{
+  const char *name;
+  const char *target;
+} Symlink;
+
+typedef struct
+{
+  const char *path;
+  GFileTest test;
+  gboolean expected_result;
+} InSysrootTest;
+
+static void
+test_file_in_sysroot (Fixture *f,
+                      gconstpointer context)
+{
+  static const char * const prepare_dirs[] =
+  {
+    "dir1/dir2/dir3",
+  };
+
+  static const File prepare_files[] =
+  {
+    { "dir1/file1", 0600 },
+    { "dir1/dir2/file2", 0600 },
+    { "dir1/exec1", 0700 },
+  };
+
+  static const Symlink prepare_symlinks[] =
+  {
+    { "dir1/dir2/symlink_to_dir3", "dir3" },
+    { "dir1/dir2/symlink_to_file2", "file2" },
+    { "dir1/dir2/sym_to_sym_to_file2", "symlink_to_file2" },
+    { "dir1/abs_symlink_to_run", "/run" },
+  };
+
+  static const InSysrootTest tests[] =
+  {
+    { "dir1", G_FILE_TEST_IS_DIR, TRUE },
+    { "dir1", G_FILE_TEST_EXISTS, TRUE },
+    { "/dir1", G_FILE_TEST_EXISTS, TRUE },
+    { "dir1/dir2", G_FILE_TEST_IS_DIR, TRUE },
+    /* These gets solved in sysroot, following symlinks too */
+    { "dir1/dir2/symlink_to_dir3", G_FILE_TEST_IS_DIR, TRUE },
+    { "dir1/dir2/sym_to_sym_to_file2", G_FILE_TEST_IS_REGULAR, TRUE },
+    { "dir1/abs_symlink_to_run", G_FILE_TEST_IS_DIR, FALSE },
+    { "dir1/missing", G_FILE_TEST_EXISTS, FALSE },
+    { "dir1/file1", G_FILE_TEST_IS_REGULAR, TRUE },
+    { "dir1/file1", (G_FILE_TEST_IS_DIR | G_FILE_TEST_IS_EXECUTABLE), FALSE },
+    { "dir1/exec1", G_FILE_TEST_IS_REGULAR, TRUE },
+    { "dir1/exec1", G_FILE_TEST_IS_EXECUTABLE, TRUE },
+  };
+
+  g_autoptr(GError) error = NULL;
+  g_auto(GLnxTmpDir) tmpdir = { FALSE };
+  gsize i;
+
+  glnx_mkdtemp ("test-XXXXXX", 0700, &tmpdir, &error);
+  g_assert_no_error (error);
+
+  for (i = 0; i < G_N_ELEMENTS (prepare_dirs); i++)
+    {
+      const char *it = prepare_dirs[i];
+
+      glnx_shutil_mkdir_p_at (tmpdir.fd, it, 0700, NULL, &error);
+      g_assert_no_error (error);
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (prepare_files); i++)
+    {
+      const File *it = &prepare_files[i];
+
+      glnx_autofd int fd = openat (tmpdir.fd, it->name, O_WRONLY|O_CREAT, it->mode);
+      if (fd == -1)
+        g_error ("openat %s: %s", it->name, g_strerror (errno));
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (prepare_symlinks); i++)
+    {
+      const Symlink *it = &prepare_symlinks[i];
+
+      if (symlinkat (it->target, tmpdir.fd, it->name) != 0)
+        g_error ("symlinkat %s: %s", it->name, g_strerror (errno));
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    {
+      const InSysrootTest *it = &tests[i];
+
+      g_assert_cmpint (pv_file_test_in_sysroot (tmpdir.path, it->path, it->test),
+                       ==, it->expected_result);
+    }
+}
+
 int
 main (int argc,
       char **argv)
@@ -294,6 +395,8 @@ main (int argc,
   g_test_add ("/same-file", Fixture, NULL, setup, test_same_file, teardown);
   g_test_add ("/search-path-append", Fixture, NULL,
               setup, test_search_path_append, teardown);
+  g_test_add ("/test-file-in-sysroot", Fixture, NULL,
+              setup, test_file_in_sysroot, teardown);
 
   return g_test_run ();
 }

@@ -73,3 +73,7 @@ gboolean pv_wait_for_child_processes (pid_t main_process,
 gboolean pv_terminate_all_child_processes (GTimeSpan wait_period,
                                            GTimeSpan grace_period,
                                            GError **error);
+
+gboolean pv_file_test_in_sysroot (const char *sysroot,
+                                  const char *filename,
+                                  GFileTest test);

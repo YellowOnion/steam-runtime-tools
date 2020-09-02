@@ -172,9 +172,10 @@ check_bwrap (const char *tools_dir,
 }
 
 static void
-bind_from_environ (const char *variable,
-                   FlatpakBwrap *bwrap)
+bind_and_propagate_from_environ (const char *variable,
+                                 FlatpakBwrap *bwrap)
 {
+  g_autofree gchar *value_host = NULL;
   const char *value = g_getenv (variable);
 
   if (value == NULL)
@@ -187,13 +188,17 @@ bind_from_environ (const char *variable,
       return;
     }
 
-  g_debug ("Bind-mounting %s=\"%s\"", variable, value);
+  value_host = pv_current_namespace_path_to_host_path (value);
+
+  g_debug ("Bind-mounting %s=\"%s\" from the current env as %s=\"%s\" in the host",
+           variable, value, variable, value_host);
 
   /* TODO: If it's a symbolic link, ideally we should jump through the
    * same hoops as Flatpak to bind-mount the *target* of the symlink
    * instead, and then create the same symlink in the container. */
   flatpak_bwrap_add_args (bwrap,
-                          "--bind", value, value,
+                          "--bind", value_host, value_host,
+                          "--setenv", variable, value_host,
                           NULL);
 }
 
@@ -812,6 +817,12 @@ main (int argc,
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
+  const char * const known_required_env[] =
+    {
+      "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+      "STEAM_COMPAT_DATA_PATH",
+      "STEAM_COMPAT_TOOL_PATH",
+    };
 
   setlocale (LC_ALL, "");
 
@@ -1408,10 +1419,9 @@ main (int argc,
                               "--unsetenv", "LD_PRELOAD",
                               NULL);
 
-  g_debug ("Making Steam compat tools available if required...");
-  bind_from_environ ("STEAM_COMPAT_CLIENT_INSTALL_PATH", bwrap);
-  bind_from_environ ("STEAM_COMPAT_DATA_PATH", bwrap);
-  bind_from_environ ("STEAM_COMPAT_TOOL_PATH", bwrap);
+  g_debug ("Making Steam environment variables available if required...");
+  for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
+    bind_and_propagate_from_environ (known_required_env[i], bwrap);
 
   /* Make arbitrary filesystems available. This is not as complete as
    * Flatpak yet. */

@@ -258,8 +258,12 @@ bind_and_propagate_from_environ (const char *variable,
    * instead, and then create the same symlink in the container. */
   flatpak_bwrap_add_args (bwrap,
                           "--bind", value_host, value_host,
-                          "--setenv", variable, value_host,
                           NULL);
+
+  if (strcmp (value, value_host) != 0)
+    flatpak_bwrap_add_args (bwrap,
+                            "--setenv", variable, value_host,
+                            NULL);
 }
 
 /* Order matters here: root, steam and steambeta are or might be symlinks

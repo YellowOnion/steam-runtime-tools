@@ -23,6 +23,7 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use File::Glob ':bsd_glob';
 use FindBin;
 use Exporter qw(import);
 use IPC::Run qw(run);
@@ -407,9 +408,14 @@ sub bind_usr {
     }
     closedir $dir;
 
-    if (-e "$tree/etc/ld.so.cache") {
-        push @bwrap, "--ro-bind", "$tree/etc/ld.so.cache",
-            "$dest/etc/ld.so.cache";
+    foreach my $ldso (bsd_glob("$tree/etc/ld.so.cache"),
+                      bsd_glob("$tree/etc/ld-*.cache"),
+                      bsd_glob("$tree/etc/ld-*.path")) {
+        next unless -e $ldso;
+
+        my $base = $ldso;
+        $base =~ s,.*/,,;
+        push @bwrap, "--ro-bind", $ldso, "$dest/etc/$base";
     }
 
     # TODO: This wouldn't be necessary in a purely glvnd system

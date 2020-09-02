@@ -3150,10 +3150,6 @@ pv_runtime_bind (PvRuntime *self,
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  /* Start with just the root tmpfs (which appears automatically)
-   * and the standard API filesystems */
-  pv_bwrap_add_api_filesystems (bwrap);
-
   if (!bind_runtime (self, bwrap, error))
     return FALSE;
 

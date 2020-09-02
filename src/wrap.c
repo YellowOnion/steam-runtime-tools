@@ -1417,6 +1417,10 @@ main (int argc,
   if (opt_terminal != PV_TERMINAL_TTY)
     flatpak_bwrap_add_arg (bwrap, "--new-session");
 
+  /* Start with just the root tmpfs (which appears automatically)
+   * and the standard API filesystems */
+  pv_bwrap_add_api_filesystems (bwrap);
+
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
@@ -1462,8 +1466,6 @@ main (int argc,
       static const char * const export_os_mutable[] = { "/etc", "/run", "/tmp", "/var" };
 
       g_assert (!is_flatpak_env);
-
-      pv_bwrap_add_api_filesystems (bwrap);
 
       if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
         goto out;

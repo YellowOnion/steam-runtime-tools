@@ -1485,28 +1485,10 @@ bind_runtime (PvRuntime *self,
 
   flatpak_bwrap_add_args (bwrap,
                           "--setenv", "XDG_RUNTIME_DIR", xrd,
-                          "--tmpfs", "/run",
                           "--tmpfs", "/tmp",
                           "--tmpfs", "/var",
                           "--symlink", "../run", "/var/run",
                           NULL);
-
-  /* https://github.com/flatpak/flatpak/pull/3733 */
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/os-release",
-                               G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/os-release",
-                            "/run/host/os-release",
-                            NULL);
-  else if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/usr/lib/os-release",
-                               G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/usr/lib/os-release",
-                            "/run/host/os-release",
-                            NULL);
-
-  if (!pv_bwrap_bind_usr (bwrap, "/", self->host_in_current_namespace, "/run/host", error))
-    return FALSE;
 
   if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
       || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
@@ -3152,13 +3134,6 @@ pv_runtime_bind (PvRuntime *self,
 
   if (!bind_runtime (self, bwrap, error))
     return FALSE;
-
-  /* steam-runtime-system-info uses this to detect pressure-vessel, so we
-   * need to create it even if it will be empty */
-  flatpak_bwrap_add_args (bwrap,
-                          "--dir",
-                          "/run/pressure-vessel",
-                          NULL);
 
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);
 

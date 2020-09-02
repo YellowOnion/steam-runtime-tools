@@ -281,6 +281,53 @@ export_root_dirs_like_filesystem_host (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
+/*
+ * This function assumes that /run on the host is the same as in the
+ * current namespace, so it won't work in Flatpak.
+ */
+static gboolean
+export_contents_of_run (FlatpakBwrap *bwrap,
+                        GError **error)
+{
+  static const char *ignore[] =
+  {
+    "gfx",              /* can be created by pressure-vessel */
+    "host",             /* created by pressure-vessel */
+    "media",            /* see export_root_dirs_like_filesystem_host() */
+    "pressure-vessel",  /* created by pressure-vessel */
+    NULL
+  };
+  g_autoptr(GDir) dir = NULL;
+  const char *member = NULL;
+
+  g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_val_if_fail (g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS),
+                        FALSE);
+
+  dir = g_dir_open ("/run", 0, error);
+
+  if (dir == NULL)
+    return FALSE;
+
+  for (member = g_dir_read_name (dir);
+       member != NULL;
+       member = g_dir_read_name (dir))
+    {
+      g_autofree gchar *path = NULL;
+
+      if (g_strv_contains (ignore, member))
+        continue;
+
+      path = g_build_filename ("/run", member, NULL);
+      flatpak_bwrap_add_args (bwrap,
+                              "--bind", path, path,
+                              NULL);
+    }
+
+  return TRUE;
+}
+
 static void
 bind_and_propagate_from_environ (const char *variable,
                                  FlatpakBwrap *bwrap)
@@ -943,6 +990,7 @@ main (int argc,
       "STEAM_COMPAT_DATA_PATH",
       "STEAM_COMPAT_TOOL_PATH",
     };
+  const char *host_in_current_ns;
 
   my_pid = getpid ();
 
@@ -1210,6 +1258,11 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
+  if (is_flatpak_env)
+    host_in_current_ns = "/run/host";
+  else
+    host_in_current_ns = "/";
+
   if (opt_terminal != PV_TERMINAL_TTY)
     {
       int fd;
@@ -1421,6 +1474,30 @@ main (int argc,
    * and the standard API filesystems */
   pv_bwrap_add_api_filesystems (bwrap);
 
+  if (!pv_bwrap_bind_usr (bwrap, "/", host_in_current_ns, "/run/host", error))
+    goto out;
+
+  /* https://github.com/flatpak/flatpak/pull/3733 */
+  if (pv_file_test_in_sysroot (host_in_current_ns, "/etc/os-release",
+                               G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--ro-bind", "/etc/os-release",
+                            "/run/host/os-release",
+                            NULL);
+  else if (pv_file_test_in_sysroot (host_in_current_ns, "/usr/lib/os-release",
+                               G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--ro-bind", "/usr/lib/os-release",
+                            "/run/host/os-release",
+                            NULL);
+
+  /* steam-runtime-system-info uses this to detect pressure-vessel, so we
+   * need to create it even if it will be empty */
+  flatpak_bwrap_add_args (bwrap,
+                          "--dir",
+                          "/run/pressure-vessel",
+                          NULL);
+
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
@@ -1463,7 +1540,7 @@ main (int argc,
     }
   else
     {
-      static const char * const export_os_mutable[] = { "/etc", "/run", "/tmp", "/var" };
+      static const char * const export_os_mutable[] = { "/etc", "/tmp", "/var" };
 
       g_assert (!is_flatpak_env);
 
@@ -1471,9 +1548,7 @@ main (int argc,
         goto out;
 
       /* This mounts over the top of the subset of /etc mounted by
-       * pv_bwrap_bind_usr(), but that's harmless.
-       * Similarly, export_root_dirs_like_filesystem_host() will mount
-       * /run/media redundantly, but that's also harmless. */
+       * pv_bwrap_bind_usr(), but that's harmless. */
       for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
         {
           const char *dir = export_os_mutable[i];
@@ -1481,6 +1556,11 @@ main (int argc,
           if (g_file_test (dir, G_FILE_TEST_EXISTS))
             flatpak_bwrap_add_args (bwrap, "--bind", dir, dir, NULL);
         }
+
+      /* We do each subdirectory of /run separately, so that we can
+       * always create /run/host and /run/pressure-vessel. */
+      if (!export_contents_of_run (bwrap, error))
+        goto out;
 
       /* This handles everything except:
        *
@@ -1490,7 +1570,7 @@ main (int argc,
        * /etc (handled by export_os_mutable)
        * /proc (handled by pv_bwrap_add_api_filesystems() above)
        * /root (should be unnecessary)
-       * /run (handled by export_os_mutable)
+       * /run (handled by export_contents_of_run())
        * /sys (handled by pv_bwrap_add_api_filesystems() above)
        * /tmp (handled by export_os_mutable)
        * /usr, /lib, /lib32, /lib64, /bin, /sbin

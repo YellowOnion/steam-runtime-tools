@@ -331,7 +331,7 @@ init_with_target( ld_libs *ldlibs, const char *tree, const char *target,
         goto fail;
     }
 
-    if( !ld_libs_load_cache( ldlibs, "/etc/ld.so.cache", code, message ) )
+    if( !ld_libs_load_cache( ldlibs, code, message ) )
     {
         goto fail;
     }
@@ -714,7 +714,6 @@ static bool
 capture_soname_match( const char *pattern, const capture_options *options,
                       int *code, char **message )
 {
-    _capsule_autofree char *cache_path = NULL;
     cache_foreach_context ctx = {
         .pattern = pattern,
         .options = options,
@@ -724,13 +723,28 @@ capture_soname_match( const char *pattern, const capture_options *options,
         .message = message,
     };
     bool ret = false;
+    size_t i;
 
     DEBUG( DEBUG_TOOL, "%s", pattern );
 
-    cache_path = build_filename_alloc( option_provider, "/etc/ld.so.cache",
-                                       NULL );
+    for( i = 0; ld_cache_filenames[i] != NULL; i++ )
+    {
+        _capsule_autofree char *cache_path = NULL;
 
-    if( !ld_cache_open( &ctx.cache, cache_path, code, message ) )
+        if( message != NULL )
+            _capsule_clear( message );
+
+        cache_path = build_filename_alloc( option_provider,
+                                           ld_cache_filenames[i],
+                                           NULL );
+
+        if( ld_cache_open( &ctx.cache, cache_path, code, message ) )
+            break;
+        else
+            assert( !ctx.cache.is_open );
+    }
+
+    if( !ctx.cache.is_open )
         goto out;
 
     if( ld_cache_foreach( &ctx.cache, cache_foreach_cb, &ctx ) != 0 )

@@ -76,6 +76,19 @@ static const char *const abi_tag_os[] =
 
 // end of stolen header structures
 ////////////////////////////////////////////////////////////////////////////
+
+const char * const ld_cache_filenames[] =
+{
+#ifdef __i386__
+    "/etc/ld-i686-pc-linux-gnu.cache",    /* Exherbo */
+#endif
+#ifdef __x86_64__
+    "/etc/ld-x86_64-pc-linux-gnu.cache",  /* Exherbo */
+#endif
+    "/etc/ld.so.cache",                   /* interoperable */
+    NULL
+};
+
 static void
 ld_cache_reset (ld_cache *cache)
 {

@@ -103,8 +103,7 @@ int   ld_libs_set_target        (ld_libs *ldlibs, const char *target,
                                  int *code, char **message);
 int   ld_libs_find_dependencies (ld_libs *ldlibs, int *code, char **message);
 void  ld_libs_finish            (ld_libs *ldlibs);
-int   ld_libs_load_cache        (ld_libs *libs, const char *path, int *code,
-                                 char **message);
+int   ld_libs_load_cache        (ld_libs *libs, int *code, char **message);
 
 void *ld_libs_load (ld_libs *ldlibs, Lmid_t *namespace, int flag, int *error,
                     char **message);

@@ -448,7 +448,7 @@ search_ldcache (const char *name, ld_libs *ldlibs, int i)
 
     if( !ldlibs->ldcache.is_open )
     {
-        if( !ld_libs_load_cache( ldlibs, "/etc/ld.so.cache", NULL, NULL ) )
+        if( !ld_libs_load_cache( ldlibs, NULL, NULL ) )
         {
             // TODO: report error?
             return 0;
@@ -1128,21 +1128,29 @@ stat_caller (void)
 //
 // this function respects any path prefix specified in ldlibs
 int
-ld_libs_load_cache (ld_libs *libs, const char *path, int *code, char **message)
+ld_libs_load_cache (ld_libs *libs, int *code, char **message)
 {
     char prefixed[PATH_MAX] = { '\0' };
-    int rv;
+    size_t i;
 
-    if( build_filename( prefixed, sizeof(prefixed), libs->prefix.path,
-                        path, NULL ) >= sizeof(prefixed) )
+    for( i = 0; ld_cache_filenames[i] != NULL; i++ )
     {
-        _capsule_set_error( code, message, ENAMETOOLONG,
-                            "Cannot append \"%s\" to prefix \"%s\": too long",
-                            path, libs->prefix.path );
-        return 0;
+        if( message != NULL )
+            _capsule_clear( message );
+
+        if( build_filename( prefixed, sizeof(prefixed), libs->prefix.path,
+                            ld_cache_filenames[i], NULL ) >= sizeof(prefixed) )
+        {
+            _capsule_set_error( code, message, ENAMETOOLONG,
+                                "Cannot append \"%s\" to prefix \"%s\": too long",
+                                ld_cache_filenames[i], libs->prefix.path );
+            continue;
+        }
+
+        if( ld_cache_open( &libs->ldcache, prefixed, code, message ) )
+            return 1;
     }
 
-    rv = ld_cache_open( &libs->ldcache, prefixed, code, message );
-
-    return rv;
+    // return the last error
+    return 0;
 }

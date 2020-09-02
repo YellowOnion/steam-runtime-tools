@@ -85,6 +85,8 @@ typedef struct
 
 // ==========================================================================
 
+extern const char * const ld_cache_filenames[];
+
 typedef intptr_t (*ld_cache_entry_cb) (const char *name,
                                        int flag,
                                        unsigned int osv,

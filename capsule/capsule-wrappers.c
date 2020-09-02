@@ -221,7 +221,7 @@ capsule_shim_dlopen(const capsule cap, const char *file, int flag)
               goto cleanup;
         }
 
-        if( !ld_libs_load_cache( &ldlibs, "/etc/ld.so.cache", &code, &errors ) )
+        if( !ld_libs_load_cache( &ldlibs, &code, &errors ) )
         {
             DEBUG( DEBUG_LDCACHE|DEBUG_WRAPPERS|DEBUG_DLFUNC,
                    "Loading ld.so.cache from %s: error %d: %s", cap->ns->prefix,

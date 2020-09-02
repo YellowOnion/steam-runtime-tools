@@ -962,6 +962,9 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
 
   if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
     {
+      struct stat via_current_env_stat;
+      struct stat via_persist_stat;
+
       /* If we are inside a Flatpak container, usually, the home
        * folder is '${HOME}/.var/app/${FLATPAK_ID}' on the host system */
       if (home_env != NULL
@@ -973,6 +976,22 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
                                            g_getenv ("FLATPAK_ID"),
                                            current_env_path + strlen (home_env),
                                            NULL);
+
+          if (lstat (path_on_host, &via_persist_stat) < 0)
+            {
+              /* The file doesn't exist in ~/.var/app, so assume it was
+               * exposed via --filesystem */
+              g_clear_pointer (&path_on_host, g_free);
+            }
+          else if (lstat (current_env_path, &via_current_env_stat) == 0
+                   && (via_persist_stat.st_dev != via_current_env_stat.st_dev
+                       || via_persist_stat.st_ino != via_current_env_stat.st_ino))
+            {
+              /* The file exists in ~/.var/app, but is not the same there -
+              * presumably a different version was mounted over the top via
+              * --filesystem */
+              g_clear_pointer (&path_on_host, g_free);
+            }
         }
 
       /* In a Flatpak container, usually, '/run/host' is the root of the

@@ -236,6 +236,7 @@ bind_and_propagate_from_environ (const char *variable,
                                  FlatpakBwrap *bwrap)
 {
   g_autofree gchar *value_host = NULL;
+  g_autofree gchar *canon = NULL;
   const char *value = g_getenv (variable);
 
   if (value == NULL)
@@ -248,7 +249,8 @@ bind_and_propagate_from_environ (const char *variable,
       return;
     }
 
-  value_host = pv_current_namespace_path_to_host_path (value);
+  canon = g_canonicalize_filename (value, NULL);
+  value_host = pv_current_namespace_path_to_host_path (canon);
 
   g_debug ("Bind-mounting %s=\"%s\" from the current env as %s=\"%s\" in the host",
            variable, value, variable, value_host);

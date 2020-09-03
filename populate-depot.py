@@ -563,12 +563,12 @@ class Main:
             os.chmod(os.path.join(self.depot, 'run-in-' + runtime.name), 0o755)
 
         for runtime in self.runtimes[0:]:
+            if not self.toolmanifest:
+                continue
+
             with open(
                 os.path.join(self.depot, 'toolmanifest.v2.vdf'), 'w'
             ) as writer:
-                if not self.toolmanifest:
-                    continue
-
                 import vdf      # noqa
 
                 writer.write('// Generated file, do not edit\n')

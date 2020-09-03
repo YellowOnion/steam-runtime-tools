@@ -1139,14 +1139,16 @@ try_bind_dri (PvRuntime *self,
               const char *libdir,
               GError **error)
 {
+  /* e.g. /usr/lib/dri */
   g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
+  /* e.g. /run/host/usr/lib/dri */
   g_autofree gchar *dri_in_current_namespace = g_build_filename (
-                                                self->provider_in_container_namespace,
+                                                self->provider_in_current_namespace,
                                                 dri,
                                                 NULL);
   g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
   g_autofree gchar *s2tc_in_current_namespace = g_build_filename (
-                                                  self->provider_in_container_namespace,
+                                                  self->provider_in_current_namespace,
                                                   s2tc,
                                                   NULL);
 

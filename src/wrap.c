@@ -231,6 +231,56 @@ check_flatpak_spawn (void)
   return NULL;
 }
 
+/*
+ * Export most root directories, but not the ones that
+ * "flatpak run --filesystem=host" would skip.
+ * (See flatpak_context_export(), which might replace this function
+ * later on.)
+ *
+ * If we are running inside Flatpak, we assume that any directory
+ * that is made available in the root, and is not in dont_mount_in_root,
+ * came in via --filesystem=host or similar and matches its equivalent
+ * on the real root filesystem.
+ */
+static gboolean
+export_root_dirs_like_filesystem_host (FlatpakBwrap *bwrap,
+                                       GError **error)
+{
+  g_autoptr(GDir) dir = NULL;
+  const char *member = NULL;
+
+  g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  dir = g_dir_open ("/", 0, error);
+
+  if (dir == NULL)
+    return FALSE;
+
+  for (member = g_dir_read_name (dir);
+       member != NULL;
+       member = g_dir_read_name (dir))
+    {
+      g_autofree gchar *path = NULL;
+
+      if (g_strv_contains (dont_mount_in_root, member))
+        continue;
+
+      path = g_build_filename ("/", member, NULL);
+      flatpak_bwrap_add_args (bwrap,
+                              "--bind", path, path,
+                              NULL);
+    }
+
+  /* For parity with Flatpak's handling of --filesystem=host */
+  if (g_file_test ("/run/media", G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap,
+                            "--bind", "/run/media", "/run/media",
+                            NULL);
+
+  return TRUE;
+}
+
 static void
 bind_and_propagate_from_environ (const char *variable,
                                  FlatpakBwrap *bwrap)
@@ -1400,14 +1450,53 @@ main (int argc,
       if (!pv_runtime_bind (runtime, bwrap, error))
         goto out;
     }
+  else if (is_flatpak_env)
+    {
+      glnx_throw (error,
+                  "Cannot operate without a runtime from inside a "
+                  "Flatpak app");
+      goto out;
+    }
   else
     {
-      flatpak_bwrap_add_args (bwrap,
-                              "--bind", "/", "/",
-                              NULL);
-      /* /dev is already visible, because we mounted the entire root
-       * filesystem, but we need to remount parts of it without nodev */
+      static const char * const export_os_mutable[] = { "/etc", "/run", "/tmp", "/var" };
+
+      g_assert (!is_flatpak_env);
+
       pv_bwrap_add_api_filesystems (bwrap);
+
+      if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
+        goto out;
+
+      /* This mounts over the top of the subset of /etc mounted by
+       * pv_bwrap_bind_usr(), but that's harmless.
+       * Similarly, export_root_dirs_like_filesystem_host() will mount
+       * /run/media redundantly, but that's also harmless. */
+      for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
+        {
+          const char *dir = export_os_mutable[i];
+
+          if (g_file_test (dir, G_FILE_TEST_EXISTS))
+            flatpak_bwrap_add_args (bwrap, "--bind", dir, dir, NULL);
+        }
+
+      /* This handles everything except:
+       *
+       * /app (should be unnecessary)
+       * /boot (should be unnecessary)
+       * /dev (handled by pv_bwrap_add_api_filesystems() above)
+       * /etc (handled by export_os_mutable)
+       * /proc (handled by pv_bwrap_add_api_filesystems() above)
+       * /root (should be unnecessary)
+       * /run (handled by export_os_mutable)
+       * /sys (handled by pv_bwrap_add_api_filesystems() above)
+       * /tmp (handled by export_os_mutable)
+       * /usr, /lib, /lib32, /lib64, /bin, /sbin
+       *  (all handled by pv_bwrap_bind_usr() above)
+       * /var (handled by export_os_mutable)
+       */
+      if (!export_root_dirs_like_filesystem_host (bwrap, error))
+        goto out;
     }
 
   /* Protect other users' homes (but guard against the unlikely

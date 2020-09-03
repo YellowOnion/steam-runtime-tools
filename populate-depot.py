@@ -62,8 +62,6 @@ sys.path[:0] = [
     ),
 ]
 
-import vdf      # noqa
-
 
 logger = logging.getLogger('populate-depot')
 
@@ -278,6 +276,7 @@ class Main:
         runtimes: Sequence[str] = (),
         ssh: bool = False,
         suite: str = '',
+        toolmanifest: bool = False,
         unpack_ld_library_path: str = '',
         unpack_runtimes: bool = False,
         unpack_sources: Sequence[str] = (),
@@ -328,6 +327,7 @@ class Main:
         self.pressure_vessel = pressure_vessel
         self.runtimes = []      # type: List[Runtime]
         self.ssh = ssh
+        self.toolmanifest = toolmanifest
         self.unpack_ld_library_path = unpack_ld_library_path
         self.unpack_runtimes = unpack_runtimes
         self.unpack_sources = unpack_sources
@@ -533,6 +533,11 @@ class Main:
             with open(
                 os.path.join(self.depot, 'toolmanifest.v2.vdf'), 'w'
             ) as writer:
+                if not self.toolmanifest:
+                    continue
+
+                import vdf      # noqa
+
                 writer.write('// Generated file, do not edit\n')
                 words = [
                     '/_v2-entry-point',
@@ -567,10 +572,11 @@ class Main:
                 )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
-            shutil.copy2(
-                os.path.join(self.depot, 'toolmanifest.v2.vdf'),
-                os.path.join(self.depot, 'toolmanifest.vdf'),
-            )
+            if self.toolmanifest:
+                shutil.copy2(
+                    os.path.join(self.depot, 'toolmanifest.v2.vdf'),
+                    os.path.join(self.depot, 'toolmanifest.vdf'),
+                )
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         pv_dir = os.path.join(self.depot, 'pressure-vessel')
@@ -854,6 +860,10 @@ def main() -> None:
     parser.add_argument(
         '--include-sdk', default=False, action='store_true',
         help='Include a corresponding SDK',
+    )
+    parser.add_argument(
+        '--toolmanifest', default=False, action='store_true',
+        help='Generate toolmanifest.vdf',
     )
     parser.add_argument(
         '--unpack-ld-library-path', metavar='PATH', default='',

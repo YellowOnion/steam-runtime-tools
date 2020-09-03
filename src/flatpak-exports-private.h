@@ -36,6 +36,8 @@ typedef enum {
 
 typedef struct _FlatpakExports FlatpakExports;
 
+extern const char *dont_export_in[];
+
 void flatpak_exports_free (FlatpakExports *exports);
 FlatpakExports *flatpak_exports_new (void);
 void flatpak_exports_append_bwrap_args (FlatpakExports *exports,

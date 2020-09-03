@@ -243,13 +243,15 @@ check_flatpak_spawn (void)
  * on the real root filesystem.
  */
 static gboolean
-export_root_dirs_like_filesystem_host (FlatpakBwrap *bwrap,
+export_root_dirs_like_filesystem_host (FlatpakExports *exports,
+                                       FlatpakFilesystemMode mode,
                                        GError **error)
 {
   g_autoptr(GDir) dir = NULL;
   const char *member = NULL;
 
-  g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (exports != NULL, FALSE);
+  g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   dir = g_dir_open ("/", 0, error);
@@ -267,16 +269,11 @@ export_root_dirs_like_filesystem_host (FlatpakBwrap *bwrap,
         continue;
 
       path = g_build_filename ("/", member, NULL);
-      flatpak_bwrap_add_args (bwrap,
-                              "--bind", path, path,
-                              NULL);
+      flatpak_exports_add_path_expose (exports, mode, path);
     }
 
   /* For parity with Flatpak's handling of --filesystem=host */
-  if (g_file_test ("/run/media", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--bind", "/run/media", "/run/media",
-                            NULL);
+  flatpak_exports_add_path_expose (exports, mode, "/run/media");
 
   return TRUE;
 }
@@ -329,12 +326,20 @@ export_contents_of_run (FlatpakBwrap *bwrap,
 }
 
 static void
-bind_and_propagate_from_environ (const char *variable,
-                                 FlatpakBwrap *bwrap)
+bind_and_propagate_from_environ (FlatpakExports *exports,
+                                 FlatpakBwrap *bwrap,
+                                 FlatpakFilesystemMode mode,
+                                 const char *variable)
 {
   g_autofree gchar *value_host = NULL;
   g_autofree gchar *canon = NULL;
-  const char *value = g_getenv (variable);
+  const char *value;
+
+  g_return_if_fail (exports != NULL);
+  g_return_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST);
+  g_return_if_fail (variable != NULL);
+
+  value = g_getenv (variable);
 
   if (value == NULL)
     return;
@@ -351,13 +356,7 @@ bind_and_propagate_from_environ (const char *variable,
 
   g_debug ("Bind-mounting %s=\"%s\" from the current env as %s=\"%s\" in the host",
            variable, value, variable, value_host);
-
-  /* TODO: If it's a symbolic link, ideally we should jump through the
-   * same hoops as Flatpak to bind-mount the *target* of the symlink
-   * instead, and then create the same symlink in the container. */
-  flatpak_bwrap_add_args (bwrap,
-                          "--bind", value_host, value_host,
-                          NULL);
+  flatpak_exports_add_path_expose (exports, mode, canon);
 
   if (strcmp (value, value_host) != 0)
     flatpak_bwrap_add_args (bwrap,
@@ -374,7 +373,8 @@ static const char * const steam_api_subdirs[] =
 };
 
 static gboolean
-use_fake_home (FlatpakBwrap *bwrap,
+use_fake_home (FlatpakExports *exports,
+               FlatpakBwrap *bwrap,
                const gchar *fake_home,
                GError **error)
 {
@@ -389,10 +389,10 @@ use_fake_home (FlatpakBwrap *bwrap,
   g_autofree gchar *data2 = g_build_filename (fake_home, "data", NULL);
   g_autofree gchar *steam_pid = NULL;
   g_autofree gchar *steam_pipe = NULL;
-  g_autoptr(GHashTable) mounted = NULL;
   gsize i;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail (fake_home != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
@@ -435,15 +435,15 @@ use_fake_home (FlatpakBwrap *bwrap,
 
   flatpak_bwrap_add_args (bwrap,
                           "--bind", fake_home, real_home,
-                          "--bind", fake_home, fake_home,
                           "--bind", tmp, "/var/tmp",
                           "--setenv", "XDG_CACHE_HOME", cache,
                           "--setenv", "XDG_CONFIG_HOME", config,
                           "--setenv", "XDG_DATA_HOME", data,
                           NULL);
 
-  mounted = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                   g_free, NULL);
+  flatpak_exports_add_path_expose (exports,
+                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                   fake_home);
 
   /*
    * These might be API entry points, according to Steam/steam.sh.
@@ -474,45 +474,90 @@ use_fake_home (FlatpakBwrap *bwrap,
           /* Remove any symlinks that might have already been there. */
           if (unlink (mount_point) != 0 && errno != ENOENT)
             g_debug ("unlink %s: %s", mount_point, g_strerror (errno));
-
-          flatpak_bwrap_add_args (bwrap, "--symlink", target, dir, NULL);
-
-          if (strcmp (steam_api_subdirs[i], "root") == 0
-              || strcmp (steam_api_subdirs[i], "steam") == 0
-              || strcmp (steam_api_subdirs[i], "steambeta") == 0)
-            {
-              flatpak_bwrap_add_args (bwrap,
-                                      "--ro-bind", target, target,
-                                      NULL);
-              g_hash_table_add (mounted, g_steal_pointer (&target));
-            }
         }
-      else if (g_file_test (dir, G_FILE_TEST_EXISTS) &&
-               !g_hash_table_contains (mounted, dir))
-        {
-          flatpak_bwrap_add_args (bwrap, "--ro-bind", dir, dir, NULL);
-          g_hash_table_add (mounted, g_steal_pointer (&dir));
-        }
+
+      flatpak_exports_add_path_expose (exports,
+                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                       dir);
     }
 
   /* steamclient.so relies on this for communication with Steam */
   steam_pid = g_build_filename (real_home, ".steam", "steam.pid", NULL);
-
-  if (g_file_test (steam_pid, G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", steam_pid, steam_pid,
-                            NULL);
+  flatpak_exports_add_path_expose (exports,
+                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                   steam_pid);
 
   /* Make sure Steam IPC is available.
    * TODO: do we need this? do we need more? */
   steam_pipe = g_build_filename (real_home, ".steam", "steam.pipe", NULL);
-
-  if (g_file_test (steam_pipe, G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--bind", steam_pipe, steam_pipe,
-                            NULL);
+  flatpak_exports_add_path_expose (exports,
+                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                   steam_pipe);
 
   return TRUE;
+}
+
+/*
+ * @bwrap: Arguments produced by flatpak_exports_append_bwrap_args(),
+ *  not including an executable name (the 0'th argument must be
+ *  `--bind` or similar)
+ * @home: The home directory
+ *
+ * Adjust arguments in @bwrap to cope with potentially running in a
+ * container.
+ */
+static void
+adjust_exports (FlatpakBwrap *bwrap,
+                const char *home)
+{
+  gsize i = 0;
+
+  while (i < bwrap->argv->len)
+    {
+      const char *opt = bwrap->argv->pdata[i];
+
+      g_assert (opt != NULL);
+
+      if (g_str_equal (opt, "--symlink"))
+        {
+          g_assert (i + 3 <= bwrap->argv->len);
+          /* pdata[i + 1] is the target: unchanged. */
+          /* pdata[i + 2] is a path in the final container: unchanged. */
+          i += 3;
+        }
+      else if (g_str_equal (opt, "--dir") ||
+               g_str_equal (opt, "--tmpfs"))
+        {
+          g_assert (i + 2 <= bwrap->argv->len);
+          /* pdata[i + 1] is a path in the final container: unchanged. */
+          i += 2;
+        }
+      else if (g_str_equal (opt, "--ro-bind") ||
+               g_str_equal (opt, "--bind"))
+        {
+          g_autofree gchar *src = NULL;
+
+          g_assert (i + 3 <= bwrap->argv->len);
+          src = g_steal_pointer (&bwrap->argv->pdata[i + 1]);
+          /* pdata[i + 2] is a path in the final container: unchanged. */
+
+          /* Paths in the home directory might need adjusting.
+           * Paths outside the home directory do not: if they're part of
+           * /run/host, they've been adjusted already by
+           * flatpak_exports_take_host_fd(), and if not, they appear in
+           * the container with the same path as on the host. */
+          if (flatpak_has_path_prefix (src, home))
+            bwrap->argv->pdata[i + 1] = pv_current_namespace_path_to_host_path (src);
+          else
+            bwrap->argv->pdata[i + 1] = g_steal_pointer (&src);
+
+          i += 3;
+        }
+      else
+        {
+          g_return_if_reached ();
+        }
+    }
 }
 
 typedef enum
@@ -969,6 +1014,8 @@ main (int argc,
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
+  g_autoptr(FlatpakBwrap) exports_bwrap = NULL;
+  g_autoptr(FlatpakExports) exports = NULL;
   g_autoptr(FlatpakBwrap) adverb_args = NULL;
   g_autofree gchar *adverb_in_container = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
@@ -990,7 +1037,6 @@ main (int argc,
       "STEAM_COMPAT_DATA_PATH",
       "STEAM_COMPAT_TOOL_PATH",
     };
-  const char *host_in_current_ns;
 
   my_pid = getpid ();
 
@@ -1258,11 +1304,6 @@ main (int argc,
    * us exit 1. */
   ret = 1;
 
-  if (is_flatpak_env)
-    host_in_current_ns = "/run/host";
-  else
-    host_in_current_ns = "/";
-
   if (opt_terminal != PV_TERMINAL_TTY)
     {
       int fd;
@@ -1463,6 +1504,21 @@ main (int argc,
 
   bwrap = flatpak_bwrap_new (NULL);
   flatpak_bwrap_add_arg (bwrap, bwrap_executable);
+  exports = flatpak_exports_new ();
+
+  if (is_flatpak_env)
+    {
+      glnx_autofd int fd = TEMP_FAILURE_RETRY (open ("/run/host",
+                                                     O_CLOEXEC | O_PATH));
+
+      if (fd < 0)
+        {
+          glnx_throw_errno_prefix (error, "Unable to open /run/host");
+          goto out;
+        }
+
+      flatpak_exports_take_host_fd (exports, glnx_steal_fd (&fd));
+    }
 
   /* Protect the controlling terminal from the app/game, unless we are
    * running an interactive shell in which case that would break its
@@ -1474,22 +1530,9 @@ main (int argc,
    * and the standard API filesystems */
   pv_bwrap_add_api_filesystems (bwrap);
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", host_in_current_ns, "/run/host", error))
-    goto out;
-
-  /* https://github.com/flatpak/flatpak/pull/3733 */
-  if (pv_file_test_in_sysroot (host_in_current_ns, "/etc/os-release",
-                               G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/os-release",
-                            "/run/host/os-release",
-                            NULL);
-  else if (pv_file_test_in_sysroot (host_in_current_ns, "/usr/lib/os-release",
-                               G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/usr/lib/os-release",
-                            "/run/host/os-release",
-                            NULL);
+  /* The FlatpakExports will populate /run/host for us */
+  flatpak_exports_add_host_os_expose (exports,
+                                      FLATPAK_FILESYSTEM_MODE_READ_ONLY);
 
   /* steam-runtime-system-info uses this to detect pressure-vessel, so we
    * need to create it even if it will be empty */
@@ -1577,7 +1620,9 @@ main (int argc,
        *  (all handled by pv_bwrap_bind_usr() above)
        * /var (handled by export_os_mutable)
        */
-      if (!export_root_dirs_like_filesystem_host (bwrap, error))
+      if (!export_root_dirs_like_filesystem_host (exports,
+                                                  FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                                  error))
         goto out;
     }
 
@@ -1592,13 +1637,13 @@ main (int argc,
 
   if (opt_fake_home == NULL)
     {
-      flatpak_bwrap_add_args (bwrap,
-                              "--bind", home, home,
-                              NULL);
+      flatpak_exports_add_path_expose (exports,
+                                       FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                       home);
     }
   else
     {
-      if (!use_fake_home (bwrap, opt_fake_home, error))
+      if (!use_fake_home (exports, bwrap, opt_fake_home, error))
         goto out;
     }
 
@@ -1655,9 +1700,9 @@ main (int argc,
                 }
               else
                 {
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", preload, preload,
-                                          NULL);
+                  flatpak_exports_add_path_expose (exports,
+                                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                                   preload);
                   pv_search_path_append (adjusted_ld_preload, preload);
                 }
             }
@@ -1684,7 +1729,9 @@ main (int argc,
 
   g_debug ("Making Steam environment variables available if required...");
   for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
-    bind_and_propagate_from_environ (known_required_env[i], bwrap);
+    bind_and_propagate_from_environ (exports, bwrap,
+                                     FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                     known_required_env[i]);
 
   /* Make arbitrary filesystems available. This is not as complete as
    * Flatpak yet. */
@@ -1698,10 +1745,9 @@ main (int argc,
           g_assert (g_path_is_absolute (opt_filesystems[i]));
 
           g_debug ("Bind-mounting \"%s\"", opt_filesystems[i]);
-          flatpak_bwrap_add_args (bwrap,
-                                  "--bind", opt_filesystems[i],
-                                  opt_filesystems[i],
-                                  NULL);
+          flatpak_exports_add_path_expose (exports,
+                                           FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                           opt_filesystems[i]);
         }
     }
 
@@ -1719,9 +1765,13 @@ main (int argc,
     }
   else
     {
-      flatpak_bwrap_add_args (bwrap,
-                              "--bind", cwd_p_host, cwd_p_host,
-                              NULL);
+      /* If in Flatpak, we assume that cwd_p_host is visible in the
+       * current namespace as well as in the host, because it's
+       * either in our ~/.var/app/$FLATPAK_ID, or a --filesystem that
+       * was exposed from the host. */
+      flatpak_exports_add_path_expose (exports,
+                                       FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                       cwd_p_host);
     }
 
   flatpak_bwrap_add_args (bwrap,
@@ -1746,12 +1796,9 @@ main (int argc,
               g_assert (equals != NULL);
 
               if (g_str_has_prefix (opt_env_if_host[i], "STEAM_RUNTIME=/"))
-                {
-                  flatpak_bwrap_add_args (bwrap,
-                                          "--ro-bind", equals + 1,
-                                          equals + 1,
-                                          NULL);
-                }
+                flatpak_exports_add_path_expose (exports,
+                                                 FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                                 equals + 1);
 
               *equals = '\0';
               /* We do this via --setenv instead of flatpak_bwrap_set_env()
@@ -1764,6 +1811,12 @@ main (int argc,
             }
         }
     }
+
+  /* Convert the exported directories into extra bubblewrap arguments */
+  exports_bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+  flatpak_exports_append_bwrap_args (exports, exports_bwrap);
+  adjust_exports (exports_bwrap, home);
+  flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
 
   /* We need to set up IPC rendezvous points relatively late, so that
    * even if we are sharing /tmp via --filesystem=/tmp, we'll still

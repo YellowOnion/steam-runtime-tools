@@ -37,6 +37,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 from contextlib import suppress
 from typing import (
@@ -66,6 +67,11 @@ sys.path[:0] = [
 logger = logging.getLogger('populate-depot')
 
 
+DEFAULT_IMAGES_URI = (
+    'https://repo.steampowered.com/steamrt-images-SUITE/snapshots'
+)
+
+
 class InvocationError(Exception):
     pass
 
@@ -78,15 +84,21 @@ class Runtime:
         suite: str,
 
         architecture: str = 'amd64,i386',
+        images_uri: str = DEFAULT_IMAGES_URI,
         include_sdk: bool = False,
         path: Optional[str] = None,
+        ssh_host: str = '',
+        ssh_path: str = '',
         version: str = 'latest',
     ) -> None:
         self.architecture = architecture
+        self.images_uri = images_uri
         self.include_sdk = include_sdk
         self.name = name
         self.path = path
         self.suite = suite
+        self.ssh_host = ssh_host
+        self.ssh_path = ssh_path
         self.version = version
         self.pinned_version = None      # type: Optional[str]
 
@@ -154,14 +166,20 @@ class Runtime:
         default_include_sdk: bool = False,
         default_suite: str = '',
         default_version: str = 'latest',
+        images_uri: str = DEFAULT_IMAGES_URI,
+        ssh_host: str = '',
+        ssh_path: str = '',
     ):
         return cls(
             name,
             architecture=details.get(
                 'architecture', default_architecture,
             ),
+            images_uri=images_uri,
             include_sdk=details.get('include_sdk', default_include_sdk),
             path=details.get('path', None),
+            ssh_host=ssh_host,
+            ssh_path=ssh_path,
             suite=details.get('suite', default_suite or name),
             version=details.get('version', default_version),
         )
@@ -172,33 +190,33 @@ class Runtime:
         version: Optional[str] = None,
     ) -> str:
         suite = self.suite
+        uri = self.images_uri.replace('SUITE', suite)
         v = version or self.pinned_version or self.version
-        return (
-            f'https://images.steamos.cloud/steamrt-{suite}/'
-            f'snapshots/{v}/{filename}'
-        )
+        return f'{uri}/{v}/{filename}'
 
     def get_ssh_path(
         self,
         filename: str,
         version: Optional[str] = None,
     ) -> str:
+        ssh_host = self.ssh_host
         suite = self.suite
+        ssh_path = self.ssh_path.replace('SUITE', suite)
         v = version or self.pinned_version or self.version
-        return (
-            f'/srv/images.internal.steamos.cloud/www/steamrt-{suite}/'
-            f'snapshots/{v}/{filename}'
-        )
+
+        if not ssh_host or not ssh_path:
+            raise RuntimeError('ssh host/path not configured')
+
+        return f'{ssh_path}/{v}/{filename}'
 
     def fetch(
         self,
         filename: str,
         destdir: str,
         opener: urllib.request.OpenerDirector,
-        ssh: bool = False,
         version: Optional[str] = None,
     ) -> None:
-        if ssh:
+        if self.ssh_host and self.ssh_path:
             path = self.get_ssh_path(filename)
             logger.info('Downloading %r...', path)
             subprocess.run([
@@ -206,7 +224,7 @@ class Runtime:
                 '--archive',
                 '--partial',
                 '--progress',
-                'images.internal.steamos.cloud:' + path,
+                self.ssh_host + ':' + path,
                 os.path.join(destdir, filename),
             ], check=True)
         else:
@@ -220,16 +238,15 @@ class Runtime:
     def pin_version(
         self,
         opener: urllib.request.OpenerDirector,
-        ssh: bool = False,
     ) -> str:
         pinned = self.pinned_version
 
         if pinned is None:
-            if ssh:
+            if self.ssh_host and self.ssh_path:
                 path = self.get_ssh_path(filename='VERSION.txt')
                 logger.info('Determining version number from %r...', path)
                 pinned = subprocess.run([
-                    'ssh', 'images.internal.steamos.cloud',
+                    'ssh', self.ssh_host,
                     'cat {}'.format(shlex.quote(path)),
                 ], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
             else:
@@ -270,11 +287,14 @@ class Main:
         architecture: str = 'amd64,i386',
         cache: str = '',
         credential_envs: Sequence[str] = (),
+        credential_hosts: Sequence[str] = (),
         depot: str = 'depot',
+        images_uri: str = DEFAULT_IMAGES_URI,
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
-        ssh: bool = False,
+        ssh_host: str = '',
+        ssh_path: str = '',
         suite: str = '',
         toolmanifest: bool = False,
         unpack_ld_library_path: str = '',
@@ -288,6 +308,13 @@ class Main:
 
         if not runtimes:
             runtimes = ('scout',)
+
+        if not credential_hosts:
+            credential_hosts = []
+            host = urllib.parse.urlparse(images_uri).hostname
+
+            if host is not None:
+                credential_hosts.append(host)
 
         if credential_envs:
             password_manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
@@ -305,12 +332,13 @@ class Main:
                         'Using username and password from $%s', cred)
                     username, password = os.environ[cred].split(':', 1)
 
-                password_manager.add_password(
-                    None,       # type: ignore
-                    'https://images.steamos.cloud/',
-                    username,
-                    password,
-                )
+                for host in credential_hosts:
+                    password_manager.add_password(
+                        None,       # type: ignore
+                        host,
+                        username,
+                        password,
+                    )
 
             openers.append(
                 urllib.request.HTTPBasicAuthHandler(password_manager)
@@ -324,9 +352,11 @@ class Main:
         self.default_suite = suite
         self.default_version = version
         self.depot = os.path.abspath(depot)
+        self.images_uri = images_uri
         self.pressure_vessel = pressure_vessel
         self.runtimes = []      # type: List[Runtime]
-        self.ssh = ssh
+        self.ssh_host = ssh_host
+        self.ssh_path = ssh_path
         self.toolmanifest = toolmanifest
         self.unpack_ld_library_path = unpack_ld_library_path
         self.unpack_runtimes = unpack_runtimes
@@ -359,6 +389,9 @@ class Main:
             default_include_sdk=self.default_include_sdk,
             default_suite=self.default_suite,
             default_version=self.default_version,
+            images_uri=self.images_uri,
+            ssh_host=self.ssh_host,
+            ssh_path=self.ssh_path,
         )
 
     def run(self) -> None:
@@ -593,14 +626,13 @@ class Main:
 
     def download_pressure_vessel(self, runtime: Runtime) -> None:
         filename = 'pressure-vessel-bin.tar.gz'
-        runtime.pin_version(self.opener, ssh=self.ssh)
+        runtime.pin_version(self.opener)
 
         with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
             runtime.fetch(
                 filename,
                 self.cache or tmp,
                 self.opener,
-                ssh=self.ssh,
             )
 
             os.makedirs(self.depot, exist_ok=True)
@@ -679,9 +711,9 @@ class Main:
         runtime build.
         """
 
-        pinned = runtime.pin_version(self.opener, ssh=self.ssh)
+        pinned = runtime.pin_version(self.opener)
         for basename in runtime.runtime_files:
-            runtime.fetch(basename, self.depot, self.opener, ssh=self.ssh)
+            runtime.fetch(basename, self.depot, self.opener)
 
         with open(
             os.path.join(self.depot, runtime.build_id_file), 'w',
@@ -701,7 +733,6 @@ class Main:
                     runtime.sources,
                     self.cache or tmp,
                     self.opener,
-                    ssh=self.ssh,
                 )
                 with open(
                     os.path.join(self.cache or tmp, runtime.sources),
@@ -728,7 +759,6 @@ class Main:
                                     os.path.join('sources', name),
                                     self.cache or tmp,
                                     self.opener,
-                                    ssh=self.ssh,
                                 )
 
                             for f in stanza['files']:
@@ -772,7 +802,7 @@ class Main:
         """
         filename = 'steam-runtime.tar.xz'
 
-        pinned = runtime.pin_version(self.opener, ssh=self.ssh)
+        pinned = runtime.pin_version(self.opener)
         logger.info('Downloading steam-runtime build %s', pinned)
         os.makedirs(self.unpack_ld_library_path, exist_ok=True)
 
@@ -781,7 +811,6 @@ class Main:
                 filename,
                 self.cache or tmp,
                 self.opener,
-                ssh=self.ssh,
             )
             subprocess.run(
                 [
@@ -827,6 +856,7 @@ def main() -> None:
             'Cache downloaded files that are not in --depot here'
         ),
     )
+
     parser.add_argument(
         '--credential-env',
         action='append',
@@ -838,11 +868,39 @@ def main() -> None:
             'for login and password respectively'
         ),
     )
+    parser.add_argument(
+        '--credential-host',
+        action='append',
+        default=[],
+        dest='credential_hosts',
+        metavar='HOST',
+        help=(
+            'Use --credential-env when downloading from the given HOST'
+            '(default: hostname of --images-uri)'
+        ),
+    )
+    parser.add_argument(
+        '--images-uri',
+        default=DEFAULT_IMAGES_URI,
+        metavar='URI',
+        help=(
+            'Download files from the given URI. '
+            '"SUITE" will be replaced with the suite name.'
+        ),
+    )
 
     parser.add_argument(
-        '--ssh', default=False, action='store_true',
-        help='Use ssh and rsync to download files',
+        '--ssh-host', default='', metavar='HOST',
+        help='Use ssh and rsync to download files from HOST',
     )
+    parser.add_argument(
+        '--ssh-path', default='', metavar='PATH',
+        help=(
+            'Use ssh and rsync to download files from PATH on HOST. '
+            '"SUITE" will be replaced with the suite name.'
+        ),
+    )
+
     parser.add_argument(
         '--depot', default='depot',
         help=(

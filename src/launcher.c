@@ -1273,7 +1273,6 @@ main (int argc,
 
   main_loop = g_main_loop_new (NULL, FALSE);
   g_main_loop_run (main_loop);
-  g_debug ("Exiting");
 
 out:
   if (local_error != NULL)
@@ -1306,5 +1305,6 @@ out:
   g_clear_error (&local_error);
   g_clear_pointer (&original_stdout, fclose);
 
+  g_debug ("Exiting with status %d", ret);
   return ret;
 }

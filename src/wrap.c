@@ -1756,5 +1756,6 @@ out:
   g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
 
+  g_debug ("Exiting with status %d", ret);
   return ret;
 }

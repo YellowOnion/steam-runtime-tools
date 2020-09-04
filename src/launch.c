@@ -871,5 +871,6 @@ out:
   g_hash_table_unref (opt_env);
   g_hash_table_unref (opt_unsetenv);
 
+  g_debug ("Exiting with status %d", launch_exit_status);
   return launch_exit_status;
 }

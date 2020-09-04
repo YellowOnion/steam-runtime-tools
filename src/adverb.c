@@ -701,5 +701,6 @@ out:
   if (local_error != NULL)
     g_warning ("%s", local_error->message);
 
+  g_debug ("Exiting with status %d", ret);
   return ret;
 }

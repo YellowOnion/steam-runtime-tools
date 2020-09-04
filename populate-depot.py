@@ -46,6 +46,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Tuple,
 )
 
 from debian.deb822 import (
@@ -381,6 +382,8 @@ class Main:
 
             self.runtimes.append(self.new_runtime(name, details))
 
+        self.versions = []      # type: List[Tuple[str, str, str]]
+
     def new_runtime(self, name: str, details: Dict[str, Any]) -> Runtime:
         return Runtime.from_details(
             name,
@@ -395,12 +398,15 @@ class Main:
         )
 
     def run(self) -> None:
+        comment = ''
+
         for runtime in self.runtimes:
             if runtime.name == self.pressure_vessel:
                 logger.info(
                     'Downloading pressure-vessel from %s', runtime.name)
                 pressure_vessel_runtime = runtime
                 self.download_pressure_vessel(pressure_vessel_runtime)
+                comment = f'from {runtime.name}'
                 break
         else:
             if self.pressure_vessel.startswith('{'):
@@ -425,6 +431,7 @@ class Main:
                 pressure_vessel_runtime = self.new_runtime(
                     'scout', {'path': self.pressure_vessel},
                 )
+                comment = 'from local file'
             elif os.path.isfile(self.pressure_vessel):
                 logger.info(
                     'Downloading pressure-vessel using JSON from %r',
@@ -441,6 +448,22 @@ class Main:
                     self.pressure_vessel, {},
                 )
                 self.download_pressure_vessel(pressure_vessel_runtime)
+                comment = 'from {self.pressure_vessel}'
+
+        if pressure_vessel_runtime.pinned_version is not None:
+            comment += f' version {pressure_vessel_runtime.pinned_version}'
+
+        version = 'unknown'
+
+        for path in ('metadata/VERSION.txt', 'sources/VERSION.txt'):
+            full = os.path.join(self.depot, 'pressure-vessel', path)
+            if os.path.exists(full):
+                with open(full) as reader:
+                    version = reader.read().rstrip('\n')
+
+                break
+
+        self.versions.append(('pressure-vessel', version, comment))
 
         if self.unpack_ld_library_path:
             logger.info(
@@ -472,6 +495,15 @@ class Main:
                     'Downloading runtime from %s',
                     runtime)
                 self.download_runtime(runtime)
+
+            version = runtime.pinned_version
+            comment = ', '.join(sorted(runtime.runtime_files))
+
+            if version is None:
+                version = runtime.version
+                comment += ' (from local build)'
+
+            self.versions.append((runtime.name, version, comment))
 
             if self.unpack_runtimes:
                 dest = os.path.join(self.depot, runtime.name)
@@ -610,6 +642,42 @@ class Main:
                     os.path.join(self.depot, 'toolmanifest.v2.vdf'),
                     os.path.join(self.depot, 'toolmanifest.vdf'),
                 )
+
+        try:
+            with subprocess.Popen(
+                [
+                    'git', 'describe',
+                    '--always',
+                    '--dirty',
+                    '--long',
+                ],
+                cwd=os.path.dirname(__file__),
+                stdout=subprocess.PIPE,
+                universal_newlines=True,
+            ) as describe:
+                version = describe.stdout.read().strip()
+                # Deliberately ignoring exit status:
+                # if git is missing or old we'll use 'unknown'
+        except (OSError, subprocess.SubprocessError):
+            version = 'unknown'
+
+        self.versions.append(
+            ('SteamLinuxRuntime', version, 'Entry point scripts, etc.')
+        )
+
+        with open(os.path.join(self.depot, 'VERSIONS.txt'), 'w') as writer:
+            writer.write('#Name\tVersion\tComment\n')
+
+            for triple in sorted(self.versions):
+                name, version, comment = triple
+
+                if comment:
+                    comment = '# ' + comment
+
+                logger.info(
+                    'Component version: %s version %s',
+                    name, version)
+                writer.write(f'{name}\t{version}\t{comment}\n')
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         pv_dir = os.path.join(self.depot, 'pressure-vessel')

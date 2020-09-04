@@ -393,6 +393,7 @@ if [ -n "$is_main" ]; then
     set -- \
         "$pressure_vessel/bin/pressure-vessel-adverb" \
         --subreaper \
+        -- \
         "$@"
 else
     launch_args=( \

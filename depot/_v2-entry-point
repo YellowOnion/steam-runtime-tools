@@ -392,6 +392,8 @@ if [ -n "$is_main" ]; then
     # shutting down the container.
     set -- \
         "$pressure_vessel/bin/pressure-vessel-adverb" \
+        ${PRESSURE_VESSEL_SHELL+--shell="$PRESSURE_VESSEL_SHELL"} \
+        ${PRESSURE_VESSEL_TERMINAL+--terminal="$PRESSURE_VESSEL_TERMINAL"} \
         --subreaper \
         -- \
         "$@"

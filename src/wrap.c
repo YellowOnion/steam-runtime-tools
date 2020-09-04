@@ -842,13 +842,15 @@ tristate_environment (const gchar *name)
   return TRISTATE_MAYBE;
 }
 
+static int my_pid = -1;
+
 static void
 cli_log_func (const gchar *log_domain,
               GLogLevelFlags log_level,
               const gchar *message,
               gpointer user_data)
 {
-  g_printerr ("%s: %s\n", (const char *) user_data, message);
+  g_printerr ("%s[%d]: %s\n", (const char *) user_data, my_pid, message);
 }
 
 int
@@ -885,6 +887,8 @@ main (int argc,
       "STEAM_COMPAT_DATA_PATH",
       "STEAM_COMPAT_TOOL_PATH",
     };
+
+  my_pid = getpid ();
 
   setlocale (LC_ALL, "");
 

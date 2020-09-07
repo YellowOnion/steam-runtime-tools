@@ -57,11 +57,26 @@ typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
 static FILE *original_stdout = NULL;
+static FILE *info_fh = NULL;
 static GDBusConnection *session_bus = NULL;
 static GHashTable *client_pid_data_hash = NULL;
 static guint name_owner_id = 0;
 static GMainLoop *main_loop;
 static PvLauncher1 *launcher;
+
+/*
+ * Close the --info-fd, and also close standard output (if different).
+ */
+static void
+close_info_fh (void)
+{
+  if (info_fh == original_stdout)
+    original_stdout = NULL;
+  else
+    g_clear_pointer (&original_stdout, fclose);
+
+  g_clear_pointer (&info_fh, fclose);
+}
 
 static void
 skeleton_died_cb (gpointer data)
@@ -558,10 +573,10 @@ on_name_acquired (GDBusConnection *connection,
   if (*ret == EX_UNAVAILABLE)
     {
       *ret = 0;
-      g_assert (original_stdout != NULL);
-      fprintf (original_stdout, "bus_name=%s\n", name);
-      fflush (original_stdout);
-      g_clear_pointer (&original_stdout, fclose);
+      g_assert (info_fh != NULL);
+      fprintf (info_fh, "bus_name=%s\n", name);
+      fflush (info_fh);
+      close_info_fh ();
     }
 }
 
@@ -963,6 +978,7 @@ set_up_exit_on_readable (int fd,
 
 static gchar *opt_bus_name = NULL;
 static gint opt_exit_on_readable_fd = -1;
+static gint opt_info_fd = -1;
 static gboolean opt_replace = FALSE;
 static gchar *opt_socket = NULL;
 static gchar *opt_socket_directory = NULL;
@@ -979,6 +995,11 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_exit_on_readable_fd,
     "Exit when data is available for reading or when end-of-file is "
     "reached on this fd, usually 0 for stdin.",
+    "FD" },
+  { "info-fd", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_info_fd,
+    "Indicate readiness and print details of how to connect on this "
+    "file descriptor instead of stdout.",
     "FD" },
   { "replace", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_replace,
@@ -1074,6 +1095,24 @@ main (int argc,
     {
       ret = EX_OSERR;
       goto out;
+    }
+
+  if (opt_info_fd > 0)   /* < 0 means unset, and 0 is stdout itself */
+    {
+      info_fh = fdopen (opt_info_fd, "w");
+
+      if (info_fh == NULL)
+        {
+          glnx_null_throw_errno_prefix (error,
+                                        "Unable to create a stdio wrapper for fd %d",
+                                        opt_info_fd);
+          ret = EX_OSERR;
+          goto out;
+        }
+    }
+  else
+    {
+      info_fh = original_stdout;
     }
 
   if (opt_exit_on_readable_fd >= 0)
@@ -1261,16 +1300,16 @@ main (int argc,
     }
 
   if (opt_socket != NULL)
-    fprintf (original_stdout, "socket=%s\n", opt_socket);
+    fprintf (info_fh, "socket=%s\n", opt_socket);
 
   if (server != NULL)
-    fprintf (original_stdout, "dbus_address=%s\n",
+    fprintf (info_fh, "dbus_address=%s\n",
              g_dbus_server_get_client_address (server));
 
   if (opt_bus_name == NULL)
     {
-      fflush (original_stdout);
-      g_clear_pointer (&original_stdout, fclose);
+      fflush (info_fh);
+      close_info_fh ();
     }
 
   g_debug ("Entering main loop");
@@ -1307,7 +1346,7 @@ out:
     ret = EX_UNAVAILABLE;
 
   g_clear_error (&local_error);
-  g_clear_pointer (&original_stdout, fclose);
+  close_info_fh ();
 
   g_debug ("Exiting with status %d", ret);
   return ret;

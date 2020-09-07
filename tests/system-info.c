@@ -1107,15 +1107,15 @@ runtime_unexpected_location (Fixture *f,
   /* Move the steam-runtime to another location called "my-runtime" and
    * adjust all the environment variables accordingly. */
   ld_path = g_strdup (g_environ_getenv (fake_home->env, "LD_LIBRARY_PATH"));
-  parts = g_strsplit (ld_path, "steam-runtime", -1);
+  parts = g_strsplit (ld_path, "/ubuntu12_32/steam-runtime/", -1);
   g_free (ld_path);
-  ld_path = g_strjoinv ("my-runtime", parts);
+  ld_path = g_strjoinv ("/ubuntu12_32/my-runtime/", parts);
   g_strfreev (parts);
 
   env_path = g_strdup (g_environ_getenv (fake_home->env, "PATH"));
-  parts = g_strsplit (env_path, "steam-runtime", -1);
+  parts = g_strsplit (env_path, "/ubuntu12_32/steam-runtime/", -1);
   g_free (env_path);
-  env_path = g_strjoinv ("my-runtime", parts);
+  env_path = g_strjoinv ("/ubuntu12_32/my-runtime/", parts);
 
   g_rename (fake_home->runtime, my_runtime);
   g_remove (dot_steam_root);

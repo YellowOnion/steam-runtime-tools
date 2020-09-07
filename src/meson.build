@@ -46,6 +46,8 @@ pressure_vessel_utils = static_library(
     'bwrap-lock.h',
     'elf-utils.c',
     'elf-utils.h',
+    'flatpak-bwrap.c',
+    'flatpak-bwrap-private.h',
     'flatpak-utils-base.c',
     'flatpak-utils-base-private.h',
     'flatpak-utils.c',
@@ -84,6 +86,8 @@ executable(
   'pressure-vessel-adverb',
   sources : [
     'adverb.c',
+    'wrap-interactive.c',
+    'wrap-interactive.h',
   ],
   dependencies : [
     threads,
@@ -146,8 +150,6 @@ executable(
   sources : [
     'bwrap.c',
     'bwrap.h',
-    'flatpak-bwrap.c',
-    'flatpak-bwrap-private.h',
     'flatpak-common-types-private.h',
     'flatpak-context.c',
     'flatpak-context-private.h',
@@ -158,8 +160,6 @@ executable(
     'runtime.c',
     'runtime.h',
     'wrap.c',
-    'wrap-interactive.c',
-    'wrap-interactive.h',
   ] + enums,
   dependencies : [
     steam_runtime_tools,

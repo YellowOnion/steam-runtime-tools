@@ -1372,35 +1372,6 @@ main (int argc,
 
   wrapped_command = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-  switch (opt_terminal)
-    {
-      case PV_TERMINAL_TTY:
-        g_debug ("Wrapping command to use tty");
-
-        if (!pv_bwrap_wrap_tty (wrapped_command, error))
-          goto out;
-
-        break;
-
-      case PV_TERMINAL_XTERM:
-        g_debug ("Wrapping command with xterm");
-        pv_bwrap_wrap_in_xterm (wrapped_command);
-        break;
-
-      case PV_TERMINAL_AUTO:
-      case PV_TERMINAL_NONE:
-      default:
-        /* do nothing */
-        break;
-    }
-
-  if (opt_shell != PV_SHELL_NONE || opt_terminal == PV_TERMINAL_XTERM)
-    {
-      /* In the (PV_SHELL_NONE, PV_TERMINAL_XTERM) case, just don't let the
-       * xterm close before the user has had a chance to see the output */
-      pv_bwrap_wrap_interactive (wrapped_command, opt_shell);
-    }
-
   if (argc > 1 && argv[1][0] == '-')
     {
       /* Make sure wrapped_command is something we can validly pass to env(1) */
@@ -1892,6 +1863,51 @@ main (int argc,
                           "--exit-with-parent",
                           "--subreaper",
                           NULL);
+
+  switch (opt_shell)
+    {
+      case PV_SHELL_AFTER:
+        flatpak_bwrap_add_arg (bwrap, "--shell=after");
+        break;
+
+      case PV_SHELL_FAIL:
+        flatpak_bwrap_add_arg (bwrap, "--shell=fail");
+        break;
+
+      case PV_SHELL_INSTEAD:
+        flatpak_bwrap_add_arg (bwrap, "--shell=instead");
+        break;
+
+      case PV_SHELL_NONE:
+        flatpak_bwrap_add_arg (bwrap, "--shell=none");
+        break;
+
+      default:
+        g_warn_if_reached ();
+    }
+
+  switch (opt_terminal)
+    {
+      case PV_TERMINAL_AUTO:
+        flatpak_bwrap_add_arg (bwrap, "--terminal=auto");
+        break;
+
+      case PV_TERMINAL_NONE:
+        flatpak_bwrap_add_arg (bwrap, "--terminal=none");
+        break;
+
+      case PV_TERMINAL_TTY:
+        flatpak_bwrap_add_arg (bwrap, "--terminal=tty");
+        break;
+
+      case PV_TERMINAL_XTERM:
+        flatpak_bwrap_add_arg (bwrap, "--terminal=xterm");
+        break;
+
+      default:
+        g_warn_if_reached ();
+        break;
+    }
 
   if (opt_verbose)
     flatpak_bwrap_add_arg (bwrap, "--verbose");

@@ -122,7 +122,7 @@ build:scout:
               --werror \
               _build-scout
             ninja -C _build-scout
-            meson test --verbose -C _build-scout
+            G_MESSAGES_DEBUG=all meson test --verbose -C _build-scout
             ninja -C _build-scout install
 
     artifacts:

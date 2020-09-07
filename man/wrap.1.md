@@ -78,6 +78,12 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     With `--copy-runtime-into`, the prepared runtime will appear in
     a subdirectory of *DIR*.
 
+`--pass-fd` *FD*
+:   Pass the file descriptor *FD* (specified as a small positive integer)
+    from the parent process to the *COMMAND*. The default is to only pass
+    through file descriptors 0, 1 and 2
+    (**stdin**, **stdout** and **stderr**).
+
 `--runtime=`
 :   Use the current execution environment's /usr to provide /usr in
     the container.

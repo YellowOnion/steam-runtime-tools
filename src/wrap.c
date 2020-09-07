@@ -657,6 +657,7 @@ static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
+static GArray *opt_pass_fds = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
@@ -683,6 +684,41 @@ opt_host_ld_preload_cb (const gchar *option_name,
 
   g_ptr_array_add (opt_ld_preload, g_steal_pointer (&preload));
 
+  return TRUE;
+}
+
+static gboolean
+opt_pass_fd_cb (const char *name,
+                const char *value,
+                gpointer data,
+                GError **error)
+{
+  char *endptr;
+  gint64 i64 = g_ascii_strtoll (value, &endptr, 10);
+  int fd;
+  int fd_flags;
+
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_val_if_fail (value != NULL, FALSE);
+
+  if (i64 < 0 || i64 > G_MAXINT || endptr == value || *endptr != '\0')
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                   "Integer out of range or invalid: %s", value);
+      return FALSE;
+    }
+
+  fd = (int) i64;
+
+  fd_flags = fcntl (fd, F_GETFD);
+
+  if (fd_flags < 0)
+    return glnx_throw_errno_prefix (error, "Unable to receive --fd %d", fd);
+
+  if (opt_pass_fds == NULL)
+    opt_pass_fds = g_array_new (FALSE, FALSE, sizeof (int));
+
+  g_array_append_val (opt_pass_fds, fd);
   return TRUE;
 }
 
@@ -925,6 +961,10 @@ static GOptionEntry options[] =
     "is run in a container. The empty string means use the graphics "
     "stack from container."
     "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/run/host' or '/']", "PATH" },
+  { "pass-fd", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_pass_fd_cb,
+    "Let the launched process inherit the given fd.",
+    NULL },
   { "remove-game-overlay", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_remove_game_overlay,
     "Disable the Steam Overlay. "
@@ -1946,6 +1986,17 @@ main (int argc,
                           "--subreaper",
                           NULL);
 
+  if (opt_pass_fds != NULL)
+    {
+      for (i = 0; i < opt_pass_fds->len; i++)
+        {
+          int fd = g_array_index (opt_pass_fds, int, i);
+
+          flatpak_bwrap_add_fd (bwrap, fd);
+          flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
+        }
+    }
+
   switch (opt_shell)
     {
       case PV_SHELL_AFTER:
@@ -2087,6 +2138,7 @@ out:
   g_clear_pointer (&opt_fake_home, g_free);
   g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
+  g_clear_pointer (&opt_pass_fds, g_array_unref);
 
   g_debug ("Exiting with status %d", ret);
   return ret;

@@ -131,6 +131,8 @@ build:scout:
 
 autopkgtest:
     stage: test
+    dependencies:
+        - build
     variables:
         STEAM_CI_INSTALL_SCRIPT: |
             # Workaround for the build regression described in !88

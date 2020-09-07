@@ -1625,6 +1625,12 @@ main (int argc,
       flatpak_bwrap_add_arg (bwrap, "--unshare-pid");
     }
 
+  /* Always export /tmp for now. SteamVR uses this as a rendezvous
+   * directory for IPC. */
+  flatpak_exports_add_path_expose (exports,
+                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                   "/tmp");
+
   g_debug ("Adjusting LD_PRELOAD...");
 
   /* We need the LD_PRELOADs from Steam visible at the paths that were

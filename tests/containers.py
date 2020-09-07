@@ -180,11 +180,19 @@ class TestContainers(BaseTest):
                     # We don't necessarily want to use versions from
                     # the builddir because they can have dependencies
                     # that are newer than the container's libraries.
+                    logger.info(
+                        'Copying pre-existing %s from %s',
+                        exe, in_containers_dir,
+                    )
                     shutil.copy2(
                         in_containers_dir,
                         os.path.join(cls.pv_dir, 'bin', exe),
                     )
                 else:
+                    logger.info(
+                        'Copying just-built %s from %s/src',
+                        exe, cls.top_builddir,
+                    )
                     shutil.copy2(
                         os.path.join(cls.top_builddir, 'src', exe),
                         os.path.join(cls.pv_dir, 'bin', exe),

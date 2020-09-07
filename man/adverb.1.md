@@ -14,7 +14,9 @@ pressure-vessel-adverb - wrap processes in various ways
 [**--fd** *FD*...]
 [**--[no-]generate-locales**]
 [**--pass-fd** *FD*...]
+[**--shell** **none**|**after**|**fail**|**instead**]
 [**--subreaper**]
+[**--terminal** **none**|**auto**|**tty**|**xterm**]
 [**--terminate-timeout** *SECONDS* [**--terminate-idle-timeout** *SECONDS*]]
 [[**--[no-]create**]
 [**--[no-]wait**]
@@ -75,12 +77,42 @@ exit status.
     through file descriptors 0, 1 and 2
     (**stdin**, **stdout** and **stderr**).
 
+**--shell=after**
+:   Run an interactive shell after *COMMAND* exits.
+    In that shell, running **"$@"** will re-run *COMMAND*.
+
+**--shell=fail**
+:   The same as **--shell=after**, but do not run the shell if *COMMAND*
+    exits with status 0.
+
+**--shell=instead**
+:   The same as **--shell=after**, but do not run *COMMAND* at all.
+
+**--shell=none**
+:   Don't run an interactive shell. This is the default.
+
 **--subreaper**
 :   If the *COMMAND* starts background processes, arrange for them to
     be reparented to **pressure-vessel-adverb** instead of to **init**
     when their parent process exits, and do not exit until all such
     descendant processes have exited.
     A non-negative **--terminate-timeout** implies this option.
+
+**--terminal=auto**
+:   Equivalent to **--terminal=xterm** if a **--shell** option other
+    than **none** is used, or **--terminal=none** otherwise.
+    This is the default.
+
+**--terminal=none**
+:   Disable features that would ordinarily use a terminal.
+
+**--terminal=tty**
+:   Use the current execution environment's controlling tty for
+    the **--shell** options.
+
+**--terminal=xterm**
+:   Start an **xterm**(1), and run *COMMAND* and/or an interactive
+    shell in that environment.
 
 **--terminate-idle-timeout** *SECONDS*
 :   If a non-negative **--terminate-timeout** is specified, wait this

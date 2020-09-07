@@ -42,13 +42,17 @@
 #include "flatpak-utils-base-private.h"
 #include "launcher.h"
 #include "utils.h"
+#include "wrap-interactive.h"
 
 static GPtrArray *global_locks = NULL;
 static GArray *global_pass_fds = NULL;
+static gboolean opt_batch = FALSE;
 static gboolean opt_create = FALSE;
 static gboolean opt_exit_with_parent = FALSE;
 static gboolean opt_generate_locales = FALSE;
+static PvShell opt_shell = PV_SHELL_NONE;
 static gboolean opt_subreaper = FALSE;
+static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 static double opt_terminate_idle_timeout = 0.0;
 static double opt_terminate_timeout = -1.0;
 static gboolean opt_verbose = FALSE;
@@ -201,6 +205,118 @@ opt_pass_fd_cb (const char *name,
 
   g_array_append_val (global_pass_fds, fd);
   return TRUE;
+}
+
+static gboolean
+opt_shell_cb (const gchar *option_name,
+              const gchar *value,
+              gpointer data,
+              GError **error)
+{
+  if (value == NULL || *value == '\0')
+    {
+      opt_shell = PV_SHELL_NONE;
+      return TRUE;
+    }
+
+  switch (value[0])
+    {
+      case 'a':
+        if (g_strcmp0 (value, "after") == 0)
+          {
+            opt_shell = PV_SHELL_AFTER;
+            return TRUE;
+          }
+        break;
+
+      case 'f':
+        if (g_strcmp0 (value, "fail") == 0)
+          {
+            opt_shell = PV_SHELL_FAIL;
+            return TRUE;
+          }
+        break;
+
+      case 'i':
+        if (g_strcmp0 (value, "instead") == 0)
+          {
+            opt_shell = PV_SHELL_INSTEAD;
+            return TRUE;
+          }
+        break;
+
+      case 'n':
+        if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
+          {
+            opt_shell = PV_SHELL_NONE;
+            return TRUE;
+          }
+        break;
+
+      default:
+        /* fall through to error */
+        break;
+    }
+
+  g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+               "Unknown choice \"%s\" for %s", value, option_name);
+  return FALSE;
+}
+
+static gboolean
+opt_terminal_cb (const gchar *option_name,
+                 const gchar *value,
+                 gpointer data,
+                 GError **error)
+{
+  if (value == NULL || *value == '\0')
+    {
+      opt_terminal = PV_TERMINAL_AUTO;
+      return TRUE;
+    }
+
+  switch (value[0])
+    {
+      case 'a':
+        if (g_strcmp0 (value, "auto") == 0)
+          {
+            opt_terminal = PV_TERMINAL_AUTO;
+            return TRUE;
+          }
+        break;
+
+      case 'n':
+        if (g_strcmp0 (value, "none") == 0 || g_strcmp0 (value, "no") == 0)
+          {
+            opt_terminal = PV_TERMINAL_NONE;
+            return TRUE;
+          }
+        break;
+
+      case 't':
+        if (g_strcmp0 (value, "tty") == 0)
+          {
+            opt_terminal = PV_TERMINAL_TTY;
+            return TRUE;
+          }
+        break;
+
+      case 'x':
+        if (g_strcmp0 (value, "xterm") == 0)
+          {
+            opt_terminal = PV_TERMINAL_XTERM;
+            return TRUE;
+          }
+        break;
+
+      default:
+        /* fall through to error */
+        break;
+    }
+
+  g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+               "Unknown choice \"%s\" for %s", value, option_name);
+  return FALSE;
 }
 
 static gboolean
@@ -358,6 +474,11 @@ terminate_child_cb (int signum)
 
 static GOptionEntry options[] =
 {
+  { "batch", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_batch,
+    "Disable all interactivity and redirection: ignore --shell*, "
+    "--terminal. [Default: if $PRESSURE_VESSEL_BATCH]", NULL },
+
   { "fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_fd_cb,
     "Take a file descriptor, already locked if desired, and keep it "
@@ -419,6 +540,13 @@ static GOptionEntry options[] =
     "Let the launched process inherit the given fd.",
     NULL },
 
+  { "shell", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_shell_cb,
+    "Run an interactive shell: never, after COMMAND, "
+    "after COMMAND if it fails, or instead of COMMAND. "
+    "[Default: none]",
+    "{none|after|fail|instead}" },
+
   { "subreaper", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_subreaper,
     "Do not exit until all descendant processes have exited.",
@@ -427,6 +555,16 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_subreaper,
     "Only wait for a direct child process [default].",
     NULL },
+
+  { "terminal", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
+    "none: disable features that would use a terminal; "
+    "auto: equivalent to xterm if a --shell option is used, or none; "
+    "xterm: put game output (and --shell if used) in an xterm; "
+    "tty: put game output (and --shell if used) on Steam's "
+    "controlling tty. "
+    "[Default: auto]",
+    "{none|auto|xterm|tty}" },
 
   { "terminate-idle-timeout", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_DOUBLE, &opt_terminate_idle_timeout,
@@ -471,14 +609,13 @@ main (int argc,
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   int ret = EX_USAGE;
-  char **command_and_args;
   int wait_status = -1;
   g_autofree gchar *locales_temp_dir = NULL;
-  g_auto(GStrv) my_environ = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   ChildSetupData child_setup_data = { -1, NULL };
   sigset_t mask;
   struct sigaction terminate_child_action = {};
+  g_autoptr(FlatpakBwrap) wrapped_command = NULL;
 
   my_pid = getpid ();
 
@@ -492,7 +629,6 @@ main (int argc,
       glnx_throw_errno_prefix (error, "pthread_sigmask");
       goto out;
     }
-
 
   setlocale (LC_ALL, "");
 
@@ -511,6 +647,7 @@ main (int argc,
 
   g_option_context_add_main_entries (context, options, NULL);
 
+  opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
   opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -566,8 +703,6 @@ main (int argc,
 
   ret = EX_UNAVAILABLE;
 
-  command_and_args = argv + 1;
-
   if (opt_exit_with_parent)
     {
       g_debug ("Setting up to exit when parent does");
@@ -588,7 +723,63 @@ main (int argc,
       goto out;
     }
 
-  my_environ = g_get_environ ();
+  wrapped_command = flatpak_bwrap_new (NULL);
+
+  if (opt_terminal == PV_TERMINAL_AUTO)
+    {
+      if (opt_shell != PV_SHELL_NONE)
+        opt_terminal = PV_TERMINAL_XTERM;
+      else
+        opt_terminal = PV_TERMINAL_NONE;
+    }
+
+  if (opt_terminal == PV_TERMINAL_NONE && opt_shell != PV_SHELL_NONE)
+    {
+      g_printerr ("%s: --terminal=none is incompatible with --shell\n",
+                  g_get_prgname ());
+      goto out;
+    }
+
+  if (opt_batch)
+    {
+      opt_shell = PV_SHELL_NONE;
+      opt_terminal = PV_TERMINAL_NONE;
+    }
+
+  switch (opt_terminal)
+    {
+      case PV_TERMINAL_TTY:
+        g_debug ("Wrapping command to use tty");
+
+        if (!pv_bwrap_wrap_tty (wrapped_command, error))
+          goto out;
+
+        break;
+
+      case PV_TERMINAL_XTERM:
+        g_debug ("Wrapping command with xterm");
+        pv_bwrap_wrap_in_xterm (wrapped_command);
+        break;
+
+      case PV_TERMINAL_AUTO:
+          g_warn_if_reached ();
+          break;
+
+      case PV_TERMINAL_NONE:
+      default:
+        /* do nothing */
+        break;
+    }
+
+  if (opt_shell != PV_SHELL_NONE || opt_terminal == PV_TERMINAL_XTERM)
+    {
+      /* In the (PV_SHELL_NONE, PV_TERMINAL_XTERM) case, just don't let the
+       * xterm close before the user has had a chance to see the output */
+      pv_bwrap_wrap_interactive (wrapped_command, opt_shell);
+    }
+
+  flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
+  flatpak_bwrap_finish (wrapped_command);
 
   if (opt_generate_locales)
     {
@@ -603,7 +794,7 @@ main (int argc,
       else if (locales_temp_dir != NULL)
         {
           g_debug ("Generated locales in %s", locales_temp_dir);
-          my_environ = g_environ_setenv (my_environ, "LOCPATH", locales_temp_dir, TRUE);
+          flatpak_bwrap_set_env (wrapped_command, "LOCPATH", locales_temp_dir, TRUE);
         }
       else
         {
@@ -634,11 +825,38 @@ main (int argc,
                                                         FALSE);
     }
 
+  if (opt_verbose)
+    {
+      gsize i;
+
+      g_message ("Command-line:");
+
+      for (i = 0; i < wrapped_command->argv->len - 1; i++)
+        {
+          g_autofree gchar *quoted = NULL;
+
+          quoted = g_shell_quote (g_ptr_array_index (wrapped_command->argv, i));
+          g_message ("\t%s", quoted);
+        }
+
+      g_assert (wrapped_command->argv->pdata[i] == NULL);
+
+      g_message ("Environment:");
+
+      for (i = 0; wrapped_command->envp != NULL && wrapped_command->envp[i] != NULL; i++)
+        {
+          g_autofree gchar *quoted = NULL;
+
+          quoted = g_shell_quote (wrapped_command->envp[i]);
+          g_message ("\t%s", quoted);
+        }
+    }
+
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
   if (!g_spawn_async (NULL,   /* working directory */
-                      command_and_args,
-                      my_environ,
+                      (char **) wrapped_command->argv->pdata,
+                      wrapped_command->envp,
                       (G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD |
                        G_SPAWN_LEAVE_DESCRIPTORS_OPEN |
                        G_SPAWN_CHILD_INHERITS_STDIN),

@@ -814,7 +814,8 @@ static GOptionEntry options[] =
   { "steam-app-id", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
-    "as home directory. [Default: $SteamAppId]", "N" },
+    "as home directory. [Default: $STEAM_COMPAT_APP_ID or $SteamAppId]",
+    "N" },
   { "gc-runtimes", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
     "If using --copy-runtime-into, garbage-collect old temporary "
@@ -881,7 +882,7 @@ static GOptionEntry options[] =
   { "unshare-home", '\0',
     G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use an app-specific home directory chosen according to --home, "
-    "--freedesktop-app-id, --steam-app-id or $SteamAppId. "
+    "--freedesktop-app-id, --steam-app-id or $STEAM_COMPAT_APP_ID. "
     "[Default if $PRESSURE_VESSEL_HOME is set or "
     "$PRESSURE_VESSEL_SHARE_HOME is 0]",
     NULL },
@@ -1237,6 +1238,13 @@ main (int argc,
     {
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 opt_steam_app_id);
+      opt_fake_home = g_build_filename (home, ".var", "app",
+                                        opt_freedesktop_app_id, NULL);
+    }
+  else if (g_getenv ("STEAM_COMPAT_APP_ID") != NULL)
+    {
+      opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
+                                                g_getenv ("STEAM_COMPAT_APP_ID"));
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
     }

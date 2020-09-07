@@ -253,7 +253,6 @@ The following environment variables (among others) are read by
 
 `STEAM_COMPAT_APP_ID` (integer)
 :   Equivalent to `--steam-app-id="$STEAM_COMPAT_APP_ID"`.
-    (Not used yet, but should be.)
 
 `STEAM_COMPAT_APP_LIBRARY_PATH` (path)
 :   (Not used yet, but should be.)

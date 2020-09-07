@@ -100,3 +100,10 @@ GSource *my_g_unix_fd_source_new (int fd,
 gchar *my_g_canonicalize_filename (const gchar *filename,
                                    const gchar *relative_to);
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 40, 0)
+#define g_hash_table_get_keys_as_array(h, l) \
+  my_g_hash_table_get_keys_as_array (h, l)
+gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
+                                             guint *len);
+#endif

@@ -33,9 +33,6 @@
 
 #include <glib-object.h>
 
-/* We have no internationalization */
-#define _(x) x
-
 #if !GLIB_CHECK_VERSION (2, 34, 0)
 G_DEFINE_QUARK (g-spawn-exit-error-quark, my_g_spawn_exit_error)
 #endif
@@ -488,5 +485,28 @@ my_g_canonicalize_filename (const gchar *filename,
     *(p-1) = 0;
 
   return canon;
+}
+#endif
+
+#if !GLIB_CHECK_VERSION(2, 40, 0)
+gpointer *
+my_g_hash_table_get_keys_as_array (GHashTable *hash,
+                                   guint *len)
+{
+  GPtrArray *arr = g_ptr_array_sized_new (g_hash_table_size (hash));
+  GHashTableIter iter;
+  gpointer k;
+
+  g_hash_table_iter_init (&iter, hash);
+
+  while (g_hash_table_iter_next (&iter, &k, NULL))
+    g_ptr_array_add (arr, k);
+
+  if (len != NULL)
+    *len = arr->len;
+
+  g_ptr_array_add (arr, NULL);
+
+  return g_ptr_array_free (arr, FALSE);
 }
 #endif

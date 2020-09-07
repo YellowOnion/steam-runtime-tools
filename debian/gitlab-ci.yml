@@ -131,7 +131,7 @@ build:scout:
 
 autopkgtest:
     stage: test
-    dependencies:
+    needs:
         - build
     variables:
         STEAM_CI_INSTALL_SCRIPT: |

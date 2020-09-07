@@ -1,3 +1,34 @@
+pressure-vessel (0.20200907.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Initial support for escaping from a Flatpak app to run games.
+    Due to Flatpak limitations, this prototype only works when the Flatpak
+    sandbox security has been completely disabled. Future development in both
+    Flatpak and pressure-vessel will be required to be able to launch games
+    in individual containers while keeping a security boundary between Steam
+    and the host system. (Resolves: T22373, T22371)
+
+  [ Simon McVittie ]
+  * runtime: Carry out the /usr merge when copying sysroots
+    (Resolves: pressure-vessel#3, T22126)
+  * wrap: Don't populate environment of FlatpakBwrap that will be merged
+    (Resolves: T23422)
+  * wrap: Use FlatpakExports to make host paths available in container.
+    This gives us access to the same tricks that Flatpak uses to get host
+    paths into the container in a more robust way: in particular, it sorts
+    paths to put parent before child, and exports symbolic links as symbolic
+    links plus a separate mount point for the target (which we previously
+    did for the subdirectories of ~/.steam, but nowhere else).
+    (Resolves: pressure-vessel#2, pressure-vessel#18)
+  * various commands: Print exit status immediately before exiting
+  * various commands: Include process ID in output.
+    When we have more than one layer of adverbs, this provides a way to
+    tell which one we are.
+  * tests: Extend timeout for launcher.py.
+    It seems we're adding enough to this that 30s is no longer enough.
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 07 Sep 2020 14:30:55 +0100
+
 pressure-vessel (0.20200819.0) scout; urgency=medium
 
   * adverb, wrap: Add --terminate-timeout, --terminate-idle-timeout options.

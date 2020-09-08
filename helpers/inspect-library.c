@@ -46,7 +46,6 @@
 #define BASE "Base"
 
 static void print_json_string_content (const char *s);
-static void clean_exit (void *handle);
 static bool has_symbol (void *handle, const char *symbol);
 static bool has_versioned_symbol (void *handle,
                                   const char *symbol,
@@ -71,6 +70,44 @@ do { \
     if (argz_add (__VA_ARGS__) != 0) \
       oom (); \
 } while (0)
+
+static inline void *
+steal_pointer (void *pp)
+{
+    typedef void *__attribute__((may_alias)) voidp_alias;
+    voidp_alias *pointer_to_pointer = pp;
+    void *ret = *pointer_to_pointer;
+    *pointer_to_pointer = NULL;
+    return ret;
+}
+
+static void
+clear_with_free (void *pp)
+{
+  free (steal_pointer (pp));
+}
+
+static void
+clear_with_dlclose (void *pp)
+{
+  void *handle = steal_pointer (pp);
+
+  if (handle != NULL)
+    dlclose (handle);
+}
+
+static void
+clear_with_fclose (void *pp)
+{
+  FILE *fh = steal_pointer (pp);
+
+  if (fh != NULL)
+    fclose (fh);
+}
+
+#define autodlclose __attribute__((__cleanup__(clear_with_dlclose)))
+#define autofclose __attribute__((__cleanup__(clear_with_fclose)))
+#define autofree __attribute__((__cleanup__(clear_with_free)))
 
 enum
 {
@@ -152,15 +189,15 @@ main (int argc,
   const char *soname;
   const char *version;
   const char *symbol;
-  void *handle = NULL;
+  autodlclose void *handle = NULL;
   struct link_map *dep_map = NULL;
   struct link_map *the_library = NULL;
-  FILE *fp;
-  char *missing_symbols = NULL;
-  char *misversioned_symbols = NULL;
+  autofclose FILE *fp = NULL;
+  autofree char *missing_symbols = NULL;
+  autofree char *misversioned_symbols = NULL;
   size_t missing_n = 0;
   size_t misversioned_n = 0;
-  char *line = NULL;
+  autofree char *line = NULL;
   size_t len = 0;
   ssize_t chars;
   bool first;
@@ -242,7 +279,6 @@ main (int argc,
       if (dlopen (hidden_deps[i], RTLD_NOW|RTLD_GLOBAL) == NULL)
         {
           fprintf (stderr, "Unable to find the dependency library: %s\n", dlerror ());
-          clean_exit (handle);
           return 1;
         }
     }
@@ -251,7 +287,6 @@ main (int argc,
   if (handle == NULL)
     {
       fprintf (stderr, "Unable to find the library: %s\n", dlerror ());
-      clean_exit (handle);
       return 1;
     }
   /* Using RTLD_DI_LINKMAP insted of RTLD_DI_ORIGIN we don't need to worry
@@ -259,7 +294,6 @@ main (int argc,
   if (dlinfo (handle, RTLD_DI_LINKMAP, &the_library) != 0 || the_library == NULL)
     {
       fprintf (stderr, "Unable to obtain the path: %s\n", dlerror ());
-      clean_exit (handle);
       return 1;
     }
 
@@ -301,7 +335,6 @@ main (int argc,
 
           fprintf (stderr, "Error reading \"%s\": %s\n",
                    argv[optind + 1], strerror (saved_errno));
-          clean_exit (handle);
           return 1;
         }
 
@@ -368,10 +401,6 @@ main (int argc,
               if (symbol == NULL)
                 {
                   fprintf (stderr, "Probably the symbol@version pair is mispelled.");
-                  free (line);
-                  free (missing_symbols);
-                  free (misversioned_symbols);
-                  clean_exit (handle);
                   return 1;
                 }
 
@@ -390,20 +419,17 @@ main (int argc,
                     }
                   else if (!has_versioned_symbol (handle, symbol, version))
                     {
-                      char * merged_string;
+                      autofree char * merged_string = NULL;
+
                       asprintf_or_die (&merged_string, "%s@%s", symbol, version);
                       if (has_symbol (handle, symbol))
                           argz_add_or_die (&misversioned_symbols, &misversioned_n, merged_string);
                       else
                           argz_add_or_die (&missing_symbols, &missing_n, merged_string);
-
-                      free (merged_string);
                     }
                 }
             }
         }
-      free (line);
-      fclose (fp);
 
       if (deb_symbols && !found_our_soname)
         {
@@ -442,9 +468,6 @@ main (int argc,
           printf ("\"");
         }
       printf ("\n    ]");
-
-      free (missing_symbols);
-      free (misversioned_symbols);
     }
   dep_map = the_library;
 
@@ -473,7 +496,7 @@ main (int argc,
     }
 
   printf ("\n    ]\n  }");
-  clean_exit (handle);
+  printf ("\n}\n");
 
   return 0;
 }
@@ -490,15 +513,6 @@ print_json_string_content (const char *s)
       else
         printf ("%c", *p);
     }
-}
-
-static void
-clean_exit (void *handle)
-{
-    if (handle != NULL)
-      dlclose (handle);
-
-    printf ("\n}\n");
 }
 
 static bool

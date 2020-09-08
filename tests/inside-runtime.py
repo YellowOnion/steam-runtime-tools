@@ -9,6 +9,7 @@ import errno
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -626,6 +627,41 @@ class TestInsideRuntime(BaseTest):
                     continue
 
                 self.assertEqual(raised.exception.errno, errno.EROFS)
+
+    def test_imported(self) -> None:
+        mount_points = set()    # type: typing.Set[str]
+
+        with open('/proc/self/mountinfo') as mountinfo:
+            for line in mountinfo:
+                _, _, _, _, mount_point, *_ = re.split(r'[ \t]', line)
+
+                mount_point = re.sub(
+                    r'\\([0-7][0-7][0-7])',
+                    lambda m: chr(int(m.group(1), 8)),
+                    mount_point,
+                )
+                mount_points.add(mount_point)
+
+        for var, plural in (
+            ('STEAM_COMPAT_APP_LIBRARY_PATH', False),
+            ('STEAM_COMPAT_APP_LIBRARY_PATHS', True),
+            ('STEAM_COMPAT_CLIENT_INSTALL_PATH', False),
+            ('STEAM_COMPAT_DATA_PATH', False),
+            ('STEAM_COMPAT_INSTALL_PATH', False),
+            ('STEAM_COMPAT_LIBRARY_PATHS', True),
+            ('STEAM_COMPAT_MOUNT_PATHS', True),
+            ('STEAM_COMPAT_MOUNTS', True),
+            ('STEAM_COMPAT_SHADER_PATH', False),
+            ('STEAM_COMPAT_TOOL_PATH', False),
+            ('STEAM_COMPAT_TOOL_PATHS', True),
+        ):
+            if plural:
+                paths = os.environ[var].split(':')
+            else:
+                paths = [os.environ[var]]
+
+            for path in paths:
+                self.assertIn(path, mount_points)
 
 
 if __name__ == '__main__':

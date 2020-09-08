@@ -41,10 +41,11 @@ variables:
     # Set non-empty to allow
     CI_ALLOW_MISSING_SOURCES: ''
 
-    # Work around _srt_rm_rf behaving oddly on overlayfs (?)
-    STEAM_CI_INSTALL_SCRIPT: |
-        mkdir -p "${TMPDIR}"
-    TMPDIR: "${CI_PROJECT_DIR}/debian/tmpdir"
+    # Work around _srt_rm_rf behaving oddly on overlayfs:
+    # we use FTW_MOUNT to make sure we won't accidentally traverse
+    # between filesystems, but on overlayfs files can appear to be on
+    # different devices
+    STEAM_CI_TMPDIR: "${CI_PROJECT_DIR}/debian/tmpdir"
 
 stages:
     - build
@@ -66,6 +67,9 @@ build:devel:
             clang \
             clang-tools \
             ${NULL+}
+
+            mkdir -p -m700 "${STEAM_CI_TMPDIR}"
+            export TMPDIR="${STEAM_CI_TMPDIR}"
 
             meson --werror -Dman=true _build-devel
             ninja -C _build-devel
@@ -121,6 +125,9 @@ build:scout:
             # g++ 4.6 is too old (see also debian/rules)
             export CXX=g++-4.8
 
+            mkdir -p -m700 "${STEAM_CI_TMPDIR}"
+            export TMPDIR="${STEAM_CI_TMPDIR}"
+
             meson \
               --prefix="$(pwd)/_build-scout/prefix" \
               -Dsrcdir=src \
@@ -140,7 +147,6 @@ autopkgtest:
         - build
     variables:
         STEAM_CI_INSTALL_SCRIPT: |
-            mkdir -p "${TMPDIR}"
             # Workaround for the build regression described in !88
             apt-get -y remove libsteam-runtime-tools-0-helpers
 

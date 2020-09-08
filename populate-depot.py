@@ -515,7 +515,7 @@ class Main:
                 argv = [
                     'tar',
                     '-C', dest,
-                    '-xvf',
+                    '-xf',
                     os.path.join(self.depot, runtime.tarball),
                 ]
                 logger.info('%r', argv)

@@ -3236,9 +3236,9 @@ _srt_list_modules_from_directory (gchar **envp,
         }
       if (!g_path_is_absolute (driver_path))
         {
+          g_debug ("We were expecting an absolute path, instead we have: %s", driver_path);
           g_free (full_path);
           g_free (driver_path);
-          g_debug ("We were expecting an absolute path, instead we have: %s", driver_path);
           goto out;
         }
 

@@ -1,8 +1,26 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
+ _srt_architecture_can_run_from_report@Base 0.20200908.0
+ _srt_dri_driver_get_from_report@Base 0.20200908.0
+ _srt_feature_get_x86_flags_from_report@Base 0.20200908.0
  _srt_filter_gameoverlayrenderer@Base 0.20190822.0
+ _srt_get_egl_from_json_report@Base 0.20200908.0
+ _srt_get_steam_desktop_entries_from_json_report@Base 0.20200908.0
+ _srt_get_vulkan_from_json_report@Base 0.20200908.0
+ _srt_glx_icd_get_from_report@Base 0.20200908.0
+ _srt_graphics_get_from_report@Base 0.20200908.0
+ _srt_json_array_to_strv@Base 0.20200908.0
+ _srt_library_get_issues_from_report@Base 0.20200908.0
+ _srt_locale_get_issues_from_report@Base 0.20200908.0
+ _srt_locale_get_locale_from_report@Base 0.20200908.0
+ _srt_os_release_populate_from_report@Base 0.20200908.0
  _srt_rm_rf@Base 0.20200306.0
+ _srt_runtime_get_issues_from_report@Base 0.20200908.0
+ _srt_steam_get_from_report@Base 0.20200908.0
  _srt_unblock_signals@Base 0.20200109.0
+ _srt_va_api_driver_get_from_report@Base 0.20200908.0
+ _srt_vdpau_driver_get_from_report@Base 0.20200908.0
+ srt_add_flag_from_nick@Base 0.20200908.0
  srt_architecture_can_run_i386@Base 0.20190717.0
  srt_architecture_can_run_x86_64@Base 0.20190717.0
  srt_check_library_presence@Base 0.20190801.0
@@ -25,7 +43,9 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_egl_icd_new_replace_library_path@Base 0.20190926.0
  srt_egl_icd_resolve_library_path@Base 0.20190926.0
  srt_egl_icd_write_to_file@Base 0.20190926.0
+ srt_enum_from_nick@Base 0.20200908.0
  srt_enum_value_to_nick@Base 0.20191209.0
+ srt_get_flags_from_json_array@Base 0.20200908.0
  srt_glx_icd_get_library_path@Base 0.20200306.0
  srt_glx_icd_get_library_soname@Base 0.20200306.0
  srt_glx_icd_get_type@Base 0.20200306.0
@@ -51,6 +71,8 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_library_get_missing_symbols@Base 0.20190801.0
  srt_library_get_misversioned_symbols@Base 0.20190801.0
  srt_library_get_multiarch_tuple@Base 0.20190801.0
+ srt_library_get_real_soname@Base 0.20200908.0
+ srt_library_get_requested_name@Base 0.20200908.0
  srt_library_get_soname@Base 0.20190801.0
  srt_library_get_terminating_signal@Base 0.20191209.0
  srt_library_get_type@Base 0.20190801.0
@@ -92,9 +114,11 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_dup_os_version_id@Base 0.20190926.1
  srt_system_info_dup_runtime_path@Base 0.20190816.0
  srt_system_info_dup_runtime_version@Base 0.20190816.0
+ srt_system_info_dup_steam_bin32_path@Base 0.20200908.0
  srt_system_info_dup_steam_data_path@Base 0.20190926.0
  srt_system_info_dup_steam_installation_path@Base 0.20190816.0
  srt_system_info_get_container_type@Base 0.20200306.0
+ srt_system_info_get_known_x86_features@Base 0.20200908.0
  srt_system_info_get_locale_issues@Base 0.20190909.0
  srt_system_info_get_primary_multiarch_tuple@Base 0.20190909.0
  srt_system_info_get_runtime_issues@Base 0.20190816.0
@@ -114,6 +138,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_list_vdpau_drivers@Base 0.20200306.0
  srt_system_info_list_vulkan_icds@Base 0.20190926.0
  srt_system_info_new@Base 0.20190801.0
+ srt_system_info_new_from_json@Base 0.20200908.0
  srt_system_info_set_environ@Base 0.20190816.0
  srt_system_info_set_expected_runtime_version@Base 0.20190816.0
  srt_system_info_set_helpers_path@Base 0.20190816.0

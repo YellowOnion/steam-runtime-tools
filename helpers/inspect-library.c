@@ -202,15 +202,17 @@ main (int argc,
   ssize_t chars;
   bool first;
   bool deb_symbols = false;
-  size_t dependency_counter = 0;
   int opt;
+  autofree char *hidden_deps = NULL;
+  size_t hidden_deps_len = 0;
+  const char *hidden_dep;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
       switch (opt)
         {
           case OPTION_HIDDEN_DEPENDENCY:
-            dependency_counter++;
+            argz_add_or_die (&hidden_deps, &hidden_deps_len, optarg);
             break;
 
           case OPTION_DEB_SYMBOLS:
@@ -243,40 +245,19 @@ main (int argc,
       usage (1);
     }
 
-  const char *hidden_deps[dependency_counter + 1];
-
-  if (dependency_counter > 0)
-    {
-      /* Reset getopt */
-      optind = 1;
-
-      size_t i = 0;
-      while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
-        {
-          switch (opt)
-            {
-              case OPTION_HIDDEN_DEPENDENCY:
-                hidden_deps[i] = optarg;
-                i++;
-                break;
-
-              default:
-                break;
-            }
-        }
-    }
-
   soname = argv[optind];
   printf ("{\n");
   printf ("  \"");
   print_json_string_content (soname);
   printf ("\": {");
 
-  for (size_t i = 0; i < dependency_counter; i++)
+  for (hidden_dep = argz_next (hidden_deps, hidden_deps_len, NULL);
+       hidden_dep != NULL;
+       hidden_dep = argz_next (hidden_deps, hidden_deps_len, hidden_dep))
     {
       /* We don't call "dlclose" on global hidden dependencies, otherwise ubsan
        * will report an indirect memory leak */
-      if (dlopen (hidden_deps[i], RTLD_NOW|RTLD_GLOBAL) == NULL)
+      if (dlopen (hidden_dep, RTLD_NOW|RTLD_GLOBAL) == NULL)
         {
           fprintf (stderr, "Unable to find the dependency library: %s\n", dlerror ());
           return 1;

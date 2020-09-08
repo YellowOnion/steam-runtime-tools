@@ -2522,13 +2522,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                         bwrap, error))
                 return FALSE;
 
-              /* Collect miscellaneous libraries that libc might dlopen.
-               * At the moment this is just libidn2. */
+              /* Collect miscellaneous libraries that libc might dlopen. */
               g_assert (temp_bwrap == NULL);
               temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
               flatpak_bwrap_add_args (temp_bwrap,
                                       "--dest", arch->libdir_in_current_namespace,
                                       "if-exists:libidn2.so.0",
+                                      "if-exists:even-if-older:soname-match:libnss_compat.so.*",
+                                      "if-exists:even-if-older:soname-match:libnss_db.so.*",
+                                      "if-exists:even-if-older:soname-match:libnss_dns.so.*",
+                                      "if-exists:even-if-older:soname-match:libnss_files.so.*",
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);
 

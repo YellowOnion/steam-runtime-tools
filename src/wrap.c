@@ -325,15 +325,49 @@ export_contents_of_run (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
+typedef enum
+{
+  ENV_MOUNT_FLAGS_COLON_DELIMITED = (1 << 0),
+  ENV_MOUNT_FLAGS_DEPRECATED = (1 << 1),
+  ENV_MOUNT_FLAGS_NONE = 0
+} EnvMountFlags;
+
+typedef struct
+{
+  const char *name;
+  EnvMountFlags flags;
+} EnvMount;
+
+static const EnvMount known_required_env[] =
+{
+    { "STEAM_COMPAT_APP_LIBRARY_PATH", ENV_MOUNT_FLAGS_DEPRECATED },
+    { "STEAM_COMPAT_APP_LIBRARY_PATHS",
+      ENV_MOUNT_FLAGS_COLON_DELIMITED | ENV_MOUNT_FLAGS_DEPRECATED },
+    { "STEAM_COMPAT_CLIENT_INSTALL_PATH", ENV_MOUNT_FLAGS_NONE },
+    { "STEAM_COMPAT_DATA_PATH", ENV_MOUNT_FLAGS_NONE },
+    { "STEAM_COMPAT_INSTALL_PATH", ENV_MOUNT_FLAGS_NONE },
+    { "STEAM_COMPAT_LIBRARY_PATHS", ENV_MOUNT_FLAGS_COLON_DELIMITED },
+    { "STEAM_COMPAT_MOUNT_PATHS",
+      ENV_MOUNT_FLAGS_COLON_DELIMITED | ENV_MOUNT_FLAGS_DEPRECATED },
+    { "STEAM_COMPAT_MOUNTS", ENV_MOUNT_FLAGS_COLON_DELIMITED },
+    { "STEAM_COMPAT_SHADER_PATH", ENV_MOUNT_FLAGS_NONE },
+    { "STEAM_COMPAT_TOOL_PATH", ENV_MOUNT_FLAGS_DEPRECATED },
+    { "STEAM_COMPAT_TOOL_PATHS", ENV_MOUNT_FLAGS_COLON_DELIMITED },
+};
+
 static void
 bind_and_propagate_from_environ (FlatpakExports *exports,
                                  FlatpakBwrap *bwrap,
                                  FlatpakFilesystemMode mode,
-                                 const char *variable)
+                                 const char *variable,
+                                 EnvMountFlags flags)
 {
-  g_autofree gchar *value_host = NULL;
-  g_autofree gchar *canon = NULL;
+  g_auto(GStrv) values = NULL;
   const char *value;
+  const char *before;
+  const char *after;
+  gboolean changed = FALSE;
+  gsize i;
 
   g_return_if_fail (exports != NULL);
   g_return_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST);
@@ -344,24 +378,63 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
   if (value == NULL)
     return;
 
-  if (!g_file_test (value, G_FILE_TEST_EXISTS))
+  if (flags & ENV_MOUNT_FLAGS_DEPRECATED)
+    g_message ("Setting $%s is deprecated", variable);
+
+  if (flags & ENV_MOUNT_FLAGS_COLON_DELIMITED)
     {
-      g_debug ("Not bind-mounting %s=\"%s\" because it does not exist",
-               variable, value);
-      return;
+      values = g_strsplit (value, ":", -1);
+      before = "...:";
+      after = ":...";
+    }
+  else
+    {
+      values = g_new0 (gchar *, 2);
+      values[0] = g_strdup (value);
+      values[1] = NULL;
+      before = "";
+      after = "";
     }
 
-  canon = g_canonicalize_filename (value, NULL);
-  value_host = pv_current_namespace_path_to_host_path (canon);
+  for (i = 0; values[i] != NULL; i++)
+    {
+      g_autofree gchar *value_host = NULL;
+      g_autofree gchar *canon = NULL;
 
-  g_debug ("Bind-mounting %s=\"%s\" from the current env as %s=\"%s\" in the host",
-           variable, value, variable, value_host);
-  flatpak_exports_add_path_expose (exports, mode, canon);
+      if (values[i][0] == '\0')
+        continue;
 
-  if (strcmp (value, value_host) != 0)
-    flatpak_bwrap_add_args (bwrap,
-                            "--setenv", variable, value_host,
-                            NULL);
+      if (!g_file_test (values[i], G_FILE_TEST_EXISTS))
+        {
+          g_debug ("Not bind-mounting %s=\"%s%s%s\" because it does not exist",
+                   variable, before, values[i], after);
+          continue;
+        }
+
+      canon = g_canonicalize_filename (values[i], NULL);
+      value_host = pv_current_namespace_path_to_host_path (canon);
+
+      g_debug ("Bind-mounting %s=\"%s%s%s\" from the current env as %s=\"%s%s%s\" in the host",
+               variable, before, values[i], after,
+               variable, before, value_host, after);
+      flatpak_exports_add_path_expose (exports, mode, canon);
+
+      if (strcmp (values[i], value_host) != 0)
+        {
+          g_clear_pointer (&values[i], g_free);
+          values[i] = g_steal_pointer (&value_host);
+          changed = TRUE;
+        }
+    }
+
+  if (changed)
+    {
+      g_autofree gchar *joined = g_strjoinv (":", values);
+
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", variable, joined,
+                              NULL);
+    }
 }
 
 /* Order matters here: root, steam and steambeta are or might be symlinks
@@ -584,6 +657,7 @@ static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
+static GArray *opt_pass_fds = NULL;
 static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
@@ -610,6 +684,41 @@ opt_host_ld_preload_cb (const gchar *option_name,
 
   g_ptr_array_add (opt_ld_preload, g_steal_pointer (&preload));
 
+  return TRUE;
+}
+
+static gboolean
+opt_pass_fd_cb (const char *name,
+                const char *value,
+                gpointer data,
+                GError **error)
+{
+  char *endptr;
+  gint64 i64 = g_ascii_strtoll (value, &endptr, 10);
+  int fd;
+  int fd_flags;
+
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_val_if_fail (value != NULL, FALSE);
+
+  if (i64 < 0 || i64 > G_MAXINT || endptr == value || *endptr != '\0')
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                   "Integer out of range or invalid: %s", value);
+      return FALSE;
+    }
+
+  fd = (int) i64;
+
+  fd_flags = fcntl (fd, F_GETFD);
+
+  if (fd_flags < 0)
+    return glnx_throw_errno_prefix (error, "Unable to receive --fd %d", fd);
+
+  if (opt_pass_fds == NULL)
+    opt_pass_fds = g_array_new (FALSE, FALSE, sizeof (int));
+
+  g_array_append_val (opt_pass_fds, fd);
   return TRUE;
 }
 
@@ -814,7 +923,8 @@ static GOptionEntry options[] =
   { "steam-app-id", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_steam_app_id,
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
-    "as home directory. [Default: $SteamAppId]", "N" },
+    "as home directory. [Default: $STEAM_COMPAT_APP_ID or $SteamAppId]",
+    "N" },
   { "gc-runtimes", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
     "If using --copy-runtime-into, garbage-collect old temporary "
@@ -851,6 +961,10 @@ static GOptionEntry options[] =
     "is run in a container. The empty string means use the graphics "
     "stack from container."
     "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/run/host' or '/']", "PATH" },
+  { "pass-fd", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_pass_fd_cb,
+    "Let the launched process inherit the given fd.",
+    NULL },
   { "remove-game-overlay", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_remove_game_overlay,
     "Disable the Steam Overlay. "
@@ -881,7 +995,7 @@ static GOptionEntry options[] =
   { "unshare-home", '\0',
     G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use an app-specific home directory chosen according to --home, "
-    "--freedesktop-app-id, --steam-app-id or $SteamAppId. "
+    "--freedesktop-app-id, --steam-app-id or $STEAM_COMPAT_APP_ID. "
     "[Default if $PRESSURE_VESSEL_HOME is set or "
     "$PRESSURE_VESSEL_SHARE_HOME is 0]",
     NULL },
@@ -1031,12 +1145,6 @@ main (int argc,
   const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
-  const char * const known_required_env[] =
-    {
-      "STEAM_COMPAT_CLIENT_INSTALL_PATH",
-      "STEAM_COMPAT_DATA_PATH",
-      "STEAM_COMPAT_TOOL_PATH",
-    };
 
   my_pid = getpid ();
 
@@ -1237,6 +1345,13 @@ main (int argc,
     {
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 opt_steam_app_id);
+      opt_fake_home = g_build_filename (home, ".var", "app",
+                                        opt_freedesktop_app_id, NULL);
+    }
+  else if (g_getenv ("STEAM_COMPAT_APP_ID") != NULL)
+    {
+      opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
+                                                g_getenv ("STEAM_COMPAT_APP_ID"));
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
     }
@@ -1625,6 +1740,12 @@ main (int argc,
       flatpak_bwrap_add_arg (bwrap, "--unshare-pid");
     }
 
+  /* Always export /tmp for now. SteamVR uses this as a rendezvous
+   * directory for IPC. */
+  flatpak_exports_add_path_expose (exports,
+                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                   "/tmp");
+
   g_debug ("Adjusting LD_PRELOAD...");
 
   /* We need the LD_PRELOADs from Steam visible at the paths that were
@@ -1702,7 +1823,8 @@ main (int argc,
   for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
     bind_and_propagate_from_environ (exports, bwrap,
                                      FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                     known_required_env[i]);
+                                     known_required_env[i].name,
+                                     known_required_env[i].flags);
 
   /* Make arbitrary filesystems available. This is not as complete as
    * Flatpak yet. */
@@ -1831,8 +1953,11 @@ main (int argc,
         }
     }
 
-  if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
-    goto out;
+  if (!opt_only_prepare)
+    {
+      if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
+        goto out;
+    }
 
   adverb_args = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
@@ -1863,6 +1988,17 @@ main (int argc,
                           "--exit-with-parent",
                           "--subreaper",
                           NULL);
+
+  if (opt_pass_fds != NULL)
+    {
+      for (i = 0; i < opt_pass_fds->len; i++)
+        {
+          int fd = g_array_index (opt_pass_fds, int, i);
+
+          flatpak_bwrap_add_fd (bwrap, fd);
+          flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
+        }
+    }
 
   switch (opt_shell)
     {
@@ -2005,6 +2141,7 @@ out:
   g_clear_pointer (&opt_fake_home, g_free);
   g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
+  g_clear_pointer (&opt_pass_fds, g_array_unref);
 
   g_debug ("Exiting with status %d", ret);
   return ret;

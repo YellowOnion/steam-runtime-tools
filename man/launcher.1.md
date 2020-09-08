@@ -12,6 +12,7 @@ pressure-vessel-launcher - server to launch processes in a container
 **pressure-vessel-launcher**
 [**--replace**]
 [**--verbose**]
+[**--info-fd**] *N*
 {**--bus-name** *NAME*|**--socket** *SOCKET*|**--socket-directory** *PATH*}
 
 # DESCRIPTION
@@ -52,6 +53,11 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
     readable, meaning either data is available or end-of-file has been
     reached.
 
+**--info-fd** *FD*
+:   Print details of the server on *FD* (see **OUTPUT** below).
+    This fd will be closed (reach end-of-file) when the server is ready.
+    The default is standard output, equivalent to **--info-fd=1**.
+
 **--replace**
 :   When used with **--bus-name**, allow other
     **pressure-vessel-launcher** processes to take over the bus name,
@@ -64,7 +70,9 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 # OUTPUT
 
 **pressure-vessel-launcher** prints zero or more lines of
-structured text on standard output, and then closes standard output:
+structured text on the file descriptor specified by **--info-fd**,
+and then closes both the **--info-fd** and standard output. The default
+**--info-fd** is standard output.
 
 **socket=**PATH
 :   The launcher is listening on *PATH*, and can be contacted by
@@ -86,11 +94,12 @@ structured text on standard output, and then closes standard output:
     (such as **dbus-send --session**) to the session bus and sending
     method calls to _NAME_.
 
-Clients must wait until after standard output has been closed, or wait
-for the bus name to appear, before connecting by bus name.
+Clients must wait until after either the **--info-fd** or standard output
+has been closed, or wait for the bus name to appear, before connecting
+by bus name.
 
-Clients must wait until after standard output has been closed before
-connecting by socket name.
+Clients must wait until after either the **--info-fd** or standard output
+has been closed before connecting by socket name.
 
 Unstructured diagnostic messages are printed on standard error,
 which remains open throughout.
@@ -211,13 +220,15 @@ instead of fifos.
     mkfifo "${tmpdir}/ready-fifo"
     pressure-vessel-wrap \
         --filesystem="${tmpdir}" \
+        --pass-fd=3
         ... \
         -- \
         pressure-vessel-launcher \
             --exit-on-readable=0 \
+            --info-fd=3 \
             --socket="${tmpdir}/launcher" \
         < "${tmpdir}/exit-fifo" \
-        > "${tmpdir}/ready-fifo" \
+        3> "${tmpdir}/ready-fifo" \
         &
     launcher_pid="$!"
     sleep infinity > "${tmpdir}/exit-fifo" &

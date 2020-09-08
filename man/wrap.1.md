@@ -78,6 +78,12 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     With `--copy-runtime-into`, the prepared runtime will appear in
     a subdirectory of *DIR*.
 
+`--pass-fd` *FD*
+:   Pass the file descriptor *FD* (specified as a small positive integer)
+    from the parent process to the *COMMAND*. The default is to only pass
+    through file descriptors 0, 1 and 2
+    (**stdin**, **stdout** and **stderr**).
+
 `--runtime=`
 :   Use the current execution environment's /usr to provide /usr in
     the container.
@@ -253,13 +259,13 @@ The following environment variables (among others) are read by
 
 `STEAM_COMPAT_APP_ID` (integer)
 :   Equivalent to `--steam-app-id="$STEAM_COMPAT_APP_ID"`.
-    (Not used yet, but should be.)
 
 `STEAM_COMPAT_APP_LIBRARY_PATH` (path)
-:   (Not used yet, but should be.)
+:   Deprecated equivalent of `STEAM_COMPAT_MOUNTS`, except that it is
+    a single path instead of being colon-delimited.
 
-`STEAM_COMPAT_APP_LIBRARY_PATHS` (path)
-:   (Not used yet, but should be?)
+`STEAM_COMPAT_APP_LIBRARY_PATHS` (`:`-separated list of paths)
+:   Deprecated equivalent of `STEAM_COMPAT_MOUNTS`.
 
 `STEAM_COMPAT_CLIENT_INSTALL_PATH` (path)
 :   When used as a Steam compatibility tool, the absolute path to the
@@ -271,11 +277,40 @@ The following environment variables (among others) are read by
     variable data directory used by Proton, if any.
     This is made available read/write in the container.
 
+`STEAM_COMPAT_INSTALL_PATH` (path)
+:   Top-level directory containing the game itself, even if the current
+    working directory is actually a subdirectory of this.
+    This is made available read/write in the container.
+
+`STEAM_COMPAT_LIBRARY_PATHS` (`:`-separated list of paths)
+:   Colon-delimited list of paths to Steam Library directories containing
+    the game, the compatibility tools if any, and any other resources
+    that the game will need, such as DirectX installers.
+    Each is currently made available read/write in the container.
+
+`STEAM_COMPAT_MOUNT_PATHS` (`:`-separated list of paths)
+:   Deprecated equivalent of `STEAM_COMPAT_MOUNTS`.
+
+`STEAM_COMPAT_MOUNTS` (`:`-separated list of paths)
+:   Colon-delimited list of paths to additional directories that are to
+    be made available read/write in the container.
+
 `STEAM_COMPAT_SESSION_ID` (integer)
 :   (Not used yet, but should be.)
 
+`STEAM_COMPAT_SHADER_PATH` (path)
+:   When used as a Steam compatibility tool, the absolute path to the
+    variable data directory used for cached shaders, if any.
+    This is made available read/write in the container.
+
+`STEAM_COMPAT_TOOL_PATH` (path)
+:   Deprecated equivalent of `STEAM_COMPAT_TOOL_PATHS`, except that it is
+    a single path instead of being colon-delimited.
+
 `STEAM_COMPAT_TOOL_PATHS` (`:`-separated list of paths)
-:   (Not used yet, but should be.)
+:   Colon-delimited list of paths to Steam compatibility tools in use,
+    such as Proton and the Steam Linux Runtime.
+    They are currently made available read/write in the container.
 
 `STEAM_RUNTIME` (path)
 :   **pressure-vessel-wrap** refuses to run if this environment variable

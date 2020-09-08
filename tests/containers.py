@@ -144,6 +144,35 @@ class TestContainers(BaseTest):
         cls.pv_dir = os.path.join(cls.tmpdir.name, 'pressure-vessel')
         os.makedirs(cls.pv_dir, exist_ok=True)
 
+        for var, plural in (
+            ('STEAM_COMPAT_APP_LIBRARY_PATH', False),
+            ('STEAM_COMPAT_APP_LIBRARY_PATHS', True),
+            ('STEAM_COMPAT_CLIENT_INSTALL_PATH', False),
+            ('STEAM_COMPAT_DATA_PATH', False),
+            ('STEAM_COMPAT_INSTALL_PATH', False),
+            ('STEAM_COMPAT_LIBRARY_PATHS', True),
+            ('STEAM_COMPAT_MOUNT_PATHS', True),
+            ('STEAM_COMPAT_MOUNTS', True),
+            ('STEAM_COMPAT_SHADER_PATH', False),
+            ('STEAM_COMPAT_TOOL_PATH', False),
+            ('STEAM_COMPAT_TOOL_PATHS', True),
+        ):
+            paths = []
+
+            if plural:
+                names = [var + '_n1', var + '_n2']
+            else:
+                # Use an inconvenient name with colon and space
+                # to check that we handle those correctly
+                names = [var + ': .d']
+
+            for name in names:
+                path = os.path.join(cls.tmpdir.name, name)
+                os.makedirs(path, exist_ok=True)
+                paths.append(path)
+
+            os.environ[var] = ':'.join(paths)
+
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             os.makedirs(os.path.join(cls.pv_dir, 'bin'))
 
@@ -521,11 +550,35 @@ class TestContainers(BaseTest):
                     )
                     self.assertEqual(completed.returncode, 0)
 
-            bwrap_arguments = bwrap_temp_file.read().decode().split("\0")
+            bwrap_arguments = bwrap_temp_file.read().decode()
             if locales:
-                self.assertIn("--generate-locales", bwrap_arguments)
+                self.assertIn("\0--generate-locales\0", bwrap_arguments)
             else:
-                self.assertNotIn("--generate-locales", bwrap_arguments)
+                self.assertNotIn("\0--generate-locales\0", bwrap_arguments)
+
+            if only_prepare:
+                for var, plural in (
+                    ('STEAM_COMPAT_APP_LIBRARY_PATH', False),
+                    ('STEAM_COMPAT_APP_LIBRARY_PATHS', True),
+                    ('STEAM_COMPAT_CLIENT_INSTALL_PATH', False),
+                    ('STEAM_COMPAT_INSTALL_PATH', False),
+                    ('STEAM_COMPAT_LIBRARY_PATHS', True),
+                    ('STEAM_COMPAT_MOUNT_PATHS', True),
+                    ('STEAM_COMPAT_MOUNTS', True),
+                    ('STEAM_COMPAT_SHADER_PATH', False),
+                    ('STEAM_COMPAT_TOOL_PATH', False),
+                    ('STEAM_COMPAT_TOOL_PATHS', True),
+                ):
+                    if plural:
+                        paths = os.environ[var].split(':')
+                    else:
+                        paths = [os.environ[var]]
+
+                    for path in paths:
+                        self.assertIn(
+                            "\0--bind\0{}\0{}".format(path, path),
+                            bwrap_arguments,
+                        )
 
             bwrap_temp_file.close()
 

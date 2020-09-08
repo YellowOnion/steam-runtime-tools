@@ -868,6 +868,22 @@ main (int argc,
       goto out;
     }
 
+  /* If the parent or child writes to a passed fd and closes it,
+   * don't stand in the way of that. Skip fds 0 (stdin),
+   * 1 (stdout) and 2 (stderr); we have moved our original stdout
+   * to another fd which will be dealt with below, and we want to keep
+   * our stdin and stderr open. */
+  if (child_setup_data.pass_fds != NULL)
+    {
+      gsize i;
+
+      for (i = 0; child_setup_data.pass_fds[i] > -1; i++)
+        {
+          if (child_setup_data.pass_fds[i] > 2)
+            close (child_setup_data.pass_fds[i]);
+        }
+    }
+
   g_free (child_setup_data.pass_fds);
 
   /* If the child writes to stdout and closes it, don't interfere */

@@ -1,3 +1,16 @@
+libcapsule (0.20200908.0-0co1) upstream; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * utils: Add public/private knowledge about symbol versions and symbols.
+    We are now able to list the symbol versions and/or symbols that are
+    known to be public/private.
+    This is especially useful for comparing libraries that removed symbol
+    versions, or symbols, from one release to another. As this already
+    happened multiple times in the past, like for example with
+    `libdrm_nouveau.so.2` or `libedit.so.2`.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Sep 2020 18:48:30 +0100
+
 libcapsule (0.20200708.0-0co1) upstream; urgency=medium
 
   [ Ludovico de Nittis, Simon McVittie ]

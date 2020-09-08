@@ -537,7 +537,7 @@ class Main:
                     argv = [
                         'tar',
                         '-C', dest,
-                        '-xvf', os.path.join(self.depot, runtime.sdk_tarball),
+                        '-xf', os.path.join(self.depot, runtime.sdk_tarball),
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
@@ -546,7 +546,7 @@ class Main:
                         'tar',
                         '-C', os.path.join(dest, 'files', 'lib', 'debug'),
                         '--transform', r's,^\(\./\)\?files\(/\|$\),,',
-                        '-xvf',
+                        '-xf',
                         os.path.join(self.depot, runtime.debug_tarball),
                     ]
                     logger.info('%r', argv)
@@ -564,7 +564,7 @@ class Main:
                         'tar',
                         '-C', os.path.join(sysroot, 'files'),
                         '--exclude', 'dev/*',
-                        '-xvf',
+                        '-xf',
                         os.path.join(self.depot, runtime.sysroot_tarball),
                     ]
                     logger.info('%r', argv)
@@ -682,7 +682,7 @@ class Main:
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         pv_dir = os.path.join(self.depot, 'pressure-vessel')
         os.makedirs(pv_dir, exist_ok=True)
-        argv = ['tar', '-C', pv_dir, '--strip-components=1', '-xvf']
+        argv = ['tar', '-C', pv_dir, '--strip-components=1', '-xf']
 
         if os.path.isfile(path):
             argv.append(path)
@@ -706,7 +706,7 @@ class Main:
             os.makedirs(self.depot, exist_ok=True)
             subprocess.run(
                 [
-                    'tar', '-C', self.depot, '-xvf',
+                    'tar', '-C', self.depot, '-xf',
                     os.path.join(self.cache or tmp, filename),
                 ],
                 check=True,
@@ -882,7 +882,7 @@ class Main:
             )
             subprocess.run(
                 [
-                    'tar', '-C', self.unpack_ld_library_path, '-xvf',
+                    'tar', '-C', self.unpack_ld_library_path, '-xf',
                     os.path.join(self.cache or tmp, filename),
                 ],
                 check=True,

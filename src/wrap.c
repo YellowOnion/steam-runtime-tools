@@ -1953,8 +1953,11 @@ main (int argc,
         }
     }
 
-  if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
-    goto out;
+  if (!opt_only_prepare)
+    {
+      if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
+        goto out;
+    }
 
   adverb_args = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 

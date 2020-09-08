@@ -71,7 +71,6 @@ class TestCheapCopy(BaseTest):
                     self.assertEqual(info.st_mode, info2.st_mode)
                     self.assertEqual(info.st_size, info2.st_size)
                     self.assertEqual(int(info.st_mtime), int(info2.st_mtime))
-                    self.assertEqual(int(info.st_ctime), int(info2.st_ctime))
 
     def assert_tree_is_same(self, left, right, require_hard_links=True):
         self.assert_tree_is_superset(left, right, require_hard_links)

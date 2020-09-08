@@ -221,7 +221,6 @@ env \
     -u SteamEnv \
     -u SteamGameId \
     -u SteamOverlayGameId \
-    STEAM_RUNTIME=/ \
 "${here}/_start-container-in-background" \
     --session="$rendezvous" \
     --suite="$suite" \
@@ -311,12 +310,6 @@ else
         --unset-env LD_PRELOAD \
     )
 fi
-
-# Stop games trying to relaunch themselves in the Steam Runtime
-launch_args=( \
-    "${launch_args[@]}" \
-    --env STEAM_RUNTIME=/ \
-)
 
 exec "$pressure_vessel/bin/pressure-vessel-launch" \
     --directory="$(pwd)" \

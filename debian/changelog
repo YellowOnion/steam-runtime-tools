@@ -1,3 +1,27 @@
+steam-runtime-tools (0.20200908.0) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * inspect-library: print the real SONAME of the given library.
+    This information could be used to correctly handle libraries like
+    libldap that sometimes is just an alias for libldap_r.
+
+  [ Simon McVittie ]
+  * system-info: Don't confuse graphics issues with library issues.
+    Previously, when we check for and find graphics issues, we'd set bits
+    in the library issues bitfield instead. Only users of the C API will
+    notice this, because this information doesn't end up in the JSON.
+  * library: Distinguish between requested name and SONAME.
+    In rare cases, like libldap-2.4 and libcurl in scout, they can differ.
+  * os: Look at /run/host/os-release if we are inspecting a container.
+    Recent versions of Flatpak and systemd-nspawn can mount the host's
+    os-release at /run/host/os-release, even if the rest of the host's
+    /etc and /usr are not exposed to the container.
+  * graphics: Fix use-after-free in a debug message.
+    Diagnosed by scan-build during CI.
+  * CI fixes
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Sep 2020 18:17:44 +0100
+
 steam-runtime-tools (0.20200624.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

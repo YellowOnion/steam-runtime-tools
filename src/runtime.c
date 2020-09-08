@@ -77,6 +77,8 @@ struct _PvRuntime
   gboolean any_libc_from_provider;
   gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
+  gboolean is_steamrt;
+  gboolean is_scout;
 };
 
 struct _PvRuntimeClass
@@ -703,7 +705,10 @@ pv_runtime_initable_init (GInitable *initable,
                           GError **error)
 {
   PvRuntime *self = PV_RUNTIME (initable);
+  g_autofree gchar *contents = NULL;
   g_autofree gchar *files_ref = NULL;
+  g_autofree gchar *os_release = NULL;
+  gsize len;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -800,6 +805,43 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (!g_file_test (self->libcapsule_knowledge, G_FILE_TEST_EXISTS))
     g_clear_pointer (&self->libcapsule_knowledge, g_free);
+
+  os_release = g_build_filename (self->runtime_usr, "lib", "os-release", NULL);
+
+  /* TODO: Teach SrtSystemInfo to be able to load lib/os-release from
+   * a merged-/usr, so we don't need to open-code this here */
+  if (g_file_get_contents (os_release, &contents, &len, NULL))
+    {
+      gsize i;
+      g_autofree gchar *id = NULL;
+      g_autofree gchar *version_id = NULL;
+      char *beginning_of_line = contents;
+
+      for (i = 0; i < len; i++)
+        {
+          if (contents[i] == '\n')
+            {
+              contents[i] = '\0';
+
+              if (id == NULL &&
+                  g_str_has_prefix (beginning_of_line, "ID="))
+                id = g_shell_unquote (beginning_of_line + strlen ("ID="), NULL);
+              else if (version_id == NULL &&
+                       g_str_has_prefix (beginning_of_line, "VERSION_ID="))
+                version_id = g_shell_unquote (beginning_of_line + strlen ("VERSION_ID="), NULL);
+
+              beginning_of_line = contents + i + 1;
+            }
+        }
+
+      if (g_strcmp0 (id, "steamrt") == 0)
+        {
+          self->is_steamrt = TRUE;
+
+          if (g_strcmp0 (version_id, "1") == 0)
+            self->is_scout = TRUE;
+        }
+    }
 
   /* Path that, when resolved in the host namespace, points to the provider */
   self->provider_in_host_namespace =
@@ -3179,6 +3221,16 @@ pv_runtime_bind (PvRuntime *self,
                               NULL);
       self->adverb_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-adverb";
     }
+
+  /* Some games detect that they have been run outside the Steam Runtime
+   * and try to re-run themselves via Steam. Trick them into thinking
+   * they are in the LD_LIBRARY_PATH Steam Runtime.
+   *
+   * We do not do this for games developed against soldier, because
+   * backwards compatibility is not a concern for game developers who
+   * have specifically opted-in to using the newer runtime. */
+  if (self->is_scout)
+    flatpak_bwrap_set_env (bwrap, "STEAM_RUNTIME", "/", TRUE);
 
   pv_runtime_set_search_paths (self, bwrap);
 

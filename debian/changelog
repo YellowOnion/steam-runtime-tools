@@ -1,4 +1,4 @@
-pressure-vessel (0.20200907.0) UNRELEASED; urgency=medium
+pressure-vessel (0.20200908.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * Initial support for escaping from a Flatpak app to run games.
@@ -7,6 +7,7 @@ pressure-vessel (0.20200907.0) UNRELEASED; urgency=medium
     Flatpak and pressure-vessel will be required to be able to launch games
     in individual containers while keeping a security boundary between Steam
     and the host system. (Resolves: T22373, T22371)
+  * CI: Run tests/containers.py
 
   [ Simon McVittie ]
   * runtime: Carry out the /usr merge when copying sysroots
@@ -19,15 +20,39 @@ pressure-vessel (0.20200907.0) UNRELEASED; urgency=medium
     paths to put parent before child, and exports symbolic links as symbolic
     links plus a separate mount point for the target (which we previously
     did for the subdirectories of ~/.steam, but nowhere else).
-    (Resolves: pressure-vessel#2, pressure-vessel#18)
+    (Resolves: pressure-vessel#2, pressure-vessel#18; part of T22908)
   * various commands: Print exit status immediately before exiting
   * various commands: Include process ID in output.
     When we have more than one layer of adverbs, this provides a way to
     tell which one we are.
-  * tests: Extend timeout for launcher.py.
-    It seems we're adding enough to this that 30s is no longer enough.
+  * wrap, adverb: Move "wrap with xterm" code into the adverb.
+    This means the launching scripts for the "session" mode, which use
+    pv-launch to run the main game command in a previously-set-up pv-launcher
+    environment, can direct pv-adverb to run an interactive shell instead of
+    or in addition to the actual game.
+    (Part of steamlinuxruntime#2)
+  * wrap: Always mount /tmp from host for now.
+    SteamHTMLSurface and SteamVR use this as a rendezvous directory for
+    IPC. (Resolves: pressure-vessel#10)
+  * wrap: Parse app ID from $STEAM_COMPAT_APP_ID
+  * wrap: Parse several environment variables for paths to mount.
+    When combined with a Steam update, this should resolve a lot of issues
+    involving paths outside the current working directory.
+    (Resolves: pressure-vessel#4, pressure-vessel#11, pressure-vessel#12,
+    steam-runtime#217, steam-runtime#236, steam-runtime#257)
+  * wrap, adverb, launcher: Add ability to pass fds through to the command
+    (Resolves: pressure-vessel#6)
+  * runtime: Load basic NSS plugins along with host system glibc,
+    fixing username resolution in soldier container on Arch Linux.
+    This might also resolve steam-runtime#226, steam-runtime#264,
+    steam-runtime#258, steam-runtime#192, steam-runtime#262,
+    steam-runtime#227.
+  * runtime: Set STEAM_RUNTIME=/ if running in scout
+    (Resolves: pressure-vessel#8, and maybe steam-runtime#202,
+    steam-runtime#249)
+  * Improve automated tests
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 07 Sep 2020 14:30:55 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Sep 2020 18:30:07 +0100
 
 pressure-vessel (0.20200819.0) scout; urgency=medium
 

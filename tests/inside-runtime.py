@@ -152,7 +152,11 @@ class TestInsideRuntime(BaseTest):
         logger.info(
             'LD_LIBRARY_PATH: %r', os.environ.get('LD_LIBRARY_PATH')
         )
-        # No actual *tests* here just yet - we just log what's there.
+
+        if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+            self.assertEqual(os.environ.get('STEAM_RUNTIME'), '/')
+        elif os.environ.get('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+            self.assertEqual(os.environ.get('STEAM_RUNTIME'), None)
 
     def test_overrides(self) -> None:
         if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):

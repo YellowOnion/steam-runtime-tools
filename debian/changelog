@@ -1,3 +1,10 @@
+steam-runtime-tools (0.20200908.1) scout; urgency=medium
+
+  * Correct version number
+  * Update symbols file
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Sep 2020 18:52:28 +0100
+
 steam-runtime-tools (0.20200908.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

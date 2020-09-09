@@ -234,7 +234,7 @@ build:scout:
             locales
             python3
 
-test:buster:
+test:debian-10:
     extends: .test_template
     image: debian:buster-slim
     script:
@@ -251,7 +251,7 @@ test:buster:
         paths:
             - _buster_test_logs
 
-test:bionic:
+test:ubuntu-18.04:
     extends: .test_template
     image: ubuntu:18.04
     script:
@@ -268,7 +268,7 @@ test:bionic:
         paths:
             - _bionic_test_logs
 
-test:focal:
+test:ubuntu-20.04:
     extends: .test_template
     image: ubuntu:20.04
     script:

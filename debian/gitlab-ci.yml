@@ -243,13 +243,13 @@ test:debian-10:
         - |
             set -eux
 
-            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_buster_test_logs"
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
             python3 tests/containers.py
 
     artifacts:
         paths:
-            - _buster_test_logs
+            - _build/artifacts
 
 test:ubuntu-18.04:
     extends: .test_template
@@ -260,13 +260,13 @@ test:ubuntu-18.04:
         - |
             set -eux
 
-            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_bionic_test_logs"
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
             python3 tests/containers.py
 
     artifacts:
         paths:
-            - _bionic_test_logs
+            - _build/artifacts
 
 test:ubuntu-20.04:
     extends: .test_template
@@ -277,13 +277,13 @@ test:ubuntu-20.04:
         - |
             set -eux
 
-            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_ubuntu_focal_test_logs"
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
             python3 tests/containers.py
 
     artifacts:
         paths:
-            - _ubuntu_focal_test_logs
+            - _build/artifacts
 
 test:archlinux:
     extends: .test_template
@@ -313,13 +313,13 @@ test:archlinux:
         - |
             set -eux
 
-            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_archlinux_test_logs"
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
             python3 tests/containers.py
 
     artifacts:
         paths:
-            - _archlinux_test_logs
+            - _build/artifacts
 
 autopkgtest:
     stage: test

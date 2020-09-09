@@ -183,10 +183,6 @@ endif
 
 subdir('pressure-vessel')
 
-if get_option('man')
-  subdir('man')
-endif
-
 subdir('tests')
 
 # vim:set sw=2 sts=2 et:

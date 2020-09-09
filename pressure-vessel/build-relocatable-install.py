@@ -263,7 +263,7 @@ def main():
             )
 
         install(
-            os.path.join(args.srcdir, 'THIRD-PARTY.md'),
+            os.path.join(args.srcdir, 'pressure-vessel', 'THIRD-PARTY.md'),
             os.path.join(installation, 'metadata', 'README.txt'),
             0o644,
         )

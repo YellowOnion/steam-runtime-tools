@@ -21,48 +21,4 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-pandoc = find_program('pandoc', required : true)
-
-if run_command(pandoc, [
-  '-f', 'markdown-smart',
-  '-t', 'man',
-  '/dev/null',
-]).returncode() == 0
-  pandoc_markdown_nosmart = 'markdown-smart'
-else
-  pandoc_markdown_nosmart = 'markdown'
-endif
-
-foreach tool : [
-  'adverb',
-  'launch',
-  'launcher',
-  'locale-gen',
-  'test-ui',
-  'try-setlocale',
-  'unruntime',
-  'wrap',
-]
-  custom_target(
-    tool + '.1',
-    build_by_default : true,
-    command : [
-      pandoc,
-      '-s',
-      '-o', '@OUTPUT@',
-      '-f', pandoc_markdown_nosmart,
-      '-t', 'man',
-      '@INPUT@',
-    ],
-    input : tool + '.1.md',
-    output : 'pressure-vessel-' + tool + '.1',
-    install : true,
-    install_dir : join_paths(
-      get_option('prefix'),
-      get_option('mandir'),
-      'man1',
-    ),
-  )
-endforeach
-
 # vim:set sw=2 sts=2 et:

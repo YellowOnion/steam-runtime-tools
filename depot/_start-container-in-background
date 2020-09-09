@@ -125,15 +125,6 @@ fi
 rm -f "$rendezvous/fifo"
 mkfifo "$rendezvous/fifo"
 
-declare -a redirect_to_fifo
-# TODO: HACK:
-# We're doing this instead of ">" because the bwrap process used
-# by run-in-steamrt would hold stdout open, preventing us from detecting
-# EOF. We can only do this because we're using a fifo rather than a pipe,
-# until we teach pressure-vessel to pass --pass-fd=N through -adverb.
-# shellcheck disable=SC2016
-redirect_to_fifo=(sh -euc 'exec >"$1"; shift; exec "$@"' sh "$rendezvous/fifo")
-
 verbose "Starting pressure-vessel-launcher in background"
 "${run_in_steamrt}" \
     --arch=amd64,i386 \
@@ -145,12 +136,13 @@ verbose "Starting pressure-vessel-launcher in background"
     --batch \
     --filesystem="$pressure_vessel" \
     --filesystem="$rendezvous" \
+    --pass-fd=3 \
     "$@" \
     -- \
-    "${redirect_to_fifo[@]}" \
 "$pressure_vessel/bin/pressure-vessel-launcher" \
+        --info-fd=3 \
         --socket-directory="$rendezvous" \
-        < /dev/null >&2 &
+        < /dev/null >&2 3>"$rendezvous/fifo" &
 verbose "Started pressure-vessel-launcher in background"
 socket=$(
     while read -r line; do

@@ -128,75 +128,18 @@ fi
 # Steam App ID of this app or game
 log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
 
-# Absolute path where the Steam client is installed
-log "STEAM_COMPAT_CLIENT_INSTALL_PATH=${STEAM_COMPAT_CLIENT_INSTALL_PATH-}"
-
-# Absolute path to the game itself
-log "STEAM_COMPAT_INSTALL_PATH=${STEAM_COMPAT_INSTALL_PATH-}"
-
-# Absolute path(s) to Steam Library containing either compat tools or
-# the app/game itself
-log "STEAM_COMPAT_LIBRARY_PATHS=${STEAM_COMPAT_LIBRARY_PATHS-}"
-
-# Absolute path(s) to miscellaneous other things (SteamVR?)
-log "STEAM_COMPAT_MOUNTS=${STEAM_COMPAT_MOUNTS-}"
-
 # Session ID used for coordination between processes involving the same game.
 # If unset/empty, only execute a single command.
 log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
-
-# Absolute path to where this app/game will put shaders.
-log "STEAM_COMPAT_SHADER_PATH=${STEAM_COMPAT_SHADER_PATH-}"
-
-# Absolute path(s) to Steam Library containing compat tools in use.
-# These are not *necessarily* subdirectories of STEAM_COMPAT_LIBRARY_PATHS
-# if a compat tool is manually downloaded.
-log "STEAM_COMPAT_TOOL_PATHS=${STEAM_COMPAT_TOOL_PATHS-}"
 
 # Used to create sockets.
 # A future version will fall back to /tmp, but only when this can be
 # done securely.
 log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}"
 
-# Old/deprecated/prototype stuff
-
-if [ -n "${STEAM_COMPAT_APP_LIBRARY_PATH+set}" ]; then
-    log "warning: STEAM_COMPAT_APP_LIBRARY_PATH is deprecated: $STEAM_COMPAT_APP_LIBRARY_PATH"
-fi
-
-if [ -n "${STEAM_COMPAT_APP_LIBRARY_PATHS+set}" ]; then
-    log "warning: STEAM_COMPAT_APP_LIBRARY_PATHS is deprecated: $STEAM_COMPAT_APP_LIBRARY_PATHS"
-fi
-
-if [ -n "${STEAM_COMPAT_MOUNT_PATHS+set}" ]; then
-    log "warning: STEAM_COMPAT_MOUNT_PATHS is deprecated: $STEAM_COMPAT_MOUNT_PATHS"
-fi
-
 # In non-session mode, we always behave like the main program
 if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     is_main=yes
-fi
-
-if [ -n "${STEAM_COMPAT_INSTALL_PATH-}" ]; then
-    if ! [ -d "$STEAM_COMPAT_INSTALL_PATH" ]; then
-        log "warning: $STEAM_COMPAT_INSTALL_PATH is not a directory"
-    elif [ -n "$is_main" ] \
-        && ! [ "$STEAM_COMPAT_INSTALL_PATH" -ef . ]; then
-        # This will trigger for games launched from a subdirectory, like
-        # Estranged and Deus Ex: Invisible War, which would not previously have
-        # worked reliably.
-        log "note: STEAM_COMPAT_INSTALL_PATH does not match working directory: $(pwd)"
-    fi
-fi
-
-if [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH-}" ] \
-    && ! [ -d "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
-    log "warning: $STEAM_COMPAT_CLIENT_INSTALL_PATH is not a directory"
-fi
-
-if [ -n "${STEAM_COMPAT_SHADER_PATH-}" ] \
-    && ! [ -d "$STEAM_COMPAT_SHADER_PATH" ]; then
-    log "warning: $STEAM_COMPAT_SHADER_PATH is not a directory"
 fi
 
 unset LD_LIBRARY_PATH
@@ -204,43 +147,8 @@ unset STEAM_RUNTIME
 
 pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 
+# Arguments for pressure-vessel-wrap, currently none
 declare -a container_args=()
-
-if [ -n "${STEAM_COMPAT_APP_ID-}" ]; then
-    container_args=("${container_args[@]}" --steam-app-id="${STEAM_COMPAT_APP_ID}")
-fi
-
-oldIFS="$IFS"
-IFS=":"
-
-# This splits the variables' values at IFS, i.e. ":"
-for fs in \
-    /tmp \
-    ${STEAM_COMPAT_APP_LIBRARY_PATH-} \
-    ${STEAM_COMPAT_APP_LIBRARY_PATHS-} \
-    ${STEAM_COMPAT_CLIENT_INSTALL_PATH-} \
-    ${STEAM_COMPAT_DATA_PATH-} \
-    ${STEAM_COMPAT_INSTALL_PATH-} \
-    ${STEAM_COMPAT_LIBRARY_PATHS-} \
-    ${STEAM_COMPAT_MOUNT_PATHS-} \
-    ${STEAM_COMPAT_MOUNTS-} \
-    ${STEAM_COMPAT_SHADER_PATH-} \
-    ${STEAM_COMPAT_TOOL_PATHS-} \
-; do
-    if [ -z "$fs" ]; then
-        continue
-    fi
-
-    if ! [ -d "$fs" ]; then
-        log "warning: $fs is not a directory"
-    fi
-
-    if [ -e "$fs" ]; then
-        container_args=("${container_args[@]}" --filesystem="${fs}")
-    fi
-done
-
-IFS="$oldIFS"
 
 if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     # Run as a single command
@@ -313,7 +221,6 @@ env \
     -u SteamEnv \
     -u SteamGameId \
     -u SteamOverlayGameId \
-    STEAM_RUNTIME=/ \
 "${here}/_start-container-in-background" \
     --session="$rendezvous" \
     --suite="$suite" \
@@ -392,6 +299,8 @@ if [ -n "$is_main" ]; then
     # shutting down the container.
     set -- \
         "$pressure_vessel/bin/pressure-vessel-adverb" \
+        ${PRESSURE_VESSEL_SHELL+--shell="$PRESSURE_VESSEL_SHELL"} \
+        ${PRESSURE_VESSEL_TERMINAL+--terminal="$PRESSURE_VESSEL_TERMINAL"} \
         --subreaper \
         -- \
         "$@"
@@ -401,12 +310,6 @@ else
         --unset-env LD_PRELOAD \
     )
 fi
-
-# Stop games trying to relaunch themselves in the Steam Runtime
-launch_args=( \
-    "${launch_args[@]}" \
-    --env STEAM_RUNTIME=/ \
-)
 
 exec "$pressure_vessel/bin/pressure-vessel-launch" \
     --directory="$(pwd)" \

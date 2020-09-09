@@ -105,6 +105,10 @@ pressure_vessel_utils = static_library(
   include_directories : pv_include_dirs,
   install: false,
 )
+pressure_vessel_utils_dep = declare_dependency(
+  link_with : pressure_vessel_utils,
+  sources : launcher1[1],
+)
 
 launcher_codegen = static_library(
   'pressure-vessel-launcher-codegen',
@@ -116,6 +120,10 @@ launcher_codegen = static_library(
   include_directories : pv_include_dirs,
   install: false,
 )
+launcher_codegen_dep = declare_dependency(
+  link_with : launcher_codegen,
+  sources : launcher1[1],
+)
 
 executable(
   'pressure-vessel-adverb',
@@ -126,12 +134,10 @@ executable(
   ],
   c_args : pv_c_args,
   dependencies : [
+    pressure_vessel_utils_dep,
     threads,
     gio_unix,
     libglnx.get_variable('libglnx_dep'),
-  ],
-  link_with : [
-    pressure_vessel_utils,
   ],
   include_directories : pv_include_dirs,
   install : true,
@@ -147,12 +153,10 @@ executable(
   ],
   c_args : pv_c_args,
   dependencies : [
+    pressure_vessel_utils_dep,
     threads,
     gio_unix,
     libglnx.get_variable('libglnx_dep'),
-  ],
-  link_with : [
-    pressure_vessel_utils,
   ],
   include_directories : pv_include_dirs,
   install : true,
@@ -168,13 +172,11 @@ executable(
   ],
   c_args : pv_c_args,
   dependencies : [
+    launcher_codegen_dep,
+    pressure_vessel_utils_dep,
     threads,
     gio_unix,
     libglnx.get_variable('libglnx_dep'),
-  ],
-  link_with : [
-    launcher_codegen,
-    pressure_vessel_utils,
   ],
   include_directories : pv_include_dirs,
   install : true,
@@ -201,13 +203,11 @@ executable(
   ] + enums,
   c_args : pv_c_args,
   dependencies : [
+    pressure_vessel_utils_dep,
     libsteamrt_static_dep,
     gio_unix,
     xau,
     libglnx.get_variable('libglnx_dep'),
-  ],
-  link_with : [
-    pressure_vessel_utils,
   ],
   include_directories : pv_include_dirs,
   install : true,

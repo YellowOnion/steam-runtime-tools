@@ -2,12 +2,9 @@ include:
     - project: 'steam/steam-ci-pipeline'
       file: '/steam-gitlab-ci-common.yml'
 
-    - project: 'steam/steam-ci-pipeline'
-      file: '/steam-gitlab-ci-pipeline.yml'
-
 variables:
     BUILD_IMAGE: registry.gitlab.steamos.cloud/steamrt/scout/sdk:beta
-    STEAM_CI_USE_BINARIES_FROM: autopkgtest
+    STEAM_CI_USE_BINARIES_FROM: build
     STEAM_CI_DEPENDENCIES: >-
         debhelper
         glslang-tools
@@ -40,6 +37,7 @@ variables:
 
     SCOUT_DOCKER_REGISTRY: registry.gitlab.steamos.cloud
     SCOUT_DOCKER_IMAGE: steamrt/scout/sdk:beta
+    SCOUT_I386_DOCKER_IMAGE: steamrt/scout/sdk/i386:beta
     SCOUT_APT_SOURCES_FILE: ''
     DEVEL_DOCKER_REGISTRY: ''
     DEVEL_DOCKER_IMAGE: ''
@@ -54,7 +52,23 @@ variables:
 
 stages:
     - build
+    - relocatable-install
     - test
+
+package:
+    extends: .build_package
+    variables:
+        STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
+        STEAM_CI_INSTALL_SCRIPT: |
+            apt-get -y install libcapsule-tools pkg-create-dbgsym
+
+package:i386:
+    extends: .build_package
+    variables:
+        BUILD_IMAGE: registry.gitlab.steamos.cloud/steamrt/scout/sdk/i386:beta
+        STEAM_CI_DEB_BUILD: any     # debuild --build=any, aka -B
+        STEAM_CI_INSTALL_SCRIPT: |
+            apt-get -y install libcapsule-tools pkg-create-dbgsym
 
 build:devel:
     stage: build
@@ -99,6 +113,45 @@ build:devel:
         paths:
             - _build/devel/meson-logs/*.txt
             - _build/clang-asan/meson-logs/*.txt
+        when: always
+
+.prepare_scout: &prepare_scout
+    - |
+        set -eux
+
+        if [ -n "${SCOUT_APT_SOURCES_FILE}" ]; then
+            cp "${SCOUT_APT_SOURCES_FILE}" /etc/apt/sources.list
+            echo >> /etc/apt/sources.list
+
+            if [ -n "${STEAM_CI_EXTRA_APT_SOURCES-}" ]; then
+              echo "${STEAM_CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
+                if [ "x$first" = xboth ]; then
+                  echo "deb $rest" >> /etc/apt/sources.list
+                  echo "deb-src $rest" >> /etc/apt/sources.list
+                else
+                  echo "$first $rest" >> /etc/apt/sources.list
+                fi
+              done
+            fi
+
+            apt-get -y update
+        fi
+
+        # We need up-to-date packages for the relocatable install to
+        # be able to get its source code
+        apt-get -y dist-upgrade
+
+        apt-get -y --no-install-recommends install \
+        libcapsule-tools \
+        ${NULL+}
+
+        # g++ 4.6 is too old (see also debian/rules)
+        export CXX=g++-4.8
+
+        mkdir -p -m700 "${STEAM_CI_TMPDIR}"
+        export TMPDIR="${STEAM_CI_TMPDIR}"
+
+        mkdir -p _build/scout
 
 build:scout:
     stage: build
@@ -107,57 +160,8 @@ build:scout:
         - linux
     image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}"
     script:
+        - *prepare_scout
         - |
-            set -eux
-
-            if [ -n "${SCOUT_APT_SOURCES_FILE}" ]; then
-                cp "${SCOUT_APT_SOURCES_FILE}" /etc/apt/sources.list
-                echo >> /etc/apt/sources.list
-
-                if [ -n "${STEAM_CI_EXTRA_APT_SOURCES-}" ]; then
-                  echo "${STEAM_CI_EXTRA_APT_SOURCES}" | while read -r first rest; do
-                    if [ "x$first" = xboth ]; then
-                      echo "deb $rest" >> /etc/apt/sources.list
-                      echo "deb-src $rest" >> /etc/apt/sources.list
-                    else
-                      echo "$first $rest" >> /etc/apt/sources.list
-                    fi
-                  done
-                fi
-
-                apt-get -y update
-            fi
-
-            # We need up-to-date packages for the relocatable install to
-            # be able to get its source code
-            apt-get -y dist-upgrade
-
-            apt-get -y --no-install-recommends install \
-            bubblewrap \
-            libcapsule0 \
-            libcapsule-tools-relocatable:amd64 \
-            libcapsule-tools-relocatable:i386 \
-            libglib2.0-dev \
-            libxau-dev \
-            meson \
-            ${NULL+}
-
-            # g++ 4.6 is too old (see also debian/rules)
-            export CXX=g++-4.8
-
-            mkdir -p -m700 "${STEAM_CI_TMPDIR}"
-            export TMPDIR="${STEAM_CI_TMPDIR}"
-
-            mkdir -p _build
-            meson \
-              --prefix="$(pwd)/_build/scout/prefix" \
-              -Dsrcdir=src \
-              --werror \
-              _build/scout-i386
-            ninja -C _build/scout-i386
-            G_MESSAGES_DEBUG=all meson test --verbose -C _build/scout-i386
-            ninja -C _build/scout-i386 install
-
             meson \
               --prefix="$(pwd)/_build/scout/prefix" \
               -Dsrcdir=src \
@@ -166,6 +170,59 @@ build:scout:
             ninja -C _build/scout
             G_MESSAGES_DEBUG=all meson test --verbose -C _build/scout
             ninja -C _build/scout install
+    artifacts:
+        paths:
+            - _build/scout/prefix
+            - _build/scout/meson-logs/*.txt
+        when: always
+
+build:scout-i386:
+    stage: build
+    tags:
+        - docker
+        - linux
+    image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_I386_DOCKER_IMAGE}"
+    script:
+        - *prepare_scout
+        - |
+            meson \
+              --prefix="$(pwd)/_build/scout/prefix" \
+              -Dsrcdir=src \
+              -Dbin=false \
+              -Dpressure_vessel=false \
+              --werror \
+              _build/scout-i386
+            ninja -C _build/scout-i386
+            G_MESSAGES_DEBUG=all meson test --verbose -C _build/scout-i386
+            ninja -C _build/scout-i386 install
+    artifacts:
+        paths:
+            - _build/scout/prefix
+            - _build/scout-i386/meson-logs/*.txt
+        when: always
+
+relocatable-install:
+    stage: relocatable-install
+    needs:
+        - build:scout
+        - build:scout-i386
+    tags:
+        - docker
+        - linux
+    image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}"
+    script:
+        - *prepare_scout
+        - |
+            apt-get -y --no-install-recommends install \
+            bubblewrap \
+            libcapsule0 \
+            libcapsule-tools \
+            libcapsule-tools-relocatable:amd64 \
+            libcapsule-tools-relocatable:i386 \
+            libglib2.0-dev \
+            libxau-dev \
+            meson \
+            ${NULL+}
 
             rm -fr _build/scout/relocatable-install
             _build/scout/prefix/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
@@ -173,14 +230,13 @@ build:scout:
               --archive "$(pwd)/_build/scout" \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
-            prove -epython3.5 -v ./tests/relocatable-install.py :: \
+            prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
               "$(pwd)/_build/scout/relocatable-install"
-
     artifacts:
         paths:
             - _build/scout/pressure-vessel-*-bin.tar.gz
             - _build/scout/pressure-vessel-*-bin+src.tar.gz
-            - _build/scout/meson-logs/*.txt
+        when: on_success
 
 .prepare_test: &prepare_test
     - |
@@ -189,7 +245,7 @@ build:scout:
         PRESSURE_VESSEL=$(ls _build/scout/pressure-vessel-*-bin.tar.gz | head -1)
 
         if [ -n "${IMAGES_DOWNLOAD_URL}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL}" ]; then
-            python3 populate-depot.py \
+            python3 ./pressure-vessel/populate-depot.py \
             --depot=_build/depot \
             --include-sdk \
             --unpack-runtimes \
@@ -200,7 +256,7 @@ build:scout:
             soldier \
             ${NULL+}
         else
-            python3 populate-depot.py \
+            python3 ./pressure-vessel/populate-depot.py \
             --depot=_build/depot \
             --include-sdk \
             --unpack-runtimes \
@@ -223,7 +279,7 @@ build:scout:
 
 .test_template:
     needs:
-        - "build:scout"
+        - relocatable-install
     stage: test
     tags:
         - docker
@@ -233,6 +289,10 @@ build:scout:
             libgl1-mesa-dri
             locales
             python3
+    artifacts:
+        paths:
+            - _build/artifacts
+        when: always
 
 test:debian-10:
     extends: .test_template
@@ -245,11 +305,7 @@ test:debian-10:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
-            python3 tests/containers.py
-
-    artifacts:
-        paths:
-            - _build/artifacts
+            python3 tests/pressure-vessel/containers.py
 
 test:ubuntu-18.04:
     extends: .test_template
@@ -262,11 +318,7 @@ test:ubuntu-18.04:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
-            python3 tests/containers.py
-
-    artifacts:
-        paths:
-            - _build/artifacts
+            python3 tests/pressure-vessel/containers.py
 
 test:ubuntu-20.04:
     extends: .test_template
@@ -279,11 +331,7 @@ test:ubuntu-20.04:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
-            python3 tests/containers.py
-
-    artifacts:
-        paths:
-            - _build/artifacts
+            python3 tests/pressure-vessel/containers.py
 
 test:archlinux:
     extends: .test_template
@@ -320,22 +368,35 @@ test:archlinux:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
-            python3 tests/containers.py
-
-    artifacts:
-        paths:
-            - _build/artifacts
+            python3 tests/pressure-vessel/containers.py
 
 autopkgtest:
     stage: test
+    extends: .autopkgtest
     needs:
-        - build
+        - package
+        - package:i386
     variables:
         STEAM_CI_INSTALL_SCRIPT: |
-            # Workaround for the build regression described in !88
-            apt-get -y remove libsteam-runtime-tools-0-helpers
             # We need up-to-date packages for the relocatable install to
             # be able to get its source code
             apt-get -y dist-upgrade
+
+            # Install the packages under test. We're not too worried about
+            # minimal dependencies here
+            dpkg -i \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-0_*.deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-0-dbgsym_*_*.*deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-dev_*.deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-helpers_*.deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-helpers-dbgsym_*_*.*deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-tests_*_amd64.deb \
+            debian/tmp/artifacts/build/pressure-vessel-relocatable_*_amd64.deb \
+            debian/tmp/artifacts/build/pressure-vessel-relocatable-dbgsym_*_amd64.*deb \
+            debian/tmp/artifacts/build/pressure-vessel-libs*.deb \
+            debian/tmp/artifacts/build/steam-runtime-tools-bin_*_amd64.deb \
+            debian/tmp/artifacts/build/steam-runtime-tools-bin-dbgsym_*_amd64.*deb \
+            ${NULL+}
+            apt-get -y -f install
 
 # vim:set sw=4 sts=4 et:

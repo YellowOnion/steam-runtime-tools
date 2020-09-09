@@ -33,7 +33,7 @@ class TestAdverb(BaseTest):
             self.adverb = self.command_prefix + [
                 os.path.join(
                     self.top_builddir,
-                    'src',
+                    'pressure-vessel',
                     'pressure-vessel-adverb'
                 ),
             ]

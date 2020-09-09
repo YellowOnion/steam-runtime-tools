@@ -121,7 +121,7 @@ project_warning_cflags = [
 
 project_include_dirs = include_directories(
     '.',
-    'src',
+    'pressure-vessel',
     'subprojects',
 )
 
@@ -209,7 +209,7 @@ add_project_arguments(
   language : 'c',
 )
 
-subdir('src')
+subdir('pressure-vessel')
 
 if get_option('man')
   subdir('man')

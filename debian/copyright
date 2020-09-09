@@ -10,7 +10,7 @@ Copyright:
 License: Expat
 
 Files:
- src/*
+ pressure-vessel/*
  subprojects/*
  tests/shellcheck.sh
 Copyright:
@@ -19,7 +19,7 @@ Copyright:
 License: LGPL-2.1+
 
 Files:
- src/try-setlocale.*
+ pressure-vessel/try-setlocale.*
 Copyright:
  2019 Collabora Ltd.
 License: Expat

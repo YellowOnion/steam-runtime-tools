@@ -180,7 +180,7 @@ class TestContainers(BaseTest):
                 'pressure-vessel-wrap',
             ):
                 shutil.copy2(
-                    os.path.join(cls.top_builddir, 'src', exe),
+                    os.path.join(cls.top_builddir, 'pressure-vessel', exe),
                     os.path.join(cls.pv_dir, 'bin', exe),
                 )
 
@@ -219,11 +219,11 @@ class TestContainers(BaseTest):
                     )
                 else:
                     logger.info(
-                        'Copying just-built %s from %s/src',
+                        'Copying just-built %s from %s/pressure-vessel',
                         exe, cls.top_builddir,
                     )
                     shutil.copy2(
-                        os.path.join(cls.top_builddir, 'src', exe),
+                        os.path.join(cls.top_builddir, 'pressure-vessel', exe),
                         os.path.join(cls.pv_dir, 'bin', exe),
                     )
 

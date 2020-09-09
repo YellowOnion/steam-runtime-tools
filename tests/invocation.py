@@ -35,7 +35,7 @@ class TestInvocation(BaseTest):
         super().setUp()
 
         self.pv_wrap = os.path.join(
-            self.top_builddir, 'src', 'pressure-vessel-wrap',
+            self.top_builddir, 'pressure-vessel', 'pressure-vessel-wrap',
         )
 
         artifacts = os.getenv('AUTOPKGTEST_ARTIFACTS')

@@ -3,7 +3,7 @@ pressure-vessel file locking model
 
 pressure-vessel uses fcntl locks to guard concurrent access to runtimes.
 They are `F_OFD_SETLK` locks if possible, falling back to POSIX
-process-oriented `F_SETLK` locks on older kernels. See `src/bwrap-lock.c`
+process-oriented `F_SETLK` locks on older kernels. See `bwrap-lock.c`
 for full details.
 
 Do not use `flock(2)`, `flock(1)` or `lockf(3)` to interact with

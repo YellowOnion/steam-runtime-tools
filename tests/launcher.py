@@ -41,14 +41,14 @@ class TestLauncher(BaseTest):
             self.launcher = self.command_prefix + [
                 os.path.join(
                     self.top_builddir,
-                    'src',
+                    'pressure-vessel',
                     'pressure-vessel-launcher'
                 ),
             ]
             self.launch = self.command_prefix + [
                 os.path.join(
                     self.top_builddir,
-                    'src',
+                    'pressure-vessel',
                     'pressure-vessel-launch',
                 ),
             ]

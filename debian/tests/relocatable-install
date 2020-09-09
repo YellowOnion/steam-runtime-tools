@@ -1,0 +1,38 @@
+#!/bin/sh
+
+set -eux
+
+dpkg --add-architecture amd64
+dpkg --add-architecture i386
+apt-get -y update
+apt-get -y install \
+    libcapsule-tools-relocatable:amd64 \
+    libcapsule-tools-relocatable:i386 \
+    libsteam-runtime-tools-0-0:amd64 \
+    libsteam-runtime-tools-0-0:i386 \
+    libsteam-runtime-tools-0-helpers:amd64 \
+    libsteam-runtime-tools-0-helpers:i386 \
+    steam-runtime-tools-bin \
+    ${NULL+}
+
+/usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+    ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
+    --output "${AUTOPKGTEST_TMP}/relocatable-install" \
+    --archive "${AUTOPKGTEST_TMP}"
+
+if command -v python3.5; then
+   PYTHON=python3.5
+else
+   PYTHON=python3
+fi
+
+"$PYTHON" ./tests/pressure-vessel/relocatable-install.py \
+    "${AUTOPKGTEST_TMP}/relocatable-install"
+
+for archive in "${AUTOPKGTEST_TMP}"/*.tar.*; do
+    echo "==== $(basename "$archive") ===="
+    tar -tvf "$archive"
+done
+
+# TODO: When the coordinator can accept bigger artifacts, use
+# --archive=${AUTOPKGTEST_ARTIFACTS} instead

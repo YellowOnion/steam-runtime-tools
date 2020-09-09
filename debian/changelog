@@ -1,3 +1,478 @@
+steam-runtime-tools (0.20200909.0) UNRELEASED; urgency=medium
+
+  * Combine steam-runtime-tools with pressure-vessel (T22909)
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 09 Sep 2020 15:08:21 +0100
+
+pressure-vessel (0.20200908.0) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Initial support for escaping from a Flatpak app to run games.
+    Due to Flatpak limitations, this prototype only works when the Flatpak
+    sandbox security has been completely disabled. Future development in both
+    Flatpak and pressure-vessel will be required to be able to launch games
+    in individual containers while keeping a security boundary between Steam
+    and the host system. (Resolves: T22373, T22371)
+  * CI: Run tests/containers.py
+
+  [ Simon McVittie ]
+  * runtime: Carry out the /usr merge when copying sysroots
+    (Resolves: pressure-vessel#3, T22126)
+  * wrap: Don't populate environment of FlatpakBwrap that will be merged
+    (Resolves: T23422)
+  * wrap: Use FlatpakExports to make host paths available in container.
+    This gives us access to the same tricks that Flatpak uses to get host
+    paths into the container in a more robust way: in particular, it sorts
+    paths to put parent before child, and exports symbolic links as symbolic
+    links plus a separate mount point for the target (which we previously
+    did for the subdirectories of ~/.steam, but nowhere else).
+    (Resolves: pressure-vessel#2, pressure-vessel#18; part of T22908)
+  * various commands: Print exit status immediately before exiting
+  * various commands: Include process ID in output.
+    When we have more than one layer of adverbs, this provides a way to
+    tell which one we are.
+  * wrap, adverb: Move "wrap with xterm" code into the adverb.
+    This means the launching scripts for the "session" mode, which use
+    pv-launch to run the main game command in a previously-set-up pv-launcher
+    environment, can direct pv-adverb to run an interactive shell instead of
+    or in addition to the actual game.
+    (Part of steamlinuxruntime#2)
+  * wrap: Always mount /tmp from host for now.
+    SteamHTMLSurface and SteamVR use this as a rendezvous directory for
+    IPC. (Resolves: pressure-vessel#10)
+  * wrap: Parse app ID from $STEAM_COMPAT_APP_ID
+  * wrap: Parse several environment variables for paths to mount.
+    When combined with a Steam update, this should resolve a lot of issues
+    involving paths outside the current working directory.
+    (Resolves: pressure-vessel#4, pressure-vessel#11, pressure-vessel#12,
+    steam-runtime#217, steam-runtime#236, steam-runtime#257)
+  * wrap, adverb, launcher: Add ability to pass fds through to the command
+    (Resolves: pressure-vessel#6)
+  * runtime: Load basic NSS plugins along with host system glibc,
+    fixing username resolution in soldier container on Arch Linux.
+    This might also resolve steam-runtime#226, steam-runtime#264,
+    steam-runtime#258, steam-runtime#192, steam-runtime#262,
+    steam-runtime#227.
+  * runtime: Set STEAM_RUNTIME=/ if running in scout
+    (Resolves: pressure-vessel#8, and maybe steam-runtime#202,
+    steam-runtime#249)
+  * Improve automated tests
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Sep 2020 18:30:07 +0100
+
+pressure-vessel (0.20200819.0) scout; urgency=medium
+
+  * adverb, wrap: Add --terminate-timeout, --terminate-idle-timeout options.
+    This will let us clean up background processes when sharing a container
+    between multiple commands using -launcher and -launch.
+  * adverb, wrap: Implement --exit-with-parent.
+    -wrap eventually replaces itself with bubblewrap. If the bubblewrap
+    process is killed, we want the adverb command to be terminated, passing
+    the termination signal on to its own child process.
+  * adverb: When sent a common fatal signal, try to pass it on to the child
+  * launch, launcher: Allow terminating commands after a "main" command exits.
+    This can be used when launching Proton games, which consist of zero or
+    more setup commands, which may launch background processes, followed by
+    launching the game itself.
+  * wrap: Don't set up X11, etc. until after --filesystem.
+    If we want to be able to use --filesystem=/tmp, then we can't set up
+    the X11 socket until after we're finished with that.
+  * launch: Improve error handling for forwarding signals
+  * launch: Fix program name in logging
+  * runtime: Always provide adverb at /run/pressure-vessel/pv-from-host
+  * glib-backports: Redo backported Unix fd source in terms of a new GSource
+  * Remove -unruntime-test-ui.
+    We have a straightforward environment-variable-based way to select this.
+  * Remove unruntime-scout.
+    The SteamLinuxRuntime depot has a better implementation of this.
+  * man: Improve documentation
+  * CI fixes
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 19 Aug 2020 16:33:45 +0100
+
+pressure-vessel (0.20200805.0) scout; urgency=medium
+
+  [ Simon McVittie ]
+  * wrap: Bind-mount /run/host/os-release if available.
+    Recent versions of Flatpak and systemd-nspawn can mount the host's
+    os-release at /run/host/os-release, even if the rest of the host's
+    /etc and /usr are not exposed to the container. For feature parity
+    we should try to do the same.
+  * runtime: Fix logic for whether to mount over an executable.
+    When using a scout sysroot with a newer-than-scout host, we were not
+    overwriting locale(1) and localedef(1) with the host copy, causing
+    mismatches.
+    Resolves: T22877
+  * wrap: Add a minimal implementation of --filesystem.
+    This is like `flatpak run --filesystem`, but for now much, much simpler;
+    callers are responsible for not giving us paths that will be a problem.
+    However, it's enough to bind-mount subdirectories of /tmp, which is
+    what we need if we want to use them as IPC rendezvous points.
+  * launcher: Add ability to run multiple commands in one container.
+    See the new pressure-vessel-launcher(1) man page for details.
+    We need this for Proton games, where running a game takes several
+    steps. At the moment each step is its own container, which means
+    they can't share locks, IPC sockets and other state.
+    Partially resolves: T22770
+  * all: Consistently work around glib!490 like Flatpak does
+  * adverb, wrap: Don't interfere with child process's stdin, stdout
+  * adverb, wrap: Pass verbosity down to adverb
+  * adverb, wrap: Share pv_boolean_environment()
+
+  [ Ludovico de Nittis ]
+  * gitlab-ci: Re-enable artifacts upload.
+    By increasing the CI upload limit we should be able to store the
+    pressure-vessel artifacts.
+  * Move locale generation to pressure-vessel-adverb
+    pressure-vessel-with-lock has been renamed to pressure-vessel-adverb
+    because now it has more capabilities than just taking a lock.
+    This change should help the environments that are not able to normally
+    run `bwrap`, like if we are in a Docker container or in a Flatpak app.
+  * Test that --generate-locales is in the bwrap arguments when expected
+  * tests/containers.py: Remove duplicated code
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 05 Aug 2020 18:51:16 +0100
+
+pressure-vessel (0.20200709.0) scout; urgency=medium
+
+  * d/control: Fix wrong dependencies.
+    I'd only intended to bump the version on the libcapsule dependency,
+    not the steam-runtime-tools dependency.
+  * runtime: Remove hwcaps subdirectories when looking for gconv modules.
+    tests/containers.py was failing on SteamOS 2 'brewmaster' with the
+    libc6-i686 package installed, because that package contains an
+    optimized i686 glibc in /lib/i386-linux-gnu/i686/cmov/libc.so.6, which
+    is used in preference to the baseline i586 glibc in
+    /lib/i386-linux-gnu/libc.so.6. There are no corresponding optimized
+    gconv modules, only /usr/lib/i386-linux-gnu/gconv/*.
+  * tests: Add support for basic testing on a soldier container.
+    For the moment, this is basically scout with fewer guarantees: we
+    can't assume whether the host glibc is newer (like Arch Linux or
+    Ubuntu 20.04) or older (like SteamOS 2 'brewmaster'). (T22544)
+  * tests: Run s-r-s-i on host with LD_BIND_NOW=1.
+    If we allow lazy binding, we can succeed in loading a GIO module from
+    the host (which depends on a newer GObject than the one bundled with
+    pressure-vessel), then find that a symbol reference fails at the time
+    that we try to actually use it. Make it fail early, instead.
+    In particular, this is helpful on SteamOS 2 'brewmaster'.
+  * tests: Ignore inability to load libOSMesa.so.8.
+    This is included in prerelease versions of SteamRT 2 'soldier',
+    but because it uses the post-gcc-5 C++ ABI of libLLVM-7.so.1, it's
+    incompatible with versions of libLLVM-7.so.1 that were compiled to be
+    compatible with the gcc 4 C++ ABI, and in particular the one in
+    SteamOS 2 'brewmaster'.
+    This and the previous commit are sufficient to make tests/containers.py
+    pass on SteamOS 2 'brewmaster', if we also configure libxcb.so.1 to
+    be chosen by counting symbols (T22538) and libgcc_s.so.1 to be chosen
+    by counting verdefs (T16561).
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 09 Jul 2020 11:43:09 +0100
+
+pressure-vessel (0.20200708.0) scout; urgency=medium
+
+  * unruntime, wrap: Add a way to disable all interactivity.
+    This is desirable if we are running something other than the main game,
+    for example steam-runtime-system-info or various preparatory steps
+    involved in running Proton.
+  * wrap: Import Steam compat tool data. (T22360)
+    This is necessary for Steam "compat tools" such as Proton.
+    STEAM_COMPAT_DATA_PATH points to data associated with the current
+    (compat tool, game) pair, for example the ${WINEPREFIX}.
+    STEAM_COMPAT_TOOL_PATH doesn't exist yet, but I'm assuming that it will
+    be set by some later version of the Steam client to point to Proton
+    itself.
+    STEAM_COMPAT_CLIENT_INSTALL_PATH points to the Steam installation. This
+    is hopefully in the home directory, so hopefully we bind-mount it anyway;
+    but if we don't, we should.
+  * runtime: Add arguments to the right bwrap invocation.
+    When we're entering the container to generate locales, we need to
+    bind-mount the staging area for /overrides in *that* bwrap invocation,
+    not add it as a bind-mount to the bwrap invocation that will actually
+    run the game. (T22534)
+  * runtime: Factor out beginning of capsule-capture-libs command-line.
+    This doesn't currently include the --dest because that varies - it's
+    usually arch->libdir_on_host, but not always.
+  * runtime: Pass --library-knowledge to capsule-capture-libs if possible.
+    For runtimes that support it, this gives us a way to override library
+    comparisons. In particular, we can make sure libgcc_s.so.1 is compared
+    by its version-definitions and symbols. (T16561, T16562)
+  * run-in-sysroot: Copy host /etc/passwd, /etc/group.
+    Otherwise, any test that refers to the username or home directory will
+    fail with a warning. Prior to GLib 2.35.9 (in particular, in GLib 2.32)
+    this happens in g_get_any_init_do(), which is also called to get the
+    TMPDIR, so any test that wants to create a temporary directory will
+    fail like this.
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 08 Jul 2020 18:43:05 +0100
+
+pressure-vessel (0.20200624.0) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Bind VDPAU drivers.
+    If available, and newer, we bind VDPAU drivers from the host system.
+  * Bind VA-API drivers and loaders.
+    If available, and newer, we bind VA-API drivers and loaders from the
+    host system.
+  * runtime: handle merged-/usr host OS with non merged-/usr container.
+    Prioritize "/usr/" over "/lib/" if it is available to avoid issues when
+    we use a non merged-/usr container with a host system that is
+    merged-/usr. (T22125)
+
+  [ Simon McVittie ]
+  * Update libglnx subproject from upstream
+  * runtime: Look for ldconfig in /sbin, /usr/sbin.
+    If we are on an OS where /sbin is not normally in unprivileged users'
+    PATHs (for example Debian), we won't find ldconfig in PATH and will
+    need to try harder.
+  * runtime: Reset PATH in the container.
+    The PATH from outside the container doesn't really make sense inside
+    the container, because the directory hierarchy could be totally different
+    (particularly on unusual host systems like GoboLinux and Exherbo).
+    Resetting it also makes sure we don't pick up local installations in
+    ~/bin or ~/.local/bin, which could have dependencies that are
+    unsatisfied in the container.
+    Conversely, the PATH from the host might not include everything we need
+    in the container.
+  * runtime: Don't critical if we were unable to lock the runtime
+  * runtime: Add an option to skip generating missing locales.
+    This is one of the slower parts of the whole process, and not all
+    games (or automated tests) even need it.
+  * runtime: Factor out a struct to hold architecture-specific details
+  * runtime: Save a bwrap invocation and a shell by not using globbing
+  * runtime: Sort DRI "search path" more carefully.
+    As noted in the comment, the order matters.
+  * runtime: Access runtime without using bwrap if possible
+  * runtime: Optionally copy the runtime, and bind-mount the copy.
+    This is good for two reasons. In a Flatpak runtime, we will not be able
+    to do tricks with arbitrary bind-mounts; if we want the host library
+    stack, we will have to rewrite the mutable copy of the runtime to
+    replace container libraries with symlinks into /run/host. Also, when
+    not in a Flatpak runtime, having a mutable copy of the immutable runtime
+    gives developers a chance to edit the runtime to inject workarounds or
+    things they're testing. (T18688, T22035)
+  * bwrap: When we bind /usr, also bind /etc/ld.so.conf*
+    We'll need those if we want to run ldconfig.
+  * wrap: Add the ability to unshare the pid namespace.
+    We can use this to test whether it can be done without breaking Steam
+    (currently it cannot, unless you unload the gameoverlayrenderer.so
+    module).
+  * wrap: Really fail on invalid --env-if-host argument
+  * locale-gen: Add --output-dir option
+  * wrap-interactive: Fix display of pressure-vessel-wrap's name
+  * wrap-interactive: Print exit status before --shell=after
+  * wrap-interactive: Print exit status before "Enter to continue" prompt
+  * utils: Preserve permissions when copying, and fall back to reflink or
+    copy if hard link fails
+  * scripts: Assert that we have the desired Python version.
+    We require Python 3.5 (backports exist in both Steam Runtime 1 'scout'
+    and Steam Runtime 1½ 'heavy'), except for scripts that are meant to run
+    on test machines or non-developer Steam users' machines, which require
+    Python 3.4 (SteamOS 2, Debian 8, Ubuntu 14.04).
+  * build: Only instantiate libglnx subproject once
+  * build: Disable optional features of steam-runtime-tools subproject
+  * build: Disable -Wunused-local-typedefs globally
+  * build: Centralize dependency checking
+  * build: Convert parts of pressure-vessel into a static library
+  * build: Split into subdirectories
+  * tests: Improve coverage
+  * test-ui: Fix pyflakes warning for unnecessary blank line
+  * tests/relocatable-install.py: Silence a mypy warning
+  * sysroot: Add a way to mount more directories rw.
+    This will make it easier to install a new pressure-vessel build into a
+    relocatable directory hierarchy for testing.
+  * CI: Enable man pages for devel build
+  * CI: Move artifacts adjacent to the job that would produce them
+  * CI: Consistently indent with 4 spaces
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Jun 2020 19:05:13 +0100
+
+pressure-vessel (0.20200331.0) scout; urgency=medium
+
+  [ Jeremy Whiting ]
+  * Add --test command line argument to pressure-vessel-wrap.
+    When --test is used, check for bubblewrap executable and return
+    0 if found, 1 otherwise.
+
+  [ Ludovico de Nittis ]
+  * Bind the host's ldconfig, gconv modules, locale(1) if we already use
+    libc from the host
+  * wrap: mount /usr/share/libdrm if using host libdrm
+  * README: update scout download URL
+  * README: fix scout SDK package name
+
+  [ Simon McVittie ]
+  * wrap: Remount API filesystems when operating without a runtime
+  * test-ui: Do some expectation-management.
+    We don't want users who discover this test UI to think that everything
+    is going to work as-is.
+  * test-ui: Always offer to unshare home, with a clearer UI.
+    Rephrase it so that in the UI, unsharing the home directory looks like
+    the active choice ("separate home directory"), with the shared home
+    directory as the passive/default choice.
+  * test-ui: Clarify what the "no runtime" choice means
+  * test-ui: Rename "runtime" to "container runtime"
+    When we start dealing with LD_LIBRARY_PATH runtimes too, the difference
+    will become significant.
+  * test-ui: Show the version number of pressure-vessel-wrap
+  * bwrap: Don't create a /libexec symlink
+  * wrap: Resync some code borrowed from Flatpak with their version
+  * wrap: Correct some wait-status / exit status confusion
+  * wrap: Debug-log the bwrap executable if --test succeeds
+  * CONTRIBUTING.md: Add notes on what it's OK to depend on
+  * build: Automatically use python3.5 if available.
+    Steam Runtime 1 'scout' has python3.5 as a non-default Python 3 version,
+    and python3.2 as default.
+  * utils: Add a method to copy a directory tree using hard links.
+    This will let us duplicate a runtime and edit it in-place.
+  * runtime: Factor out a PvRuntime object
+  * runtime: Add an off-switch for the host graphics stack.
+    In practice we always want the host graphics stack, but maybe this
+    will be useful when debugging.
+  * runtime: Combine multiple runs of capsule-capture-libs into one
+  * README: Document a wrong assumption
+  * Build as a native package again.
+    Now that deb-build-snapshot supports a Build-Suffix option in
+    debian/git-version-gen.control, we don't need to worry about whether
+    the version number will be less than a previous version that had a +srt
+    suffix added by the Open Build Service.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 31 Mar 2020 20:39:16 +0100
+
+pressure-vessel (0.20200108.0-0+steamrt1.1) scout; urgency=medium
+
+  * wrap: Don't pass --lock-file to bwrap.
+    This is redundant with us passing the fd to be held by
+    pressure-vessel-with-lock, and it causes bwrap to produce the wrong
+    exit status (see https://github.com/containers/bubblewrap/issues/336
+    and https://github.com/containers/bubblewrap/pull/325).
+  * bwrap-lock: Add support for OFD locks.
+    On Linux >= 3.15, this allows us to pass a lock fd to a child process
+    across bwrap's fork-and-exec the way we were already trying to, and
+    have it actually work.
+  * wrap: Tell child process to take out its own lock if necessary.
+    Non-OFD locks don't propagate across fork(), and bwrap needs to clone()
+    itself (which behaves like fork() in this respect) to separate itself
+    into a parent outside the container and a child inside the container.
+    This change adds a weak dependency on Linux 3.15. If we run on an older
+    version, everything should still *work*, but there will be a short
+    period of time during which we have already decided to use the runtime,
+    but it is not locked (and in particular not protected from deletion).
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 08 Jan 2020 15:34:14 +0000
+
+pressure-vessel (0.20191216.0-0+steamrt1.1) scout; urgency=medium
+
+  * wrap: Mount pressure-vessel on /run/pressure-vessel if using runtime.
+    This avoids relying on the directory containing pressure-vessel being
+    being below either the current working directory, or the default
+    Steam library in $(realpath ~/.steam/steam).
+    (Closes: ValveSoftware/steam-runtime#204)
+  * ci: Do a build with AddressSanitizer and UndefinedBehaviourSanitizer
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 16 Dec 2019 14:15:29 +0000
+
+pressure-vessel (0.20191115.0-0+steamrt1.1) scout; urgency=medium
+
+  * wrap: Add API for a bubblewrap-compatible fcntl lock
+  * wrap: Take out a lock on the container's runtime for the duration
+  * with-lock: Add a utility to do things while holding a lock
+  * wrap: Use with-lock to hold the lock until all children have exited
+  * wrap: Print environment variables quoted as intended
+  * Go back to non-native versioning.
+    Versioning pressure-vessel as a native package interacts poorly with
+    the combination of the Open Build Service pseudo-binNMU suffix and the
+    deb-build-snapshot tool used for prereleases:
+    0.20190927.0+7+g1234567+srt1 is less than 0.20190927.0+srt1, so
+    0.20190927.0 would wrongly be preferred over the prerelease at commit
+    1234567, 7 commits later than 0.20190927.0.
+  * Update libglnx, applying a fixed version of libglnx!14
+  * build: Enable and fix many compiler warnings
+  * debian: Make compiler warnings into errors for unreleased builds
+  * gitlab-ci: Make compiler warnings into errors
+  * wrap: Make GOptionEntry flags clearer
+  * wrap: Print version number as YAML
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 15 Nov 2019 19:03:20 +0000
+
+pressure-vessel (0.20191112.1) scout; urgency=medium
+
+  * Revert inclusion of libglnx!14.
+    It accidentally depended on a newer GLib version.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 12 Nov 2019 13:52:17 +0000
+
+pressure-vessel (0.20191112.0) scout; urgency=medium
+
+  * ci: Add build-dependencies of steam-runtime-tools subproject
+  * wrap: Don't bind-mount ~/.steam/steambeta etc. if they don't exist
+  * wrap: Fix logic for whether Steam Runtime is passed through
+  * Update libglnx subproject, including merge requests libglnx!13 and
+    libglnx!14
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 12 Nov 2019 13:32:32 +0000
+
+pressure-vessel (0.20190927.0) scout; urgency=medium
+
+  * wrap: Include all known NVIDIA libraries, except for libnvidia-gtk*
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 27 Sep 2019 18:40:56 +0100
+
+pressure-vessel (0.20190926.0) scout; urgency=medium
+
+  * test-ui: Respect a few of the same environment variables as -wrap
+  * wrap: Pull in EGL and Vulkan ICDs from the host system
+    - Add steam-runtime-tools library dependency
+  * Various CI improvements
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 26 Sep 2019 14:55:03 +0100
+
+pressure-vessel (0.20190912.0) scout; urgency=medium
+
+  * Refactor pressure-vessel-wrap
+  * wrap: Fail with an error if no architectures work
+  * wrap: Only bind-mount host /usr/lib/locale once
+  * wrap: If using host libc.so.6, also pick up host libidn2.so.0
+  * wrap: Use a new pressure-vessel-locale-gen to set up locales
+  * d/copyright: Remove duplication
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 12 Sep 2019 14:54:47 +0100
+
+pressure-vessel (0.20190823.0) scout; urgency=medium
+
+  * Switch to "native" packaging format
+  * wrap: Add PRESSURE_VESSEL_RUNTIME, which can force use of a runtime
+  * wrap: Add an option to find the runtime relative to a base path
+  * wrap: Add $PRESSURE_VESSEL_SHELL as default for --shell-*
+  * wrap: Add $PRESSURE_VESSEL_TERMINAL and --terminal
+  * wrap: Add environment variables for more options
+  * wrap: When using --unshare-home, replace symlinks in ~/.steam with
+    up-to-date values
+  * wrap: Make --share-home take precedence over --home
+  * wrap: Skip architecture setup for architectures the runtime can't run.
+    This means we can use amd64-only or i386-only runtimes.
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 23 Aug 2019 16:44:05 +0100
+
+pressure-vessel (0.20190822.0-0+steamrt1.1) scout; urgency=medium
+
+  * pressure-vessel-unruntime-scout: Add a shortcut way to select the
+    scout runtime
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 22 Aug 2019 15:46:36 +0100
+
+pressure-vessel (0.20190820.0-0+steamrt1.1) scout; urgency=medium
+
+  * Move Gitlab-CI setup into debian directory
+  * Improve build-relocatable-install
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 20 Aug 2019 18:44:27 +0100
+
+pressure-vessel (0.20190819.0-0+steamrt1.1) scout; urgency=medium
+
+  * Initial package
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 19 Aug 2019 16:19:18 +0100
+
 steam-runtime-tools (0.20200908.1) scout; urgency=medium
 
   * Correct version number

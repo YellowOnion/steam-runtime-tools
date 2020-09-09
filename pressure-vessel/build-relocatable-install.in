@@ -1,0 +1,8 @@
+#!@sh@
+exec "@python@" \
+"${DESTDIR}@prefix@/@pv_dir@/@srcdir@/build-relocatable-install.py" \
+--prefix "@prefix@" \
+--pressure-vessel-dir "@pv_dir@" \
+--srcdir "@srcdir@" \
+--set-version "@version@" \
+"$@"

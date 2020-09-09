@@ -1,4 +1,11 @@
 option(
+  'bin',
+  type : 'boolean',
+  value : true,
+  description : 'Build user-facing executables',
+)
+
+option(
   'gtk_doc',
   type : 'boolean',
   value : false,
@@ -34,9 +41,20 @@ option(
 )
 
 option(
+  'pressure_vessel',
+  type : 'boolean',
+  value : true,
+  description : 'Build pressure-vessel container tool',
+)
+
+option(
   'python',
   type : 'string',
   value : '',
   description: 'Search for this Python instead of "python3.5" and "python3"'
 )
 
+option('fully_featured_python', type : 'string', value : '')
+option('srcdir', type : 'string', value : '')
+option('test_containers_dir', type : 'string', value : '')
+option('version', type : 'string', value : 'auto')

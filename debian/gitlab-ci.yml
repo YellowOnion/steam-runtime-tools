@@ -23,6 +23,7 @@ variables:
         libvdpau-dev
         libvulkan-dev
         libx11-dev
+        libxau-dev
         libxcb1-dev
         libxcomposite-dev
         locales
@@ -30,6 +31,10 @@ variables:
         pandoc
         python3
         python3.5
+        zlib1g
+
+    IMAGES_DOWNLOAD_URL: ''
+    IMAGES_DOWNLOAD_CREDENTIAL: ''
 
     DEBIAN_FRONTEND: noninteractive
 
@@ -71,10 +76,11 @@ build:devel:
             mkdir -p -m700 "${STEAM_CI_TMPDIR}"
             export TMPDIR="${STEAM_CI_TMPDIR}"
 
-            meson --werror -Dman=true _build-devel
-            ninja -C _build-devel
-            ninja -C _build-devel install
-            meson test --verbose -C _build-devel
+            mkdir -p _build
+            meson --werror -Dman=true _build/devel
+            ninja -C _build/devel
+            ninja -C _build/devel install
+            meson test --verbose -C _build/devel
 
             export CC=clang
             export CXX=clang++
@@ -83,16 +89,16 @@ build:devel:
                 -Db_lundef=false \
                 -Db_sanitize=address,undefined \
                 --werror \
-                _build-clang-asan
-            ninja -C _build-clang-asan
-            ninja -C _build-clang-asan scan-build
-            ninja -C _build-clang-asan install
-            meson test --verbose -C _build-clang-asan
+                _build/clang-asan
+            ninja -C _build/clang-asan
+            ninja -C _build/clang-asan scan-build
+            ninja -C _build/clang-asan install
+            meson test --verbose -C _build/clang-asan
 
     artifacts:
         paths:
-            - _build-devel/meson-logs/*.txt
-            - _build-clang-asan/meson-logs/*.txt
+            - _build/devel/meson-logs/*.txt
+            - _build/clang-asan/meson-logs/*.txt
 
 build:scout:
     stage: build
@@ -122,24 +128,198 @@ build:scout:
                 apt-get -y update
             fi
 
+            # We need up-to-date packages for the relocatable install to
+            # be able to get its source code
+            apt-get -y dist-upgrade
+
+            apt-get -y --no-install-recommends install \
+            bubblewrap \
+            libcapsule0 \
+            libcapsule-tools-relocatable:amd64 \
+            libcapsule-tools-relocatable:i386 \
+            libglib2.0-dev \
+            libxau-dev \
+            meson \
+            ${NULL+}
+
             # g++ 4.6 is too old (see also debian/rules)
             export CXX=g++-4.8
 
             mkdir -p -m700 "${STEAM_CI_TMPDIR}"
             export TMPDIR="${STEAM_CI_TMPDIR}"
 
+            mkdir -p _build
             meson \
-              --prefix="$(pwd)/_build-scout/prefix" \
+              --prefix="$(pwd)/_build/scout/prefix" \
               -Dsrcdir=src \
               --werror \
-              _build-scout
-            ninja -C _build-scout
-            G_MESSAGES_DEBUG=all meson test --verbose -C _build-scout
-            ninja -C _build-scout install
+              _build/scout-i386
+            ninja -C _build/scout-i386
+            G_MESSAGES_DEBUG=all meson test --verbose -C _build/scout-i386
+            ninja -C _build/scout-i386 install
+
+            meson \
+              --prefix="$(pwd)/_build/scout/prefix" \
+              -Dsrcdir=src \
+              --werror \
+              _build/scout
+            ninja -C _build/scout
+            G_MESSAGES_DEBUG=all meson test --verbose -C _build/scout
+            ninja -C _build/scout install
+
+            rm -fr _build/scout/relocatable-install
+            _build/scout/prefix/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+              --output _build/scout/relocatable-install \
+              --archive "$(pwd)/_build/scout" \
+              ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
+              ${NULL+}
+            prove -epython3.5 -v ./tests/relocatable-install.py :: \
+              "$(pwd)/_build/scout/relocatable-install"
 
     artifacts:
         paths:
-            - _build-scout/meson-logs/*.txt
+            - _build/scout/pressure-vessel-*-bin.tar.gz
+            - _build/scout/pressure-vessel-*-bin+src.tar.gz
+            - _build/scout/meson-logs/*.txt
+
+.prepare_test: &prepare_test
+    - |
+        set -eux
+
+        PRESSURE_VESSEL=$(ls _build/scout/pressure-vessel-*-bin.tar.gz | head -1)
+
+        if [ -n "${IMAGES_DOWNLOAD_URL}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL}" ]; then
+            python3 populate-depot.py \
+            --depot=_build/depot \
+            --include-sdk \
+            --unpack-runtimes \
+            --credential-env IMAGES_DOWNLOAD_CREDENTIAL \
+            --images-uri "${IMAGES_DOWNLOAD_URL}"/steamrt-SUITE/snapshots \
+            --pressure-vessel "${PRESSURE_VESSEL}" \
+            scout \
+            soldier \
+            ${NULL+}
+        else
+            python3 populate-depot.py \
+            --depot=_build/depot \
+            --include-sdk \
+            --unpack-runtimes \
+            --pressure-vessel "${PRESSURE_VESSEL}" \
+            --version latest-steam-client-public-beta \
+            scout \
+            ${NULL+}
+        fi
+
+.i386_dependencies: &i386_dependencies
+    - |
+        set -eux
+
+        dpkg --add-architecture i386
+        apt-get -y update
+        apt-get -y --no-install-recommends install \
+        libc6-i386 \
+        libgl1-mesa-dri:i386 \
+        ${NULL+}
+
+.test_template:
+    needs:
+        - "build:scout"
+    stage: test
+    tags:
+        - docker
+        - linux
+    variables:
+        STEAM_CI_DEPENDENCIES: >-
+            libgl1-mesa-dri
+            locales
+            python3
+
+test:buster:
+    extends: .test_template
+    image: debian:buster-slim
+    script:
+        - *prepare_test
+        - *i386_dependencies
+        - |
+            set -eux
+
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_buster_test_logs"
+            export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            python3 tests/containers.py
+
+    artifacts:
+        paths:
+            - _buster_test_logs
+
+test:bionic:
+    extends: .test_template
+    image: ubuntu:18.04
+    script:
+        - *prepare_test
+        - *i386_dependencies
+        - |
+            set -eux
+
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_bionic_test_logs"
+            export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            python3 tests/containers.py
+
+    artifacts:
+        paths:
+            - _bionic_test_logs
+
+test:focal:
+    extends: .test_template
+    image: ubuntu:20.04
+    script:
+        - *prepare_test
+        - *i386_dependencies
+        - |
+            set -eux
+
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_ubuntu_focal_test_logs"
+            export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            python3 tests/containers.py
+
+    artifacts:
+        paths:
+            - _ubuntu_focal_test_logs
+
+test:archlinux:
+    extends: .test_template
+    image: archlinux:latest
+    # TODO this test does not work yet
+    when: manual
+    # Do not use the global before_script because it is only for Debian based
+    # distros
+    before_script:
+        - |
+            set -eux
+
+            pacman -Syu --needed --noconfirm --noprogressbar \
+            base-devel \
+            git \
+            python \
+            python-tappy \
+            sudo \
+            ${NULL+}
+
+            tempdir="$(mktemp -d)"
+            git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-debian.git "$tempdir/python-debian"
+            export PYTHONPATH="$tempdir/python-debian/lib"
+
+    script:
+        - *prepare_test
+        - |
+            set -eux
+
+            export AUTOPKGTEST_ARTIFACTS="$(pwd)/_archlinux_test_logs"
+            export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            python3 tests/containers.py
+
+    artifacts:
+        paths:
+            - _archlinux_test_logs
 
 autopkgtest:
     stage: test
@@ -149,5 +329,8 @@ autopkgtest:
         STEAM_CI_INSTALL_SCRIPT: |
             # Workaround for the build regression described in !88
             apt-get -y remove libsteam-runtime-tools-0-helpers
+            # We need up-to-date packages for the relocatable install to
+            # be able to get its source code
+            apt-get -y dist-upgrade
 
 # vim:set sw=4 sts=4 et:

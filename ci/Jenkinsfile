@@ -1,0 +1,170 @@
+#!/usr/bin/env groovy
+/*
+ * SPDX-License-Identifier: LGPL-2.1+
+ *
+ * Copyright © 2017-2018 Collabora Ltd
+ *
+ * This package is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This package is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this package.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ */
+
+pipeline {
+  options {
+    timestamps()
+    skipDefaultCheckout()
+  }
+  agent {
+    label 'docker-slave'
+  }
+  environment {
+    HOME="${env.WORKSPACE}"
+    TMPDIR="${env.WORKSPACE}"
+    PYTHONUNBUFFERED="1"
+  }
+
+  stages {
+    stage ("pressure-vessel") {
+      steps {
+        sh '''
+        git config --global user.name Jenkins
+        git config --global user.email nobody@example.com
+        '''
+
+        script {
+          if (env.CI_DOCKER_REGISTRY_CRED == '') {
+            dockerRegistryCred = null;
+          }
+          else {
+            dockerRegistryCred = env.CI_DOCKER_REGISTRY_CRED;
+          }
+
+          if (!env.CI_DOCKER_REGISTRY) {
+            env.CI_DOCKER_REGISTRY = 'docker.steamos.cloud'
+          }
+
+          if (!env.CI_DOCKER_IMAGE) {
+            env.CI_DOCKER_IMAGE = 'steamrt/sdk:scout'
+          }
+
+          if (!env.CI_DOCKER_OPTIONS) {
+            env.CI_DOCKER_OPTIONS = ''
+          }
+
+          if (!env.CI_PRESSURE_VESSEL_GIT_REPO) {
+            env.CI_PRESSURE_VESSEL_GIT_REPO = 'https://gitlab.steamos.cloud/steam/pressure-vessel.git'
+          }
+
+          if (!env.CI_PRESSURE_VESSEL_GIT_CRED) {
+            env.CI_PRESSURE_VESSEL_GIT_CRED = ''
+          }
+
+          if (!env.CI_APT_SOURCES_FILE) {
+            env.CI_APT_SOURCES_FILE = ''
+          }
+
+          if (env.CI_ALLOW_MISSING_SOURCES != 'true') {
+            env.CI_ALLOW_MISSING_SOURCES = ''
+          }
+
+          if (!env.CI_EXTRA_APT_SOURCES) {
+            env.CI_EXTRA_APT_SOURCES = ''
+          }
+
+          checkout changelog: true, poll: true, scm: [
+            $class: 'GitSCM',
+            branches: [[name: "origin/${env.CI_PRESSURE_VESSEL_GIT_BRANCH}"]],
+            extensions: [
+              [$class: 'RelativeTargetDirectory', relativeTargetDir: 'src'],
+              [$class: 'PruneStaleBranch'],
+            ],
+            userRemoteConfigs: [
+              [name: 'origin', url: env.CI_PRESSURE_VESSEL_GIT_REPO, credentialsId: env.CI_PRESSURE_VESSEL_GIT_CRED]
+            ]
+          ]
+        }
+
+        dir('src') {
+          sh '''
+          set -eu
+          ./build-aux/git-version-gen .tarball-version > .tarball-version_
+          mv .tarball-version_ .tarball-version
+          '''
+        }
+
+        sh '''
+        set -eu
+
+        sed -e 's!@BASE_IMAGE@!'"${CI_DOCKER_REGISTRY}/${CI_DOCKER_IMAGE}"'!g' < src/ci/Dockerfile.in > src/ci/Dockerfile
+
+        if [ -n "${CI_APT_SOURCES_FILE}" ]; then
+          cp "${CI_APT_SOURCES_FILE}" src/ci/sources.list
+        else
+          touch src/ci/sources.list
+        fi
+
+        echo "${CI_EXTRA_APT_SOURCES-}" | while read -r first rest; do
+          if [ "x$first" = xboth ]; then
+            echo "deb $rest" >> src/ci/sources.list
+            echo "deb-src $rest" >> src/ci/sources.list
+          else
+            echo "$first $rest" >> src/ci/sources.list
+          fi
+        done
+        '''
+
+        script {
+          docker.withRegistry("https://${env.CI_DOCKER_REGISTRY}", dockerRegistryCred) {
+            docker.build("${env.CI_DOCKER_REGISTRY}/pressure-vessel", '--no-cache --pull -f src/ci/Dockerfile src/ci').inside("${env.CI_DOCKER_OPTIONS}") {
+              sh '''
+              set -eu
+              cd src
+              meson \
+                --prefix="$(pwd)/_build/prefix" \
+                -Dsrcdir=src \
+                _build
+              ninja -C _build
+              meson test --verbose -C _build
+              ninja -C _build install
+              rm -fr ../relocatable-install
+              _build/prefix/bin/pressure-vessel-build-relocatable-install \
+                --output "${WORKSPACE}/relocatable-install" \
+                --archive "${WORKSPACE}" \
+                ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
+                ${NULL+}
+
+              if ! PYTHON=$(command -v python3.5); then
+                PYTHON=$(command -v python3)
+              fi
+
+              prove -v --exec "${PYTHON}" \
+                ./tests/relocatable-install.py :: \
+                "${WORKSPACE}/relocatable-install"
+              '''
+            }
+          }
+        }
+
+        archiveArtifacts 'pressure-vessel-*-bin.tar.gz'
+        archiveArtifacts 'pressure-vessel-*-bin+src.tar.gz'
+      }
+    }
+  }
+
+  post {
+    cleanup {
+      deleteDir()
+    }
+  }
+}
+/* vim:set sw=2 sts=2 et: */

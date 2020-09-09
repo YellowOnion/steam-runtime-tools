@@ -1,4 +1,4 @@
-# Copyright © 2019 Collabora Ltd.
+# Copyright © 2019-2020 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -279,5 +279,37 @@ foreach arch : [
     )
   endforeach
 endforeach
+
+test_scripts = [
+  'mypy.sh',
+  'pycodestyle.sh',
+  'pyflakes.sh',
+  'shellcheck.sh',
+]
+
+foreach test_name : test_scripts
+  test_args = ['-v', files(test_name)]
+  timeout = 30
+
+  if prove.found()
+    if dbus_run_session.found()
+      test(
+        test_name, dbus_run_session,
+        args : ['--', 'prove'] + test_args,
+        env : test_env,
+        timeout : timeout,
+      )
+    else
+      test(
+        test_name, prove,
+        args : test_args,
+        env : test_env,
+        timeout : timeout,
+      )
+    endif
+  endif
+endforeach
+
+subdir('pressure-vessel')
 
 # vim:set sw=2 sts=2 et:

@@ -22,7 +22,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 project(
-  'steam-runtime-tools', 'c',
+  'steam-runtime-tools', 'c', 'cpp',
   version : '0.20200908.1',
   default_options: [
     'c_std=c99',
@@ -49,6 +49,15 @@ else
   python = find_program(get_option('python'), required : true)
 endif
 
+if get_option('fully_featured_python') == ''
+  full_python = find_program('python3', required : false)
+else
+  full_python = find_program(
+    get_option('fully_featured_python'),
+    required : false,
+  )
+endif
+
 if get_option('man')
   pandoc = find_program('pandoc', required : true)
 
@@ -63,7 +72,25 @@ if get_option('man')
   endif
 endif
 
+dbus_run_session = find_program('dbus-run-session', required : false)
 glslang_validator = find_program('glslangValidator', required : true)
+prove = find_program('prove', required : false)
+sh = find_program('sh', required : true)
+
+version = get_option('version')
+if version == 'auto'
+  git_version_gen = run_command(
+    sh,
+    files('build-aux/git-version-gen'),
+    join_paths(meson.current_source_dir(), '.tarball-version'),
+    check : true,
+  )
+  version = git_version_gen.stdout().strip()
+endif
+
+if version == ''
+  version = meson.project_version()
+endif
 
 warning_flags = [
     '-Warray-bounds',
@@ -106,12 +133,14 @@ warning_cxxflags = warning_flags + [
 ]
 
 no_warning_flags = [
+    'cast-align',
     'inline',
     'missing-field-initializers',
     'pedantic',
     'sign-compare',
     'unused-local-typedefs',
     'unused-parameter',
+    'variadic-macros',
 ]
 no_warning_cflags = no_warning_flags + [
     'declaration-after-statement',
@@ -131,7 +160,7 @@ foreach flag : no_warning_cflags
     '-Wno-error=' + flag,
     '-Wno-' + flag,
   ])
-  add_project_arguments(supported_no_warning_cflags, language : 'c')
+  add_global_arguments(supported_no_warning_cflags, language : 'c')
 endforeach
 
 foreach flag : no_warning_cxxflags
@@ -139,8 +168,21 @@ foreach flag : no_warning_cxxflags
     '-Wno-error=' + flag,
     '-Wno-' + flag,
   ])
-  add_project_arguments(supported_no_warning_cxxflags, language : 'cpp')
+  add_global_arguments(supported_no_warning_cxxflags, language : 'cpp')
 endforeach
+
+# gdbus-codegen in scout generates code that has many warnings
+silence_gdbus_codegen_warnings = c_compiler.get_supported_arguments([
+  '-Wno-error',
+  '-Wno-error=discarded-qualifiers',
+  '-Wno-error=redundant-decls',
+  '-Wno-error=shadow',
+  '-Wno-error=write-strings',
+  '-Wno-discarded-qualifiers',
+  '-Wno-redundant-decls',
+  '-Wno-shadow',
+  '-Wno-write-strings',
+])
 
 add_project_link_arguments(
   c_compiler.get_supported_link_arguments(
@@ -156,10 +198,10 @@ add_project_link_arguments(
 )
 
 conf_data = configuration_data()
-conf_data.set('_GNU_SOURCE', '1')
-conf_data.set_quoted('VERSION', meson.project_version())
+conf_data.set_quoted('VERSION', version)
 
 configure_file(
+  input : 'config.h.in',
   output : '_steam-runtime-tools-config.h',
   configuration : conf_data,
 )
@@ -226,6 +268,8 @@ vulkan = dependency(
   'vulkan',
 )
 
+xau = dependency('xau', required : true)
+
 xcb = dependency(
   'xcb',
 )
@@ -240,7 +284,15 @@ xlib = dependency(
 
 libdl = c_compiler.find_library('dl', required : false)
 
+libglnx = subproject('libglnx')
+
 project_include_dirs = include_directories('.')
+
+pv_include_dirs = include_directories(
+    '.',
+    'pressure-vessel',
+    'subprojects',
+)
 
 # Relative path from get_option('prefix') to our private library directory
 pkglibdir = join_paths(
@@ -282,7 +334,14 @@ if multiarch != ''
   subdir('helpers')
 endif
 
-subdir('bin')
+if get_option('bin')
+  subdir('bin')
+endif
+
+if get_option('pressure_vessel') and get_option('bin')
+  subdir('pressure-vessel')
+endif
+
 subdir('docs')
 subdir('tests')
 

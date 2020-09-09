@@ -1,0 +1,1081 @@
+/*
+ * Contains code taken from Flatpak.
+ *
+ * Copyright © 2014-2019 Red Hat, Inc
+ * Copyright © 2017-2019 Collabora Ltd.
+ *
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "utils.h"
+
+#include <ftw.h>
+#include <sys/prctl.h>
+#include <sys/signalfd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include <glib.h>
+#include <glib-unix.h>
+#include <glib/gstdio.h>
+#include <gio/gio.h>
+
+#include "libglnx/libglnx.h"
+
+#include "glib-backports.h"
+#include "flatpak-bwrap-private.h"
+#include "flatpak-utils-base-private.h"
+#include "flatpak-utils-private.h"
+
+#include "resolve-in-sysroot.h"
+
+static void
+child_setup_cb (gpointer user_data)
+{
+  flatpak_close_fds_workaround (3);
+}
+
+/**
+ * pv_avoid_gvfs:
+ *
+ * Disable gvfs. This function must be called from main() before
+ * starting any threads.
+ */
+void
+pv_avoid_gvfs (void)
+{
+  g_autofree gchar *old_env = NULL;
+
+  /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
+  old_env = g_strdup (g_getenv ("GIO_USE_VFS"));
+  g_setenv ("GIO_USE_VFS", "local", TRUE);
+  g_vfs_get_default ();
+  if (old_env)
+    g_setenv ("GIO_USE_VFS", old_env, TRUE);
+  else
+    g_unsetenv ("GIO_USE_VFS");
+}
+
+/**
+ * pv_envp_cmp:
+ * @p1: a `const char * const *`
+ * @p2: a `const char * const *`
+ *
+ * Compare two environment variables, given as pointers to pointers
+ * to the actual `KEY=value` string.
+ *
+ * In particular this is suitable for sorting a #GStrv using `qsort`.
+ *
+ * Returns: negative, 0 or positive if `*p1` compares before, equal to
+ *  or after `*p2`
+ */
+int
+pv_envp_cmp (const void *p1,
+             const void *p2)
+{
+  const char * const * s1 = p1;
+  const char * const * s2 = p2;
+  size_t l1 = strlen (*s1);
+  size_t l2 = strlen (*s2);
+  size_t min;
+  const char *tmp;
+  int ret;
+
+  tmp = strchr (*s1, '=');
+
+  if (tmp != NULL)
+    l1 = tmp - *s1;
+
+  tmp = strchr (*s2, '=');
+
+  if (tmp != NULL)
+    l2 = tmp - *s2;
+
+  min = MIN (l1, l2);
+  ret = strncmp (*s1, *s2, min);
+
+  /* If they differ before the first '=' (if any) in either s1 or s2,
+   * then they are certainly different */
+  if (ret != 0)
+    return ret;
+
+  ret = strcmp (*s1, *s2);
+
+  /* If they do not differ at all, then they are equal */
+  if (ret == 0)
+    return ret;
+
+  /* FOO < FOO=..., and FOO < FOOBAR */
+  if ((*s1)[min] == '\0')
+    return -1;
+
+  /* FOO=... > FOO, and FOOBAR > FOO */
+  if ((*s2)[min] == '\0')
+    return 1;
+
+  /* FOO= < FOOBAR */
+  if ((*s1)[min] == '=' && (*s2)[min] != '=')
+    return -1;
+
+  /* FOOBAR > FOO= */
+  if ((*s2)[min] == '=' && (*s1)[min] != '=')
+    return 1;
+
+  /* Fall back to plain string comparison */
+  return ret;
+}
+
+/**
+ * pv_get_current_dirs:
+ * @cwd_p: (out) (transfer full) (optional): Used to return the
+ *  current physical working directory, equivalent to `$(pwd -P)`
+ *  in a shell
+ * @cwd_l: (out) (transfer full) (optional): Used to return the
+ *  current logical working directory, equivalent to `$(pwd -L)`
+ *  in a shell
+ *
+ * Return the physical and/or logical working directory.
+ *
+ * Equivalent to `$(pwd -L)` in a shell.
+ */
+void
+pv_get_current_dirs (gchar **cwd_p,
+                     gchar **cwd_l)
+{
+  g_autofree gchar *cwd = NULL;
+  const gchar *pwd;
+
+  g_return_if_fail (cwd_p == NULL || *cwd_p == NULL);
+  g_return_if_fail (cwd_l == NULL || *cwd_l == NULL);
+
+  cwd = g_get_current_dir ();
+
+  if (cwd_p != NULL)
+    *cwd_p = flatpak_canonicalize_filename (cwd);
+
+  if (cwd_l != NULL)
+    {
+      pwd = g_getenv ("PWD");
+
+      if (pwd != NULL && pv_is_same_file (pwd, cwd))
+        *cwd_l = g_strdup (pwd);
+      else
+        *cwd_l = g_strdup (cwd);
+    }
+}
+
+/**
+ * pv_is_same_file:
+ * @a: a path
+ * @b: a path
+ *
+ * Returns: %TRUE if a and b are names for the same inode.
+ */
+gboolean
+pv_is_same_file (const gchar *a,
+                 const gchar *b)
+{
+  GStatBuf a_buffer, b_buffer;
+
+  g_return_val_if_fail (a != NULL, FALSE);
+  g_return_val_if_fail (b != NULL, FALSE);
+
+  if (strcmp (a, b) == 0)
+    return TRUE;
+
+  return (stat (a, &a_buffer) == 0
+          && stat (b, &b_buffer) == 0
+          && a_buffer.st_dev == b_buffer.st_dev
+          && a_buffer.st_ino == b_buffer.st_ino);
+}
+
+void
+pv_search_path_append (GString *search_path,
+                       const gchar *item)
+{
+  g_return_if_fail (search_path != NULL);
+
+  if (item == NULL || item[0] == '\0')
+    return;
+
+  if (search_path->len != 0)
+    g_string_append (search_path, ":");
+
+  g_string_append (search_path, item);
+}
+
+gchar *
+pv_capture_output (const char * const * argv,
+                   GError **error)
+{
+  gsize len;
+  gint wait_status;
+  g_autofree gchar *output = NULL;
+  g_autofree gchar *errors = NULL;
+  gsize i;
+  g_autoptr(GString) command = g_string_new ("");
+
+  g_return_val_if_fail (argv != NULL, NULL);
+  g_return_val_if_fail (argv[0] != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  for (i = 0; argv[i] != NULL; i++)
+    {
+      g_autofree gchar *quoted = g_shell_quote (argv[i]);
+
+      g_string_append_printf (command, " %s", quoted);
+    }
+
+  g_debug ("run:%s", command->str);
+
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
+  if (!g_spawn_sync (NULL,  /* cwd */
+                     (char **) argv,
+                     NULL,  /* env */
+                     (G_SPAWN_SEARCH_PATH |
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                     child_setup_cb, NULL,
+                     &output,
+                     &errors,
+                     &wait_status,
+                     error))
+    return NULL;
+
+  g_printerr ("%s", errors);
+
+  if (!g_spawn_check_exit_status (wait_status, error))
+    return NULL;
+
+  len = strlen (output);
+
+  /* Emulate shell $() */
+  if (len > 0 && output[len - 1] == '\n')
+    output[len - 1] = '\0';
+
+  g_debug ("-> %s", output);
+
+  return g_steal_pointer (&output);
+}
+
+/*
+ * Returns: (transfer none): The first key in @table in iteration order,
+ *  or %NULL if @table is empty.
+ */
+gpointer
+pv_hash_table_get_arbitrary_key (GHashTable *table)
+{
+  GHashTableIter iter;
+  gpointer key = NULL;
+
+  g_hash_table_iter_init (&iter, table);
+  if (g_hash_table_iter_next (&iter, &key, NULL))
+    return key;
+  else
+    return NULL;
+}
+
+static gint
+ftw_remove (const gchar *path,
+            const struct stat *sb,
+            gint typeflags,
+            struct FTW *ftwbuf)
+{
+  if (remove (path) < 0)
+    return -1;
+
+  return 0;
+}
+
+/*
+ * @directory: (type filename): The directory to remove.
+ *
+ * Recursively delete @directory within the same file system and
+ * without following symbolic links.
+ *
+ * Returns: %TRUE if the removal was successful
+ */
+gboolean
+pv_rm_rf (const char *directory)
+{
+  g_return_val_if_fail (directory != NULL, FALSE);
+
+  if (nftw (directory, ftw_remove, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS) < 0)
+    return FALSE;
+
+  return TRUE;
+}
+
+gboolean
+pv_boolean_environment (const gchar *name,
+                        gboolean def)
+{
+  const gchar *value = g_getenv (name);
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRUE;
+
+  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
+    return FALSE;
+
+  if (value != NULL)
+    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
+
+  return def;
+}
+
+/**
+ * pv_divert_stdout_to_stderr:
+ * @error: Used to raise an error on failure
+ *
+ * Duplicate file descriptors so that functions that would write to
+ * `stdout` instead write to a copy of the original `stderr`. Return
+ * a file handle that can be used to print structured output to the
+ * original `stdout`.
+ *
+ * Returns: (transfer full): A libc file handle for the original `stdout`,
+ *  or %NULL on error. Free with `fclose()`.
+ */
+FILE *
+pv_divert_stdout_to_stderr (GError **error)
+{
+  g_autoptr(FILE) original_stdout = NULL;
+  glnx_autofd int original_stdout_fd = -1;
+  int flags;
+
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* Duplicate the original stdout so that we still have a way to write
+   * machine-readable output. */
+  original_stdout_fd = dup (STDOUT_FILENO);
+
+  if (original_stdout_fd < 0)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to duplicate fd %d",
+                                         STDOUT_FILENO);
+
+  flags = fcntl (original_stdout_fd, F_GETFD, 0);
+
+  if (flags < 0)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to get flags of new fd");
+
+  fcntl (original_stdout_fd, F_SETFD, flags|FD_CLOEXEC);
+
+  /* If something like g_debug writes to stdout, make it come out of
+   * our original stderr. */
+  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to make fd %d a copy of fd %d",
+                                         STDOUT_FILENO, STDERR_FILENO);
+
+  original_stdout = fdopen (original_stdout_fd, "w");
+
+  if (original_stdout == NULL)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to create a stdio wrapper for fd %d",
+                                         original_stdout_fd);
+  else
+    original_stdout_fd = -1;    /* ownership taken, do not close */
+
+  return g_steal_pointer (&original_stdout);
+}
+
+/**
+ * pv_async_signal_safe_error:
+ * @message: A human-readable message
+ * @exit_status: Call `_exit` with this status
+ *
+ * Exit with a fatal error, like g_error(), but async-signal-safe
+ * (see signal-safety(7)).
+ */
+void
+pv_async_signal_safe_error (const char *message,
+                            int exit_status)
+{
+  if (write (2, message, strlen (message)) < 0)
+    {
+      /* Ignore - there's nothing we can do about it anyway - but
+       * suppress -Wunused-result. */
+    }
+
+  _exit (exit_status);
+}
+
+#define PROC_SYS_KERNEL_RANDOM_UUID "/proc/sys/kernel/random/uuid"
+
+/**
+ * pv_get_random_uuid:
+ * @error: Used to raise an error on failure
+ *
+ * Return a random UUID (RFC 4122 version 4) as a string.
+ * It is a 128-bit quantity, with 122 bits of entropy, and 6 fixed bits
+ * indicating the "variant" (type, 0b10) and "version" (subtype, 0b0100).
+ *
+ * Returns: (transfer full): A random UUID, or %NULL on error
+ */
+gchar *
+pv_get_random_uuid (GError **error)
+{
+  g_autofree gchar *contents = NULL;
+
+  if (!g_file_get_contents (PROC_SYS_KERNEL_RANDOM_UUID,
+                            &contents, NULL, error))
+    return NULL;
+
+  g_strchomp (contents);    /* delete trailing newline */
+
+  /* Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
+  if (strlen (contents) != 36)
+    return glnx_null_throw (error, "%s not in expected format",
+                            PROC_SYS_KERNEL_RANDOM_UUID);
+
+  return g_steal_pointer (&contents);
+}
+
+/**
+ * pv_wait_for_child_processes:
+ * @main_process: process for which we will report wait-status;
+ *  zero or negative if there is no main process
+ * @wait_status_out: (out): Used to store the wait status of `@main_process`,
+ *  as if from `wait()`, on success
+ * @error: Used to raise an error on failure
+ *
+ * Wait for child processes of this process to exit, until the @main_process
+ * has exited. If there is no main process, wait until there are no child
+ * processes at all.
+ *
+ * If the process is a subreaper (`PR_SET_CHILD_SUBREAPER`),
+ * indirect child processes whose parents have exited will be reparented
+ * to it, so this will have the effect of waiting for all descendants.
+ *
+ * If @main_process is positive, return when @main_process has exited.
+ * Child processes that exited before @main_process will also have been
+ * "reaped", but child processes that exit after @main_process will not
+ * (use `pv_wait_for_child_processes (0, &error)` to resume waiting).
+ *
+ * If @main_process is zero or negative, wait for all child processes
+ * to exit.
+ *
+ * This function cannot be called in a process that is using
+ * g_child_watch_source_new() or similar functions, because it waits
+ * for all child processes regardless of their process IDs, and that is
+ * incompatible with waiting for individual child processes.
+ *
+ * Returns: %TRUE when @main_process has exited, or if @main_process
+ *  is zero or negative and all child processes have exited
+ */
+gboolean
+pv_wait_for_child_processes (pid_t main_process,
+                             int *wait_status_out,
+                             GError **error)
+{
+  if (wait_status_out != NULL)
+    *wait_status_out = -1;
+
+  while (1)
+    {
+      int wait_status = -1;
+      pid_t died = wait (&wait_status);
+
+      if (died < 0)
+        {
+          if (errno == EINTR)
+            {
+              continue;
+            }
+          else if (errno == ECHILD)
+            {
+              g_debug ("No more child processes");
+              break;
+            }
+          else
+            {
+              return glnx_throw_errno_prefix (error, "wait");
+            }
+        }
+
+      g_debug ("Child %lld exited with wait status %d",
+               (long long) died, wait_status);
+
+      if (died == main_process)
+        {
+          if (wait_status_out != NULL)
+            *wait_status_out = wait_status;
+
+          return TRUE;
+        }
+    }
+
+  if (main_process > 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Process %lld was not seen to exit",
+                   (long long) main_process);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+typedef struct
+{
+  GError *error;
+  GMainContext *context;
+  GSource *wait_source;
+  GSource *kill_source;
+  GSource *sigchld_source;
+  gchar *children_file;
+  /* GINT_TO_POINTER (pid) => arbitrary */
+  GHashTable *sent_sigterm;
+  /* GINT_TO_POINTER (pid) => arbitrary */
+  GHashTable *sent_sigkill;
+  /* Scratch space to build temporary strings */
+  GString *buffer;
+  /* 0, SIGTERM or SIGKILL */
+  int sending_signal;
+  /* Nonzero if wait_source has been attached to context */
+  guint wait_source_id;
+  guint kill_source_id;
+  guint sigchld_source_id;
+  /* TRUE if we reach a point where we have no more child processes. */
+  gboolean finished;
+} TerminationData;
+
+/*
+ * Free everything in @data.
+ */
+static void
+termination_data_clear (TerminationData *data)
+{
+  if (data->wait_source_id != 0)
+    {
+      g_source_destroy (data->wait_source);
+      data->wait_source_id = 0;
+    }
+
+  if (data->kill_source_id != 0)
+    {
+      g_source_destroy (data->kill_source);
+      data->kill_source_id = 0;
+    }
+
+  if (data->sigchld_source_id != 0)
+    {
+      g_source_destroy (data->sigchld_source);
+      data->sigchld_source_id = 0;
+    }
+
+  if (data->wait_source != NULL)
+    g_source_unref (g_steal_pointer (&data->wait_source));
+
+  if (data->kill_source != NULL)
+    g_source_unref (g_steal_pointer (&data->kill_source));
+
+  if (data->sigchld_source != NULL)
+    g_source_unref (g_steal_pointer (&data->sigchld_source));
+
+  g_clear_pointer (&data->children_file, g_free);
+  g_clear_pointer (&data->context, g_main_context_unref);
+  g_clear_error (&data->error);
+  g_clear_pointer (&data->sent_sigterm, g_hash_table_unref);
+  g_clear_pointer (&data->sent_sigkill, g_hash_table_unref);
+
+  if (data->buffer != NULL)
+    g_string_free (g_steal_pointer (&data->buffer), TRUE);
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (TerminationData, termination_data_clear)
+
+/*
+ * Do whatever the next step for pv_terminate_all_child_processes() is.
+ *
+ * First, reap child processes that already exited, without blocking.
+ *
+ * Then, act according to the phase we are in:
+ * - before wait_period: do nothing
+ * - after wait_period but before grace_period: send SIGTERM
+ * - after wait_period and grace_period: send SIGKILL
+ */
+static void
+termination_data_refresh (TerminationData *data)
+{
+  g_autofree gchar *contents = NULL;
+  gboolean has_child = FALSE;
+  const char *p;
+  char *endptr;
+
+  if (data->error != NULL)
+    return;
+
+  g_debug ("Checking for child processes");
+
+  while (1)
+    {
+      int wait_status = -1;
+      pid_t died = waitpid (-1, &wait_status, WNOHANG);
+
+      if (died < 0)
+        {
+          if (errno == EINTR)
+            {
+              continue;
+            }
+          else if (errno == ECHILD)
+            {
+              /* No child processes at all. We'll double-check this
+               * a bit later. */
+              break;
+            }
+          else
+            {
+              glnx_throw_errno_prefix (&data->error, "wait");
+              return;
+            }
+        }
+      else if (died == 0)
+        {
+          /* No more child processes have exited, but at least one is
+           * still running. */
+          break;
+        }
+
+      /* This process has gone away, so remove any record that we have
+       * sent it signals. If the pid is reused, we'll want to send
+       * the same signals again. */
+      g_debug ("Process %d exited", died);
+      g_hash_table_remove (data->sent_sigkill, GINT_TO_POINTER (died));
+      g_hash_table_remove (data->sent_sigterm, GINT_TO_POINTER (died));
+    }
+
+  /* See whether we have any remaining children. These could be direct
+   * child processes, or they could be children we adopted because
+   * their parent was one of our descendants and has exited, leaving the
+   * child to be reparented to us (their (great)*grandparent) because we
+   * are a subreaper. */
+  if (!g_file_get_contents (data->children_file, &contents, NULL, &data->error))
+    return;
+
+  g_debug ("Child tasks: %s", contents);
+
+  for (p = contents;
+       p != NULL && *p != '\0';
+       p = endptr)
+    {
+      guint64 maybe_child;
+      int child;
+      GHashTable *already;
+
+      while (*p != '\0' && g_ascii_isspace (*p))
+        p++;
+
+      if (*p == '\0')
+        break;
+
+      maybe_child = g_ascii_strtoull (p, &endptr, 10);
+
+      if (*endptr != '\0' && !g_ascii_isspace (*endptr))
+        {
+          glnx_throw (&data->error, "Non-numeric string found in %s: %s",
+                      data->children_file, p);
+          return;
+        }
+
+      if (maybe_child > G_MAXINT)
+        {
+          glnx_throw (&data->error, "Out-of-range number found in %s: %s",
+                      data->children_file, p);
+          return;
+        }
+
+      child = (int) maybe_child;
+      g_string_printf (data->buffer, "/proc/%d", child);
+
+      /* If the task is just a thread, it won't have a /proc/%d directory
+       * in its own right. We don't kill threads, only processes. */
+      if (!g_file_test (data->buffer->str, G_FILE_TEST_IS_DIR))
+        {
+          g_debug ("Task %d is a thread, not a process", child);
+          continue;
+        }
+
+      has_child = TRUE;
+
+      if (data->sending_signal == 0)
+        break;
+      else if (data->sending_signal == SIGKILL)
+        already = data->sent_sigkill;
+      else
+        already = data->sent_sigterm;
+
+      if (!g_hash_table_contains (already, GINT_TO_POINTER (child)))
+        {
+          g_debug ("Sending signal %d to process %d",
+                   data->sending_signal, child);
+          g_hash_table_add (already, GINT_TO_POINTER (child));
+
+          if (kill (child, data->sending_signal) < 0)
+            g_warning ("Unable to send signal %d to process %d: %s",
+                       data->sending_signal, child, g_strerror (errno));
+
+          /* In case the child is stopped, wake it up to receive the signal */
+          if (kill (child, SIGCONT) < 0)
+            g_warning ("Unable to send SIGCONT to process %d: %s",
+                       child, g_strerror (errno));
+
+          /* When the child terminates, we will get SIGCHLD and come
+           * back to here. */
+        }
+    }
+
+  if (!has_child)
+    data->finished = TRUE;
+}
+
+/*
+ * Move from wait period to grace period: start sending SIGTERM to
+ * child processes.
+ */
+static gboolean
+start_sending_sigterm (gpointer user_data)
+{
+  TerminationData *data = user_data;
+
+  g_debug ("Wait period finished, starting to send SIGTERM...");
+
+  if (data->sending_signal == 0)
+    data->sending_signal = SIGTERM;
+
+  termination_data_refresh (data);
+
+  data->wait_source_id = 0;
+  return G_SOURCE_REMOVE;
+}
+
+/*
+ * End of grace period: start sending SIGKILL to child processes.
+ */
+static gboolean
+start_sending_sigkill (gpointer user_data)
+{
+  TerminationData *data = user_data;
+
+  g_debug ("Grace period finished, starting to send SIGKILL...");
+
+  data->sending_signal = SIGKILL;
+  termination_data_refresh (data);
+
+  data->kill_source_id = 0;
+  return G_SOURCE_REMOVE;
+}
+
+/*
+ * Called when at least one child process has exited, resulting in
+ * SIGCHLD to this process.
+ */
+static gboolean
+sigchld_cb (int sfd,
+            G_GNUC_UNUSED GIOCondition condition,
+            gpointer user_data)
+{
+  TerminationData *data = user_data;
+  struct signalfd_siginfo info;
+  ssize_t size;
+
+  size = read (sfd, &info, sizeof (info));
+
+  if (size < 0)
+    {
+      if (errno != EINTR && errno != EAGAIN)
+        g_warning ("Unable to read struct signalfd_siginfo: %s",
+                   g_strerror (errno));
+    }
+  else if (size != sizeof (info))
+    {
+      g_warning ("Expected struct signalfd_siginfo of size %"
+                 G_GSIZE_FORMAT ", got %" G_GSSIZE_FORMAT,
+                 sizeof (info), size);
+    }
+
+  g_debug ("One or more child processes exited");
+  termination_data_refresh (data);
+  return G_SOURCE_CONTINUE;
+}
+
+/**
+ * pv_terminate_all_child_processes:
+ * @wait_period: If greater than 0, wait this many microseconds before
+ *  sending `SIGTERM`
+ * @grace_period: If greater than 0, after @wait_period plus this many
+ *  microseconds, use `SIGKILL` instead of `SIGTERM`. If 0, proceed
+ *  directly to sending `SIGKILL`.
+ * @error: Used to raise an error on failure
+ *
+ * Make sure all child processes are terminated.
+ *
+ * If a child process catches `SIGTERM` but does not exit promptly and
+ * does not pass the signal on to its descendants, note that its
+ * descendant processes are not guaranteed to be terminated gracefully
+ * with `SIGTERM`; they might only receive `SIGKILL`.
+ *
+ * Return when all child processes have exited or when an error has
+ * occurred.
+ *
+ * This function cannot be called in a process that is using
+ * g_child_watch_source_new() or similar functions.
+ *
+ * The process must be a subreaper, and must have `SIGCHLD` blocked.
+ *
+ * Returns: %TRUE on success.
+ */
+gboolean
+pv_terminate_all_child_processes (GTimeSpan wait_period,
+                                  GTimeSpan grace_period,
+                                  GError **error)
+{
+  g_auto(TerminationData) data = {};
+  sigset_t mask;
+  int is_subreaper = -1;
+  glnx_autofd int sfd = -1;
+
+  if (prctl (PR_GET_CHILD_SUBREAPER, (unsigned long) &is_subreaper, 0, 0, 0) != 0)
+    return glnx_throw_errno_prefix (error, "prctl PR_GET_CHILD_SUBREAPER");
+
+  if (is_subreaper != 1)
+    return glnx_throw (error, "Process is not a subreaper");
+
+  sigemptyset (&mask);
+
+  if (pthread_sigmask (SIG_BLOCK, NULL, &mask) != 0)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
+  if (!sigismember (&mask, SIGCHLD))
+    return glnx_throw (error, "Process has not blocked SIGCHLD");
+
+  data.children_file = g_strdup_printf ("/proc/%d/task/%d/children",
+                                        getpid (), getpid ());
+  data.context = g_main_context_new ();
+  data.sent_sigterm = g_hash_table_new (NULL, NULL);
+  data.sent_sigkill = g_hash_table_new (NULL, NULL);
+  data.buffer = g_string_new ("/proc/2345678901");
+
+  if (wait_period > 0 && grace_period > 0)
+    {
+      data.wait_source = g_timeout_source_new (wait_period / G_TIME_SPAN_MILLISECOND);
+
+      g_source_set_callback (data.wait_source, start_sending_sigterm,
+                             &data, NULL);
+      data.wait_source_id = g_source_attach (data.wait_source, data.context);
+    }
+  else if (grace_period > 0)
+    {
+      start_sending_sigterm (&data);
+    }
+
+  if (wait_period + grace_period > 0)
+    {
+      data.kill_source = g_timeout_source_new ((wait_period + grace_period) / G_TIME_SPAN_MILLISECOND);
+
+      g_source_set_callback (data.kill_source, start_sending_sigkill,
+                             &data, NULL);
+      data.kill_source_id = g_source_attach (data.kill_source, data.context);
+    }
+  else
+    {
+      start_sending_sigkill (&data);
+    }
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+
+  sfd = signalfd (-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+
+  if (sfd < 0)
+    return glnx_throw_errno_prefix (error, "signalfd");
+
+  data.sigchld_source = g_unix_fd_source_new (sfd, G_IO_IN);
+  g_source_set_callback (data.sigchld_source,
+                         (GSourceFunc) G_CALLBACK (sigchld_cb), &data, NULL);
+  data.sigchld_source_id = g_source_attach (data.sigchld_source, data.context);
+
+  termination_data_refresh (&data);
+
+  while (data.error == NULL
+         && !data.finished
+         && (data.wait_source_id != 0
+             || data.kill_source_id != 0
+             || data.sigchld_source_id != 0))
+    g_main_context_iteration (data.context, TRUE);
+
+  if (data.error != NULL)
+    {
+      g_propagate_error (error, g_steal_pointer (&data.error));
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+/**
+ * pv_current_namespace_path_to_host_path:
+ * @current_env_path: a path in the current environment
+ *
+ * Returns: (transfer full): The @current_env_path converted to the host
+ *  system, or a copy of @current_env_path if we are not in a Flatpak
+ *  environment or it's unknown how to convert the given path.
+ */
+gchar *
+pv_current_namespace_path_to_host_path (const gchar *current_env_path)
+{
+  gchar *path_on_host = NULL;
+  g_autofree gchar *home_env_guarded = NULL;
+  const gchar *home_env = g_getenv ("HOME");
+
+  g_return_val_if_fail (g_path_is_absolute (current_env_path),
+                        g_strdup (current_env_path));
+
+  if (home_env == NULL)
+    home_env = g_get_home_dir ();
+
+  if (home_env != NULL)
+    {
+      /* Avoid the edge case where e.g. current_env_path is
+       * '/home/melanie/Games' and home_env is '/home/me' */
+      if (g_str_has_suffix (home_env, "/"))
+        home_env_guarded = g_strdup (home_env);
+      else
+        home_env_guarded = g_strdup_printf ("%s/", home_env);
+    }
+
+  if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
+    {
+      struct stat via_current_env_stat;
+      struct stat via_persist_stat;
+
+      /* If we are inside a Flatpak container, usually, the home
+       * folder is '${HOME}/.var/app/${FLATPAK_ID}' on the host system */
+      if (home_env != NULL
+          && g_str_has_prefix (current_env_path, home_env_guarded))
+        {
+          path_on_host = g_build_filename (home_env,
+                                           ".var",
+                                           "app",
+                                           g_getenv ("FLATPAK_ID"),
+                                           current_env_path + strlen (home_env),
+                                           NULL);
+
+          if (lstat (path_on_host, &via_persist_stat) < 0)
+            {
+              /* The file doesn't exist in ~/.var/app, so assume it was
+               * exposed via --filesystem */
+              g_clear_pointer (&path_on_host, g_free);
+            }
+          else if (lstat (current_env_path, &via_current_env_stat) == 0
+                   && (via_persist_stat.st_dev != via_current_env_stat.st_dev
+                       || via_persist_stat.st_ino != via_current_env_stat.st_ino))
+            {
+              /* The file exists in ~/.var/app, but is not the same there -
+              * presumably a different version was mounted over the top via
+              * --filesystem */
+              g_clear_pointer (&path_on_host, g_free);
+            }
+        }
+
+      /* In a Flatpak container, usually, '/run/host' is the root of the
+       * host system */
+      if (g_str_has_prefix (current_env_path, "/run/host/"))
+        path_on_host = g_strdup (current_env_path + strlen ("/run/host"));
+      else if (g_strcmp0 (current_env_path, "/run/host") == 0)
+        path_on_host = g_strdup ("/");
+    }
+  /* Either we are not in a Flatpak container or it's not obvious how the
+   * container to host translation should happen. Just keep the same path. */
+  if (path_on_host == NULL)
+    path_on_host = g_strdup (current_env_path);
+
+  return path_on_host;
+}
+
+/**
+ * pv_file_test_in_sysroot:
+ * @sysroot: (type filename): A path used as the root
+ * @filename: (type filename): A path below the root directory, either
+ *  absolute or relative (to the root)
+ * @test: The test to perform on the resolved file in @sysroot.
+ *  G_FILE_TEST_IS_SYMLINK is not a valid GFileTest value because the
+ *  path is resolved following symlinks too.
+ *
+ * Returns: %TRUE if the @filename resolved in @sysroot passes the @test.
+ */
+gboolean
+pv_file_test_in_sysroot (const char *sysroot,
+                         const char *filename,
+                         GFileTest test)
+{
+  glnx_autofd int file_fd = -1;
+  glnx_autofd int sysroot_fd = -1;
+  struct stat stat_buf;
+  g_autofree gchar *file_realpath_in_sysroot = NULL;
+  g_autoptr(GError) error = NULL;
+
+  g_return_val_if_fail (sysroot != NULL, FALSE);
+  g_return_val_if_fail (filename != NULL, FALSE);
+  /* We reject G_FILE_TEST_IS_SYMLINK because the provided filename is resolved
+   * in sysroot, following the eventual symlinks too. So it is not possible for
+   * the resolved filename to be a symlink */
+  g_return_val_if_fail ((test & (G_FILE_TEST_EXISTS | G_FILE_TEST_IS_EXECUTABLE
+                                 | G_FILE_TEST_IS_REGULAR
+                                 | G_FILE_TEST_IS_DIR)) == test, FALSE);
+
+  if (!glnx_opendirat (-1, sysroot, FALSE, &sysroot_fd, &error))
+    {
+      g_debug ("An error occurred trying to open %s: %s", sysroot,
+               error->message);
+      return FALSE;
+    }
+
+  file_fd = pv_resolve_in_sysroot (sysroot_fd,
+                                   filename, PV_RESOLVE_FLAGS_NONE,
+                                   &file_realpath_in_sysroot, &error);
+
+  if (file_fd < 0)
+    {
+      g_debug ("An error occurred trying to resolve %s in sysroot: %s",
+               filename, error->message);
+      return FALSE;
+    }
+
+  if (fstat (file_fd, &stat_buf) != 0)
+    {
+      g_debug ("fstat %s/%s: %s",
+               sysroot, file_realpath_in_sysroot, g_strerror (errno));
+      return FALSE;
+    }
+
+  if (test & G_FILE_TEST_EXISTS)
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_EXECUTABLE) && (stat_buf.st_mode & 0111))
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_REGULAR) && S_ISREG (stat_buf.st_mode))
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_DIR) && S_ISDIR (stat_buf.st_mode))
+    return TRUE;
+
+  return FALSE;
+}

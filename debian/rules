@@ -1,5 +1,5 @@
 #!/usr/bin/make -f
-# Copyright © 2019 Collabora Ltd.
+# Copyright © 2019-2020 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 # (see debian/copyright)
 
@@ -48,17 +48,24 @@ DESTDIR := $(CURDIR)/debian/tmp
 relocatable_pkglibdir := $(CURDIR)/debian/libsteam-runtime-tools-0-relocatable-libs/usr/$(pkglibdir)
 
 override_dh_auto_configure:
-	meson builddir \
+	if ! meson builddir \
 		--prefix=/usr \
 		--libexecdir=$(libexecdir) \
 		--libdir=$(libdir) \
 		-Dgtk_doc=$(gtk_doc_has_cflags) \
 		-Dintrospection=false \
+		-Dman=true \
 		-Dmultiarch_tuple=$(DEB_HOST_MULTIARCH) \
-		$(meson_options)
+		-Dsrcdir=src \
+		-Dversion=$(DEB_VERSION) \
+		$(meson_options) \
+	; then \
+		cat builddir/meson-logs/meson-log.txt; \
+		exit 1; \
+	fi
 
 override_dh_auto_build:
-	ninja -C builddir
+	ninja -v -C builddir
 
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)

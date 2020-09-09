@@ -1,0 +1,560 @@
+#!/usr/bin/env python3
+
+# Copyright © 2019 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+import logging
+import os
+import shlex
+import subprocess
+import sys
+
+try:
+    import typing
+except ImportError:
+    pass
+else:
+    typing      # silence pyflakes
+
+import gi
+gi.require_version('Gtk', '3.0')
+
+from gi.repository import GLib
+from gi.repository import Gtk
+
+logger = logging.getLogger('pressure-vessel-test-ui')
+
+assert sys.version_info >= (3, 4), 'Python 3.4+ is required for this script'
+
+
+def tristate_environment(name):
+    # type: (str) -> typing.Optional[bool]
+    value = os.getenv(name)
+
+    if value is None or value == '':
+        return None
+
+    if value == '1':
+        return True
+
+    if value == '0':
+        return False
+
+    logger.warning('Unrecognised value %r for $%s', value, name)
+    return None
+
+
+def boolean_environment(name, default):
+    # type: (str, bool) -> bool
+    value = os.getenv(name)
+
+    if value is None:
+        return default
+
+    if value == '1':
+        return True
+
+    if value in ('', '0'):
+        return False
+
+    logger.warning('Unrecognised value %r for $%s', value, name)
+    return default
+
+
+class Gui:
+    def __init__(self):
+        # type: (...) -> None
+
+        self.failed = False
+        self.home = GLib.get_home_dir()
+
+        self.container_runtimes = {}    # type: typing.Dict[str, str]
+
+        for search in (
+            os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
+            '..',
+            '../..',
+        ):
+            if search is None:
+                continue
+
+            source_of_runtimes = os.path.join(
+                os.path.dirname(__file__),
+                search,
+            )
+
+            if not os.path.isdir(source_of_runtimes):
+                continue
+
+            for member in os.listdir(source_of_runtimes):
+                path = os.path.realpath(
+                    os.path.join(source_of_runtimes, member)
+                )
+                files = os.path.join(path, 'files')
+
+                if os.path.isdir(files):
+                    description = self._describe_runtime(path)
+                    self.container_runtimes[path] = description
+
+        self.window = Gtk.Window()
+        self.window.set_default_size(600, 300)
+        self.window.connect('delete-event', Gtk.main_quit)
+        self.window.set_title('pressure-vessel options')
+
+        self.grid = Gtk.Grid(
+            row_spacing=6,
+            column_spacing=6,
+            margin_top=12,
+            margin_bottom=12,
+            margin_start=12,
+            margin_end=12,
+        )
+        self.window.add(self.grid)
+
+        row = 0
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            'This is a test UI for developers. '
+            '<b>'
+            'Some options are known to break games and Steam features.'
+            '</b>'
+            ' Use at your own risk!'
+        )
+        label.set_line_wrap(True)
+        self.grid.attach(label, 0, row, 2, 1)
+        row += 1
+
+        label = Gtk.Label.new('Container runtime')
+        self.grid.attach(label, 0, row, 1, 1)
+
+        self.container_runtime_combo = Gtk.ComboBoxText.new()
+        self.container_runtime_combo.append(
+            '/',
+            'None (use host system and traditional LD_LIBRARY_PATH runtime)'
+        )
+
+        for path, description in sorted(self.container_runtimes.items()):
+            self.container_runtime_combo.append(path, description)
+
+        if self.container_runtimes:
+            self.container_runtime_combo.set_active(1)
+        else:
+            self.container_runtime_combo.set_active(0)
+
+        self.grid.attach(self.container_runtime_combo, 1, row, 1, 1)
+
+        row += 1
+
+        var_path = os.getenv('PRESSURE_VESSEL_COPY_RUNTIME_INTO', None)
+
+        if var_path is None:
+            value = False
+            var_path = os.getenv(
+                'PRESSURE_VESSEL_RUNTIME_BASE',
+                os.path.dirname(__file__) + '/../..',
+            ) + '/var'
+            assert var_path is not None
+        else:
+            value = True
+
+        self.var_path = os.path.realpath(var_path)
+        self.copy_runtime_into_check = Gtk.CheckButton.new_with_label(
+            'Create temporary runtime copy on disk'
+        )
+        self.copy_runtime_into_check.set_active(value)
+        self.grid.attach(self.copy_runtime_into_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'The copy will be in {} and can be modified while the '
+            'container is running. It will be deleted next time you '
+            'run a game in this mode.'
+            '</i></small>'.format(
+                GLib.markup_escape_text(self.var_path),
+            )
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self.host_graphics_check = Gtk.CheckButton.new_with_label(
+            'Use host-system graphics stack'
+        )
+        value = boolean_environment('PRESSURE_VESSEL_HOST_GRAPHICS', True)
+        self.host_graphics_check.set_active(value)
+        self.grid.attach(self.host_graphics_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            "Most games and GPUs won't work when this is disabled."
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self._container_runtime_changed(self.container_runtime_combo)
+        self.container_runtime_combo.connect(
+            'changed',
+            self._container_runtime_changed)
+
+        self.unshare_home_check = Gtk.CheckButton.new_with_label(
+            'Use a separate home directory per game'
+        )
+        share_home = tristate_environment('PRESSURE_VESSEL_SHARE_HOME')
+        self.unshare_home_check.set_active(
+            share_home is not None and not share_home
+        )
+        self.grid.attach(self.unshare_home_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'Creating a separate home directory is experimental, '
+            'and is likely to break Steam Cloud Auto-Sync, Steam Workshop '
+            'and probably other features.'
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self.unshare_pid_check = Gtk.CheckButton.new_with_label(
+            'Create a new process ID namespace'
+        )
+        share_pid = boolean_environment('PRESSURE_VESSEL_SHARE_PID', True)
+        self.unshare_pid_check.set_active(not share_pid)
+        self.grid.attach(self.unshare_pid_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            "Creating a new process ID namespace is very experimental, "
+            "and is known to break Steam's tracking of running games."
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self.keep_game_overlay_check = Gtk.CheckButton.new_with_label(
+            'Allow Steam Overlay'
+        )
+        remove = boolean_environment(
+            'PRESSURE_VESSEL_REMOVE_GAME_OVERLAY', False
+        )
+        self.keep_game_overlay_check.set_active(not remove)
+        self.grid.attach(self.keep_game_overlay_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'Disabling this seems to work around some of the issues with '
+            'process ID namespaces, but will break various Steam features.'
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
+        self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
+        self.xterm_check.set_active(False)
+        self.grid.attach(self.xterm_check, 1, row, 1, 1)
+
+        env = os.getenv('PRESSURE_VESSEL_TERMINAL')
+
+        if env is not None:
+            if env == 'xterm':
+                self.xterm_check.set_active(True)
+
+        row += 1
+
+        shell_label = Gtk.Label.new('Run an interactive shell')
+        self.grid.attach(shell_label, 0, row, 1, 1)
+
+        self.shell_combo = Gtk.ComboBoxText.new()
+        self.shell_combo.append('', 'No')
+        self.shell_combo.append('--shell-after', 'After running the command')
+        self.shell_combo.append('--shell-fail', 'If the command fails')
+        self.shell_combo.append(
+            '--shell-instead', 'Instead of running the command')
+        self.shell_combo.set_active(0)
+
+        env = os.getenv('PRESSURE_VESSEL_SHELL')
+
+        if env is not None:
+            if env == 'after':
+                self.shell_combo.set_active(1)
+            elif env == 'fail':
+                self.shell_combo.set_active(2)
+            elif env == 'instead':
+                self.shell_combo.set_active(3)
+
+        self._shell_changed(self.shell_combo)
+        self.shell_combo.connect('changed', self._shell_changed)
+        self.grid.attach(self.shell_combo, 1, row, 1, 1)
+
+        row += 1
+
+        try:
+            subproc = subprocess.Popen(
+                [
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        'pressure-vessel-wrap'
+                    ),
+                    '--version-only',
+                ],
+                stdout=subprocess.PIPE,
+            )
+            stdout, _ = subproc.communicate()
+            version = stdout.decode('utf-8', errors='replace')
+        except Exception:
+            version = ''
+
+        if version:
+            label = Gtk.Label.new('')
+            label.set_markup(
+                '<small>v{}</small>'.format(
+                    GLib.markup_escape_text(version),
+                )
+            )
+            label.set_line_wrap(True)
+            label.set_halign(Gtk.Align.START)
+            label.set_sensitive(False)
+            self.grid.attach(label, 0, row, 1, 1)
+
+        buttons_grid = Gtk.Grid(
+            column_spacing=6,
+            column_homogeneous=True,
+            halign=Gtk.Align.END,
+        )
+
+        cancel_button = Gtk.Button.new_with_label('Cancel')
+        cancel_button.connect('clicked', Gtk.main_quit)
+        buttons_grid.attach(cancel_button, 0, 0, 1, 1)
+
+        run_button = Gtk.Button.new_with_label('Run')
+        run_button.connect('clicked', self.run_cb)
+        buttons_grid.attach(run_button, 1, 0, 1, 1)
+
+        self.grid.attach(buttons_grid, 1, row, 2, 1)
+
+        row += 1
+
+    def _shell_changed(self, shell_combo):
+        if shell_combo.get_active_id():
+            self.xterm_check.set_active(True)
+            self.xterm_check.set_sensitive(False)
+        else:
+            self.xterm_check.set_sensitive(True)
+
+    def _container_runtime_changed(self, combo):
+        if combo.get_active_id() == '/':
+            self.copy_runtime_into_check.set_sensitive(False)
+            self.host_graphics_check.set_sensitive(False)
+        else:
+            self.copy_runtime_into_check.set_sensitive(True)
+            self.host_graphics_check.set_sensitive(True)
+
+    def _describe_runtime(
+        self,
+        path        # type: str
+    ):
+        # type: (...) -> str
+
+        description = path
+        files = os.path.join(path, 'files')
+        metadata = os.path.join(path, 'metadata')
+
+        if os.path.islink(files):
+            description = os.path.realpath(files)
+
+        if description.startswith(self.home + '/'):
+            description = '~' + description[len(self.home):]
+
+        name = None             # type: typing.Optional[str]
+        pretty_name = None      # type: typing.Optional[str]
+        build_id = None         # type: typing.Optional[str]
+        variant = None          # type: typing.Optional[str]
+
+        try:
+            keyfile = GLib.KeyFile.new()
+            keyfile.load_from_file(
+                metadata, GLib.KeyFileFlags.NONE)
+            try:
+                build_id = keyfile.get_string('Runtime', 'x-flatdeb-build-id')
+            except GLib.Error:
+                pass
+
+            try:
+                name = keyfile.get_string('Runtime', 'runtime')
+            except GLib.Error:
+                pass
+            else:
+                assert name is not None
+                variant = name.split('.')[-1]
+        except GLib.Error:
+            pass
+
+        try:
+            with open(
+                os.path.join(files, 'lib', 'os-release')
+            ) as reader:
+                for line in reader:
+                    if line.startswith('PRETTY_NAME='):
+                        pretty_name = line.split('=', 1)[1].strip()
+                        pretty_name = GLib.shell_unquote(pretty_name)
+                    elif line.startswith('BUILD_ID='):
+                        build_id = line.split('=', 1)[1].strip()
+                        build_id = GLib.shell_unquote(build_id)
+                    elif line.startswith('VARIANT='):
+                        variant = line.split('=', 1)[1].strip()
+                        variant = GLib.shell_unquote(variant)
+        except (GLib.Error, EnvironmentError):
+            pass
+
+        if pretty_name is None:
+            pretty_name = name
+
+        if pretty_name is None:
+            pretty_name = os.path.basename(path)
+
+        if build_id is None:
+            build_id = ''
+        else:
+            build_id = ' build {}'.format(build_id)
+
+        if variant is None:
+            variant = ''
+        else:
+            variant = ' {}'.format(variant)
+
+        description = '{}{}{}\n({})'.format(
+            pretty_name,
+            variant,
+            build_id,
+            description,
+        )
+
+        return description
+
+    def run_cb(self, _ignored=None):
+        # type: (typing.Any) -> None
+
+        argv = [
+            os.path.join(
+                os.path.dirname(__file__),
+                'pressure-vessel-wrap'
+            ),
+        ]
+
+        id = self.container_runtime_combo.get_active_id()
+
+        if id is None:
+            argv.append('--runtime=')
+        elif id == '/':
+            argv.append('--runtime=')
+        else:
+            argv.append('--runtime')
+            argv.append(os.path.join(id, 'files'))
+
+        if self.host_graphics_check.get_active():
+            if os.path.isdir('/run/host'):
+                argv.append('--graphics-provider=/run/host')
+            else:
+                argv.append('--graphics-provider=/')
+        else:
+            argv.append('--graphics-provider=')
+
+        if self.copy_runtime_into_check.get_active():
+            os.makedirs(self.var_path, mode=0o755, exist_ok=True)
+            argv.append('--copy-runtime-into=' + self.var_path)
+        else:
+            argv.append('--copy-runtime-into=')
+
+        if self.unshare_home_check.get_active():
+            argv.append('--unshare-home')
+        else:
+            argv.append('--share-home')
+
+        if self.unshare_pid_check.get_active():
+            argv.append('--unshare-pid')
+        else:
+            argv.append('--share-pid')
+
+        if self.keep_game_overlay_check.get_active():
+            argv.append('--keep-game-overlay')
+        else:
+            argv.append('--remove-game-overlay')
+
+        if self.xterm_check.get_active():
+            argv.append('--terminal=xterm')
+        else:
+            argv.append('--terminal=none')
+
+        id = self.shell_combo.get_active_id()
+
+        if id is not None and id != '':
+            argv.append(id)
+        else:
+            argv.append('--shell=none')
+
+        argv.append('--verbose')
+        argv.extend(sys.argv[1:])
+
+        os.environ['G_MESSAGES_DEBUG'] = 'all'
+
+        try:
+            os.execvp(argv[0], argv)
+        except OSError:
+            logger.error('Unable to run: %s', ' '.join(map(shlex.quote, argv)))
+            Gtk.main_quit()
+            self.failed = True
+            raise
+
+    def run(self):
+        # type: (...) -> None
+        self.window.show_all()
+        Gtk.main()
+
+        if self.failed:
+            sys.exit(1)
+
+
+if __name__ == '__main__':
+    if '--check-gui-dependencies' not in sys.argv:
+        Gui().run()

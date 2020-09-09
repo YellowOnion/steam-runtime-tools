@@ -1,10 +1,10 @@
-Copyright © 2019 Collabora Ltd.
+SPDX-License-Identifier: MIT and LGPL-2.1-or-later and Apache-2.0
 
-SPDX-License-Identifier: MIT and Apache-2.0
+See individual source files for copyright and licensing details, and
+in particular pressure-vessel/THIRD-PARTY.md for details of third-party
+libraries used or included in pressure-vessel releases.
 
-See individual source files for details.
-
-The shared library is under the MIT/X11 license:
+The steam-runtime-tools shared library is under the MIT/X11 license:
 
     Permission is hereby granted, free of charge, to any person obtaining
     a copy of this software and associated documentation files (the
@@ -24,6 +24,10 @@ The shared library is under the MIT/X11 license:
     CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
     TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
     SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The overall license of pressure-vessel is
+LGPL-2.1-or-later <https://spdx.org/licenses/LGPL-2.1-or-later.html>,
+which can be found in the file `COPYING.LGPL-2.1`.
 
 For supporting code that is marked as being under the
 Apache license version 2.0, the full license text can be found in

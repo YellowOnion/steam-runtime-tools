@@ -10,6 +10,8 @@
 /libsteam-runtime-tools-0-relocatable-libs/
 /libsteam-runtime-tools-0-tests/
 /locales/
+/pressure-vessel-libs-*/
+/pressure-vessel-relocatable/
 /steam-runtime-tools-bin/
 /tmp/
 /version.txt

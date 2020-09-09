@@ -1,0 +1,6 @@
+extend-diff-ignore=(?:^|/)\.git(?:/|$)
+extend-diff-ignore=(?:^|/)_build(?:/|$)
+extend-diff-ignore=(?:^|/)subprojects/steam-runtime-tools(?:/|$)
+tar-ignore=.git
+tar-ignore=_build
+tar-ignore=subprojects/steam-runtime-tools

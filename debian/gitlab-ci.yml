@@ -288,18 +288,23 @@ test:ubuntu-20.04:
 test:archlinux:
     extends: .test_template
     image: archlinux:latest
-    # TODO this test does not work yet
-    when: manual
     # Do not use the global before_script because it is only for Debian based
     # distros
     before_script:
         - |
             set -eux
 
+            # Enable multilib repository
+            echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+
             pacman -Syu --needed --noconfirm --noprogressbar \
             base-devel \
             git \
+            lib32-glibc \
+            lib32-mesa \
             python \
+            python-chardet \
+            python-six \
             python-tappy \
             sudo \
             ${NULL+}

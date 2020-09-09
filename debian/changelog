@@ -1,8 +1,19 @@
-steam-runtime-tools (0.20200909.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200909.1) UNRELEASED; urgency=medium
 
   * Combine steam-runtime-tools with pressure-vessel (T22909)
 
  -- Simon McVittie <smcv@collabora.com>  Wed, 09 Sep 2020 15:08:21 +0100
+
+pressure-vessel (0.20200909.0) scout; urgency=medium
+
+  * Revert "runtime: Set STEAM_RUNTIME=/ if running in scout".
+    Setting STEAM_RUNTIME=/ causes configuration changes in libraries like
+    Pango and GTK, which break module loading when not in the
+    LD_LIBRARY_PATH Steam Runtime. We will need to update those libraries'
+    search paths before we can do this.
+    (Reopens: pressure-vessel#8, steam-runtime#202, steam-runtime#249)
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 09 Sep 2020 18:51:19 +0100
 
 pressure-vessel (0.20200908.0) scout; urgency=medium
 

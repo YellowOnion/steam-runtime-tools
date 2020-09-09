@@ -201,7 +201,7 @@ executable(
   ] + enums,
   c_args : pv_c_args,
   dependencies : [
-    libsteamrt_dep,
+    libsteamrt_static_dep,
     gio_unix,
     xau,
     libglnx.get_variable('libglnx_dep'),

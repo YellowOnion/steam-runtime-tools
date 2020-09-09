@@ -71,8 +71,8 @@ install_headers(
   subdir : join_paths('steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
 )
 
-libsteamrt = library(
-  'steam-runtime-tools-' + api_major,
+libsteamrt_static = static_library(
+  'steam-runtime-tools-internal',
   libsteamrt_sources + libsteamrt_public_headers + enums,
   c_args : [
     '-DG_LOG_DOMAIN="' + meson.project_name() + '"',
@@ -83,6 +83,12 @@ libsteamrt = library(
   ],
   include_directories : project_include_dirs,
   dependencies : [libdl, threads, libelf, gio_unix, glib, gobject, json_glib],
+  install : false,
+)
+libsteamrt = library(
+  'steam-runtime-tools-' + api_major,
+  dependencies : [libdl, threads, libelf, gio_unix, glib, gobject, json_glib],
+  objects : [libsteamrt_static.extract_all_objects()],
   soversion : abi_major,
   version : abi_major + '.' + abi_minor,
   install : true,
@@ -98,6 +104,11 @@ pkg.generate(
 libsteamrt_dep = declare_dependency(
   include_directories : project_include_dirs,
   link_with : libsteamrt,
+  sources : libsteamrt_public_headers + [enums[1]],
+)
+libsteamrt_static_dep = declare_dependency(
+  include_directories : project_include_dirs,
+  link_with : libsteamrt_static,
   sources : libsteamrt_public_headers + [enums[1]],
 )
 

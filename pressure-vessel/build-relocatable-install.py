@@ -386,10 +386,6 @@ def main():
                     'soname:libjson-glib-1.0.so.0',
                     'soname:libpcre.so.3',
                     'soname:libselinux.so.1',
-                    'path:{}/lib/{}/libsteam-runtime-tools-0.so.0'.format(
-                        args.prefix,
-                        arch.multiarch,
-                    ),
                 ])
 
             for so in glob.glob(

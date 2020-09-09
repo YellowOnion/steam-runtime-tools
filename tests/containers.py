@@ -922,12 +922,14 @@ class TestContainers(BaseTest):
             if os.path.isfile('/usr/bin/locale'):
                 link = os.path.join(tree, 'usr', 'bin', 'locale')
                 target = os.readlink(link)
-                self.assertEqual(target, '/run/host/usr/bin/locale')
+                # Might be either /usr/bin/locale or /usr/sbin/locale
+                self.assertRegex(target, r'^/run/host/usr/')
 
             if os.path.isfile('/usr/bin/localedef'):
                 link = os.path.join(tree, 'usr', 'bin', 'localedef')
                 target = os.readlink(link)
-                self.assertEqual(target, '/run/host/usr/bin/localedef')
+                # Might be either /usr/bin/localedef or /usr/sbin/localedef
+                self.assertRegex(target, r'^/run/host/usr/')
 
             for ldso, scout_impl in (
                 (

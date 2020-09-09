@@ -82,6 +82,7 @@ def main():
         '--exclude=./.git',
         '--exclude=./.mypy_cache',
         '--exclude=./_build',
+        '--exclude=./builddir',
         '--exclude=./debian',
         '--exclude=./relocatable-install',
         '-cf-',

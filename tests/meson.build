@@ -29,15 +29,20 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 tests = [
   'architecture',
-  'check-requirements-cli',
   'desktop-entry',
   'graphics',
   'library',
   'locale',
   'system-info',
-  'system-info-cli',
   'utils',
 ]
+
+if get_option('bin')
+  tests += [
+    'check-requirements-cli',
+    'system-info-cli',
+  ]
+endif
 
 tests_utils = [
   'fake-home.c',

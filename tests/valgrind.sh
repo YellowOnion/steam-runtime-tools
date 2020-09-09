@@ -24,7 +24,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 # Usage:
-# meson test -C builddir -v --wrap=$(pwd)/tests/valgrind.sh
+# meson test -C _build -v --wrap=$(pwd)/tests/valgrind.sh
 # or build with DEB_BUILD_OPTIONS=nostrip and use:
 # $(pwd)/tests/valgrind.sh /usr/libexec/installed-tests/steam-runtime-tools-0/test-architecture
 #

@@ -37,7 +37,7 @@ endif
 # knowledge of Meson.
 
 override_dh_auto_clean:
-	rm -fr builddir
+	rm -fr _build
 	rm -fr debian/locales
 
 libexecdir := libexec
@@ -48,7 +48,7 @@ DESTDIR := $(CURDIR)/debian/tmp
 relocatable_pkglibdir := $(CURDIR)/debian/libsteam-runtime-tools-0-relocatable-libs/usr/$(pkglibdir)
 
 override_dh_auto_configure:
-	if ! meson builddir \
+	if ! meson _build \
 		--prefix=/usr \
 		--libexecdir=$(libexecdir) \
 		--libdir=$(libdir) \
@@ -60,24 +60,24 @@ override_dh_auto_configure:
 		-Dversion=$(DEB_VERSION) \
 		$(meson_options) \
 	; then \
-		cat builddir/meson-logs/meson-log.txt; \
+		cat _build/meson-logs/meson-log.txt; \
 		exit 1; \
 	fi
 
 override_dh_auto_build:
-	ninja -v -C builddir
+	ninja -v -C _build
 
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
-	debian/check-version-number.sh $(CURDIR)/builddir $(DEB_VERSION_UPSTREAM)
+	debian/check-version-number.sh $(CURDIR)/_build $(DEB_VERSION_UPSTREAM)
 	mkdir debian/locales
 	localedef -f UTF-8 -i en_US --no-archive debian/locales/en_US.UTF-8
 	env LOCPATH=$(CURDIR)/debian/locales LC_ALL=en_US.UTF-8 \
-	meson test -C builddir --verbose
+	meson test -C _build --verbose
 endif
 
 override_dh_auto_install:
-	DESTDIR=$(DESTDIR) ninja -C builddir install
+	DESTDIR=$(DESTDIR) ninja -C _build install
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-vulkaninfo \
 		$(DESTDIR)/usr/$(pkglibexecdir)/
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-wflinfo \

@@ -93,14 +93,16 @@ class BaseTest(unittest.TestCase):
             'G_TEST_SRCDIR',
             os.path.abspath(os.path.dirname(__file__)),
         )
-        cls.top_srcdir = os.path.dirname(cls.G_TEST_SRCDIR)
+        cls.top_srcdir = os.path.dirname(os.path.dirname(cls.G_TEST_SRCDIR))
         cls.G_TEST_BUILDDIR = os.getenv(
             'G_TEST_BUILDDIR',
             os.path.abspath(
-                os.path.join(os.path.dirname(__file__), '..', '_build'),
+                os.path.join(os.path.dirname(__file__), '..', '..', '_build'),
             ),
         )
-        cls.top_builddir = os.path.dirname(cls.G_TEST_BUILDDIR)
+        cls.top_builddir = os.path.dirname(
+            os.path.dirname(cls.G_TEST_BUILDDIR)
+        )
 
         cls.tmpdir = tempfile.TemporaryDirectory()
 
@@ -136,7 +138,10 @@ class BaseTest(unittest.TestCase):
             ]
 
             for supp in (
-                os.path.join(self.top_srcdir, 'tests', 'pressure-vessel.supp'),
+                os.path.join(
+                    self.top_srcdir, 'tests', 'pressure-vessel',
+                    'pressure-vessel.supp',
+                ),
                 '/usr/share/glib-2.0/valgrind/glib.supp',
             ):
                 if os.path.isfile(supp):

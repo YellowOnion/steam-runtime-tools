@@ -40,7 +40,7 @@ elif "${PYFLAKES}" \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
     ./sysroot/*.py \
-    ./tests/*.py \
+    ./tests/*/*.py \
     >&2; then
     echo "1..1"
     echo "ok 1 - $PYFLAKES reported no issues"

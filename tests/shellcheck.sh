@@ -38,6 +38,7 @@ for shell_script in \
         ./pressure-vessel/pressure-vessel-locale-gen \
         ./pressure-vessel/pressure-vessel-unruntime \
         ./tests/*.sh \
+        ./tests/*/*.sh \
         ; do
     n=$((n + 1))
 

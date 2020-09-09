@@ -159,7 +159,8 @@ Then you can do:
     _build/prefix/bin/pressure-vessel-build-relocatable-install \
         --output _build/relocatable-install \
         --archive .
-    ./tests/relocatable-install.py _build/relocatable-install  # optional
+    ./tests/pressure-vessel/relocatable-install.py \
+        _build/relocatable-install      # optional
 
 When building a development version of `pressure-vessel` using a 'scout'
 SDK Docker image, if the `pressure-vessel-build-relocatable-install`

@@ -172,7 +172,8 @@ build:scout:
                 --archive "$(pwd)/_build" \
                 ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
                 ${NULL+}
-              prove -epython3.5 -v ./tests/relocatable-install.py :: \
+              prove -epython3.5 -v \
+                ./tests/pressure-vessel/relocatable-install.py :: \
                 "$(pwd)/_build/relocatable-install"
             fi
 
@@ -250,7 +251,7 @@ test:buster:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_buster_test_logs"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_depot"
-            python3 tests/containers.py
+            python3 tests/pressure-vessel/containers.py
 
     artifacts:
         paths:
@@ -267,7 +268,7 @@ test:bionic:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_bionic_test_logs"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_depot"
-            python3 tests/containers.py
+            python3 tests/pressure-vessel/containers.py
 
     artifacts:
         paths:
@@ -284,7 +285,7 @@ test:focal:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_ubuntu_focal_test_logs"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_depot"
-            python3 tests/containers.py
+            python3 tests/pressure-vessel/containers.py
 
     artifacts:
         paths:
@@ -320,7 +321,7 @@ test:archlinux:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_archlinux_test_logs"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_depot"
-            python3 tests/containers.py
+            python3 tests/pressure-vessel/containers.py
 
     artifacts:
         paths:

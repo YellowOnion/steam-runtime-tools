@@ -40,7 +40,7 @@ for script in \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
     ./sysroot/*.py \
-    ./tests/*.py \
+    ./tests/*/*.py \
 ; do
     i=$((i + 1))
     if [ "x${MYPY:="$(command -v mypy || echo false)"}" = xfalse ]; then

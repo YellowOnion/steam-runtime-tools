@@ -50,7 +50,7 @@ if "${PYCODESTYLE}" \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
     ./sysroot/*.py \
-    ./tests/*.py \
+    ./tests/*/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"
 else

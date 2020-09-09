@@ -24,81 +24,17 @@
 test_env = environment()
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
-test_env.set(
-  'PRESSURE_VESSEL_TEST_CONTAINERS',
-  get_option('test_containers_dir'),
-)
-test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
 tests = [
-  'adverb.py',
-  'cheap-copy.py',
-  'containers.py',
-  'invocation.py',
-  'launcher.py',
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
   'shellcheck.sh',
-  'test-locale-gen.sh',
-  'utils.py',
 ]
-
-compiled_tests = [
-  'bwrap-lock',
-  'resolve-in-sysroot',
-  'wait-for-child-processes',
-  'utils',
-]
-
-foreach test_name : compiled_tests
-  exe = executable(
-    'test-' + test_name,
-    files(test_name + '.c', 'test-utils.c'),
-    dependencies : [gio_unix, libglnx.get_variable('libglnx_dep')],
-    link_with : [pressure_vessel_utils],
-    include_directories : project_include_dirs,
-    install : false,
-  )
-
-  if glib_tap_support.found()
-    if prove.found()
-      test(
-        test_name, prove,
-        args : ['-v', '-e', '', exe, '::', '--tap'],
-        env : test_env,
-      )
-    else
-      test(
-        test_name, exe,
-        args : ['--tap'],
-        env : test_env,
-      )
-    endif
-  else
-    test(
-      test_name, exe,
-      env : test_env,
-    )
-  endif
-
-endforeach
 
 foreach test_name : tests
   test_args = ['-v', files(test_name)]
   timeout = 30
-
-  if test_name.endswith('.py')
-    test_args += ['-e', python.path()]
-  endif
-
-  if test_name.endswith('launcher.py')
-    timeout = 60
-  endif
-
-  if test_name.endswith('containers.py')
-    timeout = 300
-  endif
 
   if prove.found()
     if dbus_run_session.found()
@@ -108,23 +44,6 @@ foreach test_name : tests
         env : test_env,
         timeout : timeout,
       )
-
-      # Re-run launcher.py with the default python3 version (if any)
-      # to try the code path involving gi.repository.Gio
-      if test_name == 'launcher.py' and full_python.found()
-        test(
-          'full-python-' + test_name,
-          dbus_run_session,
-          args : [
-            '--',
-            'prove',
-            '-v', files(test_name),
-            '-e', full_python.path(),
-          ],
-          env : test_env,
-          timeout : timeout,
-        )
-      endif
     else
       test(
         test_name, prove,
@@ -136,29 +55,6 @@ foreach test_name : tests
   endif
 endforeach
 
-# Helper programs and manual tests
-helpers = [
-  'cheap-copy',
-  'elf-get-soname',
-  'helper',
-]
-
-foreach helper : helpers
-  executable(
-    'test-' + helper,
-    sources : [
-      helper + '.c',
-    ],
-    dependencies : [
-      gio_unix,
-      libglnx.get_variable('libglnx_dep'),
-    ],
-    link_with : [
-      pressure_vessel_utils,
-    ],
-    include_directories : project_include_dirs,
-    install : false,
-  )
-endforeach
+subdir('pressure-vessel')
 
 # vim:set sw=2 sts=2 et:

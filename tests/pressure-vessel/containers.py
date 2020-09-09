@@ -47,12 +47,12 @@ that was built against scout:
         --check-source-directory="$PRESSURE_VESSEL_TEST_CONTAINERS" \
         --allow-missing-sources \
         --srcdir="$(pwd)" --set-version "$(git describe)"
-    ./tests/containers.py
+    ./tests/pressure-vessel/containers.py
 
 or against the SteamLinuxRuntime depot that gets uploaded to the Steam CDN:
 
     export PRESSURE_VESSEL_TEST_CONTAINERS=../SteamLinuxRuntime/depot
-    ./tests/containers.py
+    ./tests/pressure-vessel/containers.py
 
 Influential environment variables:
 
@@ -63,9 +63,11 @@ Influential environment variables:
 * BWRAP:
     A bubblewrap executable
 * G_TEST_SRCDIR:
-    The ./tests subdirectory of the source root, typically $(pwd)/tests
+    The ./tests/pressure-vessel subdirectory of the source root,
+    typically $(pwd)/tests/pressure-vessel
 * G_TEST_BUILDDIR:
-    The ./tests subdirectory of the build root, typically $(pwd)/_build/tests
+    The ./tests/pressure-vessel subdirectory of the build root,
+    typically $(pwd)/_build/tests/pressure-vessel
 * PRESSURE_VESSEL_LIBCAPSULE_TOOLS:
     Override the location of capsule-capture-libs etc.
 * PRESSURE_VESSEL_TEST_CONTAINERS:

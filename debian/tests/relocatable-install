@@ -26,7 +26,8 @@ else
    PYTHON=python3
 fi
 
-"$PYTHON" ./tests/relocatable-install.py "${AUTOPKGTEST_TMP}/relocatable-install"
+"$PYTHON" ./tests/pressure-vessel/relocatable-install.py \
+    "${AUTOPKGTEST_TMP}/relocatable-install"
 
 for archive in "${AUTOPKGTEST_TMP}"/*.tar.*; do
     echo "==== $(basename "$archive") ===="

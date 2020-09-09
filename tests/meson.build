@@ -315,6 +315,8 @@ foreach test_name : test_scripts
   endif
 endforeach
 
-subdir('pressure-vessel')
+if get_option('pressure_vessel') and get_option('bin')
+  subdir('pressure-vessel')
+endif
 
 # vim:set sw=2 sts=2 et:

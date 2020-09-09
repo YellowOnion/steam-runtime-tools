@@ -35,8 +35,8 @@ cd "$G_TEST_SRCDIR/.."
 
 n=0
 for shell_script in \
-        ./pressure-vessel-unruntime \
-        ./pressure-vessel-locale-gen \
+        ./pressure-vessel/pressure-vessel-locale-gen \
+        ./pressure-vessel/pressure-vessel-unruntime \
         ./tests/*.sh \
         ; do
     n=$((n + 1))

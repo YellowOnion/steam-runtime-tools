@@ -47,8 +47,8 @@ echo "1..1"
 
 if "${PYCODESTYLE}" \
     --ignore=E402,W503 \
-    ./*.py \
-    ./pressure-vessel-test-ui \
+    ./pressure-vessel/*.py \
+    ./pressure-vessel/pressure-vessel-test-ui \
     ./sysroot/*.py \
     ./tests/*.py \
     >&2; then

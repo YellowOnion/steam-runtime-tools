@@ -82,7 +82,7 @@ if [ -z "${G_TEST_BUILDDIR-}" ]; then
 fi
 
 if [ -n "${PRESSURE_VESSEL_UNINSTALLED-}" ]; then
-    PATH="${G_TEST_BUILDDIR}/..:${G_TEST_SRCDIR}/..:${PATH}"
+    PATH="${G_TEST_BUILDDIR}/../pressure-vessel:${G_TEST_SRCDIR}/../pressure-vessel:${PATH}"
 fi
 
 locale_gen="pressure-vessel-locale-gen"

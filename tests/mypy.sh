@@ -37,8 +37,8 @@ export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
 
 i=0
 for script in \
-    ./*.py \
-    ./pressure-vessel-test-ui \
+    ./pressure-vessel/*.py \
+    ./pressure-vessel/pressure-vessel-test-ui \
     ./sysroot/*.py \
     ./tests/*.py \
 ; do

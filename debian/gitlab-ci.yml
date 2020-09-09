@@ -194,7 +194,7 @@ build:
         PRESSURE_VESSEL=$(ls _build/pressure-vessel-*-bin.tar.gz | head -1)
 
         if [ -n "${IMAGES_DOWNLOAD_URL}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL}" ]; then
-            python3 populate-depot.py \
+            python3 pressure-vessel/populate-depot.py \
             --depot=_depot \
             --include-sdk \
             --unpack-runtimes \
@@ -205,7 +205,7 @@ build:
             soldier \
             ${NULL+}
         else
-            python3 populate-depot.py \
+            python3 pressure-vessel/populate-depot.py \
             --depot=_depot \
             --include-sdk \
             --unpack-runtimes \

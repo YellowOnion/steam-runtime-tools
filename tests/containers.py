@@ -42,7 +42,7 @@ that was built against scout:
     rm -fr "$PRESSURE_VESSEL_TEST_CONTAINERS/pressure-vessel"
     env DESTDIR="$(pwd)/_build-for-sysroot/DESTDIR" \
         ./sysroot/run-in-sysroot.py --sysroot ../scout-sysroot -- \
-        python3.5 ./build-relocatable-install.py \
+        python3.5 ./pressure-vessel/build-relocatable-install.py \
         --output="$PRESSURE_VESSEL_TEST_CONTAINERS/pressure-vessel" \
         --check-source-directory="$PRESSURE_VESSEL_TEST_CONTAINERS" \
         --allow-missing-sources \
@@ -188,7 +188,7 @@ class TestContainers(BaseTest):
                 'pressure-vessel-locale-gen',
             ):
                 shutil.copy2(
-                    os.path.join(cls.top_srcdir, exe),
+                    os.path.join(cls.top_srcdir, 'pressure-vessel', exe),
                     os.path.join(cls.pv_dir, 'bin', exe),
                 )
 

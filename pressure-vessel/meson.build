@@ -21,6 +21,29 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+conf_data = configuration_data()
+conf_data.set_quoted('VERSION', version)
+
+configure_file(
+  input : 'config.h.in',
+  output : '_pressure-vessel-config.h',
+  configuration : conf_data,
+)
+pv_c_args = ['-include', '_pressure-vessel-config.h']
+
+scripts = [
+  'pressure-vessel-locale-gen',
+  'pressure-vessel-test-ui',
+  'pressure-vessel-unruntime',
+]
+
+foreach script : scripts
+  install_data(
+    script,
+    install_dir : get_option('bindir'),
+  )
+endforeach
+
 # Headers to scan for enum/flags types.
 headers = [
   'resolve-in-sysroot.h',
@@ -61,6 +84,7 @@ pressure_vessel_utils = static_library(
     'utils.c',
     'utils.h',
   ],
+  c_args : pv_c_args,
   dependencies : [
     threads,
     gio_unix,
@@ -77,7 +101,7 @@ launcher_codegen = static_library(
   dependencies : [
     gio_unix,
   ],
-  c_args : silence_gdbus_codegen_warnings,
+  c_args : silence_gdbus_codegen_warnings + pv_c_args,
   include_directories : project_include_dirs,
   install: false,
 )
@@ -89,6 +113,7 @@ executable(
     'wrap-interactive.c',
     'wrap-interactive.h',
   ],
+  c_args : pv_c_args,
   dependencies : [
     threads,
     gio_unix,
@@ -109,6 +134,7 @@ executable(
   sources: [
     'launch.c',
   ],
+  c_args : pv_c_args,
   dependencies : [
     threads,
     gio_unix,
@@ -129,6 +155,7 @@ executable(
   sources: [
     'launcher.c',
   ],
+  c_args : pv_c_args,
   dependencies : [
     threads,
     gio_unix,
@@ -161,6 +188,7 @@ executable(
     'runtime.h',
     'wrap.c',
   ] + enums,
+  c_args : pv_c_args,
   dependencies : [
     steam_runtime_tools,
     gio_unix,
@@ -182,9 +210,36 @@ executable(
   sources : [
     'try-setlocale.c',
   ],
+  c_args : pv_c_args,
   include_directories : project_include_dirs,
   install : true,
   install_dir : get_option('bindir'),
 )
+
+if get_option('srcdir') != ''
+  conf_data = configuration_data()
+  conf_data.set('prefix', get_option('prefix'))
+  conf_data.set('python', python.path())
+  conf_data.set('sh', sh.path())
+  conf_data.set('srcdir', get_option('srcdir'))
+  conf_data.set('version', version)
+  install_data(
+    configure_file(
+      input : 'build-relocatable-install.in',
+      output : 'pressure-vessel-build-relocatable-install',
+      configuration : conf_data,
+    ),
+    install_dir : get_option('bindir'),
+    install_mode : 'rwxr-xr-x',
+  )
+  meson.add_install_script(
+    python.path(),
+    meson.current_source_dir() / 'copy-source-code.py',
+    '--srcdir', meson.current_source_dir(),
+    '--prefix', get_option('prefix'),
+    '--set-version', version,
+    get_option('srcdir'),
+  )
+endif
 
 # vim:set sw=2 sts=2 et:

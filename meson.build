@@ -181,64 +181,10 @@ if not libelf.found()
   libelf = declare_dependency(link_args : ['-lelf'])
 endif
 
-scripts = [
-  'pressure-vessel-locale-gen',
-  'pressure-vessel-test-ui',
-  'pressure-vessel-unruntime',
-]
-
-foreach script : scripts
-  install_data(
-    script,
-    install_dir : get_option('bindir'),
-  )
-endforeach
-
-cc = meson.get_compiler('c')
-
-conf_data = configuration_data()
-conf_data.set_quoted('VERSION', version)
-
-configure_file(
-  input : 'config.h.in',
-  output : '_pressure-vessel-config.h',
-  configuration : conf_data,
-)
-add_project_arguments(
-  ['-include', '_pressure-vessel-config.h'],
-  language : 'c',
-)
-
 subdir('pressure-vessel')
 
 if get_option('man')
   subdir('man')
-endif
-
-if get_option('srcdir') != ''
-  conf_data = configuration_data()
-  conf_data.set('prefix', get_option('prefix'))
-  conf_data.set('python', python.path())
-  conf_data.set('sh', sh.path())
-  conf_data.set('srcdir', get_option('srcdir'))
-  conf_data.set('version', version)
-  install_data(
-    configure_file(
-      input : 'build-relocatable-install.in',
-      output : 'pressure-vessel-build-relocatable-install',
-      configuration : conf_data,
-    ),
-    install_dir : get_option('bindir'),
-    install_mode : 'rwxr-xr-x',
-  )
-  meson.add_install_script(
-    python.path(),
-    meson.current_source_dir() / 'copy-source-code.py',
-    '--srcdir', meson.current_source_dir(),
-    '--prefix', get_option('prefix'),
-    '--set-version', version,
-    get_option('srcdir'),
-  )
 endif
 
 subdir('tests')

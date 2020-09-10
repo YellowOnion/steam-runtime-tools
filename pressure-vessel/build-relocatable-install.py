@@ -118,6 +118,8 @@ LIBCAPSULE_TOOLS = [
 
 def install(src, dst, mode=0o644):
     # type: (str, str, int) -> None
+
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy(src, dst)
 
     if os.path.isdir(dst):
@@ -342,6 +344,7 @@ def main():
                         installation,
                         'libexec',
                         'steam-runtime-tools-0',
+                        os.path.basename(tool),
                     ),
                 )
 

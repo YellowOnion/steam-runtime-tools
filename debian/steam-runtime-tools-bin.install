@@ -1,3 +1,3 @@
 usr/bin/steam-runtime-check-requirements
 usr/bin/steam-runtime-system-info
-usr/share/man/man1
+usr/share/man/man1/steam-runtime-*

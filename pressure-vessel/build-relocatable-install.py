@@ -318,7 +318,12 @@ def main():
                     os.path.join(installation, 'bin'),
                 )
 
-            path = '/usr/libexec/steam-runtime-tools-0'
+            path = os.path.join(
+                args.prefix, 'libexec', 'steam-runtime-tools-0',
+            )
+
+            if not os.path.exists(path):
+                path = '/usr/libexec/steam-runtime-tools-0'
 
             if not os.path.exists(path):
                 package = 'libsteam-runtime-tools-0-helpers'
@@ -373,6 +378,16 @@ def main():
             ])
 
             if arch.name == primary_architecture:
+                path = os.path.join(
+                    args.prefix, 'lib', arch.multiarch,
+                    'libsteam-runtime-tools-0.so.0',
+                )
+
+                if os.path.exists(path):
+                    libsrt_pattern = 'path:' + path
+                else:
+                    libsrt_pattern = 'soname:libsteam-runtime-tools-0.so.0'
+
                 v_check_call([
                     '{}/bin/{}-capsule-capture-libs'.format(
                         installation,
@@ -389,6 +404,7 @@ def main():
                     'soname:libjson-glib-1.0.so.0',
                     'soname:libpcre.so.3',
                     'soname:libselinux.so.1',
+                    libsrt_pattern,
                 ])
 
             for so in glob.glob(
@@ -400,7 +416,21 @@ def main():
                     '*.so.*',
                 ),
             ):
-                install(so, os.path.join(installation, 'lib', arch.multiarch))
+                install(
+                    so,
+                    os.path.join(
+                        installation, 'lib', arch.multiarch,
+                        os.path.basename(so)
+                    )
+                )
+                install(
+                    so,
+                    os.path.join(
+                        installation, 'lib', arch.multiarch,
+                        'steam-runtime-tools-0',
+                        os.path.basename(so)
+                    )
+                )
 
         # For bwrap (and possibly other programs in future) we don't have
         # a relocatable version with a RPATH/RUNPATH, so we wrap a script

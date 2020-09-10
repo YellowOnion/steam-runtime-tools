@@ -258,7 +258,6 @@ relocatable-install:
         else
             python3 ./pressure-vessel/populate-depot.py \
             --depot=_build/depot \
-            --include-sdk \
             --unpack-runtimes \
             --pressure-vessel "${PRESSURE_VESSEL}" \
             --version latest-steam-client-public-beta \

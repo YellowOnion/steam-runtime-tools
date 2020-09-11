@@ -159,7 +159,7 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
         --suite="${suite}" \
         "${deploy}" \
         -- \
-        "${container_args[@]}" \
+        ${container_args[0]+"${container_args[@]}"} \
         -- \
         "$@" \
         ${NULL+}
@@ -225,7 +225,7 @@ env \
     --session="$rendezvous" \
     --suite="$suite" \
     -- \
-    "${container_args[@]}" \
+    ${container_args[0]+"${container_args[@]}"} \
     --terminate-timeout=10 \
     ${NULL+}
 

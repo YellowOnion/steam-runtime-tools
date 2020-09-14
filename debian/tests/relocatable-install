@@ -29,7 +29,7 @@ fi
 "$PYTHON" ./tests/pressure-vessel/relocatable-install.py \
     "${AUTOPKGTEST_TMP}/relocatable-install"
 
-for archive in "${AUTOPKGTEST_TMP}"/*.tar.*; do
+for archive in "${AUTOPKGTEST_ARTIFACTS}"/*.tar.*; do
     echo "==== $(basename "$archive") ===="
     tar -tvf "$archive"
 done

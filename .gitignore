@@ -10,6 +10,5 @@
 /obj-*/
 /pressure-vessel-[0-9]*.tar.gz
 /relocatable-install/
-/subprojects/steam-runtime-tools/
 /tests/sysroots/
 __pycache__/

@@ -1,4 +1,0 @@
-[wrap-git]
-directory = steam-runtime-tools
-url = https://gitlab.steamos.cloud/steam/steam-runtime-tools.git
-revision = head

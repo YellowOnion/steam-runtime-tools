@@ -1,8 +1,17 @@
-steam-runtime-tools (0.20200909.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200914.0) UNRELEASED; urgency=medium
 
+  [ Simon McVittie ]
   * Combine steam-runtime-tools with pressure-vessel (T22909)
+  * inspect-library: Refactoring
+  * CI improvements
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 09 Sep 2020 15:08:21 +0100
+  [ Ludovico de Nittis ]
+  * steam: Do not report an issue if the Flatpak version of Steam is the
+    default URI handler
+  * wrap: Propagate even unchanged environment variables if running
+    in Flatpak
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 14 Sep 2020 14:19:23 +0100
 
 pressure-vessel (0.20200909.0) scout; urgency=medium
 

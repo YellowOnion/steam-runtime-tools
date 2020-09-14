@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20200914.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20200914.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * Combine steam-runtime-tools with pressure-vessel (T22909)
@@ -11,7 +11,7 @@ steam-runtime-tools (0.20200914.0) UNRELEASED; urgency=medium
   * wrap: Propagate even unchanged environment variables if running
     in Flatpak
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 14 Sep 2020 14:19:23 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 14 Sep 2020 17:17:04 +0100
 
 pressure-vessel (0.20200909.0) scout; urgency=medium
 

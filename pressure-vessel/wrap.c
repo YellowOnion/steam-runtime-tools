@@ -427,7 +427,7 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
         }
     }
 
-  if (changed)
+  if (changed || g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
     {
       g_autofree gchar *joined = g_strjoinv (":", values);
 

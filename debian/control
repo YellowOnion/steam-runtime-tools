@@ -26,6 +26,8 @@ Build-Depends:
  python3,
  python3 (>= 3.5) | python3.5,
  zlib1g <!nocheck>,
+Build-Depends-Indep:
+ libglib2.0-doc,
 Build-Conflicts:
  libsteam-runtime-tools-0-helpers (<< 0.20191204.0~),
  libsteam-runtime-tools-0-relocatable-libs,

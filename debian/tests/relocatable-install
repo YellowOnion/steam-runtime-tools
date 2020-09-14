@@ -18,7 +18,7 @@ apt-get -y install \
 /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
     ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
     --output "${AUTOPKGTEST_TMP}/relocatable-install" \
-    --archive "${AUTOPKGTEST_TMP}"
+    --archive "${AUTOPKGTEST_ARTIFACTS}"
 
 if command -v python3.5; then
    PYTHON=python3.5
@@ -33,6 +33,3 @@ for archive in "${AUTOPKGTEST_TMP}"/*.tar.*; do
     echo "==== $(basename "$archive") ===="
     tar -tvf "$archive"
 done
-
-# TODO: When the coordinator can accept bigger artifacts, use
-# --archive=${AUTOPKGTEST_ARTIFACTS} instead

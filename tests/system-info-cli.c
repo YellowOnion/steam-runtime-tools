@@ -715,14 +715,29 @@ json_parsing (Fixture *f,
       gchar *output_json;
       gchar *output = NULL;
       gchar *expectation = NULL;
+      gchar *generated = NULL;
       gchar **envp;
       GError *error = NULL;
       const gchar *argv[] = { "steam-runtime-system-info", NULL };
+      JsonParser *parser = NULL;
+      JsonNode *node = NULL;  /* not owned */
+      JsonGenerator *generator = NULL;
 
       g_test_message ("%s: input=%s output=%s", test->description, test->input_name, test->output_name);
 
       input_json = g_build_filename (f->srcdir, "json-report", test->input_name, NULL);
       output_json = g_build_filename (f->srcdir, "json-report", test->output_name, NULL);
+
+      parser = json_parser_new ();
+      json_parser_load_from_file (parser, output_json, &error);
+      g_assert_no_error (error);
+      node = json_parser_get_root (parser);
+      g_assert_nonnull (node);
+      generator = json_generator_new ();
+      json_generator_set_root (generator, node);
+      json_generator_set_pretty (generator, TRUE);
+      generated = json_generator_to_data (generator, NULL);
+      expectation = g_strconcat (generated, "\n", NULL);
 
       envp = g_get_environ ();
       envp = g_environ_setenv (envp, "SRT_TEST_PARSE_JSON", input_json, TRUE);
@@ -741,15 +756,14 @@ json_parsing (Fixture *f,
       g_assert_true (result);
       g_assert_cmpint (exit_status, ==, 0);
       g_assert_nonnull (output);
-
-      g_assert_true (g_file_get_contents (output_json, &expectation, NULL, &error));
-      g_assert_no_error (error);
-
       g_assert_cmpstr (output, ==, expectation);
 
+      g_object_unref (parser);
+      g_object_unref (generator);
       g_free (input_json);
       g_free (output_json);
       g_free (output);
+      g_free (generated);
       g_free (expectation);
       g_strfreev (envp);
       g_clear_error (&error);

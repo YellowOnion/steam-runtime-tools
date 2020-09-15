@@ -28,6 +28,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <steam-runtime-tools/glib-compat.h>
+#include <steam-runtime-tools/json-glib-compat.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -93,15 +94,15 @@ libraries_presence (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
   JsonObject *json_graphics;
-  GError *error = NULL;
-  gchar *output = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autofree gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
     {
       "steam-runtime-system-info", "--expectations", expectations_in, NULL
@@ -169,12 +170,6 @@ libraries_presence (Fixture *f,
       g_assert_true (json_object_has_member (json_graphics, "egl_x11/gl"));
       g_assert_true (json_object_has_member (json_graphics, "egl_x11/glesv2"));
     }
-
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (expectations_in);
-  g_free (output);
-  g_clear_error (&error);
 }
 
 static void
@@ -235,14 +230,14 @@ libraries_missing (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
-  GError *error = NULL;
-  gchar *output = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  gchar *expectations_in = g_build_filename (f->srcdir, "expectations_with_missings", NULL);
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autofree gchar *expectations_in = g_build_filename (f->srcdir, "expectations_with_missings", NULL);
   const gchar *argv[] =
     {
       "steam-runtime-system-info", "--expectations", expectations_in, NULL
@@ -295,12 +290,6 @@ libraries_missing (Fixture *f,
 
       check_libraries_missing (json_arch);
     }
-
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (expectations_in);
-  g_free (output);
-  g_clear_error (&error);
 }
 
 static void
@@ -349,14 +338,14 @@ libraries_presence_verbose (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
-  GError *error = NULL;
-  gchar *output = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autofree gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
     {
       /* We assert that there was nothing on stderr, so don't let
@@ -416,12 +405,6 @@ libraries_presence_verbose (Fixture *f,
 
       check_libraries_verbose (json_arch);
     }
-
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (expectations_in);
-  g_free (output);
-  g_clear_error (&error);
 }
 
 /*
@@ -433,13 +416,13 @@ no_arguments (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
-  GError *error = NULL;
-  gchar *output = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
 
   result = g_spawn_sync (NULL,    /* working directory */
@@ -485,11 +468,6 @@ no_arguments (Fixture *f,
       g_assert_true (json_object_has_member (json_arch, "vdpau_drivers"));
       g_assert_true (json_object_has_member (json_arch, "glx_drivers"));
     }
-
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (output);
-  g_clear_error (&error);
 }
 
 /*
@@ -501,16 +479,15 @@ steam_presence (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_sub_object;
   JsonArray *array;
-  GError *error = NULL;
-  gchar *output = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
   const gchar *path = NULL;
   const gchar *version = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
 
@@ -580,10 +557,6 @@ steam_presence (Fixture *f,
   g_assert_true (json_object_has_member (json, "architectures"));
 
   fake_home_clean_up (fake_home);
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (output);
-  g_clear_error (&error);
 }
 
 /*
@@ -595,16 +568,15 @@ steam_issues (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_sub_object;
   JsonArray *array;
-  GError *error = NULL;
-  gchar *output = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
   const gchar *path = NULL;
   const gchar *version = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
 
@@ -682,10 +654,6 @@ steam_issues (Fixture *f,
   g_assert_true (json_object_has_member (json, "architectures"));
 
   fake_home_clean_up (fake_home);
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (output);
-  g_clear_error (&error);
 }
 
 typedef struct
@@ -713,17 +681,17 @@ json_parsing (Fixture *f,
       const JsonTest *test = &json_test[i];
       gboolean result;
       int exit_status = -1;
-      gchar *input_json;
-      gchar *output_json;
-      gchar *output = NULL;
-      gchar *expectation = NULL;
-      gchar *generated = NULL;
-      gchar **envp;
-      GError *error = NULL;
+      g_autofree gchar *input_json = NULL;
+      g_autofree gchar *output_json = NULL;
+      g_autofree gchar *output = NULL;
+      g_autofree gchar *expectation = NULL;
+      g_autofree gchar *generated = NULL;
+      g_auto(GStrv) envp = NULL;
+      g_autoptr(GError) error = NULL;
       const gchar *argv[] = { "steam-runtime-system-info", NULL };
-      JsonParser *parser = NULL;
+      g_autoptr(JsonParser) parser = NULL;
       JsonNode *node = NULL;  /* not owned */
-      JsonGenerator *generator = NULL;
+      g_autoptr(JsonGenerator) generator = NULL;
 
       g_test_message ("%s: input=%s output=%s", test->description, test->input_name, test->output_name);
 
@@ -759,16 +727,6 @@ json_parsing (Fixture *f,
       g_assert_cmpint (exit_status, ==, 0);
       g_assert_nonnull (output);
       g_assert_cmpstr (output, ==, expectation);
-
-      g_object_unref (parser);
-      g_object_unref (generator);
-      g_free (input_json);
-      g_free (output_json);
-      g_free (output);
-      g_free (generated);
-      g_free (expectation);
-      g_strfreev (envp);
-      g_clear_error (&error);
     }
 }
 
@@ -781,9 +739,9 @@ test_help_and_version (Fixture *f,
 {
   gboolean ret;
   int exit_status = -1;
-  GError *error = NULL;
-  gchar *output = NULL;
-  gchar *diagnostics = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
+  g_autofree gchar *diagnostics = NULL;
   const gchar *argv[] = {
       "env",
       "LC_ALL=C",
@@ -835,10 +793,6 @@ test_help_and_version (Fixture *f,
   g_assert_nonnull (diagnostics);
 
   g_assert_nonnull (strstr (output, "OPTIONS"));
-
-  g_free (output);
-  g_free (diagnostics);
-  g_clear_error (&error);
 }
 
 /*
@@ -850,15 +804,15 @@ test_unblocks_sigchld (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
-  GError *error = NULL;
-  gchar *output = NULL;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  gchar *adverb = g_build_filename (f->builddir, "adverb", NULL);
-  gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *output = NULL;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autofree gchar *adverb = g_build_filename (f->builddir, "adverb", NULL);
+  g_autofree gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
     {
       adverb,
@@ -910,13 +864,6 @@ test_unblocks_sigchld (Fixture *f,
       g_assert_cmpint (json_object_get_boolean_member (json_arch, "can-run"),
                       ==, srt_system_info_can_run (info, multiarch_tuples[i]));
     }
-
-  g_object_unref (parser);
-  g_object_unref (info);
-  g_free (output);
-  g_clear_error (&error);
-  g_free (adverb);
-  g_free (expectations_in);
 }
 
 int

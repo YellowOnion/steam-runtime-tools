@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <libglnx.h>
+
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <steam-runtime-tools/glib-compat.h>

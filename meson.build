@@ -284,9 +284,13 @@ xlib = dependency(
 
 libdl = c_compiler.find_library('dl', required : false)
 
-libglnx = subproject('libglnx')
+libglnx_dep = subproject('libglnx').get_variable('libglnx_dep')
 
-project_include_dirs = include_directories('.')
+project_include_dirs = include_directories(
+  '.',
+  'subprojects',
+  'subprojects/libglnx',
+)
 
 pv_include_dirs = include_directories(
     '.',

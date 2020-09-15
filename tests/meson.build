@@ -44,10 +44,34 @@ if get_option('bin')
   ]
 endif
 
-tests_utils = [
-  'fake-home.c',
-  'test-utils.c',
-]
+test_utils = static_library(
+  'test-utils',
+  sources : [
+    'fake-home.c',
+    'test-utils.c',
+  ],
+  dependencies : [
+    glib,
+    gobject,
+    gio_unix,
+    json_glib,
+    libglnx_dep,
+    libsteamrt_dep,
+  ],
+  include_directories : project_include_dirs,
+  install: false,
+)
+test_utils_dep = declare_dependency(
+  dependencies : [
+    glib,
+    gobject,
+    gio_unix,
+    json_glib,
+    libglnx_dep,
+    libsteamrt_dep,
+  ],
+  link_with : test_utils,
+)
 
 tests_dir = join_paths(
   get_option('libexecdir'),
@@ -110,11 +134,19 @@ executable(
 foreach test_name : tests
   exe = executable(
     'test-' + test_name,
-    files(test_name + '.c') + tests_utils,
+    files(test_name + '.c'),
     c_args : [
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],
-    dependencies : [glib, gobject, json_glib, libsteamrt_dep],
+    dependencies : [
+      glib,
+      gobject,
+      gio_unix,
+      json_glib,
+      libglnx_dep,
+      libsteamrt_dep,
+      test_utils_dep,
+    ],
     include_directories : project_include_dirs,
     install : get_option('installed_tests'),
     install_dir : tests_dir,
@@ -277,7 +309,7 @@ foreach arch : [
       arch + '-' + helper,
       helper + '.c',
       c_args : ['-DMOCK_ARCHITECTURE_' + arch],
-      dependencies : [glib, gio],
+      dependencies : [glib, gio, test_utils_dep],
       include_directories : project_include_dirs,
       install: true,
       install_dir: tests_dir

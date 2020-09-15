@@ -35,7 +35,7 @@
 #include "glib-backports.h"
 #include "libglnx/libglnx.h"
 
-#include "test-utils.h"
+#include "tests/test-utils.h"
 #include "utils.h"
 
 typedef struct

@@ -33,7 +33,7 @@
 #include "libglnx/libglnx.h"
 
 #include "resolve-in-sysroot.h"
-#include "test-utils.h"
+#include "tests/test-utils.h"
 #include "utils.h"
 
 typedef struct

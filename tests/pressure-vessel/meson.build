@@ -50,8 +50,12 @@ compiled_tests = [
 foreach test_name : compiled_tests
   exe = executable(
     'test-' + test_name,
-    files(test_name + '.c', 'test-utils.c'),
-    dependencies : [gio_unix, libglnx.get_variable('libglnx_dep')],
+    files(test_name + '.c'),
+    dependencies : [
+      gio_unix,
+      libglnx_dep,
+      test_utils_dep,
+    ],
     link_with : [pressure_vessel_utils],
     include_directories : pv_include_dirs,
     install : false,
@@ -153,7 +157,7 @@ foreach helper : helpers
     ],
     dependencies : [
       gio_unix,
-      libglnx.get_variable('libglnx_dep'),
+      libglnx_dep,
     ],
     link_with : [
       pressure_vessel_utils,

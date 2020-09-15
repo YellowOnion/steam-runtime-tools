@@ -25,6 +25,8 @@
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
+#include <libglnx.h>
+
 #include <steam-runtime-tools/glib-compat.h>
 
 #include <glib.h>

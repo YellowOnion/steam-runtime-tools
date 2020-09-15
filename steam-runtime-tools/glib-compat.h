@@ -35,7 +35,7 @@
 # define G_SPAWN_DEFAULT (0)
 #endif
 
-#if !GLIB_CHECK_VERSION(2, 44, 0)
+#if !defined(g_steal_pointer)
 #define g_steal_pointer(x) _srt_steal_pointer (x)
 /* A simplified version of g_steal_pointer without type-safety. */
 static inline gpointer
@@ -50,7 +50,7 @@ _srt_steal_pointer (gpointer pointer_to_pointer)
 }
 #endif
 
-#if !GLIB_CHECK_VERSION(2, 34, 0)
+#if !defined(g_clear_pointer)
 #define g_clear_pointer(x, destroy) \
   _srt_clear_pointer (x, (GDestroyNotify) (void (*)(void)) destroy)
 /* A simplified version of g_clear_pointer without type-safety. */

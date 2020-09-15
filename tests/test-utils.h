@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -32,6 +32,9 @@
 
 #include <glib.h>
 
+/* for its backports of g_test_skip(), etc. */
+#include <libglnx/libglnx.h>
+
 #ifndef g_assert_true
 #define g_assert_true(x) g_assert ((x))
 #endif
@@ -53,17 +56,13 @@
 #define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
 #endif
 
-#ifndef g_assert_nonnull
-#define g_assert_nonnull(x) g_assert ((x) != NULL)
-#endif
-
-#ifndef g_assert_null
-#define g_assert_null(x) g_assert ((x) == NULL)
-#endif
-
-#if !GLIB_CHECK_VERSION(2, 38, 0)
-#define g_test_skip(msg) g_test_message ("SKIP: %s", msg)
-#endif
+/*
+ * Other assorted test helpers.
+ */
 
 gchar *_srt_global_setup_private_xdg_dirs (void);
 gboolean _srt_global_teardown_private_xdg_dirs (void);
+
+typedef GHashTable *TestsOpenFdSet;
+TestsOpenFdSet tests_check_fd_leaks_enter (void);
+void tests_check_fd_leaks_leave (TestsOpenFdSet fds);

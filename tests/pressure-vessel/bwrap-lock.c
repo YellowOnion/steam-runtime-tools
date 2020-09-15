@@ -32,7 +32,7 @@
 #include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"
-#include "test-utils.h"
+#include "tests/test-utils.h"
 #include "utils.h"
 
 typedef struct

@@ -48,3 +48,7 @@ const char *srt_desktop_entry_get_commandline (SrtDesktopEntry *self);
 const char *srt_desktop_entry_get_filename (SrtDesktopEntry *self);
 gboolean srt_desktop_entry_is_default_handler (SrtDesktopEntry *self);
 gboolean srt_desktop_entry_is_steam_handler (SrtDesktopEntry *self);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDesktopEntry, g_object_unref)
+#endif

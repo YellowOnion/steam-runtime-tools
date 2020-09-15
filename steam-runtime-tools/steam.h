@@ -113,3 +113,7 @@ SrtSteamIssues srt_steam_get_issues (SrtSteam *self);
 const char *srt_steam_get_install_path (SrtSteam *self);
 const char *srt_steam_get_data_path (SrtSteam *self);
 const char *srt_steam_get_bin32_path (SrtSteam *self);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSteam, g_object_unref)
+#endif

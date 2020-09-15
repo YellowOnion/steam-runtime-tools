@@ -29,3 +29,13 @@ Some more advanced environment variables (subject to change):
 
 * See the pressure-vessel source code for more.
 
+Licensing and copyright
+-----------------------
+
+The Steam Runtime contains many third-party software packages under
+various open-source licenses.
+
+For full source code, please see the version-numbered subdirectories of
+<https://repo.steampowered.com/steamrt-images-scout/snapshots/> and
+<https://repo.steampowered.com/steamrt-images-soldier/snapshots/>
+corresponding to the version numbers listed in VERSIONS.txt.

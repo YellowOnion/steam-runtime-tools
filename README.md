@@ -2,7 +2,8 @@ steam-runtime-tools — Steam Runtime integration for the Steam client
 ====================================================================
 
 The steam-runtime-tools library provides low-level Unix-specific tools
-and functionality for the Steam client.
+and functionality for the Steam client, including the pressure-vessel
+tool that runs Steam games in containers.
 
 To support multiple architectures (currently only `i386` and `x86_64`
 are supported), you will need to build it once for each architecture and
@@ -25,3 +26,16 @@ to bundle steam-runtime-tools alongside some other stack in this layout:
 as long as the program that is linked to `libsteam-runtime-tools-0.so.0`
 can find it (via a `RPATH` or `RUNPATH` or by setting the `LD_LIBRARY_PATH`
 environment variable).
+
+pressure-vessel — putting Steam in containers
+---------------------------------------------
+
+The `pressure-vessel/` subdirectory of this project contains the
+pressure-vessel utilities, which are used by Steam's
+[Steam Linux Runtime](https://steamdb.info/app/1070560/depots/)
+compatibility tool to run games in individual game-specific containers.
+For background on pressure-vessel and SteamLinuxRuntime, please see:
+
+* <https://github.com/ValveSoftware/steam-runtime/tree/master/doc>
+* <https://archive.fosdem.org/2020/schedule/event/containers_steam/>
+* <https://steamcommunity.com/app/221410/discussions/0/1638675549018366706/>

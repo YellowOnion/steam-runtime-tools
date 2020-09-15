@@ -1,7 +1,15 @@
 pressure-vessel — tools to put Steam in containers
 ==================================================
 
-pressure-vessel is a bit like a simplified version of Flatpak for Steam games.
+pressure-vessel is a bit like a simplified version of Flatpak for Steam
+games. It is used by Steam's
+[Steam Linux Runtime](https://steamdb.info/app/1070560/depots/)
+compatibility tool to run games in individual game-specific containers.
+For background on pressure-vessel and SteamLinuxRuntime, please see:
+
+* <https://github.com/ValveSoftware/steam-runtime/tree/master/doc>
+* <https://archive.fosdem.org/2020/schedule/event/containers_steam/>
+* <https://steamcommunity.com/app/221410/discussions/0/1638675549018366706/>
 
 Use cases
 ---------

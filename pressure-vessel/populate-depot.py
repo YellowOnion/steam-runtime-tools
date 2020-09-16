@@ -458,8 +458,8 @@ class Main:
         for path in ('metadata/VERSION.txt', 'sources/VERSION.txt'):
             full = os.path.join(self.depot, 'pressure-vessel', path)
             if os.path.exists(full):
-                with open(full) as reader:
-                    version = reader.read().rstrip('\n')
+                with open(full) as text_reader:
+                    pv_version.version = text_reader.read().rstrip('\n')
 
                 break
 
@@ -655,7 +655,9 @@ class Main:
                 stdout=subprocess.PIPE,
                 universal_newlines=True,
             ) as describe:
-                version = describe.stdout.read().strip()
+                stdout = describe.stdout
+                assert stdout is not None
+                version = stdout.read().strip()
                 # Deliberately ignoring exit status:
                 # if git is missing or old we'll use 'unknown'
         except (OSError, subprocess.SubprocessError):

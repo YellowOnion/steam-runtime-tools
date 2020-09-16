@@ -46,7 +46,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
 )
 
 from debian.deb822 import (
@@ -282,6 +281,38 @@ exec "$here/run-in-steamrt" \\
 '''
 
 
+class ComponentVersion:
+    def __init__(self, name: str = '') -> None:
+        self.name = name
+        self.version = ''
+        self.runtime = ''
+        self.runtime_version = ''
+        self.comment = ''
+
+    def __str__(self) -> str:
+        ret = '{} version {!r}'.format(self.name, self.version)
+
+        if self.runtime or self.runtime_version:
+            ret = ret + ' (from {} version {})'.format(
+                self.runtime or '(unknown runtime)',
+                self.runtime_version or '(unknown)',
+            )
+
+        return ret
+
+    def to_tsv(self) -> str:
+        if self.comment:
+            comment = '# ' + self.comment
+        else:
+            comment = ''
+
+        return '\t'.join((
+            self.name, self.version,
+            self.runtime, self.runtime_version,
+            comment,
+        )) + '\n'
+
+
 class Main:
     def __init__(
         self,
@@ -382,15 +413,20 @@ class Main:
 
             self.runtimes.append(self.new_runtime(name, details))
 
-        self.versions = []      # type: List[Tuple[str, str, str]]
+        self.versions = []      # type: List[ComponentVersion]
 
-    def new_runtime(self, name: str, details: Dict[str, Any]) -> Runtime:
+    def new_runtime(
+        self,
+        name: str,
+        details: Dict[str, Any],
+        default_suite: str = '',
+    ) -> Runtime:
         return Runtime.from_details(
             name,
             details,
             default_architecture=self.default_architecture,
             default_include_sdk=self.default_include_sdk,
-            default_suite=self.default_suite,
+            default_suite=default_suite or self.default_suite,
             default_version=self.default_version,
             images_uri=self.images_uri,
             ssh_host=self.ssh_host,
@@ -398,24 +434,29 @@ class Main:
         )
 
     def run(self) -> None:
-        comment = ''
+        pv_version = ComponentVersion('pressure-vessel')
 
         for runtime in self.runtimes:
             if runtime.name == self.pressure_vessel:
                 logger.info(
                     'Downloading pressure-vessel from %s', runtime.name)
                 pressure_vessel_runtime = runtime
-                self.download_pressure_vessel(pressure_vessel_runtime)
-                comment = f'from {runtime.name}'
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
                 break
         else:
             if self.pressure_vessel.startswith('{'):
                 logger.info(
                     'Downloading pressure-vessel using JSON from command-line')
                 pressure_vessel_runtime = self.new_runtime(
-                    'scout', json.loads(self.pressure_vessel),
+                    'scout',
+                    json.loads(self.pressure_vessel),
+                    default_suite='scout',
                 )
-                self.download_pressure_vessel(pressure_vessel_runtime)
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
             elif (
                 os.path.isdir(self.pressure_vessel)
                 or (
@@ -430,30 +471,34 @@ class Main:
                 self.use_local_pressure_vessel(self.pressure_vessel)
                 pressure_vessel_runtime = self.new_runtime(
                     'scout', {'path': self.pressure_vessel},
+                    default_suite='local',
                 )
-                comment = 'from local file'
+                pv_version.comment = 'from local file'
             elif os.path.isfile(self.pressure_vessel):
                 logger.info(
                     'Downloading pressure-vessel using JSON from %r',
                     self.pressure_vessel)
                 with open(self.pressure_vessel, 'rb') as reader:
                     details = json.load(reader)
-                pressure_vessel_runtime = self.new_runtime('scout', details)
-                self.download_pressure_vessel(pressure_vessel_runtime)
+                pressure_vessel_runtime = self.new_runtime(
+                    'scout',
+                    details,
+                    default_suite='scout',
+                )
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
             else:
                 logger.info(
                     'Assuming %r is a suite containing pressure-vessel',
                     self.pressure_vessel)
                 pressure_vessel_runtime = self.new_runtime(
                     self.pressure_vessel, {},
+                    default_suite=self.pressure_vessel,
                 )
-                self.download_pressure_vessel(pressure_vessel_runtime)
-                comment = 'from {self.pressure_vessel}'
-
-        if pressure_vessel_runtime.pinned_version is not None:
-            comment += f' version {pressure_vessel_runtime.pinned_version}'
-
-        version = 'unknown'
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
 
         for path in ('metadata/VERSION.txt', 'sources/VERSION.txt'):
             full = os.path.join(self.depot, 'pressure-vessel', path)
@@ -463,7 +508,11 @@ class Main:
 
                 break
 
-        self.versions.append(('pressure-vessel', version, comment))
+        pv_version.runtime = pressure_vessel_runtime.suite or ''
+        pv_version.runtime_version = (
+            pressure_vessel_runtime.pinned_version or ''
+        )
+        self.versions.append(pv_version)
 
         if self.unpack_ld_library_path:
             logger.info(
@@ -496,6 +545,8 @@ class Main:
                     runtime)
                 self.download_runtime(runtime)
 
+            component_version = ComponentVersion(runtime.name)
+
             version = runtime.pinned_version
             comment = ', '.join(sorted(runtime.runtime_files))
 
@@ -503,7 +554,11 @@ class Main:
                 version = runtime.version
                 comment += ' (from local build)'
 
-            self.versions.append((runtime.name, version, comment))
+            component_version.version = version
+            component_version.runtime = runtime.suite
+            component_version.runtime_version = version
+            component_version.comment = comment
+            self.versions.append(component_version)
 
             if self.unpack_runtimes:
                 dest = os.path.join(self.depot, runtime.name)
@@ -663,23 +718,19 @@ class Main:
         except (OSError, subprocess.SubprocessError):
             version = 'unknown'
 
-        self.versions.append(
-            ('SteamLinuxRuntime', version, 'Entry point scripts, etc.')
-        )
+        component_version = ComponentVersion('SteamLinuxRuntime')
+        component_version.version = version
+        component_version.comment = 'Entry point scripts, etc.'
+        self.versions.append(component_version)
 
         with open(os.path.join(self.depot, 'VERSIONS.txt'), 'w') as writer:
-            writer.write('#Name\tVersion\tComment\n')
+            writer.write(
+                '#Name\tVersion\t\tRuntime\tRuntime_Version\tComment\n'
+            )
 
-            for triple in sorted(self.versions):
-                name, version, comment = triple
-
-                if comment:
-                    comment = '# ' + comment
-
-                logger.info(
-                    'Component version: %s version %s',
-                    name, version)
-                writer.write(f'{name}\t{version}\t{comment}\n')
+            for entry in sorted(self.versions, key=lambda v: v.to_tsv()):
+                logger.info('Component version: %s', entry)
+                writer.write(entry.to_tsv())
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         pv_dir = os.path.join(self.depot, 'pressure-vessel')
@@ -694,7 +745,7 @@ class Main:
         logger.info('%r', argv)
         subprocess.run(argv, check=True)
 
-    def download_pressure_vessel(self, runtime: Runtime) -> None:
+    def download_pressure_vessel(self, runtime: Runtime) -> str:
         filename = 'pressure-vessel-bin.tar.gz'
         runtime.pin_version(self.opener)
 
@@ -713,6 +764,8 @@ class Main:
                 ],
                 check=True,
             )
+
+        return filename
 
     def use_local_runtime(self, runtime: Runtime) -> None:
         assert runtime.path

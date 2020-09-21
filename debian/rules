@@ -28,6 +28,10 @@ else
 confflags += --without-glib
 endif
 
+override_dh_clean:
+	rm -fr html
+	dh_clean
+
 override_dh_auto_configure:
 	dh_auto_configure -- $(confflags)
 

@@ -35,7 +35,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonGenerator, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonParser, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonPath, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonReader, g_object_unref)
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonArray, array_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonArray, json_array_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonNode, json_node_free)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (JsonObject, json_object_unref)
 #endif

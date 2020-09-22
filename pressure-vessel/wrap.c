@@ -1132,6 +1132,7 @@ main (int argc,
   int ret = 2;
   gsize i;
   g_auto(GStrv) original_argv = NULL;
+  g_auto(GStrv) original_environ = NULL;
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
@@ -1177,6 +1178,8 @@ main (int argc,
       ret = 2;
       goto out;
     }
+
+  original_environ = g_get_environ ();
 
   /* Set defaults */
   opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
@@ -1449,7 +1452,7 @@ main (int argc,
 
   if (opt_verbose)
     {
-      g_auto(GStrv) env = g_get_environ ();
+      g_auto(GStrv) env = g_strdupv (original_environ);
 
       g_log_set_handler (G_LOG_DOMAIN,
                          G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
@@ -1599,7 +1602,7 @@ main (int argc,
         goto out;
     }
 
-  bwrap = flatpak_bwrap_new (NULL);
+  bwrap = flatpak_bwrap_new (original_environ);
   flatpak_bwrap_add_arg (bwrap, bwrap_executable);
   exports = flatpak_exports_new ();
 

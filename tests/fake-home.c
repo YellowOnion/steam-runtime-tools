@@ -53,14 +53,14 @@ fake_home_new (const gchar *home)
   FakeHome *fake_home = g_slice_new (FakeHome);
   if (home)
     {
-      gchar *dirname = g_path_get_dirname (home);
-      g_assert_cmpstr (dirname, !=, "/tmp");
-      g_assert_cmpstr (dirname, !=, "/var/tmp");
+      gchar *home_dirname = g_path_get_dirname (home);
+      g_assert_cmpstr (home_dirname, !=, "/tmp");
+      g_assert_cmpstr (home_dirname, !=, "/var/tmp");
       fake_home->home = g_strdup (home);
-      g_assert_cmpint (g_mkdir_with_parents (dirname, 0755) == 0 ? 0 : errno, ==, 0);
+      g_assert_cmpint (g_mkdir_with_parents (home_dirname, 0755) == 0 ? 0 : errno, ==, 0);
       /* It should not already exist */
       g_assert_cmpint (g_mkdir (fake_home->home, 0755) == 0 ? 0 : errno, ==, 0);
-      g_free (dirname);
+      g_free (home_dirname);
     }
   else
     {

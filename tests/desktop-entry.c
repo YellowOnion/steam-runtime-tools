@@ -32,6 +32,7 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/desktop-entry-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "test-utils.h"
 #include "fake-home.h"
 

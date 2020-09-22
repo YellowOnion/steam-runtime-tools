@@ -81,3 +81,5 @@ G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
 
 gchar ** _srt_json_array_to_strv (JsonObject *json_obj,
                                   const gchar *array_member);
+
+gboolean _srt_rm_rf (const char *directory);

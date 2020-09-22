@@ -45,5 +45,3 @@ typedef GList SrtObjectList;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtObjectList, _srt_free_object_list)
 
 #endif
-
-gboolean _srt_rm_rf (const char *directory);

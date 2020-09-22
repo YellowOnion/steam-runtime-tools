@@ -34,6 +34,7 @@
 
 #include "test-utils.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
+#include "steam-runtime-tools/utils-internal.h"
 
 /**
  * fake_home_new:

@@ -32,6 +32,7 @@
 
 #include "steam-runtime-tools/glib-compat.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
+#include "steam-runtime-tools/utils-internal.h"
 
 static gchar *fake_home_parent = NULL;
 

@@ -38,6 +38,8 @@ typedef enum
   SRT_HELPER_FLAGS_NONE = 0
 } SrtHelperFlags;
 
+G_GNUC_INTERNAL gboolean _srt_check_not_setuid (void);
+
 G_GNUC_INTERNAL GPtrArray *_srt_get_helper (const char *helpers_path,
                                             const char *multiarch,
                                             const char *base,

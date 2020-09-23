@@ -654,6 +654,7 @@ static char *opt_home = NULL;
 static gboolean opt_host_fallback = FALSE;
 static char *opt_graphics_provider = NULL;
 static char *graphics_provider_mount_point = NULL;
+static gboolean opt_launcher = FALSE;
 static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static PvShell opt_shell = PV_SHELL_NONE;
@@ -962,6 +963,11 @@ static GOptionEntry options[] =
     "is run in a container. The empty string means use the graphics "
     "stack from container."
     "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/run/host' or '/']", "PATH" },
+  { "launcher", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_launcher,
+    "Instead of specifying a command with its arguments to execute, all the "
+    "elements after '--' will be used as arguments for "
+    "'pressure-vessel-launcher'. This option implies --batch.", NULL },
   { "pass-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_pass_fd_cb,
     "Let the launched process inherit the given fd.",
@@ -1310,6 +1316,10 @@ main (int argc,
       goto out;
     }
 
+  /* --launcher implies --batch */
+  if (opt_launcher)
+    opt_batch = TRUE;
+
   if (opt_batch)
     {
       /* --batch or PRESSURE_VESSEL_BATCH=1 overrides these */
@@ -1488,7 +1498,7 @@ main (int argc,
 
   wrapped_command = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-  if (argc > 1 && argv[1][0] == '-')
+  if (argc > 1 && argv[1][0] == '-' && !opt_launcher)
     {
       /* Make sure wrapped_command is something we can validly pass to env(1) */
       if (strchr (argv[1], '=') != NULL)
@@ -2051,6 +2061,15 @@ main (int argc,
 
   flatpak_bwrap_append_bwrap (bwrap, adverb_args);
   flatpak_bwrap_add_arg (bwrap, "--");
+
+  if (opt_launcher)
+    {
+      g_autofree gchar *pressure_vessel_launcher = g_build_filename (tools_dir,
+                                                                     "pressure-vessel-launcher",
+                                                                     NULL);
+      g_debug ("Adding pressure-vessel-launcher '%s'...", pressure_vessel_launcher);
+      flatpak_bwrap_add_arg (bwrap, pressure_vessel_launcher);
+    }
 
   g_debug ("Adding wrapped command...");
   flatpak_bwrap_append_args (bwrap, wrapped_command->argv);

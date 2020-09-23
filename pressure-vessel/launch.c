@@ -460,7 +460,6 @@ main (int argc,
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
-  g_autoptr(GPtrArray) env_prefix = NULL;
   char **command_and_args;
   g_autoptr(FILE) original_stdout = NULL;
   g_autoptr(GDBusConnection) session_bus = NULL;
@@ -764,6 +763,21 @@ main (int argc,
     g_variant_builder_add (&options_builder, "{s@v}", "terminate-after",
                            g_variant_new_variant (g_variant_new_boolean (TRUE)));
 
+  if (g_hash_table_size (opt_unsetenv) > 0)
+    {
+      GVariantBuilder strv_builder;
+
+      g_variant_builder_init (&strv_builder, G_VARIANT_TYPE_STRING_ARRAY);
+
+      g_hash_table_iter_init (&iter, opt_unsetenv);
+
+      while (g_hash_table_iter_next (&iter, &key, NULL))
+        g_variant_builder_add (&strv_builder, "s", key);
+
+      g_variant_builder_add (&options_builder, "{s@v}", "unset-env",
+                             g_variant_new_variant (g_variant_builder_end (&strv_builder)));
+    }
+
   if (!opt_directory)
     {
       opt_directory = g_get_current_dir ();
@@ -780,39 +794,6 @@ main (int argc,
                                         name_owner_changed,
                                         g_main_loop_ref (loop),
                                         (GDestroyNotify) g_main_loop_unref);
-
-  /* Prepend "env -u" if necessary */
-  if (g_hash_table_size (opt_unsetenv) > 0)
-    {
-      env_prefix = g_ptr_array_new_full (2 * g_hash_table_size (opt_unsetenv) + 6,
-                                         g_free);
-      g_ptr_array_add (env_prefix, g_strdup ("env"));
-
-      g_hash_table_iter_init (&iter, opt_unsetenv);
-
-      while (g_hash_table_iter_next (&iter, &key, NULL))
-        {
-          g_ptr_array_add (env_prefix, g_strdup ("-u"));
-          g_ptr_array_add (env_prefix, g_strdup (key));
-        }
-
-      /* If command_and_args[0] contains '=', env(1) can't deal with
-       * that, so use the standard workaround */
-      if (strchr (command_and_args[0], '=') != NULL)
-        {
-          g_ptr_array_add (env_prefix, g_strdup ("sh"));
-          g_ptr_array_add (env_prefix, g_strdup ("-euc"));
-          g_ptr_array_add (env_prefix, g_strdup ("exec \"$@\""));
-          g_ptr_array_add (env_prefix, g_strdup ("sh"));    /* argv[0] */
-        }
-
-      for (i = 0; command_and_args[i] != NULL; i++)
-        g_ptr_array_add (env_prefix, g_strdup (command_and_args[i]));
-
-      g_ptr_array_add (env_prefix, NULL);
-
-      command_and_args = (char **) env_prefix->pdata;
-    }
 
   {
     g_autoptr(GVariant) fds = NULL;

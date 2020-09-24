@@ -32,6 +32,7 @@
 #include <glib.h>
 
 #include "steam-runtime-tools/utils.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 G_GNUC_INTERNAL void
 _srt_os_release_init (SrtOsRelease *self)

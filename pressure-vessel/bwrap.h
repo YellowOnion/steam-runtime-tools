@@ -25,7 +25,7 @@
 #include "libglnx/libglnx.h"
 
 #include "flatpak-bwrap-private.h"
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 gboolean pv_bwrap_run_sync (FlatpakBwrap *bwrap,
                             int *exit_status_out,

@@ -86,8 +86,6 @@ pressure_vessel_utils = static_library(
     'flatpak-utils-base-private.h',
     'flatpak-utils.c',
     'flatpak-utils-private.h',
-    'glib-backports.c',
-    'glib-backports.h',
     'resolve-in-sysroot.c',
     'resolve-in-sysroot.h',
     'tree-copy.c',

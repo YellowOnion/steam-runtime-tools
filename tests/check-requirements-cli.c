@@ -27,7 +27,7 @@
 
 #include <libglnx.h>
 
-#include <steam-runtime-tools/glib-compat.h>
+#include <steam-runtime-tools/glib-backports-internal.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>

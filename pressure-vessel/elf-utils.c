@@ -26,7 +26,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 #define throw_elf_error(error, format, ...) \
   glnx_null_throw (error, format ": %s", ##__VA_ARGS__, elf_errmsg (elf_errno ()))

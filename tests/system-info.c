@@ -28,7 +28,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 #include "steam-runtime-tools/utils-internal.h"
 
-#include <steam-runtime-tools/glib-compat.h>
+#include <steam-runtime-tools/glib-backports-internal.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>

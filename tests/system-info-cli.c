@@ -27,7 +27,7 @@
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
-#include <steam-runtime-tools/glib-compat.h>
+#include <steam-runtime-tools/glib-backports-internal.h>
 #include <steam-runtime-tools/json-glib-compat.h>
 
 #include <glib.h>

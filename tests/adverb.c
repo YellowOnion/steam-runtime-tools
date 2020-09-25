@@ -33,7 +33,7 @@
 #include <glib.h>
 #include <gio/gio.h>
 
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 static gboolean opt_print_version = FALSE;
 static gboolean opt_ignore_sigchld = FALSE;

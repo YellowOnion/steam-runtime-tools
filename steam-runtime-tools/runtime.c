@@ -36,7 +36,7 @@
 
 #include <glib/gstdio.h>
 
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 
 /**

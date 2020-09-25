@@ -125,7 +125,7 @@ endforeach
 executable(
   'adverb',
   'adverb.c',
-  dependencies : [glib, gio],
+  dependencies : [glib, gio, gio_unix, libglnx_dep],
   include_directories : project_include_dirs,
   install : get_option('installed_tests'),
   install_dir : tests_dir,
@@ -180,7 +180,7 @@ executable(
     '-DMOCK_CHECK_LOCALE_HAVE_C_UTF8',
     '-DMOCK_CHECK_LOCALE_HAVE_EN_US',
   ],
-  dependencies : [glib, json_glib],
+  dependencies : [glib, gio_unix, libglnx_dep, json_glib],
   include_directories : project_include_dirs,
   install: true,
   install_dir : tests_dir
@@ -196,7 +196,7 @@ executable(
     '-DMOCK_CHECK_LOCALE_HAVE_EN_US',
     '-DMOCK_CHECK_LOCALE_LEGACY',
   ],
-  dependencies : [glib, json_glib],
+  dependencies : [glib, gio_unix, libglnx_dep, json_glib],
   include_directories : project_include_dirs,
   install: true,
   install_dir : tests_dir
@@ -208,7 +208,7 @@ executable(
   'mock-unamerican-check-locale',
   join_paths('..', 'helpers', 'check-locale.c'),
   c_args : ['-DMOCK_CHECK_LOCALE', '-DMOCK_CHECK_LOCALE_HAVE_C_UTF8'],
-  dependencies : [glib, json_glib],
+  dependencies : [glib, gio_unix, libglnx_dep, json_glib],
   include_directories : project_include_dirs,
   install: true,
   install_dir : tests_dir

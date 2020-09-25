@@ -40,7 +40,7 @@
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-utils-base-private.h"

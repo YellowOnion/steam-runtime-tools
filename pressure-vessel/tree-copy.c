@@ -30,7 +30,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"

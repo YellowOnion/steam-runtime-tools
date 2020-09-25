@@ -28,6 +28,8 @@ libsteamrt_sources = [
     'cpu-feature.c',
     'desktop-entry-internal.h',
     'desktop-entry.c',
+    'glib-backports.c',
+    'glib-backports-internal.h',
     'graphics-internal.h',
     'graphics.c',
     'library-internal.h',

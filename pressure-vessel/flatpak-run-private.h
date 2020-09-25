@@ -36,7 +36,7 @@
 #include "flatpak-context-private.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-private.h"
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 void flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
                                gboolean      allowed);

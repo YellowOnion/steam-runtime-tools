@@ -28,7 +28,7 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"

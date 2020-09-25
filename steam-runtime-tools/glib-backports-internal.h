@@ -22,6 +22,12 @@
 
 #include <glib.h>
 
+#include <libglnx.h>
+
+#if !GLIB_CHECK_VERSION (2, 42, 0)
+# define G_OPTION_FLAG_NONE (0)
+#endif
+
 #ifndef G_SPAWN_DEFAULT
 #define G_SPAWN_DEFAULT 0
 #endif
@@ -66,10 +72,6 @@ gboolean my_g_spawn_check_exit_status (gint exit_status,
 void my_g_ptr_array_insert (GPtrArray *arr,
                             gint index_,
                             gpointer data);
-#endif
-
-#if !GLIB_CHECK_VERSION (2, 42, 0)
-#define G_OPTION_FLAG_NONE 0
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 36, 0)

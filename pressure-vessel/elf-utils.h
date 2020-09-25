@@ -25,7 +25,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (Elf, elf_end);
 

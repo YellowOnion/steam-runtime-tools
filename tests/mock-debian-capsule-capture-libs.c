@@ -23,7 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <steam-runtime-tools/glib-compat.h>
+#include <steam-runtime-tools/glib-backports-internal.h>
 
 #include <stdio.h>
 #include <stdlib.h>

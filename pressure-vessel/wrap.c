@@ -29,7 +29,7 @@
 #include <locale.h>
 #include <stdlib.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "bwrap.h"

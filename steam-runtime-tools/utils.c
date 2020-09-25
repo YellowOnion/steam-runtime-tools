@@ -43,7 +43,7 @@
 
 #include <glib-object.h>
 #include <gio/gio.h>
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 #ifdef HAVE_GETAUXVAL
 #define getauxval_AT_SECURE() getauxval (AT_SECURE)

@@ -137,6 +137,7 @@ executable(
     threads,
     gio_unix,
     libglnx_dep,
+    json_glib,
   ],
   include_directories : pv_include_dirs,
   install : true,

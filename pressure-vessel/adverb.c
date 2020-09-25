@@ -36,6 +36,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"
@@ -934,7 +935,7 @@ out:
   g_clear_pointer (&global_pass_fds, g_array_unref);
 
   if (locales_temp_dir != NULL)
-    pv_rm_rf (locales_temp_dir);
+    _srt_rm_rf (locales_temp_dir);
 
   if (local_error != NULL)
     g_warning ("%s", local_error->message);

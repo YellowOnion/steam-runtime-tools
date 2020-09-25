@@ -54,8 +54,6 @@ gchar *pv_capture_output (const char * const * argv,
 
 gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);
 
-gboolean pv_rm_rf (const char *directory);
-
 gboolean pv_boolean_environment (const gchar *name,
                                  gboolean def);
 

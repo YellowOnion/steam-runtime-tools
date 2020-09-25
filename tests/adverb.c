@@ -34,6 +34,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 static gboolean opt_print_version = FALSE;
 static gboolean opt_ignore_sigchld = FALSE;
@@ -65,56 +66,20 @@ static GOptionEntry options[] =
   { NULL }
 };
 
-/* Return the original stdout fd. */
-static int
-divert_stdout_to_stderr (GError **error)
-{
-  int original_stdout_fd;
-
-  /* Duplicate the original stdout so that we still have a way to write
-   * machine-readable output. */
-  original_stdout_fd = dup (STDOUT_FILENO);
-
-  if (original_stdout_fd < 0)
-    {
-      int saved_errno = errno;
-
-      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (saved_errno),
-                   "Unable to duplicate fd %d: %s",
-                   STDOUT_FILENO, g_strerror (saved_errno));
-      return -1;
-    }
-
-  /* If something like g_debug writes to stdout, make it come out of
-   * our original stderr. */
-  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
-    {
-      int saved_errno = errno;
-
-      close (original_stdout_fd);
-      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (saved_errno),
-                   "Unable to make fd %d a copy of fd %d: %s",
-                   STDOUT_FILENO, STDERR_FILENO, g_strerror (saved_errno));
-      return -1;
-    }
-
-  return original_stdout_fd;
-}
-
 static gboolean
-put_back_original_stdout (int original_stdout_fd,
+put_back_original_stdout (FILE *original_stdout,
                           GError **error)
 {
-  if (dup2 (original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
-    {
-      int saved_errno = errno;
+  int original_stdout_fd = fileno (original_stdout);
 
-      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (saved_errno),
-                   "Unable to make fd %d a copy of fd %d: %s",
-                   STDOUT_FILENO, original_stdout_fd,
-                   g_strerror (saved_errno));
-      return FALSE;
-    }
+  if (original_stdout_fd < 0)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to get fileno of original stdout");
+
+  if (dup2 (original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to make fd %d a copy of fd %d",
+                                    STDOUT_FILENO, original_stdout_fd);
 
   return TRUE;
 }
@@ -124,7 +89,7 @@ main (int argc,
       char *argv[])
 {
   GError *local_error = NULL;
-  int original_stdout_fd;
+  FILE *original_stdout = NULL;
   int ret = EX_USAGE;
   char **command_and_args;
   int saved_errno;
@@ -158,9 +123,9 @@ main (int argc,
       goto out;
     }
 
-  original_stdout_fd = divert_stdout_to_stderr (&local_error);
+  original_stdout = _srt_divert_stdout_to_stderr (&local_error);
 
-  if (original_stdout_fd < 0)
+  if (original_stdout == NULL)
     {
       ret = EX_OSERR;
       goto out;
@@ -352,7 +317,7 @@ main (int argc,
         }
     }
 
-  if (!put_back_original_stdout (original_stdout_fd, &local_error))
+  if (!put_back_original_stdout (original_stdout, &local_error))
     goto out;
 
   if (command_and_args == NULL)

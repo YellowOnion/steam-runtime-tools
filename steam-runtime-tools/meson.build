@@ -105,6 +105,7 @@ libsteamrt = library(
     gio_unix,
     glib,
     gobject,
+    libglnx_dep,
     json_glib,
   ],
   objects : [libsteamrt_static.extract_all_objects()],

@@ -101,6 +101,7 @@ pressure_vessel_utils = static_library(
     gio_unix,
     libelf,
     libglnx_dep,
+    libsteamrt_static_dep,
   ],
   include_directories : pv_include_dirs,
   install: false,
@@ -204,7 +205,6 @@ executable(
   c_args : pv_c_args,
   dependencies : [
     pressure_vessel_utils_dep,
-    libsteamrt_static_dep,
     gio_unix,
     xau,
     libglnx_dep,

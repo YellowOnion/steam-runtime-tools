@@ -148,6 +148,7 @@ socket=$(
         case "$line" in
             (socket=*)
                 echo "${line#socket=}"
+                break
                 ;;
         esac
     done < "$rendezvous/fifo"

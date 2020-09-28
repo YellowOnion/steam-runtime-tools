@@ -42,7 +42,7 @@
 #include "flatpak-utils-private.h"
 #include "flatpak-utils-base-private.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 static void
 clear_fd (gpointer data)

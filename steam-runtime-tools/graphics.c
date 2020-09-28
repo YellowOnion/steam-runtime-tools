@@ -27,7 +27,7 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
@@ -3170,7 +3170,7 @@ _srt_list_modules_from_directory (gchar **envp,
 {
   int exit_status = -1;
   GError *error = NULL;
-  gchar *stderr = NULL;
+  gchar *stderr_output = NULL;
   gchar *output = NULL;
   GDir *dir_iter = NULL;
   GPtrArray *members = NULL;
@@ -3193,7 +3193,7 @@ _srt_list_modules_from_directory (gchar **envp,
                      _srt_child_setup_unblock_signals,
                      NULL,    /* user data */
                      &output, /* stdout */
-                     &stderr,
+                     &stderr_output,
                      &exit_status,
                      &error))
     {
@@ -3294,7 +3294,7 @@ out:
     g_dir_close (dir_iter);
   g_clear_pointer (&members, g_ptr_array_unref);
   g_free (output);
-  g_free (stderr);
+  g_free (stderr_output);
   g_clear_error (&error);
 }
 

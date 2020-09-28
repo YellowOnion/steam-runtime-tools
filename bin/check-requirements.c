@@ -81,56 +81,6 @@ usage (int code)
   exit (code);
 }
 
-static FILE *
-divert_stdout_to_stderr (GError **error)
-{
-  int original_stdout_fd;
-  FILE *original_stdout;
-
-  /* Duplicate the original stdout so that we still have a way to write
-   * machine-readable output. */
-  original_stdout_fd = dup (STDOUT_FILENO);
-
-  if (original_stdout_fd < 0)
-    {
-      int saved_errno = errno;
-
-      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
-                   "Unable to duplicate fd %d: %s",
-                   STDOUT_FILENO, g_strerror (saved_errno));
-      return NULL;
-    }
-
-  /* If something like g_debug writes to stdout, make it come out of
-   * our original stderr. */
-  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
-    {
-      int saved_errno = errno;
-
-      close (original_stdout_fd);
-      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
-                   "Unable to make fd %d a copy of fd %d: %s",
-                   STDOUT_FILENO, STDERR_FILENO, g_strerror (saved_errno));
-      return NULL;
-    }
-
-  /* original_stdout takes ownership of original_stdout_fd on success */
-  original_stdout = fdopen (original_stdout_fd, "w");
-
-  if (original_stdout == NULL)
-    {
-      int saved_errno = errno;
-
-      close (original_stdout_fd);
-      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (saved_errno),
-                   "Unable to create a stdio wrapper for fd %d: %s",
-                   original_stdout_fd, g_strerror (saved_errno));
-      return NULL;
-    }
-
-  return original_stdout;
-}
-
 static gboolean
 check_x86_features (SrtX86FeatureFlags features)
 {
@@ -180,7 +130,7 @@ main (int argc,
 
   /* stdout is reserved for machine-readable output, so avoid having
    * things like g_debug() pollute it. */
-  original_stdout = divert_stdout_to_stderr (&error);
+  original_stdout = _srt_divert_stdout_to_stderr (&error);
 
   if (original_stdout == NULL)
     {

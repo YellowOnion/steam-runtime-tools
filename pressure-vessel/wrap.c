@@ -29,7 +29,8 @@
 #include <locale.h>
 #include <stdlib.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "bwrap.h"
@@ -1277,7 +1278,7 @@ main (int argc,
       goto out;
     }
 
-  original_stdout = pv_divert_stdout_to_stderr (error);
+  original_stdout = _srt_divert_stdout_to_stderr (error);
 
   if (original_stdout == NULL)
     {

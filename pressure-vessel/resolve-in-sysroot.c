@@ -25,7 +25,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 /* Enabling debug logging for this is rather too verbose, so only
  * enable it when actively debugging this module */

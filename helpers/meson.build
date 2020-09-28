@@ -35,7 +35,7 @@ executable(
   multiarch + '-check-locale',
   'check-locale.c',
   include_directories : project_include_dirs,
-  dependencies : [glib, json_glib],
+  dependencies : [glib, gio_unix, libglnx_dep, json_glib],
   install : true,
   install_dir : pkglibexecdir,
   # Use json-glib and GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH

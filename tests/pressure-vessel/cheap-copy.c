@@ -25,7 +25,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "tree-copy.h"
 #include "utils.h"
 

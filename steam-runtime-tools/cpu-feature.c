@@ -31,7 +31,7 @@
 #include <sys/types.h>
 #include <cpuid.h>
 
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 

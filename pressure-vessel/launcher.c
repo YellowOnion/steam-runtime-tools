@@ -40,7 +40,8 @@
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-utils-base-private.h"
@@ -1089,7 +1090,7 @@ main (int argc,
                        G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
                        cli_log_func, (void *) g_get_prgname ());
 
-  original_stdout = pv_divert_stdout_to_stderr (error);
+  original_stdout = _srt_divert_stdout_to_stderr (error);
 
   if (original_stdout == NULL)
     {

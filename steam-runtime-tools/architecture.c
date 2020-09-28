@@ -26,7 +26,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 

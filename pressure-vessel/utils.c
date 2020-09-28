@@ -35,7 +35,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
@@ -288,37 +288,6 @@ pv_hash_table_get_arbitrary_key (GHashTable *table)
     return NULL;
 }
 
-static gint
-ftw_remove (const gchar *path,
-            const struct stat *sb,
-            gint typeflags,
-            struct FTW *ftwbuf)
-{
-  if (remove (path) < 0)
-    return -1;
-
-  return 0;
-}
-
-/*
- * @directory: (type filename): The directory to remove.
- *
- * Recursively delete @directory within the same file system and
- * without following symbolic links.
- *
- * Returns: %TRUE if the removal was successful
- */
-gboolean
-pv_rm_rf (const char *directory)
-{
-  g_return_val_if_fail (directory != NULL, FALSE);
-
-  if (nftw (directory, ftw_remove, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS) < 0)
-    return FALSE;
-
-  return TRUE;
-}
-
 gboolean
 pv_boolean_environment (const gchar *name,
                         gboolean def)
@@ -335,63 +304,6 @@ pv_boolean_environment (const gchar *name,
     g_warning ("Unrecognised value \"%s\" for $%s", value, name);
 
   return def;
-}
-
-/**
- * pv_divert_stdout_to_stderr:
- * @error: Used to raise an error on failure
- *
- * Duplicate file descriptors so that functions that would write to
- * `stdout` instead write to a copy of the original `stderr`. Return
- * a file handle that can be used to print structured output to the
- * original `stdout`.
- *
- * Returns: (transfer full): A libc file handle for the original `stdout`,
- *  or %NULL on error. Free with `fclose()`.
- */
-FILE *
-pv_divert_stdout_to_stderr (GError **error)
-{
-  g_autoptr(FILE) original_stdout = NULL;
-  glnx_autofd int original_stdout_fd = -1;
-  int flags;
-
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  /* Duplicate the original stdout so that we still have a way to write
-   * machine-readable output. */
-  original_stdout_fd = dup (STDOUT_FILENO);
-
-  if (original_stdout_fd < 0)
-    return glnx_null_throw_errno_prefix (error,
-                                         "Unable to duplicate fd %d",
-                                         STDOUT_FILENO);
-
-  flags = fcntl (original_stdout_fd, F_GETFD, 0);
-
-  if (flags < 0)
-    return glnx_null_throw_errno_prefix (error,
-                                         "Unable to get flags of new fd");
-
-  fcntl (original_stdout_fd, F_SETFD, flags|FD_CLOEXEC);
-
-  /* If something like g_debug writes to stdout, make it come out of
-   * our original stderr. */
-  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
-    return glnx_null_throw_errno_prefix (error,
-                                         "Unable to make fd %d a copy of fd %d",
-                                         STDOUT_FILENO, STDERR_FILENO);
-
-  original_stdout = fdopen (original_stdout_fd, "w");
-
-  if (original_stdout == NULL)
-    return glnx_null_throw_errno_prefix (error,
-                                         "Unable to create a stdio wrapper for fd %d",
-                                         original_stdout_fd);
-  else
-    original_stdout_fd = -1;    /* ownership taken, do not close */
-
-  return g_steal_pointer (&original_stdout);
 }
 
 /**

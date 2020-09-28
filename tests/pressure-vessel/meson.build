@@ -157,6 +157,7 @@ foreach helper : helpers
     ],
     dependencies : [
       gio_unix,
+      json_glib,
       libglnx_dep,
     ],
     link_with : [

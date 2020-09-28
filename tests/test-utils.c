@@ -30,7 +30,7 @@
 
 #include "libglnx/libglnx.h"
 
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
 #include "steam-runtime-tools/utils-internal.h"
 

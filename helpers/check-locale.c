@@ -29,7 +29,7 @@
 #include <glib.h>
 #include <json-glib/json-glib.h>
 
-#include "steam-runtime-tools/glib-compat.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #ifdef MOCK_CHECK_LOCALE

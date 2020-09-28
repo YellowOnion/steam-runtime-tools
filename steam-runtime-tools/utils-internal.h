@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <stdio.h>
+
 #include <glib.h>
 
 #include <json-glib/json-glib.h>
@@ -83,3 +85,5 @@ gchar ** _srt_json_array_to_strv (JsonObject *json_obj,
                                   const gchar *array_member);
 
 gboolean _srt_rm_rf (const char *directory);
+
+FILE *_srt_divert_stdout_to_stderr (GError **error);

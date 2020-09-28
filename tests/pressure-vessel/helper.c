@@ -29,7 +29,8 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "utils.h"
@@ -40,7 +41,7 @@ try_divert_stdout (void)
   g_autoptr(GError) error = NULL;
   g_autoptr(FILE) original_stdout = NULL;
 
-  original_stdout = pv_divert_stdout_to_stderr (&error);
+  original_stdout = _srt_divert_stdout_to_stderr (&error);
   g_assert_no_error (error);
 
   g_setenv ("G_MESSAGES_DEBUG", "all", TRUE);

@@ -23,7 +23,7 @@
 #include <glib/gstdio.h>
 #include <glib-object.h>
 
-#include "glib-backports.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-bwrap-private.h"

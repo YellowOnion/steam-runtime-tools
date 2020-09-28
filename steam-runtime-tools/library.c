@@ -613,7 +613,8 @@ srt_check_library_presence (const char *requested_name,
                             SrtLibrary **more_details_out)
 {
   return _srt_check_library_presence (NULL, requested_name, multiarch,
-                                      symbols_path, NULL, NULL,
+                                      symbols_path, NULL,
+                                      (gchar **) _srt_peek_environ_nonnull (),
                                       symbols_format, more_details_out);
 }
 
@@ -656,6 +657,7 @@ _srt_check_library_presence (const char *helpers_path,
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
                         SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (envp != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_UNKNOWN);
 
   if (symbols_path == NULL)
@@ -714,11 +716,7 @@ _srt_check_library_presence (const char *helpers_path,
   /* NULL terminate the array */
   g_ptr_array_add (argv, NULL);
 
-  if (envp == NULL)
-    my_environ = g_get_environ ();
-  else
-    my_environ = g_strdupv (envp);
-
+  my_environ = g_strdupv (envp);
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
   if (ld_preload != NULL)
     {

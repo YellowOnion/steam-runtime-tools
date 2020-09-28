@@ -98,7 +98,7 @@ struct _SrtSystemInfo
   gchar *expectations;
   /* Root directory to inspect, usually "/" */
   gchar *sysroot;
-  /* Fake environment variables, or %NULL to use the real environment */
+  /* Environment variables */
   gchar **env;
   /* Path to find helper executables, or %NULL to use $SRT_HELPERS_PATH
    * or the installed helpers */
@@ -322,6 +322,7 @@ srt_system_info_init (SrtSystemInfo *self)
   self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
 
   srt_system_info_set_sysroot (self, "/");
+  srt_system_info_set_environ (self, NULL);
 }
 
 static void
@@ -570,6 +571,7 @@ SrtSystemInfo *
 srt_system_info_new_from_json (const char *path,
                                GError **error)
 {
+  static const char * const no_strings[] = { NULL };
   SrtSystemInfo *info = NULL;
   JsonObject *json_obj = NULL;
   JsonObject *json_sub_obj = NULL;
@@ -581,6 +583,7 @@ srt_system_info_new_from_json (const char *path,
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, (gchar * const *) no_strings);
 
   parser = json_parser_new ();
 
@@ -783,7 +786,7 @@ srt_system_info_can_run (SrtSystemInfo *self,
 
   if (abi->can_run == TRI_MAYBE)
     {
-      if (_srt_architecture_can_run (self->helpers_path, multiarch_tuple))
+      if (_srt_architecture_can_run (self->env, self->helpers_path, multiarch_tuple))
         abi->can_run = TRI_YES;
       else
         abi->can_run = TRI_NO;
@@ -846,15 +849,6 @@ graphics_compare (SrtGraphics *a, SrtGraphics *b)
   return (aKey < bKey) ? -1 : (aKey > bKey);
 }
 
-static gchar **
-get_environ (SrtSystemInfo *self)
-{
-  if (self->env != NULL)
-    return self->env;
-  else
-    return environ;
-}
-
 /* Path components from ${prefix} to steamrt expectations */
 #define STEAMRT_EXPECTATIONS "lib", "steamrt", "expectations"
 
@@ -869,7 +863,7 @@ ensure_expectations (SrtSystemInfo *self)
       const char *runtime;
       gchar *def = NULL;
 
-      runtime = g_environ_getenv (get_environ (self), "STEAM_RUNTIME");
+      runtime = g_environ_getenv (self->env, "STEAM_RUNTIME");
 
       if (runtime != NULL && runtime[0] == '/')
         {
@@ -1032,7 +1026,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
 
       if (!g_spawn_sync (self->sysroot,     /* working directory */
                         (gchar **) argv,
-                        get_environ (self),
+                        self->env,
                         G_SPAWN_SEARCH_PATH,
                         _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
@@ -1135,7 +1129,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
 
       if (!g_spawn_sync (runtime, /* working directory */
                         (gchar **) argv,
-                        get_environ (self),
+                        self->env,
                         G_SPAWN_SEARCH_PATH,
                         _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
@@ -1174,7 +1168,7 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
 
       if (!g_spawn_sync (runtime,    /* working directory */
                         (gchar **) argv,
-                        get_environ (self),
+                        self->env,
                         G_SPAWN_SEARCH_PATH,
                         _srt_child_setup_unblock_signals,
                         NULL,    /* user data */
@@ -1455,7 +1449,7 @@ srt_system_info_check_libraries (SrtSystemInfo *self,
                                                                           multiarch_tuple,
                                                                           symbols_file,
                                                                           (const gchar * const *)hidden_deps,
-                                                                          NULL,
+                                                                          self->env,
                                                                           SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                                                           &library);
               g_hash_table_insert (abi->cached_results, soname, library);
@@ -1600,7 +1594,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
                                                         multiarch_tuple,
                                                         symbols_file,
                                                         (const gchar * const *)hidden_deps,
-                                                        NULL,
+                                                        self->env,
                                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                                         &library);
                   g_hash_table_insert (abi->cached_results, soname_found, library);
@@ -1626,7 +1620,7 @@ srt_system_info_check_library (SrtSystemInfo *self,
                                         multiarch_tuple,
                                         NULL,
                                         NULL,
-                                        NULL,
+                                        self->env,
                                         SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                         &library);
   g_hash_table_insert (abi->cached_results, g_strdup (requested_name), library);
@@ -1755,7 +1749,8 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
     return SRT_GRAPHICS_ISSUES_UNKNOWN;
 
   graphics = NULL;
-  issues = _srt_check_graphics (self->helpers_path,
+  issues = _srt_check_graphics (self->env,
+                                self->helpers_path,
                                 self->test_flags,
                                 multiarch_tuple,
                                 window_system,
@@ -1891,7 +1886,11 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_pinned_libs (self);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   g_strfreev (self->env);
-  self->env = g_strdupv ((gchar **) env);
+
+  if (env != NULL)
+    self->env = g_strdupv ((gchar **) env);
+  else
+    self->env = g_strdupv ((gchar **) _srt_peek_environ_nonnull ());
 
   /* Forget what we know about Steam because it is bounded to the environment. */
   forget_steam (self);
@@ -2748,7 +2747,8 @@ srt_system_info_check_locale (SrtSystemInfo *self,
       GError *local_error = NULL;
       SrtLocale *locale = NULL;
 
-      locale = _srt_check_locale (self->helpers_path,
+      locale = _srt_check_locale (self->env,
+                                  self->helpers_path,
                                   srt_system_info_get_primary_multiarch_tuple (self),
                                   g_quark_to_string (quark),
                                   &local_error);
@@ -3121,7 +3121,7 @@ ensure_driver_environment (SrtSystemInfo *self)
     {
       GPtrArray *builder;
       GRegex *regex;
-      gchar **env_list = get_environ (self);
+      gchar **env_list = self->env;
       /* This is the list of well-known driver-selection environment variables,
        * plus __GLX_FORCE_VENDOR_LIBRARY_%d that will be searched with a regex */
       static const gchar * const drivers_env[] = {"VDPAU_DRIVER",

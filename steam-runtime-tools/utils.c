@@ -996,3 +996,21 @@ _srt_file_test_in_sysroot (const char *sysroot,
 
   return FALSE;
 }
+
+/*
+ * Return a pointer to the environment block, without copying.
+ * In the unlikely event that `environ == NULL`, return a pointer to
+ * an empty #GStrv.
+ */
+const char * const *
+_srt_peek_environ_nonnull (void)
+{
+  static const char * const no_strings[] = { NULL };
+
+  g_return_val_if_fail (_srt_check_not_setuid (), no_strings);
+
+  if (environ != NULL)
+    return (const char * const *) environ;
+  else
+    return no_strings;
+}

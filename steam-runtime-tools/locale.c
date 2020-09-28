@@ -192,6 +192,7 @@ srt_locale_class_init (SrtLocaleClass *cls)
 
 /*
  * _srt_check_locale:
+ * @envp: Environment variables
  * @helpers_path: Path to find helper executables
  * @multiarch_tuple: Multiarch tuple of helper executable to use
  * @requested_name: The locale name to check for
@@ -205,7 +206,8 @@ srt_locale_class_init (SrtLocaleClass *cls)
  * Returns: (transfer full): A #SrtLocale object, or %NULL
  */
 SrtLocale *
-_srt_check_locale (const char *helpers_path,
+_srt_check_locale (gchar **envp,
+                   const char *helpers_path,
                    const char *multiarch_tuple,
                    const char *requested_name,
                    GError **error)
@@ -222,6 +224,7 @@ _srt_check_locale (const char *helpers_path,
   int exit_status;
 
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+  g_return_val_if_fail (envp != NULL, NULL);
   g_return_val_if_fail (requested_name != NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
@@ -234,7 +237,7 @@ _srt_check_locale (const char *helpers_path,
   if (argv == NULL)
     goto out;
 
-  my_environ = g_get_environ ();
+  my_environ = g_strdupv (envp);
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
   if (ld_preload != NULL)
     {

@@ -167,14 +167,21 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     # not reached
 fi
 
-# Session mode. The XDG_RUNTIME_DIR is required, for now.
+# Session mode. Either PRESSURE_VESSEL_SOCKET_DIR or XDG_RUNTIME_DIR are required.
 
-if ! [ -O "$XDG_RUNTIME_DIR" ]; then
-    log "XDG_RUNTIME_DIR is owned by someone else"
-    exit 125
+if [[ -v PRESSURE_VESSEL_SOCKET_DIR ]]; then
+    if ! [ -O "$PRESSURE_VESSEL_SOCKET_DIR" ]; then
+        log "PRESSURE_VESSEL_SOCKET_DIR is owned by someone else"
+        exit 125
+    fi
+    rendezvous="${PRESSURE_VESSEL_SOCKET_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
+else
+    if ! [ -O "$XDG_RUNTIME_DIR" ]; then
+        log "XDG_RUNTIME_DIR is owned by someone else"
+        exit 125
+    fi
+    rendezvous="${XDG_RUNTIME_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
 fi
-
-rendezvous="${XDG_RUNTIME_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
 
 if mkdir -m700 "$rendezvous" 2>/dev/null; then
     :

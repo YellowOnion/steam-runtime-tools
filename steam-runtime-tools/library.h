@@ -32,6 +32,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/macros.h>
+
 typedef struct _SrtLibrary SrtLibrary;
 typedef struct _SrtLibraryClass SrtLibraryClass;
 
@@ -42,6 +44,7 @@ typedef struct _SrtLibraryClass SrtLibraryClass;
 #define SRT_IS_LIBRARY_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_LIBRARY))
 #define SRT_LIBRARY_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_LIBRARY, SrtLibraryClass)
 
+_SRT_PUBLIC
 GType srt_library_get_type (void);
 
 /* Backward compatibility with previous steam-runtime-tools naming */
@@ -92,23 +95,35 @@ typedef enum
   SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS
 } SrtLibrarySymbolsFormat;
 
+_SRT_PUBLIC
 const char *srt_library_get_requested_name (SrtLibrary *self);
+_SRT_PUBLIC
 const char *srt_library_get_absolute_path (SrtLibrary *self);
-G_DEPRECATED_FOR(srt_library_get_requested_name)
+_SRT_PUBLIC G_DEPRECATED_FOR(srt_library_get_requested_name)
 const char *srt_library_get_soname (SrtLibrary *self);
+_SRT_PUBLIC
 const char *srt_library_get_messages (SrtLibrary *self);
+_SRT_PUBLIC
 const char *srt_library_get_multiarch_tuple (SrtLibrary *self);
+_SRT_PUBLIC
 SrtLibraryIssues srt_library_get_issues (SrtLibrary *self);
+_SRT_PUBLIC
 const char * const *srt_library_get_missing_symbols (SrtLibrary *self);
+_SRT_PUBLIC
 const char * const *srt_library_get_misversioned_symbols (SrtLibrary *self);
+_SRT_PUBLIC
 const char * const *srt_library_get_dependencies (SrtLibrary *self);
+_SRT_PUBLIC
 const char *srt_library_get_real_soname (SrtLibrary *self);
+_SRT_PUBLIC
 SrtLibraryIssues srt_check_library_presence (const char *requested_name,
                                              const char *multiarch,
                                              const char *symbols_path,
                                              SrtLibrarySymbolsFormat symbols_format,
                                              SrtLibrary **more_details_out);
+_SRT_PUBLIC
 int srt_library_get_exit_status (SrtLibrary *self);
+_SRT_PUBLIC
 int srt_library_get_terminating_signal (SrtLibrary *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC

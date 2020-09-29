@@ -1,25 +1,8 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
- _srt_architecture_can_run_from_report@Base 0.20200908.0
- _srt_dri_driver_get_from_report@Base 0.20200908.0
- _srt_feature_get_x86_flags_from_report@Base 0.20200908.0
  _srt_filter_gameoverlayrenderer@Base 0.20190822.0
- _srt_get_egl_from_json_report@Base 0.20200908.0
- _srt_get_steam_desktop_entries_from_json_report@Base 0.20200908.0
- _srt_get_vulkan_from_json_report@Base 0.20200908.0
- _srt_glx_icd_get_from_report@Base 0.20200908.0
- _srt_graphics_get_from_report@Base 0.20200908.0
- _srt_json_array_to_strv@Base 0.20200908.0
- _srt_library_get_issues_from_report@Base 0.20200908.0
- _srt_locale_get_issues_from_report@Base 0.20200908.0
- _srt_locale_get_locale_from_report@Base 0.20200908.0
- _srt_os_release_populate_from_report@Base 0.20200908.0
  _srt_rm_rf@Base 0.20200306.0
- _srt_runtime_get_issues_from_report@Base 0.20200908.0
- _srt_steam_get_from_report@Base 0.20200908.0
  _srt_unblock_signals@Base 0.20200109.0
- _srt_va_api_driver_get_from_report@Base 0.20200908.0
- _srt_vdpau_driver_get_from_report@Base 0.20200908.0
  srt_add_flag_from_nick@Base 0.20200908.0
  srt_architecture_can_run_i386@Base 0.20190717.0
  srt_architecture_can_run_x86_64@Base 0.20190717.0

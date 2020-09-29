@@ -29,6 +29,8 @@
 #error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
 #endif
 
+#include <steam-runtime-tools/macros.h>
+
 /* Backward compatibility with previous steam-runtime-tools naming */
 #define SRT_RUNTIME_ISSUES_INTERNAL_ERROR SRT_RUNTIME_ISSUES_UNKNOWN
 

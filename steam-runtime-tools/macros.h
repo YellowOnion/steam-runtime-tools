@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,25 +31,5 @@
 
 #include <glib.h>
 
-#include <steam-runtime-tools/macros.h>
-
-/**
- * SRT_ABI_I386:
- *
- * The multiarch tuple for the i386 (IA-32) ABI normally used on
- * 32-bit x86 Linux.
- */
-#define SRT_ABI_I386 "i386-linux-gnu"
-
-/**
- * SRT_ABI_X86_64:
- *
- * The multiarch tuple for the x86_64 ABI normally used on
- * 64-bit x86 Linux.
- */
-#define SRT_ABI_X86_64 "x86_64-linux-gnu"
-
-_SRT_PUBLIC
-gboolean srt_architecture_can_run_i386 (void);
-_SRT_PUBLIC
-gboolean srt_architecture_can_run_x86_64 (void);
+#define _SRT_PUBLIC         __attribute__((visibility("default")))
+#define _SRT_PRIVATE_EXPORT __attribute__((visibility("default")))

@@ -32,6 +32,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/macros.h>
+
 typedef struct _SrtDesktopEntry SrtDesktopEntry;
 typedef struct _SrtDesktopEntryClass SrtDesktopEntryClass;
 
@@ -41,12 +43,18 @@ typedef struct _SrtDesktopEntryClass SrtDesktopEntryClass;
 #define SRT_IS_DESKTOP_ENTRY(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_DESKTOP_ENTRY))
 #define SRT_IS_DESKTOP_ENTRY_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_DESKTOP_ENTRY))
 #define SRT_DESKTOP_ENTRY_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_DESKTOP_ENTRY, SrtDesktopEntryClass)
+_SRT_PUBLIC
 GType srt_desktop_entry_get_type (void);
 
+_SRT_PUBLIC
 const char *srt_desktop_entry_get_id (SrtDesktopEntry *self);
+_SRT_PUBLIC
 const char *srt_desktop_entry_get_commandline (SrtDesktopEntry *self);
+_SRT_PUBLIC
 const char *srt_desktop_entry_get_filename (SrtDesktopEntry *self);
+_SRT_PUBLIC
 gboolean srt_desktop_entry_is_default_handler (SrtDesktopEntry *self);
+_SRT_PUBLIC
 gboolean srt_desktop_entry_is_steam_handler (SrtDesktopEntry *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC

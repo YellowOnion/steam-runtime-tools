@@ -32,6 +32,8 @@
 
 #include <json-glib/json-glib.h>
 
+#include <steam-runtime-tools/macros.h>
+
 typedef enum
 {
   SRT_HELPER_FLAGS_SEARCH_PATH = (1 << 0),
@@ -47,6 +49,7 @@ G_GNUC_INTERNAL GPtrArray *_srt_get_helper (const char *helpers_path,
                                             const char *base,
                                             SrtHelperFlags flags,
                                             GError **error);
+_SRT_PRIVATE_EXPORT
 gchar *_srt_filter_gameoverlayrenderer (const gchar *input);
 G_GNUC_INTERNAL const char *_srt_find_myself (const char **helpers_path_out,
                                               GError **error);
@@ -55,19 +58,23 @@ G_GNUC_INTERNAL gboolean _srt_process_timeout_wait_status (int wait_status,
                                                            int *exit_status,
                                                            int *terminating_signal);
 
+_SRT_PRIVATE_EXPORT
 const char *srt_enum_value_to_nick (GType enum_type,
                                     int value);
 
+_SRT_PRIVATE_EXPORT
 gboolean srt_enum_from_nick (GType enum_type,
                              const gchar *nick,
                              gint *value_out,
                              GError **error);
 
+_SRT_PRIVATE_EXPORT
 gboolean srt_add_flag_from_nick (GType flags_type,
                                  const gchar *string,
                                  guint *value_out,
                                  GError **error);
 
+_SRT_PRIVATE_EXPORT
 guint srt_get_flags_from_json_array (GType flags_type,
                                      JsonObject *json_obj,
                                      const gchar *array_member,
@@ -75,7 +82,7 @@ guint srt_get_flags_from_json_array (GType flags_type,
 
 G_GNUC_INTERNAL void _srt_child_setup_unblock_signals (gpointer ignored);
 
-/* not G_GNUC_INTERNAL because s-r-s-i calls it */
+_SRT_PRIVATE_EXPORT
 void _srt_unblock_signals (void);
 
 G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
@@ -84,8 +91,10 @@ G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
 gchar ** _srt_json_array_to_strv (JsonObject *json_obj,
                                   const gchar *array_member);
 
+_SRT_PRIVATE_EXPORT
 gboolean _srt_rm_rf (const char *directory);
 
+_SRT_PRIVATE_EXPORT
 FILE *_srt_divert_stdout_to_stderr (GError **error);
 
 G_GNUC_INTERNAL

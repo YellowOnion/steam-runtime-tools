@@ -32,6 +32,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/macros.h>
+
 typedef struct _SrtGraphics SrtGraphics;
 typedef struct _SrtGraphicsClass SrtGraphicsClass;
 
@@ -42,6 +44,7 @@ typedef struct _SrtGraphicsClass SrtGraphicsClass;
 #define SRT_IS_GRAPHICS_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_GRAPHICS))
 #define SRT_GRAPHICS_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_GRAPHICS, SrtGraphicsClass)
 
+_SRT_PUBLIC
 GType srt_graphics_get_type (void);
 
 /* Backward compatibility with previous steam-runtime-tools naming */
@@ -127,17 +130,28 @@ typedef enum
 
 #define SRT_N_RENDERING_INTERFACES (SRT_RENDERING_INTERFACE_VAAPI + 1)
 
+_SRT_PUBLIC
 const char *srt_graphics_get_multiarch_tuple (SrtGraphics *self);
+_SRT_PUBLIC
 SrtGraphicsIssues srt_graphics_get_issues (SrtGraphics *self);
+_SRT_PUBLIC
 gboolean srt_graphics_library_is_vendor_neutral (SrtGraphics *self,
                                                  SrtGraphicsLibraryVendor *vendor_out);
+_SRT_PUBLIC
 SrtWindowSystem srt_graphics_get_window_system (SrtGraphics *self);
+_SRT_PUBLIC
 SrtRenderingInterface srt_graphics_get_rendering_interface (SrtGraphics *self);
+_SRT_PUBLIC
 const char *srt_graphics_get_version_string (SrtGraphics *self);
+_SRT_PUBLIC
 const char *srt_graphics_get_renderer_string (SrtGraphics *self);
+_SRT_PUBLIC
 const char *srt_graphics_get_messages (SrtGraphics *self);
+_SRT_PUBLIC
 gchar *srt_graphics_dup_parameters_string (SrtGraphics *self);
+_SRT_PUBLIC
 int srt_graphics_get_exit_status (SrtGraphics *self);
+_SRT_PUBLIC
 int srt_graphics_get_terminating_signal (SrtGraphics *self);
 
 typedef struct _SrtEglIcd SrtEglIcd;
@@ -149,15 +163,22 @@ typedef struct _SrtEglIcdClass SrtEglIcdClass;
 #define SRT_IS_EGL_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_EGL_ICD))
 #define SRT_IS_EGL_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_EGL_ICD))
 #define SRT_EGL_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_EGL_ICD, SrtEglIcdClass)
+_SRT_PUBLIC
 GType srt_egl_icd_get_type (void);
 
+_SRT_PUBLIC
 gboolean srt_egl_icd_check_error (SrtEglIcd *self,
                                   GError **error);
+_SRT_PUBLIC
 const gchar *srt_egl_icd_get_json_path (SrtEglIcd *self);
+_SRT_PUBLIC
 const gchar *srt_egl_icd_get_library_path (SrtEglIcd *self);
+_SRT_PUBLIC
 gchar *srt_egl_icd_resolve_library_path (SrtEglIcd *self);
+_SRT_PUBLIC
 SrtEglIcd *srt_egl_icd_new_replace_library_path (SrtEglIcd *self,
                                                  const char *path);
+_SRT_PUBLIC
 gboolean srt_egl_icd_write_to_file (SrtEglIcd *self,
                                     const char *path,
                                     GError **error);
@@ -171,10 +192,14 @@ typedef struct _SrtDriDriverClass SrtDriDriverClass;
 #define SRT_IS_DRI_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_DRI_DRIVER))
 #define SRT_IS_DRI_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_DRI_DRIVER))
 #define SRT_DRI_DRIVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_DRI_DRIVER, SrtDriDriverClass)
+_SRT_PUBLIC
 GType srt_dri_driver_get_type (void);
 
+_SRT_PUBLIC
 const gchar *srt_dri_driver_get_library_path (SrtDriDriver *self);
+_SRT_PUBLIC
 gboolean srt_dri_driver_is_extra (SrtDriDriver *self);
+_SRT_PUBLIC
 gchar *srt_dri_driver_resolve_library_path (SrtDriDriver *self);
 
 typedef struct _SrtVaApiDriver SrtVaApiDriver;
@@ -186,10 +211,14 @@ typedef struct _SrtVaApiDriverClass SrtVaApiDriverClass;
 #define SRT_IS_VA_API_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VA_API_DRIVER))
 #define SRT_IS_VA_API_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VA_API_DRIVER))
 #define SRT_VA_API_DRIVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VA_API_DRIVER, SrtVaApiDriverClass)
+_SRT_PUBLIC
 GType srt_va_api_driver_get_type (void);
 
+_SRT_PUBLIC
 const gchar *srt_va_api_driver_get_library_path (SrtVaApiDriver *self);
+_SRT_PUBLIC
 gboolean srt_va_api_driver_is_extra (SrtVaApiDriver *self);
+_SRT_PUBLIC
 gchar *srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self);
 
 typedef struct _SrtVdpauDriver SrtVdpauDriver;
@@ -201,11 +230,16 @@ typedef struct _SrtVdpauDriverClass SrtVdpauDriverClass;
 #define SRT_IS_VDPAU_DRIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VDPAU_DRIVER))
 #define SRT_IS_VDPAU_DRIVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VDPAU_DRIVER))
 #define SRT_VDPAU_DRIVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VDPAU_DRIVER, SrtVdpauDriverClass)
+_SRT_PUBLIC
 GType srt_vdpau_driver_get_type (void);
 
+_SRT_PUBLIC
 const gchar *srt_vdpau_driver_get_library_path (SrtVdpauDriver *self);
+_SRT_PUBLIC
 const gchar *srt_vdpau_driver_get_library_link (SrtVdpauDriver *self);
+_SRT_PUBLIC
 gboolean srt_vdpau_driver_is_extra (SrtVdpauDriver *self);
+_SRT_PUBLIC
 gchar *srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self);
 
 typedef struct _SrtVulkanIcd SrtVulkanIcd;
@@ -217,16 +251,24 @@ typedef struct _SrtVulkanIcdClass SrtVulkanIcdClass;
 #define SRT_IS_VULKAN_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VULKAN_ICD))
 #define SRT_IS_VULKAN_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VULKAN_ICD))
 #define SRT_VULKAN_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VULKAN_ICD, SrtVulkanIcdClass)
+_SRT_PUBLIC
 GType srt_vulkan_icd_get_type (void);
 
+_SRT_PUBLIC
 gboolean srt_vulkan_icd_check_error (SrtVulkanIcd *self,
                                      GError **error);
+_SRT_PUBLIC
 const gchar *srt_vulkan_icd_get_api_version (SrtVulkanIcd *self);
+_SRT_PUBLIC
 const gchar *srt_vulkan_icd_get_json_path (SrtVulkanIcd *self);
+_SRT_PUBLIC
 const gchar *srt_vulkan_icd_get_library_path (SrtVulkanIcd *self);
+_SRT_PUBLIC
 gchar *srt_vulkan_icd_resolve_library_path (SrtVulkanIcd *self);
+_SRT_PUBLIC
 SrtVulkanIcd *srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
                                                        const char *path);
+_SRT_PUBLIC
 gboolean srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
                                        const char *path,
                                        GError **error);
@@ -240,9 +282,12 @@ typedef struct _SrtGlxIcdClass SrtGlxIcdClass;
 #define SRT_IS_GLX_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_GLX_ICD))
 #define SRT_IS_GLX_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_GLX_ICD))
 #define SRT_GLX_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_GLX_ICD, SrtGlxIcdClass)
+_SRT_PUBLIC
 GType srt_glx_icd_get_type (void);
 
+_SRT_PUBLIC
 const gchar *srt_glx_icd_get_library_soname (SrtGlxIcd *self);
+_SRT_PUBLIC
 const gchar *srt_glx_icd_get_library_path (SrtGlxIcd *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC

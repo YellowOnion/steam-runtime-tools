@@ -1743,8 +1743,7 @@ srt_icd_write_to_file (const SrtIcd *self,
 
 /*
  * load_json_dir:
- * @sysroot: (nullable): Interpret directory names as being inside this
- *  sysroot, mainly for unit testing
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @dir: A directory to search
  * @suffix: (nullable): A path to append to @dir, such as `"vulkan/icd.d"`
  * @sort: (nullable): If not %NULL, load ICDs sorted by filename in this order
@@ -1769,6 +1768,7 @@ load_json_dir (const char *sysroot,
   g_autoptr(GPtrArray) members = NULL;
   gsize i;
 
+  g_return_if_fail (sysroot != NULL);
   g_return_if_fail (load_json_cb != NULL);
 
   if (dir == NULL)
@@ -1786,15 +1786,10 @@ load_json_dir (const char *sysroot,
       dir = suffixed_dir;
     }
 
-  iter_dir = dir;
+  sysrooted_dir = g_build_filename (sysroot, dir, NULL);
+  iter_dir = sysrooted_dir;
 
-  if (sysroot != NULL)
-    {
-      sysrooted_dir = g_build_filename (sysroot, dir, NULL);
-      iter_dir = sysrooted_dir;
-    }
-
-  g_debug ("Looking for ICDs in %s...", dir);
+  g_debug ("Looking for ICDs in %s (in sysroot %s)...", dir, sysroot);
 
   dir_iter = g_dir_open (iter_dir, 0, &error);
 
@@ -1830,8 +1825,7 @@ load_json_dir (const char *sysroot,
 
 /*
  * load_json_dir:
- * @sysroot: (nullable): Interpret directory names as being inside this
- *  sysroot, mainly for unit testing
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @search_paths: Directories to search
  * @suffix: (nullable): A path to append to @dir, such as `"vulkan/icd.d"`
  * @sort: (nullable): If not %NULL, load ICDs sorted by filename in this order
@@ -1848,6 +1842,7 @@ load_json_dirs (const char *sysroot,
 {
   gchar **iter;
 
+  g_return_if_fail (sysroot != NULL);
   g_return_if_fail (load_json_cb != NULL);
 
   for (iter = search_paths;
@@ -2329,8 +2324,7 @@ srt_egl_icd_get_library_path (SrtEglIcd *self)
 
 /*
  * egl_icd_load_json:
- * @sysroot: Interpret the filename as being inside this sysroot,
- *  mainly for unit testing
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @filename: The filename of the metadata
  * @list: (element-type SrtEglIcd) (inout): Prepend the
  *  resulting #SrtEglIcd to this list
@@ -2347,6 +2341,7 @@ egl_icd_load_json (const char *sysroot,
   g_autofree gchar *in_sysroot = NULL;
   g_autofree gchar *library_path = NULL;
 
+  g_return_if_fail (sysroot != NULL);
   g_return_if_fail (list != NULL);
 
   if (!g_path_is_absolute (filename))
@@ -2355,11 +2350,9 @@ egl_icd_load_json (const char *sysroot,
       filename = canon;
     }
 
-  if (sysroot != NULL)
-    in_sysroot = g_build_filename (sysroot, filename, NULL);
+  in_sysroot = g_build_filename (sysroot, filename, NULL);
 
-  if (load_json (SRT_TYPE_EGL_ICD,
-                 in_sysroot == NULL ? filename : in_sysroot,
+  if (load_json (SRT_TYPE_EGL_ICD, in_sysroot,
                  NULL, &library_path, &error))
     {
       g_assert (library_path != NULL);
@@ -2487,7 +2480,7 @@ get_glvnd_datadir (void)
 
 /*
  * _srt_load_egl_icds:
- * @sysroot: (nullable): Look in this directory instead of the real root
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1): Behave as though `environ` was this
  *  array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
@@ -2511,6 +2504,7 @@ _srt_load_egl_icds (const char *sysroot,
    * then reverse it at the end. */
   GList *ret = NULL;
 
+  g_return_val_if_fail (sysroot != NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
   if (envp == NULL)
@@ -2541,8 +2535,7 @@ _srt_load_egl_icds (const char *sysroot,
 
       value = g_environ_getenv (envp, "__EGL_VENDOR_LIBRARY_DIRS");
 
-      flatpak_info = g_build_filename (sysroot != NULL ? sysroot : "/",
-                                       ".flatpak-info", NULL);
+      flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
 
       if (value != NULL)
         {
@@ -3302,7 +3295,7 @@ out:
 
 /**
  * _srt_get_modules_full:
- * @sysroot: (nullable): Look in this directory instead of the real root
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -3345,6 +3338,7 @@ _srt_get_modules_full (const char *sysroot,
 
   g_return_if_fail (multiarch_tuple != NULL);
   g_return_if_fail (drivers_out != NULL);
+  g_return_if_fail (sysroot != NULL);
   g_return_if_fail (_srt_check_not_setuid ());
 
   switch (module)
@@ -3382,9 +3376,6 @@ _srt_get_modules_full (const char *sysroot,
       force_elf_class = g_getenv ("SRT_TEST_FORCE_ELF");
       ld_library_path = g_getenv ("LD_LIBRARY_PATH");
     }
-
-  if (sysroot == NULL)
-    sysroot = "/";
 
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
   drivers_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -3675,7 +3666,7 @@ out:
 
 /*
  * _srt_list_glx_icds:
- * @sysroot: (nullable): Look in this directory instead of the real root
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "capsule-capture-libs" helper,
  *  PATH is used if %NULL
@@ -3701,6 +3692,7 @@ _srt_list_glx_icds (const char *sysroot,
   gchar *overrides_path = NULL;
   GHashTable *known_libs = NULL;
 
+  g_return_if_fail (sysroot != NULL);
   g_return_if_fail (multiarch_tuple != NULL);
   g_return_if_fail (drivers_out != NULL);
   g_return_if_fail (_srt_check_not_setuid ());
@@ -3727,7 +3719,7 @@ _srt_list_glx_icds (const char *sysroot,
   /* When in a container we might miss valid GLX drivers because the `ld.so.cache` in
    * use doesn't have a reference about them. To fix that we also include every
    * "libGLX_*.so.*" libraries that we find in the "/overrides/lib/${multiarch}" folder */
-  overrides_path = sysroot ? g_build_filename (sysroot, "/overrides", NULL) : g_strdup ("/overrides");
+  overrides_path = g_build_filename (sysroot, "/overrides", NULL);
   if (g_file_test (overrides_path, G_FILE_TEST_IS_DIR))
     {
       overrides_tmp_dir = g_dir_make_tmp ("glx-icds-XXXXXX", &error);
@@ -3771,7 +3763,7 @@ out:
 
 /**
  * _srt_list_graphics_modules:
- * @sysroot: (nullable): Look in this directory instead of the real root
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -3800,6 +3792,7 @@ _srt_list_graphics_modules (const char *sysroot,
 {
   GList *drivers = NULL;
 
+  g_return_val_if_fail (sysroot != NULL, NULL);
   g_return_val_if_fail (multiarch_tuple != NULL, NULL);
 
   if (which == SRT_GRAPHICS_GLX_MODULE)
@@ -4761,8 +4754,7 @@ srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
 
 /*
  * vulkan_icd_load_json:
- * @sysroot: Interpret the filename as being inside this sysroot,
- *  mainly for unit testing
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @filename: The filename of the metadata
  * @list: (element-type SrtVulkanIcd) (inout): Prepend the
  *  resulting #SrtVulkanIcd to this list
@@ -4788,11 +4780,9 @@ vulkan_icd_load_json (const char *sysroot,
       filename = canon;
     }
 
-  if (sysroot != NULL)
-    in_sysroot = g_build_filename (sysroot, filename, NULL);
+  in_sysroot = g_build_filename (sysroot, filename, NULL);
 
-  if (load_json (SRT_TYPE_VULKAN_ICD,
-                 in_sysroot == NULL ? filename : in_sysroot,
+  if (load_json (SRT_TYPE_VULKAN_ICD, in_sysroot,
                  &api_version, &library_path, &error))
     {
       g_assert (api_version != NULL);
@@ -4835,7 +4825,7 @@ get_vulkan_sysconfdir (void)
 
 /*
  * _srt_load_vulkan_icds:
- * @sysroot: (nullable): Look in this directory instead of the real root
+ * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1): Behave as though `environ` was this
  *  array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
@@ -4919,8 +4909,7 @@ _srt_load_vulkan_icds (const char *sysroot,
         load_json_dir (sysroot, "/etc", VULKAN_ICD_SUFFIX,
                        READDIR_ORDER, vulkan_icd_load_json_cb, &ret);
 
-      flatpak_info = g_build_filename (sysroot != NULL ? sysroot : "/",
-                                       ".flatpak-info", NULL);
+      flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
 
       /* freedesktop-sdk patches the Vulkan loader to look here. */
       if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)

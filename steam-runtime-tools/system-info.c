@@ -95,7 +95,7 @@ struct _SrtSystemInfo
   GObject parent;
   /* "" if we have tried and failed to auto-detect */
   gchar *expectations;
-  /* Fake root directory, or %NULL to use the real root */
+  /* Root directory to inspect, usually "/" */
   gchar *sysroot;
   /* Fake environment variables, or %NULL to use the real environment */
   gchar **env;
@@ -317,6 +317,8 @@ srt_system_info_init (SrtSystemInfo *self)
   _srt_os_release_init (&self->os_release);
 
   self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
+
+  srt_system_info_set_sysroot (self, "/");
 }
 
 static void
@@ -1024,7 +1026,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
       if (g_strcmp0 (runtime, "/") != 0)
         goto out;
 
-      if (!g_spawn_sync (self->sysroot == NULL ? "/" : self->sysroot, /* working directory */
+      if (!g_spawn_sync (self->sysroot,     /* working directory */
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
@@ -1910,6 +1912,9 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
+
+  if (root == NULL)
+    root = "/";
 
   forget_container_info (self);
   forget_graphics_modules (self);
@@ -3215,7 +3220,6 @@ container_type_from_name (const char *name)
 static void
 ensure_container_info (SrtSystemInfo *self)
 {
-  const char *sysroot = NULL;
   gchar *contents = NULL;
   gchar *filename = NULL;
 
@@ -3224,15 +3228,11 @@ ensure_container_info (SrtSystemInfo *self)
 
   g_assert (self->container.host_directory == NULL);
   g_assert (self->container.type == SRT_CONTAINER_TYPE_UNKNOWN);
+  g_assert (self->sysroot != NULL);
 
-  sysroot = self->sysroot;
+  g_debug ("Finding container info in sysroot %s...", self->sysroot);
 
-  if (sysroot == NULL)
-    sysroot = "/";
-
-  g_debug ("Finding container info in sysroot %s...", sysroot);
-
-  filename = g_build_filename (sysroot, "run", "systemd", "container", NULL);
+  filename = g_build_filename (self->sysroot, "run", "systemd", "container", NULL);
 
   if (g_file_get_contents (filename, &contents, NULL, NULL))
     {
@@ -3243,7 +3243,7 @@ ensure_container_info (SrtSystemInfo *self)
     }
 
   g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, ".flatpak-info", NULL);
+  filename = g_build_filename (self->sysroot, ".flatpak-info", NULL);
 
   if (g_file_test (filename, G_FILE_TEST_IS_REGULAR))
     {
@@ -3253,7 +3253,7 @@ ensure_container_info (SrtSystemInfo *self)
     }
 
   g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, "run", "pressure-vessel", NULL);
+  filename = g_build_filename (self->sysroot, "run", "pressure-vessel", NULL);
 
   if (g_file_test (filename, G_FILE_TEST_IS_DIR))
     {
@@ -3263,7 +3263,7 @@ ensure_container_info (SrtSystemInfo *self)
     }
 
   g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, ".dockerenv", NULL);
+  filename = g_build_filename (self->sysroot, ".dockerenv", NULL);
 
   if (g_file_test (filename, G_FILE_TEST_EXISTS))
     {
@@ -3273,7 +3273,7 @@ ensure_container_info (SrtSystemInfo *self)
     }
 
   g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, "proc", "1", "cgroup", NULL);
+  filename = g_build_filename (self->sysroot, "proc", "1", "cgroup", NULL);
 
   if (g_file_get_contents (filename, &contents, NULL, NULL))
     {
@@ -3288,7 +3288,7 @@ ensure_container_info (SrtSystemInfo *self)
     }
 
   g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, "run", "host", NULL);
+  filename = g_build_filename (self->sysroot, "run", "host", NULL);
 
   if (g_file_test (filename, G_FILE_TEST_IS_DIR))
     {
@@ -3312,8 +3312,9 @@ out:
     {
       case SRT_CONTAINER_TYPE_FLATPAK:
       case SRT_CONTAINER_TYPE_PRESSURE_VESSEL:
-        self->container.host_directory = g_build_filename (sysroot, "run",
-                                                           "host", NULL);
+        self->container.host_directory = g_build_filename (self->sysroot,
+                                                           "run", "host",
+                                                           NULL);
         break;
 
       case SRT_CONTAINER_TYPE_DOCKER:

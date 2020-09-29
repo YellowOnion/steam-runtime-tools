@@ -303,9 +303,6 @@ pv_resolve_in_sysroot (int sysroot,
         }
     }
 
-  if (real_path_out != NULL)
-    *real_path_out = g_string_free (g_steal_pointer (&current_path), FALSE);
-
   if (flags & PV_RESOLVE_FLAGS_READABLE)
     {
       g_autofree char *proc_fd_name = g_strdup_printf ("/proc/self/fd/%d",
@@ -316,8 +313,14 @@ pv_resolve_in_sysroot (int sysroot,
       if (!glnx_openat_rdonly (-1, proc_fd_name, TRUE, &fd, error))
         return -1;
 
+      if (real_path_out != NULL)
+        *real_path_out = g_string_free (g_steal_pointer (&current_path), FALSE);
+
       return glnx_steal_fd (&fd);
     }
+
+  if (real_path_out != NULL)
+    *real_path_out = g_string_free (g_steal_pointer (&current_path), FALSE);
 
   /* Taking the address might look like nonsense here, but it's
    * documented to work: g_array_index expands to fds->data[some_offset].

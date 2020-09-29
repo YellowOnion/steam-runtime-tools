@@ -57,7 +57,6 @@ endforeach
 
 # Headers to scan for enum/flags types.
 headers = [
-  'resolve-in-sysroot.h',
   'runtime.h',
 ]
 
@@ -86,8 +85,6 @@ pressure_vessel_utils = static_library(
     'flatpak-utils-base-private.h',
     'flatpak-utils.c',
     'flatpak-utils-private.h',
-    'resolve-in-sysroot.c',
-    'resolve-in-sysroot.h',
     'tree-copy.c',
     'tree-copy.h',
     'utils.c',

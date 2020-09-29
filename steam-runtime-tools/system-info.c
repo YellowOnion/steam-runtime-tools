@@ -35,6 +35,7 @@
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/locale-internal.h"
 #include "steam-runtime-tools/os-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -95,7 +96,7 @@ struct _SrtSystemInfo
   GObject parent;
   /* "" if we have tried and failed to auto-detect */
   gchar *expectations;
-  /* Fake root directory, or %NULL to use the real root */
+  /* Root directory to inspect, usually "/" */
   gchar *sysroot;
   /* Fake environment variables, or %NULL to use the real environment */
   gchar **env;
@@ -170,6 +171,7 @@ struct _SrtSystemInfo
   gchar **cached_driver_environment;
   /* (element-type Abi) */
   GPtrArray *abis;
+  int sysroot_fd;
 };
 
 struct _SrtSystemInfoClass
@@ -310,6 +312,7 @@ static void
 srt_system_info_init (SrtSystemInfo *self)
 {
   self->can_write_uinput = TRI_MAYBE;
+  self->sysroot_fd = -1;
 
   /* Assume that in practice we will usually add two ABIs: amd64 and i386 */
   self->abis = g_ptr_array_new_full (2, abi_free);
@@ -317,6 +320,8 @@ srt_system_info_init (SrtSystemInfo *self)
   _srt_os_release_init (&self->os_release);
 
   self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
+
+  srt_system_info_set_sysroot (self, "/");
 }
 
 static void
@@ -480,6 +485,7 @@ srt_system_info_finalize (GObject *object)
   g_free (self->expectations);
   g_free (self->helpers_path);
   g_free (self->sysroot);
+  glnx_close_fd (&self->sysroot_fd);
   g_strfreev (self->env);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   if (self->cached_hidden_deps)
@@ -1024,7 +1030,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
       if (g_strcmp0 (runtime, "/") != 0)
         goto out;
 
-      if (!g_spawn_sync (self->sysroot == NULL ? "/" : self->sysroot, /* working directory */
+      if (!g_spawn_sync (self->sysroot,     /* working directory */
                         (gchar **) argv,
                         get_environ (self),
                         G_SPAWN_SEARCH_PATH,
@@ -1908,8 +1914,13 @@ void
 srt_system_info_set_sysroot (SrtSystemInfo *self,
                              const char *root)
 {
+  g_autoptr(GError) local_error = NULL;
+
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
+
+  if (root == NULL)
+    root = "/";
 
   forget_container_info (self);
   forget_graphics_modules (self);
@@ -1919,7 +1930,19 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
   forget_os (self);
   forget_overrides (self);
   g_free (self->sysroot);
+  glnx_close_fd (&self->sysroot_fd);
+
   self->sysroot = g_strdup (root);
+
+  if (!glnx_opendirat (-1,
+                       self->sysroot,
+                       FALSE,
+                       &self->sysroot_fd,
+                       &local_error))
+    {
+      g_debug ("Unable to open sysroot %s: %s",
+               self->sysroot, local_error->message);
+    }
 }
 
 static void
@@ -2078,8 +2101,11 @@ srt_system_info_dup_steam_bin32_path (SrtSystemInfo *self)
 static void
 ensure_os_cached (SrtSystemInfo *self)
 {
-  if (!self->os_release.populated && !self->immutable_values)
-    _srt_os_release_populate (&self->os_release, self->sysroot);
+  if (!self->os_release.populated
+      && !self->immutable_values
+      && self->sysroot_fd >= 0)
+    _srt_os_release_populate (&self->os_release, self->sysroot,
+                              self->sysroot_fd);
 }
 
 /**
@@ -3215,114 +3241,98 @@ container_type_from_name (const char *name)
 static void
 ensure_container_info (SrtSystemInfo *self)
 {
-  const char *sysroot = NULL;
-  gchar *contents = NULL;
-  gchar *filename = NULL;
+  g_autofree gchar *contents = NULL;
+  g_autofree gchar *run_host_path = NULL;
+  glnx_autofd int run_host_fd = -1;
 
   if (self->container.have_data || self->immutable_values)
     return;
 
   g_assert (self->container.host_directory == NULL);
   g_assert (self->container.type == SRT_CONTAINER_TYPE_UNKNOWN);
+  g_assert (self->sysroot != NULL);
 
-  sysroot = self->sysroot;
+  if (self->sysroot_fd < 0)
+    {
+      g_debug ("Cannot find container info: previously failed to open "
+               "sysroot %s", self->sysroot);
+      goto out;
+    }
 
-  if (sysroot == NULL)
-    sysroot = "/";
+  g_debug ("Finding container info in sysroot %s...", self->sysroot);
 
-  g_debug ("Finding container info in sysroot %s...", sysroot);
+  run_host_fd = _srt_resolve_in_sysroot (self->sysroot_fd, "/run/host",
+                                         SRT_RESOLVE_FLAGS_DIRECTORY,
+                                         &run_host_path, NULL);
 
-  filename = g_build_filename (sysroot, "run", "systemd", "container", NULL);
+  if (run_host_path != NULL)
+    self->container.host_directory = g_build_filename (self->sysroot,
+                                                       run_host_path,
+                                                       NULL);
 
-  if (g_file_get_contents (filename, &contents, NULL, NULL))
+  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
+                                         "/run/systemd/container",
+                                         &contents, NULL, NULL))
     {
       g_strchomp (contents);
       self->container.type = container_type_from_name (contents);
-      g_debug ("Type %d based on %s", self->container.type, filename);
+      g_debug ("Type %d based on /run/systemd/container",
+               self->container.type);
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, ".flatpak-info", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_IS_REGULAR))
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/.flatpak-info", G_FILE_TEST_IS_REGULAR))
     {
       self->container.type = SRT_CONTAINER_TYPE_FLATPAK;
-      g_debug ("Flatpak based on %s", filename);
+      g_debug ("Flatpak based on /.flatpak-info");
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, "run", "pressure-vessel", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_IS_DIR))
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/run/pressure-vessel", G_FILE_TEST_IS_DIR))
     {
       self->container.type = SRT_CONTAINER_TYPE_PRESSURE_VESSEL;
-      g_debug ("pressure-vessel based on %s", filename);
+      g_debug ("pressure-vessel based on /run/pressure-vessel");
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, ".dockerenv", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/.dockerenv", G_FILE_TEST_EXISTS))
     {
       self->container.type = SRT_CONTAINER_TYPE_DOCKER;
-      g_debug ("Docker based on %s", filename);
+      g_debug ("Docker based on /.dockerenv");
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, "proc", "1", "cgroup", NULL);
-
-  if (g_file_get_contents (filename, &contents, NULL, NULL))
+  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
+                                         "/proc/1/cgroup",
+                                         &contents, NULL, NULL))
     {
       if (strstr (contents, "/docker/") != NULL)
         self->container.type = SRT_CONTAINER_TYPE_DOCKER;
 
       if (self->container.type != SRT_CONTAINER_TYPE_UNKNOWN)
         {
-          g_debug ("Type %d based on %s", self->container.type, filename);
+          g_debug ("Type %d based on /proc/1/cgroup", self->container.type);
           goto out;
         }
+
+      g_clear_pointer (&contents, g_free);
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (sysroot, "run", "host", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_IS_DIR))
+  if (run_host_fd >= 0)
     {
-      g_debug ("Unknown container technology based on %s", filename);
+      g_debug ("Unknown container technology based on /run/host");
       self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
-      self->container.host_directory = g_steal_pointer (&filename);
       goto out;
     }
-
-  g_clear_pointer (&filename, g_free);
 
   /* We haven't found any particular evidence of being in a container */
   g_debug ("Probably not a container");
   self->container.type = SRT_CONTAINER_TYPE_NONE;
 
 out:
-  g_free (contents);
-  g_free (filename);
-
-  switch (self->container.type)
-    {
-      case SRT_CONTAINER_TYPE_FLATPAK:
-      case SRT_CONTAINER_TYPE_PRESSURE_VESSEL:
-        self->container.host_directory = g_build_filename (sysroot, "run",
-                                                           "host", NULL);
-        break;
-
-      case SRT_CONTAINER_TYPE_DOCKER:
-      case SRT_CONTAINER_TYPE_UNKNOWN:
-      case SRT_CONTAINER_TYPE_NONE:
-      default:
-        break;
-    }
-
   self->container.have_data = TRUE;
 }
 

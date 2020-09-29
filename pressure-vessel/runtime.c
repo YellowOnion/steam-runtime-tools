@@ -29,13 +29,14 @@
 #include "libglnx/libglnx.h"
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
 #include "elf-utils.h"
 #include "enumtypes.h"
 #include "flatpak-run-private.h"
-#include "resolve-in-sysroot.h"
 #include "tree-copy.h"
 #include "utils.h"
 
@@ -1590,8 +1591,8 @@ bind_runtime (PvRuntime *self,
   /* If we are in a Flatpak environment, we need to test if these files are
    * available in the host, and not in the current environment, because we will
    * run bwrap in the host system */
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/machine-id",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/machine-id", G_FILE_TEST_EXISTS))
     {
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", "/etc/machine-id", "/etc/machine-id",
@@ -1602,8 +1603,9 @@ bind_runtime (PvRuntime *self,
   /* We leave this for completeness but in practice we do not expect to have
    * access to the "/var" host directory because Flatpak usually just binds
    * the host's "etc" and "usr". */
-  else if (pv_file_test_in_sysroot (self->host_in_current_namespace,
-                                    "/var/lib/dbus/machine-id", G_FILE_TEST_EXISTS))
+  else if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                      "/var/lib/dbus/machine-id",
+                                      G_FILE_TEST_EXISTS))
     {
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", "/var/lib/dbus/machine-id",
@@ -1613,34 +1615,34 @@ bind_runtime (PvRuntime *self,
                               NULL);
     }
 
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/resolv.conf",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/resolv.conf", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
                             NULL);
 
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/host.conf",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/host.conf", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/host.conf", "/etc/host.conf",
                             NULL);
 
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/hosts",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/hosts", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/hosts", "/etc/hosts",
                             NULL);
 
   /* TODO: Synthesize a passwd with only the user and nobody,
    * like Flatpak does? */
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/passwd",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/passwd", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/passwd", "/etc/passwd",
                             NULL);
 
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/group",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/group", G_FILE_TEST_EXISTS))
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
@@ -1665,8 +1667,8 @@ bind_runtime (PvRuntime *self,
    * non-existing targets), in which case we don't want to attempt to create
    * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
    */
-  if (pv_file_test_in_sysroot (self->host_in_current_namespace, "/etc/localtime",
-                               G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                 "/etc/localtime", G_FILE_TEST_EXISTS))
     {
       g_autofree char *target = NULL;
       gboolean is_reachable = FALSE;
@@ -1734,15 +1736,15 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
   if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_DIR)
     {
-      if (!pv_file_test_in_sysroot (self->provider_in_current_namespace,
-                                    source_in_provider, G_FILE_TEST_IS_DIR))
+      if (!_srt_file_test_in_sysroot (self->provider_in_current_namespace, -1,
+                                      source_in_provider, G_FILE_TEST_IS_DIR))
         return TRUE;
     }
 
   if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS)
     {
-      if (!pv_file_test_in_sysroot (self->provider_in_current_namespace,
-                                    source_in_provider, G_FILE_TEST_EXISTS))
+      if (!_srt_file_test_in_sysroot (self->provider_in_current_namespace, -1,
+                                      source_in_provider, G_FILE_TEST_EXISTS))
         return TRUE;
     }
 
@@ -1756,10 +1758,10 @@ pv_runtime_take_from_provider (PvRuntime *self,
       glnx_autofd int parent_dirfd = -1;
 
       parent_in_container = g_path_get_dirname (dest_in_container);
-      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                            parent_in_container,
-                                            PV_RESOLVE_FLAGS_MKDIR_P,
-                                            NULL, error);
+      parent_dirfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                              parent_in_container,
+                                              SRT_RESOLVE_FLAGS_MKDIR_P,
+                                              NULL, error);
 
       if (parent_dirfd < 0)
         return FALSE;
@@ -1783,9 +1785,9 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                    FALSE, &sysroot_fd, error))
                 return FALSE;
 
-              file_fd = pv_resolve_in_sysroot (sysroot_fd, source_in_provider,
-                                               PV_RESOLVE_FLAGS_READABLE,
-                                               NULL, error);
+              file_fd = _srt_resolve_in_sysroot (sysroot_fd, source_in_provider,
+                                                 SRT_RESOLVE_FLAGS_READABLE,
+                                                 NULL, error);
               if (file_fd < 0)
                 return FALSE;
 
@@ -1904,10 +1906,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          libdir_fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                             multiarch_libdirs[i],
-                                             PV_RESOLVE_FLAGS_READABLE,
-                                             NULL, &local_error);
+          libdir_fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                               multiarch_libdirs[i],
+                                               SRT_RESOLVE_FLAGS_READABLE,
+                                               NULL, &local_error);
 
           if (libdir_fd < 0)
             {
@@ -2018,9 +2020,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
-          libfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd, path,
-                                         PV_RESOLVE_FLAGS_READABLE, NULL,
-                                         &local_error);
+          libfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd, path,
+                                           SRT_RESOLVE_FLAGS_READABLE, NULL,
+                                           &local_error);
 
           if (libfd < 0)
             {
@@ -2120,9 +2122,9 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
   if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
     return FALSE;
 
-  path_fd = pv_resolve_in_sysroot (provider_fd,
-                                   arch->ld_so, PV_RESOLVE_FLAGS_READABLE,
-                                   &ld_so_relative_to_provider, error);
+  path_fd = _srt_resolve_in_sysroot (provider_fd,
+                                     arch->ld_so, SRT_RESOLVE_FLAGS_READABLE,
+                                     &ld_so_relative_to_provider, error);
 
   if (path_fd < 0)
     return glnx_throw_errno_prefix (error,
@@ -2192,8 +2194,8 @@ pv_runtime_search_in_path_and_bin (PvRuntime *self,
       g_autofree gchar *test_path = g_build_filename (common_bin_dirs[i],
                                                       program_name,
                                                       NULL);
-      if (pv_file_test_in_sysroot (self->host_in_current_namespace,
-                                   test_path, G_FILE_TEST_IS_EXECUTABLE))
+      if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                     test_path, G_FILE_TEST_IS_EXECUTABLE))
         return g_steal_pointer (&test_path);
     }
 
@@ -2341,11 +2343,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               glnx_autofd int fd = -1;
 
-              fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                          arch->ld_so,
-                                          PV_RESOLVE_FLAGS_NONE,
-                                          &ld_so_in_runtime,
-                                          error);
+              fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                            arch->ld_so,
+                                            SRT_RESOLVE_FLAGS_NONE,
+                                            &ld_so_in_runtime,
+                                            error);
 
               if (fd < 0)
                 return FALSE;
@@ -2608,8 +2610,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
                   gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
-                  if (pv_file_test_in_sysroot (self->provider_in_current_namespace,
-                                               gconv_dir_in_provider, G_FILE_TEST_IS_DIR))
+                  if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                                 -1,
+                                                 gconv_dir_in_provider,
+                                                 G_FILE_TEST_IS_DIR))
                     {
                       g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
                       found = TRUE;
@@ -2638,8 +2642,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                       g_clear_pointer (&gconv_dir_in_provider, g_free);
                       gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
-                      if (pv_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                   gconv_dir_in_provider, G_FILE_TEST_IS_DIR))
+                      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                                     -1,
+                                                     gconv_dir_in_provider,
+                                                     G_FILE_TEST_IS_DIR))
                         {
                           g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
                           found = TRUE;
@@ -2696,8 +2702,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
                   libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
 
-                  if (pv_file_test_in_sysroot (self->provider_in_current_namespace,
-                                               libdrm_dir_in_provider, G_FILE_TEST_IS_DIR))
+                  if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                                 -1,
+                                                 libdrm_dir_in_provider,
+                                                 G_FILE_TEST_IS_DIR))
                     {
                       g_hash_table_add (libdrm_data_in_provider,
                                         g_steal_pointer (&libdrm_dir_in_provider));
@@ -3188,10 +3196,10 @@ pv_runtime_bind (PvRuntime *self,
       g_autofree gchar *dest = NULL;
       glnx_autofd int parent_dirfd = -1;
 
-      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                            "/usr/lib/pressure-vessel",
-                                            PV_RESOLVE_FLAGS_MKDIR_P,
-                                            NULL, error);
+      parent_dirfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                              "/usr/lib/pressure-vessel",
+                                              SRT_RESOLVE_FLAGS_MKDIR_P,
+                                              NULL, error);
 
       if (parent_dirfd < 0)
         return FALSE;

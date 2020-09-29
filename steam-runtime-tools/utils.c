@@ -44,6 +44,7 @@
 #include <glib-object.h>
 #include <gio/gio.h>
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 
 #ifdef HAVE_GETAUXVAL
 #define getauxval_AT_SECURE() getauxval (AT_SECURE)
@@ -861,4 +862,137 @@ _srt_divert_stdout_to_stderr (GError **error)
     original_stdout_fd = -1;    /* ownership taken, do not close */
 
   return g_steal_pointer (&original_stdout);
+}
+
+/*
+ * _srt_file_get_contents_in_sysroot:
+ * @sysroot_fd: A directory fd opened on the sysroot or `/`
+ * @path: Absolute or root-relative path within @sysroot_fd
+ * @contents: (out) (not optional): Used to return contents
+ * @len: (out) (optional): Used to return length
+ * @error: Used to return error on failure
+ *
+ * Like g_file_get_contents(), but the file is in a sysroot, and we
+ * follow symlinks as though @sysroot_fd was the root directory
+ * (similar to `fakechroot`).
+ *
+ * Returns: %TRUE if successful
+ */
+gboolean
+_srt_file_get_contents_in_sysroot (int sysroot_fd,
+                                   const char *path,
+                                   gchar **contents,
+                                   gsize *len,
+                                   GError **error)
+{
+  g_autofree gchar *real_path = NULL;
+  g_autofree gchar *fd_path = NULL;
+  g_autofree gchar *ignored = NULL;
+  glnx_autofd int fd = -1;
+
+  g_return_val_if_fail (sysroot_fd >= 0, FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
+  g_return_val_if_fail (contents != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (contents == NULL)
+    contents = &ignored;
+
+  fd = _srt_resolve_in_sysroot (sysroot_fd,
+                                path,
+                                SRT_RESOLVE_FLAGS_READABLE,
+                                &real_path,
+                                error);
+
+  if (fd < 0)
+    return FALSE;
+
+  fd_path = g_strdup_printf ("/proc/self/fd/%d", fd);
+
+  if (!g_file_get_contents (fd_path, contents, len, error))
+    {
+      g_prefix_error (error, "Unable to read %s: ", real_path);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * _srt_file_test_in_sysroot:
+ * @sysroot: (type filename): A path used as the root
+ * @sysroot_fd: A file descriptor opened on @sysroot, or negative to
+ *  reopen it
+ * @filename: (type filename): A path below the root directory, either
+ *  absolute or relative (to the root)
+ * @test: The test to perform on the resolved file in @sysroot.
+ *  G_FILE_TEST_IS_SYMLINK is not a valid GFileTest value because the
+ *  path is resolved following symlinks too.
+ *
+ * Returns: %TRUE if the @filename resolved in @sysroot passes the @test.
+ */
+gboolean
+_srt_file_test_in_sysroot (const char *sysroot,
+                           int sysroot_fd,
+                           const char *filename,
+                           GFileTest test)
+{
+  glnx_autofd int file_fd = -1;
+  glnx_autofd int local_sysroot_fd = -1;
+  struct stat stat_buf;
+  g_autofree gchar *file_realpath_in_sysroot = NULL;
+  g_autoptr(GError) error = NULL;
+
+  g_return_val_if_fail (sysroot != NULL, FALSE);
+  g_return_val_if_fail (filename != NULL, FALSE);
+  /* We reject G_FILE_TEST_IS_SYMLINK because the provided filename is resolved
+   * in sysroot, following the eventual symlinks too. So it is not possible for
+   * the resolved filename to be a symlink */
+  g_return_val_if_fail ((test & (G_FILE_TEST_EXISTS | G_FILE_TEST_IS_EXECUTABLE
+                                 | G_FILE_TEST_IS_REGULAR
+                                 | G_FILE_TEST_IS_DIR)) == test, FALSE);
+
+  if (sysroot_fd < 0)
+    {
+      if (!glnx_opendirat (-1, sysroot, FALSE, &local_sysroot_fd, &error))
+        {
+          g_debug ("An error occurred trying to open %s: %s", sysroot,
+                   error->message);
+          return FALSE;
+        }
+
+      sysroot_fd = local_sysroot_fd;
+    }
+
+  file_fd = _srt_resolve_in_sysroot (sysroot_fd,
+                                     filename, SRT_RESOLVE_FLAGS_NONE,
+                                     &file_realpath_in_sysroot, &error);
+
+  if (file_fd < 0)
+    {
+      g_debug ("An error occurred trying to resolve %s in sysroot: %s",
+               filename, error->message);
+      return FALSE;
+    }
+
+  if (fstat (file_fd, &stat_buf) != 0)
+    {
+      g_debug ("fstat %s/%s: %s",
+               sysroot, file_realpath_in_sysroot, g_strerror (errno));
+      return FALSE;
+    }
+
+  if (test & G_FILE_TEST_EXISTS)
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_EXECUTABLE) && (stat_buf.st_mode & 0111))
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_REGULAR) && S_ISREG (stat_buf.st_mode))
+    return TRUE;
+
+  if ((test & G_FILE_TEST_IS_DIR) && S_ISDIR (stat_buf.st_mode))
+    return TRUE;
+
+  return FALSE;
 }

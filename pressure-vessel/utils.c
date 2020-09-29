@@ -36,11 +36,10 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
-
-#include "resolve-in-sysroot.h"
 
 static void
 child_setup_cb (gpointer user_data)
@@ -919,75 +918,4 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
     path_on_host = g_strdup (current_env_path);
 
   return path_on_host;
-}
-
-/**
- * pv_file_test_in_sysroot:
- * @sysroot: (type filename): A path used as the root
- * @filename: (type filename): A path below the root directory, either
- *  absolute or relative (to the root)
- * @test: The test to perform on the resolved file in @sysroot.
- *  G_FILE_TEST_IS_SYMLINK is not a valid GFileTest value because the
- *  path is resolved following symlinks too.
- *
- * Returns: %TRUE if the @filename resolved in @sysroot passes the @test.
- */
-gboolean
-pv_file_test_in_sysroot (const char *sysroot,
-                         const char *filename,
-                         GFileTest test)
-{
-  glnx_autofd int file_fd = -1;
-  glnx_autofd int sysroot_fd = -1;
-  struct stat stat_buf;
-  g_autofree gchar *file_realpath_in_sysroot = NULL;
-  g_autoptr(GError) error = NULL;
-
-  g_return_val_if_fail (sysroot != NULL, FALSE);
-  g_return_val_if_fail (filename != NULL, FALSE);
-  /* We reject G_FILE_TEST_IS_SYMLINK because the provided filename is resolved
-   * in sysroot, following the eventual symlinks too. So it is not possible for
-   * the resolved filename to be a symlink */
-  g_return_val_if_fail ((test & (G_FILE_TEST_EXISTS | G_FILE_TEST_IS_EXECUTABLE
-                                 | G_FILE_TEST_IS_REGULAR
-                                 | G_FILE_TEST_IS_DIR)) == test, FALSE);
-
-  if (!glnx_opendirat (-1, sysroot, FALSE, &sysroot_fd, &error))
-    {
-      g_debug ("An error occurred trying to open %s: %s", sysroot,
-               error->message);
-      return FALSE;
-    }
-
-  file_fd = pv_resolve_in_sysroot (sysroot_fd,
-                                   filename, PV_RESOLVE_FLAGS_NONE,
-                                   &file_realpath_in_sysroot, &error);
-
-  if (file_fd < 0)
-    {
-      g_debug ("An error occurred trying to resolve %s in sysroot: %s",
-               filename, error->message);
-      return FALSE;
-    }
-
-  if (fstat (file_fd, &stat_buf) != 0)
-    {
-      g_debug ("fstat %s/%s: %s",
-               sysroot, file_realpath_in_sysroot, g_strerror (errno));
-      return FALSE;
-    }
-
-  if (test & G_FILE_TEST_EXISTS)
-    return TRUE;
-
-  if ((test & G_FILE_TEST_IS_EXECUTABLE) && (stat_buf.st_mode & 0111))
-    return TRUE;
-
-  if ((test & G_FILE_TEST_IS_REGULAR) && S_ISREG (stat_buf.st_mode))
-    return TRUE;
-
-  if ((test & G_FILE_TEST_IS_DIR) && S_ISDIR (stat_buf.st_mode))
-    return TRUE;
-
-  return FALSE;
 }

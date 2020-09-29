@@ -17,7 +17,7 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "resolve-in-sysroot.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -67,7 +67,7 @@ fd_array_take (GArray *fds,
 }
 
 /*
- * pv_resolve_in_sysroot:
+ * _srt_resolve_in_sysroot:
  * @sysroot: (transfer none): A file descriptor representing the root
  * @descendant: (type filename): A path below the root directory, either
  *  absolute or relative (to the root)
@@ -78,7 +78,7 @@ fd_array_take (GArray *fds,
  *
  * Open @descendant as though @sysroot was the root directory.
  *
- * If %PV_RESOLVE_FLAGS_MKDIR_P is in @flags, each path segment in
+ * If %SRT_RESOLVE_FLAGS_MKDIR_P is in @flags, each path segment in
  * @descendant must be a directory, a symbolic link to a directory,
  * or nonexistent (in which case a directory will be created, currently
  * with hard-coded 0700 permissions).
@@ -87,11 +87,11 @@ fd_array_take (GArray *fds,
  *  or -1 on error
  */
 int
-pv_resolve_in_sysroot (int sysroot,
-                       const char *descendant,
-                       PvResolveFlags flags,
-                       gchar **real_path_out,
-                       GError **error)
+_srt_resolve_in_sysroot (int sysroot,
+                         const char *descendant,
+                         SrtResolveFlags flags,
+                         gchar **real_path_out,
+                         GError **error)
 {
   g_autoptr(GString) current_path = g_string_new ("");
   /* Array of fds pointing to directories beneath @sysroot.
@@ -196,7 +196,7 @@ pv_resolve_in_sysroot (int sysroot,
       fd = TEMP_FAILURE_RETRY (openat (g_array_index (fds, int, fds->len - 1),
                                        next, open_flags));
 
-      if (fd < 0 && errno == ENOENT && (flags & PV_RESOLVE_FLAGS_MKDIR_P) != 0)
+      if (fd < 0 && errno == ENOENT && (flags & SRT_RESOLVE_FLAGS_MKDIR_P) != 0)
         {
           if (TEMP_FAILURE_RETRY (mkdirat (g_array_index (fds, int, fds->len - 1),
                                            next, 0700)) != 0)
@@ -225,13 +225,13 @@ pv_resolve_in_sysroot (int sysroot,
 
       if (target != NULL)   /* Yes, it's a symlink */
         {
-          if (flags & PV_RESOLVE_FLAGS_REJECT_SYMLINKS)
+          if (flags & SRT_RESOLVE_FLAGS_REJECT_SYMLINKS)
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_TOO_MANY_LINKS,
                            "\"%s/%s\" is a symlink", current_path->str, next);
               return -1;
             }
-          else if ((flags & PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK) != 0 &&
+          else if ((flags & SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK) != 0 &&
                    remaining == NULL)
             {
               /* Treat as though not a symlink. */
@@ -273,7 +273,7 @@ pv_resolve_in_sysroot (int sysroot,
         {
           /* If we are emulating mkdir -p, or if we will go on to open
            * a member of @fd, then it had better be a directory. */
-          if ((flags & PV_RESOLVE_FLAGS_MKDIR_P) != 0 ||
+          if ((flags & SRT_RESOLVE_FLAGS_MKDIR_P) != 0 ||
               remaining != NULL)
             {
               struct stat stat_buf;
@@ -303,15 +303,23 @@ pv_resolve_in_sysroot (int sysroot,
         }
     }
 
-  if (flags & PV_RESOLVE_FLAGS_READABLE)
+  if (flags & (SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY))
     {
       g_autofree char *proc_fd_name = g_strdup_printf ("/proc/self/fd/%d",
                                                        g_array_index (fds, int,
                                                                       fds->len - 1));
       glnx_autofd int fd = -1;
 
-      if (!glnx_openat_rdonly (-1, proc_fd_name, TRUE, &fd, error))
-        return -1;
+      if (flags & SRT_RESOLVE_FLAGS_DIRECTORY)
+        {
+          if (!glnx_opendirat (-1, proc_fd_name, TRUE, &fd, error))
+            return -1;
+        }
+      else
+        {
+          if (!glnx_openat_rdonly (-1, proc_fd_name, TRUE, &fd, error))
+            return -1;
+        }
 
       if (real_path_out != NULL)
         *real_path_out = g_string_free (g_steal_pointer (&current_path), FALSE);

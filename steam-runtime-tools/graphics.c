@@ -1765,7 +1765,7 @@ load_json_dir (const char *sysroot,
   g_autofree gchar *suffixed_dir = NULL;
   const char *iter_dir;
   const char *member;
-  GPtrArray *members;
+  g_autoptr(GPtrArray) members = NULL;
   gsize i;
 
   g_return_if_fail (load_json_cb != NULL);

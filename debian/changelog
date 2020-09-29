@@ -1,3 +1,39 @@
+steam-runtime-tools (0.20200929.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Reapply "runtime: Set STEAM_RUNTIME=/ if running in scout".
+    This will reassure some games, particularly those ported by Feral
+    Interactive, that they are running in the right environment.
+    Last time we tried this, it broke GTK in scout, but since then we have
+    fixed the custom search path patches in various libraries to cope.
+    (Resolves: pressure-vessel#8; maybe also: steam-runtime#202,
+    steam-runtime#249)
+  * json-glib-compat.h: Use the correct cleanup function for JsonArray
+  * fake-home.c: Do not shadow the possible global declaration of dirname
+
+  [ Simon McVittie ]
+  * README: Add more information about pressure-vessel
+  * build: Link libglnx into steam-runtime-tools library.
+    This changes the effective license of the library from MIT/X11 to LGPL,
+    and will let us make more use of libglnx in future to make the library
+    more reliable.
+  * libsrt: Consolidate GLib backwards compatibility
+  * libsrt: Move non-public utility functions to internal header
+  * libsrt: Remove duplication of _srt_rm_rf() vs. pv_rm_rf()
+  * libsrt: Move pv_divert_stdout_to_stderr() here, reducing duplication
+  * pressure-vessel: Include static libsrt in utils library
+  * flatpak-bwrap: Update from Flatpak 1.8.2
+    gcc 10 correctly diagnoses that if there are 0 bytes of arguments, we'll
+    allocate no bytes, leaving no space for this (unnecessary) '\0'.
+  * tests: Parse and re-serialize expected JSON output.
+    This avoids test failure when using json-glib 1.6.x, which pretty-prints
+    empty arrays and empty objects differently.
+  * tests: Consolidate test-helper libraries
+  * tests: Start to use g_autofree
+  * graphics: Fix shadowing
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 29 Sep 2020 16:53:45 +0100
+
 steam-runtime-tools (0.20200914.0) scout; urgency=medium
 
   [ Simon McVittie ]

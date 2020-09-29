@@ -170,6 +170,7 @@ struct _SrtSystemInfo
   gchar **cached_driver_environment;
   /* (element-type Abi) */
   GPtrArray *abis;
+  int sysroot_fd;
 };
 
 struct _SrtSystemInfoClass
@@ -310,6 +311,7 @@ static void
 srt_system_info_init (SrtSystemInfo *self)
 {
   self->can_write_uinput = TRI_MAYBE;
+  self->sysroot_fd = -1;
 
   /* Assume that in practice we will usually add two ABIs: amd64 and i386 */
   self->abis = g_ptr_array_new_full (2, abi_free);
@@ -482,6 +484,7 @@ srt_system_info_finalize (GObject *object)
   g_free (self->expectations);
   g_free (self->helpers_path);
   g_free (self->sysroot);
+  glnx_close_fd (&self->sysroot_fd);
   g_strfreev (self->env);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   if (self->cached_hidden_deps)
@@ -1910,6 +1913,8 @@ void
 srt_system_info_set_sysroot (SrtSystemInfo *self,
                              const char *root)
 {
+  g_autoptr(GError) local_error = NULL;
+
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
@@ -1924,7 +1929,19 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
   forget_os (self);
   forget_overrides (self);
   g_free (self->sysroot);
+  glnx_close_fd (&self->sysroot_fd);
+
   self->sysroot = g_strdup (root);
+
+  if (!glnx_opendirat (-1,
+                       self->sysroot,
+                       FALSE,
+                       &self->sysroot_fd,
+                       &local_error))
+    {
+      g_debug ("Unable to open sysroot %s: %s",
+               self->sysroot, local_error->message);
+    }
 }
 
 static void

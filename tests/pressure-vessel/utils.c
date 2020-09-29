@@ -30,6 +30,7 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "tests/test-utils.h"
@@ -374,7 +375,8 @@ test_file_in_sysroot (Fixture *f,
     {
       const InSysrootTest *it = &tests[i];
 
-      g_assert_cmpint (pv_file_test_in_sysroot (tmpdir.path, it->path, it->test),
+      g_assert_cmpint (_srt_file_test_in_sysroot (tmpdir.path, -1,
+                                                  it->path, it->test),
                        ==, it->expected_result);
     }
 }

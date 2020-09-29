@@ -94,3 +94,9 @@ gboolean _srt_file_get_contents_in_sysroot (int sysroot_fd,
                                             gchar **contents,
                                             gsize *len,
                                             GError **error);
+
+G_GNUC_INTERNAL
+gboolean _srt_file_test_in_sysroot (const char *sysroot,
+                                    int sysroot_fd,
+                                    const char *filename,
+                                    GFileTest test);

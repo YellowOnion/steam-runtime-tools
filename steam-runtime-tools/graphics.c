@@ -1761,6 +1761,7 @@ load_json_dir (const char *sysroot,
 {
   g_autoptr(GError) error = NULL;
   g_autoptr(GDir) dir_iter = NULL;
+  g_autofree gchar *canon = NULL;
   g_autofree gchar *sysrooted_dir = NULL;
   g_autofree gchar *suffixed_dir = NULL;
   const char *iter_dir;
@@ -1772,6 +1773,12 @@ load_json_dir (const char *sysroot,
 
   if (dir == NULL)
     return;
+
+  if (!g_path_is_absolute (dir))
+    {
+      canon = g_canonicalize_filename (dir, NULL);
+      dir = canon;
+    }
 
   if (suffix != NULL)
     {
@@ -2336,10 +2343,17 @@ egl_icd_load_json (const char *sysroot,
                    GList **list)
 {
   g_autoptr(GError) error = NULL;
+  g_autofree gchar *canon = NULL;
   g_autofree gchar *in_sysroot = NULL;
   g_autofree gchar *library_path = NULL;
 
   g_return_if_fail (list != NULL);
+
+  if (!g_path_is_absolute (filename))
+    {
+      canon = g_canonicalize_filename (filename, NULL);
+      filename = canon;
+    }
 
   if (sysroot != NULL)
     in_sysroot = g_build_filename (sysroot, filename, NULL);
@@ -4761,11 +4775,18 @@ vulkan_icd_load_json (const char *sysroot,
                       GList **list)
 {
   g_autoptr(GError) error = NULL;
+  g_autofree gchar *canon = NULL;
   g_autofree gchar *in_sysroot = NULL;
   g_autofree gchar *api_version = NULL;
   g_autofree gchar *library_path = NULL;
 
   g_return_if_fail (list != NULL);
+
+  if (!g_path_is_absolute (filename))
+    {
+      canon = g_canonicalize_filename (filename, NULL);
+      filename = canon;
+    }
 
   if (sysroot != NULL)
     in_sysroot = g_build_filename (sysroot, filename, NULL);

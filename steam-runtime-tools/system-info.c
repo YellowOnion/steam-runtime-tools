@@ -35,6 +35,7 @@
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/locale-internal.h"
 #include "steam-runtime-tools/os-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -3240,8 +3241,9 @@ container_type_from_name (const char *name)
 static void
 ensure_container_info (SrtSystemInfo *self)
 {
-  gchar *contents = NULL;
-  gchar *filename = NULL;
+  g_autofree gchar *contents = NULL;
+  g_autofree gchar *run_host_path = NULL;
+  glnx_autofd int run_host_fd = -1;
 
   if (self->container.have_data || self->immutable_values)
     return;
@@ -3250,100 +3252,87 @@ ensure_container_info (SrtSystemInfo *self)
   g_assert (self->container.type == SRT_CONTAINER_TYPE_UNKNOWN);
   g_assert (self->sysroot != NULL);
 
+  if (self->sysroot_fd < 0)
+    {
+      g_debug ("Cannot find container info: previously failed to open "
+               "sysroot %s", self->sysroot);
+      goto out;
+    }
+
   g_debug ("Finding container info in sysroot %s...", self->sysroot);
 
-  filename = g_build_filename (self->sysroot, "run", "systemd", "container", NULL);
+  run_host_fd = _srt_resolve_in_sysroot (self->sysroot_fd, "/run/host",
+                                         SRT_RESOLVE_FLAGS_DIRECTORY,
+                                         &run_host_path, NULL);
 
-  if (g_file_get_contents (filename, &contents, NULL, NULL))
+  if (run_host_path != NULL)
+    self->container.host_directory = g_build_filename (self->sysroot,
+                                                       run_host_path,
+                                                       NULL);
+
+  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
+                                         "/run/systemd/container",
+                                         &contents, NULL, NULL))
     {
       g_strchomp (contents);
       self->container.type = container_type_from_name (contents);
-      g_debug ("Type %d based on %s", self->container.type, filename);
+      g_debug ("Type %d based on /run/systemd/container",
+               self->container.type);
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (self->sysroot, ".flatpak-info", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_IS_REGULAR))
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/.flatpak-info", G_FILE_TEST_IS_REGULAR))
     {
       self->container.type = SRT_CONTAINER_TYPE_FLATPAK;
-      g_debug ("Flatpak based on %s", filename);
+      g_debug ("Flatpak based on /.flatpak-info");
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (self->sysroot, "run", "pressure-vessel", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_IS_DIR))
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/run/pressure-vessel", G_FILE_TEST_IS_DIR))
     {
       self->container.type = SRT_CONTAINER_TYPE_PRESSURE_VESSEL;
-      g_debug ("pressure-vessel based on %s", filename);
+      g_debug ("pressure-vessel based on /run/pressure-vessel");
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (self->sysroot, ".dockerenv", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_EXISTS))
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/.dockerenv", G_FILE_TEST_EXISTS))
     {
       self->container.type = SRT_CONTAINER_TYPE_DOCKER;
-      g_debug ("Docker based on %s", filename);
+      g_debug ("Docker based on /.dockerenv");
       goto out;
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (self->sysroot, "proc", "1", "cgroup", NULL);
-
-  if (g_file_get_contents (filename, &contents, NULL, NULL))
+  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
+                                         "/proc/1/cgroup",
+                                         &contents, NULL, NULL))
     {
       if (strstr (contents, "/docker/") != NULL)
         self->container.type = SRT_CONTAINER_TYPE_DOCKER;
 
       if (self->container.type != SRT_CONTAINER_TYPE_UNKNOWN)
         {
-          g_debug ("Type %d based on %s", self->container.type, filename);
+          g_debug ("Type %d based on /proc/1/cgroup", self->container.type);
           goto out;
         }
+
+      g_clear_pointer (&contents, g_free);
     }
 
-  g_clear_pointer (&filename, g_free);
-  filename = g_build_filename (self->sysroot, "run", "host", NULL);
-
-  if (g_file_test (filename, G_FILE_TEST_IS_DIR))
+  if (run_host_fd >= 0)
     {
-      g_debug ("Unknown container technology based on %s", filename);
+      g_debug ("Unknown container technology based on /run/host");
       self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
-      self->container.host_directory = g_steal_pointer (&filename);
       goto out;
     }
-
-  g_clear_pointer (&filename, g_free);
 
   /* We haven't found any particular evidence of being in a container */
   g_debug ("Probably not a container");
   self->container.type = SRT_CONTAINER_TYPE_NONE;
 
 out:
-  g_free (contents);
-  g_free (filename);
-
-  switch (self->container.type)
-    {
-      case SRT_CONTAINER_TYPE_FLATPAK:
-      case SRT_CONTAINER_TYPE_PRESSURE_VESSEL:
-        self->container.host_directory = g_build_filename (self->sysroot,
-                                                           "run", "host",
-                                                           NULL);
-        break;
-
-      case SRT_CONTAINER_TYPE_DOCKER:
-      case SRT_CONTAINER_TYPE_UNKNOWN:
-      case SRT_CONTAINER_TYPE_NONE:
-      default:
-        break;
-    }
-
   self->container.have_data = TRUE;
 }
 

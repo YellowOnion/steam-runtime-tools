@@ -87,3 +87,10 @@ gchar ** _srt_json_array_to_strv (JsonObject *json_obj,
 gboolean _srt_rm_rf (const char *directory);
 
 FILE *_srt_divert_stdout_to_stderr (GError **error);
+
+G_GNUC_INTERNAL
+gboolean _srt_file_get_contents_in_sysroot (int sysroot_fd,
+                                            const char *path,
+                                            gchar **contents,
+                                            gsize *len,
+                                            GError **error);

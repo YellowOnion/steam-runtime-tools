@@ -36,11 +36,10 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
-
-#include "resolve-in-sysroot.h"
 
 static void
 child_setup_cb (gpointer user_data)
@@ -959,9 +958,9 @@ pv_file_test_in_sysroot (const char *sysroot,
       return FALSE;
     }
 
-  file_fd = pv_resolve_in_sysroot (sysroot_fd,
-                                   filename, PV_RESOLVE_FLAGS_NONE,
-                                   &file_realpath_in_sysroot, &error);
+  file_fd = _srt_resolve_in_sysroot (sysroot_fd,
+                                     filename, SRT_RESOLVE_FLAGS_NONE,
+                                     &file_realpath_in_sysroot, &error);
 
   if (file_fd < 0)
     {

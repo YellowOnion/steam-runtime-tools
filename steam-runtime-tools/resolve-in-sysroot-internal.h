@@ -22,31 +22,32 @@
 #include <glib.h>
 
 /*
- * PvResolveFlags:
- * @PV_RESOLVE_FLAGS_MKDIR_P: Create the filename to be resolved and
+ * SrtResolveFlags:
+ * @SRT_RESOLVE_FLAGS_MKDIR_P: Create the filename to be resolved and
  *  all of its ancestors as directories. If any already exist, they
  *  must be directories or symlinks to directories.
- * @PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK: If the last component of
+ * @SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK: If the last component of
  *  the path is a symlink, return a fd pointing to the symlink itself.
- * @PV_RESOLVE_FLAGS_REJECT_SYMLINKS: If any component of
+ * @SRT_RESOLVE_FLAGS_REJECT_SYMLINKS: If any component of
  *  the path is a symlink, fail with %G_IO_ERROR_TOO_MANY_LINKS.
- * @PV_RESOLVE_FLAGS_READABLE: Open the last component of the path
+ * @SRT_RESOLVE_FLAGS_READABLE: Open the last component of the path
  *  for reading, instead of just as `O_PATH`.
- * @PV_RESOLVE_FLAGS_NONE: No special behaviour.
+ * @SRT_RESOLVE_FLAGS_NONE: No special behaviour.
  *
- * Flags affecting how pv_resolve_in_sysroot() behaves.
+ * Flags affecting how _srt_resolve_in_sysroot() behaves.
  */
 typedef enum
 {
-  PV_RESOLVE_FLAGS_MKDIR_P = (1 << 0),
-  PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK = (1 << 1),
-  PV_RESOLVE_FLAGS_REJECT_SYMLINKS = (1 << 2),
-  PV_RESOLVE_FLAGS_READABLE = (1 << 3),
-  PV_RESOLVE_FLAGS_NONE = 0
-} PvResolveFlags;
+  SRT_RESOLVE_FLAGS_MKDIR_P = (1 << 0),
+  SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK = (1 << 1),
+  SRT_RESOLVE_FLAGS_REJECT_SYMLINKS = (1 << 2),
+  SRT_RESOLVE_FLAGS_READABLE = (1 << 3),
+  SRT_RESOLVE_FLAGS_NONE = 0
+} SrtResolveFlags;
 
-int pv_resolve_in_sysroot (int sysroot,
-                           const char *descendant,
-                           PvResolveFlags flags,
-                           gchar **real_path_out,
-                           GError **error) G_GNUC_WARN_UNUSED_RESULT;
+G_GNUC_INTERNAL
+int _srt_resolve_in_sysroot (int sysroot,
+                             const char *descendant,
+                             SrtResolveFlags flags,
+                             gchar **real_path_out,
+                             GError **error) G_GNUC_WARN_UNUSED_RESULT;

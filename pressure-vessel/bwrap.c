@@ -23,7 +23,7 @@
 
 #include "bwrap.h"
 
-#include "resolve-in-sysroot.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 
 /**
  * pv_bwrap_run_sync:

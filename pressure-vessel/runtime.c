@@ -29,13 +29,13 @@
 #include "libglnx/libglnx.h"
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
 #include "elf-utils.h"
 #include "enumtypes.h"
 #include "flatpak-run-private.h"
-#include "resolve-in-sysroot.h"
 #include "tree-copy.h"
 #include "utils.h"
 
@@ -1756,10 +1756,10 @@ pv_runtime_take_from_provider (PvRuntime *self,
       glnx_autofd int parent_dirfd = -1;
 
       parent_in_container = g_path_get_dirname (dest_in_container);
-      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                            parent_in_container,
-                                            PV_RESOLVE_FLAGS_MKDIR_P,
-                                            NULL, error);
+      parent_dirfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                              parent_in_container,
+                                              SRT_RESOLVE_FLAGS_MKDIR_P,
+                                              NULL, error);
 
       if (parent_dirfd < 0)
         return FALSE;
@@ -1783,9 +1783,9 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                    FALSE, &sysroot_fd, error))
                 return FALSE;
 
-              file_fd = pv_resolve_in_sysroot (sysroot_fd, source_in_provider,
-                                               PV_RESOLVE_FLAGS_READABLE,
-                                               NULL, error);
+              file_fd = _srt_resolve_in_sysroot (sysroot_fd, source_in_provider,
+                                                 SRT_RESOLVE_FLAGS_READABLE,
+                                                 NULL, error);
               if (file_fd < 0)
                 return FALSE;
 
@@ -1904,10 +1904,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          libdir_fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                             multiarch_libdirs[i],
-                                             PV_RESOLVE_FLAGS_READABLE,
-                                             NULL, &local_error);
+          libdir_fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                               multiarch_libdirs[i],
+                                               SRT_RESOLVE_FLAGS_READABLE,
+                                               NULL, &local_error);
 
           if (libdir_fd < 0)
             {
@@ -2018,9 +2018,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
-          libfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd, path,
-                                         PV_RESOLVE_FLAGS_READABLE, NULL,
-                                         &local_error);
+          libfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd, path,
+                                           SRT_RESOLVE_FLAGS_READABLE, NULL,
+                                           &local_error);
 
           if (libfd < 0)
             {
@@ -2120,9 +2120,9 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
   if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
     return FALSE;
 
-  path_fd = pv_resolve_in_sysroot (provider_fd,
-                                   arch->ld_so, PV_RESOLVE_FLAGS_READABLE,
-                                   &ld_so_relative_to_provider, error);
+  path_fd = _srt_resolve_in_sysroot (provider_fd,
+                                     arch->ld_so, SRT_RESOLVE_FLAGS_READABLE,
+                                     &ld_so_relative_to_provider, error);
 
   if (path_fd < 0)
     return glnx_throw_errno_prefix (error,
@@ -2341,11 +2341,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               glnx_autofd int fd = -1;
 
-              fd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                          arch->ld_so,
-                                          PV_RESOLVE_FLAGS_NONE,
-                                          &ld_so_in_runtime,
-                                          error);
+              fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                            arch->ld_so,
+                                            SRT_RESOLVE_FLAGS_NONE,
+                                            &ld_so_in_runtime,
+                                            error);
 
               if (fd < 0)
                 return FALSE;
@@ -3188,10 +3188,10 @@ pv_runtime_bind (PvRuntime *self,
       g_autofree gchar *dest = NULL;
       glnx_autofd int parent_dirfd = -1;
 
-      parent_dirfd = pv_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                            "/usr/lib/pressure-vessel",
-                                            PV_RESOLVE_FLAGS_MKDIR_P,
-                                            NULL, error);
+      parent_dirfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                              "/usr/lib/pressure-vessel",
+                                              SRT_RESOLVE_FLAGS_MKDIR_P,
+                                              NULL, error);
 
       if (parent_dirfd < 0)
         return FALSE;

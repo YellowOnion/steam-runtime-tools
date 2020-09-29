@@ -30,9 +30,9 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "libglnx/libglnx.h"
 
-#include "resolve-in-sysroot.h"
 #include "tests/test-utils.h"
 #include "utils.h"
 
@@ -91,7 +91,7 @@ typedef struct
   struct
   {
     const char *path;
-    PvResolveFlags flags;
+    SrtResolveFlags flags;
     ResolveCallFlags test_flags;
   } call;
   struct
@@ -123,60 +123,60 @@ test_resolve_in_sysroot (Fixture *f,
   {
     { { "a/b/c/d" }, { "a/b/c/d" } },
     {
-      { "a/b/c/d", PV_RESOLVE_FLAGS_NONE, RESOLVE_CALL_FLAGS_IGNORE_PATH },
+      { "a/b/c/d", SRT_RESOLVE_FLAGS_NONE, RESOLVE_CALL_FLAGS_IGNORE_PATH },
       { "a/b/c/d" },
     },
-    { { "a/b/c/d", PV_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
+    { { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
     {
-      { "a/b/c/d", PV_RESOLVE_FLAGS_MKDIR_P, RESOLVE_CALL_FLAGS_IGNORE_PATH },
+      { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P, RESOLVE_CALL_FLAGS_IGNORE_PATH },
       { "a/b/c/d" },
     },
     { { "create_me" }, { NULL, G_IO_ERROR_NOT_FOUND } },
     {
-      { "create_me", PV_RESOLVE_FLAGS_NONE, RESOLVE_CALL_FLAGS_IGNORE_PATH },
+      { "create_me", SRT_RESOLVE_FLAGS_NONE, RESOLVE_CALL_FLAGS_IGNORE_PATH },
       { NULL, G_IO_ERROR_NOT_FOUND }
     },
-    { { "a/b/c/d", PV_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
+    { { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
     { { "a/b///////.////./././///././c/d" }, { "a/b/c/d" } },
     { { "/a/b///////.////././../b2////././c2/d2" }, { "a/b2/c2/d2" } },
     { { "a/b/c/d/e/f" }, { NULL, G_IO_ERROR_NOT_FOUND } },
-    { { "a/b/c/d/e/f", PV_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
+    { { "a/b/c/d/e/f", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
     { { "a/b/c/d/e/f" }, { "a/b/c/d/e/f" } },
-    { { "a/b/c/d/e/f", PV_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
+    { { "a/b/c/d/e/f", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
     { { "a3/b3/c3" }, { NULL, G_IO_ERROR_NOT_FOUND } },
-    { { "a3/b3/c3", PV_RESOLVE_FLAGS_MKDIR_P }, { "a3/b3/c3" } },
+    { { "a3/b3/c3", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a3/b3/c3" } },
     { { "a/b/symlink_to_c" }, { "a/b/c" } },
     { { "a/b/symlink_to_c/d" }, { "a/b/c/d" } },
     {
-      { "a/b/symlink_to_c/d", PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK },
+      { "a/b/symlink_to_c/d", SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK },
       { "a/b/c/d" }
     },
     {
-      { "a/b/symlink_to_c/d", PV_RESOLVE_FLAGS_REJECT_SYMLINKS },
+      { "a/b/symlink_to_c/d", SRT_RESOLVE_FLAGS_REJECT_SYMLINKS },
       { NULL, G_IO_ERROR_TOO_MANY_LINKS }
     },
     { { "a/b/symlink_to_b2" }, { "a/b2" } },
     { { "a/b/symlink_to_c2" }, { "a/b2/c2" } },
     { { "a/b/abs_symlink_to_run" }, { NULL, G_IO_ERROR_NOT_FOUND } },
     {
-      { "a/b/abs_symlink_to_run", PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK },
+      { "a/b/abs_symlink_to_run", SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK },
       { "a/b/abs_symlink_to_run" }
     },
     { { "run" }, { NULL, G_IO_ERROR_NOT_FOUND } },    /* Wasn't created yet */
-    { { "a/b/abs_symlink_to_run", PV_RESOLVE_FLAGS_MKDIR_P }, { "run" } },
+    { { "a/b/abs_symlink_to_run", SRT_RESOLVE_FLAGS_MKDIR_P }, { "run" } },
     { { "a/b/abs_symlink_to_run/host" }, { NULL, G_IO_ERROR_NOT_FOUND } },
-    { { "a/b/abs_symlink_to_run/host", PV_RESOLVE_FLAGS_MKDIR_P }, { "run/host" } },
+    { { "a/b/abs_symlink_to_run/host", SRT_RESOLVE_FLAGS_MKDIR_P }, { "run/host" } },
     { { "a/b/long_symlink_to_dev" }, { NULL, G_IO_ERROR_NOT_FOUND } },
     { { "a/b/long_symlink_to_dev/shm" }, { NULL, G_IO_ERROR_NOT_FOUND } },
-    { { "a/b/long_symlink_to_dev/shm", PV_RESOLVE_FLAGS_MKDIR_P }, { "dev/shm" } },
-    { { "a/b/../b2/c2/../c3", PV_RESOLVE_FLAGS_MKDIR_P }, { "a/b2/c3" } },
+    { { "a/b/long_symlink_to_dev/shm", SRT_RESOLVE_FLAGS_MKDIR_P }, { "dev/shm" } },
+    { { "a/b/../b2/c2/../c3", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b2/c3" } },
     { { "x" }, { NULL, G_IO_ERROR_NOT_FOUND } },
-    { { "x", PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK }, { "x" } },
+    { { "x", SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK }, { "x" } },
     /* This is a bit odd: unlike mkdir -p, we create targets for dangling
      * symlinks. It's easier to do this than not, and for pressure-vessel's
      * use-case it probably even makes more sense than not. */
     { { "x/y" }, { NULL, G_IO_ERROR_NOT_FOUND } },
-    { { "x/y", PV_RESOLVE_FLAGS_MKDIR_P }, { "create_me/y" } },
+    { { "x/y", SRT_RESOLVE_FLAGS_MKDIR_P }, { "create_me/y" } },
   };
   g_autoptr(GError) error = NULL;
   g_auto(GLnxTmpDir) tmpdir = { FALSE };
@@ -212,13 +212,13 @@ test_resolve_in_sysroot (Fixture *f,
 
       old_fds = tests_check_fd_leaks_enter ();
 
-      if (it->call.flags & PV_RESOLVE_FLAGS_MKDIR_P)
+      if (it->call.flags & SRT_RESOLVE_FLAGS_MKDIR_P)
         g_string_append (description, " (creating directories)");
 
-      if (it->call.flags & PV_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK)
+      if (it->call.flags & SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK)
         g_string_append (description, " (not following final symlink)");
 
-      if (it->call.flags & PV_RESOLVE_FLAGS_REJECT_SYMLINKS)
+      if (it->call.flags & SRT_RESOLVE_FLAGS_REJECT_SYMLINKS)
         g_string_append (description, " (not following any symlink)");
 
       g_test_message ("%" G_GSIZE_FORMAT ": Resolving %s%s",
@@ -229,8 +229,8 @@ test_resolve_in_sysroot (Fixture *f,
       else
         out_path = &path;
 
-      fd = pv_resolve_in_sysroot (tmpdir.fd, it->call.path,
-                                  it->call.flags, out_path, &error);
+      fd = _srt_resolve_in_sysroot (tmpdir.fd, it->call.path,
+                                    it->call.flags, out_path, &error);
 
       if (it->expect.path != NULL)
         {

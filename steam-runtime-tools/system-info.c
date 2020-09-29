@@ -2100,8 +2100,11 @@ srt_system_info_dup_steam_bin32_path (SrtSystemInfo *self)
 static void
 ensure_os_cached (SrtSystemInfo *self)
 {
-  if (!self->os_release.populated && !self->immutable_values)
-    _srt_os_release_populate (&self->os_release, self->sysroot);
+  if (!self->os_release.populated
+      && !self->immutable_values
+      && self->sysroot_fd >= 0)
+    _srt_os_release_populate (&self->os_release, self->sysroot,
+                              self->sysroot_fd);
 }
 
 /**

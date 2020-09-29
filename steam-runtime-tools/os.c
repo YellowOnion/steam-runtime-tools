@@ -141,7 +141,8 @@ do_line (SrtOsRelease *self,
 
 G_GNUC_INTERNAL void
 _srt_os_release_populate (SrtOsRelease *self,
-                          const char *sysroot)
+                          const char *sysroot,
+                          int sysroot_fd)
 {
   gsize i;
 
@@ -155,33 +156,28 @@ _srt_os_release_populate (SrtOsRelease *self,
   g_return_if_fail (self->variant_id == NULL);
   g_return_if_fail (self->version_codename == NULL);
   g_return_if_fail (self->version_id == NULL);
+  g_return_if_fail (sysroot != NULL);
+  g_return_if_fail (sysroot_fd >= 0);
 
   for (i = 0; i < G_N_ELEMENTS (os_release_paths); i++)
     {
+      g_autoptr(GError) local_error = NULL;
       const char *path = os_release_paths[i].path;
       gboolean only_in_run_host = os_release_paths[i].only_in_run_host;
-      gchar *built_path = NULL;
-      gchar *contents = NULL;
+      g_autofree gchar *contents = NULL;
       char *beginning_of_line;
-      GError *local_error = NULL;
       gsize len;
       gsize j;
 
       if (only_in_run_host
-          && (sysroot == NULL || !g_str_has_suffix (sysroot, "/run/host")))
+          && !g_str_has_suffix (sysroot, "/run/host"))
         continue;
 
-      if (sysroot != NULL)
+      if (!_srt_file_get_contents_in_sysroot (sysroot_fd, path,
+                                              &contents, &len,
+                                              &local_error))
         {
-          built_path = g_build_filename (sysroot, path, NULL);
-          path = built_path;
-        }
-
-      if (!g_file_get_contents (path, &contents, &len, &local_error))
-        {
-          g_debug ("Unable to open %s: %s", path, local_error->message);
-          g_clear_error (&local_error);
-          g_free (built_path);
+          g_debug ("%s", local_error->message);
           continue;
         }
 
@@ -201,9 +197,6 @@ _srt_os_release_populate (SrtOsRelease *self,
 
       /* Collect a possible partial line */
       do_line (self, path, beginning_of_line);
-
-      g_free (contents);
-      g_free (built_path);
       break;
     }
 

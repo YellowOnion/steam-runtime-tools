@@ -303,15 +303,23 @@ _srt_resolve_in_sysroot (int sysroot,
         }
     }
 
-  if (flags & SRT_RESOLVE_FLAGS_READABLE)
+  if (flags & (SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY))
     {
       g_autofree char *proc_fd_name = g_strdup_printf ("/proc/self/fd/%d",
                                                        g_array_index (fds, int,
                                                                       fds->len - 1));
       glnx_autofd int fd = -1;
 
-      if (!glnx_openat_rdonly (-1, proc_fd_name, TRUE, &fd, error))
-        return -1;
+      if (flags & SRT_RESOLVE_FLAGS_DIRECTORY)
+        {
+          if (!glnx_opendirat (-1, proc_fd_name, TRUE, &fd, error))
+            return -1;
+        }
+      else
+        {
+          if (!glnx_openat_rdonly (-1, proc_fd_name, TRUE, &fd, error))
+            return -1;
+        }
 
       if (real_path_out != NULL)
         *real_path_out = g_string_free (g_steal_pointer (&current_path), FALSE);

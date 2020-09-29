@@ -110,6 +110,10 @@ test_resolve_in_sysroot (Fixture *f,
     "a/b/c/d/e",
     "a/b2/c2/d2/e2",
   };
+  static const char * const prepare_files[] =
+  {
+    "a/b/c/file",
+  };
   static const Symlink prepare_symlinks[] =
   {
     { "a/b/symlink_to_c", "c" },
@@ -137,6 +141,21 @@ test_resolve_in_sysroot (Fixture *f,
       { NULL, G_IO_ERROR_NOT_FOUND }
     },
     { { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
+    { { "a/b/c/d", SRT_RESOLVE_FLAGS_READABLE }, { "a/b/c/d" } },
+    { { "a/b/c/d", SRT_RESOLVE_FLAGS_DIRECTORY }, { "a/b/c/d" } },
+    {
+      { "a/b/c/d", SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY },
+      { "a/b/c/d" }
+    },
+    { { "a/b/c/file", SRT_RESOLVE_FLAGS_READABLE }, { "a/b/c/file" } },
+    {
+      { "a/b/c/file", SRT_RESOLVE_FLAGS_DIRECTORY },
+      { NULL, G_IO_ERROR_NOT_DIRECTORY }
+    },
+    {
+      { "a/b/c/file", SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY },
+      { NULL, G_IO_ERROR_NOT_DIRECTORY }
+    },
     { { "a/b///////.////./././///././c/d" }, { "a/b/c/d" } },
     { { "/a/b///////.////././../b2////././c2/d2" }, { "a/b2/c2/d2" } },
     { { "a/b/c/d/e/f" }, { NULL, G_IO_ERROR_NOT_FOUND } },
@@ -193,6 +212,16 @@ test_resolve_in_sysroot (Fixture *f,
       g_assert_no_error (error);
     }
 
+  for (i = 0; i < G_N_ELEMENTS (prepare_files); i++)
+    {
+      const char *it = prepare_files[i];
+
+      glnx_file_replace_contents_at (tmpdir.fd, it,
+                                     (guint8 *) "hello", 5,
+                                     0, NULL, &error);
+      g_assert_no_error (error);
+    }
+
   for (i = 0; i < G_N_ELEMENTS (prepare_symlinks); i++)
     {
       const Symlink *it = &prepare_symlinks[i];
@@ -220,6 +249,12 @@ test_resolve_in_sysroot (Fixture *f,
 
       if (it->call.flags & SRT_RESOLVE_FLAGS_REJECT_SYMLINKS)
         g_string_append (description, " (not following any symlink)");
+
+      if (it->call.flags & SRT_RESOLVE_FLAGS_DIRECTORY)
+        g_string_append (description, " (must be a directory)");
+
+      if (it->call.flags & SRT_RESOLVE_FLAGS_READABLE)
+        g_string_append (description, " (open for reading)");
 
       g_test_message ("%" G_GSIZE_FORMAT ": Resolving %s%s",
                       i, it->call.path, description->str);

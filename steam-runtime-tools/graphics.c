@@ -1759,13 +1759,13 @@ load_json_dir (const char *sysroot,
                void (*load_json_cb) (const char *, const char *, void *),
                void *user_data)
 {
-  GError *error = NULL;
-  GDir *dir_iter = NULL;
-  gchar *sysrooted_dir = NULL;
-  gchar *suffixed_dir = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GDir) dir_iter = NULL;
+  g_autofree gchar *sysrooted_dir = NULL;
+  g_autofree gchar *suffixed_dir = NULL;
   const char *iter_dir;
   const char *member;
-  GPtrArray *members;
+  g_autoptr(GPtrArray) members = NULL;
   gsize i;
 
   g_return_if_fail (load_json_cb != NULL);
@@ -1794,7 +1794,7 @@ load_json_dir (const char *sysroot,
   if (dir_iter == NULL)
     {
       g_debug ("Failed to open \"%s\": %s", iter_dir, error->message);
-      goto out;
+      return;
     }
 
   members = g_ptr_array_new_with_free_func (g_free);
@@ -1819,14 +1819,6 @@ load_json_dir (const char *sysroot,
       load_json_cb (sysroot, path, user_data);
       g_free (path);
     }
-
-out:
-  if (dir_iter != NULL)
-    g_dir_close (dir_iter);
-
-  g_free (suffixed_dir);
-  g_free (sysrooted_dir);
-  g_clear_error (&error);
 }
 
 /*
@@ -2343,9 +2335,9 @@ egl_icd_load_json (const char *sysroot,
                    const char *filename,
                    GList **list)
 {
-  GError *error = NULL;
-  gchar *in_sysroot = NULL;
-  gchar *library_path = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *in_sysroot = NULL;
+  g_autofree gchar *library_path = NULL;
 
   g_return_if_fail (list != NULL);
 
@@ -2368,10 +2360,6 @@ egl_icd_load_json (const char *sysroot,
       *list = g_list_prepend (*list,
                               srt_egl_icd_new_error (filename, error));
     }
-
-  g_free (in_sysroot);
-  g_free (library_path);
-  g_clear_error (&error);
 }
 
 /**
@@ -4772,10 +4760,10 @@ vulkan_icd_load_json (const char *sysroot,
                       const char *filename,
                       GList **list)
 {
-  GError *error = NULL;
-  gchar *in_sysroot = NULL;
-  gchar *api_version = NULL;
-  gchar *library_path = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *in_sysroot = NULL;
+  g_autofree gchar *api_version = NULL;
+  g_autofree gchar *library_path = NULL;
 
   g_return_if_fail (list != NULL);
 
@@ -4802,11 +4790,6 @@ vulkan_icd_load_json (const char *sysroot,
       *list = g_list_prepend (*list,
                               srt_vulkan_icd_new_error (filename, error));
     }
-
-  g_free (in_sysroot);
-  g_free (api_version);
-  g_free (library_path);
-  g_clear_error (&error);
 }
 
 static void

@@ -558,6 +558,7 @@ static gchar ** _srt_system_info_get_pinned_libs_from_report (JsonObject *json_o
 /**
  * srt_system_info_new_from_json:
  * @path: (not nullable) (type filename): Path to a JSON report
+ * @error: Used to raise an error on failure
  *
  * Return a new #SrtSystemInfo with the info parsed from an existing JSON
  * report.
@@ -1777,7 +1778,7 @@ srt_system_info_check_graphics (SrtSystemInfo *self,
  * Check whether various combinations of rendering interface and windowing
  * system are available. The specific combinations of rendering interface and
  * windowing system that are returned are not guaranteed, but will include at
- * least %SRT_RENDERER_GL on %SRT_WINDOW_SYSTEM_GLX. Additional combinations
+ * least %SRT_RENDERING_INTERFACE_GL on %SRT_WINDOW_SYSTEM_GLX. Additional combinations
  * will be added in future versions of this library.
  *
  * Returns: (transfer full) (type SrtGraphics): A list of #SrtGraphics objects
@@ -3358,6 +3359,7 @@ srt_system_info_get_container_type (SrtSystemInfo *self)
 
 /**
  * srt_system_info_dup_container_host_directory:
+ * @self: The #SrtSystemInfo object
  *
  * If the program appears to be running in a container, return the
  * directory where host files can be found. For example, if this function

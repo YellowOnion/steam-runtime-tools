@@ -130,7 +130,7 @@ SrtLibraryIssues srt_system_info_check_libraries (SrtSystemInfo *self,
 _SRT_PUBLIC
 SrtLibraryIssues srt_system_info_check_library (SrtSystemInfo *self,
                                                 const gchar *multiarch_tuple,
-                                                const gchar *soname,
+                                                const gchar *requested_name,
                                                 SrtLibrary **more_details_out);
 
 _SRT_PUBLIC

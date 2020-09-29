@@ -99,7 +99,9 @@ _SRT_PUBLIC
 const char *srt_library_get_requested_name (SrtLibrary *self);
 _SRT_PUBLIC
 const char *srt_library_get_absolute_path (SrtLibrary *self);
+#ifndef __GTK_DOC_IGNORE__
 _SRT_PUBLIC G_DEPRECATED_FOR(srt_library_get_requested_name)
+#endif
 const char *srt_library_get_soname (SrtLibrary *self);
 _SRT_PUBLIC
 const char *srt_library_get_messages (SrtLibrary *self);

@@ -117,6 +117,7 @@ typedef enum
  * @SRT_RENDERING_INTERFACE_GLESV2: GLESv2 rendering interfaces
  * @SRT_RENDERING_INTERFACE_VULKAN: Vulkan rendering interface
  * @SRT_RENDERING_INTERFACE_VDPAU: VDPAU rendering interface
+ * @SRT_RENDERING_INTERFACE_VAAPI: VA-API rendering interface
  */
 typedef enum
 {

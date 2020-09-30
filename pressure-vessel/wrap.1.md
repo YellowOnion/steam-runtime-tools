@@ -73,6 +73,11 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 :   If `--remove-game-overlay` is specified, remove the Steam Overlay
     from the `LD_PRELOAD`. The default is `--keep-game-overlay`.
 
+`--launcher`
+:   Instead of specifying a command with its arguments to execute, all the
+    elements after `--` will be used as arguments for
+    `pressure-vessel-launcher`. This option implies `--batch`.
+
 `--only-prepare`
 :   Prepare the runtime, but do not actually run *COMMAND*.
     With `--copy-runtime-into`, the prepared runtime will appear in

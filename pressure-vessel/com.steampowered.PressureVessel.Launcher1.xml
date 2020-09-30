@@ -69,10 +69,11 @@
             <term>1</term>
             <listitem><para>
               Clear the environment. If set, the environment will be
-              exactly @envs, similar to `env - X=1 Y=2 COMMAND`.
-              If unset, @envs are used to override environment variables
-              and any environment variable that is not overridden is
-              left unchanged, similar to `env X=1 Y=2 COMMAND`.
+              exactly @envs, minus the eventual variables listed in
+              "unset-env" in @options, similar to `env - X=1 Y=2 COMMAND`.
+              If unset, @envs and the option "unset-env" are used to override
+              environment variables and any environment variable that is not
+              overridden is left unchanged, similar to `env X=1 Y=2 COMMAND`.
             </para></listitem>
           </varlistentry>
         </variablelist>
@@ -91,6 +92,13 @@
               launched commands will be terminated by SIGTERM immediately
               after this command exits, regardless of whether it exits
               successfully or unsuccessfully.
+            </para></listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>unset-env as</term>
+            <listitem><para>
+              If present, the given array of variables will be unset in the
+              environment of the new process.
             </para></listitem>
           </varlistentry>
         </variablelist>

@@ -265,6 +265,7 @@ handle_launch (PvLauncher1           *object,
   gint fds_len = 0;
   g_autofree FdMapEntry *fd_map = NULL;
   g_auto(GStrv) env = NULL;
+  g_auto(GStrv) unset_env = NULL;
   gint32 max_fd;
   gboolean terminate_after = FALSE;
 
@@ -366,6 +367,14 @@ handle_launch (PvLauncher1           *object,
       g_variant_get_child (arg_envs, i, "{&s&s}", &var, &val);
 
       env = g_environ_setenv (env, var, val, TRUE);
+    }
+
+  g_variant_lookup (arg_options, "unset-env", "^as", &unset_env);
+
+  for (i = 0; unset_env != NULL && unset_env[i] != NULL; i++)
+    {
+      g_debug ("Unsetting the environment variable %s...", unset_env[i]);
+      env = g_environ_unsetenv (env, unset_env[i]);
     }
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see flatpak_close_fds_workaround */

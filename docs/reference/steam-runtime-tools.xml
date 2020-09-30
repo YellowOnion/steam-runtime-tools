@@ -19,7 +19,11 @@
   <chapter id="ch-specific">
     <title>Specific system information</title>
     <xi:include href="xml/architecture.xml"/>
+    <xi:include href="xml/cpu-feature.xml"/>
+    <xi:include href="xml/desktop-entry.xml"/>
+    <xi:include href="xml/graphics.xml"/>
     <xi:include href="xml/library.xml"/>
+    <xi:include href="xml/locale.xml"/>
     <xi:include href="xml/runtime.xml"/>
     <xi:include href="xml/steam.xml"/>
   </chapter>

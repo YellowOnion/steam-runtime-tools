@@ -38,7 +38,7 @@ G_DEFINE_QUARK (g-spawn-exit-error-quark, my_g_spawn_exit_error)
 #endif
 
 #if !GLIB_CHECK_VERSION (2, 36, 0)
-/**
+/*
  * g_close:
  * @fd: A file descriptor
  * @error: a #GError
@@ -86,7 +86,7 @@ my_g_close (gint       fd,
 #endif
 
 #if !GLIB_CHECK_VERSION (2, 34, 0)
-/**
+/*
  * g_spawn_check_exit_status:
  * @exit_status: An exit code as returned from g_spawn_sync()
  * @error: a #GError
@@ -208,7 +208,7 @@ my_g_ptr_array_insert (GPtrArray *arr,
 #endif
 
 #if !GLIB_CHECK_VERSION (2, 36, 0)
-/**
+/*
  * g_dbus_address_escape_value:
  * @string: an unescaped string to be included in a D-Bus address
  *     as the value in a key-value pair
@@ -352,7 +352,7 @@ my_g_unix_fd_add_full (int priority,
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 58, 0)
-/**
+/*
  * g_canonicalize_filename:
  * @filename: (type filename): the name of the file
  * @relative_to: (type filename) (nullable): the relative directory, or %NULL

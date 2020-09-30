@@ -11,7 +11,7 @@ Depends:
  libcapsule-tools,
  libipc-run-perl,
  libglib2.0-0,
- libjpeg62 (>= 6b1) | libjpeg62-turbo,
+ libxml2,
  libtool,
  perl,
  pkg-config,

@@ -30,10 +30,6 @@ variables:
     # A known-good version of deb-build-snapshot
     DEB_BUILD_SNAPSHOT_TAG: v0.20190828.0
 
-    # Name of the package with libjpeg.so.62 in. Set to libjpeg62 in
-    # Ubuntu or really old versions of Debian
-    LIBJPEG62: libjpeg62-turbo
-
 before_script:
     - |
         set -eux
@@ -54,7 +50,7 @@ before_script:
           libelf-dev \
           libipc-run-perl \
           libglib2.0-dev \
-          ${LIBJPEG62} \
+          libxml2 \
           perl \
           python3-debian \
           rsync \
@@ -131,7 +127,6 @@ build:bionic:
     extends: .deb-build-snapshot
     variables:
         BUILD_IMAGE: 'ubuntu:bionic'
-        LIBJPEG62: 'libjpeg62'
 
 build:arch:
     when: manual
@@ -157,8 +152,8 @@ build:arch:
             glib2 \
             gtk-doc \
             libelf \
-            libjpeg6-turbo \
             libtool \
+            libxml2 \
             libxslt \
             make \
             perl \

@@ -77,13 +77,13 @@ else {
 
 # How about versioned symbols?
 my $output;
-run_ok([$CAPSULE_SYMBOLS_TOOL, 'libjpeg.so.62', '/'], '>', \$output);
+run_ok([$CAPSULE_SYMBOLS_TOOL, 'libxml2.so.2', '/'], '>', \$output);
 diag_multiline $output;
 
-like($output, qr{^jpeg_destroy \@\@LIBJPEG_6\.2$}m,
-    "jpeg_destroy is a versioned symbol");
-unlike($output, qr{^jpeg_destroy (?!\@\@LIBJPEG_6\.2)}m,
-    "jpeg_destroy does not appear unversioned");
+like($output, qr{^xmlFree \@\@LIBXML2_2\.4\.30$}m,
+    "xmlFree is a versioned symbol");
+unlike($output, qr{^xmlFree (?!\@\@LIBXML2_2\.4\.30)}m,
+    "xmlFree does not appear unversioned");
 
 done_testing;
 

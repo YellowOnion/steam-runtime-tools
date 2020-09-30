@@ -264,7 +264,7 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         qw(--dev-bind /dev /dev),
         $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
         "--dest=$libdir", "--provider=$host",
-        'soname-match:libjp*g.so.6*'], '>&2');
+        'soname-match:lib*ml2.so.2*'], '>&2');
 {
     opendir(my $dir_iter, $libdir);
     foreach my $symlink (readdir $dir_iter) {
@@ -273,8 +273,8 @@ run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
     }
     closedir $dir_iter;
 }
-like(readlink "$libdir/libjpeg.so.62", qr{^$LIBDIR/libjpeg\.so\.62(?:[0-9.]+)$},
-     '$libdir/libjpeg.so.62 is a symlink to /run/host + realpath of libjpeg-6b');
+like(readlink "$libdir/libxml2.so.2", qr{^$LIBDIR/libxml2\.so\.2(?:[0-9.]+)$},
+     '$libdir/libxml2.so.2 is a symlink to /run/host + realpath of libxml2');
 
 run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
@@ -492,8 +492,8 @@ SKIP: {
         $other_multiarch = 'x86_64-linux-gnu';
     }
 
-    skip "$other_multiarch libjpeg.so.62 not available", 1
-        unless -e "/usr/lib/$other_multiarch/libjpeg.so.62";
+    skip "$other_multiarch libxml2.so.2 not available", 1
+        unless -e "/usr/lib/$other_multiarch/libxml2.so.2";
 
     # Normally, the wrong ABI is an error...
     run_ok(['rm', '-fr', $libdir]);
@@ -503,10 +503,10 @@ SKIP: {
                            qw(--dev-bind /dev /dev),
                            $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
                            "--dest=$libdir", "--provider=$host",
-                           "path:/usr/lib/$other_multiarch/libjpeg.so.62"],
+                           "path:/usr/lib/$other_multiarch/libxml2.so.2"],
                            '>&2');
     ok(! $result, 'library of wrong ABI yields an error');
-    ok(! -e "$libdir/libjpeg.so.62");
+    ok(! -e "$libdir/libxml2.so.2");
 
     # ... but when we're dealing with a glob match, other ABIs are silently
     # ignored.
@@ -517,10 +517,10 @@ SKIP: {
                            qw(--dev-bind /dev /dev),
                            $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
                            "--dest=$libdir", "--provider=$host",
-                           "path-match:/usr/lib/$other_multiarch/libjpeg.so.62"],
+                           "path-match:/usr/lib/$other_multiarch/libxml2.so.2"],
                            '>&2');
     ok($result, 'library of wrong ABI ignored when using path-match');
-    ok(! -e "$libdir/libjpeg.so.62");
+    ok(! -e "$libdir/libxml2.so.2");
 
     # We can also ignore this case explicitly.
     run_ok(['rm', '-fr', $libdir]);
@@ -530,10 +530,10 @@ SKIP: {
                            qw(--dev-bind /dev /dev),
                            $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/',
                            "--dest=$libdir", "--provider=$host",
-                           "if-same-abi:path:/usr/lib/$other_multiarch/libjpeg.so.62"],
+                           "if-same-abi:path:/usr/lib/$other_multiarch/libxml2.so.2"],
                            '>&2');
     ok($result, 'library of wrong ABI ignored when using if-same-abi');
-    ok(! -e "$libdir/libjpeg.so.62");
+    ok(! -e "$libdir/libxml2.so.2");
 };
 
 SKIP: {

@@ -32,6 +32,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/macros.h>
+
 typedef struct _SrtLocale SrtLocale;
 typedef struct _SrtLocaleClass SrtLocaleClass;
 
@@ -42,6 +44,7 @@ typedef struct _SrtLocaleClass SrtLocaleClass;
 #define SRT_IS_LOCALE_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_LOCALE))
 #define SRT_LOCALE_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_LOCALE, SrtLocaleClass)
 
+_SRT_PUBLIC
 GType srt_locale_get_type (void);
 
 /**
@@ -61,6 +64,7 @@ typedef enum
 
 #define SRT_LOCALE_ERROR (srt_locale_error_quark ())
 
+_SRT_PUBLIC
 GQuark srt_locale_error_quark (void);
 
 /* Backward compatibility with previous steam-runtime-tools naming */
@@ -120,9 +124,13 @@ typedef enum
   SRT_LOCALE_ISSUES_I18N_LOCALES_EN_US_MISSING = (1 << 6),
 } SrtLocaleIssues;
 
+_SRT_PUBLIC
 const char *srt_locale_get_requested_name (SrtLocale *self);
+_SRT_PUBLIC
 const char *srt_locale_get_resulting_name (SrtLocale *self);
+_SRT_PUBLIC
 const char *srt_locale_get_charset (SrtLocale *self);
+_SRT_PUBLIC
 gboolean srt_locale_is_utf8 (SrtLocale *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC

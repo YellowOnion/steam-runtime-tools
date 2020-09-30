@@ -171,6 +171,8 @@ foreach flag : no_warning_cxxflags
   add_global_arguments(supported_no_warning_cxxflags, language : 'cpp')
 endforeach
 
+add_global_arguments('-fvisibility=hidden', language : ['c', 'cpp'])
+
 # gdbus-codegen in scout generates code that has many warnings
 silence_gdbus_codegen_warnings = c_compiler.get_supported_arguments([
   '-Wno-error',

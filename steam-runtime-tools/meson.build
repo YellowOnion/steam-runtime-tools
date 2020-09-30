@@ -56,6 +56,7 @@ libsteamrt_public_headers = [
     'graphics.h',
     'library.h',
     'locale.h',
+    'macros.h',
     'runtime.h',
     'steam-runtime-tools.h',
     'steam.h',
@@ -65,6 +66,8 @@ libsteamrt_public_headers = [
 
 enums = gnome.mkenums_simple(
   'enums',
+  decorator : '_SRT_PUBLIC',
+  header_prefix : '#include <steam-runtime-tools/macros.h>',
   install_dir : join_paths(get_option('includedir'), 'steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
   install_header : true,
   sources : libsteamrt_public_headers,
@@ -80,7 +83,6 @@ libsteamrt_static = static_library(
   libsteamrt_sources + libsteamrt_public_headers + enums,
   c_args : [
     '-DG_LOG_DOMAIN="' + meson.project_name() + '"',
-    '-D_SRT_COMPILATION',
     '-D_SRT_SONAME="libsteam-runtime-tools-' + api_major + '.so.' + abi_major + '"',
     '-D_SRT_MULTIARCH="' + multiarch + '"',
     '-D_SRT_API_MAJOR="' + api_major + '"',
@@ -145,7 +147,6 @@ if get_option('introspection')
     export_packages : 'steam-runtime-tools-' + api_major,
     includes : ['GLib-2.0', 'GObject-2.0'],
     install : true,
-    extra_args : ['-D_SRT_COMPILATION'],
   )
 endif
 

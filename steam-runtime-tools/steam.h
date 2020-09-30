@@ -32,6 +32,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/macros.h>
+
 typedef struct _SrtSteam SrtSteam;
 typedef struct _SrtSteamClass SrtSteamClass;
 
@@ -41,6 +43,7 @@ typedef struct _SrtSteamClass SrtSteamClass;
 #define SRT_IS_STEAM(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_STEAM))
 #define SRT_IS_STEAM_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_STEAM))
 #define SRT_STEAM_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_STEAM, SrtSteamClass)
+_SRT_PUBLIC
 GType srt_steam_get_type (void);
 
 /* Backward compatibility with previous steam-runtime-tools naming */
@@ -109,9 +112,13 @@ typedef enum
   SRT_STEAM_ISSUES_NONE = 0
 } SrtSteamIssues;
 
+_SRT_PUBLIC
 SrtSteamIssues srt_steam_get_issues (SrtSteam *self);
+_SRT_PUBLIC
 const char *srt_steam_get_install_path (SrtSteam *self);
+_SRT_PUBLIC
 const char *srt_steam_get_data_path (SrtSteam *self);
+_SRT_PUBLIC
 const char *srt_steam_get_bin32_path (SrtSteam *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC

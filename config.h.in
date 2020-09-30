@@ -1,3 +1,4 @@
+#define _SRT_COMPILATION
 #define _GNU_SOURCE 1
 #mesondefine VERSION
 

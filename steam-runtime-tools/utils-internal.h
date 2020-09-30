@@ -109,3 +109,5 @@ gboolean _srt_file_test_in_sysroot (const char *sysroot,
                                     int sysroot_fd,
                                     const char *filename,
                                     GFileTest test);
+
+G_GNUC_INTERNAL const char * const *_srt_peek_environ_nonnull (void);

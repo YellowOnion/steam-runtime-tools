@@ -681,11 +681,9 @@ _argv_for_list_vdpau_drivers (gchar **envp,
   const gchar *vdpau_driver = NULL;
   GPtrArray *argv;
 
-  if (envp != NULL)
-    vdpau_driver = g_environ_getenv (envp, "VDPAU_DRIVER");
-  else
-    vdpau_driver = g_getenv ("VDPAU_DRIVER");
+  g_return_val_if_fail (envp != NULL, NULL);
 
+  vdpau_driver = g_environ_getenv (envp, "VDPAU_DRIVER");
   argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
                           SRT_HELPER_FLAGS_SEARCH_PATH, error);
 
@@ -774,6 +772,7 @@ _argv_for_list_glx_icds_in_path (const char *helpers_path,
 
 /**
  * _srt_check_library_vendor:
+ * @envp: (not nullable): The environment
  * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
  * @window_system: The window system to check.
  * @rendering_interface: The graphics renderer to check.
@@ -798,7 +797,8 @@ _argv_for_list_glx_icds_in_path (const char *helpers_path,
  *  %SRT_RENDERING_INTERFACE_VULKAN or if there was a problem loading the library.
  */
 static SrtGraphicsLibraryVendor
-_srt_check_library_vendor (const char *multiarch_tuple,
+_srt_check_library_vendor (gchar **envp,
+                           const char *multiarch_tuple,
                            SrtWindowSystem window_system,
                            SrtRenderingInterface rendering_interface)
 {
@@ -807,6 +807,8 @@ _srt_check_library_vendor (const char *multiarch_tuple,
   SrtLibrary *library = NULL;
   SrtLibraryIssues issues;
   const char * const *dependencies;
+
+  g_return_val_if_fail (envp != NULL, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
 
   /* Vulkan, VDPAU and VA-API are always vendor-neutral, so it doesn't make sense to check it.
    * We simply return SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN */
@@ -950,6 +952,7 @@ _srt_run_helper (GStrv *my_environ,
 
 /**
  * _srt_check_graphics:
+ * @envp: (not nullable): Used instead of `environ`
  * @helpers_path: An optional path to find wflinfo helpers, PATH is used if null.
  * @test_flags: Flags used during automated testing
  * @multiarch_tuple: A multiarch tuple to check e.g. i386-linux-gnu
@@ -963,7 +966,8 @@ _srt_run_helper (GStrv *my_environ,
  *  if no problems were found
  */
 G_GNUC_INTERNAL SrtGraphicsIssues
-_srt_check_graphics (const char *helpers_path,
+_srt_check_graphics (gchar **envp,
+                     const char *helpers_path,
                      SrtTestFlags test_flags,
                      const char *multiarch_tuple,
                      SrtWindowSystem window_system,
@@ -992,6 +996,7 @@ _srt_check_graphics (const char *helpers_path,
   g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (((unsigned) rendering_interface) < SRT_N_RENDERING_INTERFACES, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (_srt_check_not_setuid (), SRT_GRAPHICS_ISSUES_UNKNOWN);
+  g_return_val_if_fail (envp != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   GPtrArray *argv = _argv_for_graphics_test (helpers_path,
                                              test_flags,
@@ -1008,7 +1013,7 @@ _srt_check_graphics (const char *helpers_path,
       goto out;
     }
 
-  my_environ = g_get_environ ();
+  my_environ = g_strdupv (envp);
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
   if (ld_preload != NULL)
     {
@@ -1016,7 +1021,9 @@ _srt_check_graphics (const char *helpers_path,
       my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
     }
 
-  library_vendor = _srt_check_library_vendor (multiarch_tuple, window_system, rendering_interface);
+  library_vendor = _srt_check_library_vendor (envp, multiarch_tuple,
+                                              window_system,
+                                              rendering_interface);
 
   switch (rendering_interface)
     {
@@ -2481,8 +2488,8 @@ get_glvnd_datadir (void)
 /*
  * _srt_load_egl_icds:
  * @sysroot: (not nullable): The root directory, usually `/`
- * @envp: (array zero-terminated=1): Behave as though `environ` was this
- *  array
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
+ *  was this array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
  *  is detected, assume a freedesktop-sdk-based runtime and look for
  *  GL extensions for these multiarch tuples
@@ -2497,7 +2504,6 @@ _srt_load_egl_icds (const char *sysroot,
                     gchar **envp,
                     const char * const *multiarch_tuples)
 {
-  gchar **environ_copy = NULL;
   const gchar *value;
   gsize i;
   /* To avoid O(n**2) performance, we build this list in reverse order,
@@ -2506,12 +2512,7 @@ _srt_load_egl_icds (const char *sysroot,
 
   g_return_val_if_fail (sysroot != NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
-
-  if (envp == NULL)
-    {
-      environ_copy = g_get_environ ();
-      envp = environ_copy;
-    }
+  g_return_val_if_fail (envp != NULL, NULL);
 
   /* See
    * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
@@ -2572,7 +2573,6 @@ _srt_load_egl_icds (const char *sysroot,
       g_free (flatpak_info);
     }
 
-  g_strfreev (environ_copy);
   return g_list_reverse (ret);
 }
 
@@ -3008,7 +3008,7 @@ srt_glx_icd_new (const gchar *library_soname,
 
 /**
  * _srt_get_modules_from_path:
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH
  *  is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -3043,6 +3043,7 @@ _srt_get_modules_from_path (gchar **envp,
   GDir *dir = NULL;
   SrtLibraryIssues issues;
 
+  g_return_if_fail (envp != NULL);
   g_return_if_fail (module_directory_path != NULL);
   g_return_if_fail (drivers_out != NULL);
 
@@ -3136,7 +3137,7 @@ _srt_get_modules_from_path (gchar **envp,
 
 /**
  * _srt_list_modules_from_directory:
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this array
  * @argv: (array zero-terminated=1) (not nullable): The `argv` of the helper to use
  * @tmp_directory: (not nullable) (type filename): Full path to the destination
  *  directory used by the "capsule-capture-libs" helper
@@ -3177,6 +3178,7 @@ _srt_list_modules_from_directory (gchar **envp,
   gchar *soname_path = NULL;
 
   g_return_if_fail (argv != NULL);
+  g_return_if_fail (envp != NULL);
   g_return_if_fail (tmp_directory != NULL);
   g_return_if_fail (known_table != NULL);
   g_return_if_fail (modules_out != NULL);
@@ -3296,7 +3298,7 @@ out:
 /**
  * _srt_get_modules_full:
  * @sysroot: (not nullable): The root directory, usually `/`
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
  *  such as %SRT_ABI_X86_64
@@ -3336,6 +3338,7 @@ _srt_get_modules_full (const char *sysroot,
   GPtrArray *vdpau_argv = NULL;
   GError *error = NULL;
 
+  g_return_if_fail (envp != NULL);
   g_return_if_fail (multiarch_tuple != NULL);
   g_return_if_fail (drivers_out != NULL);
   g_return_if_fail (sysroot != NULL);
@@ -3364,18 +3367,9 @@ _srt_get_modules_full (const char *sysroot,
         g_return_if_reached ();
     }
 
-  if (envp != NULL)
-    {
-      drivers_path = g_environ_getenv (envp, env_override);
-      force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
-      ld_library_path = g_environ_getenv (envp, "LD_LIBRARY_PATH");
-    }
-  else
-    {
-      drivers_path = g_getenv (env_override);
-      force_elf_class = g_getenv ("SRT_TEST_FORCE_ELF");
-      ld_library_path = g_getenv ("LD_LIBRARY_PATH");
-    }
+  drivers_path = g_environ_getenv (envp, env_override);
+  force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
+  ld_library_path = g_environ_getenv (envp, "LD_LIBRARY_PATH");
 
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
   drivers_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -3667,7 +3661,7 @@ out:
 /*
  * _srt_list_glx_icds:
  * @sysroot: (not nullable): The root directory, usually `/`
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "capsule-capture-libs" helper,
  *  PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
@@ -3764,7 +3758,7 @@ out:
 /**
  * _srt_list_graphics_modules:
  * @sysroot: (not nullable): The root directory, usually `/`
- * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this array
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
  *  such as %SRT_ABI_X86_64
@@ -4826,7 +4820,7 @@ get_vulkan_sysconfdir (void)
 /*
  * _srt_load_vulkan_icds:
  * @sysroot: (not nullable): The root directory, usually `/`
- * @envp: (array zero-terminated=1): Behave as though `environ` was this
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this
  *  array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
  *  is detected, assume a freedesktop-sdk-based runtime and look for
@@ -4842,7 +4836,6 @@ _srt_load_vulkan_icds (const char *sysroot,
                        gchar **envp,
                        const char * const *multiarch_tuples)
 {
-  gchar **environ_copy = NULL;
   const gchar *value;
   gsize i;
   /* To avoid O(n**2) performance, we build this list in reverse order,
@@ -4850,12 +4843,7 @@ _srt_load_vulkan_icds (const char *sysroot,
   GList *ret = NULL;
 
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
-
-  if (envp == NULL)
-    {
-      environ_copy = g_get_environ ();
-      envp = environ_copy;
-    }
+  g_return_val_if_fail (envp != NULL, NULL);
 
   /* See
    * https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
@@ -4980,7 +4968,6 @@ _srt_load_vulkan_icds (const char *sysroot,
       g_free (tmp);
     }
 
-  g_strfreev (environ_copy);
   return g_list_reverse (ret);
 }
 

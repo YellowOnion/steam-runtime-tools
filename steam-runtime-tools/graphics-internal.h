@@ -74,7 +74,8 @@ static inline int _srt_graphics_hash_key(SrtWindowSystem winsys, SrtRenderingInt
 
 #ifndef __GTK_DOC_IGNORE__
 
-G_GNUC_INTERNAL SrtGraphicsIssues _srt_check_graphics (const char *helpers_path,
+G_GNUC_INTERNAL SrtGraphicsIssues _srt_check_graphics (gchar **envp,
+                                                       const char *helpers_path,
                                                        SrtTestFlags test_flags,
                                                        const char *multiarch_tuple,
                                                        SrtWindowSystem window_system,

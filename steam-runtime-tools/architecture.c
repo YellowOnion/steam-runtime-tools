@@ -44,7 +44,8 @@
  */
 
 gboolean
-_srt_architecture_can_run (const char *helpers_path,
+_srt_architecture_can_run (gchar **envp,
+                           const char *helpers_path,
                            const char *multiarch)
 {
   gchar *helper = NULL;
@@ -56,6 +57,7 @@ _srt_architecture_can_run (const char *helpers_path,
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
 
+  g_return_val_if_fail (envp != NULL, FALSE);
   g_return_val_if_fail (multiarch != NULL, FALSE);
   g_return_val_if_fail (_srt_check_not_setuid (), FALSE);
 
@@ -72,7 +74,7 @@ _srt_architecture_can_run (const char *helpers_path,
   g_debug ("Testing architecture %s with %s",
            multiarch, (const char *) g_ptr_array_index (argv, 0));
 
-  my_environ = g_get_environ ();
+  my_environ = g_strdupv (envp);
   ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
   if (ld_preload != NULL)
     {
@@ -138,7 +140,8 @@ out:
 gboolean
 srt_architecture_can_run_i386 (void)
 {
-  return _srt_architecture_can_run (NULL, SRT_ABI_I386);
+  return _srt_architecture_can_run ((gchar **) _srt_peek_environ_nonnull (),
+                                    NULL, SRT_ABI_I386);
 }
 
 /**
@@ -156,7 +159,8 @@ srt_architecture_can_run_i386 (void)
 gboolean
 srt_architecture_can_run_x86_64 (void)
 {
-  return _srt_architecture_can_run (NULL, SRT_ABI_X86_64);
+  return _srt_architecture_can_run ((gchar **) _srt_peek_environ_nonnull (),
+                                    NULL, SRT_ABI_X86_64);
 }
 
 /**

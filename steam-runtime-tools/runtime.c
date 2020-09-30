@@ -127,8 +127,7 @@ same_stat (GStatBuf *left,
  * @bin32: (nullable): The absolute path to `ubuntu12_32`
  * @expected_version: (nullable): The expected version number of the
  *  Steam Runtime
- * @custom_environ: (nullable): The list of environment variables to use. If NULL
- *  g_get_environ will be used instead.
+ * @custom_environ: (not nullable): The list of environment variables to use
  * @version_out: (optional) (type utf8) (out): The actual version number
  * @path_out: (optional) (type filename) (out): The absolute path of the
  *  Steam Runtime
@@ -167,10 +166,7 @@ _srt_runtime_check (const char *bin32,
                         SRT_RUNTIME_ISSUES_UNKNOWN);
   g_return_val_if_fail (_srt_check_not_setuid (), SRT_RUNTIME_ISSUES_UNKNOWN);
 
-  if (custom_environ == NULL)
-    my_environ = g_get_environ ();
-  else
-    my_environ = g_strdupv (custom_environ);
+  my_environ = g_strdupv (custom_environ);
 
   env = g_environ_getenv (my_environ, "STEAM_RUNTIME");
 

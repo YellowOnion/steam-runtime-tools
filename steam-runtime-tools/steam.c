@@ -270,13 +270,14 @@ srt_steam_get_bin32_path (SrtSteam *self)
 
 /**
  * _srt_steam_check:
- * @my_environ: (nullable): The list of environment variables to use.
+ * @my_environ: (not nullable): The list of environment variables to use.
  * @more_details_out: (out) (optional) (transfer full): Used to return an
  *  #SrtSteam object representing information about the current Steam
  *  installation. Free with `g_object_unref()`.
  *
- * Please note that @my_environ can't be used when checking the default
- * desktop entry that handles `steam:` URIs.
+ * Please note that when checking the default desktop entry that handles
+ * `steam:` URIs, @my_environ is ignored and the real environment is used
+ * instead.
  *
  * Returns: A bitfield containing problems, or %SRT_STEAM_ISSUES_NONE
  *  if no problems were found
@@ -304,11 +305,12 @@ _srt_steam_check (const GStrv my_environ,
   GStrv env = NULL;
   GError *error = NULL;
 
+  g_return_val_if_fail (my_environ != NULL, SRT_STEAM_ISSUES_UNKNOWN);
   g_return_val_if_fail (_srt_check_not_setuid (), SRT_STEAM_ISSUES_UNKNOWN);
   g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
                         SRT_STEAM_ISSUES_UNKNOWN);
 
-  env = (my_environ == NULL) ? g_get_environ () : g_strdupv (my_environ);
+  env = g_strdupv (my_environ);
 
   home = g_environ_getenv (env, "HOME");
   user_data = g_environ_getenv (env, "XDG_DATA_HOME");

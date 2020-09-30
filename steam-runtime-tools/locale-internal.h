@@ -55,7 +55,8 @@ _srt_locale_new (const char *requested_name,
 }
 
 G_GNUC_INTERNAL
-SrtLocale *_srt_check_locale (const char *helpers_path,
+SrtLocale *_srt_check_locale (gchar **envp,
+                              const char *helpers_path,
                               const char *multiarch_tuple,
                               const char *requested_name,
                               GError **error);

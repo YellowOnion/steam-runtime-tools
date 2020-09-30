@@ -39,7 +39,7 @@ sub tolerant_readlink ($)
 
 skip_all_unless_bwrap;
 
-my $LIBDIR = qr{/(?:usr/)?lib(?:32|64|x32)?(?:/\w+-linux-gnu\w*)?(?:/i686)?(?:/cmov)?};
+my $LIBDIR = qr{/(?:usr/(?:\w+-(?:\w+-)?linux-gnu\w*/)?)?lib(?:32|64|x32)?(?:/\w+-linux-gnu\w*)?(?:/i686)?(?:/cmov)?};
 
 my $test_tempdir = File::Temp->newdir();
 diag "Working directory: $test_tempdir";

@@ -78,6 +78,8 @@ gchar *pv_runtime_get_adverb (PvRuntime *self,
                               FlatpakBwrap *adverb_args);
 gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakBwrap *bwrap,
+                          GHashTable *extra_locked_vars_to_unset,
+                          GHashTable *extra_locked_vars_to_inherit,
                           GError **error);
 void pv_runtime_cleanup (PvRuntime *self);
 

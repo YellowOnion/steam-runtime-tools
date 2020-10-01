@@ -248,6 +248,8 @@ G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RuntimeArchitecture,
 
 static gboolean pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                         FlatpakBwrap *bwrap,
+                                                        GHashTable *extra_locked_vars_to_unset,
+                                                        GHashTable *extra_locked_vars_to_inherit,
                                                         GError **error);
 static void pv_runtime_set_search_paths (PvRuntime *self,
                                          FlatpakBwrap *bwrap);
@@ -1467,6 +1469,8 @@ bind_icd (PvRuntime *self,
 static gboolean
 bind_runtime (PvRuntime *self,
               FlatpakBwrap *bwrap,
+              GHashTable *extra_locked_vars_to_unset,
+              GHashTable *extra_locked_vars_to_inherit,
               GError **error)
 {
   static const char * const bind_mutable[] =
@@ -1527,11 +1531,12 @@ bind_runtime (PvRuntime *self,
     }
 
   flatpak_bwrap_add_args (bwrap,
-                          "--setenv", "XDG_RUNTIME_DIR", xrd,
                           "--tmpfs", "/tmp",
                           "--tmpfs", "/var",
                           "--symlink", "../run", "/var/run",
                           NULL);
+
+  flatpak_bwrap_set_env (bwrap, "XDG_RUNTIME_DIR", xrd, TRUE);
 
   if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
       || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
@@ -1649,7 +1654,8 @@ bind_runtime (PvRuntime *self,
 
   if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
     {
-      if (!pv_runtime_use_provider_graphics_stack (self, bwrap, error))
+      if (!pv_runtime_use_provider_graphics_stack (self, bwrap, extra_locked_vars_to_unset,
+                                                   extra_locked_vars_to_inherit, error))
         return FALSE;
     }
 
@@ -2205,6 +2211,8 @@ pv_runtime_search_in_path_and_bin (PvRuntime *self,
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
+                                        GHashTable *extra_locked_vars_to_unset,
+                                        GHashTable *extra_locked_vars_to_inherit,
                                         GError **error)
 {
   gsize i, j;
@@ -3085,44 +3093,26 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   if (dri_path->len != 0)
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "LIBGL_DRIVERS_PATH", dri_path->str,
-                              NULL);
+    flatpak_bwrap_set_env (bwrap, "LIBGL_DRIVERS_PATH", dri_path->str, TRUE);
   else
-      flatpak_bwrap_add_args (bwrap,
-                              "--unsetenv", "LIBGL_DRIVERS_PATH",
-                              NULL);
+    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("LIBGL_DRIVERS_PATH"));
 
   if (egl_path->len != 0)
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "__EGL_VENDOR_LIBRARY_FILENAMES",
-                              egl_path->str, NULL);
+    flatpak_bwrap_set_env (bwrap, "__EGL_VENDOR_LIBRARY_FILENAMES", egl_path->str, TRUE);
   else
-      flatpak_bwrap_add_args (bwrap,
-                              "--unsetenv", "__EGL_VENDOR_LIBRARY_FILENAMES",
-                              NULL);
+    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("__EGL_VENDOR_LIBRARY_FILENAMES"));
 
-  flatpak_bwrap_add_args (bwrap,
-                          "--unsetenv", "__EGL_VENDOR_LIBRARY_DIRS",
-                          NULL);
+  g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("__EGL_VENDOR_LIBRARY_DIRS"));
 
   if (vulkan_path->len != 0)
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "VK_ICD_FILENAMES",
-                              vulkan_path->str, NULL);
+    flatpak_bwrap_set_env (bwrap, "VK_ICD_FILENAMES", vulkan_path->str, TRUE);
   else
-      flatpak_bwrap_add_args (bwrap,
-                              "--unsetenv", "VK_ICD_FILENAMES",
-                              NULL);
+    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_ICD_FILENAMES"));
 
   if (va_api_path->len != 0)
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "LIBVA_DRIVERS_PATH",
-                              va_api_path->str, NULL);
+    flatpak_bwrap_set_env (bwrap, "LIBVA_DRIVERS_PATH", va_api_path->str, TRUE);
   else
-      flatpak_bwrap_add_args (bwrap,
-                              "--unsetenv", "LIBVA_DRIVERS_PATH",
-                              NULL);
+    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("LIBVA_DRIVERS_PATH"));
 
   /* We binded the VDPAU drivers in "%{libdir}/vdpau".
    * Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't
@@ -3132,12 +3122,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
    * the ${PLATFORM} placeholder value we also create symlinks from `i486`, up
    * to `i686`, to the library directory `i386` that we expect to have
    * already. */
-  flatpak_bwrap_add_args (bwrap,
-                          "--setenv", "VDPAU_DRIVER_PATH",
-                          NULL);
-  flatpak_bwrap_add_arg_printf (bwrap,
-                                "%s/lib/${PLATFORM}-linux-gnu/vdpau",
-                                self->overrides_in_container);
+  g_autofree gchar *vdpau_val = g_strdup_printf ("%s/lib/${PLATFORM}-linux-gnu/vdpau",
+                                                 self->overrides_in_container);
+
+  flatpak_bwrap_set_env (bwrap, "VDPAU_DRIVER_PATH", vdpau_val, TRUE);
 
   static const char * const extra_multiarch_tuples[] =
   {
@@ -3177,15 +3165,20 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 gboolean
 pv_runtime_bind (PvRuntime *self,
                  FlatpakBwrap *bwrap,
+                 GHashTable *extra_locked_vars_to_unset,
+                 GHashTable *extra_locked_vars_to_inherit,
                  GError **error)
 {
   g_autofree gchar *pressure_vessel_prefix = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (extra_locked_vars_to_unset != NULL, FALSE);
+  g_return_val_if_fail (extra_locked_vars_to_inherit != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!bind_runtime (self, bwrap, error))
+  if (!bind_runtime (self, bwrap, extra_locked_vars_to_unset,
+                     extra_locked_vars_to_inherit, error))
     return FALSE;
 
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);
@@ -3271,17 +3264,10 @@ pv_runtime_set_search_paths (PvRuntime *self,
         pv_search_path_append (ld_library_path, ld_path);
       }
 
-  /* This would be filtered out by a setuid bwrap, so we have to go
-   * via --setenv. */
-  flatpak_bwrap_add_args (bwrap,
-                          /* The PATH from outside the container doesn't
-                           * really make sense inside the container:
-                           * in principle the layout could be totally
-                           * different. */
-                          "--setenv", "PATH", "/usr/bin:/bin",
-                          "--setenv", "LD_LIBRARY_PATH",
-                          ld_library_path->str,
-                          NULL);
+  /* The PATH from outside the container doesn't really make sense inside the
+   * container: in principle the layout could be totally different. */
+  flatpak_bwrap_set_env (bwrap, "PATH", "/usr/bin:/bin", TRUE);
+  flatpak_bwrap_set_env (bwrap, "LD_LIBRARY_PATH", ld_library_path->str, TRUE);
 }
 
 static void

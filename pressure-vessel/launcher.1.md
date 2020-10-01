@@ -58,6 +58,13 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
     This fd will be closed (reach end-of-file) when the server is ready.
     The default is standard output, equivalent to **--info-fd=1**.
 
+**--lock-env-from-fd** *FD*
+:   List of environment variables, separated with the null character
+    '\0', that will be locked to their initial value (whether that
+    is inherited or unset). If **pressure-vessel-launch**(1) asks
+    to unset these variables or change their values, that request
+    will be ignored.
+
 **--replace**
 :   When used with **--bus-name**, allow other
     **pressure-vessel-launcher** processes to take over the bus name,

@@ -66,6 +66,7 @@ static GHashTable *client_pid_data_hash = NULL;
 static guint name_owner_id = 0;
 static GMainLoop *main_loop;
 static PvLauncher1 *launcher;
+static gchar *original_cwd_l = NULL;
 
 /*
  * Close the --info-fd, and also close standard output (if different).
@@ -382,6 +383,11 @@ handle_launch (PvLauncher1           *object,
       const char *val = NULL;
       g_variant_get_child (arg_envs, i, "{&s&s}", &var, &val);
 
+      /* Ignore PWD: we special-case that later, and the debug message
+       * if it is locked would be confusing */
+      if (g_strcmp0 (var, "PWD") == 0)
+        continue;
+
       if (g_hash_table_contains (lock_env_hash, var))
         {
           const gchar *locked_val = g_environ_getenv (env, var);
@@ -398,6 +404,10 @@ handle_launch (PvLauncher1           *object,
 
   for (i = 0; unset_env != NULL && unset_env[i] != NULL; i++)
     {
+      /* Again ignore PWD */
+      if (g_strcmp0 (unset_env[i], "PWD") == 0)
+        continue;
+
       if (g_hash_table_contains (lock_env_hash, unset_env[i]))
         {
           const gchar *locked_val = g_environ_getenv (env, unset_env[i]);
@@ -410,6 +420,11 @@ handle_launch (PvLauncher1           *object,
       g_debug ("Unsetting the environment variable %s...", unset_env[i]);
       env = g_environ_unsetenv (env, unset_env[i]);
     }
+
+  if (arg_cwd_path == NULL)
+    env = g_environ_setenv (env, "PWD", original_cwd_l, TRUE);
+  else
+    env = g_environ_setenv (env, "PWD", arg_cwd_path, TRUE);
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see flatpak_close_fds_workaround */
   if (!g_spawn_async_with_pipes (arg_cwd_path,
@@ -1102,6 +1117,8 @@ main (int argc,
 
   my_pid = getpid ();
 
+  pv_get_current_dirs (NULL, &original_cwd_l);
+
   setlocale (LC_ALL, "");
 
   g_set_prgname ("pressure-vessel-launcher");
@@ -1421,6 +1438,8 @@ out:
 
   g_clear_error (&local_error);
   close_info_fh ();
+
+  g_free (original_cwd_l);
 
   g_debug ("Exiting with status %d", ret);
   return ret;

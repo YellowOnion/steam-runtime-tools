@@ -114,6 +114,14 @@ it set, and pass through **FONTS** from the caller.
     **env -u** *VAR* *COMMAND* *ARGUMENTS...*
     as the command.
 
+# ENVIRONMENT
+
+`PWD`
+:   **pressure-vessel-launcher**(1) sets this to the current working
+    directory (as specified by **--directory**, or inherited from the
+    launcher) for each command executed inside the container,
+    overriding the environment options shown above.
+
 # OUTPUT
 
 The standard output from *COMMAND* is printed on standard output.

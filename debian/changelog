@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20200929.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20201002.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * Reapply "runtime: Set STEAM_RUNTIME=/ if running in scout".
@@ -48,7 +48,7 @@ steam-runtime-tools (0.20200929.0) UNRELEASED; urgency=medium
   * tests: Consolidate test-helper libraries
   * Fix various gtk-doc warnings
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 02 Oct 2020 10:41:37 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 02 Oct 2020 13:53:34 +0100
 
 steam-runtime-tools (0.20200914.0) scout; urgency=medium
 

@@ -1,5 +1,6 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
+ _srt_divert_stdout_to_stderr@Base 0.20201002.0
  _srt_filter_gameoverlayrenderer@Base 0.20190822.0
  _srt_rm_rf@Base 0.20200306.0
  _srt_unblock_signals@Base 0.20200109.0

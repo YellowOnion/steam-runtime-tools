@@ -95,11 +95,11 @@ foreach test_name : tests
     test_args += ['-e', python.path()]
   endif
 
-  if test_name.endswith('launcher.py')
+  if test_name in ['test-locale-gen.sh', 'launcher.py']
     timeout = 60
   endif
 
-  if test_name.endswith('containers.py')
+  if test_name in ['containers.py']
     timeout = 300
   endif
 

@@ -167,14 +167,21 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     # not reached
 fi
 
-# Session mode. The XDG_RUNTIME_DIR is required, for now.
+# Session mode. Either PRESSURE_VESSEL_SOCKET_DIR or XDG_RUNTIME_DIR are required.
 
-if ! [ -O "$XDG_RUNTIME_DIR" ]; then
-    log "XDG_RUNTIME_DIR is owned by someone else"
-    exit 125
+if [[ -v PRESSURE_VESSEL_SOCKET_DIR ]]; then
+    if ! [ -O "$PRESSURE_VESSEL_SOCKET_DIR" ]; then
+        log "PRESSURE_VESSEL_SOCKET_DIR is owned by someone else"
+        exit 125
+    fi
+    rendezvous="${PRESSURE_VESSEL_SOCKET_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
+else
+    if ! [ -O "$XDG_RUNTIME_DIR" ]; then
+        log "XDG_RUNTIME_DIR is owned by someone else"
+        exit 125
+    fi
+    rendezvous="${XDG_RUNTIME_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
 fi
-
-rendezvous="${XDG_RUNTIME_DIR}/SteamLinuxRuntime.${STEAM_COMPAT_SESSION_ID:?}"
 
 if mkdir -m700 "$rendezvous" 2>/dev/null; then
     :
@@ -229,15 +236,6 @@ env \
     --terminate-timeout=10 \
     ${NULL+}
 
-# TODO: Which arguments should be given unconditionally, which should
-# be given but only for the final game (waitforexitandrun), and which
-# should be ignored?
-#
-# For now we do everything explicitly. --pass-env options that are
-# redundant with --pass-env-matching are intended to illustrate which
-# variables are actually set in practice, and allow unsetting variables
-# if unset in the caller.
-
 launch_args=( \
 )
 
@@ -249,49 +247,7 @@ if [ -n "$is_main" ]; then
 
     launch_args=( \
         "${launch_args[@]}" \
-        --pass-env-matching 'AMD_VK_*' \
-        --pass-env-matching 'DXVK_*' \
-        --pass-env-matching 'ENABLE_VK_LAYER_*' \
-        --pass-env-matching 'FOSSILIZE_*' \
-        --pass-env-matching 'LC_*' \
-        --pass-env-matching 'MESA_*' \
-        --pass-env-matching 'SDL_*' \
-        --pass-env-matching 'STEAM*' \
-        --pass-env-matching 'Steam*' \
-        --pass-env-matching '__GL_*' \
-        --pass-env AMD_VK_PIPELINE_CACHE_FILENAME \
-        --pass-env AMD_VK_PIPELINE_CACHE_PATH \
-        --pass-env AMD_VK_USE_PIPELINE_CACHE \
-        --pass-env DXVK_STATE_CACHE_PATH \
-        --pass-env ENABLE_VK_LAYER_VALVE_steam_fossilize_1 \
-        --pass-env EnableConfiguratorSupport \
-        --pass-env FOSSILIZE_APPLICATION_INFO_FILTER_PATH \
-        --pass-env LC_ALL \
-        --pass-env LD_PRELOAD \
-        --pass-env MESA_GLSL_CACHE_DIR \
-        --pass-env MESA_GLSL_CACHE_MAX_SIZE \
-        --pass-env SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD \
-        --pass-env SDL_GAMECONTROLLER_USE_BUTTON_LABELS \
-        --pass-env STEAMVIDEOTOKEN \
-        --pass-env STEAM_CLIENT_CONFIG_FILE \
-        --pass-env STEAM_COMPAT_CLIENT_INSTALL_PATH \
-        --pass-env STEAM_COMPAT_DATA_PATH \
-        --pass-env STEAM_COMPAT_MEDIA_PATH \
-        --pass-env STEAM_FOSSILIZE_DUMP_PATH \
-        --pass-env STEAM_FOSSILIZE_DUMP_PATH_READ_ONLY \
-        --pass-env SteamAppId \
-        --pass-env SteamAppUser \
-        --pass-env SteamClientLaunch \
-        --pass-env SteamEnv \
-        --pass-env SteamGameId \
-        --pass-env SteamOverlayGameId \
-        --pass-env SteamStreamingHardwareEncodingAMD \
-        --pass-env SteamStreamingHardwareEncodingIntel \
-        --pass-env SteamStreamingHardwareEncodingNVIDIA \
-        --pass-env __GL_SHADER_DISK_CACHE_APP_NAME \
-        --pass-env __GL_SHADER_DISK_CACHE_PATH \
-        --pass-env __GL_SHADER_DISK_CACHE_READ_ONLY_APP_NAME \
-        --pass-env __GL_SHADER_DISK_CACHE_SKIP_CLEANUP \
+        --pass-env-matching '*' \
         --terminate \
     )
 

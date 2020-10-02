@@ -133,13 +133,12 @@ verbose "Starting pressure-vessel-launcher in background"
     --suite="${suite}" \
     "${deploy}" \
     -- \
-    --batch \
     --filesystem="$pressure_vessel" \
     --filesystem="$rendezvous" \
+    --launcher \
     --pass-fd=3 \
     "$@" \
     -- \
-"$pressure_vessel/bin/pressure-vessel-launcher" \
         --info-fd=3 \
         --socket-directory="$rendezvous" \
         < /dev/null >&2 3>"$rendezvous/fifo" &
@@ -149,6 +148,7 @@ socket=$(
         case "$line" in
             (socket=*)
                 echo "${line#socket=}"
+                break
                 ;;
         esac
     done < "$rendezvous/fifo"

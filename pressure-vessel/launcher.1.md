@@ -74,6 +74,12 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 **--verbose**
 :   Be more verbose.
 
+# ENVIRONMENT
+
+`PWD`
+:   Set to the current working directory for each command executed
+    inside the container, overriding **--lock-env-from-fd**.
+
 # OUTPUT
 
 **pressure-vessel-launcher** prints zero or more lines of

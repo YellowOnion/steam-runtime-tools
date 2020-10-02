@@ -262,6 +262,10 @@ The following environment variables (among others) are read by
 `PULSE_SERVER`
 :   Used to locate a PulseAudio server.
 
+`PWD`
+:   Used to choose between logically equivalent names for the current
+    working directory (see **get_current_dir_name**(3)).
+
 `STEAM_COMPAT_APP_ID` (integer)
 :   Equivalent to `--steam-app-id="$STEAM_COMPAT_APP_ID"`.
 
@@ -378,6 +382,9 @@ The following environment variables are set by **pressure-vessel-wrap**(1).
 
 `PULSE_SERVER`
 :   Set to the address of a PulseAudio server socket.
+
+`PWD`
+:   Set to the current working directory inside the container.
 
 `VDPAU_DRIVER_PATH`
 :   Set to a search path for VDPAU drivers

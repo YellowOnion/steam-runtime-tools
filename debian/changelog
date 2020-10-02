@@ -8,31 +8,47 @@ steam-runtime-tools (0.20200929.0) UNRELEASED; urgency=medium
     fixed the custom search path patches in various libraries to cope.
     (Resolves: pressure-vessel#8; maybe also: steam-runtime#202,
     steam-runtime#249)
+  * wrap, launcher: Add an environment variable locking system.
+    If we want to pass all the possible variables that a user might have set
+    in the environment, then we need a mechanism to lock the variables that
+    pressure-vessel is editing (e.g. LIBGL_DRIVERS_PATH), variables that we
+    want to keep unset because will be wrong in the new container (e.g.
+    FLATPAK_ID) and variables that should inherit their value from the host
+    system (e.g. DISPLAY).
+    (Part of steam-runtime-tools#17)
+  * wrap: Save original environ before potentially altering it
+  * launcher: add support for unsetting environment variables
   * json-glib-compat.h: Use the correct cleanup function for JsonArray
   * fake-home.c: Do not shadow the possible global declaration of dirname
 
   [ Simon McVittie ]
-  * README: Add more information about pressure-vessel
+  * launcher: Always set PWD to the command's actual working directory,
+    ignoring "locked" variables
   * build: Link libglnx into steam-runtime-tools library.
     This changes the effective license of the library from MIT/X11 to LGPL,
     and will let us make more use of libglnx in future to make the library
     more reliable.
-  * libsrt: Consolidate GLib backwards compatibility
+    - graphics, tests: Start to use g_autofree
+  * libsrt: Explicitly control symbol visibility
   * libsrt: Move non-public utility functions to internal header
-  * libsrt: Remove duplication of _srt_rm_rf() vs. pv_rm_rf()
-  * libsrt: Move pv_divert_stdout_to_stderr() here, reducing duplication
-  * pressure-vessel: Include static libsrt in utils library
+  * libsrt: Start moving pressure-vessel utilities into the library
   * flatpak-bwrap: Update from Flatpak 1.8.2
     gcc 10 correctly diagnoses that if there are 0 bytes of arguments, we'll
     allocate no bytes, leaving no space for this (unnecessary) '\0'.
+  * graphics: Fix a minor memory leak
+  * graphics: Canonicalize relative filenames before prepending sysroot
+  * graphics: Fix shadowing
+  * system-info: Open sysroot as a file descriptor
+  * system-info: Resolve container flag-files via sysroot
+  * system-info: Always pass around a non-NULL environment block
+  * README: Add more information about pressure-vessel
   * tests: Parse and re-serialize expected JSON output.
     This avoids test failure when using json-glib 1.6.x, which pretty-prints
     empty arrays and empty objects differently.
   * tests: Consolidate test-helper libraries
-  * tests: Start to use g_autofree
-  * graphics: Fix shadowing
+  * Fix various gtk-doc warnings
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 29 Sep 2020 16:53:45 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 02 Oct 2020 10:41:37 +0100
 
 steam-runtime-tools (0.20200914.0) scout; urgency=medium
 

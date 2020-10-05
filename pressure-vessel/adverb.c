@@ -353,6 +353,52 @@ opt_lock_file_cb (const char *name,
 }
 
 static gboolean
+run_helper_sync (const char *cwd,
+                 const char * const *argv,
+                 const char * const *envp,
+                 gchar **child_stdout,
+                 gchar **child_stderr,
+                 int *wait_status,
+                 GError **error)
+{
+  sigset_t mask;
+  sigset_t old_mask;
+  gboolean ret;
+
+  g_return_val_if_fail (argv != NULL, FALSE);
+  g_return_val_if_fail (argv[0] != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (envp == NULL)
+    envp = global_original_environ;
+
+  sigemptyset (&mask);
+  sigemptyset (&old_mask);
+  sigaddset (&mask, SIGCHLD);
+
+  /* Unblock SIGCHLD in case g_spawn_sync() needs it in some version */
+  if (pthread_sigmask (SIG_UNBLOCK, &mask, &old_mask) != 0)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
+  ret = g_spawn_sync (cwd,
+                      (gchar **) argv,
+                      (gchar **) envp,
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                      child_setup_cb, NULL,
+                      child_stdout,
+                      child_stderr,
+                      wait_status,
+                      error);
+
+  if (pthread_sigmask (SIG_SETMASK, &old_mask, NULL) != 0 && ret)
+    return glnx_throw_errno_prefix (error, "pthread_sigmask");
+
+  return ret;
+}
+
+static gboolean
 generate_locales (gchar **locpath_out,
                   GError **error)
 {
@@ -364,16 +410,9 @@ generate_locales (gchar **locpath_out,
   g_autofree gchar *pvlg = NULL;
   g_autofree gchar *this_path = NULL;
   g_autofree gchar *this_dir = NULL;
-  gboolean ret;
-  sigset_t mask;
-  sigset_t old_mask;
 
   g_return_val_if_fail (locpath_out == NULL || *locpath_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  sigemptyset (&mask);
-  sigemptyset (&old_mask);
-  sigaddset (&mask, SIGCHLD);
 
   temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
 
@@ -389,7 +428,7 @@ generate_locales (gchar **locpath_out,
   this_dir = g_path_get_dirname (this_path);
   pvlg = g_build_filename (this_dir, "pressure-vessel-locale-gen", NULL);
 
-  const char *locale_gen_argv[] =
+  const char * const locale_gen_argv[] =
   {
     pvlg,
     "--output-dir", temp_dir,
@@ -397,26 +436,13 @@ generate_locales (gchar **locpath_out,
     NULL
   };
 
-  /* Unblock SIGCHLD in case g_spawn_sync() needs it in some version */
-  if (pthread_sigmask (SIG_UNBLOCK, &mask, &old_mask) != 0)
-    return glnx_throw_errno_prefix (error, "pthread_sigmask");
-
-  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-   * see flatpak_close_fds_workaround */
-  ret = g_spawn_sync (NULL,  /* cwd */
-                      (gchar **) locale_gen_argv,
-                      (gchar **) global_original_environ,
-                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                      child_setup_cb, NULL,
-                      &child_stdout,
-                      &child_stderr,
-                      &wait_status,
-                      error);
-
-  if (pthread_sigmask (SIG_SETMASK, &old_mask, NULL) != 0 && ret)
-    return glnx_throw_errno_prefix (error, "pthread_sigmask");
-
-  if (!ret)
+  if (!run_helper_sync (NULL,
+                        locale_gen_argv,
+                        NULL,
+                        &child_stdout,
+                        &child_stderr,
+                        &wait_status,
+                        error))
     {
       if (error != NULL)
         glnx_prefix_error (error, "Cannot run pressure-vessel-locale-gen");

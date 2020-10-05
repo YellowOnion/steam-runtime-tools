@@ -58,6 +58,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusAuthObserver, g_object_unref)
 typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
+static const char * const *global_original_environ = NULL;
 static FILE *original_stdout = NULL;
 static FILE *info_fh = NULL;
 static GHashTable *lock_env_hash = NULL;
@@ -373,7 +374,7 @@ handle_launch (PvLauncher1           *object,
     }
   else
     {
-      env = g_get_environ ();
+      env = g_strdupv ((gchar **) global_original_environ);
     }
 
   n_envs = g_variant_n_children (arg_envs);
@@ -1106,6 +1107,7 @@ int
 main (int argc,
       char *argv[])
 {
+  g_auto(GStrv) original_environ = NULL;
   g_autoptr(AutoDBusServer) server = NULL;
   g_autoptr(GOptionContext) context = NULL;
   guint signals_id = 0;
@@ -1117,6 +1119,8 @@ main (int argc,
 
   my_pid = getpid ();
 
+  original_environ = g_get_environ ();
+  global_original_environ = (const char * const *) original_environ;
   pv_get_current_dirs (NULL, &original_cwd_l);
 
   setlocale (LC_ALL, "");
@@ -1440,6 +1444,7 @@ out:
   close_info_fh ();
 
   g_free (original_cwd_l);
+  global_original_environ = NULL;
 
   g_debug ("Exiting with status %d", ret);
   return ret;

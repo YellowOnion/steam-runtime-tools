@@ -45,6 +45,7 @@
 #include "utils.h"
 #include "wrap-interactive.h"
 
+static const char * const *global_original_environ = NULL;
 static GPtrArray *global_locks = NULL;
 static GArray *global_pass_fds = NULL;
 static gboolean opt_batch = FALSE;
@@ -404,7 +405,7 @@ generate_locales (gchar **locpath_out,
    * see flatpak_close_fds_workaround */
   ret = g_spawn_sync (NULL,  /* cwd */
                       (gchar **) locale_gen_argv,
-                      NULL,  /* environ */
+                      (gchar **) global_original_environ,
                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
                       child_setup_cb, NULL,
                       &child_stdout,
@@ -605,6 +606,7 @@ int
 main (int argc,
       char *argv[])
 {
+  g_auto(GStrv) original_environ = NULL;
   g_autoptr(GPtrArray) locks = NULL;
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
@@ -632,6 +634,9 @@ main (int argc,
     }
 
   setlocale (LC_ALL, "");
+
+  original_environ = g_get_environ ();
+  global_original_environ = (const char * const *) original_environ;
 
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
@@ -724,7 +729,7 @@ main (int argc,
       goto out;
     }
 
-  wrapped_command = flatpak_bwrap_new (NULL);
+  wrapped_command = flatpak_bwrap_new (original_environ);
 
   if (opt_terminal == PV_TERMINAL_AUTO)
     {
@@ -940,6 +945,7 @@ out:
   if (local_error != NULL)
     g_warning ("%s", local_error->message);
 
+  global_original_environ = NULL;
   g_debug ("Exiting with status %d", ret);
   return ret;
 }

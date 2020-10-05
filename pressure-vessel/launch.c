@@ -744,6 +744,8 @@ main (int argc,
           glnx_prefix_error (error, "Can't append fd");
           goto out;
         }
+      /* The GUnixFdList keeps a duplicate, so we should release the original */
+      close (fd);
       g_variant_builder_add (&fd_builder, "{uh}", fd, handle);
     }
 
@@ -838,6 +840,10 @@ main (int argc,
   }
 
   g_debug ("child_pid: %d", child_pid);
+
+  /* Release our reference to the fds, so that only the copy we sent over
+   * D-Bus remains open */
+  g_clear_object (&fd_list);
 
   g_signal_connect (bus_or_peer_connection, "closed",
                     G_CALLBACK (connection_closed_cb), loop);

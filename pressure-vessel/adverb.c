@@ -412,7 +412,7 @@ generate_locales (gchar **locpath_out,
                       &wait_status,
                       error);
 
-  if (pthread_sigmask (SIG_SETMASK, &old_mask, NULL) != 0)
+  if (pthread_sigmask (SIG_SETMASK, &old_mask, NULL) != 0 && ret)
     return glnx_throw_errno_prefix (error, "pthread_sigmask");
 
   if (!ret)

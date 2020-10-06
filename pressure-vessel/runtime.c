@@ -153,27 +153,37 @@ static const char * const multiarch_tuples[] =
   NULL
 };
 
-/*
- * Directories other than /usr/lib that we must search for loadable
- * modules, in the same order as multiarch_tuples
- */
-static const char * const libquals[] =
+typedef struct
 {
-  "lib64",
-  "lib32"
+  const char *tuple;
+  const char *libqual;
+} MultiarchDetails;
+
+/*
+ * More details, in the same order as multiarch_tuples
+ */
+static const MultiarchDetails multiarch_details[] =
+{
+  {
+    .tuple = "x86_64-linux-gnu",
+    .libqual = "lib64",
+  },
+  {
+    .tuple = "i386-linux-gnu",
+    .libqual = "lib32",
+  },
 };
-G_STATIC_ASSERT (G_N_ELEMENTS (libquals)
+G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
                  == G_N_ELEMENTS (multiarch_tuples) - 1);
 
 typedef struct
 {
   gsize multiarch_index;
-  const char *tuple;
+  const MultiarchDetails *details;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
   gchar *libdir_in_current_namespace;
   gchar *libdir_in_container;
-  const char *libqual;
   gchar *ld_so;
 } RuntimeArchitecture;
 
@@ -183,24 +193,27 @@ runtime_architecture_init (RuntimeArchitecture *self,
 {
   const gchar *argv[] = { NULL, "--print-ld.so", NULL };
 
-  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (libquals), FALSE);
+  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_details),
+                        FALSE);
   g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
                         FALSE);
-  g_return_val_if_fail (self->tuple == NULL, FALSE);
+  g_return_val_if_fail (self->details == NULL, FALSE);
 
-  self->tuple = multiarch_tuples[self->multiarch_index];
-  g_return_val_if_fail (self->tuple != NULL, FALSE);
-  self->libqual = libquals[self->multiarch_index];
+  self->details = &multiarch_details[self->multiarch_index];
+  g_return_val_if_fail (self->details != NULL, FALSE);
+  g_return_val_if_fail (self->details->tuple != NULL, FALSE);
+  g_return_val_if_fail (g_strcmp0 (multiarch_tuples[self->multiarch_index],
+                                   self->details->tuple) == 0, FALSE);
 
   self->capsule_capture_libs_basename = g_strdup_printf ("%s-capsule-capture-libs",
-                                                         self->tuple);
+                                                         self->details->tuple);
   self->capsule_capture_libs = g_build_filename (runtime->tools_dir,
                                                  self->capsule_capture_libs_basename,
                                                  NULL);
   self->libdir_in_current_namespace = g_build_filename (runtime->overrides, "lib",
-                                                        self->tuple, NULL);
+                                                        self->details->tuple, NULL);
   self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
-                                                "lib", self->tuple, NULL);
+                                                "lib", self->details->tuple, NULL);
 
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the current environment. We
@@ -211,7 +224,7 @@ runtime_architecture_init (RuntimeArchitecture *self,
 
   if (self->ld_so == NULL)
     {
-      g_debug ("Cannot determine ld.so for %s", self->tuple);
+      g_debug ("Cannot determine ld.so for %s", self->details->tuple);
       return FALSE;
     }
 
@@ -221,13 +234,12 @@ runtime_architecture_init (RuntimeArchitecture *self,
 static gboolean
 runtime_architecture_check_valid (RuntimeArchitecture *self)
 {
-  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (libquals), FALSE);
-  g_return_val_if_fail (self->tuple == multiarch_tuples[self->multiarch_index], FALSE);
+  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_details), FALSE);
+  g_return_val_if_fail (self->details == &multiarch_details[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->capsule_capture_libs_basename != NULL, FALSE);
   g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
-  g_return_val_if_fail (self->libqual == libquals[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->ld_so != NULL, FALSE);
   return TRUE;
 }
@@ -236,8 +248,7 @@ static void
 runtime_architecture_clear (RuntimeArchitecture *self)
 {
   self->multiarch_index = G_MAXSIZE;
-  self->tuple = NULL;
-  self->libqual = NULL;
+  self->details = NULL;
   g_clear_pointer (&self->capsule_capture_libs_basename, g_free);
   g_clear_pointer (&self->capsule_capture_libs, g_free);
   g_clear_pointer (&self->libdir_in_current_namespace, g_free);
@@ -1269,7 +1280,7 @@ try_bind_dri (PvRuntime *self,
                                                      "dri", member, NULL);
 
           g_debug ("Creating symbolic link \"%s\" -> \"%s\" for \"%s\" DRI driver",
-                   dest, target, arch->tuple);
+                   dest, target, arch->details->tuple);
 
           /* Delete an existing symlink if any, like ln -f */
           if (unlink (dest) != 0 && errno != ENOENT)
@@ -1936,7 +1947,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
       glnx_autofd int libdir_fd = -1;
       struct dirent *dent;
 
-      multiarch_libdirs[i] = g_build_filename (libdirs[i], arch->tuple, NULL);
+      multiarch_libdirs[i] = g_build_filename (libdirs[i], arch->details->tuple, NULL);
 
       /* Mostly ignore error: if the library directory cannot be opened,
        * presumably we don't need to do anything with it... */
@@ -1960,7 +1971,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         }
 
       g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
-               arch->tuple, multiarch_libdirs[i], self->mutable_sysroot);
+               arch->details->tuple, multiarch_libdirs[i], self->mutable_sysroot);
 
       if (!glnx_dirfd_iterator_init_take_fd (&libdir_fd, &iters[i], error))
         {
@@ -2431,7 +2442,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               g_debug ("Container does not have %s so it cannot run "
                        "%s binaries",
-                       arch->ld_so, arch->tuple);
+                       arch->ld_so, arch->details->tuple);
               continue;
             }
 
@@ -2508,7 +2519,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
           g_debug ("Collecting %s EGL drivers from host system...",
-                   arch->tuple);
+                   arch->details->tuple);
 
           for (j = 0; j < egl_icd_details->len; j++)
             {
@@ -2526,7 +2537,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             }
 
           g_debug ("Collecting %s Vulkan drivers from host system...",
-                   arch->tuple);
+                   arch->details->tuple);
 
           for (j = 0; j < vulkan_icd_details->len; j++)
             {
@@ -2543,9 +2554,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->tuple);
+          g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->details->tuple);
           vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
-                                                              arch->tuple,
+                                                              arch->details->tuple,
                                                               SRT_DRIVER_FLAGS_NONE);
 
           for (icd_iter = vdpau_drivers; icd_iter != NULL; icd_iter = icd_iter->next)
@@ -2563,9 +2574,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             }
 
           g_debug ("Enumerating %s VA-API drivers on host system...",
-                   arch->tuple);
+                   arch->details->tuple);
           va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
-                                                                arch->tuple,
+                                                                arch->details->tuple,
                                                                 SRT_DRIVER_FLAGS_NONE);
 
           /* Guess that there will be about the same number of VA-API ICDs
@@ -2724,7 +2735,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
                   dir = g_path_get_dirname (target);
 
-                  lib_multiarch = g_build_filename ("/lib", arch->tuple, NULL);
+                  lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
                   if (g_str_has_suffix (dir, lib_multiarch))
                     dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
                   else if (g_str_has_suffix (dir, "/lib64"))
@@ -2772,10 +2783,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           dirs = g_new0 (gchar *, 7);
           dirs[0] = g_strdup ("/lib");
           dirs[1] = g_strdup ("/usr/lib");
-          dirs[2] = g_build_filename ("/", arch->libqual, NULL);
-          dirs[3] = g_build_filename ("/usr", arch->libqual, NULL);
-          dirs[4] = g_build_filename ("/lib", arch->tuple, NULL);
-          dirs[5] = g_build_filename ("/usr", "lib", arch->tuple, NULL);
+          dirs[2] = g_build_filename ("/", arch->details->libqual, NULL);
+          dirs[3] = g_build_filename ("/usr", arch->details->libqual, NULL);
+          dirs[4] = g_build_filename ("/lib", arch->details->tuple, NULL);
+          dirs[5] = g_build_filename ("/usr", "lib", arch->details->tuple, NULL);
 
           for (j = 0; j < 6; j++)
             {

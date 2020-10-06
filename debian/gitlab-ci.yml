@@ -272,6 +272,7 @@ relocatable-install:
 
         dpkg --add-architecture i386
         apt-get -y update
+        apt-get -y upgrade
         apt-get -y --no-install-recommends install \
         libc6-i386 \
         libgl1-mesa-dri:i386 \

@@ -52,8 +52,28 @@ as a subprocess of **pressure-vessel-launcher**.
 
 **--bus-name** *NAME*
 :   Connect to the well-known D-Bus session bus and send commands to
-    the given *NAME*, which is assumed to be owned by
+    the given *NAME*, which is normally assumed to be owned by
     **pressure-vessel-launcher**.
+
+    As a special case, if the *NAME* is
+    **org.freedesktop.Flatpak**, then it is assumed to be
+    owned by the **flatpak-session-helper** per-user service, and the
+    *COMMAND* is launched on the host system, similar to the
+    **--host** option of **flatpak-spawn**(1).
+    The **--terminate** option is not allowed in this mode, and most
+    options that would unset environment variables, such as **--unset-env**,
+    are ignored with a warning (but **--clear-env** is still possible).
+
+    As another special case, if the *NAME* is
+    **org.freedesktop.portal.Flatpak**, then it is assumed to be
+    owned by the **flatpak-portal** per-user service, and the
+    *COMMAND* is launched in a Flatpak sub-sandbox, similar to
+    **flatpak-spawn**(1) without the **--host** option.
+    Options that alter how the sub-sandbox is created, such as
+    **--sandbox-flag**, are not currently supported.
+    As with **org.freedesktop.Flatpak**, the
+    **--terminate** option is not allowed in this mode, and most
+    options that would unset environment variables are ignored with a warning.
 
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment

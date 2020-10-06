@@ -46,9 +46,79 @@
 #include "launcher.h"
 #include "utils.h"
 
-static const char *service_bus_name = NULL;
-static const char *service_iface = LAUNCHER_IFACE;
-static const char *service_obj_path = LAUNCHER_PATH;
+typedef enum {
+  FLATPAK_SPAWN_FLAGS_CLEAR_ENV = 1 << 0,
+  FLATPAK_SPAWN_FLAGS_LATEST_VERSION = 1 << 1,
+  FLATPAK_SPAWN_FLAGS_SANDBOX = 1 << 2,
+  FLATPAK_SPAWN_FLAGS_NO_NETWORK = 1 << 3,
+  FLATPAK_SPAWN_FLAGS_WATCH_BUS = 1 << 4, /* Since 1.2 */
+  FLATPAK_SPAWN_FLAGS_EXPOSE_PIDS = 1 << 5, /* Since 1.6, optional */
+} FlatpakSpawnFlags;
+
+typedef enum {
+  FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV = 1 << 0,
+  FLATPAK_HOST_COMMAND_FLAGS_WATCH_BUS = 1 << 1, /* Since 1.2 */
+} FlatpakHostCommandFlags;
+
+/* Since 1.6 */
+typedef enum {
+  FLATPAK_SPAWN_SANDBOX_FLAGS_SHARE_DISPLAY = 1 << 0,
+  FLATPAK_SPAWN_SANDBOX_FLAGS_SHARE_SOUND = 1 << 1,
+  FLATPAK_SPAWN_SANDBOX_FLAGS_SHARE_GPU = 1 << 2,
+  FLATPAK_SPAWN_SANDBOX_FLAGS_ALLOW_DBUS = 1 << 3,
+  FLATPAK_SPAWN_SANDBOX_FLAGS_ALLOW_A11Y = 1 << 4,
+} FlatpakSpawnSandboxFlags;
+
+/* Since 1.6 */
+typedef enum {
+  FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS = 1 << 0,
+} FlatpakSpawnSupportFlags;
+
+typedef struct
+{
+  const char *service_iface;
+  const char *service_obj_path;
+  const char *service_bus_name;
+  const char *send_signal_method;
+  const char *exit_signal;
+  const char *launch_method;
+  guint clear_env_flag;
+} Api;
+
+static Api launcher_api =
+{
+  .service_iface = LAUNCHER_IFACE,
+  .service_obj_path = LAUNCHER_PATH,
+  .service_bus_name = NULL,
+  .send_signal_method = "SendSignal",
+  .exit_signal = "ProcessExited",
+  .launch_method = "Launch",
+  .clear_env_flag = PV_LAUNCH_FLAGS_CLEAR_ENV,
+};
+
+static const Api host_api =
+{
+  .service_iface = "org.freedesktop.Flatpak.Development",
+  .service_obj_path = "/org/freedesktop/Flatpak/Development",
+  .service_bus_name = "org.freedesktop.Flatpak",
+  .send_signal_method = "HostCommandSignal",
+  .exit_signal = "HostCommandExited",
+  .launch_method = "HostCommand",
+  .clear_env_flag = FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV,
+};
+
+static const Api subsandbox_api =
+{
+  .service_iface = "org.freedesktop.portal.Flatpak",
+  .service_obj_path = "/org/freedesktop/portal/Flatpak",
+  .service_bus_name = "org.freedesktop.portal.Flatpak",
+  .send_signal_method = "SpawnSignal",
+  .exit_signal = "SpawnExited",
+  .launch_method = "Spawn",
+  .clear_env_flag = FLATPAK_SPAWN_FLAGS_CLEAR_ENV,
+};
+
+static const Api *api = NULL;
 
 typedef GUnixFDList AutoUnixFDList;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoUnixFDList, g_object_unref)
@@ -118,6 +188,8 @@ forward_signal (int sig)
   gboolean to_process_group = FALSE;
   g_autoptr(GError) error = NULL;
 
+  g_return_if_fail (api != NULL);
+
   if (child_pid == 0)
     {
       /* We are not monitoring a child yet, so let the signal act on
@@ -154,10 +226,10 @@ forward_signal (int sig)
     to_process_group = TRUE;
 
   reply = g_dbus_connection_call_sync (bus_or_peer_connection,
-                                       service_bus_name,    /* NULL if p2p */
-                                       service_obj_path,
-                                       service_iface,
-                                       "SendSignal",
+                                       api->service_bus_name,   /* NULL if p2p */
+                                       api->service_obj_path,
+                                       api->service_iface,
+                                       api->send_signal_method,
                                        g_variant_new ("(uub)",
                                                       child_pid, sig,
                                                       to_process_group),
@@ -259,10 +331,12 @@ name_owner_changed (G_GNUC_UNUSED GDBusConnection *connection,
   GMainLoop *loop = user_data;
   const char *name, *from, *to;
 
+  g_return_if_fail (api != NULL);
+
   g_variant_get (parameters, "(sss)", &name, &from, &to);
 
   /* Check if the service dies, then we exit, because we can't track it anymore */
-  if (strcmp (name, service_bus_name) == 0 &&
+  if (strcmp (name, api->service_bus_name) == 0 &&
       strcmp (to, "") == 0)
     {
       g_debug ("portal exited");
@@ -393,7 +467,7 @@ opt_env_cb (const char *option_name,
 static const GOptionEntry options[] =
 {
   { "bus-name", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &service_bus_name,
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &launcher_api.service_bus_name,
     "Connect to a Launcher service with this name on the session bus.",
     "NAME" },
   { "dbus-address", '\0',
@@ -472,7 +546,7 @@ main (int argc,
   gint stdin_handle = -1;
   gint stdout_handle = -1;
   gint stderr_handle = -1;
-  PvLaunchFlags spawn_flags = 0;
+  guint spawn_flags = 0;
   guint signal_source = 0;
   gsize i;
   GHashTableIter iter;
@@ -542,9 +616,25 @@ main (int argc,
 
   pv_avoid_gvfs ();
 
-  if (service_bus_name != NULL && opt_socket != NULL)
+  if (launcher_api.service_bus_name != NULL && opt_socket != NULL)
     {
       glnx_throw (error, "--bus-name and --socket cannot both be used");
+      goto out;
+    }
+
+  if (g_strcmp0 (launcher_api.service_bus_name,
+                 host_api.service_bus_name) == 0)
+    api = &host_api;
+  else if (g_strcmp0 (launcher_api.service_bus_name,
+                      subsandbox_api.service_bus_name) == 0)
+    api = &subsandbox_api;
+  else
+    api = &launcher_api;
+
+  if (api != &launcher_api && opt_terminate)
+    {
+      glnx_throw (error,
+                  "--terminate cannot be used with Flatpak services");
       goto out;
     }
 
@@ -573,7 +663,7 @@ main (int argc,
   launch_exit_status = LAUNCH_EX_FAILED;
   loop = g_main_loop_new (NULL, FALSE);
 
-  if (service_bus_name != NULL)
+  if (api->service_bus_name != NULL)
     {
       if (opt_dbus_address != NULL || opt_socket != NULL)
         {
@@ -665,9 +755,9 @@ main (int argc,
       g_assert (opt_terminate);   /* already checked */
 
       reply = g_dbus_connection_call_sync (bus_or_peer_connection,
-                                           service_bus_name,
-                                           service_obj_path,
-                                           service_iface,
+                                           api->service_bus_name,
+                                           api->service_obj_path,
+                                           api->service_iface,
                                            "Terminate",
                                            g_variant_new ("()"),
                                            G_VARIANT_TYPE ("()"),
@@ -683,10 +773,10 @@ main (int argc,
 
   g_assert (command_and_args != NULL);
   g_dbus_connection_signal_subscribe (bus_or_peer_connection,
-                                      service_bus_name,   /* NULL if p2p */
-                                      service_iface,
-                                      "ProcessExited",
-                                      service_obj_path,
+                                      api->service_bus_name,    /* NULL if p2p */
+                                      api->service_iface,
+                                      api->exit_signal,
+                                      api->service_obj_path,
                                       NULL,
                                       G_DBUS_SIGNAL_FLAGS_NONE,
                                       process_exited_cb,
@@ -757,13 +847,16 @@ main (int argc,
   spawn_flags = 0;
 
   if (opt_clear_env)
-    spawn_flags |= PV_LAUNCH_FLAGS_CLEAR_ENV;
+    spawn_flags |= api->clear_env_flag;
 
   g_variant_builder_init (&options_builder, G_VARIANT_TYPE ("a{sv}"));
 
   if (opt_terminate)
-    g_variant_builder_add (&options_builder, "{s@v}", "terminate-after",
-                           g_variant_new_variant (g_variant_new_boolean (TRUE)));
+    {
+      g_assert (api == &launcher_api);
+      g_variant_builder_add (&options_builder, "{s@v}", "terminate-after",
+                             g_variant_new_variant (g_variant_new_boolean (TRUE)));
+    }
 
   if (g_hash_table_size (opt_unsetenv) > 0)
     {
@@ -773,11 +866,20 @@ main (int argc,
 
       g_hash_table_iter_init (&iter, opt_unsetenv);
 
-      while (g_hash_table_iter_next (&iter, &key, NULL))
-        g_variant_builder_add (&strv_builder, "s", key);
+      if (api == &launcher_api)
+        {
+          while (g_hash_table_iter_next (&iter, &key, NULL))
+            g_variant_builder_add (&strv_builder, "s", key);
 
-      g_variant_builder_add (&options_builder, "{s@v}", "unset-env",
-                             g_variant_new_variant (g_variant_builder_end (&strv_builder)));
+          g_variant_builder_add (&options_builder, "{s@v}", "unset-env",
+                                 g_variant_new_variant (g_variant_builder_end (&strv_builder)));
+        }
+      else
+        {
+          while (g_hash_table_iter_next (&iter, &key, NULL))
+            g_warning ("Cannot unset %s when using Flatpak services",
+                       (const char *) key);
+        }
     }
 
   if (!opt_directory)
@@ -801,6 +903,7 @@ main (int argc,
     g_autoptr(GVariant) fds = NULL;
     g_autoptr(GVariant) env = NULL;
     g_autoptr(GVariant) opts = NULL;
+    GVariant *arguments = NULL;   /* floating */
 
     g_debug ("Forwarding command:");
 
@@ -811,18 +914,34 @@ main (int argc,
     env = g_variant_ref_sink (g_variant_builder_end (&env_builder));
     opts = g_variant_ref_sink (g_variant_builder_end (&options_builder));
 
+    if (api == &host_api)
+      {
+        /* o.fd.Flatpak.Development doesn't take arbitrary options a{sv} */
+        arguments = g_variant_new ("(^ay^aay@a{uh}@a{ss}u)",
+                                   opt_directory,
+                                   (const char * const *) command_and_args,
+                                   fds,
+                                   env,
+                                   spawn_flags);
+      }
+    else
+      {
+        arguments = g_variant_new ("(^ay^aay@a{uh}@a{ss}u@a{sv})",
+                                   opt_directory,
+                                   (const char * const *) command_and_args,
+                                   fds,
+                                   env,
+                                   spawn_flags,
+                                   opts);
+      }
+
     reply = g_dbus_connection_call_with_unix_fd_list_sync (bus_or_peer_connection,
-                                                           service_bus_name,
-                                                           service_obj_path,
-                                                           service_iface,
-                                                           "Launch",
-                                                           g_variant_new ("(^ay^aay@a{uh}@a{ss}u@a{sv})",
-                                                                          opt_directory,
-                                                                          (const char * const *) command_and_args,
-                                                                          fds,
-                                                                          env,
-                                                                          spawn_flags,
-                                                                          opts),
+                                                           api->service_bus_name,
+                                                           api->service_obj_path,
+                                                           api->service_iface,
+                                                           api->launch_method,
+                                                           /* sinks floating reference */
+                                                           g_steal_pointer (&arguments),
                                                            G_VARIANT_TYPE ("(u)"),
                                                            G_DBUS_CALL_FLAGS_NONE,
                                                            -1,

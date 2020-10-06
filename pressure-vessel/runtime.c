@@ -156,7 +156,16 @@ static const char * const multiarch_tuples[] =
 typedef struct
 {
   const char *tuple;
-  const char *libqual;
+
+  /* Directories other than /usr/lib that we must search for loadable
+   * modules, most-ambiguous first, least-ambiguous last, not including
+   * Debian-style multiarch directories which are automatically derived
+   * from @tuple.
+   * - Red-Hat- or Arch-style lib<QUAL>
+   * - Exherbo <GNU-tuple>/lib
+   * - etc.
+   * Size is completely arbitrary, expand as needed */
+  const char *multilib[3];
 } MultiarchDetails;
 
 /*
@@ -166,11 +175,11 @@ static const MultiarchDetails multiarch_details[] =
 {
   {
     .tuple = "x86_64-linux-gnu",
-    .libqual = "lib64",
+    .multilib = { "lib64", "x86_64-pc-linux-gnu/lib", NULL },
   },
   {
     .tuple = "i386-linux-gnu",
-    .libqual = "lib32",
+    .multilib = { "lib32", "i686-pc-linux-gnu/lib", NULL }
   },
 };
 G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
@@ -2783,10 +2792,18 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           dirs = g_ptr_array_new_with_free_func (g_free);
           g_ptr_array_add (dirs, g_strdup ("/lib"));
           g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
-          g_ptr_array_add (dirs,
-                           g_build_filename ("/", arch->details->libqual, NULL));
-          g_ptr_array_add (dirs,
-                           g_build_filename ("/usr", arch->details->libqual, NULL));
+
+          for (j = 0; j < G_N_ELEMENTS (arch->details->multilib); j++)
+            {
+              if (arch->details->multilib[j] == NULL)
+                break;
+
+              g_ptr_array_add (dirs,
+                               g_build_filename ("/", arch->details->multilib[j], NULL));
+              g_ptr_array_add (dirs,
+                               g_build_filename ("/usr", arch->details->multilib[j], NULL));
+            }
+
           g_ptr_array_add (dirs,
                            g_build_filename ("/lib", arch->details->tuple, NULL));
           g_ptr_array_add (dirs,

@@ -123,6 +123,7 @@ static const Api *api = NULL;
 typedef GUnixFDList AutoUnixFDList;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoUnixFDList, g_object_unref)
 
+static const char * const *global_original_environ = NULL;
 static GDBusConnection *bus_or_peer_connection = NULL;
 static guint child_pid = 0;
 static int launch_exit_status = LAUNCH_EX_USAGE;
@@ -427,12 +428,12 @@ opt_env_cb (const char *option_name,
 
   if (g_strcmp0 (option_name, "--pass-env-matching") == 0)
     {
-      char **iter;
+      const char * const *iter;
 
-      if (environ == NULL)
+      if (global_original_environ == NULL)
         return TRUE;
 
-      for (iter = environ; *iter != NULL; iter++)
+      for (iter = global_original_environ; *iter != NULL; iter++)
         {
           g_auto(GStrv) split = g_strsplit (*iter, "=", 2);
 
@@ -530,6 +531,7 @@ int
 main (int argc,
       char *argv[])
 {
+  g_auto(GStrv) original_environ = NULL;
   g_autoptr(GMainLoop) loop = NULL;
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
@@ -555,6 +557,9 @@ main (int argc,
   my_pid = getpid ();
 
   setlocale (LC_ALL, "");
+
+  original_environ = g_get_environ ();
+  global_original_environ = (const char * const *) original_environ;
 
   g_set_prgname ("pressure-vessel-launch");
 
@@ -981,6 +986,7 @@ out:
   g_free (opt_socket);
   g_hash_table_unref (opt_env);
   g_hash_table_unref (opt_unsetenv);
+  global_original_environ = NULL;
 
   g_debug ("Exiting with status %d", launch_exit_status);
   return launch_exit_status;

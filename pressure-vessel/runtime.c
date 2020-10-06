@@ -2376,7 +2376,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
       if (runtime_architecture_init (arch, self))
         {
-          g_auto(GStrv) dirs = NULL;
+          g_autoptr(GPtrArray) dirs = NULL;
           g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
           g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_in_current_namespace,
                                                                       "dri", NULL);
@@ -2780,17 +2780,21 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * /lib and /usr/lib are 32- or 64-bit, we need to prioritize
            * libQUAL higher. Prioritize Debian-style multiarch higher
            * still, because it's completely unambiguous. */
-          dirs = g_new0 (gchar *, 7);
-          dirs[0] = g_strdup ("/lib");
-          dirs[1] = g_strdup ("/usr/lib");
-          dirs[2] = g_build_filename ("/", arch->details->libqual, NULL);
-          dirs[3] = g_build_filename ("/usr", arch->details->libqual, NULL);
-          dirs[4] = g_build_filename ("/lib", arch->details->tuple, NULL);
-          dirs[5] = g_build_filename ("/usr", "lib", arch->details->tuple, NULL);
+          dirs = g_ptr_array_new_with_free_func (g_free);
+          g_ptr_array_add (dirs, g_strdup ("/lib"));
+          g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
+          g_ptr_array_add (dirs,
+                           g_build_filename ("/", arch->details->libqual, NULL));
+          g_ptr_array_add (dirs,
+                           g_build_filename ("/usr", arch->details->libqual, NULL));
+          g_ptr_array_add (dirs,
+                           g_build_filename ("/lib", arch->details->tuple, NULL));
+          g_ptr_array_add (dirs,
+                           g_build_filename ("/usr", "lib", arch->details->tuple, NULL));
 
-          for (j = 0; j < 6; j++)
+          for (j = 0; j < dirs->len; j++)
             {
-              if (!try_bind_dri (self, arch, bwrap, dirs[j], error))
+              if (!try_bind_dri (self, arch, bwrap, g_ptr_array_index (dirs, j), error))
                 return FALSE;
             }
         }

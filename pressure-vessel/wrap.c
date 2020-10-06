@@ -1868,8 +1868,6 @@ main (int argc,
 
   if (adjusted_ld_preload->len != 0)
     flatpak_bwrap_set_env (bwrap, "LD_PRELOAD", adjusted_ld_preload->str, TRUE);
-  else
-    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("LD_PRELOAD"));
 
   g_debug ("Making Steam environment variables available if required...");
   for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
@@ -1994,6 +1992,11 @@ main (int argc,
       char *equals = strchr (bwrap->envp[i], '=');
 
       g_assert (equals != NULL);
+
+      /* Never lock LD_PRELOAD, otherwise, for example, we might miss the
+       * overlay renderer library that the Steam client adds to LD_PRELOAD */
+      if (g_str_has_prefix (bwrap->envp[i], "LD_PRELOAD="))
+        continue;
 
       *equals = '\0';
 

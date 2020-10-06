@@ -1168,6 +1168,9 @@ pv_runtime_provide_container_access (PvRuntime *self,
     }
   else
     {
+      g_autofree gchar *etc = NULL;
+      g_autofree gchar *etc_dest = NULL;
+
       /* Otherwise, will we need to use bwrap to build a directory hierarchy
        * that is the same shape as the final system. */
       g_debug ("%s: Using bwrap to set up runtime that is just /usr",
@@ -1188,12 +1191,22 @@ pv_runtime_provide_container_access (PvRuntime *self,
                               "--bind", self->overrides, self->overrides,
                               "--tmpfs", self->container_access,
                               NULL);
+
       if (!pv_bwrap_bind_usr (self->container_access_adverb,
                               self->runtime_files_on_host,
                               self->runtime_files,
                               self->container_access,
                               error))
         return FALSE;
+
+      /* For simplicity we bind all of /etc here */
+      etc = g_build_filename (self->runtime_files_on_host,
+                              "etc", NULL);
+      etc_dest = g_build_filename (self->container_access,
+                                   "etc", NULL);
+      flatpak_bwrap_add_args (self->container_access_adverb,
+                              "--ro-bind", etc, etc_dest,
+                              NULL);
     }
 
   return TRUE;
@@ -2413,6 +2426,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             }
           else
             {
+              g_autofree gchar *etc = NULL;
+              g_autofree gchar *provider_etc = NULL;
+              g_autofree gchar *provider_etc_dest = NULL;
+
               /* Do it the hard way, by asking a process running in the
                * container (or at least a container resembling the one we
                * are going to use) to resolve it for us */
@@ -2428,12 +2445,30 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                       error))
                 return FALSE;
 
+              etc = g_build_filename (self->runtime_files_on_host,
+                                      "etc", NULL);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      "--ro-bind",
+                                      etc,
+                                      "/etc",
+                                      NULL);
+
               if (!pv_bwrap_bind_usr (temp_bwrap,
                                       self->provider_in_host_namespace,
                                       self->provider_in_current_namespace,
                                       self->provider_in_container_namespace,
                                       error))
                 return FALSE;
+
+              provider_etc = g_build_filename (self->provider_in_host_namespace,
+                                               "etc", NULL);
+              provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
+                                                    "etc", NULL);
+              flatpak_bwrap_add_args (temp_bwrap,
+                                      "--ro-bind",
+                                      provider_etc,
+                                      provider_etc_dest,
+                                      NULL);
 
               flatpak_bwrap_add_args (temp_bwrap,
                                       "env", "PATH=/usr/bin:/bin",

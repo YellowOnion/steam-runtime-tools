@@ -187,9 +187,9 @@ pv_bwrap_execve (FlatpakBwrap *bwrap,
  * a merged `/usr`. It is mounted on `${mount_point}/usr`, and `lib*`,
  * `bin` and `sbin` symbolic links are created in @mount_point.
  *
- * In either case, if @host_path` contains `etc/alternatives` and/or
- * `etc/ld.so.cache`, they are mounted on corresponding paths under
- * @mount_point.
+ * To make this useful, the caller will probably also have to bind-mount
+ * `etc`, or at least `etc/alternatives` and `etc/ld.so.cache`. However,
+ * these are not handled here.
  *
  * Returns: %TRUE on success
  */
@@ -206,14 +206,6 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
   gboolean host_path_is_usr = FALSE;
   g_autoptr(GDir) dir = NULL;
   const gchar *member = NULL;
-  static const char * const bind_etc[] =
-  {
-    "alternatives",
-    "ld.so.cache",
-    "ld.so.conf",
-    "ld.so.conf.d",
-  };
-  gsize i;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
@@ -297,25 +289,6 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
                                           NULL);
                 }
             }
-
-          g_clear_pointer (&dest, g_free);
-        }
-    }
-
-  for (i = 0; i < G_N_ELEMENTS (bind_etc); i++)
-    {
-      g_autofree gchar *path = g_build_filename (provider_in_host_namespace, "etc",
-                                                 bind_etc[i], NULL);
-      g_autofree gchar *path_in_current_namespace = g_build_filename (provider_in_current_namespace,
-                                                                      "etc", bind_etc[i], NULL);
-
-      if (g_file_test (path_in_current_namespace, G_FILE_TEST_EXISTS))
-        {
-          dest = g_build_filename (provider_in_container_namespace, "etc", bind_etc[i], NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", path, dest,
-                                  NULL);
 
           g_clear_pointer (&dest, g_free);
         }

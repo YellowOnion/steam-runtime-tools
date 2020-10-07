@@ -40,20 +40,26 @@
 static inline SrtSteam *_srt_steam_new (SrtSteamIssues issues,
                                         const char *install_path,
                                         const char *data_path,
-                                        const char *bin32_path);
+                                        const char *bin32_path,
+                                        const char *steamscript_path,
+                                        const char *steamscript_version);
 
 #ifndef __GTK_DOC_IGNORE__
 static inline SrtSteam *
 _srt_steam_new (SrtSteamIssues issues,
                 const char *install_path,
                 const char *data_path,
-                const char *bin32_path)
+                const char *bin32_path,
+                const char *steamscript_path,
+                const char *steamscript_version)
 {
   return g_object_new (SRT_TYPE_STEAM,
                        "issues", issues,
                        "install-path", install_path,
                        "data-path", data_path,
                        "bin32-path", bin32_path,
+                       "steamscript-path", steamscript_path,
+                       "steamscript-version", steamscript_version,
                        NULL);
 }
 #endif

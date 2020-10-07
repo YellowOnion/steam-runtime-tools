@@ -487,12 +487,22 @@ steam_presence (Fixture *f,
   g_autoptr(GError) error = NULL;
   g_autofree gchar *output = NULL;
   const gchar *path = NULL;
+  const gchar *script_path = NULL;
+  const gchar *script_path_member = NULL;
+  const gchar *script_version = NULL;
   const gchar *version = NULL;
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
 
   fake_home = fake_home_new (NULL);
   fake_home_create_structure (fake_home);
+
+  /* We expect `fake_home_new` to already set 'STEAMSCRIPT' */
+  script_path = g_environ_getenv (fake_home->env, "STEAMSCRIPT");
+  g_assert_cmpstr (script_path, !=, NULL);
+
+  fake_home->env = g_environ_setenv (fake_home->env, "STEAMSCRIPT_VERSION",
+                                     "1.0.0.66", TRUE);
 
   result = g_spawn_sync (NULL,    /* working directory */
                          (gchar **) argv,
@@ -527,6 +537,14 @@ steam_presence (Fixture *f,
   path = json_object_get_string_member (json_sub_object, "path");
   g_assert_cmpstr (path, !=, NULL);
   g_assert_true (path[0] == '/');
+
+  g_assert_true (json_object_has_member (json_sub_object, "steamscript_path"));
+  script_path_member = json_object_get_string_member (json_sub_object, "steamscript_path");
+  g_assert_cmpstr (script_path_member, ==, script_path);
+
+  g_assert_true (json_object_has_member (json_sub_object, "steamscript_version"));
+  script_version = json_object_get_string_member (json_sub_object, "steamscript_version");
+  g_assert_cmpstr (script_version, ==, "1.0.0.66");
 
   g_assert_true (json_object_has_member (json_sub_object, "issues"));
   array = json_object_get_array_member (json_sub_object, "issues");
@@ -576,6 +594,8 @@ steam_issues (Fixture *f,
   g_autoptr(GError) error = NULL;
   g_autofree gchar *output = NULL;
   const gchar *path = NULL;
+  const gchar *script_path = NULL;
+  const gchar *script_version = NULL;
   const gchar *version = NULL;
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
@@ -585,6 +605,8 @@ steam_issues (Fixture *f,
   fake_home->create_steam_symlink = FALSE;
   fake_home->create_steamrt_files = FALSE;
   fake_home_create_structure (fake_home);
+
+  fake_home->env = g_environ_unsetenv (fake_home->env, "STEAMSCRIPT");
 
   result = g_spawn_sync (NULL,    /* working directory */
                          (gchar **) argv,
@@ -621,13 +643,26 @@ steam_issues (Fixture *f,
   g_assert_cmpstr (path, !=, NULL);
   g_assert_true (path[0] == '/');
 
+  g_assert_true (json_object_has_member (json_sub_object, "steamscript_path"));
+  script_path = json_object_get_string_member (json_sub_object, "steamscript_path");
+  g_assert_cmpstr (script_path, ==, NULL);
+
+  g_assert_true (json_object_has_member (json_sub_object, "steamscript_version"));
+  script_version = json_object_get_string_member (json_sub_object, "steamscript_version");
+  g_assert_cmpstr (script_version, ==, NULL);
+
   g_assert_true (json_object_has_member (json_sub_object, "issues"));
   array = json_object_get_array_member (json_sub_object, "issues");
-  g_assert_cmpint (json_array_get_length (array), ==, 2);
+  g_assert_cmpint (json_array_get_length (array), ==, 4);
   g_assert_cmpstr (json_array_get_string_element (array, 0), ==,
                    "dot-steam-steam-not-symlink");
   g_assert_cmpstr (json_array_get_string_element (array, 1), ==,
                    "dot-steam-steam-not-directory");
+  g_assert_cmpstr (json_array_get_string_element (array, 2), ==,
+                   "steamscript-not-in-environment");
+  /* This is caused by the missing steamscript */
+  g_assert_cmpstr (json_array_get_string_element (array, 3), ==,
+                   "unexpected-steam-uri-handler");
 
   g_assert_true (json_object_has_member (json, "runtime"));
   json_sub_object = json_object_get_object_member (json, "runtime");

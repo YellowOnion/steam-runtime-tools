@@ -1,6 +1,8 @@
 {
   "steam-installation" : {
-    "path" : "/home/me/.local/share/Steam"
+    "path" : "/home/me/.local/share/Steam",
+    "steamscript_path" : null,
+    "steamscript_version" : null
   },
   "runtime" : {
     "path" : "/home/me/.steam/root/ubuntu12_32/steam-runtime",

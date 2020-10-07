@@ -257,6 +257,11 @@ SrtX86FeatureFlags srt_system_info_get_x86_features (SrtSystemInfo *self);
 _SRT_PUBLIC
 SrtX86FeatureFlags srt_system_info_get_known_x86_features (SrtSystemInfo *self);
 
+_SRT_PUBLIC
+gchar *srt_system_info_dup_steamscript_path (SrtSystemInfo *self);
+_SRT_PUBLIC
+gchar *srt_system_info_dup_steamscript_version (SrtSystemInfo *self);
+
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)
 #endif

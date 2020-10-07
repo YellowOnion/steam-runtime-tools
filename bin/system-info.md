@@ -57,6 +57,18 @@ keys:
         This is usually a direct subdirectory of **path** but can differ under
         some circumstances.
 
+    **steamscript_path**
+    :   A string: if **steam-runtime-system-info** was run by Steam,
+        the absolute path to the "bootstrapper" script used to launch
+        Steam, typically **/usr/bin/steam** or **/usr/games/steam**.
+        Otherwise, or if unavailable, it is **null**.
+
+    **steamscript_version**
+    :   A string: if **steam-runtime-system-info** was run by Steam,
+        the version of the "bootstrapper" script used to launch
+        Steam, for example **1.0.0.66** or **1.0.0.66-2/Debian**.
+        Otherwise, or if unavailable, it is **null**.
+
     **issues**
     :   An array of strings representing problems with the Steam
         installation. If empty, no problems were found.

@@ -58,6 +58,8 @@ struct _SrtSteam
   gchar *install_path;
   gchar *data_path;
   gchar *bin32_path;
+  gchar *steamscript_path;
+  gchar *steamscript_version;
 };
 
 struct _SrtSteamClass
@@ -72,6 +74,8 @@ enum {
   PROP_INSTALL_PATH,
   PROP_DATA_PATH,
   PROP_BIN32_PATH,
+  PROP_STEAMSCRIPT_PATH,
+  PROP_STEAMSCRIPT_VERSION,
   N_PROPERTIES
 };
 
@@ -106,6 +110,14 @@ srt_steam_get_property (GObject *object,
 
       case PROP_BIN32_PATH:
         g_value_set_string (value, self->bin32_path);
+        break;
+
+      case PROP_STEAMSCRIPT_PATH:
+        g_value_set_string (value, self->steamscript_path);
+        break;
+
+      case PROP_STEAMSCRIPT_VERSION:
+        g_value_set_string (value, self->steamscript_version);
         break;
 
       default:
@@ -147,6 +159,18 @@ srt_steam_set_property (GObject *object,
         self->bin32_path = g_value_dup_string (value);
         break;
 
+      case PROP_STEAMSCRIPT_PATH:
+        /* Construct only */
+        g_return_if_fail (self->steamscript_path == NULL);
+        self->steamscript_path = g_value_dup_string (value);
+        break;
+
+      case PROP_STEAMSCRIPT_VERSION:
+        /* Construct only */
+        g_return_if_fail (self->steamscript_version == NULL);
+        self->steamscript_version = g_value_dup_string (value);
+        break;
+
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -160,6 +184,8 @@ srt_steam_finalize (GObject *object)
   g_free (self->install_path);
   g_free (self->data_path);
   g_free (self->bin32_path);
+  g_free (self->steamscript_path);
+  g_free (self->steamscript_version);
 
   G_OBJECT_CLASS (srt_steam_parent_class)->finalize (object);
 }
@@ -200,6 +226,22 @@ srt_steam_class_init (SrtSteamClass *cls)
   properties[PROP_BIN32_PATH] =
     g_param_spec_string ("bin32-path", "Bin32 path",
                          "Absolute path to `ubuntu12_32`",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_STEAMSCRIPT_PATH] =
+    g_param_spec_string ("steamscript-path", "Steamscript path",
+                         "Absolute path to the bootstrapper script used to "
+                         "launch Steam",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  properties[PROP_STEAMSCRIPT_VERSION] =
+    g_param_spec_string ("steamscript-version", "Steamscript version",
+                         "Version of the bootstrapper script used to launch "
+                         "Steam",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -269,6 +311,52 @@ srt_steam_get_bin32_path (SrtSteam *self)
 }
 
 /**
+ * srt_steam_get_steamscript_path:
+ * @self: The #SrtSteam object
+ *
+ * Return the absolute path to the script used to launch Steam, if known.
+ * If the application using this library was not run as a child process
+ * of the Steam client, then this will usually be %NULL.
+ *
+ * This will usually be `/usr/bin/steam` for the packaged Steam launcher
+ * released by Valve, `/app/bin/steam` for the Flatpak app, or either
+ * `/usr/bin/steam` or `/usr/games/steam` for third-party packaged versions
+ * of the Steam client.
+ *
+ * Returns: (type filename) (nullable): A filename valid as long as @self
+ *  is not destroyed, or %NULL.
+ */
+const char *
+srt_steam_get_steamscript_path (SrtSteam *self)
+{
+  g_return_val_if_fail (SRT_IS_STEAM (self), NULL);
+  return self->steamscript_path;
+}
+
+/**
+ * srt_steam_get_steamscript_version:
+ * @self: The #SrtSteam object
+ *
+ * Return the version of the script used to launch Steam, if known.
+ * If the application using this library was not run as a child process
+ * of the Steam client, then this will usually be %NULL.
+ *
+ * Typical values look like `1.0.0.66` for the packaged Steam launcher
+ * released by Valve, `1.0.0.66-2/Debian` for recent Debian packages, or
+ * %NULL for older Debian/Ubuntu packages. Future Ubuntu packages might
+ * produce a string like `1.0.0.66-2ubuntu1/Ubuntu`.
+ *
+ * Returns: (type filename) (nullable): A filename valid as long as @self
+ *  is not destroyed, or %NULL.
+ */
+const char *
+srt_steam_get_steamscript_version (SrtSteam *self)
+{
+  g_return_val_if_fail (SRT_IS_STEAM (self), NULL);
+  return self->steamscript_version;
+}
+
+/**
  * _srt_steam_check:
  * @my_environ: (not nullable): The list of environment variables to use.
  * @more_details_out: (out) (optional) (transfer full): Used to return an
@@ -298,6 +386,7 @@ _srt_steam_check (const GStrv my_environ,
   const char *home = NULL;
   const char *user_data = NULL;
   const char *steam_script = NULL;
+  const char *steam_script_version = NULL;
   const char *commandline = NULL;
   const char *executable = NULL;
   const char *app_id = NULL;
@@ -603,11 +692,15 @@ _srt_steam_check (const GStrv my_environ,
         }
     }
 
+  steam_script_version = g_environ_getenv (env, "STEAMSCRIPT_VERSION");
+
   if (more_details_out != NULL)
     *more_details_out = _srt_steam_new (issues,
                                         install_path,
                                         data_path,
-                                        bin32);
+                                        bin32,
+                                        steam_script,
+                                        steam_script_version);
 
   free (install_path);
   free (data_path);
@@ -640,6 +733,8 @@ _srt_steam_get_from_report (JsonObject *json_obj)
   const gchar *install_path = NULL;
   const gchar *data_path = NULL;
   const gchar *bin32_path = NULL;
+  const gchar *steamscript_path = NULL;
+  const gchar *steamscript_version = NULL;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
 
@@ -680,11 +775,19 @@ _srt_steam_get_from_report (JsonObject *json_obj)
 
       if (json_object_has_member (json_sub_obj, "bin32_path"))
         bin32_path = json_object_get_string_member (json_sub_obj, "bin32_path");
+
+      if (json_object_has_member (json_sub_obj, "steamscript_path"))
+        steamscript_path = json_object_get_string_member (json_sub_obj, "steamscript_path");
+
+      if (json_object_has_member (json_sub_obj, "steamscript_version"))
+        steamscript_version = json_object_get_string_member (json_sub_obj, "steamscript_version");
     }
 
 out:
   return _srt_steam_new (issues,
                          install_path,
                          data_path,
-                         bin32_path);
+                         bin32_path,
+                         steamscript_path,
+                         steamscript_version);
 }

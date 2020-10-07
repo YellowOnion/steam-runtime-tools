@@ -24,7 +24,7 @@
 executable(
   'steam-runtime-system-info',
   'system-info.c',
-  dependencies : [glib, json_glib, libsteamrt_dep],
+  dependencies : [gio_unix, glib, json_glib, libglnx_dep, libsteamrt_dep],
   install : true,
   # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
   # LD_LIBRARY_PATH even if set

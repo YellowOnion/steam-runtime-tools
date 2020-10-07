@@ -4,6 +4,8 @@
     "path" : "/home/me/.local/share/Steam",
     "data_path" : "/home/me/.local/share/Steam",
     "bin32_path" : "/home/me/.local/share/Steam/ubuntu12_32",
+    "steamscript_path" : "/usr/bin/steam",
+    "steamscript_version" : "1.0.0.66",
     "issues" : [
       "steamscript-not-in-environment"
     ]

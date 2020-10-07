@@ -120,6 +120,10 @@ _SRT_PUBLIC
 const char *srt_steam_get_data_path (SrtSteam *self);
 _SRT_PUBLIC
 const char *srt_steam_get_bin32_path (SrtSteam *self);
+_SRT_PUBLIC
+const char *srt_steam_get_steamscript_path (SrtSteam *self);
+_SRT_PUBLIC
+const char *srt_steam_get_steamscript_version (SrtSteam *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSteam, g_object_unref)

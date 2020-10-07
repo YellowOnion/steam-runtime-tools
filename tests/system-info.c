@@ -2211,6 +2211,47 @@ driver_environment (Fixture *f,
   g_strfreev (envp);
 }
 
+static void
+steamscript_env (Fixture *f,
+                  gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  g_autofree gchar *steamscript_path;
+  g_autofree gchar *steamscript_version;
+
+  envp = g_get_environ ();
+
+  envp = g_environ_setenv (envp, "STEAMSCRIPT", "/usr/bin/steam", TRUE);
+  envp = g_environ_setenv (envp, "STEAMSCRIPT_VERSION", "1.0.0.66", TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+
+  steamscript_path = srt_system_info_dup_steamscript_path (info);
+  steamscript_version = srt_system_info_dup_steamscript_version (info);
+
+  g_assert_cmpstr (steamscript_path, ==, "/usr/bin/steam");
+  g_assert_cmpstr (steamscript_version, ==, "1.0.0.66");
+
+  g_clear_pointer (&steamscript_path, g_free);
+  g_clear_pointer (&steamscript_version, g_free);
+
+  envp = g_environ_unsetenv (envp, "STEAMSCRIPT");
+  envp = g_environ_unsetenv (envp, "STEAMSCRIPT_VERSION");
+
+  srt_system_info_set_environ (info, envp);
+
+  steamscript_path = srt_system_info_dup_steamscript_path (info);
+  steamscript_version = srt_system_info_dup_steamscript_version (info);
+
+  g_assert_cmpstr (steamscript_path, ==, NULL);
+  g_assert_cmpstr (steamscript_version, ==, NULL);
+
+  g_object_unref (info);
+  g_strfreev (envp);
+}
+
 typedef struct
 {
   const char *description;
@@ -2314,6 +2355,8 @@ typedef struct
 {
   const gchar *path;
   const gchar *data_path;
+  const gchar *steamscript_path;
+  const gchar *steamscript_version;
   SrtSteamIssues issues;
 } SteamInstallationTest;
 
@@ -2436,6 +2479,8 @@ static const JsonTest json_test[] =
     {
       .path = "/home/me/.local/share/Steam",
       .data_path = "/home/me/.local/share/Steam",
+      .steamscript_path = "/usr/bin/steam",
+      .steamscript_version = "1.0.0.66",
       .issues = SRT_STEAM_ISSUES_STEAMSCRIPT_NOT_IN_ENVIRONMENT,
     },
 
@@ -2930,6 +2975,8 @@ json_parsing (Fixture *f,
       gchar *name;
       gchar *pretty_name;
       gchar *host_directory;
+      g_autofree gchar *steamscript_path = NULL;
+      g_autofree gchar *steamscript_version = NULL;
       gchar **pinned_32 = NULL;
       gchar **messages_32 = NULL;
       gchar **pinned_64 = NULL;
@@ -2949,8 +2996,12 @@ json_parsing (Fixture *f,
 
       steam_path = srt_system_info_dup_steam_installation_path (info);
       steam_data_path = srt_system_info_dup_steam_data_path (info);
+      steamscript_path = srt_system_info_dup_steamscript_path (info);
+      steamscript_version = srt_system_info_dup_steamscript_version (info);
       g_assert_cmpstr (t->steam_installation.path, ==, steam_path);
       g_assert_cmpstr (t->steam_installation.data_path, ==, steam_data_path);
+      g_assert_cmpstr (t->steam_installation.steamscript_path, ==, steamscript_path);
+      g_assert_cmpstr (t->steam_installation.steamscript_version, ==, steamscript_version);
       g_assert_cmpint (t->steam_installation.issues, ==, srt_system_info_get_steam_issues (info));
 
       runtime_path = srt_system_info_dup_runtime_path (info);
@@ -3265,6 +3316,8 @@ main (int argc,
 
   g_test_add ("/system-info/driver_environment", Fixture, NULL,
               setup, driver_environment, teardown);
+  g_test_add ("/system-info/steamscript_env", Fixture, NULL,
+              setup, steamscript_env, teardown);
 
   g_test_add ("/system-info/containers", Fixture, NULL,
               setup, test_containers, teardown);

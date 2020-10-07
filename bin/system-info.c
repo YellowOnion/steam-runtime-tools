@@ -114,6 +114,8 @@
  *      A boolean: whether the character set is UTF-8
  */
 
+#include <libglnx.h>
+
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <errno.h>
@@ -787,6 +789,8 @@ main (int argc,
   JsonGenerator *generator;
   gboolean can_run = FALSE;
   const gchar *test_json_path = NULL;
+  g_autofree gchar *steamscript_path = NULL;
+  g_autofree gchar *steamscript_version = NULL;
   gchar *json_output;
   gchar *version = NULL;
   gchar *inst_path = NULL;
@@ -894,6 +898,13 @@ main (int argc,
   json_builder_set_member_name (builder, "bin32_path");
   bin32_path = srt_system_info_dup_steam_bin32_path (info);
   json_builder_add_string_value (builder, bin32_path);
+  json_builder_set_member_name (builder, "steamscript_path");
+  steamscript_path = srt_system_info_dup_steamscript_path (info);
+  json_builder_add_string_value (builder, steamscript_path);
+  json_builder_set_member_name (builder, "steamscript_version");
+  steamscript_version = srt_system_info_dup_steamscript_version (info);
+  json_builder_add_string_value (builder, steamscript_version);
+
   json_builder_set_member_name (builder, "issues");
   json_builder_begin_array (builder);
   steam_issues = srt_system_info_get_steam_issues (info);

@@ -3538,3 +3538,51 @@ srt_system_info_get_known_x86_features (SrtSystemInfo *self)
 
   return self->cpu_features.x86_known;
 }
+
+/**
+ * srt_system_info_dup_steamscript_path:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the absolute path to the script used to launch Steam, if known.
+ * If the application using this library was not run as a child process
+ * of the Steam client, then this will usually be %NULL.
+ *
+ * This will usually be `/usr/bin/steam` for the packaged Steam launcher
+ * released by Valve, `/app/bin/steam` for the Flatpak app, or either
+ * `/usr/bin/steam` or `/usr/games/steam` for third-party packaged versions
+ * of the Steam client.
+ *
+ * Returns: (transfer full) (type filename) (nullable): A filename, or %NULL.
+ */
+gchar *
+srt_system_info_dup_steamscript_path (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_steam_cached (self);
+  return g_strdup (srt_steam_get_steamscript_path (self->steam_data));
+}
+
+/**
+ * srt_system_info_dup_steamscript_version:
+ * @self: The #SrtSystemInfo object
+ *
+ * Return the version of the script used to launch Steam, if known.
+ * If the application using this library was not run as a child process
+ * of the Steam client, then this will usually be %NULL.
+ *
+ * Typical values look like `1.0.0.66` for the packaged Steam launcher
+ * released by Valve, `1.0.0.66-2/Debian` for recent Debian packages, or
+ * %NULL for older Debian/Ubuntu packages. Future Ubuntu packages might
+ * produce a string like `1.0.0.66-2ubuntu1/Ubuntu`.
+ *
+ * Returns: (transfer full) (type filename) (nullable): A filename, or %NULL.
+ */
+gchar *
+srt_system_info_dup_steamscript_version (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ensure_steam_cached (self);
+  return g_strdup (srt_steam_get_steamscript_version (self->steam_data));
+}

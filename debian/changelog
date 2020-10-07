@@ -1,3 +1,22 @@
+steam-runtime-tools (0.20201007.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * wrap: Do not lock LD_PRELOAD, so that games run in session mode get the
+    Steam Overlay (steam-runtime-tools#21)
+  * launch: Close the file descriptors after being forwarded
+  * CI: Avoid partial upgrades
+  * Diagnostic tools: include STEAMSCRIPT and STEAMSCRIPT_VERSION.
+    These provide details of the Steam bootstrapper script. (T22352)
+
+  [ Simon McVittie ]
+  * launch: Add support for communicating with Flatpak services
+  * adverb: Don't "pile up" errors if we cannot exec generate-locales
+  * adverb, launch, launcher: Store original environment
+  * flatpak-run: Make this more similar to Flatpak's version
+  * tests: Allow more time for test-locale-gen.sh
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 07 Oct 2020 16:15:22 +0100
+
 steam-runtime-tools (0.20201002.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

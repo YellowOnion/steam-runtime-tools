@@ -76,6 +76,8 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_steam_get_data_path@Base 0.20200415.0
  srt_steam_get_install_path@Base 0.20200415.0
  srt_steam_get_issues@Base 0.20200415.0
+ srt_steam_get_steamscript_path@Base 0.20201007.0
+ srt_steam_get_steamscript_version@Base 0.20201007.0
  srt_steam_get_type@Base 0.20200415.0
  srt_steam_issues_get_type@Base 0.20190816.0
  srt_system_info_can_run@Base 0.20190801.0
@@ -101,6 +103,8 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_dup_steam_bin32_path@Base 0.20200908.0
  srt_system_info_dup_steam_data_path@Base 0.20190926.0
  srt_system_info_dup_steam_installation_path@Base 0.20190816.0
+ srt_system_info_dup_steamscript_path@Base 0.20201007.0
+ srt_system_info_dup_steamscript_version@Base 0.20201007.0
  srt_system_info_get_container_type@Base 0.20200306.0
  srt_system_info_get_known_x86_features@Base 0.20200908.0
  srt_system_info_get_locale_issues@Base 0.20190909.0

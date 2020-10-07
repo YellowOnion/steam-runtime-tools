@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20201007.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20201007.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * wrap: Do not lock LD_PRELOAD, so that games run in session mode get the
@@ -15,7 +15,7 @@ steam-runtime-tools (0.20201007.0) UNRELEASED; urgency=medium
   * flatpak-run: Make this more similar to Flatpak's version
   * tests: Allow more time for test-locale-gen.sh
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 07 Oct 2020 16:15:22 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 07 Oct 2020 16:25:00 +0100
 
 steam-runtime-tools (0.20201002.0) scout; urgency=medium
 

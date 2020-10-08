@@ -46,11 +46,15 @@ fi
 # We currently only look for I18NDIR data in /usr/share/i18n, the
 # glibc default path.
 #
+# Instead of just /usr/share/i18n/SUPPORTED, we also try to parse
+# /etc/locale.gen because in some distributions, e.g. Arch Linux,
+# /usr/share/i18n/SUPPORTED might not be present.
+#
 # If we discover that some distros use a different default, then we
 # should enhance this script to iterate through a search path.
 #
 # Please keep this in sync with srt_system_info_get_locale_issues().
-SUPPORTED="/usr/share/i18n/SUPPORTED"
+SUPPORTED="/etc/locale.gen /usr/share/i18n/SUPPORTED"
 
 log () {
     printf '%s\n' "$me: $*" >&2

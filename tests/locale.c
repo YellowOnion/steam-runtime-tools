@@ -128,6 +128,22 @@ test_object (Fixture *f,
   g_object_unref (locale);
 }
 
+static gboolean
+is_host_os_like (SrtSystemInfo *info,
+                 const gchar *host)
+{
+  g_auto(GStrv) os_like = NULL;
+  gsize i;
+
+  os_like = srt_system_info_dup_os_id_like (info, TRUE);
+  for (i = 0; os_like != NULL && os_like[i] != NULL; i++)
+    {
+      if (g_strcmp0 (os_like[i], host) == 0)
+        return TRUE;
+    }
+  return FALSE;
+}
+
 static void
 test_complete (Fixture *f,
                gconstpointer context)
@@ -135,13 +151,20 @@ test_complete (Fixture *f,
   SrtLocale *locale = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   SrtLocaleIssues issues;
+  SrtLocaleIssues additional_issues = SRT_LOCALE_ISSUES_NONE;
   GError *error = NULL;
+
+  /* With Arch Linux it is expected to not have the SUPPORTED locale file */
+  if (is_host_os_like (info, "arch"))
+    additional_issues = SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING;
 
   srt_system_info_set_primary_multiarch_tuple (info, "mock");
   srt_system_info_set_helpers_path (info, f->builddir);
 
   issues = srt_system_info_get_locale_issues (info);
-  g_assert_cmpint (issues, ==, SRT_LOCALE_ISSUES_NONE);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LOCALE_ISSUES_NONE
+                    | additional_issues));
 
   locale = srt_system_info_check_locale (info, "C", &error);
   g_assert_no_error (error);
@@ -222,7 +245,11 @@ test_legacy (Fixture *f,
   SrtLocale *locale = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   SrtLocaleIssues issues;
+  SrtLocaleIssues additional_issues = SRT_LOCALE_ISSUES_NONE;
   GError *error = NULL;
+
+  if (is_host_os_like (info, "arch"))
+    additional_issues = SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING;
 
   srt_system_info_set_primary_multiarch_tuple (info, "mock-legacy");
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -230,7 +257,8 @@ test_legacy (Fixture *f,
   issues = srt_system_info_get_locale_issues (info);
   g_assert_cmpint (issues, ==,
                    (SRT_LOCALE_ISSUES_DEFAULT_NOT_UTF8
-                    | SRT_LOCALE_ISSUES_C_UTF8_MISSING));
+                    | SRT_LOCALE_ISSUES_C_UTF8_MISSING
+                    | additional_issues));
 
   locale = srt_system_info_check_locale (info, "C", &error);
   g_assert_no_error (error);
@@ -306,13 +334,19 @@ test_unamerican (Fixture *f,
   SrtLocale *locale = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   SrtLocaleIssues issues;
+  SrtLocaleIssues additional_issues = SRT_LOCALE_ISSUES_NONE;
   GError *error = NULL;
+
+  if (is_host_os_like (info, "arch"))
+    additional_issues = SRT_LOCALE_ISSUES_I18N_SUPPORTED_MISSING;
 
   srt_system_info_set_primary_multiarch_tuple (info, "mock-unamerican");
   srt_system_info_set_helpers_path (info, f->builddir);
 
   issues = srt_system_info_get_locale_issues (info);
-  g_assert_cmpint (issues, ==, SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING);
+  g_assert_cmpint (issues, ==,
+                   (SRT_LOCALE_ISSUES_EN_US_UTF8_MISSING
+                    | additional_issues));
 
   locale = srt_system_info_check_locale (info, "C", &error);
   g_assert_no_error (error);

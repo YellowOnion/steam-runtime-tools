@@ -581,7 +581,7 @@ srt_system_info_new_from_json (const char *path,
 
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail (path != NULL, NULL);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, (gchar * const *) no_strings);

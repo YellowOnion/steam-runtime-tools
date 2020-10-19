@@ -1953,6 +1953,40 @@ main (int argc,
         }
     }
 
+  /* Convert the exported directories into extra bubblewrap arguments */
+  exports_bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+  flatpak_exports_append_bwrap_args (exports, exports_bwrap);
+  adjust_exports (exports_bwrap, home);
+  flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+
+  /* We need to set up IPC rendezvous points relatively late, so that
+   * even if we are sharing /tmp via --filesystem=/tmp, we'll still
+   * mount our own /tmp/.X11-unix over the top of the OS's. */
+  if (runtime != NULL)
+    {
+      flatpak_run_add_wayland_args (bwrap);
+
+      /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
+       * but it might be different on the host system. As a workaround we simply
+       * bind the whole "/tmp/.X11-unix" directory and later unset the container
+       * "DISPLAY" env.
+       */
+      if (is_flatpak_env)
+        {
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
+                                  NULL);
+        }
+      else
+        {
+          flatpak_run_add_x11_args (bwrap, extra_locked_vars_to_unset, TRUE);
+        }
+
+      flatpak_run_add_pulseaudio_args (bwrap, extra_locked_vars_to_unset);
+      flatpak_run_add_session_dbus_args (bwrap);
+      flatpak_run_add_system_dbus_args (bwrap);
+    }
+
   if (is_flatpak_env)
     {
       /* These are the environment variables that will be wrong, or useless,
@@ -2073,41 +2107,6 @@ main (int argc,
 
   lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
   flatpak_bwrap_add_fd (bwrap, glnx_steal_fd (&lock_env_tmpf.fd));
-
-  /* Convert the exported directories into extra bubblewrap arguments */
-  exports_bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-  flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-  adjust_exports (exports_bwrap, home);
-  flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
-
-  /* We need to set up IPC rendezvous points relatively late, so that
-   * even if we are sharing /tmp via --filesystem=/tmp, we'll still
-   * mount our own /tmp/.X11-unix over the top of the OS's. */
-  if (runtime != NULL)
-    {
-      flatpak_run_add_wayland_args (bwrap);
-
-      /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
-       * but it might be different on the host system. As a workaround we simply
-       * bind the whole "/tmp/.X11-unix" directory and unset the container
-       * "DISPLAY" env.
-       */
-      if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
-        {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
-                                  NULL);
-          flatpak_bwrap_unset_env (bwrap, "DISPLAY");
-        }
-      else
-        {
-          flatpak_run_add_x11_args (bwrap, TRUE);
-        }
-
-      flatpak_run_add_pulseaudio_args (bwrap);
-      flatpak_run_add_session_dbus_args (bwrap);
-      flatpak_run_add_system_dbus_args (bwrap);
-    }
 
   if (opt_verbose)
     {

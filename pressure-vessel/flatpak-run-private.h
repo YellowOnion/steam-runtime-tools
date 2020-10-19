@@ -39,9 +39,11 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 
 void flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
+                               GHashTable   *extra_locked_vars_to_unset,
                                gboolean      allowed);
 gboolean flatpak_run_add_wayland_args (FlatpakBwrap *bwrap);
-void flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap);
+void flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap,
+                                      GHashTable   *extra_locked_vars_to_unset);
 gboolean flatpak_run_add_system_dbus_args (FlatpakBwrap *app_bwrap);
 gboolean flatpak_run_add_session_dbus_args (FlatpakBwrap *app_bwrap);
 void     flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,

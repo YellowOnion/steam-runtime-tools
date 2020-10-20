@@ -41,5 +41,11 @@
         "error" : "Something went wrong"
       }
     ]
+  },
+  "xdg-portals" : {
+    "issues" : [
+      "timeout"
+    ],
+    "messages" : "timeout: failed to run command ‘x86_64-linux-gnu-check-xdg-portal’: No such file or directory\n"
   }
 }

@@ -35,6 +35,7 @@ tests = [
   {'name': 'locale'},
   {'name': 'system-info'},
   {'name': 'utils', 'static': true},
+  {'name': 'xdg-portal'},
 ]
 
 if get_option('bin')
@@ -261,10 +262,14 @@ foreach helper : [
   'mock-bad-check-va-api',
   'mock-bad-check-vdpau',
   'mock-bad-check-vulkan',
+  'mock-bad-check-xdg-portal',
   'mock-bad-vulkaninfo',
   'mock-good-check-va-api',
   'mock-good-check-vdpau',
+  'mock-good-check-xdg-portal',
+  'mock-good-flatpak-check-xdg-portal',
   'mock-good-vulkaninfo',
+  'mock-hanging-check-xdg-portal',
   'mock-hanging-wflinfo',
   'mock-sigusr-wflinfo',
 ]

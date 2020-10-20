@@ -247,6 +247,29 @@
       "steam_uri_handler" : true
     }
   ],
+  "xdg-portals" : {
+    "details" : {
+      "interfaces" : {
+        "org.freedesktop.portal.OpenURI" : {
+          "available" : true,
+          "version" : 3
+        },
+        "org.freedesktop.portal.Email" : {
+          "available" : true,
+          "version" : 2
+        }
+      },
+      "backends" : {
+        "org.freedesktop.impl.portal.desktop.gtk" : {
+          "available" : true
+        },
+        "org.freedesktop.impl.portal.desktop.kde" : {
+          "available" : false
+        }
+      }
+    },
+    "issues" : []
+  },
   "cpu-features" : {
     "x86-64" : true,
     "sse3" : false,

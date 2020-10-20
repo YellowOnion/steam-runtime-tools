@@ -284,14 +284,14 @@ handle_launch (PvLauncher1           *object,
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
                                              G_DBUS_ERROR_INVALID_ARGS,
                                              "No command given");
-      return TRUE;
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
   if ((arg_flags & ~PV_LAUNCH_FLAGS_MASK) != 0)
     {
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS,
                                              "Unsupported flags enabled: 0x%x", arg_flags & ~PV_LAUNCH_FLAGS_MASK);
-      return TRUE;
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
   g_variant_lookup (arg_options, "terminate-after", "b", &terminate_after);
@@ -449,7 +449,7 @@ handle_launch (PvLauncher1           *object,
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, code,
                                              "Failed to start command: %s",
                                              error->message);
-      return TRUE;
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
   pid_data = g_new0 (PidData, 1);
@@ -469,7 +469,7 @@ handle_launch (PvLauncher1           *object,
                         pid_data);
 
   pv_launcher1_complete_launch (object, invocation, NULL, pid);
-  return TRUE;
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
 static gboolean
@@ -491,7 +491,7 @@ handle_send_signal (PvLauncher1           *object,
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
                                              G_DBUS_ERROR_UNIX_PROCESS_ID_UNKNOWN,
                                              "No such pid");
-      return TRUE;
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
   g_debug ("Sending signal %d to client pid %d", arg_signal, arg_pid);
@@ -503,7 +503,7 @@ handle_send_signal (PvLauncher1           *object,
 
   pv_launcher1_complete_send_signal (launcher, invocation);
 
-  return TRUE;
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
 static gboolean
@@ -513,7 +513,7 @@ handle_terminate (PvLauncher1           *object,
   terminate_children (SIGTERM);
   pv_launcher1_complete_terminate (object, invocation);
   unref_skeleton_in_timeout ();
-  return TRUE;    /* handled */
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
 static void
@@ -812,10 +812,10 @@ new_connection_cb (GDBusServer *server,
     {
       g_warning ("Unable to export object: %s", error->message);
       g_dbus_connection_close (connection, NULL, NULL, NULL);
-      return TRUE;  /* handled, unsuccessfully */
+      return G_DBUS_METHOD_INVOCATION_HANDLED;
     }
 
-  return TRUE;
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
 static GDBusServer *

@@ -39,5 +39,6 @@
 #include <steam-runtime-tools/steam.h>
 #include <steam-runtime-tools/system-info.h>
 #include <steam-runtime-tools/utils.h>
+#include <steam-runtime-tools/xdg-portal.h>
 
 #undef _SRT_IN_SINGLE_HEADER

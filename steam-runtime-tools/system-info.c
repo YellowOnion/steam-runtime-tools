@@ -25,11 +25,14 @@
 
 #include "steam-runtime-tools/system-info.h"
 
+/* Include this at the beginning so that every backports of
+ * G_DEFINE_AUTOPTR_CLEANUP_FUNC will be visible */
+#include "steam-runtime-tools/glib-backports-internal.h"
+
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 #include "steam-runtime-tools/cpu-feature-internal.h"
 #include "steam-runtime-tools/desktop-entry-internal.h"
-#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/library-internal.h"
@@ -39,6 +42,7 @@
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/xdg-portal-internal.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -110,6 +114,7 @@ struct _SrtSystemInfo
   gboolean immutable_values;
   GHashTable *cached_hidden_deps;
   SrtSteam *steam_data;
+  SrtXdgPortal *xdg_portal_data;
   struct
   {
     /* GQuark => MaybeLocale */
@@ -467,6 +472,15 @@ forget_pinned_libs (SrtSystemInfo *self)
   self->pinned_libs.have_data = FALSE;
 }
 
+/*
+ * Forget any cached information about xdg portals.
+ */
+static void
+forget_xdg_portal (SrtSystemInfo *self)
+{
+  g_clear_object (&self->xdg_portal_data);
+}
+
 static void
 srt_system_info_finalize (GObject *object)
 {
@@ -481,6 +495,7 @@ srt_system_info_finalize (GObject *object)
   forget_pinned_libs (self);
   forget_runtime (self);
   forget_steam (self);
+  forget_xdg_portal (self);
 
   g_clear_pointer (&self->abis, g_ptr_array_unref);
   g_free (self->expectations);
@@ -732,6 +747,8 @@ srt_system_info_new_from_json (const char *path,
 
   info->desktop_entry.have_data = TRUE;
   info->desktop_entry.values = _srt_get_steam_desktop_entries_from_json_report (json_obj);
+
+  info->xdg_portal_data = _srt_xdg_portal_get_info_from_report (json_obj);
 
   info->cpu_features.x86_features = _srt_feature_get_x86_flags_from_report (json_obj,
                                                                             &info->cpu_features.x86_known);
@@ -1885,6 +1902,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
   forget_graphics_results (self);
   forget_locales (self);
   forget_pinned_libs (self);
+  forget_xdg_portal (self);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
   g_strfreev (self->env);
 
@@ -3585,4 +3603,107 @@ srt_system_info_dup_steamscript_version (SrtSystemInfo *self)
 
   ensure_steam_cached (self);
   return g_strdup (srt_steam_get_steamscript_version (self->steam_data));
+}
+
+static void
+ensure_xdg_portals_cached (SrtSystemInfo *self)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  if (self->xdg_portal_data == NULL)
+    {
+      ensure_container_info (self);
+      _srt_check_xdg_portals (self->env,
+                              self->helpers_path,
+                              self->test_flags,
+                              self->container.type,
+                              srt_system_info_get_primary_multiarch_tuple (self),
+                              &self->xdg_portal_data);
+    }
+}
+
+/**
+ * srt_system_info_list_xdg_portal_backends:
+ * @self: The #SrtSystemInfo object
+ *
+ * List the XDG portal backends that have been checked, with information about
+ * their eventual availability.
+ *
+ * Examples of XDG portal backends are "org.freedesktop.impl.portal.desktop.gtk"
+ * and "org.freedesktop.impl.portal.desktop.kde".
+ *
+ * The returned list is in the same arbitrary order as the check-xdg-portal
+ * helper used to return them.
+ *
+ * Returns: (transfer full) (element-type SrtXdgPortalBackend) (nullable):
+ *  A list of opaque #SrtXdgPortalBackend objects or %NULL if an error
+ *  occurred trying to check the backends availability or if we were unable to
+ *  check them, e.g. if we are in a Flatpak environment.
+ *  Free with `g_list_free_full (backends, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_xdg_portal_backends (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->immutable_values)
+    ensure_xdg_portals_cached (self);
+
+  return srt_xdg_portal_get_backends (self->xdg_portal_data);
+}
+
+/**
+ * srt_system_info_list_xdg_portal_interfaces:
+ * @self: The #SrtSystemInfo object
+ *
+ * List the XDG portal interfaces that have been checked, with information
+ * about their eventual availability and version property.
+ *
+ * Examples of XDG portal interfaces are "org.freedesktop.portal.OpenURI"
+ * and "org.freedesktop.portal.Email".
+ *
+ * The returned list is in the same arbitrary order as the check-xdg-portal
+ * helper used to return them.
+ *
+ * Returns: (transfer full) (element-type SrtXdgPortalInterface) (nullable):
+ *  A list of opaque #SrtXdgPortalInterface objects or %NULL if an error
+ *  occurred trying to check the interfaces availability. Free with
+ *  `g_list_free_full (interfaces, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_xdg_portal_interfaces (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->immutable_values)
+    ensure_xdg_portals_cached (self);
+
+  return srt_xdg_portal_get_interfaces (self->xdg_portal_data);
+}
+
+/**
+ * srt_system_info_get_xdg_portal_issues:
+ * @self: The #SrtSystemInfo object
+ * @messages: (optional) (out): If not %NULL, used to return the diagnostic
+ *  messages. Free with g_free().
+ *
+ * Check if the current system supports the XDG portals.
+ *
+ * Returns: A bitfield containing problems, or %SRT_XDG_PORTAL_ISSUES_NONE
+ *  if no problems were found.
+ */
+SrtXdgPortalIssues
+srt_system_info_get_xdg_portal_issues (SrtSystemInfo *self,
+                                       gchar **messages)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_XDG_PORTAL_ISSUES_UNKNOWN);
+  g_return_val_if_fail (messages == NULL || *messages == NULL, SRT_XDG_PORTAL_ISSUES_UNKNOWN);
+
+  if (!self->immutable_values)
+    ensure_xdg_portals_cached (self);
+
+  if (messages != NULL)
+    *messages = g_strdup (srt_xdg_portal_get_messages (self->xdg_portal_data));
+
+  return srt_xdg_portal_get_issues (self->xdg_portal_data);
 }

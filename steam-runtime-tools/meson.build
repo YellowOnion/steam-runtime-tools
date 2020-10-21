@@ -47,6 +47,7 @@ libsteamrt_sources = [
     'system-info.c',
     'utils-internal.h',
     'utils.c',
+    'xdg-portal.c',
 ]
 
 libsteamrt_public_headers = [
@@ -62,6 +63,7 @@ libsteamrt_public_headers = [
     'steam.h',
     'system-info.h',
     'utils.h',
+    'xdg-portal.h',
 ]
 
 enums = gnome.mkenums_simple(

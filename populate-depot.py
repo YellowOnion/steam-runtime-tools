@@ -670,6 +670,7 @@ class Main:
                     manifest=dict(
                         commandline=' '.join(words),
                         version='2',
+                        use_tool_subprocess_reaper='1',
                     )
                 )       # type: Dict[str, Any]
                 if runtime.suite == 'soldier':

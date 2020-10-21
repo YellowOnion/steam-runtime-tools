@@ -375,8 +375,19 @@ capture_one( const char *soname, const capture_options *options,
         return false;
     }
 
-    if( !ld_libs_find_dependencies( &provider, code, message ) )
+    if( !ld_libs_find_dependencies( &provider, &local_code, &local_message ) )
     {
+        if( ( options->flags & CAPTURE_FLAG_IF_EXISTS ) && local_code == ENOENT )
+        {
+            DEBUG( DEBUG_TOOL,
+                   "Some of the dependencies for %s have not been found, ignoring",
+                   soname );
+            _capsule_clear( &local_message );
+            return true;
+        }
+
+        _capsule_propagate_error( code, message, local_code,
+                                  _capsule_steal_pointer( &local_message ) );
         return false;
     }
 

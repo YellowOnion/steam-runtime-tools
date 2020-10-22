@@ -807,6 +807,8 @@ main (int argc,
   const GList *icd_iter;
   SrtDriverFlags extra_driver_flags = SRT_DRIVER_FLAGS_INCLUDE_ALL;
 
+  _srt_setenv_disable_gio_modules ();
+
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
       switch (opt)

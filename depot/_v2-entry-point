@@ -233,7 +233,7 @@ env \
     --suite="$suite" \
     -- \
     ${container_args[0]+"${container_args[@]}"} \
-    --terminate-timeout=10 \
+    --terminate-timeout=2 \
     ${NULL+}
 
 launch_args=( \

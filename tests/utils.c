@@ -216,6 +216,19 @@ filter_gameoverlayrenderer (Fixture *f,
   g_free (filtered_preload);
 }
 
+static void
+test_str_is_integer (Fixture *f,
+                     gconstpointer context)
+{
+  g_assert_false (_srt_str_is_integer (""));
+  g_assert_false (_srt_str_is_integer ("no"));
+  g_assert_true (_srt_str_is_integer ("1"));
+  g_assert_true (_srt_str_is_integer ("123456789012345678901234567890"));
+  g_assert_false (_srt_str_is_integer ("1.23"));
+  g_assert_false (_srt_str_is_integer ("x23"));
+  g_assert_false (_srt_str_is_integer ("23a"));
+}
+
 int
 main (int argc,
       char **argv)
@@ -228,6 +241,8 @@ main (int argc,
               setup, test_file_in_sysroot, teardown);
   g_test_add ("/utils/filter_gameoverlayrenderer", Fixture, NULL, setup,
               filter_gameoverlayrenderer, teardown);
+  g_test_add ("/utils/str_is_integer", Fixture, NULL,
+              setup, test_str_is_integer, teardown);
 
   return g_test_run ();
 }

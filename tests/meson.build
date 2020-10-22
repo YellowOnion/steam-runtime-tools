@@ -31,6 +31,15 @@ tests = [
   {'name': 'architecture'},
   {'name': 'desktop-entry'},
   {'name': 'graphics'},
+  {
+    'name': 'input-device',
+    'static': true,
+    'sources': [
+      'input-device.c',
+      'mock-input-device.c',
+      'mock-input-device.h',
+    ],
+  },
   {'name': 'json-utils', 'static': true},
   {'name': 'library'},
   {'name': 'locale'},
@@ -153,9 +162,11 @@ foreach test_info : tests
     deps = [libsteamrt_dep, test_utils_dep]
   endif
 
+  sources = test_info.get('sources', files(test_name + '.c'))
+
   exe = executable(
     'test-' + test_name,
-    files(test_name + '.c'),
+    sources,
     c_args : [
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],

@@ -961,3 +961,28 @@ _srt_setenv_disable_gio_modules (void)
   g_setenv ("GIO_USE_VFS", "local", TRUE);
   g_setenv ("GIO_MODULE_DIR", "/nonexistent", TRUE);
 }
+
+/*
+ * Return TRUE if @str points to one or more decimal digits, followed
+ * by nul termination. This is the same as Python bytes.isdigit().
+ */
+gboolean
+_srt_str_is_integer (const char *str)
+{
+  const char *p;
+
+  g_return_val_if_fail (str != NULL, FALSE);
+
+  if (*str == '\0')
+    return FALSE;
+
+  for (p = str;
+       *p != '\0';
+       p++)
+    {
+      if (!g_ascii_isdigit (*p))
+        break;
+    }
+
+  return (*p == '\0');
+}

@@ -28,19 +28,19 @@ test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'he
 test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 tests = [
-  'architecture',
-  'desktop-entry',
-  'graphics',
-  'library',
-  'locale',
-  'system-info',
-  'utils',
+  {'name': 'architecture'},
+  {'name': 'desktop-entry'},
+  {'name': 'graphics'},
+  {'name': 'library'},
+  {'name': 'locale'},
+  {'name': 'system-info'},
+  {'name': 'utils', 'static': true},
 ]
 
 if get_option('bin')
   tests += [
-    'check-requirements-cli',
-    'system-info-cli',
+    {'name': 'check-requirements-cli'},
+    {'name': 'system-info-cli'},
   ]
 endif
 
@@ -56,7 +56,6 @@ test_utils = static_library(
     gio_unix,
     json_glib,
     libglnx_dep,
-    libsteamrt_dep,
   ],
   include_directories : project_include_dirs,
   install: false,
@@ -69,6 +68,17 @@ test_utils_dep = declare_dependency(
     json_glib,
     libglnx_dep,
     libsteamrt_dep,
+  ],
+  link_with : test_utils,
+)
+test_utils_static_libsteamrt_dep = declare_dependency(
+  dependencies : [
+    glib,
+    gobject,
+    gio_unix,
+    json_glib,
+    libglnx_dep,
+    libsteamrt_static_dep,
   ],
   link_with : test_utils,
 )
@@ -131,7 +141,15 @@ executable(
   install_dir : tests_dir,
 )
 
-foreach test_name : tests
+foreach test_info : tests
+  test_name = test_info['name']
+
+  if test_info.get('static', false)
+    deps = [libsteamrt_static_dep, test_utils_static_libsteamrt_dep]
+  else
+    deps = [libsteamrt_dep, test_utils_dep]
+  endif
+
   exe = executable(
     'test-' + test_name,
     files(test_name + '.c'),
@@ -144,9 +162,7 @@ foreach test_name : tests
       gio_unix,
       json_glib,
       libglnx_dep,
-      libsteamrt_dep,
-      test_utils_dep,
-    ],
+    ] + deps,
     include_directories : project_include_dirs,
     install : get_option('installed_tests'),
     install_dir : tests_dir,

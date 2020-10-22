@@ -1,3 +1,16 @@
+steam-runtime-tools (0.20201022.0) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * wrap: Set all the env vars before building the locking list.
+    This ensures pressure-vessel picks up the correct DISPLAY and XAUTHORITY
+    to work in situations where the X11 server does not listen on an
+    abstract socket, such as recent GNOME in Wayland mode.
+    (steam-runtime-tools#26, Proton#4270)
+  * Add support for Arch Linux /etc/locale.gen. (steam-runtime-tools#5)
+  * system-info: Return the correct value if the assertion fails
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 22 Oct 2020 10:09:01 +0100
+
 steam-runtime-tools (0.20201007.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

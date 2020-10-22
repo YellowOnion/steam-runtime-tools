@@ -187,6 +187,31 @@ foreach test_info : tests
   endif
 endforeach
 
+# Helpers and manual tests statically linked to libsteam-r-t
+foreach helper : [
+  'find-myself',
+]
+  executable(
+    helper,
+    files(helper + '.c'),
+    c_args : [
+      '-D_SRT_MULTIARCH="' + multiarch + '"',
+    ],
+    dependencies : [
+      glib,
+      gobject,
+      gio_unix,
+      json_glib,
+      libglnx_dep,
+      libsteamrt_static_dep,
+      test_utils_static_libsteamrt_dep,
+    ],
+    include_directories : project_include_dirs,
+    install : get_option('installed_tests'),
+    install_dir : tests_dir,
+  )
+endforeach
+
 # A mock implementation of check-locale that offers lots of locales
 executable(
   'mock-check-locale',

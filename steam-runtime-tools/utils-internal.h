@@ -111,3 +111,5 @@ gboolean _srt_file_test_in_sysroot (const char *sysroot,
                                     GFileTest test);
 
 G_GNUC_INTERNAL const char * const *_srt_peek_environ_nonnull (void);
+
+G_GNUC_INTERNAL void _srt_setenv_disable_gio_modules (void);

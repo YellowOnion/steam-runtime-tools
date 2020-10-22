@@ -85,7 +85,8 @@ static void
 test_avoid_gvfs (Fixture *f,
                  gconstpointer context)
 {
-  /* This doesn't actually call pv_avoid_gvfs(), because that's documented
+  /* This doesn't actually call _srt_setenv_disable_gio_modules(),
+   * because that's documented
    * to have to happen as early as possible in main(). Instead, we do that
    * in main() as documented, and in this function we just assert that
    * we did. */
@@ -385,7 +386,7 @@ int
 main (int argc,
       char **argv)
 {
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/arbitrary-key", Fixture, NULL,

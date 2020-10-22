@@ -29,6 +29,7 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "bwrap-lock.h"
@@ -161,7 +162,7 @@ int
 main (int argc,
       char **argv)
 {
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/locks", Fixture, NULL,

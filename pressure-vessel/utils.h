@@ -35,8 +35,6 @@
 #define PR_SET_CHILD_SUBREAPER 36
 #endif
 
-void pv_avoid_gvfs (void);
-
 int pv_envp_cmp (const void *p1,
                  const void *p2);
 

@@ -1014,3 +1014,21 @@ _srt_peek_environ_nonnull (void)
   else
     return no_strings;
 }
+
+/*
+ * Globally disable GIO modules.
+ *
+ * This function modifies the environment, therefore:
+ *
+ * - it must be called from main() before starting any threads
+ * - you must save a copy of the original environment first if you intend
+ *   for subprocesses to receive the original, unmodified environment
+ *
+ * To be effective, it must also be called before any use of GIO APIs.
+ */
+void
+_srt_setenv_disable_gio_modules (void)
+{
+  g_setenv ("GIO_USE_VFS", "local", TRUE);
+  g_setenv ("GIO_MODULE_DIR", "/nonexistent", TRUE);
+}

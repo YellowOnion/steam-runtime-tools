@@ -26,6 +26,7 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "tree-copy.h"
 #include "utils.h"
 
@@ -52,7 +53,7 @@ main (int argc,
   int ret = EX_USAGE;
 
   setlocale (LC_ALL, "");
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   context = g_option_context_new ("SOURCE DEST");
   g_option_context_add_main_entries (context, options, NULL);

@@ -26,6 +26,7 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 #include "elf-utils.h"
 #include "utils.h"
@@ -46,7 +47,7 @@ main (int argc,
   int i;
 
   setlocale (LC_ALL, "");
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   context = g_option_context_new ("LIBRARY...");
   g_option_context_add_main_entries (context, options, NULL);

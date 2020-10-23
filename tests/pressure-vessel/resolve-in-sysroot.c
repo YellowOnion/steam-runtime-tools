@@ -31,6 +31,7 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "tests/test-utils.h"
@@ -298,7 +299,7 @@ int
 main (int argc,
       char **argv)
 {
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/resolve-in-sysroot", Fixture, NULL,

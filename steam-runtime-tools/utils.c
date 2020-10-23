@@ -154,6 +154,8 @@ _srt_check_not_setuid (void)
   "/lib/" _SRT_MULTIARCH
 #define RELOCATABLE_PKGLIBDIR \
   MULTIARCH_LIBDIR "/steam-runtime-tools-" _SRT_API_MAJOR
+#define PKGLIBEXECDIR \
+  "/libexec/steam-runtime-tools-" _SRT_API_MAJOR
 
 /**
  * _srt_process_timeout_wait_status:
@@ -234,17 +236,41 @@ _srt_find_myself (const char **helpers_path_out,
       goto out;
     }
 
-  g_debug ("Found _srt_find_myself() in %s", map->l_name);
-  dir = g_path_get_dirname (map->l_name);
+  if (map->l_name == NULL || map->l_name[0] == '\0')
+    {
+      char *exe = realpath ("/proc/self/exe", NULL);
+
+      if (exe == NULL)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unable to locate main executable");
+          goto out;
+        }
+
+      g_debug ("Found _srt_find_myself() in main executable %s", exe);
+      dir = g_path_get_dirname (exe);
+      free (exe);
+    }
+  else
+    {
+      g_debug ("Found _srt_find_myself() in %s", map->l_name);
+      dir = g_path_get_dirname (map->l_name);
+    }
 
   if (g_str_has_suffix (dir, RELOCATABLE_PKGLIBDIR))
     dir[strlen (dir) - strlen (RELOCATABLE_PKGLIBDIR)] = '\0';
   else if (g_str_has_suffix (dir, MULTIARCH_LIBDIR))
     dir[strlen (dir) - strlen (MULTIARCH_LIBDIR)] = '\0';
+  else if (g_str_has_suffix (dir, PKGLIBEXECDIR))
+    dir[strlen (dir) - strlen (PKGLIBEXECDIR)] = '\0';
+  else if (g_str_has_suffix (dir, "/libexec"))
+    dir[strlen (dir) - strlen ("/libexec")] = '\0';
   else if (g_str_has_suffix (dir, "/lib64"))
     dir[strlen (dir) - strlen ("/lib64")] = '\0';
   else if (g_str_has_suffix (dir, "/lib"))
     dir[strlen (dir) - strlen ("/lib")] = '\0';
+  else if (g_str_has_suffix (dir, "/bin"))
+    dir[strlen (dir) - strlen ("/bin")] = '\0';
 
   /* If the library was found in /lib/MULTIARCH, /lib64 or /lib on a
    * merged-/usr system, assume --prefix=/usr (/libexec doesn't
@@ -1013,4 +1039,22 @@ _srt_peek_environ_nonnull (void)
     return (const char * const *) environ;
   else
     return no_strings;
+}
+
+/*
+ * Globally disable GIO modules.
+ *
+ * This function modifies the environment, therefore:
+ *
+ * - it must be called from main() before starting any threads
+ * - you must save a copy of the original environment first if you intend
+ *   for subprocesses to receive the original, unmodified environment
+ *
+ * To be effective, it must also be called before any use of GIO APIs.
+ */
+void
+_srt_setenv_disable_gio_modules (void)
+{
+  g_setenv ("GIO_USE_VFS", "local", TRUE);
+  g_setenv ("GIO_MODULE_DIR", "/nonexistent", TRUE);
 }

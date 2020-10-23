@@ -24,10 +24,9 @@
 executable(
   'steam-runtime-system-info',
   'system-info.c',
-  dependencies : [gio_unix, glib, json_glib, libglnx_dep, libsteamrt_dep],
+  dependencies : [gio_unix, glib, json_glib, libglnx_dep, libsteamrt_static_dep],
   install : true,
-  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
-  # LD_LIBRARY_PATH even if set
+  # Use the adjacent json-glib, ignoring LD_LIBRARY_PATH even if set
   build_rpath : bin_rpath,
   install_rpath : bin_rpath,
 )
@@ -35,10 +34,9 @@ executable(
 executable(
   'steam-runtime-check-requirements',
   'check-requirements.c',
-  dependencies : [glib, json_glib, gobject, libsteamrt_dep],
+  dependencies : [glib, json_glib, gobject, libsteamrt_static_dep],
   install : true,
-  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
-  # LD_LIBRARY_PATH even if set
+  # Use the adjacent json-glib, ignoring LD_LIBRARY_PATH even if set
   build_rpath : bin_rpath,
   install_rpath : bin_rpath,
 )

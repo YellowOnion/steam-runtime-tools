@@ -619,7 +619,7 @@ main (int argc,
         }
     }
 
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   if (launcher_api.service_bus_name != NULL && opt_socket != NULL)
     {

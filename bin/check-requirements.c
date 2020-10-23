@@ -100,6 +100,8 @@ main (int argc,
   int opt;
   int exit_code = EXIT_SUCCESS;
 
+  _srt_setenv_disable_gio_modules ();
+
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
       switch (opt)

@@ -717,7 +717,7 @@ main (int argc,
       goto out;
     }
 
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   if (argc >= 2 && strcmp (argv[1], "--") == 0)
     {

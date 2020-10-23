@@ -48,27 +48,6 @@ child_setup_cb (gpointer user_data)
 }
 
 /**
- * pv_avoid_gvfs:
- *
- * Disable gvfs. This function must be called from main() before
- * starting any threads.
- */
-void
-pv_avoid_gvfs (void)
-{
-  g_autofree gchar *old_env = NULL;
-
-  /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
-  old_env = g_strdup (g_getenv ("GIO_USE_VFS"));
-  g_setenv ("GIO_USE_VFS", "local", TRUE);
-  g_vfs_get_default ();
-  if (old_env)
-    g_setenv ("GIO_USE_VFS", old_env, TRUE);
-  else
-    g_unsetenv ("GIO_USE_VFS");
-}
-
-/**
  * pv_envp_cmp:
  * @p1: a `const char * const *`
  * @p2: a `const char * const *`

@@ -34,6 +34,7 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 #include "tests/test-utils.h"
 #include "utils.h"
@@ -323,7 +324,7 @@ main (int argc,
     g_error ("pthread_sigmask: %s", g_strerror (errno));
 
   prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
-  pv_avoid_gvfs ();
+  _srt_setenv_disable_gio_modules ();
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/terminate/nothing", Fixture, NULL,

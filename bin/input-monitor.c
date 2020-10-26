@@ -159,6 +159,7 @@ interrupt_cb (void *user_data)
   return G_SOURCE_CONTINUE;
 }
 
+static SrtInputDeviceMonitorFlags opt_mode = SRT_INPUT_DEVICE_MONITOR_FLAGS_NONE;
 static SrtInputDeviceMonitorFlags opt_flags = SRT_INPUT_DEVICE_MONITOR_FLAGS_NONE;
 static gboolean opt_evdev = FALSE;
 static gboolean opt_hidraw = FALSE;
@@ -174,8 +175,30 @@ opt_once_cb (const gchar *option_name,
   return TRUE;
 }
 
+static gboolean
+opt_direct_cb (const gchar *option_name,
+               const gchar *value,
+               gpointer data,
+               GError **error)
+{
+  opt_mode = SRT_INPUT_DEVICE_MONITOR_FLAGS_DIRECT;
+  return TRUE;
+}
+
+static gboolean
+opt_udev_cb (const gchar *option_name,
+             const gchar *value,
+             gpointer data,
+             GError **error)
+{
+  opt_mode = SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV;
+  return TRUE;
+}
+
 static const GOptionEntry option_entries[] =
 {
+  { "direct", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_direct_cb,
+    "Find devices using /dev and /sys", NULL },
   { "evdev", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_evdev,
     "List evdev event devices", NULL },
   { "hidraw", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_hidraw,
@@ -188,6 +211,8 @@ static const GOptionEntry option_entries[] =
   { "seq", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_seq,
     "Output application/json-seq [default: pretty-print as concatenated JSON]",
     NULL },
+  { "udev", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_udev_cb,
+    "Find devices using udev", NULL },
   { "version", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_print_version,
     "Print version number and exit", NULL },
   { NULL }
@@ -230,7 +255,7 @@ run (int argc,
     return FALSE;
 
   int_handler = g_unix_signal_add (SIGINT, interrupt_cb, &monitor);
-  monitor = srt_input_device_monitor_new (opt_flags);
+  monitor = srt_input_device_monitor_new (opt_mode | opt_flags);
 
   if (opt_evdev)
     srt_input_device_monitor_request_evdev (monitor);

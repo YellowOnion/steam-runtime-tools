@@ -39,7 +39,7 @@
 
 typedef struct
 {
-  enum { MOCK, DIRECT } type;
+  enum { MOCK, DIRECT, UDEV } type;
 } Config;
 
 static const Config defconfig =
@@ -50,6 +50,11 @@ static const Config defconfig =
 static const Config direct_config =
 {
   .type = DIRECT,
+};
+
+static const Config udev_config =
+{
+  .type = UDEV,
 };
 
 typedef struct
@@ -212,6 +217,11 @@ input_device_monitor_new (Fixture *f,
   switch (f->config->type)
     {
       case DIRECT:
+        flags |= SRT_INPUT_DEVICE_MONITOR_FLAGS_DIRECT;
+        return srt_input_device_monitor_new (flags);
+
+      case UDEV:
+        flags |= SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV;
         return srt_input_device_monitor_new (flags);
 
       case MOCK:
@@ -419,6 +429,10 @@ main (int argc,
   g_test_add ("/input-device/monitor/direct", Fixture, &direct_config,
               setup, test_input_device_monitor, teardown);
   g_test_add ("/input-device/monitor-once/direct", Fixture, &direct_config,
+              setup, test_input_device_monitor_once, teardown);
+  g_test_add ("/input-device/monitor/udev", Fixture, &udev_config,
+              setup, test_input_device_monitor, teardown);
+  g_test_add ("/input-device/monitor-once/udev", Fixture, &udev_config,
               setup, test_input_device_monitor_once, teardown);
 
   return g_test_run ();

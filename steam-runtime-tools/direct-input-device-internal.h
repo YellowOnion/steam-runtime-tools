@@ -57,3 +57,11 @@ GType _srt_direct_input_device_monitor_get_type (void);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDirectInputDevice, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDirectInputDeviceMonitor, g_object_unref)
+
+static inline SrtInputDeviceMonitor *
+srt_direct_input_device_monitor_new (SrtInputDeviceMonitorFlags flags)
+{
+  return g_object_new (SRT_TYPE_DIRECT_INPUT_DEVICE_MONITOR,
+                       "flags", flags,
+                       NULL);
+}

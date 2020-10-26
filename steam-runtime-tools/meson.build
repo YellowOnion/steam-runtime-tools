@@ -53,6 +53,8 @@ libsteamrt_sources = [
     'steam-internal.h',
     'steam.c',
     'system-info.c',
+    'udev-input-device-internal.h',
+    'udev-input-device.c',
     'utils-internal.h',
     'utils.c',
     'xdg-portal.c',

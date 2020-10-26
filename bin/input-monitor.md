@@ -17,6 +17,11 @@ steam-runtime-input-monitor - list input devices
 
 # OPTIONS
 
+**--direct**
+:   List input devices by reading `/dev` and `/sys`.
+    This currently only lists input devices for which at least read access
+    to the underlying device node is available.
+
 **--evdev**
 :   List all input event devices.
 
@@ -37,6 +42,10 @@ steam-runtime-input-monitor - list input devices
     each event is printed as U+001E RECORD SEPARATOR, followed by
     a JSON object, followed by U+000A LINE FEED.
 
+**--udev**
+:   List input devices by contacting udevd. This is usually not
+    expected to work inside a container.
+
 **--version**
 :   Print the version number as YAML and exit.
 
@@ -55,6 +64,10 @@ that request *all* input devices.
 Options to limit devices more selectively (for example, only evdev
 devices that have the **ID_INPUT_JOYSTICK** udev property) are likely
 to be added in future versions.
+
+By default, an implementation is chosen automatically. The **--direct**
+and **--udev** options override this, with the last one used
+taking precedence.
 
 Each event is a JSON object with a single key. Consumers should ignore
 unknown keys to allow for future expansion.

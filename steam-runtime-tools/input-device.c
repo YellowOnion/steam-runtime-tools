@@ -31,6 +31,7 @@
 #include "steam-runtime-tools/enums.h"
 
 #include "steam-runtime-tools/direct-input-device-internal.h"
+#include "steam-runtime-tools/udev-input-device-internal.h"
 
 /**
  * SrtInputDevice:
@@ -174,6 +175,33 @@ static guint monitor_signal_added = 0;
 static guint monitor_signal_removed = 0;
 static guint monitor_signal_all_for_now = 0;
 
+static const SrtInputDeviceMonitorFlags mode_flags = (SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV
+                                                      | SRT_INPUT_DEVICE_MONITOR_FLAGS_DIRECT);
+
+/*
+ * @monitor_out: (out) (not optional):
+ * @error: (inout) (not optional):
+ */
+static gboolean
+try_udev (SrtInputDeviceMonitorFlags flags,
+          SrtInputDeviceMonitor **monitor_out,
+          GError **error)
+{
+  /* Don't try it again if we already failed, to avoid another warning */
+  if (*error != NULL)
+    return FALSE;
+
+  *monitor_out = srt_udev_input_device_monitor_new (flags, error);
+
+  if (*monitor_out != NULL)
+    return TRUE;
+
+  /* We usually expect this to succeed, so log a warning if it fails */
+  g_warning ("Unable to initialize udev input device monitor: %s",
+             (*error)->message);
+  return FALSE;
+}
+
 /**
  * srt_input_device_monitor_new:
  * @flags: Flags affecting the behaviour of the input device monitor.
@@ -189,10 +217,35 @@ static guint monitor_signal_all_for_now = 0;
 SrtInputDeviceMonitor *
 srt_input_device_monitor_new (SrtInputDeviceMonitorFlags flags)
 {
-  /* For now we only have one implementation. */
-  return g_object_new (SRT_TYPE_DIRECT_INPUT_DEVICE_MONITOR,
-                       "flags", flags,
-                       NULL);
+  SrtInputDeviceMonitor *udev = NULL;
+  g_autoptr(GError) udev_error = NULL;
+
+  if (__builtin_popcount (flags & mode_flags) > 1)
+    g_warning ("Requesting more than one of UDEV and DIRECT "
+               "monitoring has undefined results: 0x%x", flags);
+
+  /* First see whether the caller expressed a preference */
+
+  if (flags & SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV)
+    {
+      if (try_udev (flags, &udev, &udev_error))
+        return udev;
+    }
+
+  if (flags & SRT_INPUT_DEVICE_MONITOR_FLAGS_DIRECT)
+    return srt_direct_input_device_monitor_new (flags);
+
+  /* Prefer a direct monitor if we're in a container */
+  if (g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS)
+      || g_file_test ("/run/pressure-vessel", G_FILE_TEST_EXISTS)
+      || g_file_test ("/run/host", G_FILE_TEST_EXISTS))
+    return srt_direct_input_device_monitor_new (flags);
+
+  if (try_udev (flags, &udev, &udev_error))
+    return udev;
+
+  /* Fall back to direct monitoring if we don't have libudev */
+  return srt_direct_input_device_monitor_new (flags);
 }
 
 static void

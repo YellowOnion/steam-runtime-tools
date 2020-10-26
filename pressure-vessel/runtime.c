@@ -1183,7 +1183,14 @@ static FlatpakBwrap *
 pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                                      RuntimeArchitecture *arch)
 {
+  const gchar *ld_library_path;
   FlatpakBwrap *ret = pv_bwrap_copy (self->container_access_adverb);
+
+  /* If we have a custom "LD_LIBRARY_PATH", we want to preserve
+   * it when calling capsule-capture-libs */
+  ld_library_path = g_environ_getenv (self->original_environ, "LD_LIBRARY_PATH");
+  if (ld_library_path != NULL)
+    flatpak_bwrap_set_env (ret, "LD_LIBRARY_PATH", ld_library_path, TRUE);
 
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,

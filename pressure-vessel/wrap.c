@@ -1711,6 +1711,7 @@ main (int argc,
                                 tools_dir,
                                 opt_graphics_provider,
                                 graphics_provider_mount_point,
+                                original_environ,
                                 flags,
                                 error);
 

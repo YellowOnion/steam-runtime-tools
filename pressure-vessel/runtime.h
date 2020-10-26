@@ -71,6 +71,7 @@ PvRuntime *pv_runtime_new (const char *source_files,
                            const char *tools_dir,
                            const char *provider_in_current_namespace,
                            const char *provider_in_container_namespace,
+                           const GStrv original_environ,
                            PvRuntimeFlags flags,
                            GError **error);
 

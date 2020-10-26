@@ -54,6 +54,7 @@ struct _PvRuntime
   gchar *source_files;
   gchar *tools_dir;
   PvBwrapLock *runtime_lock;
+  GStrv original_environ;
 
   gchar *libcapsule_knowledge;
   gchar *mutable_parent;
@@ -90,6 +91,7 @@ struct _PvRuntimeClass
 enum {
   PROP_0,
   PROP_BUBBLEWRAP,
+  PROP_ORIGINAL_ENVIRON,
   PROP_FLAGS,
   PROP_MUTABLE_PARENT,
   PROP_PROVIDER_IN_CURRENT_NAMESPACE,
@@ -277,6 +279,10 @@ pv_runtime_get_property (GObject *object,
         g_value_set_string (value, self->bubblewrap);
         break;
 
+      case PROP_ORIGINAL_ENVIRON:
+        g_value_set_boxed (value, self->original_environ);
+        break;
+
       case PROP_FLAGS:
         g_value_set_flags (value, self->flags);
         break;
@@ -321,6 +327,13 @@ pv_runtime_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->bubblewrap == NULL);
         self->bubblewrap = g_value_dup_string (value);
+        break;
+
+      case PROP_ORIGINAL_ENVIRON:
+        /* Construct-only */
+        g_return_if_fail (self->original_environ == NULL);
+
+        self->original_environ = g_value_dup_boxed (value);
         break;
 
       case PROP_FLAGS:
@@ -396,6 +409,7 @@ pv_runtime_constructed (GObject *object)
   G_OBJECT_CLASS (pv_runtime_parent_class)->constructed (object);
 
   g_return_if_fail (self->bubblewrap != NULL);
+  g_return_if_fail (self->original_environ != NULL);
   g_return_if_fail (self->provider_in_current_namespace != NULL);
   g_return_if_fail (self->provider_in_container_namespace != NULL);
   g_return_if_fail (self->source_files != NULL);
@@ -888,6 +902,7 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  g_strfreev (self->original_environ);
   g_free (self->libcapsule_knowledge);
   glnx_close_fd (&self->mutable_parent_fd);
   g_free (self->mutable_parent);
@@ -923,6 +938,13 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          NULL,
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
+
+  properties[PROP_ORIGINAL_ENVIRON] =
+    g_param_spec_boxed ("original-environ", "Original environ",
+                        "The original environ to use",
+                        G_TYPE_STRV,
+                        (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS));
 
   properties[PROP_FLAGS] =
     g_param_spec_flags ("flags", "Flags",
@@ -982,6 +1004,7 @@ pv_runtime_new (const char *source_files,
                 const char *tools_dir,
                 const char *provider_in_current_namespace,
                 const char *provider_in_container_namespace,
+                const GStrv original_environ,
                 PvRuntimeFlags flags,
                 GError **error)
 {
@@ -994,6 +1017,7 @@ pv_runtime_new (const char *source_files,
                          NULL,
                          error,
                          "bubblewrap", bubblewrap,
+                         "original-environ", original_environ,
                          "mutable-parent", mutable_parent,
                          "source-files", source_files,
                          "tools-directory", tools_dir,

@@ -246,7 +246,7 @@ if [ -n "$is_main" ]; then
     fi
 
     launch_args=( \
-        "${launch_args[@]}" \
+        ${launch_args[0]+"${launch_args[@]}"} \
         --pass-env-matching '*' \
         --terminate \
     )
@@ -262,7 +262,7 @@ if [ -n "$is_main" ]; then
         "$@"
 else
     launch_args=( \
-        "${launch_args[@]}" \
+        ${launch_args[0]+"${launch_args[@]}"} \
         --unset-env LD_PRELOAD \
     )
 fi
@@ -270,7 +270,7 @@ fi
 exec "$pressure_vessel/bin/pressure-vessel-launch" \
     --directory="$(pwd)" \
     --socket="$rendezvous/socket" \
-    "${launch_args[@]}" \
+    ${launch_args[0]+"${launch_args[@]}"} \
     -- \
     "$@"
 exit 125

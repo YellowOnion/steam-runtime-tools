@@ -681,6 +681,55 @@ keys:
     **steam_uri_handler**
     :   A boolean value indicating whether this entry can open `steam:` URIs.
 
+**xdg-portals**
+:   An object describing the XDG portal support. Whether `xdg-desktop-portal`
+    is installed, and working, and which portal backend implementations are
+    available. The keys are the strings:
+
+    **details**
+    :   An object describing in details which XDG portals have been checked.
+        The keys are the strings:
+
+        **interfaces**
+        :   An object describing XDG portal interfaces. The keys are the
+            interface name. The values are objects containing details of
+            of an interface:
+
+            **available**
+            :   A boolean value indicating whether this interface is available.
+
+            **version**
+            :   An integer representing the version property of this interface.
+
+        **backends**
+        :   An object describing XDG portal backends. The keys are the
+            backend name. The values are objects containing details of
+            of an interface:
+
+            **available**
+            :   A boolean value indicating whether this backend is available.
+
+    **issues**
+    :   Problems with the XDG portal support, represented as an array
+        of strings. The array is empty if no problems were detected.
+
+        **unknown**
+        :   There was an unknown error while checking XDG portal support.
+
+        **timeout**
+        :   The test to check the XDG portal support timed out.
+
+        **missing-interface**
+        :   At least one of the required XDG portal interfaces is missing.
+
+        **no-implementation**
+        :   There isn't a working XDG portal implementation.
+
+    **messages**
+    :   Human-readable string with error messages about the XDG portal
+        support. This element will not be printed if there aren't any error
+        messages.
+
 **cpu-features**
 :   An object decribing some of the features that the CPU in use supports.
     Currently it has the following string keys, each with a boolean

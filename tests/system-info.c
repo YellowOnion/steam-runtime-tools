@@ -2451,6 +2451,21 @@ typedef struct
 
 typedef struct
 {
+  const gchar *name;
+  gboolean available;
+  guint32 version;
+} XdgPortalInfoTest;
+
+typedef struct
+{
+  XdgPortalInfoTest interfaces[3];
+  XdgPortalInfoTest backends[3];
+  SrtXdgPortalIssues issues;
+  const gchar *messages;
+} XdgPortalTest;
+
+typedef struct
+{
   const gchar *description;
   const gchar *input_name;
   gboolean can_write_uinput;
@@ -2465,6 +2480,7 @@ typedef struct
   IcdTest egl_icd[3];
   IcdTest vulkan_icd[3];
   DesktopEntryTest desktop_entry[3];
+  XdgPortalTest xdg_portal;
   SrtX86FeatureFlags x86_features;
   SrtX86FeatureFlags x86_known;
 } JsonTest;
@@ -2758,6 +2774,34 @@ static const JsonTest json_test[] =
       },
     },
 
+    .xdg_portal =
+    {
+      .interfaces =
+      {
+        {
+          .name = "org.freedesktop.portal.OpenURI",
+          .available = TRUE,
+          .version = 3,
+        },
+        {
+          .name = "org.freedesktop.portal.Email",
+          .available = TRUE,
+          .version = 2,
+        },
+      },
+      .backends =
+      {
+        {
+          .name = "org.freedesktop.impl.portal.desktop.gtk",
+          .available = TRUE,
+        },
+        {
+          .name = "org.freedesktop.impl.portal.desktop.kde",
+          .available = FALSE,
+        },
+      },
+    },
+
     .x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_CMPXCHG16B,
     .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B,
 
@@ -2829,6 +2873,11 @@ static const JsonTest json_test[] =
         .error_message = "Something went wrong",
       },
     },
+    .xdg_portal =
+    {
+      .issues = SRT_XDG_PORTAL_ISSUES_TIMEOUT,
+      .messages = "timeout: failed to run command ‘x86_64-linux-gnu-check-xdg-portal’: No such file or directory\n",
+    },
     .x86_features = SRT_X86_FEATURE_NONE,
     .x86_known = SRT_X86_FEATURE_NONE,
   }, /* End Partial JSON report */
@@ -2875,6 +2924,10 @@ static const JsonTest json_test[] =
         .error_message = "(missing error message)",
       },
     },
+    .xdg_portal =
+    {
+      .issues = SRT_XDG_PORTAL_ISSUES_UNKNOWN,
+    },
     .x86_features = SRT_X86_FEATURE_NONE,
     .x86_known = SRT_X86_FEATURE_NONE,
   }, /* End Partial-2 JSON report */
@@ -2904,6 +2957,10 @@ static const JsonTest json_test[] =
       },
     },
     .locale_issues = SRT_LOCALE_ISSUES_UNKNOWN,
+    .xdg_portal =
+    {
+      .issues = SRT_XDG_PORTAL_ISSUES_UNKNOWN,
+    },
     .x86_features = SRT_X86_FEATURE_NONE,
     .x86_known = SRT_X86_FEATURE_NONE,
   }, /* End Empty JSON report */
@@ -2946,6 +3003,10 @@ static const JsonTest json_test[] =
       }
     },
     .locale_issues = SRT_LOCALE_ISSUES_C_UTF8_MISSING | SRT_LOCALE_ISSUES_UNKNOWN,
+    .xdg_portal =
+    {
+      .issues = SRT_XDG_PORTAL_ISSUES_UNKNOWN,
+    },
     .x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_UNKNOWN,
     .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_UNKNOWN,
   }, /* End Newer JSON report */
@@ -2975,8 +3036,12 @@ json_parsing (Fixture *f,
       gchar *name;
       gchar *pretty_name;
       gchar *host_directory;
+      g_autoptr(SrtObjectList) portal_interfaces = NULL;
+      g_autoptr(SrtObjectList) portal_backends = NULL;
+      g_autofree gchar *portal_messages = NULL;
       g_autofree gchar *steamscript_path = NULL;
       g_autofree gchar *steamscript_version = NULL;
+      SrtXdgPortalIssues issues;
       gchar **pinned_32 = NULL;
       gchar **messages_32 = NULL;
       gchar **pinned_64 = NULL;
@@ -3210,6 +3275,33 @@ json_parsing (Fixture *f,
           g_assert_cmpint (t->desktop_entry[j].steam_handler, ==,
                            srt_desktop_entry_is_steam_handler (iter->data));
         }
+
+      portal_interfaces = srt_system_info_list_xdg_portal_interfaces (info);
+      for (j = 0, iter = portal_interfaces; iter != NULL; iter = iter->next, j++)
+        {
+          g_assert_cmpstr (t->xdg_portal.interfaces[j].name, ==,
+                           srt_xdg_portal_interface_get_name (iter->data));
+          g_assert_cmpint (t->xdg_portal.interfaces[j].available, ==,
+                           srt_xdg_portal_interface_is_available (iter->data));
+          g_assert_cmpint (t->xdg_portal.interfaces[j].version, ==,
+                           srt_xdg_portal_interface_get_version (iter->data));
+        }
+      g_assert_cmpstr (t->xdg_portal.interfaces[j].name, ==, NULL);
+
+      portal_backends = srt_system_info_list_xdg_portal_backends (info);
+      for (j = 0, iter = portal_backends; iter != NULL; iter = iter->next, j++)
+        {
+          g_assert_cmpstr (t->xdg_portal.backends[j].name, ==,
+                           srt_xdg_portal_backend_get_name (iter->data));
+          g_assert_cmpint (t->xdg_portal.backends[j].available, ==,
+                           srt_xdg_portal_backend_is_available (iter->data));
+        }
+      g_assert_cmpstr (t->xdg_portal.backends[j].name, ==, NULL);
+
+      issues = srt_system_info_get_xdg_portal_issues (info, &portal_messages);
+
+      g_assert_cmpint (issues, ==, t->xdg_portal.issues);
+      g_assert_cmpstr (portal_messages, ==, t->xdg_portal.messages);
 
       g_assert_cmpint (t->x86_features, ==, srt_system_info_get_x86_features (info));
       g_assert_cmpint (t->x86_known, ==, srt_system_info_get_known_x86_features (info));

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,22 +23,26 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#include <stdio.h>
 
-#define _SRT_IN_SINGLE_HEADER
+int
+main (int argc,
+      char **argv)
+{
+  // Give good output as if we were in a Flatpak environment
+  printf ("{\n"
+          "\t\"interfaces\" : {\n"
+          "\t\t\"org.freedesktop.portal.OpenURI\" : {\n"
+          "\t\t\t\"available\" : true,\n"
+          "\t\t\t\"version\" : 3\n"
+          "\t\t},\n"
+          "\t\t\"org.freedesktop.portal.Email\" : {\n"
+          "\t\t\t\"available\" : true,\n"
+          "\t\t\t\"version\" : 3\n"
+          "\t\t}\n"
+          "\t}\n"
+          "}\n");
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/cpu-feature.h>
-#include <steam-runtime-tools/desktop-entry.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/graphics.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/locale.h>
-#include <steam-runtime-tools/macros.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
-#include <steam-runtime-tools/utils.h>
-#include <steam-runtime-tools/xdg-portal.h>
+  return 0;
+}
 
-#undef _SRT_IN_SINGLE_HEADER

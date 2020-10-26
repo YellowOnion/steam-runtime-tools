@@ -39,6 +39,7 @@
 #include <steam-runtime-tools/macros.h>
 #include <steam-runtime-tools/runtime.h>
 #include <steam-runtime-tools/steam.h>
+#include <steam-runtime-tools/xdg-portal.h>
 
 /**
  * SrtTestFlags:
@@ -261,6 +262,14 @@ _SRT_PUBLIC
 gchar *srt_system_info_dup_steamscript_path (SrtSystemInfo *self);
 _SRT_PUBLIC
 gchar *srt_system_info_dup_steamscript_version (SrtSystemInfo *self);
+
+_SRT_PUBLIC
+GList *srt_system_info_list_xdg_portal_backends (SrtSystemInfo *self);
+_SRT_PUBLIC
+GList *srt_system_info_list_xdg_portal_interfaces (SrtSystemInfo *self);
+_SRT_PUBLIC
+SrtXdgPortalIssues srt_system_info_get_xdg_portal_issues (SrtSystemInfo *self,
+                                                          gchar **messages);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)

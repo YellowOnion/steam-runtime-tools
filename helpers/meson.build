@@ -125,4 +125,17 @@ executable(
   )
 )
 
+executable(
+  multiarch + '-check-xdg-portal',
+  'check-xdg-portal.c',
+  include_directories : project_include_dirs,
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib],
+  install : true,
+  install_dir : pkglibexecdir,
+  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
+  # LD_LIBRARY_PATH even if set
+  build_rpath : pkglibexec_rpath,
+  install_rpath : pkglibexec_rpath,
+)
+
 # vim:set sw=2 sts=2 et:

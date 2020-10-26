@@ -324,6 +324,13 @@ jsonify_locale_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_xdg_portal_issues (JsonBuilder *builder,
+                           SrtXdgPortalIssues issues)
+{
+  jsonify_flags (builder, SRT_TYPE_XDG_PORTAL_ISSUES, issues);
+}
+
+static void
 jsonify_x86_features (JsonBuilder *builder,
                       SrtX86FeatureFlags present,
                       SrtX86FeatureFlags known)
@@ -781,8 +788,11 @@ main (int argc,
   SrtSteamIssues steam_issues = SRT_STEAM_ISSUES_NONE;
   SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
   SrtLocaleIssues locale_issues = SRT_LOCALE_ISSUES_NONE;
+  SrtXdgPortalIssues xdg_portal_issues = SRT_XDG_PORTAL_ISSUES_NONE;
   SrtX86FeatureFlags x86_features = SRT_X86_FEATURE_NONE;
   SrtX86FeatureFlags known_x86_features = SRT_X86_FEATURE_NONE;
+  g_autoptr(SrtObjectList) portal_backends = NULL;
+  g_autoptr(SrtObjectList) portal_interfaces = NULL;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
@@ -791,6 +801,7 @@ main (int argc,
   const gchar *test_json_path = NULL;
   g_autofree gchar *steamscript_path = NULL;
   g_autofree gchar *steamscript_version = NULL;
+  g_autofree gchar *xdg_portal_messages = NULL;
   gchar *json_output;
   gchar *version = NULL;
   gchar *inst_path = NULL;
@@ -1284,6 +1295,69 @@ main (int argc,
       g_list_free_full (desktop_entries, g_object_unref);
     }
   json_builder_end_array (builder);
+
+  json_builder_set_member_name (builder, "xdg-portals");
+  json_builder_begin_object (builder);
+    {
+      portal_interfaces = srt_system_info_list_xdg_portal_interfaces (info);
+      portal_backends = srt_system_info_list_xdg_portal_backends (info);
+      if (portal_interfaces != NULL || portal_backends != NULL)
+        {
+          json_builder_set_member_name (builder, "details");
+          json_builder_begin_object (builder);
+
+          if (portal_interfaces != NULL)
+            {
+              json_builder_set_member_name (builder, "interfaces");
+              json_builder_begin_object (builder);
+              for (const GList *iter = portal_interfaces; iter != NULL; iter = iter->next)
+                {
+                  gboolean is_available;
+                  json_builder_set_member_name (builder, srt_xdg_portal_interface_get_name (iter->data));
+                  json_builder_begin_object (builder);
+                  json_builder_set_member_name (builder, "available");
+                  is_available = srt_xdg_portal_interface_is_available (iter->data);
+                  json_builder_add_boolean_value (builder, is_available);
+                  if (is_available)
+                    {
+                      json_builder_set_member_name (builder, "version");
+                      json_builder_add_int_value (builder, srt_xdg_portal_interface_get_version (iter->data));
+                    }
+                  json_builder_end_object (builder);
+                }
+              json_builder_end_object (builder);
+            }
+
+          if (portal_backends != NULL)
+            {
+              json_builder_set_member_name (builder, "backends");
+              json_builder_begin_object (builder);
+              for (const GList *iter = portal_backends; iter != NULL; iter = iter->next)
+                {
+                  json_builder_set_member_name (builder, srt_xdg_portal_backend_get_name (iter->data));
+                  json_builder_begin_object (builder);
+                  json_builder_set_member_name (builder, "available");
+                  json_builder_add_boolean_value (builder, srt_xdg_portal_backend_is_available (iter->data));
+                  json_builder_end_object (builder);
+                }
+              json_builder_end_object (builder);
+            }
+          json_builder_end_object (builder);
+        }
+
+      json_builder_set_member_name (builder, "issues");
+      json_builder_begin_array (builder);
+      xdg_portal_issues = srt_system_info_get_xdg_portal_issues (info, &xdg_portal_messages);
+      jsonify_xdg_portal_issues (builder, xdg_portal_issues);
+      json_builder_end_array (builder);
+
+      if (xdg_portal_messages != NULL)
+        {
+          json_builder_set_member_name (builder, "messages");
+          json_builder_add_string_value (builder, xdg_portal_messages);
+        }
+    }
+  json_builder_end_object (builder);
 
   json_builder_set_member_name (builder, "cpu-features");
   json_builder_begin_object (builder);

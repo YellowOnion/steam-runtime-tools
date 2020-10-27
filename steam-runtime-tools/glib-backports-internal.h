@@ -114,3 +114,9 @@ gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
 #define G_DBUS_METHOD_INVOCATION_HANDLED TRUE
 #define G_DBUS_METHOD_INVOCATION_UNHANDLED FALSE
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 52, 0)
+#define g_utf8_make_valid(s,l) my_g_utf8_make_valid (s, l)
+gchar *my_g_utf8_make_valid (const gchar *str,
+                             gssize len);
+#endif

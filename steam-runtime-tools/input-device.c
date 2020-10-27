@@ -136,6 +136,49 @@ srt_input_device_get_subsystem (SrtInputDevice *device)
 }
 
 /**
+ * srt_input_device_dup_uevent:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return the `uevent` data from the kernel.
+ *
+ * Returns: (nullable) (transfer full): A multi-line string, or %NULL.
+ *  Free with g_free().
+ */
+gchar *
+srt_input_device_dup_uevent (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->dup_uevent (device);
+}
+
+/*
+ * Default implementation: read the file in /sys. The kernel provides this,
+ * so it should always be present, except in containers.
+ */
+static gchar *
+srt_input_device_default_dup_uevent (SrtInputDevice *device)
+{
+  g_autofree gchar *uevent_path = NULL;
+  g_autofree gchar *contents = NULL;
+  const char *sys_path;
+
+  sys_path = srt_input_device_get_sys_path (device);
+
+  if (sys_path == NULL)
+    return NULL;
+
+  uevent_path = g_build_filename (sys_path, "uevent", NULL);
+
+  if (g_file_get_contents (uevent_path, &contents, NULL, NULL))
+    return g_steal_pointer (&contents);
+
+  return NULL;
+}
+
+/**
  * srt_input_device_dup_udev_properties:
  * @device: An object implementing #SrtInputDeviceInterface
  *
@@ -166,6 +209,7 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
   IMPLEMENT2 (get_sys_path, get_null_string);
   IMPLEMENT2 (get_subsystem, get_null_string);
   IMPLEMENT2 (dup_udev_properties, get_null_strv);
+  IMPLEMENT (dup_uevent);
 
 #undef IMPLEMENT
 #undef IMPLEMENT2

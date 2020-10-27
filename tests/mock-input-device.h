@@ -53,6 +53,7 @@ struct _MockInputDevice
   gchar *dev_node;
   gchar *subsystem;
   gchar **udev_properties;
+  gchar *uevent;
 };
 
 struct _MockInputDeviceClass

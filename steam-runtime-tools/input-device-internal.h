@@ -36,6 +36,7 @@ struct _SrtInputDeviceInterface
   const char * (*get_sys_path) (SrtInputDevice *device);
   const char * (*get_subsystem) (SrtInputDevice *device);
   gchar ** (*dup_udev_properties) (SrtInputDevice *device);
+  gchar * (*dup_uevent) (SrtInputDevice *device);
 };
 
 struct _SrtInputDeviceMonitorInterface

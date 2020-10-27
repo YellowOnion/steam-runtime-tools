@@ -64,6 +64,7 @@ static struct
   const char *(*udev_device_get_syspath) (struct udev_device *);
   struct udev_list_entry *(*udev_device_get_properties_list_entry) (struct udev_device *);
   const char *(*udev_device_get_property_value) (struct udev_device *, const char *);
+  const char *(*udev_device_get_sysattr_value) (struct udev_device *, const char *);
   struct udev_device *(*udev_device_ref) (struct udev_device *);
   struct udev_device *(*udev_device_unref) (struct udev_device *);
 
@@ -208,6 +209,14 @@ srt_udev_input_device_dup_udev_properties (SrtInputDevice *device)
   return (gchar **) g_ptr_array_free (g_steal_pointer (&arr), FALSE);
 }
 
+static gchar *
+srt_udev_input_device_dup_uevent (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  return g_strdup (symbols.udev_device_get_sysattr_value (self->dev, "uevent"));
+}
+
 static void
 srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
@@ -217,6 +226,7 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
   IMPLEMENT (dup_udev_properties);
+  IMPLEMENT (dup_uevent);
 
 #undef IMPLEMENT
 }
@@ -380,6 +390,7 @@ srt_udev_input_device_monitor_initable_init (GInitable *initable,
   SYMBOL (udev_device_get_syspath);
   SYMBOL (udev_device_get_properties_list_entry);
   SYMBOL (udev_device_get_property_value);
+  SYMBOL (udev_device_get_sysattr_value);
   SYMBOL (udev_device_ref);
   SYMBOL (udev_device_unref);
 

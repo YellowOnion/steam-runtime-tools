@@ -43,6 +43,7 @@
 static FILE *original_stdout = NULL;
 static gboolean opt_one_line = FALSE;
 static gboolean opt_seq = FALSE;
+static gboolean opt_verbose = FALSE;
 
 static void
 print_json (JsonBuilder *builder)
@@ -112,6 +113,46 @@ added (SrtInputDeviceMonitor *monitor,
                 }
 
               json_builder_end_array (builder);
+            }
+
+          if (opt_verbose)
+            {
+              g_autofree gchar *uevent = srt_input_device_dup_uevent (dev);
+
+              if (uevent != NULL)
+                {
+                  const char *start = uevent;
+                  const char *end;
+
+                  /* uevent is conceptually a single string, but we
+                   * present it as an array of lines here, because that's
+                   * a lot easier to read! */
+                  json_builder_set_member_name (builder, "uevent");
+                  json_builder_begin_array (builder);
+
+                  while (*start != '\0')
+                    {
+                      g_autofree gchar *valid = NULL;
+
+                      while (*start == '\n')
+                        start++;
+
+                      if (*start == '\0')
+                        break;
+
+                      end = strchrnul (start, '\n');
+
+                      valid = g_utf8_make_valid (start, (end - start) - 1);
+                      json_builder_add_string_value (builder, valid);
+
+                      if (*end == '\0')
+                        break;
+
+                      start = end + 1;
+                    }
+
+                  json_builder_end_array (builder);
+                }
             }
 
           /* TODO: Print more details here */
@@ -236,6 +277,8 @@ static const GOptionEntry option_entries[] =
     NULL },
   { "udev", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_udev_cb,
     "Find devices using udev", NULL },
+  { "verbose", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
+    "Be more verbose", NULL },
   { "version", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_print_version,
     "Print version number and exit", NULL },
   { NULL }

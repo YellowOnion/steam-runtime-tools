@@ -54,6 +54,12 @@ srt_input_device_default_get_null_string (SrtInputDevice *device)
   return NULL;
 }
 
+static gchar **
+srt_input_device_default_get_null_strv (SrtInputDevice *device)
+{
+  return NULL;
+}
+
 /**
  * srt_input_device_get_dev_node:
  * @device: An object implementing #SrtInputDeviceInterface
@@ -129,6 +135,27 @@ srt_input_device_get_subsystem (SrtInputDevice *device)
   return iface->get_subsystem (device);
 }
 
+/**
+ * srt_input_device_dup_udev_properties:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return the udev properties of this input device, if available, in
+ * the same format as `environ`. g_environ_getenv() can be used to
+ * process them.
+ *
+ * Returns: (nullable) (transfer full): udev properties, or %NULL.
+ *  Free with g_strfreev().
+ */
+gchar **
+srt_input_device_dup_udev_properties (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->dup_udev_properties (device);
+}
+
 static void
 srt_input_device_default_init (SrtInputDeviceInterface *iface)
 {
@@ -138,6 +165,7 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
   IMPLEMENT2 (get_dev_node, get_null_string);
   IMPLEMENT2 (get_sys_path, get_null_string);
   IMPLEMENT2 (get_subsystem, get_null_string);
+  IMPLEMENT2 (dup_udev_properties, get_null_strv);
 
 #undef IMPLEMENT
 #undef IMPLEMENT2

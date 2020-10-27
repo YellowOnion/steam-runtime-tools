@@ -102,10 +102,14 @@ test_input_device_usb (Fixture *f,
 {
   g_autoptr(MockInputDevice) mock_device = mock_input_device_new ();
   SrtInputDevice *device = SRT_INPUT_DEVICE (mock_device);
+  g_auto(GStrv) udev_properties = NULL;
 
   mock_device->dev_node = g_strdup ("/dev/input/event0");
   mock_device->sys_path = g_strdup ("/sys/devices/mock/usb/hid/input/input0/event0");
   mock_device->subsystem = g_strdup ("input");
+  mock_device->udev_properties = g_new0 (gchar *, 2);
+  mock_device->udev_properties[0] = g_strdup ("ID_INPUT_JOYSTICK=1");
+  mock_device->udev_properties[1] = NULL;
 
   /* TODO: Fill in somewhat realistic details for a USB-attached
    * Steam Controller */
@@ -115,6 +119,12 @@ test_input_device_usb (Fixture *f,
   g_assert_cmpstr (srt_input_device_get_sys_path (device), ==,
                    "/sys/devices/mock/usb/hid/input/input0/event0");
   g_assert_cmpstr (srt_input_device_get_subsystem (device), ==, "input");
+
+  udev_properties = srt_input_device_dup_udev_properties (device);
+  g_assert_nonnull (udev_properties);
+  g_assert_cmpstr (udev_properties[0], ==, "ID_INPUT_JOYSTICK=1");
+  g_assert_cmpstr (udev_properties[1], ==, NULL);
+
   /* TODO: Check other details */
 }
 
@@ -147,7 +157,16 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
    * real device monitors, we don't know what's physically present,
    * so we have to just emit debug messages. */
   if (f->config->type == MOCK)
-    g_ptr_array_add (f->log, g_steal_pointer (&message));
+    {
+      g_auto(GStrv) udev_properties = NULL;
+
+      udev_properties = srt_input_device_dup_udev_properties (device);
+      g_assert_nonnull (udev_properties);
+      g_assert_cmpstr (udev_properties[0], ==, "ID_INPUT_JOYSTICK=1");
+      g_assert_cmpstr (udev_properties[1], ==, NULL);
+
+      g_ptr_array_add (f->log, g_steal_pointer (&message));
+    }
 
   g_assert_true (in_monitor_main_context (f));
 }

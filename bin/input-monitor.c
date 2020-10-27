@@ -82,6 +82,8 @@ added (SrtInputDeviceMonitor *monitor,
       json_builder_set_member_name (builder, "added");
       json_builder_begin_object (builder);
         {
+          g_auto(GStrv) udev_properties = NULL;
+
           json_builder_set_member_name (builder, "dev_node");
           json_builder_add_string_value (builder,
                                          srt_input_device_get_dev_node (dev));
@@ -91,6 +93,27 @@ added (SrtInputDeviceMonitor *monitor,
           json_builder_set_member_name (builder, "sys_path");
           json_builder_add_string_value (builder,
                                          srt_input_device_get_sys_path (dev));
+
+          udev_properties = srt_input_device_dup_udev_properties (dev);
+
+          if (udev_properties != NULL)
+            {
+              gsize i;
+
+              json_builder_set_member_name (builder, "udev_properties");
+              json_builder_begin_array (builder);
+
+              for (i = 0; udev_properties[i] != NULL; i++)
+                {
+                  g_autofree gchar *valid = NULL;
+
+                  valid = g_utf8_make_valid (udev_properties[i], -1);
+                  json_builder_add_string_value (builder, valid);
+                }
+
+              json_builder_end_array (builder);
+            }
+
           /* TODO: Print more details here */
         }
       json_builder_end_object (builder);

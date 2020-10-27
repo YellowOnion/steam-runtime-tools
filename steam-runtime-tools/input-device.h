@@ -50,6 +50,8 @@ _SRT_PUBLIC
 const char *srt_input_device_get_sys_path (SrtInputDevice *device);
 _SRT_PUBLIC
 const char *srt_input_device_get_subsystem (SrtInputDevice *device);
+_SRT_PUBLIC
+gchar **srt_input_device_dup_udev_properties (SrtInputDevice *device);
 
 /**
  * SrtInputDeviceMonitorFlags:

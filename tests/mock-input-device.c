@@ -63,6 +63,7 @@ mock_input_device_finalize (GObject *object)
   g_clear_pointer (&self->sys_path, g_free);
   g_clear_pointer (&self->dev_node, g_free);
   g_clear_pointer (&self->subsystem, g_free);
+  g_clear_pointer (&self->udev_properties, g_strfreev);
 
   G_OBJECT_CLASS (mock_input_device_parent_class)->finalize (object);
 }
@@ -99,6 +100,14 @@ mock_input_device_get_sys_path (SrtInputDevice *device)
   return self->sys_path;
 }
 
+static gchar **
+mock_input_device_dup_udev_properties (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return g_strdupv (self->udev_properties);
+}
+
 static void
 mock_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
@@ -107,6 +116,7 @@ mock_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
+  IMPLEMENT (dup_udev_properties);
 
 #undef IMPLEMENT
 }
@@ -255,11 +265,16 @@ add_steam_controller (MockInputDeviceMonitor *self,
                       MockInputDevice **dev_out)
 {
   g_autoptr(MockInputDevice) device = mock_input_device_new ();
+  g_autoptr(GPtrArray) arr = g_ptr_array_new_full (1, g_free);
 
   device->dev_node = g_strdup_printf ("/dev/input/event%s", tail);
   device->sys_path = g_strdup_printf ("/sys/devices/mock/usb/hid/input/input0/event%s",
                                       tail);
   device->subsystem = g_strdup ("input");
+
+  g_ptr_array_add (arr, g_strdup ("ID_INPUT_JOYSTICK=1"));
+  g_ptr_array_add (arr, NULL);
+  device->udev_properties = (gchar **) g_ptr_array_free (g_steal_pointer (&arr), FALSE);
 
   /* TODO: When we have the rest of the expected fields, like vendor ID,
    * fill in somewhat realistic details of a Steam Controller */

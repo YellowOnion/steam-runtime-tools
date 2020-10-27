@@ -62,6 +62,8 @@ static struct
   const char *(*udev_device_get_devnode) (struct udev_device *);
   const char *(*udev_device_get_subsystem) (struct udev_device *);
   const char *(*udev_device_get_syspath) (struct udev_device *);
+  struct udev_list_entry *(*udev_device_get_properties_list_entry) (struct udev_device *);
+  const char *(*udev_device_get_property_value) (struct udev_device *, const char *);
   struct udev_device *(*udev_device_ref) (struct udev_device *);
   struct udev_device *(*udev_device_unref) (struct udev_device *);
 
@@ -182,6 +184,30 @@ srt_udev_input_device_get_sys_path (SrtInputDevice *device)
   return symbols.udev_device_get_syspath (self->dev);
 }
 
+static gchar **
+srt_udev_input_device_dup_udev_properties (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+  struct udev_list_entry *entries;
+  struct udev_list_entry *entry;
+  g_autoptr(GPtrArray) arr = g_ptr_array_new_with_free_func (g_free);
+
+  entries = symbols.udev_device_get_properties_list_entry (self->dev);
+
+  for (entry = entries;
+       entry != NULL;
+       entry = symbols.udev_list_entry_get_next (entry))
+    {
+      const char *name = symbols.udev_list_entry_get_name (entry);
+      const char *value = symbols.udev_device_get_property_value (self->dev, name);
+
+      g_ptr_array_add (arr, g_strdup_printf ("%s=%s", name, value));
+    }
+
+  g_ptr_array_add (arr, NULL);
+  return (gchar **) g_ptr_array_free (g_steal_pointer (&arr), FALSE);
+}
+
 static void
 srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
@@ -190,6 +216,7 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
+  IMPLEMENT (dup_udev_properties);
 
 #undef IMPLEMENT
 }
@@ -351,6 +378,8 @@ srt_udev_input_device_monitor_initable_init (GInitable *initable,
   SYMBOL (udev_device_get_devnode);
   SYMBOL (udev_device_get_subsystem);
   SYMBOL (udev_device_get_syspath);
+  SYMBOL (udev_device_get_properties_list_entry);
+  SYMBOL (udev_device_get_property_value);
   SYMBOL (udev_device_ref);
   SYMBOL (udev_device_unref);
 

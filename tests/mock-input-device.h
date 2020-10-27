@@ -52,6 +52,7 @@ struct _MockInputDevice
   gchar *sys_path;
   gchar *dev_node;
   gchar *subsystem;
+  gchar **udev_properties;
 };
 
 struct _MockInputDeviceClass

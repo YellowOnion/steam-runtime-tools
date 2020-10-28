@@ -46,6 +46,41 @@ static gboolean opt_seq = FALSE;
 static gboolean opt_verbose = FALSE;
 
 static void
+jsonify_flags (JsonBuilder *builder,
+               GType flags_type,
+               unsigned int values)
+{
+  GFlagsClass *class;
+  GFlagsValue *flags_value;
+
+  g_return_if_fail (G_TYPE_IS_FLAGS (flags_type));
+
+  class = g_type_class_ref (flags_type);
+
+  while (values != 0)
+    {
+      flags_value = g_flags_get_first_value (class, values);
+
+      if (flags_value == NULL)
+        break;
+
+      json_builder_add_string_value (builder, flags_value->value_nick);
+      values &= ~flags_value->value;
+    }
+
+  if (values)
+    {
+      gchar *rest = g_strdup_printf ("0x%x", values);
+
+      json_builder_add_string_value (builder, rest);
+
+      g_free (rest);
+    }
+
+  g_type_class_unref (class);
+}
+
+static void
 print_json (JsonBuilder *builder)
 {
   g_autoptr(JsonGenerator) generator = json_generator_new ();
@@ -123,6 +158,12 @@ added (SrtInputDeviceMonitor *monitor,
         {
           g_auto(GStrv) udev_properties = NULL;
           const char *sys_path;
+
+          json_builder_set_member_name (builder, "interface_flags");
+          json_builder_begin_array (builder);
+          jsonify_flags (builder, SRT_TYPE_INPUT_DEVICE_INTERFACE_FLAGS,
+                         srt_input_device_get_interface_flags (dev));
+          json_builder_end_array (builder);
 
           json_builder_set_member_name (builder, "dev_node");
           json_builder_add_string_value (builder,

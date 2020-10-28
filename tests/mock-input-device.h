@@ -72,6 +72,8 @@ struct _MockInputDevice
     gchar *sys_path;
     gchar *uevent;
   } usb_device_ancestor;
+
+  SrtInputDeviceInterfaceFlags iface_flags;
 };
 
 struct _MockInputDeviceClass

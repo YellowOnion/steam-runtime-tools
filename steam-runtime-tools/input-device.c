@@ -26,6 +26,9 @@
 #include "steam-runtime-tools/input-device.h"
 #include "steam-runtime-tools/input-device-internal.h"
 
+#include <linux/hidraw.h>
+#include <linux/input.h>
+
 #include <libglnx.h>
 
 #include "steam-runtime-tools/enums.h"
@@ -58,6 +61,30 @@ static gchar **
 srt_input_device_default_get_null_strv (SrtInputDevice *device)
 {
   return NULL;
+}
+
+/**
+ * srt_input_device_get_interface_flags:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return flags describing how the input device can be used.
+ *
+ * Returns: Flags describing the input device.
+ */
+SrtInputDeviceInterfaceFlags
+srt_input_device_get_interface_flags (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, SRT_INPUT_DEVICE_INTERFACE_FLAGS_NONE);
+
+  return iface->get_interface_flags (device);
+}
+
+static SrtInputDeviceInterfaceFlags
+srt_input_device_default_get_interface_flags (SrtInputDevice *device)
+{
+  return SRT_INPUT_DEVICE_INTERFACE_FLAGS_NONE;
 }
 
 /**
@@ -373,6 +400,7 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
 #define IMPLEMENT2(x, y) iface->x = srt_input_device_default_ ## y
 #define IMPLEMENT(x) IMPLEMENT2 (x, x)
 
+  IMPLEMENT (get_interface_flags);
   IMPLEMENT2 (get_dev_node, get_null_string);
   IMPLEMENT2 (get_sys_path, get_null_string);
   IMPLEMENT2 (get_subsystem, get_null_string);
@@ -757,6 +785,80 @@ _srt_input_device_monitor_emit_all_for_now (SrtInputDeviceMonitor *monitor)
 {
   g_debug ("All for now");
   g_signal_emit (monitor, monitor_signal_all_for_now, 0);
+}
+
+gboolean
+_srt_get_identity_from_evdev (int fd,
+                              guint32 *bus_type,
+                              guint32 *vendor,
+                              guint32 *product,
+                              guint32 *version)
+{
+  struct input_id iid = {};
+
+  if (bus_type != NULL)
+    *bus_type = 0;
+
+  if (vendor != NULL)
+    *vendor = 0;
+
+  if (product != NULL)
+    *product = 0;
+
+  if (ioctl (fd, EVIOCGID, &iid) < 0)
+    {
+      g_debug ("EVIOCGID: %s", g_strerror (errno));
+      return FALSE;
+    }
+
+  if (bus_type != NULL)
+    *bus_type = iid.bustype;
+
+  if (vendor != NULL)
+    *vendor = iid.vendor;
+
+  if (product != NULL)
+    *product = iid.product;
+
+  if (version != NULL)
+    *version = iid.version;
+
+  return TRUE;
+}
+
+gboolean
+_srt_get_identity_from_raw_hid (int fd,
+                                guint32 *bus_type,
+                                guint32 *vendor,
+                                guint32 *product)
+{
+  struct hidraw_devinfo devinfo = {};
+
+  if (bus_type != NULL)
+    *bus_type = 0;
+
+  if (vendor != NULL)
+    *vendor = 0;
+
+  if (product != NULL)
+    *product = 0;
+
+  if (ioctl (fd, HIDIOCGRAWINFO, &devinfo) < 0)
+    {
+      g_debug ("HIDIOCGRAWINFO: %s", g_strerror (errno));
+      return FALSE;
+    }
+
+  if (bus_type != NULL)
+    *bus_type = devinfo.bustype;
+
+  if (vendor != NULL)
+    *vendor = devinfo.vendor;
+
+  if (product != NULL)
+    *product = devinfo.product;
+
+  return TRUE;
 }
 
 /*

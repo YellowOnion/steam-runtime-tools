@@ -32,6 +32,8 @@ struct _SrtInputDeviceInterface
 {
   GTypeInterface parent;
 
+  SrtInputDeviceInterfaceFlags (*get_interface_flags) (SrtInputDevice *device);
+
   const char * (*get_dev_node) (SrtInputDevice *device);
   const char * (*get_sys_path) (SrtInputDevice *device);
   const char * (*get_subsystem) (SrtInputDevice *device);
@@ -73,6 +75,16 @@ void _srt_input_device_monitor_emit_removed (SrtInputDeviceMonitor *monitor,
                                              SrtInputDevice *device);
 void _srt_input_device_monitor_emit_all_for_now (SrtInputDeviceMonitor *monitor);
 
+
+gboolean _srt_get_identity_from_evdev (int fd,
+                                       guint32 *bus_type,
+                                       guint32 *vendor,
+                                       guint32 *product,
+                                       guint32 *version);
+gboolean _srt_get_identity_from_raw_hid (int fd,
+                                         guint32 *bus_type,
+                                         guint32 *vendor,
+                                         guint32 *product);
 gchar *_srt_input_device_uevent_field (const char *text,
                                        const char *key);
 gboolean _srt_input_device_uevent_field_equals (const char *text,

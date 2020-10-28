@@ -108,6 +108,8 @@ test_input_device_usb (Fixture *f,
   g_autofree gchar *input_uevent = NULL;
   g_autofree gchar *usb_uevent = NULL;
 
+  mock_device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+                              | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE);
   mock_device->dev_node = g_strdup ("/dev/input/event0");
   mock_device->sys_path = g_strdup ("/sys/devices/mock/usb/hid/input/input0/event0");
   mock_device->subsystem = g_strdup ("input");
@@ -128,6 +130,9 @@ test_input_device_usb (Fixture *f,
   /* TODO: Fill in somewhat realistic details for a USB-attached
    * Steam Controller */
 
+  g_assert_cmpuint (srt_input_device_get_interface_flags (device), ==,
+                    SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+                    | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE);
   g_assert_cmpstr (srt_input_device_get_dev_node (device), ==,
                    "/dev/input/event0");
   g_assert_cmpstr (srt_input_device_get_sys_path (device), ==,
@@ -195,6 +200,11 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
       g_autofree gchar *input_uevent = NULL;
       g_autofree gchar *usb_uevent = NULL;
       g_auto(GStrv) udev_properties = NULL;
+
+      g_assert_cmpuint (srt_input_device_get_interface_flags (device), ==,
+                        SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+                        | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE
+                        | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE);
 
       uevent = srt_input_device_dup_uevent (device);
       g_assert_cmpstr (uevent, ==, "ONE=1\nTWO=2\n");

@@ -36,6 +36,8 @@
 #include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
+#define ALWAYS_OPEN_FLAGS (O_CLOEXEC | O_NOCTTY)
+
 static void srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface);
 static void srt_udev_input_device_monitor_iface_init (SrtInputDeviceMonitorInterface *iface);
 static void srt_udev_input_device_monitor_initable_iface_init (GInitableIface *iface);
@@ -123,6 +125,8 @@ struct _SrtUdevInputDevice
   {
     struct udev_device *dev;                  /* borrowed from child dev */
   } usb_device_ancestor;
+
+  SrtInputDeviceInterfaceFlags iface_flags;
 };
 
 struct _SrtUdevInputDeviceClass
@@ -191,6 +195,14 @@ _srt_udev_input_device_class_init (SrtUdevInputDeviceClass *cls)
   GObjectClass *object_class = G_OBJECT_CLASS (cls);
 
   object_class->finalize = srt_udev_input_device_finalize;
+}
+
+static SrtInputDeviceInterfaceFlags
+srt_udev_input_device_get_interface_flags (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  return self->iface_flags;
 }
 
 static const char *
@@ -320,6 +332,7 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
 #define IMPLEMENT(x) iface->x = srt_udev_input_device_ ## x
 
+  IMPLEMENT (get_interface_flags);
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
@@ -535,6 +548,7 @@ add_device (SrtUdevInputDeviceMonitor *self,
   gboolean is_evdev = FALSE;
   gboolean is_hidraw = FALSE;
   const char *slash;
+  int fd;
 
   syspath = symbols.udev_device_get_syspath (dev);
   devnode = symbols.udev_device_get_devnode (dev);
@@ -586,6 +600,28 @@ add_device (SrtUdevInputDeviceMonitor *self,
 
   device = g_object_new (SRT_TYPE_UDEV_INPUT_DEVICE, NULL);
   device->dev = symbols.udev_device_ref (dev);
+
+  if (is_evdev)
+    device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
+
+  if (is_hidraw)
+    device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID;
+
+  fd = open (devnode, O_RDONLY | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+
+  if (fd >= 0)
+    {
+      device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE;
+      close (fd);
+    }
+
+  fd = open (devnode, O_RDWR | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+
+  if (fd >= 0)
+    {
+      device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE;
+      close (fd);
+    }
 
   device->hid_ancestor.dev = symbols.udev_device_get_parent_with_subsystem_devtype (device->dev,
                                                                                     "hid",

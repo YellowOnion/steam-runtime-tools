@@ -86,6 +86,14 @@ mock_input_device_class_init (MockInputDeviceClass *cls)
   object_class->finalize = mock_input_device_finalize;
 }
 
+static SrtInputDeviceInterfaceFlags
+mock_input_device_get_interface_flags (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return self->iface_flags;
+}
+
 static const char *
 mock_input_device_get_dev_node (SrtInputDevice *device)
 {
@@ -179,6 +187,7 @@ mock_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
 #define IMPLEMENT(x) iface->x = mock_input_device_ ## x
 
+  IMPLEMENT (get_interface_flags);
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
@@ -341,6 +350,9 @@ add_steam_controller (MockInputDeviceMonitor *self,
   g_autoptr(MockInputDevice) device = mock_input_device_new ();
   g_autoptr(GPtrArray) arr = g_ptr_array_new_full (1, g_free);
 
+  device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE
+                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE);
   device->dev_node = g_strdup_printf ("/dev/input/event%s", tail);
   device->sys_path = g_strdup_printf ("/sys/devices/mock/usb/hid/input/input0/event%s",
                                       tail);

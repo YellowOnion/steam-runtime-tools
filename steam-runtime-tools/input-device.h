@@ -33,6 +33,28 @@
 
 #include "steam-runtime-tools/macros.h"
 
+/**
+ * SrtInputDeviceInterfaceFlags:
+ * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT: evdev event device nodes,
+ *  typically /dev/input/event*
+ * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID: Raw USB or Bluetooth HID
+ *  device nodes, typically /dev/hidraw*
+ * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE: Only report device nodes that appear to be
+ *  openable in read-only mode
+ * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE: Only report device nodes that appear to be
+ *  openable in read/write mode
+ *
+ * Flags describing the interface offered by an input device.
+ */
+typedef enum
+{
+  SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT = (1 << 0),
+  SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID = (1 << 1),
+  SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE = (1 << 2),
+  SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE = (1 << 3),
+  SRT_INPUT_DEVICE_INTERFACE_FLAGS_NONE = 0
+} SrtInputDeviceInterfaceFlags;
+
 #define SRT_TYPE_INPUT_DEVICE (srt_input_device_get_type ())
 #define SRT_INPUT_DEVICE(x) (G_TYPE_CHECK_INSTANCE_CAST ((x), SRT_TYPE_INPUT_DEVICE, SrtInputDevice))
 #define SRT_IS_INPUT_DEVICE(x) (G_TYPE_CHECK_INSTANCE_TYPE ((x), SRT_TYPE_INPUT_DEVICE))
@@ -44,6 +66,8 @@ typedef struct _SrtInputDeviceInterface SrtInputDeviceInterface;
 _SRT_PUBLIC
 GType srt_input_device_get_type (void);
 
+_SRT_PUBLIC
+SrtInputDeviceInterfaceFlags srt_input_device_get_interface_flags (SrtInputDevice *device);
 _SRT_PUBLIC
 const char *srt_input_device_get_dev_node (SrtInputDevice *device);
 _SRT_PUBLIC

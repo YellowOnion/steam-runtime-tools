@@ -170,6 +170,23 @@ struct _SrtDirectInputDevice
   {
     gchar *sys_path;
   } usb_device_ancestor;
+
+  struct
+  {
+    guint32 bus_type;
+    guint32 product_id;
+    guint32 vendor_id;
+    guint32 version;
+  } evdev;
+
+  struct
+  {
+    guint32 bus_type;
+    guint32 product_id;
+    guint32 vendor_id;
+  } hid;
+
+  SrtInputDeviceInterfaceFlags iface_flags;
 };
 
 struct _SrtDirectInputDeviceClass
@@ -241,6 +258,14 @@ _srt_direct_input_device_class_init (SrtDirectInputDeviceClass *cls)
   object_class->finalize = srt_direct_input_device_finalize;
 }
 
+static SrtInputDeviceInterfaceFlags
+srt_direct_input_device_get_interface_flags (SrtInputDevice *device)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  return self->iface_flags;
+}
+
 static const char *
 srt_direct_input_device_get_dev_node (SrtInputDevice *device)
 {
@@ -294,6 +319,7 @@ srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
 #define IMPLEMENT(x) iface->x = srt_direct_input_device_ ## x
 
+  IMPLEMENT (get_interface_flags);
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
@@ -441,6 +467,9 @@ add_device (SrtDirectInputDeviceMonitor *self,
       return;
     }
 
+  if (subsystem == quark_hidraw)
+    device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID;
+
   g_debug ("Trying to open %s", devnode);
 
   fd = open (devnode, O_RDONLY | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
@@ -449,12 +478,59 @@ add_device (SrtDirectInputDeviceMonitor *self,
     {
       /* The permissions are already OK for use */
       g_debug ("Opened %s", devnode);
+      device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE;
+
+      if (_srt_get_identity_from_raw_hid (fd,
+                                          &device->hid.bus_type,
+                                          &device->hid.vendor_id,
+                                          &device->hid.product_id))
+        {
+          g_debug ("%s is raw HID: bus type 0x%04x, vendor 0x%04x, product 0x%04x",
+                   devnode,
+                   device->hid.bus_type,
+                   device->hid.vendor_id,
+                   device->hid.product_id);
+          device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID;
+        }
+
+      if (_srt_get_identity_from_evdev (fd,
+                                        &device->evdev.bus_type,
+                                        &device->evdev.vendor_id,
+                                        &device->evdev.product_id,
+                                        &device->evdev.version))
+        {
+          g_debug ("%s is evdev: bus type 0x%04x, vendor 0x%04x, product 0x%04x, version 0x%04x",
+                   devnode,
+                   device->evdev.bus_type,
+                   device->evdev.vendor_id,
+                   device->evdev.product_id,
+                   device->evdev.version);
+          device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
+        }
+
       close (fd);
     }
   else
     {
       /* We'll get another chance after the permissions get updated */
       g_debug ("Unable to open %s to identify it: %s", devnode, g_strerror (errno));
+      g_object_unref (device);
+      return;
+    }
+
+  fd = open (devnode, O_RDWR | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+
+  if (fd >= 0)
+    {
+      g_debug ("Opened %s rw", devnode);
+      device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE;
+      close (fd);
+    }
+
+  if ((device->iface_flags & (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+                              | SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID)) == 0)
+    {
+      g_debug ("%s is neither evdev nor raw HID, ignoring", devnode);
       g_object_unref (device);
       return;
     }

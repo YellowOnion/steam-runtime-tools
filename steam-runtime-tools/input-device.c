@@ -154,18 +154,11 @@ srt_input_device_dup_uevent (SrtInputDevice *device)
   return iface->dup_uevent (device);
 }
 
-/*
- * Default implementation: read the file in /sys. The kernel provides this,
- * so it should always be present, except in containers.
- */
 static gchar *
-srt_input_device_default_dup_uevent (SrtInputDevice *device)
+read_uevent (const char *sys_path)
 {
   g_autofree gchar *uevent_path = NULL;
   g_autofree gchar *contents = NULL;
-  const char *sys_path;
-
-  sys_path = srt_input_device_get_sys_path (device);
 
   if (sys_path == NULL)
     return NULL;
@@ -176,6 +169,34 @@ srt_input_device_default_dup_uevent (SrtInputDevice *device)
     return g_steal_pointer (&contents);
 
   return NULL;
+}
+
+/*
+ * Default implementation: read the file in /sys. The kernel provides this,
+ * so it should always be present, except in containers.
+ */
+static gchar *
+srt_input_device_default_dup_uevent (SrtInputDevice *device)
+{
+  return read_uevent (srt_input_device_get_sys_path (device));
+}
+
+static gchar *
+srt_input_device_default_dup_hid_uevent (SrtInputDevice *device)
+{
+  return read_uevent (srt_input_device_get_hid_sys_path (device));
+}
+
+static gchar *
+srt_input_device_default_dup_input_uevent (SrtInputDevice *device)
+{
+  return read_uevent (srt_input_device_get_input_sys_path (device));
+}
+
+static gchar *
+srt_input_device_default_dup_usb_device_uevent (SrtInputDevice *device)
+{
+  return read_uevent (srt_input_device_get_usb_device_sys_path (device));
 }
 
 /**
@@ -199,6 +220,153 @@ srt_input_device_dup_udev_properties (SrtInputDevice *device)
   return iface->dup_udev_properties (device);
 }
 
+/**
+ * srt_input_device_get_hid_sys_path:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return the path of the device directory in /sys that represents this
+ * input device's closest ancestor that is a Human Interface Device.
+ * Many, but not all, input devices have a HID ancestor. If there is no
+ * applicable HID device, return %NULL.
+ *
+ * For processes in a container, it is not guaranteed that this path will
+ * exist in the container's /sys.
+ *
+ * The returned string will not be freed as long as @device is referenced,
+ * but the directory in /sys might be deleted, or even reused for a different
+ * device.
+ *
+ * Returns: (nullable) (transfer none): A path in /sys that will not be
+ *  freed as long as a reference to @device is held, or %NULL
+ */
+const char *
+srt_input_device_get_hid_sys_path (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->get_hid_sys_path (device);
+}
+
+/**
+ * srt_input_device_dup_hid_uevent:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return the uevent data structure similar to
+ * srt_input_device_dup_uevent(), but for the ancestor device returned
+ * by srt_input_device_get_hid_sys_path().
+ *
+ * Returns: (nullable) (transfer full): A multi-line string, or %NULL.
+ *  Free with g_free().
+ */
+gchar *
+srt_input_device_dup_hid_uevent (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->dup_hid_uevent (device);
+}
+
+/**
+ * srt_input_device_get_usb_device_sys_path:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * If the @device is associated with a USB device, return the path in
+ * /sys representing the Linux `usb_device`. If not, return %NULL.
+ *
+ * For processes in a container, it is not guaranteed that this path will
+ * exist in the container's /sys.
+ *
+ * The returned string will not be freed as long as @device is referenced,
+ * but the directory in /sys might be deleted, or even reused for a different
+ * device.
+ *
+ * Returns: (nullable) (transfer none): A path in /sys that will not be
+ *  freed as long as a reference to @device is held, or %NULL
+ */
+const char *
+srt_input_device_get_usb_device_sys_path (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->get_usb_device_sys_path (device);
+}
+
+/**
+ * srt_input_device_dup_usb_device_uevent:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return the uevent data structure similar to
+ * srt_input_device_dup_uevent(), but for the ancestor device returned
+ * by srt_input_device_get_usb_device_sys_path().
+ *
+ * Returns: (nullable) (transfer full): A multi-line string, or %NULL.
+ *  Free with g_free().
+ */
+gchar *
+srt_input_device_dup_usb_device_uevent (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->dup_usb_device_uevent (device);
+}
+
+/**
+ * srt_input_device_get_input_sys_path:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * If the @device has an ancestor device that advertises evdev input
+ * capabilities, return the path in /sys for that device. Otherwise
+ * return %NULL.
+ *
+ * For processes in a container, it is not guaranteed that this path will
+ * exist in the container's /sys.
+ *
+ * The returned string will not be freed as long as @device is referenced,
+ * but the directory in /sys might be deleted, or even reused for a different
+ * device.
+ *
+ * Returns: (nullable) (transfer none): A path in /sys that will not be
+ *  freed as long as a reference to @device is held, or %NULL
+ */
+const char *
+srt_input_device_get_input_sys_path (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->get_input_sys_path (device);
+}
+
+/**
+ * srt_input_device_dup_input_uevent:
+ * @device: An object implementing #SrtInputDeviceInterface
+ *
+ * Return the uevent data structure similar to
+ * srt_input_device_dup_uevent(), but for the ancestor device returned
+ * by srt_input_device_get_input_sys_path().
+ *
+ * Returns: (nullable) (transfer full): A multi-line string, or %NULL.
+ *  Free with g_free().
+ */
+gchar *
+srt_input_device_dup_input_uevent (SrtInputDevice *device)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, NULL);
+
+  return iface->dup_input_uevent (device);
+}
+
 static void
 srt_input_device_default_init (SrtInputDeviceInterface *iface)
 {
@@ -208,8 +376,17 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
   IMPLEMENT2 (get_dev_node, get_null_string);
   IMPLEMENT2 (get_sys_path, get_null_string);
   IMPLEMENT2 (get_subsystem, get_null_string);
+
+  IMPLEMENT2 (get_hid_sys_path, get_null_string);
+  IMPLEMENT2 (get_input_sys_path, get_null_string);
+  IMPLEMENT2 (get_usb_device_sys_path, get_null_string);
+
   IMPLEMENT2 (dup_udev_properties, get_null_strv);
+
   IMPLEMENT (dup_uevent);
+  IMPLEMENT (dup_hid_uevent);
+  IMPLEMENT (dup_input_uevent);
+  IMPLEMENT (dup_usb_device_uevent);
 
 #undef IMPLEMENT
 #undef IMPLEMENT2
@@ -580,4 +757,78 @@ _srt_input_device_monitor_emit_all_for_now (SrtInputDeviceMonitor *monitor)
 {
   g_debug ("All for now");
   g_signal_emit (monitor, monitor_signal_all_for_now, 0);
+}
+
+/*
+ * Returns: The field @key from @text, or %NULL if not found.
+ */
+gchar *
+_srt_input_device_uevent_field (const char *text,
+                                const char *key)
+{
+  const char *line = text;
+  size_t key_len = strlen (key);
+
+  for (line = text;
+       line != NULL && *line != '\0';
+       line = strchr (line, '\n'))
+    {
+      while (*line == '\n')
+        line++;
+
+      /* If the line starts with KEY=, we're looking at the right field */
+      if (strncmp (line, key, key_len) == 0
+          && line[key_len] == '=')
+        {
+          const char *value = line + key_len + 1;
+          const char *after = strchrnul (line, '\n');
+
+          g_assert (after != NULL);
+          g_assert (after >= value);
+          g_assert (*after == '\n' || *after == '\0');
+          return g_strndup (value, after - value);
+        }
+    }
+
+  return NULL;
+}
+
+/*
+ * Returns: %TRUE if @text contains KEY=WANT_VALUE, preceded by
+ *  beginning-of-string or a newline, and followed by a newline
+ *  or end-of-string.
+ */
+gboolean
+_srt_input_device_uevent_field_equals (const char *text,
+                                       const char *key,
+                                       const char *want_value)
+{
+  const char *line = text;
+  size_t key_len = strlen (key);
+  size_t val_len = strlen (want_value);
+
+  for (line = text;
+       line != NULL && *line != '\0';
+       line = strchr (line, '\n'))
+    {
+      while (*line == '\n')
+        line++;
+
+      /* If the line starts with KEY=, we're looking at the right field */
+      if (strncmp (line, key, key_len) == 0
+          && line[key_len] == '=')
+        {
+          const char *real_value = line + key_len + 1;
+          char after;
+
+          if (strncmp (real_value, want_value, val_len) != 0)
+            return FALSE;
+
+          after = real_value[val_len];
+
+          return (after == '\0' || after == '\n');
+        }
+    }
+
+  return FALSE;
 }

@@ -66,6 +66,15 @@ mock_input_device_finalize (GObject *object)
   g_clear_pointer (&self->udev_properties, g_strfreev);
   g_clear_pointer (&self->uevent, g_free);
 
+  g_clear_pointer (&self->hid_ancestor.sys_path, g_free);
+  g_clear_pointer (&self->hid_ancestor.uevent, g_free);
+
+  g_clear_pointer (&self->input_ancestor.sys_path, g_free);
+  g_clear_pointer (&self->input_ancestor.uevent, g_free);
+
+  g_clear_pointer (&self->usb_device_ancestor.sys_path, g_free);
+  g_clear_pointer (&self->usb_device_ancestor.uevent, g_free);
+
   G_OBJECT_CLASS (mock_input_device_parent_class)->finalize (object);
 }
 
@@ -117,6 +126,54 @@ mock_input_device_dup_uevent (SrtInputDevice *device)
   return g_strdup (self->uevent);
 }
 
+static const char *
+mock_input_device_get_hid_sys_path (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return self->hid_ancestor.sys_path;
+}
+
+static gchar *
+mock_input_device_dup_hid_uevent (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return g_strdup (self->hid_ancestor.uevent);
+}
+
+static const char *
+mock_input_device_get_input_sys_path (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return self->input_ancestor.sys_path;
+}
+
+static gchar *
+mock_input_device_dup_input_uevent (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return g_strdup (self->input_ancestor.uevent);
+}
+
+static const char *
+mock_input_device_get_usb_device_sys_path (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return self->usb_device_ancestor.sys_path;
+}
+
+static gchar *
+mock_input_device_dup_usb_device_uevent (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return g_strdup (self->usb_device_ancestor.uevent);
+}
+
 static void
 mock_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
@@ -127,6 +184,13 @@ mock_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_subsystem);
   IMPLEMENT (dup_udev_properties);
   IMPLEMENT (dup_uevent);
+
+  IMPLEMENT (get_hid_sys_path);
+  IMPLEMENT (dup_hid_uevent);
+  IMPLEMENT (get_input_sys_path);
+  IMPLEMENT (dup_input_uevent);
+  IMPLEMENT (get_usb_device_sys_path);
+  IMPLEMENT (dup_usb_device_uevent);
 
 #undef IMPLEMENT
 }
@@ -282,6 +346,15 @@ add_steam_controller (MockInputDeviceMonitor *self,
                                       tail);
   device->subsystem = g_strdup ("input");
   device->uevent = g_strdup ("ONE=1\nTWO=2\n");
+
+  device->hid_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid");
+  device->hid_ancestor.uevent = g_strdup ("HID=yes\n");
+
+  device->input_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid/input");
+  device->input_ancestor.uevent = g_strdup ("INPUT=yes\n");
+
+  device->usb_device_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb");
+  device->usb_device_ancestor.uevent = g_strdup ("USB=usb_device\n");
 
   g_ptr_array_add (arr, g_strdup ("ID_INPUT_JOYSTICK=1"));
   g_ptr_array_add (arr, NULL);

@@ -72,6 +72,44 @@ print_json (JsonBuilder *builder)
 }
 
 static void
+add_uevent_member (JsonBuilder *builder,
+                   const char *name,
+                   const char *value)
+{
+  const char *start = value;
+  const char *end;
+
+  /* value is conceptually a single string, but we
+   * present it as an array of lines here, because that's
+   * a lot easier to read! */
+  json_builder_set_member_name (builder, name);
+  json_builder_begin_array (builder);
+
+  while (*start != '\0')
+    {
+      g_autofree gchar *valid = NULL;
+
+      while (*start == '\n')
+        start++;
+
+      if (*start == '\0')
+        break;
+
+      end = strchrnul (start, '\n');
+
+      valid = g_utf8_make_valid (start, end - start);
+      json_builder_add_string_value (builder, valid);
+
+      if (*end == '\0')
+        break;
+
+      start = end + 1;
+    }
+
+  json_builder_end_array (builder);
+}
+
+static void
 added (SrtInputDeviceMonitor *monitor,
        SrtInputDevice *dev,
        void *user_data)
@@ -84,6 +122,7 @@ added (SrtInputDeviceMonitor *monitor,
       json_builder_begin_object (builder);
         {
           g_auto(GStrv) udev_properties = NULL;
+          const char *sys_path;
 
           json_builder_set_member_name (builder, "dev_node");
           json_builder_add_string_value (builder,
@@ -120,39 +159,74 @@ added (SrtInputDeviceMonitor *monitor,
               g_autofree gchar *uevent = srt_input_device_dup_uevent (dev);
 
               if (uevent != NULL)
+                add_uevent_member (builder, "uevent", uevent);
+            }
+
+          sys_path = srt_input_device_get_hid_sys_path (dev);
+
+          if (sys_path != NULL)
+            {
+              json_builder_set_member_name (builder, "hid_ancestor");
+              json_builder_begin_object (builder);
                 {
-                  const char *start = uevent;
-                  const char *end;
+                  json_builder_set_member_name (builder, "sys_path");
+                  json_builder_add_string_value (builder, sys_path);
 
-                  /* uevent is conceptually a single string, but we
-                   * present it as an array of lines here, because that's
-                   * a lot easier to read! */
-                  json_builder_set_member_name (builder, "uevent");
-                  json_builder_begin_array (builder);
-
-                  while (*start != '\0')
+                  if (opt_verbose)
                     {
-                      g_autofree gchar *valid = NULL;
+                      g_autofree gchar *uevent = srt_input_device_dup_hid_uevent (dev);
 
-                      while (*start == '\n')
-                        start++;
-
-                      if (*start == '\0')
-                        break;
-
-                      end = strchrnul (start, '\n');
-
-                      valid = g_utf8_make_valid (start, (end - start) - 1);
-                      json_builder_add_string_value (builder, valid);
-
-                      if (*end == '\0')
-                        break;
-
-                      start = end + 1;
+                      if (uevent != NULL)
+                        add_uevent_member (builder, "uevent", uevent);
                     }
 
-                  json_builder_end_array (builder);
+                  /* TODO: vendor, product etc. */
                 }
+              json_builder_end_object (builder);
+            }
+
+          sys_path = srt_input_device_get_input_sys_path (dev);
+
+          if (sys_path != NULL)
+            {
+              json_builder_set_member_name (builder, "input_ancestor");
+              json_builder_begin_object (builder);
+                {
+                  json_builder_set_member_name (builder, "sys_path");
+                  json_builder_add_string_value (builder, sys_path);
+
+                  if (opt_verbose)
+                    {
+                      g_autofree gchar *uevent = srt_input_device_dup_input_uevent (dev);
+
+                      if (uevent != NULL)
+                        add_uevent_member (builder, "uevent", uevent);
+                    }
+                }
+              json_builder_end_object (builder);
+            }
+
+          sys_path = srt_input_device_get_usb_device_sys_path (dev);
+
+          if (sys_path != NULL)
+            {
+              json_builder_set_member_name (builder, "usb_device_ancestor");
+              json_builder_begin_object (builder);
+                {
+                  json_builder_set_member_name (builder, "sys_path");
+                  json_builder_add_string_value (builder, sys_path);
+
+                  if (opt_verbose)
+                    {
+                      g_autofree gchar *uevent = srt_input_device_dup_usb_device_uevent (dev);
+
+                      if (uevent != NULL)
+                        add_uevent_member (builder, "uevent", uevent);
+                    }
+
+                  /* TODO: vendor, product etc. */
+                }
+              json_builder_end_object (builder);
             }
 
           /* TODO: Print more details here */

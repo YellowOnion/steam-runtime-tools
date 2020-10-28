@@ -55,6 +55,21 @@ gchar **srt_input_device_dup_udev_properties (SrtInputDevice *device);
 _SRT_PUBLIC
 gchar *srt_input_device_dup_uevent (SrtInputDevice *device);
 
+_SRT_PUBLIC
+const char *srt_input_device_get_hid_sys_path (SrtInputDevice *device);
+_SRT_PUBLIC
+gchar *srt_input_device_dup_hid_uevent (SrtInputDevice *device);
+
+_SRT_PUBLIC
+const char *srt_input_device_get_input_sys_path (SrtInputDevice *device);
+_SRT_PUBLIC
+gchar *srt_input_device_dup_input_uevent (SrtInputDevice *device);
+
+_SRT_PUBLIC
+const char *srt_input_device_get_usb_device_sys_path (SrtInputDevice *device);
+_SRT_PUBLIC
+gchar *srt_input_device_dup_usb_device_uevent (SrtInputDevice *device);
+
 /**
  * SrtInputDeviceMonitorFlags:
  * @SRT_INPUT_DEVICE_MONITOR_FLAGS_ONCE: Enumerate the devices that were

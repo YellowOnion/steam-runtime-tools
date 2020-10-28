@@ -54,6 +54,24 @@ struct _MockInputDevice
   gchar *subsystem;
   gchar **udev_properties;
   gchar *uevent;
+
+  struct
+  {
+    gchar *sys_path;
+    gchar *uevent;
+  } hid_ancestor;
+
+  struct
+  {
+    gchar *sys_path;
+    gchar *uevent;
+  } input_ancestor;
+
+  struct
+  {
+    gchar *sys_path;
+    gchar *uevent;
+  } usb_device_ancestor;
 };
 
 struct _MockInputDeviceClass

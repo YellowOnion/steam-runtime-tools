@@ -29,6 +29,7 @@
 #include <glib/gstdio.h>
 #include <glib-object.h>
 
+#include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "test-utils.h"
 
@@ -229,6 +230,64 @@ test_str_is_integer (Fixture *f,
   g_assert_false (_srt_str_is_integer ("23a"));
 }
 
+static const char uevent[] =
+"DRIVER=lenovo\n"
+"HID_ID=0003:000017EF:00006009\n"
+"HID_NAME=Lite-On Technology Corp. ThinkPad USB Keyboard with TrackPoint\n"
+"HID_PHYS=usb-0000:00:14.0-2/input0\n"
+"HID_UNIQ=\n"
+"MODALIAS=hid:b0003g0000v000017EFp00006009\n";
+
+static struct
+{
+  const char *key;
+  const char *value;
+} uevent_parsed[] =
+{
+  { "DRIVER", "lenovo" },
+  { "HID_ID", "0003:000017EF:00006009" },
+  { "HID_NAME", "Lite-On Technology Corp. ThinkPad USB Keyboard with TrackPoint" },
+  { "HID_PHYS", "usb-0000:00:14.0-2/input0" },
+  { "HID_UNIQ", "" },
+  { "MODALIAS", "hid:b0003g0000v000017EFp00006009" }
+};
+
+static const char no_newline[] = "DRIVER=lenovo";
+
+static void
+test_uevent_field (Fixture *f,
+                   gconstpointer context)
+{
+  gsize i;
+
+  g_assert_false (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", ""));
+  g_assert_false (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", "lenov"));
+  g_assert_true (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", "lenovo"));
+  g_assert_false (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", "lenovoo"));
+
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "DRIVER", "lenov"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "DRIVER", "lenovoo"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "HID_ID", "0003:000017EF:0000600"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "HID_ID", "0003:000017EF:000060099"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "HID_UNIQ", "x"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "MODALIAS", "nope"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "NOPE", ""));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "NOPE", "nope"));
+
+  for (i = 0; i < G_N_ELEMENTS (uevent_parsed); i++)
+    {
+      g_autofree gchar *v = NULL;
+
+      v = _srt_input_device_uevent_field (uevent, uevent_parsed[i].key);
+      g_assert_cmpstr (v, ==, uevent_parsed[i].value);
+      g_assert_true (_srt_input_device_uevent_field_equals (uevent,
+                                                            uevent_parsed[i].key,
+                                                            uevent_parsed[i].value));
+    }
+
+  g_assert_null (_srt_input_device_uevent_field (uevent, "NOPE"));
+}
+
 int
 main (int argc,
       char **argv)
@@ -243,6 +302,8 @@ main (int argc,
               filter_gameoverlayrenderer, teardown);
   g_test_add ("/utils/str_is_integer", Fixture, NULL,
               setup, test_str_is_integer, teardown);
+  g_test_add ("/utils/uevent-field", Fixture, NULL,
+              setup, test_uevent_field, teardown);
 
   return g_test_run ();
 }

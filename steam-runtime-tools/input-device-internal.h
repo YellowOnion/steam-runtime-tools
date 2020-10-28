@@ -37,6 +37,15 @@ struct _SrtInputDeviceInterface
   const char * (*get_subsystem) (SrtInputDevice *device);
   gchar ** (*dup_udev_properties) (SrtInputDevice *device);
   gchar * (*dup_uevent) (SrtInputDevice *device);
+
+  const char * (*get_hid_sys_path) (SrtInputDevice *device);
+  gchar * (*dup_hid_uevent) (SrtInputDevice *device);
+
+  const char * (*get_input_sys_path) (SrtInputDevice *device);
+  gchar * (*dup_input_uevent) (SrtInputDevice *device);
+
+  const char * (*get_usb_device_sys_path) (SrtInputDevice *device);
+  gchar * (*dup_usb_device_uevent) (SrtInputDevice *device);
 };
 
 struct _SrtInputDeviceMonitorInterface
@@ -63,3 +72,9 @@ void _srt_input_device_monitor_emit_added (SrtInputDeviceMonitor *monitor,
 void _srt_input_device_monitor_emit_removed (SrtInputDeviceMonitor *monitor,
                                              SrtInputDevice *device);
 void _srt_input_device_monitor_emit_all_for_now (SrtInputDeviceMonitor *monitor);
+
+gchar *_srt_input_device_uevent_field (const char *text,
+                                       const char *key);
+gboolean _srt_input_device_uevent_field_equals (const char *text,
+                                                const char *key,
+                                                const char *want_value);

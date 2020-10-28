@@ -43,6 +43,108 @@
 static void srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface);
 static void srt_direct_input_device_monitor_iface_init (SrtInputDeviceMonitorInterface *iface);
 
+static void
+remove_last_component_in_place (char *path)
+{
+  char *slash = strrchr (path, '/');
+
+  if (slash == NULL)
+    *path = '\0';
+  else
+    *slash = '\0';
+}
+
+/*
+ * @path: The path to a device directory in /sys
+ *
+ * Returns: (nullable) (transfer full): The closest ancestor of @path
+ *  that is an input device with evdev capabilities, or %NULL if not found
+ */
+static gchar *
+find_input_ancestor (const char *path)
+{
+  g_autofree char *ancestor = NULL;
+
+  for (ancestor = g_strdup (path);
+       g_str_has_prefix (ancestor, "/sys/");
+       remove_last_component_in_place (ancestor))
+    {
+      g_autofree char *subsys = g_build_filename (ancestor, "subsystem", NULL);
+      g_autofree char *caps = g_build_filename (ancestor, "capabilities", "ev", NULL);
+      g_autofree char *target = glnx_readlinkat_malloc (AT_FDCWD, subsys,
+                                                        NULL, NULL);
+      const char *slash = NULL;
+
+      if (!g_file_test (caps, G_FILE_TEST_IS_REGULAR))
+        continue;
+
+      if (target != NULL)
+        slash = strrchr (target, '/');
+
+      if (slash == NULL || strcmp (slash + 1, "input") != 0)
+        continue;
+
+      return g_steal_pointer (&ancestor);
+    }
+
+  return NULL;
+}
+
+/*
+ * @path: The path to a device directory in /sys
+ * @subsystem: A desired subsystem, such as "hid" or "usb", or %NULL to accept any
+ * @devtype: A desired device type, such as "usb_device", or %NULL to accept any
+ * @uevent_out: (out) (optional): Optionally return the text of /sys/.../uevent
+ *
+ * Returns: (nullable) (transfer full): The closest ancestor of @path
+ *  that has a subsystem of @subsystem, or %NULL if not found.
+ */
+static gchar *
+get_ancestor_with_subsystem_devtype (const char *path,
+                                     const char *subsystem,
+                                     const char *devtype,
+                                     gchar **uevent_out)
+{
+  g_autofree char *ancestor = NULL;
+
+  for (ancestor = g_strdup (path);
+       g_str_has_prefix (ancestor, "/sys/");
+       remove_last_component_in_place (ancestor))
+    {
+      g_autofree char *uevent = g_build_filename (ancestor, "uevent", NULL);
+      g_autofree char *text = NULL;
+
+      /* If it doesn't have a uevent file, it isn't a real device */
+      if (!g_file_get_contents (uevent, &text, NULL, NULL))
+        continue;
+
+      if (subsystem != NULL)
+        {
+          g_autofree char *subsys = g_build_filename (ancestor, "subsystem", NULL);
+          g_autofree char *target = glnx_readlinkat_malloc (AT_FDCWD, subsys,
+                                                            NULL, NULL);
+          const char *slash = NULL;
+
+          if (target != NULL)
+            slash = strrchr (target, '/');
+
+          if (slash == NULL || strcmp (slash + 1, subsystem) != 0)
+            continue;
+        }
+
+      if (devtype != NULL
+          && !_srt_input_device_uevent_field_equals (text, "DEVTYPE", devtype))
+        continue;
+
+      if (uevent_out != NULL)
+        *uevent_out = g_steal_pointer (&text);
+
+      return g_steal_pointer (&ancestor);
+    }
+
+  return NULL;
+}
+
 static GQuark quark_hidraw = 0;
 static GQuark quark_input = 0;
 
@@ -53,6 +155,21 @@ struct _SrtDirectInputDevice
   char *sys_path;
   gchar *dev_node;
   GQuark subsystem;
+
+  struct
+  {
+    gchar *sys_path;
+  } hid_ancestor;
+
+  struct
+  {
+    gchar *sys_path;
+  } input_ancestor;
+
+  struct
+  {
+    gchar *sys_path;
+  } usb_device_ancestor;
 };
 
 struct _SrtDirectInputDeviceClass
@@ -109,6 +226,9 @@ srt_direct_input_device_finalize (GObject *object)
 
   g_clear_pointer (&self->sys_path, free);
   g_clear_pointer (&self->dev_node, g_free);
+  g_clear_pointer (&self->hid_ancestor.sys_path, g_free);
+  g_clear_pointer (&self->input_ancestor.sys_path, g_free);
+  g_clear_pointer (&self->usb_device_ancestor.sys_path, g_free);
 
   G_OBJECT_CLASS (_srt_direct_input_device_parent_class)->finalize (object);
 }
@@ -145,6 +265,30 @@ srt_direct_input_device_get_sys_path (SrtInputDevice *device)
   return self->sys_path;
 }
 
+static const char *
+srt_direct_input_device_get_hid_sys_path (SrtInputDevice *device)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  return self->hid_ancestor.sys_path;
+}
+
+static const char *
+srt_direct_input_device_get_input_sys_path (SrtInputDevice *device)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  return self->input_ancestor.sys_path;
+}
+
+static const char *
+srt_direct_input_device_get_usb_device_sys_path (SrtInputDevice *device)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  return self->usb_device_ancestor.sys_path;
+}
+
 static void
 srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
@@ -153,6 +297,10 @@ srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
+
+  IMPLEMENT (get_hid_sys_path);
+  IMPLEMENT (get_input_sys_path);
+  IMPLEMENT (get_usb_device_sys_path);
 
 #undef IMPLEMENT
 }
@@ -310,6 +458,15 @@ add_device (SrtDirectInputDeviceMonitor *self,
       g_object_unref (device);
       return;
     }
+
+  device->hid_ancestor.sys_path = get_ancestor_with_subsystem_devtype (device->sys_path,
+                                                              "hid", NULL,
+                                                              NULL);
+  device->input_ancestor.sys_path = find_input_ancestor (device->sys_path);
+  device->usb_device_ancestor.sys_path = get_ancestor_with_subsystem_devtype (device->sys_path,
+                                                                     "usb",
+                                                                     "usb_device",
+                                                                     NULL);
 
   g_hash_table_replace (self->devices, device->dev_node, device);
   _srt_input_device_monitor_emit_added (SRT_INPUT_DEVICE_MONITOR (self),

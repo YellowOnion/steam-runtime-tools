@@ -65,6 +65,7 @@ static struct
   struct udev_list_entry *(*udev_device_get_properties_list_entry) (struct udev_device *);
   const char *(*udev_device_get_property_value) (struct udev_device *, const char *);
   const char *(*udev_device_get_sysattr_value) (struct udev_device *, const char *);
+  struct udev_device *(*udev_device_get_parent_with_subsystem_devtype) (struct udev_device *, const char *, const char *);
   struct udev_device *(*udev_device_ref) (struct udev_device *);
   struct udev_device *(*udev_device_unref) (struct udev_device *);
 
@@ -86,11 +87,42 @@ static struct
   struct udev_enumerate *(*udev_enumerate_unref) (struct udev_enumerate *);
 } symbols;
 
+static struct udev_device *
+find_input_ancestor (struct udev_device *dev)
+{
+  struct udev_device *ancestor;
+
+  for (ancestor = dev;
+       ancestor != NULL;
+       ancestor = symbols.udev_device_get_parent_with_subsystem_devtype (ancestor, "input", NULL))
+    {
+      if (symbols.udev_device_get_sysattr_value (ancestor, "capabilities/ev") != NULL)
+        return ancestor;
+    }
+
+  return NULL;
+}
+
 struct _SrtUdevInputDevice
 {
   GObject parent;
 
-  struct udev_device *dev;
+  struct udev_device *dev;                    /* owned */
+
+  struct
+  {
+    struct udev_device *dev;                  /* borrowed from child dev */
+  } hid_ancestor;
+
+  struct
+  {
+    struct udev_device *dev;                  /* borrowed from child dev */
+  } input_ancestor;
+
+  struct
+  {
+    struct udev_device *dev;                  /* borrowed from child dev */
+  } usb_device_ancestor;
 };
 
 struct _SrtUdevInputDeviceClass
@@ -217,6 +249,72 @@ srt_udev_input_device_dup_uevent (SrtInputDevice *device)
   return g_strdup (symbols.udev_device_get_sysattr_value (self->dev, "uevent"));
 }
 
+static const char *
+srt_udev_input_device_get_hid_sys_path (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->hid_ancestor.dev == NULL)
+    return NULL;
+
+  return symbols.udev_device_get_syspath (self->hid_ancestor.dev);
+}
+
+static const char *
+srt_udev_input_device_get_input_sys_path (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->input_ancestor.dev == NULL)
+    return NULL;
+
+  return symbols.udev_device_get_syspath (self->input_ancestor.dev);
+}
+
+static const char *
+srt_udev_input_device_get_usb_device_sys_path (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->usb_device_ancestor.dev == NULL)
+    return NULL;
+
+  return symbols.udev_device_get_syspath (self->usb_device_ancestor.dev);
+}
+
+static gchar *
+srt_udev_input_device_dup_hid_uevent (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->hid_ancestor.dev == NULL)
+    return NULL;
+
+  return g_strdup (symbols.udev_device_get_sysattr_value (self->hid_ancestor.dev, "uevent"));
+}
+
+static gchar *
+srt_udev_input_device_dup_input_uevent (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->input_ancestor.dev == NULL)
+    return NULL;
+
+  return g_strdup (symbols.udev_device_get_sysattr_value (self->input_ancestor.dev, "uevent"));
+}
+
+static gchar *
+srt_udev_input_device_dup_usb_device_uevent (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->usb_device_ancestor.dev == NULL)
+    return NULL;
+
+  return g_strdup (symbols.udev_device_get_sysattr_value (self->usb_device_ancestor.dev, "uevent"));
+}
+
 static void
 srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
@@ -227,6 +325,14 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_subsystem);
   IMPLEMENT (dup_udev_properties);
   IMPLEMENT (dup_uevent);
+
+  IMPLEMENT (get_hid_sys_path);
+  IMPLEMENT (get_input_sys_path);
+  IMPLEMENT (get_usb_device_sys_path);
+
+  IMPLEMENT (dup_hid_uevent);
+  IMPLEMENT (dup_input_uevent);
+  IMPLEMENT (dup_usb_device_uevent);
 
 #undef IMPLEMENT
 }
@@ -391,6 +497,7 @@ srt_udev_input_device_monitor_initable_init (GInitable *initable,
   SYMBOL (udev_device_get_properties_list_entry);
   SYMBOL (udev_device_get_property_value);
   SYMBOL (udev_device_get_sysattr_value);
+  SYMBOL (udev_device_get_parent_with_subsystem_devtype);
   SYMBOL (udev_device_ref);
   SYMBOL (udev_device_unref);
 
@@ -479,6 +586,14 @@ add_device (SrtUdevInputDeviceMonitor *self,
 
   device = g_object_new (SRT_TYPE_UDEV_INPUT_DEVICE, NULL);
   device->dev = symbols.udev_device_ref (dev);
+
+  device->hid_ancestor.dev = symbols.udev_device_get_parent_with_subsystem_devtype (device->dev,
+                                                                                    "hid",
+                                                                                    NULL);
+  device->input_ancestor.dev = find_input_ancestor (device->dev);
+  device->usb_device_ancestor.dev = symbols.udev_device_get_parent_with_subsystem_devtype (device->dev,
+                                                                                           "usb",
+                                                                                           "usb_device");
 
   g_hash_table_replace (self->devices, (char *) syspath, device);
   _srt_input_device_monitor_emit_added (SRT_INPUT_DEVICE_MONITOR (self),

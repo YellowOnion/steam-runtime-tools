@@ -104,6 +104,9 @@ test_input_device_usb (Fixture *f,
   SrtInputDevice *device = SRT_INPUT_DEVICE (mock_device);
   g_auto(GStrv) udev_properties = NULL;
   g_autofree gchar *uevent = NULL;
+  g_autofree gchar *hid_uevent = NULL;
+  g_autofree gchar *input_uevent = NULL;
+  g_autofree gchar *usb_uevent = NULL;
 
   mock_device->dev_node = g_strdup ("/dev/input/event0");
   mock_device->sys_path = g_strdup ("/sys/devices/mock/usb/hid/input/input0/event0");
@@ -112,6 +115,15 @@ test_input_device_usb (Fixture *f,
   mock_device->udev_properties[0] = g_strdup ("ID_INPUT_JOYSTICK=1");
   mock_device->udev_properties[1] = NULL;
   mock_device->uevent = g_strdup ("A=a\nB=b\n");
+
+  mock_device->hid_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid");
+  mock_device->hid_ancestor.uevent = g_strdup ("HID=yes\n");
+
+  mock_device->input_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid/input");
+  mock_device->input_ancestor.uevent = g_strdup ("INPUT=yes\n");
+
+  mock_device->usb_device_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb");
+  mock_device->usb_device_ancestor.uevent = g_strdup ("USB=usb_device\n");
 
   /* TODO: Fill in somewhat realistic details for a USB-attached
    * Steam Controller */
@@ -124,6 +136,21 @@ test_input_device_usb (Fixture *f,
 
   uevent = srt_input_device_dup_uevent (device);
   g_assert_cmpstr (uevent, ==, "A=a\nB=b\n");
+
+  g_assert_cmpstr (srt_input_device_get_hid_sys_path (device), ==,
+                   "/sys/devices/mock/usb/hid");
+  hid_uevent = srt_input_device_dup_hid_uevent (device);
+  g_assert_cmpstr (hid_uevent, ==, "HID=yes\n");
+
+  g_assert_cmpstr (srt_input_device_get_input_sys_path (device), ==,
+                   "/sys/devices/mock/usb/hid/input");
+  input_uevent = srt_input_device_dup_input_uevent (device);
+  g_assert_cmpstr (input_uevent, ==, "INPUT=yes\n");
+
+  g_assert_cmpstr (srt_input_device_get_usb_device_sys_path (device), ==,
+                   "/sys/devices/mock/usb");
+  usb_uevent = srt_input_device_dup_usb_device_uevent (device);
+  g_assert_cmpstr (usb_uevent, ==, "USB=usb_device\n");
 
   udev_properties = srt_input_device_dup_udev_properties (device);
   g_assert_nonnull (udev_properties);
@@ -164,6 +191,9 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
   if (f->config->type == MOCK)
     {
       g_autofree gchar *uevent = NULL;
+      g_autofree gchar *hid_uevent = NULL;
+      g_autofree gchar *input_uevent = NULL;
+      g_autofree gchar *usb_uevent = NULL;
       g_auto(GStrv) udev_properties = NULL;
 
       uevent = srt_input_device_dup_uevent (device);
@@ -173,6 +203,21 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
       g_assert_nonnull (udev_properties);
       g_assert_cmpstr (udev_properties[0], ==, "ID_INPUT_JOYSTICK=1");
       g_assert_cmpstr (udev_properties[1], ==, NULL);
+
+      g_assert_cmpstr (srt_input_device_get_hid_sys_path (device), ==,
+                       "/sys/devices/mock/usb/hid");
+      hid_uevent = srt_input_device_dup_hid_uevent (device);
+      g_assert_cmpstr (hid_uevent, ==, "HID=yes\n");
+
+      g_assert_cmpstr (srt_input_device_get_input_sys_path (device), ==,
+                       "/sys/devices/mock/usb/hid/input");
+      input_uevent = srt_input_device_dup_input_uevent (device);
+      g_assert_cmpstr (input_uevent, ==, "INPUT=yes\n");
+
+      g_assert_cmpstr (srt_input_device_get_usb_device_sys_path (device), ==,
+                       "/sys/devices/mock/usb");
+      usb_uevent = srt_input_device_dup_usb_device_uevent (device);
+      g_assert_cmpstr (usb_uevent, ==, "USB=usb_device\n");
 
       g_ptr_array_add (f->log, g_steal_pointer (&message));
     }

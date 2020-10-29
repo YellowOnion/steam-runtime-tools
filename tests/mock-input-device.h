@@ -54,23 +54,46 @@ struct _MockInputDevice
   gchar *subsystem;
   gchar **udev_properties;
   gchar *uevent;
+  guint32 bus_type;
+  guint32 product_id;
+  guint32 vendor_id;
+  guint32 version;
 
   struct
   {
     gchar *sys_path;
     gchar *uevent;
+    gchar *name;
+    gchar *phys;
+    gchar *uniq;
+    guint32 bus_type;
+    guint32 product_id;
+    guint32 vendor_id;
   } hid_ancestor;
 
   struct
   {
     gchar *sys_path;
     gchar *uevent;
+    gchar *name;
+    gchar *phys;
+    gchar *uniq;
+    guint32 bus_type;
+    guint32 product_id;
+    guint32 vendor_id;
+    guint32 version;
   } input_ancestor;
 
   struct
   {
     gchar *sys_path;
     gchar *uevent;
+    gchar *manufacturer;
+    gchar *product;
+    gchar *serial;
+    guint32 product_id;
+    guint32 vendor_id;
+    guint32 device_version;
   } usb_device_ancestor;
 
   SrtInputDeviceInterfaceFlags iface_flags;

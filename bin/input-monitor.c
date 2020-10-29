@@ -158,6 +158,14 @@ added (SrtInputDeviceMonitor *monitor,
         {
           g_auto(GStrv) udev_properties = NULL;
           const char *sys_path;
+          struct
+          {
+            const char *name;
+            const char *phys;
+            const char *uniq;
+            const char *manufacturer;
+            unsigned int bus_type, vendor_id, product_id, version;
+          } id, blank_id = {};
 
           json_builder_set_member_name (builder, "interface_flags");
           json_builder_begin_array (builder);
@@ -174,6 +182,36 @@ added (SrtInputDeviceMonitor *monitor,
           json_builder_set_member_name (builder, "sys_path");
           json_builder_add_string_value (builder,
                                          srt_input_device_get_sys_path (dev));
+
+          id = blank_id;
+
+          if (srt_input_device_get_identity (dev,
+                                             &id.bus_type,
+                                             &id.vendor_id,
+                                             &id.product_id,
+                                             &id.version))
+            {
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.bus_type);
+                  json_builder_set_member_name (builder, "bus_type");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.vendor_id);
+                  json_builder_set_member_name (builder, "vendor_id");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.product_id);
+                  json_builder_set_member_name (builder, "product_id");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.version);
+                  json_builder_set_member_name (builder, "version");
+                  json_builder_add_string_value (builder, s);
+                }
+            }
 
           udev_properties = srt_input_device_dup_udev_properties (dev);
 
@@ -205,72 +243,169 @@ added (SrtInputDeviceMonitor *monitor,
 
           sys_path = srt_input_device_get_hid_sys_path (dev);
 
-          if (sys_path != NULL)
+          id = blank_id;
+
+          if (srt_input_device_get_hid_identity (dev,
+                                                 &id.bus_type,
+                                                 &id.vendor_id,
+                                                 &id.product_id,
+                                                 &id.name,
+                                                 &id.phys,
+                                                 &id.uniq)
+              || sys_path != NULL)
             {
               json_builder_set_member_name (builder, "hid_ancestor");
               json_builder_begin_object (builder);
+
+              json_builder_set_member_name (builder, "sys_path");
+              json_builder_add_string_value (builder, sys_path);
+
+              json_builder_set_member_name (builder, "name");
+              json_builder_add_string_value (builder, id.name);
+
                 {
-                  json_builder_set_member_name (builder, "sys_path");
-                  json_builder_add_string_value (builder, sys_path);
-
-                  if (opt_verbose)
-                    {
-                      g_autofree gchar *uevent = srt_input_device_dup_hid_uevent (dev);
-
-                      if (uevent != NULL)
-                        add_uevent_member (builder, "uevent", uevent);
-                    }
-
-                  /* TODO: vendor, product etc. */
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.bus_type);
+                  json_builder_set_member_name (builder, "bus_type");
+                  json_builder_add_string_value (builder, s);
                 }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.vendor_id);
+                  json_builder_set_member_name (builder, "vendor_id");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.product_id);
+                  json_builder_set_member_name (builder, "product_id");
+                  json_builder_add_string_value (builder, s);
+                }
+
+              json_builder_set_member_name (builder, "uniq");
+              json_builder_add_string_value (builder, id.uniq);
+
+              if (opt_verbose)
+                {
+                  g_autofree gchar *uevent = srt_input_device_dup_hid_uevent (dev);
+
+                  json_builder_set_member_name (builder, "phys");
+                  json_builder_add_string_value (builder, id.phys);
+
+                  if (uevent != NULL)
+                    add_uevent_member (builder, "uevent", uevent);
+                }
+
               json_builder_end_object (builder);
             }
 
           sys_path = srt_input_device_get_input_sys_path (dev);
 
-          if (sys_path != NULL)
+          id = blank_id;
+
+          if (srt_input_device_get_input_identity (dev,
+                                                   &id.bus_type,
+                                                   &id.vendor_id,
+                                                   &id.product_id,
+                                                   &id.version,
+                                                   &id.name,
+                                                   &id.phys,
+                                                   &id.uniq)
+              || sys_path != NULL)
             {
               json_builder_set_member_name (builder, "input_ancestor");
               json_builder_begin_object (builder);
+
+              json_builder_set_member_name (builder, "sys_path");
+              json_builder_add_string_value (builder, sys_path);
+
+              json_builder_set_member_name (builder, "name");
+              json_builder_add_string_value (builder, id.name);
+
                 {
-                  json_builder_set_member_name (builder, "sys_path");
-                  json_builder_add_string_value (builder, sys_path);
-
-                  if (opt_verbose)
-                    {
-                      g_autofree gchar *uevent = srt_input_device_dup_input_uevent (dev);
-
-                      if (uevent != NULL)
-                        add_uevent_member (builder, "uevent", uevent);
-                    }
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.bus_type);
+                  json_builder_set_member_name (builder, "bus_type");
+                  json_builder_add_string_value (builder, s);
                 }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.vendor_id);
+                  json_builder_set_member_name (builder, "vendor_id");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.product_id);
+                  json_builder_set_member_name (builder, "product_id");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.version);
+                  json_builder_set_member_name (builder, "version");
+                  json_builder_add_string_value (builder, s);
+                }
+
+              if (opt_verbose)
+                {
+                  g_autofree gchar *uevent = srt_input_device_dup_input_uevent (dev);
+
+                  json_builder_set_member_name (builder, "phys");
+                  json_builder_add_string_value (builder, id.phys);
+
+                  if (uevent != NULL)
+                    add_uevent_member (builder, "uevent", uevent);
+                }
+
               json_builder_end_object (builder);
             }
 
           sys_path = srt_input_device_get_usb_device_sys_path (dev);
 
-          if (sys_path != NULL)
+          id = blank_id;
+
+          if (srt_input_device_get_usb_device_identity (dev,
+                                                        &id.vendor_id,
+                                                        &id.product_id,
+                                                        &id.version,
+                                                        &id.manufacturer,
+                                                        &id.name,
+                                                        &id.uniq)
+              || sys_path != NULL)
             {
               json_builder_set_member_name (builder, "usb_device_ancestor");
               json_builder_begin_object (builder);
+
+              json_builder_set_member_name (builder, "sys_path");
+              json_builder_add_string_value (builder, sys_path);
+
                 {
-                  json_builder_set_member_name (builder, "sys_path");
-                  json_builder_add_string_value (builder, sys_path);
-
-                  if (opt_verbose)
-                    {
-                      g_autofree gchar *uevent = srt_input_device_dup_usb_device_uevent (dev);
-
-                      if (uevent != NULL)
-                        add_uevent_member (builder, "uevent", uevent);
-                    }
-
-                  /* TODO: vendor, product etc. */
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.vendor_id);
+                  json_builder_set_member_name (builder, "vendor_id");
+                  json_builder_add_string_value (builder, s);
                 }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.product_id);
+                  json_builder_set_member_name (builder, "product_id");
+                  json_builder_add_string_value (builder, s);
+                }
+                {
+                  g_autofree gchar *s = g_strdup_printf ("0x%04x", id.version);
+                  json_builder_set_member_name (builder, "version");
+                  json_builder_add_string_value (builder, s);
+                }
+
+              json_builder_set_member_name (builder, "manufacturer");
+              json_builder_add_string_value (builder, id.manufacturer);
+              json_builder_set_member_name (builder, "product");
+              json_builder_add_string_value (builder, id.name);
+              json_builder_set_member_name (builder, "serial");
+              json_builder_add_string_value (builder, id.uniq);
+
+              if (opt_verbose)
+                {
+                  g_autofree gchar *uevent = srt_input_device_dup_usb_device_uevent (dev);
+
+                  if (uevent != NULL)
+                    add_uevent_member (builder, "uevent", uevent);
+                }
+
               json_builder_end_object (builder);
             }
-
-          /* TODO: Print more details here */
         }
       json_builder_end_object (builder);
     }

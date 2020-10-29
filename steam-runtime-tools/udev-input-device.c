@@ -89,6 +89,13 @@ static struct
   struct udev_enumerate *(*udev_enumerate_unref) (struct udev_enumerate *);
 } symbols;
 
+static gboolean
+has_all_flags (unsigned int have,
+               unsigned int want)
+{
+  return ((have & want) == want);
+}
+
 static struct udev_device *
 find_input_ancestor (struct udev_device *dev)
 {
@@ -114,16 +121,32 @@ struct _SrtUdevInputDevice
   struct
   {
     struct udev_device *dev;                  /* borrowed from child dev */
+    gchar *name;
+    gchar *phys;
+    gchar *uniq;
+    guint32 bus_type;
+    guint32 product_id;
+    guint32 vendor_id;
   } hid_ancestor;
 
   struct
   {
     struct udev_device *dev;                  /* borrowed from child dev */
+    gchar *name;
+    gchar *phys;
+    gchar *uniq;
+    guint32 bus_type;
+    guint32 product_id;
+    guint32 vendor_id;
+    guint32 version;
   } input_ancestor;
 
   struct
   {
     struct udev_device *dev;                  /* borrowed from child dev */
+    guint32 product_id;
+    guint32 vendor_id;
+    guint32 device_version;
   } usb_device_ancestor;
 
   SrtInputDeviceInterfaceFlags iface_flags;
@@ -185,6 +208,12 @@ srt_udev_input_device_finalize (GObject *object)
   SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (object);
 
   g_clear_pointer (&self->dev, symbols.udev_device_unref);
+  g_free (self->hid_ancestor.name);
+  g_free (self->hid_ancestor.phys);
+  g_free (self->hid_ancestor.uniq);
+  g_free (self->input_ancestor.name);
+  g_free (self->input_ancestor.phys);
+  g_free (self->input_ancestor.uniq);
 
   G_OBJECT_CLASS (_srt_udev_input_device_parent_class)->finalize (object);
 }
@@ -195,6 +224,66 @@ _srt_udev_input_device_class_init (SrtUdevInputDeviceClass *cls)
   GObjectClass *object_class = G_OBJECT_CLASS (cls);
 
   object_class->finalize = srt_udev_input_device_finalize;
+}
+
+/*
+ * Get a sysfs attribute that is a string.
+ *
+ * On success, set *out and return TRUE.
+ * On failure, leave *out untouched and return FALSE.
+ */
+static gboolean
+get_string (struct udev_device *dev,
+            const char *attribute,
+            const gchar **out)
+{
+  const char *tmp;
+
+  if (dev == NULL)
+    return FALSE;
+
+  tmp = symbols.udev_device_get_sysattr_value (dev, attribute);
+
+  if (tmp == NULL)
+    return FALSE;
+
+  if (out != NULL)
+    *out = tmp;
+
+  return TRUE;
+}
+
+/*
+ * Get a sysfs attribute that is a uint32 (or smaller) in hexadecimal
+ * (with or without 0x prefix).
+ *
+ * On success, set *out and return TRUE.
+ * On failure, leave *out untouched and return FALSE.
+ */
+static gboolean
+get_uint32_hex (struct udev_device *dev,
+                const char *attribute,
+                guint32 *out)
+{
+  const char *tmp;
+  guint64 ret;
+  gchar *endptr;
+
+  if (!get_string (dev, attribute, &tmp))
+    return FALSE;
+
+  if (tmp[0] == '0' && (tmp[1] == 'x' || tmp[1] == 'X'))
+    tmp += 2;
+
+  ret = g_ascii_strtoull (tmp, &endptr, 16);
+
+  if (endptr == NULL || *endptr != '\0' || ret > G_MAXUINT32)
+    return FALSE;
+
+  if (out != NULL)
+    *out = (guint32) ret;
+
+  return TRUE;
 }
 
 static SrtInputDeviceInterfaceFlags
@@ -272,6 +361,47 @@ srt_udev_input_device_get_hid_sys_path (SrtInputDevice *device)
   return symbols.udev_device_get_syspath (self->hid_ancestor.dev);
 }
 
+static gboolean
+srt_udev_input_device_get_hid_identity (SrtInputDevice *device,
+                                        unsigned int *bus_type,
+                                        unsigned int *vendor_id,
+                                        unsigned int *product_id,
+                                        const char **name,
+                                        const char **phys,
+                                        const char **uniq)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->hid_ancestor.dev == NULL
+      && !has_all_flags (self->iface_flags,
+                         SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID
+                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE))
+    return FALSE;
+
+  if (bus_type != NULL)
+    *bus_type = self->hid_ancestor.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->hid_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->hid_ancestor.product_id;
+
+  if (name != NULL
+      && !get_string (self->hid_ancestor.dev, "name", name))
+    *name = NULL;
+
+  if (phys != NULL
+      && !get_string (self->hid_ancestor.dev, "phys", phys))
+    *phys = NULL;
+
+  if (uniq != NULL
+      && !get_string (self->hid_ancestor.dev, "uniq", uniq))
+    *uniq = NULL;
+
+  return TRUE;
+}
+
 static const char *
 srt_udev_input_device_get_input_sys_path (SrtInputDevice *device)
 {
@@ -283,6 +413,51 @@ srt_udev_input_device_get_input_sys_path (SrtInputDevice *device)
   return symbols.udev_device_get_syspath (self->input_ancestor.dev);
 }
 
+static gboolean
+srt_udev_input_device_get_input_identity (SrtInputDevice *device,
+                                          unsigned int *bus_type,
+                                          unsigned int *vendor_id,
+                                          unsigned int *product_id,
+                                          unsigned int *version,
+                                          const char **name,
+                                          const char **phys,
+                                          const char **uniq)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->input_ancestor.dev == NULL
+      && !has_all_flags (self->iface_flags,
+                         SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE))
+    return FALSE;
+
+  if (bus_type != NULL)
+    *bus_type = self->input_ancestor.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->input_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->input_ancestor.product_id;
+
+  if (version != NULL)
+    *version = self->input_ancestor.version;
+
+  if (name != NULL
+      && !get_string (self->input_ancestor.dev, "name", name))
+    *name = NULL;
+
+  if (phys != NULL
+      && !get_string (self->input_ancestor.dev, "phys", phys))
+    *phys = NULL;
+
+  if (uniq != NULL
+      && !get_string (self->input_ancestor.dev, "uniq", uniq))
+    *uniq = NULL;
+
+  return TRUE;
+}
+
 static const char *
 srt_udev_input_device_get_usb_device_sys_path (SrtInputDevice *device)
 {
@@ -292,6 +467,47 @@ srt_udev_input_device_get_usb_device_sys_path (SrtInputDevice *device)
     return NULL;
 
   return symbols.udev_device_get_syspath (self->usb_device_ancestor.dev);
+}
+
+static gboolean
+srt_udev_input_device_get_usb_device_identity (SrtInputDevice *device,
+                                               unsigned int *vendor_id,
+                                               unsigned int *product_id,
+                                               unsigned int *device_version,
+                                               const char **manufacturer,
+                                               const char **product,
+                                               const char **serial)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  if (self->usb_device_ancestor.dev == NULL)
+    return FALSE;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->usb_device_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->usb_device_ancestor.product_id;
+
+  if (device_version != NULL)
+    *device_version = self->usb_device_ancestor.device_version;
+
+  if (manufacturer != NULL
+      && !get_string (self->usb_device_ancestor.dev,
+                      "manufacturer", manufacturer))
+    *manufacturer = NULL;
+
+  if (product != NULL
+      && !get_string (self->usb_device_ancestor.dev,
+                      "product", product))
+    *product = NULL;
+
+  if (serial != NULL
+      && !get_string (self->usb_device_ancestor.dev,
+                      "serial", serial))
+    *serial = NULL;
+
+  return TRUE;
 }
 
 static gchar *
@@ -342,6 +558,10 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_hid_sys_path);
   IMPLEMENT (get_input_sys_path);
   IMPLEMENT (get_usb_device_sys_path);
+
+  IMPLEMENT (get_hid_identity);
+  IMPLEMENT (get_input_identity);
+  IMPLEMENT (get_usb_device_identity);
 
   IMPLEMENT (dup_hid_uevent);
   IMPLEMENT (dup_input_uevent);
@@ -538,6 +758,55 @@ fail:
 }
 
 static void
+read_hid_ancestor (SrtUdevInputDevice *device)
+{
+  const char *uevent;
+
+  if (device->hid_ancestor.dev == NULL)
+    return;
+
+  uevent = symbols.udev_device_get_sysattr_value (device->hid_ancestor.dev,
+                                                  "uevent");
+  _srt_get_identity_from_hid_uevent (uevent,
+                                     &device->hid_ancestor.bus_type,
+                                     &device->hid_ancestor.vendor_id,
+                                     &device->hid_ancestor.product_id,
+                                     &device->hid_ancestor.name,
+                                     &device->hid_ancestor.phys,
+                                     &device->hid_ancestor.uniq);
+}
+
+static void
+read_input_ancestor (SrtUdevInputDevice *device)
+{
+  if (device->input_ancestor.dev == NULL)
+    return;
+
+  get_uint32_hex (device->input_ancestor.dev, "id/bustype",
+                  &device->input_ancestor.bus_type);
+  get_uint32_hex (device->input_ancestor.dev, "id/vendor",
+                  &device->input_ancestor.vendor_id);
+  get_uint32_hex (device->input_ancestor.dev, "id/product",
+                  &device->input_ancestor.product_id);
+  get_uint32_hex (device->input_ancestor.dev, "id/version",
+                  &device->input_ancestor.version);
+}
+
+static void
+read_usb_device_ancestor (SrtUdevInputDevice *device)
+{
+  if (device->usb_device_ancestor.dev == NULL)
+    return;
+
+  get_uint32_hex (device->usb_device_ancestor.dev, "idVendor",
+                  &device->usb_device_ancestor.vendor_id);
+  get_uint32_hex (device->usb_device_ancestor.dev, "idProduct",
+                  &device->usb_device_ancestor.product_id);
+  get_uint32_hex (device->usb_device_ancestor.dev, "bcdDevice",
+                  &device->usb_device_ancestor.device_version);
+}
+
+static void
 add_device (SrtUdevInputDeviceMonitor *self,
             struct udev_device *dev)
 {
@@ -612,6 +881,41 @@ add_device (SrtUdevInputDeviceMonitor *self,
   if (fd >= 0)
     {
       device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE;
+
+      if (_srt_get_identity_from_raw_hid (fd,
+                                          &device->hid_ancestor.bus_type,
+                                          &device->hid_ancestor.vendor_id,
+                                          &device->hid_ancestor.product_id,
+                                          NULL,
+                                          NULL,
+                                          NULL))
+        {
+          g_debug ("%s is raw HID: bus type 0x%04x, vendor 0x%04x, product 0x%04x",
+                   devnode,
+                   device->hid_ancestor.bus_type,
+                   device->hid_ancestor.vendor_id,
+                   device->hid_ancestor.product_id);
+          device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID;
+        }
+
+      if (_srt_get_identity_from_evdev (fd,
+                                        &device->input_ancestor.bus_type,
+                                        &device->input_ancestor.vendor_id,
+                                        &device->input_ancestor.product_id,
+                                        &device->input_ancestor.version,
+                                        NULL,
+                                        NULL,
+                                        NULL))
+        {
+          g_debug ("%s is evdev: bus type 0x%04x, vendor 0x%04x, product 0x%04x, version 0x%04x",
+                   devnode,
+                   device->input_ancestor.bus_type,
+                   device->input_ancestor.vendor_id,
+                   device->input_ancestor.product_id,
+                   device->input_ancestor.version);
+          device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
+        }
+
       close (fd);
     }
 
@@ -626,10 +930,18 @@ add_device (SrtUdevInputDeviceMonitor *self,
   device->hid_ancestor.dev = symbols.udev_device_get_parent_with_subsystem_devtype (device->dev,
                                                                                     "hid",
                                                                                     NULL);
+  read_hid_ancestor (device);
   device->input_ancestor.dev = find_input_ancestor (device->dev);
-  device->usb_device_ancestor.dev = symbols.udev_device_get_parent_with_subsystem_devtype (device->dev,
-                                                                                           "usb",
-                                                                                           "usb_device");
+  read_input_ancestor (device);
+
+  if (device->hid_ancestor.bus_type == BUS_USB
+      || device->input_ancestor.bus_type == BUS_USB)
+    {
+      device->usb_device_ancestor.dev = symbols.udev_device_get_parent_with_subsystem_devtype (device->dev,
+                                                                                               "usb",
+                                                                                               "usb_device");
+      read_usb_device_ancestor (device);
+    }
 
   g_hash_table_replace (self->devices, (char *) syspath, device);
   _srt_input_device_monitor_emit_added (SRT_INPUT_DEVICE_MONITOR (self),

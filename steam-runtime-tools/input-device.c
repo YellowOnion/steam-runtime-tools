@@ -36,6 +36,12 @@
 #include "steam-runtime-tools/direct-input-device-internal.h"
 #include "steam-runtime-tools/udev-input-device-internal.h"
 
+#ifndef HIDIOCGRAWUNIQ
+/* added in Linux 5.6, will fail on older kernels; this should
+ * be fine, we'll just report a NULL unique ID */
+#define HIDIOCGRAWUNIQ(len)     _IOC(_IOC_READ, 'H', 0x08, len)
+#endif
+
 /**
  * SrtInputDevice:
  *
@@ -248,6 +254,83 @@ srt_input_device_dup_udev_properties (SrtInputDevice *device)
 }
 
 /**
+ * srt_input_device_get_identity:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @bus_type: (out): Used to return the bus type from `<linux/input.h>`,
+ *  usually `BUS_USB` or `BUS_BLUETOOTH`
+ * @vendor_id: (out): Used to return the vendor ID, namespaced by
+ *  the @bus_type, or 0 if unavailable
+ * @product_id: (out): Used to return the product ID, namespaced by
+ *  the @vendor_id, or 0 if unavailable
+ * @version: (out): Used to return the device version, or 0 if unavailable
+ *
+ * Attempt to identify the device. If available, return the bus type,
+ * the vendor ID, the product ID and/or the device version via "out"
+ * parameters.
+ *
+ * The source of the information is unspecified. Use
+ * srt_input_device_get_hid_identity(),
+ * srt_input_device_get_input_identity() and/or
+ * srt_input_device_get_usb_device_identity() if a specific source
+ * is desired.
+ *
+ * Returns: %TRUE if information was available
+ */
+gboolean
+srt_input_device_get_identity (SrtInputDevice *device,
+                               unsigned int *bus_type,
+                               unsigned int *vendor_id,
+                               unsigned int *product_id,
+                               unsigned int *version)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, FALSE);
+
+  return iface->get_identity (device, bus_type, vendor_id, product_id, version);
+}
+
+static gboolean
+srt_input_device_default_get_identity (SrtInputDevice *device,
+                                       unsigned int *bus_type,
+                                       unsigned int *vendor_id,
+                                       unsigned int *product_id,
+                                       unsigned int *version)
+{
+  if (srt_input_device_get_input_identity (device,
+                                           bus_type, vendor_id, product_id,
+                                           version, NULL, NULL, NULL))
+    return TRUE;
+
+  if (srt_input_device_get_hid_identity (device,
+                                         bus_type, vendor_id, product_id,
+                                         NULL, NULL, NULL))
+    {
+      if (version != NULL)
+        {
+          *version = 0;
+
+          srt_input_device_get_usb_device_identity (device, NULL, NULL, version,
+                                                    NULL, NULL, NULL);
+        }
+
+      return TRUE;
+    }
+
+  if (srt_input_device_get_usb_device_identity (device,
+                                                vendor_id, product_id, version,
+                                                NULL, NULL, NULL))
+    {
+      if (bus_type != NULL)
+        *bus_type = BUS_USB;
+
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+/**
  * srt_input_device_get_hid_sys_path:
  * @device: An object implementing #SrtInputDeviceInterface
  *
@@ -295,6 +378,57 @@ srt_input_device_dup_hid_uevent (SrtInputDevice *device)
   g_return_val_if_fail (iface != NULL, NULL);
 
   return iface->dup_hid_uevent (device);
+}
+
+/**
+ * srt_input_device_get_hid_identity:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @bus_type: (out): Used to return the bus type from `<linux/input.h>`,
+ *  usually `BUS_USB` or `BUS_BLUETOOTH`
+ * @vendor_id: (out): Used to return the vendor ID, namespaced by
+ *  the @bus_type, or 0 if unavailable
+ * @product_id: (out): Used to return the product ID, namespaced by
+ *  the @vendor_id, or 0 if unavailable
+ * @name: (out) (transfer none): Used to return a human-readable name
+ *  that usually combines the vendor and product, or empty or %NULL
+ *  if unavailable
+ * @phys: (out) (transfer none): Used to return how the device is
+ *  physically attached, or empty or %NULL if unavailable
+ * @uniq: (out) (transfer none): Used to return the device's serial number
+ *  or other unique identifier, or empty or %NULL if unavailable
+ *
+ * Attempt to identify the device. If available, return details via
+ * "out" parameters.
+ *
+ * Returns: %TRUE if this is an evdev device and information was available
+ */
+gboolean
+srt_input_device_get_hid_identity (SrtInputDevice *device,
+                                   unsigned int *bus_type,
+                                   unsigned int *vendor_id,
+                                   unsigned int *product_id,
+                                   const char **name,
+                                   const char **phys,
+                                   const char **uniq)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, FALSE);
+
+  return iface->get_hid_identity (device, bus_type, vendor_id, product_id,
+                                  name, phys, uniq);
+}
+
+static gboolean
+srt_input_device_default_get_hid_identity (SrtInputDevice *device,
+                                           unsigned int *bus_type,
+                                           unsigned int *vendor_id,
+                                           unsigned int *product_id,
+                                           const char **name,
+                                           const char **phys,
+                                           const char **uniq)
+{
+  return FALSE;
 }
 
 /**
@@ -346,6 +480,58 @@ srt_input_device_dup_usb_device_uevent (SrtInputDevice *device)
 }
 
 /**
+ * srt_input_device_get_usb_device_identity:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @bus_type: (out): Used to return the bus type from `<linux/input.h>`,
+ *  usually `BUS_USB` or `BUS_BLUETOOTH`
+ * @vendor_id: (out): Used to return the vendor ID, namespaced by
+ *  the @bus_type, or 0 if unavailable
+ * @product_id: (out): Used to return the product ID, namespaced by
+ *  the @vendor_id, or 0 if unavailable
+ * @device_version: (out): Used to return the product version, or 0 if unavailable
+ * @manufacturer: (out) (transfer none): Used to return the human-readable name
+ *  of the manufacturer, or empty or %NULL if unavailable
+ * @product: (out) (transfer none): Used to return the human-readable name
+ *  of the product, or empty or %NULL if unavailable
+ * @serial: (out) (transfer none): Used to return the device's serial number
+ *  or other unique identifier, or empty or %NULL if unavailable
+ *
+ * Attempt to identify the device. If available, return details via
+ * "out" parameters.
+ *
+ * Returns: %TRUE if this is a USB device and information was available
+ */
+gboolean
+srt_input_device_get_usb_device_identity (SrtInputDevice *device,
+                                          unsigned int *vendor_id,
+                                          unsigned int *product_id,
+                                          unsigned int *device_version,
+                                          const char **manufacturer,
+                                          const char **product,
+                                          const char **serial)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, FALSE);
+
+  return iface->get_usb_device_identity (device,
+                                         vendor_id, product_id, device_version,
+                                         manufacturer, product, serial);
+}
+
+static gboolean
+srt_input_device_default_get_usb_device_identity (SrtInputDevice *device,
+                                                  unsigned int *vendor_id,
+                                                  unsigned int *product_id,
+                                                  unsigned int *device_version,
+                                                  const char **manufacturer,
+                                                  const char **product,
+                                                  const char **serial)
+{
+  return FALSE;
+}
+
+/**
  * srt_input_device_get_input_sys_path:
  * @device: An object implementing #SrtInputDeviceInterface
  *
@@ -394,6 +580,61 @@ srt_input_device_dup_input_uevent (SrtInputDevice *device)
   return iface->dup_input_uevent (device);
 }
 
+/**
+ * srt_input_device_get_input_identity:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @bus_type: (out): Used to return the bus type from `<linux/input.h>`,
+ *  usually `BUS_USB` or `BUS_BLUETOOTH`
+ * @vendor_id: (out): Used to return the vendor ID, namespaced by
+ *  the @bus_type, or 0 if unavailable
+ * @product_id: (out): Used to return the product ID, namespaced by
+ *  the @vendor_id, or 0 if unavailable
+ * @version: (out): Used to return the product version, or 0 if unavailable
+ * @name: (out) (transfer none): Used to return a human-readable name
+ *  that usually combines the vendor and product, or empty or %NULL
+ *  if unavailable
+ * @phys: (out) (transfer none): Used to return how the device is
+ *  physically attached, or empty or %NULL if unavailable
+ * @uniq: (out) (transfer none): Used to return the device's serial number
+ *  or other unique identifier, or empty or %NULL if unavailable
+ *
+ * Attempt to identify the device. If available, return details via
+ * "out" parameters.
+ *
+ * Returns: %TRUE if this is an evdev device and information was available
+ */
+gboolean
+srt_input_device_get_input_identity (SrtInputDevice *device,
+                                     unsigned int *bus_type,
+                                     unsigned int *vendor_id,
+                                     unsigned int *product_id,
+                                     unsigned int *version,
+                                     const char **name,
+                                     const char **phys,
+                                     const char **uniq)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, FALSE);
+
+  return iface->get_input_identity (device,
+                                    bus_type, vendor_id, product_id, version,
+                                    name, phys, uniq);
+}
+
+static gboolean
+srt_input_device_default_get_input_identity (SrtInputDevice *device,
+                                             unsigned int *bus_type,
+                                             unsigned int *vendor_id,
+                                             unsigned int *product_id,
+                                             unsigned int *version,
+                                             const char **name,
+                                             const char **phys,
+                                             const char **uniq)
+{
+  return FALSE;
+}
+
 static void
 srt_input_device_default_init (SrtInputDeviceInterface *iface)
 {
@@ -404,10 +645,14 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
   IMPLEMENT2 (get_dev_node, get_null_string);
   IMPLEMENT2 (get_sys_path, get_null_string);
   IMPLEMENT2 (get_subsystem, get_null_string);
+  IMPLEMENT (get_identity);
 
   IMPLEMENT2 (get_hid_sys_path, get_null_string);
+  IMPLEMENT (get_hid_identity);
   IMPLEMENT2 (get_input_sys_path, get_null_string);
+  IMPLEMENT (get_input_identity);
   IMPLEMENT2 (get_usb_device_sys_path, get_null_string);
+  IMPLEMENT (get_usb_device_identity);
 
   IMPLEMENT2 (dup_udev_properties, get_null_strv);
 
@@ -792,9 +1037,13 @@ _srt_get_identity_from_evdev (int fd,
                               guint32 *bus_type,
                               guint32 *vendor,
                               guint32 *product,
-                              guint32 *version)
+                              guint32 *version,
+                              gchar **name,
+                              gchar **phys,
+                              gchar **uniq)
 {
   struct input_id iid = {};
+  char buf[256] = { '\0' };
 
   if (bus_type != NULL)
     *bus_type = 0;
@@ -810,6 +1059,22 @@ _srt_get_identity_from_evdev (int fd,
       g_debug ("EVIOCGID: %s", g_strerror (errno));
       return FALSE;
     }
+
+  if (name != NULL
+      && ioctl (fd, EVIOCGNAME (sizeof (buf) - 1), buf) == 0)
+    *name = g_strdup (buf);
+
+  memset (buf, '\0', sizeof (buf));
+
+  if (phys != NULL
+      && ioctl (fd, EVIOCGPHYS (sizeof (buf) - 1), buf) == 0)
+    *phys = g_strdup (buf);
+
+  memset (buf, '\0', sizeof (buf));
+
+  if (uniq != NULL
+      && ioctl (fd, EVIOCGUNIQ (sizeof (buf) - 1), buf) == 0)
+    *uniq = g_strdup (buf);
 
   if (bus_type != NULL)
     *bus_type = iid.bustype;
@@ -830,8 +1095,12 @@ gboolean
 _srt_get_identity_from_raw_hid (int fd,
                                 guint32 *bus_type,
                                 guint32 *vendor,
-                                guint32 *product)
+                                guint32 *product,
+                                gchar **name,
+                                gchar **phys,
+                                gchar **uniq)
 {
+  char buf[256] = { '\0' };
   struct hidraw_devinfo devinfo = {};
 
   if (bus_type != NULL)
@@ -848,6 +1117,22 @@ _srt_get_identity_from_raw_hid (int fd,
       g_debug ("HIDIOCGRAWINFO: %s", g_strerror (errno));
       return FALSE;
     }
+
+  if (name != NULL
+      && ioctl (fd, HIDIOCGRAWNAME (sizeof (buf) - 1), buf) == 0)
+    *name = g_strdup (buf);
+
+  memset (buf, '\0', sizeof (buf));
+
+  if (phys != NULL
+      && ioctl (fd, HIDIOCGRAWPHYS (sizeof (buf) - 1), buf) == 0)
+    *phys = g_strdup (buf);
+
+  memset (buf, '\0', sizeof (buf));
+
+  if (uniq != NULL
+      && ioctl (fd, HIDIOCGRAWUNIQ (sizeof (buf) - 1), buf) == 0)
+    *uniq = g_strdup (buf);
 
   if (bus_type != NULL)
     *bus_type = devinfo.bustype;
@@ -933,4 +1218,51 @@ _srt_input_device_uevent_field_equals (const char *text,
     }
 
   return FALSE;
+}
+
+gboolean
+_srt_get_identity_from_hid_uevent (const char *text,
+                                   guint32 *bus_type,
+                                   guint32 *vendor_id,
+                                   guint32 *product_id,
+                                   gchar **name,
+                                   gchar **phys,
+                                   gchar **uniq)
+{
+  g_autofree gchar *id = _srt_input_device_uevent_field (text, "HID_ID");
+  struct
+  {
+    guint bus_type;
+    guint vendor_id;
+    guint product_id;
+  } tmp;
+  int used;
+
+  if (id == NULL)
+    return FALSE;
+
+  if (sscanf (id, "%x:%x:%x%n",
+              &tmp.bus_type, &tmp.vendor_id, &tmp.product_id, &used) != 3
+      || ((size_t) used) != strlen (id))
+    return FALSE;
+
+  if (name != NULL)
+    *name = _srt_input_device_uevent_field (text, "HID_NAME");
+
+  if (phys != NULL)
+    *phys = _srt_input_device_uevent_field (text, "HID_PHYS");
+
+  if (uniq != NULL)
+    *uniq = _srt_input_device_uevent_field (text, "HID_UNIQ");
+
+  if (bus_type != NULL)
+    *bus_type = tmp.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = tmp.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = tmp.product_id;
+
+  return TRUE;
 }

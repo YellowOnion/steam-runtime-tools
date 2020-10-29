@@ -169,10 +169,19 @@ struct _SrtDirectInputDevice
   struct
   {
     gchar *sys_path;
+    gchar *manufacturer;
+    gchar *product;
+    gchar *serial;
+    guint32 product_id;
+    guint32 vendor_id;
+    guint32 device_version;
   } usb_device_ancestor;
 
   struct
   {
+    gchar *name;
+    gchar *phys;
+    gchar *uniq;
     guint32 bus_type;
     guint32 product_id;
     guint32 vendor_id;
@@ -181,6 +190,9 @@ struct _SrtDirectInputDevice
 
   struct
   {
+    gchar *name;
+    gchar *phys;
+    gchar *uniq;
     guint32 bus_type;
     guint32 product_id;
     guint32 vendor_id;
@@ -246,6 +258,15 @@ srt_direct_input_device_finalize (GObject *object)
   g_clear_pointer (&self->hid_ancestor.sys_path, g_free);
   g_clear_pointer (&self->input_ancestor.sys_path, g_free);
   g_clear_pointer (&self->usb_device_ancestor.sys_path, g_free);
+  g_clear_pointer (&self->usb_device_ancestor.manufacturer, g_free);
+  g_clear_pointer (&self->usb_device_ancestor.product, g_free);
+  g_clear_pointer (&self->usb_device_ancestor.serial, g_free);
+  g_clear_pointer (&self->hid.name, g_free);
+  g_clear_pointer (&self->hid.phys, g_free);
+  g_clear_pointer (&self->hid.uniq, g_free);
+  g_clear_pointer (&self->evdev.name, g_free);
+  g_clear_pointer (&self->evdev.phys, g_free);
+  g_clear_pointer (&self->evdev.uniq, g_free);
 
   G_OBJECT_CLASS (_srt_direct_input_device_parent_class)->finalize (object);
 }
@@ -298,6 +319,42 @@ srt_direct_input_device_get_hid_sys_path (SrtInputDevice *device)
   return self->hid_ancestor.sys_path;
 }
 
+static gboolean
+srt_direct_input_device_get_hid_identity (SrtInputDevice *device,
+                                          unsigned int *bus_type,
+                                          unsigned int *vendor_id,
+                                          unsigned int *product_id,
+                                          const char **name,
+                                          const char **phys,
+                                          const char **uniq)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  if (self->hid_ancestor.sys_path == NULL
+      && (self->iface_flags & SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID) == 0)
+    return FALSE;
+
+  if (bus_type != NULL)
+    *bus_type = self->hid.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->hid.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->hid.product_id;
+
+  if (name != NULL)
+    *name = self->hid.name;
+
+  if (phys != NULL)
+    *phys = self->hid.phys;
+
+  if (uniq != NULL)
+    *uniq = self->hid.uniq;
+
+  return TRUE;
+}
+
 static const char *
 srt_direct_input_device_get_input_sys_path (SrtInputDevice *device)
 {
@@ -306,12 +363,87 @@ srt_direct_input_device_get_input_sys_path (SrtInputDevice *device)
   return self->input_ancestor.sys_path;
 }
 
+static gboolean
+srt_direct_input_device_get_input_identity (SrtInputDevice *device,
+                                            unsigned int *bus_type,
+                                            unsigned int *vendor_id,
+                                            unsigned int *product_id,
+                                            unsigned int *version,
+                                            const char **name,
+                                            const char **phys,
+                                            const char **uniq)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  if (self->input_ancestor.sys_path == NULL
+      && (self->iface_flags & SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT) == 0)
+    return FALSE;
+
+  if (bus_type != NULL)
+    *bus_type = self->evdev.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->evdev.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->evdev.product_id;
+
+  if (version != NULL)
+    *version = self->evdev.version;
+
+  if (name != NULL)
+    *name = self->evdev.name;
+
+  if (phys != NULL)
+    *phys = self->evdev.phys;
+
+  if (uniq != NULL)
+    *uniq = self->evdev.uniq;
+
+  return TRUE;
+}
+
 static const char *
 srt_direct_input_device_get_usb_device_sys_path (SrtInputDevice *device)
 {
   SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
 
   return self->usb_device_ancestor.sys_path;
+}
+
+static gboolean
+srt_direct_input_device_get_usb_device_identity (SrtInputDevice *device,
+                                                 unsigned int *vendor_id,
+                                                 unsigned int *product_id,
+                                                 unsigned int *device_version,
+                                                 const char **manufacturer,
+                                                 const char **product,
+                                                 const char **serial)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  if (self->usb_device_ancestor.sys_path == NULL)
+    return FALSE;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->usb_device_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->usb_device_ancestor.product_id;
+
+  if (device_version != NULL)
+    *device_version = self->usb_device_ancestor.device_version;
+
+  if (manufacturer != NULL)
+    *manufacturer = self->usb_device_ancestor.manufacturer;
+
+  if (product != NULL)
+    *product = self->usb_device_ancestor.product;
+
+  if (serial != NULL)
+    *serial = self->usb_device_ancestor.serial;
+
+  return TRUE;
 }
 
 static void
@@ -327,6 +459,10 @@ srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_hid_sys_path);
   IMPLEMENT (get_input_sys_path);
   IMPLEMENT (get_usb_device_sys_path);
+
+  IMPLEMENT (get_hid_identity);
+  IMPLEMENT (get_input_identity);
+  IMPLEMENT (get_usb_device_identity);
 
 #undef IMPLEMENT
 }
@@ -433,6 +569,131 @@ _srt_direct_input_device_monitor_class_init (SrtDirectInputDeviceMonitorClass *c
   quark_input = g_quark_from_static_string ("input");
 }
 
+/*
+ * Get a sysfs attribute that is a string.
+ *
+ * On success, set *out and return TRUE.
+ * On failure, leave *out untouched and return FALSE.
+ */
+static gboolean
+dup_string (const char *sys_path,
+            const char *attribute,
+            gchar **out)
+{
+  g_autofree gchar *text = NULL;
+  g_autofree gchar *child = NULL;
+
+  if (sys_path == NULL)
+    return FALSE;
+
+  child = g_build_filename (sys_path, attribute, NULL);
+
+  if (!g_file_get_contents (child, &text, NULL, NULL))
+    return FALSE;
+
+  g_strchomp (text);
+
+  if (out != NULL)
+    *out = g_steal_pointer (&text);
+
+  return TRUE;
+}
+
+/*
+ * Get a sysfs attribute that is a uint32 (or smaller) in hexadecimal
+ * (with or without 0x prefix).
+ *
+ * On success, set *out and return TRUE.
+ * On failure, leave *out untouched and return FALSE.
+ */
+static gboolean
+get_uint32_hex (const char *sys_path,
+                const char *attribute,
+                guint32 *out)
+{
+  g_autofree gchar *buf = NULL;
+  const char *tmp;
+  guint64 ret;
+  gchar *endptr;
+
+  if (!dup_string (sys_path, attribute, &buf))
+    return FALSE;
+
+  tmp = buf;
+
+  if (tmp[0] == '0' && (tmp[1] == 'x' || tmp[1] == 'X'))
+    tmp += 2;
+
+  ret = g_ascii_strtoull (tmp, &endptr, 16);
+
+  if (endptr == NULL
+      || (*endptr != '\0' && *endptr != '\n')
+      || ret > G_MAXUINT32)
+    return FALSE;
+
+  if (out != NULL)
+    *out = (guint32) ret;
+
+  return TRUE;
+}
+
+static void
+read_hid_ancestor (SrtDirectInputDevice *device)
+{
+  g_autofree gchar *uevent = NULL;
+
+  if (device->hid_ancestor.sys_path == NULL)
+    return;
+
+  if (!dup_string (device->hid_ancestor.sys_path, "uevent", &uevent))
+    return;
+
+  _srt_get_identity_from_hid_uevent (uevent,
+                                     &device->hid.bus_type,
+                                     &device->hid.vendor_id,
+                                     &device->hid.product_id,
+                                     &device->hid.name,
+                                     &device->hid.phys,
+                                     &device->hid.uniq);
+}
+
+static void
+read_input_ancestor (SrtDirectInputDevice *device)
+{
+  if (device->input_ancestor.sys_path == NULL)
+    return;
+
+  get_uint32_hex (device->input_ancestor.sys_path, "id/bustype",
+                  &device->evdev.bus_type);
+  get_uint32_hex (device->input_ancestor.sys_path, "id/vendor",
+                  &device->evdev.vendor_id);
+  get_uint32_hex (device->input_ancestor.sys_path, "id/product",
+                  &device->evdev.product_id);
+  get_uint32_hex (device->input_ancestor.sys_path, "id/version",
+                  &device->evdev.version);
+  dup_string (device->input_ancestor.sys_path, "name", &device->evdev.name);
+  dup_string (device->input_ancestor.sys_path, "phys", &device->evdev.phys);
+  dup_string (device->input_ancestor.sys_path, "uniq", &device->evdev.uniq);
+}
+
+static void
+read_usb_device_ancestor (SrtDirectInputDevice *device)
+{
+  if (device->usb_device_ancestor.sys_path == NULL)
+    return;
+
+  get_uint32_hex (device->usb_device_ancestor.sys_path, "idVendor",
+                  &device->usb_device_ancestor.vendor_id);
+  get_uint32_hex (device->usb_device_ancestor.sys_path, "idProduct",
+                  &device->usb_device_ancestor.product_id);
+  get_uint32_hex (device->usb_device_ancestor.sys_path, "bcdDevice",
+                  &device->usb_device_ancestor.device_version);
+  dup_string (device->usb_device_ancestor.sys_path, "manufacturer",
+              &device->usb_device_ancestor.manufacturer);
+  dup_string (device->usb_device_ancestor.sys_path, "product",
+              &device->usb_device_ancestor.product);
+}
+
 static void
 add_device (SrtDirectInputDeviceMonitor *self,
             const char *devnode,
@@ -483,13 +744,17 @@ add_device (SrtDirectInputDeviceMonitor *self,
       if (_srt_get_identity_from_raw_hid (fd,
                                           &device->hid.bus_type,
                                           &device->hid.vendor_id,
-                                          &device->hid.product_id))
+                                          &device->hid.product_id,
+                                          &device->hid.name,
+                                          &device->hid.phys,
+                                          &device->hid.uniq))
         {
-          g_debug ("%s is raw HID: bus type 0x%04x, vendor 0x%04x, product 0x%04x",
+          g_debug ("%s is raw HID: bus type 0x%04x, vendor 0x%04x, product 0x%04x, \"%s\"",
                    devnode,
                    device->hid.bus_type,
                    device->hid.vendor_id,
-                   device->hid.product_id);
+                   device->hid.product_id,
+                   device->hid.name);
           device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID;
         }
 
@@ -497,14 +762,18 @@ add_device (SrtDirectInputDeviceMonitor *self,
                                         &device->evdev.bus_type,
                                         &device->evdev.vendor_id,
                                         &device->evdev.product_id,
-                                        &device->evdev.version))
+                                        &device->evdev.version,
+                                        &device->evdev.name,
+                                        &device->evdev.phys,
+                                        &device->evdev.uniq))
         {
-          g_debug ("%s is evdev: bus type 0x%04x, vendor 0x%04x, product 0x%04x, version 0x%04x",
+          g_debug ("%s is evdev: bus type 0x%04x, vendor 0x%04x, product 0x%04x, version 0x%04x, \"%s\"",
                    devnode,
                    device->evdev.bus_type,
                    device->evdev.vendor_id,
                    device->evdev.product_id,
-                   device->evdev.version);
+                   device->evdev.version,
+                   device->evdev.name);
           device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
         }
 
@@ -536,13 +805,20 @@ add_device (SrtDirectInputDeviceMonitor *self,
     }
 
   device->hid_ancestor.sys_path = get_ancestor_with_subsystem_devtype (device->sys_path,
-                                                              "hid", NULL,
-                                                              NULL);
+                                                                       "hid", NULL,
+                                                                       NULL);
+  read_hid_ancestor (device);
   device->input_ancestor.sys_path = find_input_ancestor (device->sys_path);
-  device->usb_device_ancestor.sys_path = get_ancestor_with_subsystem_devtype (device->sys_path,
-                                                                     "usb",
-                                                                     "usb_device",
-                                                                     NULL);
+  read_input_ancestor (device);
+
+  if (device->hid.bus_type == BUS_USB || device->evdev.bus_type == BUS_USB)
+    {
+      device->usb_device_ancestor.sys_path = get_ancestor_with_subsystem_devtype (device->sys_path,
+                                                                                  "usb",
+                                                                                  "usb_device",
+                                                                                  NULL);
+      read_usb_device_ancestor (device);
+    }
 
   g_hash_table_replace (self->devices, device->dev_node, device);
   _srt_input_device_monitor_emit_added (SRT_INPUT_DEVICE_MONITOR (self),

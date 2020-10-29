@@ -39,15 +39,42 @@ struct _SrtInputDeviceInterface
   const char * (*get_subsystem) (SrtInputDevice *device);
   gchar ** (*dup_udev_properties) (SrtInputDevice *device);
   gchar * (*dup_uevent) (SrtInputDevice *device);
+  gboolean (*get_identity) (SrtInputDevice *device,
+                            unsigned int *bus_type,
+                            unsigned int *vendor_id,
+                            unsigned int *product_id,
+                            unsigned int *version);
 
   const char * (*get_hid_sys_path) (SrtInputDevice *device);
   gchar * (*dup_hid_uevent) (SrtInputDevice *device);
+  gboolean (*get_hid_identity) (SrtInputDevice *device,
+                                unsigned int *bus_type,
+                                unsigned int *vendor_id,
+                                unsigned int *product_id,
+                                const char **name,
+                                const char **phys,
+                                const char **uniq);
 
   const char * (*get_input_sys_path) (SrtInputDevice *device);
   gchar * (*dup_input_uevent) (SrtInputDevice *device);
+  gboolean (*get_input_identity) (SrtInputDevice *device,
+                                  unsigned int *bus_type,
+                                  unsigned int *vendor_id,
+                                  unsigned int *product_id,
+                                  unsigned int *version,
+                                  const char **name,
+                                  const char **phys,
+                                  const char **uniq);
 
   const char * (*get_usb_device_sys_path) (SrtInputDevice *device);
   gchar * (*dup_usb_device_uevent) (SrtInputDevice *device);
+  gboolean (*get_usb_device_identity) (SrtInputDevice *device,
+                                       unsigned int *vendor_id,
+                                       unsigned int *product_id,
+                                       unsigned int *device_version,
+                                       const char **manufacturer,
+                                       const char **product,
+                                       const char **serial);
 };
 
 struct _SrtInputDeviceMonitorInterface
@@ -80,13 +107,26 @@ gboolean _srt_get_identity_from_evdev (int fd,
                                        guint32 *bus_type,
                                        guint32 *vendor,
                                        guint32 *product,
-                                       guint32 *version);
+                                       guint32 *version,
+                                       gchar **name,
+                                       gchar **phys,
+                                       gchar **uniq);
 gboolean _srt_get_identity_from_raw_hid (int fd,
                                          guint32 *bus_type,
                                          guint32 *vendor,
-                                         guint32 *product);
+                                         guint32 *product,
+                                         gchar **name,
+                                         gchar **phys,
+                                         gchar **uniq);
 gchar *_srt_input_device_uevent_field (const char *text,
                                        const char *key);
 gboolean _srt_input_device_uevent_field_equals (const char *text,
                                                 const char *key,
                                                 const char *want_value);
+gboolean _srt_get_identity_from_hid_uevent (const char *text,
+                                            guint32 *bus_type,
+                                            guint32 *product_id,
+                                            guint32 *vendor_id,
+                                            gchar **name,
+                                            gchar **phys,
+                                            gchar **uniq);

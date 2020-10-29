@@ -97,6 +97,52 @@ teardown (Fixture *f,
 }
 
 static void
+test_input_device_identity_from_hid_uevent (Fixture *f,
+                                            gconstpointer context)
+{
+  static const char text[] =
+    "DRIVER=hid-steam\n"
+    "HID_ID=0003:000028DE:00001142\n"
+    "HID_NAME=Valve Software Steam Controller\n"
+    "HID_PHYS=usb-0000:00:14.0-1.1/input0\n"
+    "HID_UNIQ=serialnumber\n"
+    "MODALIAS=hid:b0003g0001v000028DEp00001142\n";
+  guint32 bus_type, vendor_id, product_id;
+  g_autofree gchar *name = NULL;
+  g_autofree gchar *phys = NULL;
+  g_autofree gchar *uniq = NULL;
+
+  g_assert_true (_srt_get_identity_from_hid_uevent (text,
+                                                    &bus_type,
+                                                    &vendor_id,
+                                                    &product_id,
+                                                    &name,
+                                                    &phys,
+                                                    &uniq));
+  g_assert_cmphex (bus_type, ==, 0x0003);
+  g_assert_cmphex (vendor_id, ==, 0x28de);
+  g_assert_cmphex (product_id, ==, 0x1142);
+  g_assert_cmpstr (name, ==, "Valve Software Steam Controller");
+  g_assert_cmpstr (phys, ==, "usb-0000:00:14.0-1.1/input0");
+  /* Real Steam Controllers don't expose a serial number here, but it's
+   * a better test if we include one */
+  g_assert_cmpstr (uniq, ==, "serialnumber");
+}
+
+#define VENDOR_SONY 0x0268
+#define PRODUCT_SONY_PS3 0x054c
+
+#define VENDOR_VALVE 0x28de
+#define PRODUCT_VALVE_STEAM_CONTROLLER 0x1142
+
+/* These aren't in the real vendor/product IDs, but we add them here
+ * to make the test able to distinguish. They look a bit like HID,
+ * EVDE(v) and USB, if you squint. */
+#define HID_MARKER 0x41D00000
+#define EVDEV_MARKER 0xE7DE0000
+#define USB_MARKER 0x05B00000
+
+static void
 test_input_device_usb (Fixture *f,
                        gconstpointer context)
 {
@@ -107,6 +153,41 @@ test_input_device_usb (Fixture *f,
   g_autofree gchar *hid_uevent = NULL;
   g_autofree gchar *input_uevent = NULL;
   g_autofree gchar *usb_uevent = NULL;
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+  } identity = { 1, 1, 1, 1 };
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } hid_identity = { 1, 1, 1, "x", "x", "x" };
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } input_identity = { 1, 1, 1, 1, "x", "x", "x" };
+  struct
+  {
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *manufacturer;
+    const char *product;
+    const char *serial;
+  } usb_identity = { 1, 1, 1, "x", "x", "x" };
 
   mock_device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
                               | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE);
@@ -117,18 +198,41 @@ test_input_device_usb (Fixture *f,
   mock_device->udev_properties[0] = g_strdup ("ID_INPUT_JOYSTICK=1");
   mock_device->udev_properties[1] = NULL;
   mock_device->uevent = g_strdup ("A=a\nB=b\n");
+  /* This is a semi-realistic PS3 controller. */
+  mock_device->bus_type = BUS_USB;
+  mock_device->vendor_id = VENDOR_SONY;
+  mock_device->product_id = PRODUCT_SONY_PS3;
+  mock_device->version = 0x8111;
 
   mock_device->hid_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid");
   mock_device->hid_ancestor.uevent = g_strdup ("HID=yes\n");
+  /* The part in square brackets isn't present on the real device, but
+   * makes this test more thorough by letting us distinguish. */
+  mock_device->hid_ancestor.name = g_strdup ("Sony PLAYSTATION(R)3 Controller [hid]");
+  mock_device->hid_ancestor.phys = g_strdup ("usb-0000:00:14.0-1/input0");
+  mock_device->hid_ancestor.uniq = g_strdup ("12:34:56:78:9a:bc");
+  mock_device->hid_ancestor.bus_type = HID_MARKER | BUS_USB;
+  mock_device->hid_ancestor.vendor_id = HID_MARKER | VENDOR_SONY;
+  mock_device->hid_ancestor.product_id = HID_MARKER | PRODUCT_SONY_PS3;
 
   mock_device->input_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid/input");
   mock_device->input_ancestor.uevent = g_strdup ("INPUT=yes\n");
+  mock_device->input_ancestor.name = g_strdup ("Sony PLAYSTATION(R)3 Controller [input]");
+  mock_device->input_ancestor.phys = NULL;
+  mock_device->input_ancestor.uniq = NULL;
+  mock_device->input_ancestor.bus_type = EVDEV_MARKER | BUS_USB;
+  mock_device->input_ancestor.vendor_id = EVDEV_MARKER | VENDOR_SONY;
+  mock_device->input_ancestor.product_id = EVDEV_MARKER | PRODUCT_SONY_PS3;
+  mock_device->input_ancestor.version = EVDEV_MARKER | 0x8111;
 
   mock_device->usb_device_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb");
   mock_device->usb_device_ancestor.uevent = g_strdup ("USB=usb_device\n");
-
-  /* TODO: Fill in somewhat realistic details for a USB-attached
-   * Steam Controller */
+  mock_device->usb_device_ancestor.vendor_id = USB_MARKER | VENDOR_SONY;
+  mock_device->usb_device_ancestor.product_id = USB_MARKER | PRODUCT_SONY_PS3;
+  mock_device->usb_device_ancestor.device_version = USB_MARKER | 0x0100;
+  mock_device->usb_device_ancestor.manufacturer = g_strdup ("Sony");
+  mock_device->usb_device_ancestor.product = g_strdup ("PLAYSTATION(R)3 Controller");
+  mock_device->usb_device_ancestor.serial = NULL;
 
   g_assert_cmpuint (srt_input_device_get_interface_flags (device), ==,
                     SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
@@ -162,7 +266,69 @@ test_input_device_usb (Fixture *f,
   g_assert_cmpstr (udev_properties[0], ==, "ID_INPUT_JOYSTICK=1");
   g_assert_cmpstr (udev_properties[1], ==, NULL);
 
-  /* TODO: Check other details */
+  g_assert_true (srt_input_device_get_identity (device,
+                                                NULL, NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_identity (device,
+                                                &identity.bus_type,
+                                                &identity.vendor_id,
+                                                &identity.product_id,
+                                                &identity.version));
+  g_assert_cmphex (identity.bus_type, ==, BUS_USB);
+  g_assert_cmphex (identity.vendor_id, ==, VENDOR_SONY);
+  g_assert_cmphex (identity.product_id, ==, PRODUCT_SONY_PS3);
+  g_assert_cmphex (identity.version, ==, 0x8111);
+
+  g_assert_true (srt_input_device_get_hid_identity (device,
+                                                    NULL, NULL, NULL,
+                                                    NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_hid_identity (device,
+                                                    &hid_identity.bus_type,
+                                                    &hid_identity.vendor_id,
+                                                    &hid_identity.product_id,
+                                                    &hid_identity.name,
+                                                    &hid_identity.phys,
+                                                    &hid_identity.uniq));
+  g_assert_cmphex (hid_identity.bus_type, ==, HID_MARKER | BUS_USB);
+  g_assert_cmphex (hid_identity.vendor_id, ==, HID_MARKER | VENDOR_SONY);
+  g_assert_cmphex (hid_identity.product_id, ==, HID_MARKER | PRODUCT_SONY_PS3);
+  g_assert_cmpstr (hid_identity.name, ==, "Sony PLAYSTATION(R)3 Controller [hid]");
+  g_assert_cmpstr (hid_identity.phys, ==, "usb-0000:00:14.0-1/input0");
+  g_assert_cmpstr (hid_identity.uniq, ==, "12:34:56:78:9a:bc");
+
+  g_assert_true (srt_input_device_get_input_identity (device,
+                                                      NULL, NULL, NULL, NULL,
+                                                      NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_input_identity (device,
+                                                      &input_identity.bus_type,
+                                                      &input_identity.vendor_id,
+                                                      &input_identity.product_id,
+                                                      &input_identity.version,
+                                                      &input_identity.name,
+                                                      &input_identity.phys,
+                                                      &input_identity.uniq));
+  g_assert_cmphex (input_identity.bus_type, ==, EVDEV_MARKER | BUS_USB);
+  g_assert_cmphex (input_identity.vendor_id, ==, EVDEV_MARKER | VENDOR_SONY);
+  g_assert_cmphex (input_identity.product_id, ==, EVDEV_MARKER | PRODUCT_SONY_PS3);
+  g_assert_cmphex (input_identity.version, ==, EVDEV_MARKER | 0x8111);
+  g_assert_cmpstr (input_identity.name, ==, "Sony PLAYSTATION(R)3 Controller [input]");
+  g_assert_cmpstr (input_identity.phys, ==, NULL);
+  g_assert_cmpstr (input_identity.uniq, ==, NULL);
+
+  g_assert_true (srt_input_device_get_usb_device_identity (device,
+                                                           NULL, NULL, NULL,
+                                                           NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_usb_device_identity (device,
+                                                           &usb_identity.vendor_id,
+                                                           &usb_identity.product_id,
+                                                           &usb_identity.version,
+                                                           &usb_identity.manufacturer,
+                                                           &usb_identity.product,
+                                                           &usb_identity.serial));
+  g_assert_cmphex (usb_identity.vendor_id, ==, USB_MARKER | VENDOR_SONY);
+  g_assert_cmphex (usb_identity.product_id, ==, USB_MARKER | PRODUCT_SONY_PS3);
+  g_assert_cmpstr (usb_identity.manufacturer, ==, "Sony");
+  g_assert_cmpstr (usb_identity.product, ==, "PLAYSTATION(R)3 Controller");
+  g_assert_cmpstr (usb_identity.serial, ==, NULL);
 }
 
 static gboolean
@@ -181,6 +347,41 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
 {
   Fixture *f = user_data;
   g_autofree gchar *message = NULL;
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+  } identity = { 1, 1, 1, 1 };
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } hid_identity = { 1, 1, 1, "x", "x", "x" };
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } input_identity = { 1, 1, 1, 1, "x", "x", "x" };
+  struct
+  {
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *manufacturer;
+    const char *product;
+    const char *serial;
+  } usb_identity = { 1, 1, 1, "x", "x", "x" };
 
   g_assert_true (SRT_IS_INPUT_DEVICE_MONITOR (monitor));
   g_assert_true (SRT_IS_INPUT_DEVICE (device));
@@ -188,6 +389,106 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
   message = g_strdup_printf ("added device: %s",
                              srt_input_device_get_dev_node (device));
   g_debug ("%s: %s", G_OBJECT_TYPE_NAME (monitor), message);
+
+  if (srt_input_device_get_identity (device,
+                                     &identity.bus_type,
+                                     &identity.vendor_id,
+                                     &identity.product_id,
+                                     &identity.version))
+    {
+      g_assert_true (srt_input_device_get_identity (device,
+                                                    NULL, NULL, NULL, NULL));
+    }
+  else
+    {
+      g_assert_false (srt_input_device_get_identity (device,
+                                                     NULL, NULL, NULL, NULL));
+      /* previous contents are untouched */
+      g_assert_cmphex (identity.bus_type, ==, 1);
+      g_assert_cmphex (identity.vendor_id, ==, 1);
+      g_assert_cmphex (identity.product_id, ==, 1);
+      g_assert_cmphex (identity.version, ==, 1);
+    }
+
+  if (srt_input_device_get_hid_identity (device,
+                                         &hid_identity.bus_type,
+                                         &hid_identity.vendor_id,
+                                         &hid_identity.product_id,
+                                         &hid_identity.name,
+                                         &hid_identity.phys,
+                                         &hid_identity.uniq))
+    {
+      g_assert_true (srt_input_device_get_hid_identity (device,
+                                                        NULL, NULL, NULL,
+                                                        NULL, NULL, NULL));
+    }
+  else
+    {
+      g_assert_false (srt_input_device_get_hid_identity (device,
+                                                         NULL, NULL, NULL,
+                                                         NULL, NULL, NULL));
+      /* previous contents are untouched */
+      g_assert_cmphex (hid_identity.bus_type, ==, 1);
+      g_assert_cmphex (hid_identity.vendor_id, ==, 1);
+      g_assert_cmphex (hid_identity.product_id, ==, 1);
+      g_assert_cmpstr (hid_identity.name, ==, "x");
+      g_assert_cmpstr (hid_identity.phys, ==, "x");
+      g_assert_cmpstr (hid_identity.uniq, ==, "x");
+    }
+
+  if (srt_input_device_get_input_identity (device,
+                                           &input_identity.bus_type,
+                                           &input_identity.vendor_id,
+                                           &input_identity.product_id,
+                                           &input_identity.version,
+                                           &input_identity.name,
+                                           &input_identity.phys,
+                                           &input_identity.uniq))
+    {
+      g_assert_true (srt_input_device_get_input_identity (device,
+                                                          NULL, NULL, NULL, NULL,
+                                                          NULL, NULL, NULL));
+    }
+  else
+    {
+      g_assert_false (srt_input_device_get_input_identity (device,
+                                                           NULL, NULL, NULL, NULL,
+                                                           NULL, NULL, NULL));
+      /* previous contents are untouched */
+      g_assert_cmphex (input_identity.bus_type, ==, 1);
+      g_assert_cmphex (input_identity.vendor_id, ==, 1);
+      g_assert_cmphex (input_identity.product_id, ==, 1);
+      g_assert_cmphex (input_identity.version, ==, 1);
+      g_assert_cmpstr (input_identity.name, ==, "x");
+      g_assert_cmpstr (input_identity.phys, ==, "x");
+      g_assert_cmpstr (input_identity.uniq, ==, "x");
+    }
+
+  if (srt_input_device_get_usb_device_identity (device,
+                                                &usb_identity.vendor_id,
+                                                &usb_identity.product_id,
+                                                &usb_identity.version,
+                                                &usb_identity.manufacturer,
+                                                &usb_identity.product,
+                                                &usb_identity.serial))
+    {
+      g_assert_true (srt_input_device_get_usb_device_identity (device,
+                                                               NULL, NULL, NULL,
+                                                               NULL, NULL, NULL));
+    }
+  else
+    {
+      g_assert_false (srt_input_device_get_usb_device_identity (device,
+                                                                NULL, NULL, NULL,
+                                                                NULL, NULL, NULL));
+      /* previous contents are untouched */
+      g_assert_cmphex (usb_identity.vendor_id, ==, 1);
+      g_assert_cmphex (usb_identity.product_id, ==, 1);
+      g_assert_cmphex (usb_identity.version, ==, 1);
+      g_assert_cmpstr (usb_identity.manufacturer, ==, "x");
+      g_assert_cmpstr (usb_identity.product, ==, "x");
+      g_assert_cmpstr (usb_identity.serial, ==, "x");
+    }
 
   /* For the mock device monitor, we know exactly what to expect, so
    * we can compare the expected log with what actually happened. For
@@ -205,6 +506,33 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
                         SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE
                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE);
+
+      g_assert_cmphex (identity.bus_type, ==, BUS_USB);
+      g_assert_cmphex (identity.vendor_id, ==, VENDOR_VALVE);
+      g_assert_cmphex (identity.product_id, ==, PRODUCT_VALVE_STEAM_CONTROLLER);
+      g_assert_cmphex (identity.version, ==, 0x0111);
+
+      g_assert_cmphex (hid_identity.bus_type, ==, HID_MARKER | BUS_USB);
+      g_assert_cmphex (hid_identity.vendor_id, ==, HID_MARKER | VENDOR_VALVE);
+      g_assert_cmphex (hid_identity.product_id, ==, HID_MARKER | PRODUCT_VALVE_STEAM_CONTROLLER);
+      g_assert_cmpstr (hid_identity.name, ==, "Valve Software Steam Controller");
+      g_assert_cmpstr (hid_identity.phys, ==, "[hid]usb-0000:00:14.0-1.2/input1");
+      g_assert_cmpstr (hid_identity.uniq, ==, "");
+
+      g_assert_cmphex (input_identity.bus_type, ==, EVDEV_MARKER | BUS_USB);
+      g_assert_cmphex (input_identity.vendor_id, ==, EVDEV_MARKER | VENDOR_VALVE);
+      g_assert_cmphex (input_identity.product_id, ==, EVDEV_MARKER | PRODUCT_VALVE_STEAM_CONTROLLER);
+      g_assert_cmphex (input_identity.version, ==, EVDEV_MARKER | 0x0111);
+      g_assert_cmpstr (input_identity.name, ==, "Wireless Steam Controller");
+      g_assert_cmpstr (input_identity.phys, ==, "[input]usb-0000:00:14.0-1.2/input1");
+      g_assert_cmpstr (input_identity.uniq, ==, "12345678");
+
+      g_assert_cmphex (usb_identity.vendor_id, ==, USB_MARKER | VENDOR_VALVE);
+      g_assert_cmphex (usb_identity.product_id, ==, USB_MARKER | PRODUCT_VALVE_STEAM_CONTROLLER);
+      g_assert_cmphex (usb_identity.version, ==, USB_MARKER | 0x0001);
+      g_assert_cmpstr (usb_identity.manufacturer, ==, "Valve Software");
+      g_assert_cmpstr (usb_identity.product, ==, "Steam Controller");
+      g_assert_cmpstr (usb_identity.serial, ==, NULL);
 
       uevent = srt_input_device_dup_uevent (device);
       g_assert_cmpstr (uevent, ==, "ONE=1\nTWO=2\n");
@@ -503,6 +831,8 @@ main (int argc,
 {
   g_test_init (&argc, &argv, NULL);
 
+  g_test_add ("/input-device/identity-from-hid-uevent", Fixture, NULL,
+              setup, test_input_device_identity_from_hid_uevent, teardown);
   g_test_add ("/input-device/usb", Fixture, NULL,
               setup, test_input_device_usb, teardown);
   g_test_add ("/input-device/monitor/mock", Fixture, NULL,

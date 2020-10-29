@@ -35,6 +35,16 @@
 #include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
+#define VENDOR_VALVE 0x28de
+#define PRODUCT_VALVE_STEAM_CONTROLLER 0x1142
+
+/* These aren't in the real vendor/product IDs, but we add them here
+ * to make the test able to distinguish. They look a bit like HID,
+ * EVDE(v) and USB, if you squint. */
+#define HID_MARKER 0x41D00000
+#define EVDEV_MARKER 0xE7DE0000
+#define USB_MARKER 0x05B00000
+
 static void mock_input_device_iface_init (SrtInputDeviceInterface *iface);
 static void mock_input_device_monitor_iface_init (SrtInputDeviceMonitorInterface *iface);
 
@@ -118,6 +128,139 @@ mock_input_device_get_sys_path (SrtInputDevice *device)
   return self->sys_path;
 }
 
+static gboolean
+mock_input_device_get_identity (SrtInputDevice *device,
+                                unsigned int *bus_type,
+                                unsigned int *vendor_id,
+                                unsigned int *product_id,
+                                unsigned int *version)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  if (bus_type != NULL)
+    *bus_type = self->bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->product_id;
+
+  if (version != NULL)
+    *version = self->version;
+
+  return TRUE;
+}
+
+static gboolean
+mock_input_device_get_hid_identity (SrtInputDevice *device,
+                                        unsigned int *bus_type,
+                                        unsigned int *vendor_id,
+                                        unsigned int *product_id,
+                                        const char **name,
+                                        const char **phys,
+                                        const char **uniq)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  if (self->hid_ancestor.sys_path == NULL)
+    return FALSE;
+
+  if (bus_type != NULL)
+    *bus_type = self->hid_ancestor.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->hid_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->hid_ancestor.product_id;
+
+  if (name != NULL)
+    *name = self->hid_ancestor.name;
+
+  if (phys != NULL)
+    *phys = self->hid_ancestor.phys;
+
+  if (uniq != NULL)
+    *uniq = self->hid_ancestor.uniq;
+
+  return TRUE;
+}
+
+static gboolean
+mock_input_device_get_input_identity (SrtInputDevice *device,
+                                          unsigned int *bus_type,
+                                          unsigned int *vendor_id,
+                                          unsigned int *product_id,
+                                          unsigned int *version,
+                                          const char **name,
+                                          const char **phys,
+                                          const char **uniq)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  if (self->input_ancestor.sys_path == NULL)
+    return FALSE;
+
+  if (bus_type != NULL)
+    *bus_type = self->input_ancestor.bus_type;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->input_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->input_ancestor.product_id;
+
+  if (version != NULL)
+    *version = self->input_ancestor.version;
+
+  if (name != NULL)
+    *name = self->input_ancestor.name;
+
+  if (phys != NULL)
+    *phys = self->input_ancestor.phys;
+
+  if (uniq != NULL)
+    *uniq = self->input_ancestor.uniq;
+
+  return TRUE;
+}
+
+static gboolean
+mock_input_device_get_usb_device_identity (SrtInputDevice *device,
+                                               unsigned int *vendor_id,
+                                               unsigned int *product_id,
+                                               unsigned int *device_version,
+                                               const char **manufacturer,
+                                               const char **product,
+                                               const char **serial)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  if (self->usb_device_ancestor.sys_path == NULL)
+    return FALSE;
+
+  if (vendor_id != NULL)
+    *vendor_id = self->usb_device_ancestor.vendor_id;
+
+  if (product_id != NULL)
+    *product_id = self->usb_device_ancestor.product_id;
+
+  if (device_version != NULL)
+    *device_version = self->usb_device_ancestor.device_version;
+
+  if (manufacturer != NULL)
+    *manufacturer = self->usb_device_ancestor.manufacturer;
+
+  if (product != NULL)
+    *product = self->usb_device_ancestor.product;
+
+  if (serial != NULL)
+    *serial = self->usb_device_ancestor.serial;
+
+  return TRUE;
+}
+
 static gchar **
 mock_input_device_dup_udev_properties (SrtInputDevice *device)
 {
@@ -193,13 +336,17 @@ mock_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_subsystem);
   IMPLEMENT (dup_udev_properties);
   IMPLEMENT (dup_uevent);
+  IMPLEMENT (get_identity);
 
   IMPLEMENT (get_hid_sys_path);
   IMPLEMENT (dup_hid_uevent);
+  IMPLEMENT (get_hid_identity);
   IMPLEMENT (get_input_sys_path);
   IMPLEMENT (dup_input_uevent);
+  IMPLEMENT (get_input_identity);
   IMPLEMENT (get_usb_device_sys_path);
   IMPLEMENT (dup_usb_device_uevent);
+  IMPLEMENT (get_usb_device_identity);
 
 #undef IMPLEMENT
 }
@@ -372,8 +519,35 @@ add_steam_controller (MockInputDeviceMonitor *self,
   g_ptr_array_add (arr, NULL);
   device->udev_properties = (gchar **) g_ptr_array_free (g_steal_pointer (&arr), FALSE);
 
-  /* TODO: When we have the rest of the expected fields, like vendor ID,
-   * fill in somewhat realistic details of a Steam Controller */
+  /* This is a semi-realistic Steam Controller. */
+  device->bus_type = BUS_USB;
+  device->vendor_id = VENDOR_VALVE;
+  device->product_id = PRODUCT_VALVE_STEAM_CONTROLLER;
+  device->version = 0x0111;
+
+  /* The part in square brackets isn't present on the real device, but
+   * makes this test more thorough by letting us distinguish. */
+  device->hid_ancestor.name = g_strdup ("Valve Software Steam Controller");
+  device->hid_ancestor.phys = g_strdup ("[hid]usb-0000:00:14.0-1.2/input1");
+  device->hid_ancestor.uniq = g_strdup ("");
+  device->hid_ancestor.bus_type = HID_MARKER | BUS_USB;
+  device->hid_ancestor.vendor_id = HID_MARKER | VENDOR_VALVE;
+  device->hid_ancestor.product_id = HID_MARKER | PRODUCT_VALVE_STEAM_CONTROLLER;
+
+  device->input_ancestor.name = g_strdup ("Wireless Steam Controller");
+  device->input_ancestor.phys = g_strdup ("[input]usb-0000:00:14.0-1.2/input1");
+  device->input_ancestor.uniq = g_strdup ("12345678");
+  device->input_ancestor.bus_type = EVDEV_MARKER | BUS_USB;
+  device->input_ancestor.vendor_id = EVDEV_MARKER | VENDOR_VALVE;
+  device->input_ancestor.product_id = EVDEV_MARKER | PRODUCT_VALVE_STEAM_CONTROLLER;
+  device->input_ancestor.version = EVDEV_MARKER | 0x0111;
+
+  device->usb_device_ancestor.vendor_id = USB_MARKER | VENDOR_VALVE;
+  device->usb_device_ancestor.product_id = USB_MARKER | PRODUCT_VALVE_STEAM_CONTROLLER;
+  device->usb_device_ancestor.device_version = USB_MARKER | 0x0001;
+  device->usb_device_ancestor.manufacturer = g_strdup ("Valve Software");
+  device->usb_device_ancestor.product = g_strdup ("Steam Controller");
+  device->usb_device_ancestor.serial = NULL;
 
   mock_input_device_monitor_add (self, device);
 

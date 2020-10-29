@@ -78,21 +78,52 @@ _SRT_PUBLIC
 gchar **srt_input_device_dup_udev_properties (SrtInputDevice *device);
 _SRT_PUBLIC
 gchar *srt_input_device_dup_uevent (SrtInputDevice *device);
+_SRT_PUBLIC
+gboolean srt_input_device_get_identity (SrtInputDevice *device,
+                                        unsigned int *bus_type,
+                                        unsigned int *vendor_id,
+                                        unsigned int *product_id,
+                                        unsigned int *version);
 
 _SRT_PUBLIC
 const char *srt_input_device_get_hid_sys_path (SrtInputDevice *device);
 _SRT_PUBLIC
 gchar *srt_input_device_dup_hid_uevent (SrtInputDevice *device);
+_SRT_PUBLIC
+gboolean srt_input_device_get_hid_identity (SrtInputDevice *device,
+                                            unsigned int *bus_type,
+                                            unsigned int *vendor_id,
+                                            unsigned int *product_id,
+                                            const char **name,
+                                            const char **phys,
+                                            const char **uniq);
 
 _SRT_PUBLIC
 const char *srt_input_device_get_input_sys_path (SrtInputDevice *device);
 _SRT_PUBLIC
 gchar *srt_input_device_dup_input_uevent (SrtInputDevice *device);
+_SRT_PUBLIC
+gboolean srt_input_device_get_input_identity (SrtInputDevice *device,
+                                              unsigned int *bus_type,
+                                              unsigned int *vendor_id,
+                                              unsigned int *product_id,
+                                              unsigned int *version,
+                                              const char **name,
+                                              const char **phys,
+                                              const char **uniq);
 
 _SRT_PUBLIC
 const char *srt_input_device_get_usb_device_sys_path (SrtInputDevice *device);
 _SRT_PUBLIC
 gchar *srt_input_device_dup_usb_device_uevent (SrtInputDevice *device);
+_SRT_PUBLIC
+gboolean srt_input_device_get_usb_device_identity (SrtInputDevice *device,
+                                                   unsigned int *vendor_id,
+                                                   unsigned int *product_id,
+                                                   unsigned int *device_version,
+                                                   const char **manufacturer,
+                                                   const char **product,
+                                                   const char **serial);
 
 /**
  * SrtInputDeviceMonitorFlags:

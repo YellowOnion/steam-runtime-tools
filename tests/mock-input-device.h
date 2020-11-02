@@ -59,6 +59,8 @@ struct _MockInputDevice
   guint32 vendor_id;
   guint32 version;
 
+  SrtEvdevCapabilities evdev_caps;
+
   struct
   {
     gchar *sys_path;

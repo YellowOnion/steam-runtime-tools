@@ -84,6 +84,22 @@ gboolean srt_input_device_get_identity (SrtInputDevice *device,
                                         unsigned int *vendor_id,
                                         unsigned int *product_id,
                                         unsigned int *version);
+_SRT_PUBLIC
+size_t srt_input_device_get_event_capabilities (SrtInputDevice *device,
+                                                unsigned int type,
+                                                unsigned long *storage,
+                                                size_t n_longs);
+_SRT_PUBLIC
+size_t srt_input_device_get_event_types (SrtInputDevice *device,
+                                         unsigned long *storage,
+                                         size_t n_longs);
+_SRT_PUBLIC
+gboolean srt_input_device_has_event_type (SrtInputDevice *device,
+                                          unsigned int type);
+_SRT_PUBLIC
+gboolean srt_input_device_has_event_capability (SrtInputDevice *device,
+                                                unsigned int type,
+                                                unsigned int code);
 
 _SRT_PUBLIC
 const char *srt_input_device_get_hid_sys_path (SrtInputDevice *device);

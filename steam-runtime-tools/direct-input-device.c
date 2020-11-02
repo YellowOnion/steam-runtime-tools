@@ -179,6 +179,7 @@ struct _SrtDirectInputDevice
 
   struct
   {
+    SrtEvdevCapabilities caps;
     gchar *name;
     gchar *phys;
     gchar *uniq;
@@ -309,6 +310,14 @@ srt_direct_input_device_get_sys_path (SrtInputDevice *device)
   SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
 
   return self->sys_path;
+}
+
+static const SrtEvdevCapabilities *
+srt_direct_input_device_peek_event_capabilities (SrtInputDevice *device)
+{
+  SrtDirectInputDevice *self = SRT_DIRECT_INPUT_DEVICE (device);
+
+  return &self->evdev.caps;
 }
 
 static const char *
@@ -455,6 +464,7 @@ srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
   IMPLEMENT (get_subsystem);
+  IMPLEMENT (peek_event_capabilities);
 
   IMPLEMENT (get_hid_sys_path);
   IMPLEMENT (get_input_sys_path);
@@ -777,6 +787,7 @@ add_device (SrtDirectInputDeviceMonitor *self,
           device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
         }
 
+      _srt_evdev_capabilities_set_from_evdev (&device->evdev.caps, fd);
       close (fd);
     }
   else

@@ -142,12 +142,16 @@ test_input_device_identity_from_hid_uevent (Fixture *f,
 #define EVDEV_MARKER 0xE7DE0000
 #define USB_MARKER 0x05B00000
 
+/* The test below assumes EV_MAX doesn't increase its value */
+G_STATIC_ASSERT (EV_MAX <= 31);
+
 static void
 test_input_device_usb (Fixture *f,
                        gconstpointer context)
 {
   g_autoptr(MockInputDevice) mock_device = mock_input_device_new ();
   SrtInputDevice *device = SRT_INPUT_DEVICE (mock_device);
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
   g_auto(GStrv) udev_properties = NULL;
   g_autofree gchar *uevent = NULL;
   g_autofree gchar *hid_uevent = NULL;
@@ -188,6 +192,10 @@ test_input_device_usb (Fixture *f,
     const char *product;
     const char *serial;
   } usb_identity = { 1, 1, 1, "x", "x", "x" };
+  unsigned long evbits;
+  /* Initialize the first two to nonzero to check that they get zeroed */
+  unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)] = { 0xa, 0xb };
+  gsize i;
 
   mock_device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
                               | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE);
@@ -203,6 +211,21 @@ test_input_device_usb (Fixture *f,
   mock_device->vendor_id = VENDOR_SONY;
   mock_device->product_id = PRODUCT_SONY_PS3;
   mock_device->version = 0x8111;
+
+  /* We don't set all the bits, just enough to be vaguely realistic */
+  set_bit (EV_KEY, mock_device->evdev_caps.ev);
+  set_bit (EV_ABS, mock_device->evdev_caps.ev);
+  set_bit (BTN_A, mock_device->evdev_caps.keys);
+  set_bit (BTN_B, mock_device->evdev_caps.keys);
+  set_bit (BTN_TL, mock_device->evdev_caps.keys);
+  set_bit (BTN_TR, mock_device->evdev_caps.keys);
+  set_bit (ABS_X, mock_device->evdev_caps.abs);
+  set_bit (ABS_Y, mock_device->evdev_caps.abs);
+  set_bit (ABS_RX, mock_device->evdev_caps.abs);
+  set_bit (ABS_RY, mock_device->evdev_caps.abs);
+
+  g_debug ("Mock device capabilities:");
+  _srt_evdev_capabilities_dump (&mock_device->evdev_caps);
 
   mock_device->hid_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid");
   mock_device->hid_ancestor.uevent = g_strdup ("HID=yes\n");
@@ -329,6 +352,81 @@ test_input_device_usb (Fixture *f,
   g_assert_cmpstr (usb_identity.manufacturer, ==, "Sony");
   g_assert_cmpstr (usb_identity.product, ==, "PLAYSTATION(R)3 Controller");
   g_assert_cmpstr (usb_identity.serial, ==, NULL);
+
+  g_debug ("Capabilities internally:");
+  _srt_evdev_capabilities_dump (iface->peek_event_capabilities (device));
+
+  /* This assumes EV_MAX doesn't increase its value */
+  g_assert_cmpuint (srt_input_device_get_event_types (device, NULL, 0),
+                    ==, 1);
+  g_assert_cmpuint (srt_input_device_get_event_types (device, &evbits, 1),
+                    ==, 1);
+  g_assert_cmphex (evbits, ==, mock_device->evdev_caps.ev[0]);
+  g_assert_cmphex (evbits & (1 << EV_KEY), ==, 1 << EV_KEY);
+  g_assert_cmphex (evbits & (1 << EV_ABS), ==, 1 << EV_ABS);
+  g_assert_cmphex (evbits & (1 << EV_SW), ==, 0);
+  g_assert_cmphex (evbits & (1 << EV_MSC), ==, 0);
+  g_assert_cmpint (srt_input_device_has_event_type (device, EV_KEY), ==, TRUE);
+  g_assert_cmpint (srt_input_device_has_event_type (device, EV_SW), ==, FALSE);
+  g_assert_cmpint (srt_input_device_has_event_capability (device, 0, EV_KEY),
+                   ==, TRUE);
+  g_assert_cmpint (srt_input_device_has_event_capability (device, 0, EV_SW),
+                   ==, FALSE);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (device, 0,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, evbits);
+
+  for (i = 1; i < G_N_ELEMENTS (bits); i++)
+    g_assert_cmphex (bits[i], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_KEY,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >, 1);
+  /* Low KEY_ codes are keyboard keys, which we don't have */
+  g_assert_cmphex (bits[0], ==, 0);
+  g_assert_cmpint (test_bit (BTN_A, bits), ==, 1);
+  g_assert_cmpint (test_bit (BTN_STYLUS, bits), ==, 0);
+  g_assert_cmpint (test_bit (KEY_SEMICOLON, bits), ==, 0);
+  g_assert_cmpmem (bits,
+                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.keys)),
+                   mock_device->evdev_caps.keys,
+                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.keys)));
+
+  /* ABS axes also match */
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_ABS,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmpint (test_bit (ABS_X, bits), ==, 1);
+  g_assert_cmpint (test_bit (ABS_Z, bits), ==, 0);
+  g_assert_cmpmem (bits,
+                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.abs)),
+                   mock_device->evdev_caps.abs,
+                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.abs)));
+
+  /* REL axes also match (in fact we don't have any, but we still store
+   * the bitfield) */
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_REL,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmpmem (bits,
+                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.rel)),
+                   mock_device->evdev_caps.rel,
+                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.rel)));
+
+  /* We don't support EV_SW */
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_SW,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    ==, 0);
+
+  for (i = 1; i < G_N_ELEMENTS (bits); i++)
+    g_assert_cmphex (bits[i], ==, 0);
 }
 
 static gboolean
@@ -501,6 +599,9 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
       g_autofree gchar *input_uevent = NULL;
       g_autofree gchar *usb_uevent = NULL;
       g_auto(GStrv) udev_properties = NULL;
+      unsigned long evbits;
+      unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)];
+      gsize i;
 
       g_assert_cmpuint (srt_input_device_get_interface_flags (device), ==,
                         SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
@@ -556,6 +657,68 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
                        "/sys/devices/mock/usb");
       usb_uevent = srt_input_device_dup_usb_device_uevent (device);
       g_assert_cmpstr (usb_uevent, ==, "USB=usb_device\n");
+
+      /* This assumes EV_MAX doesn't increase its value */
+      g_assert_cmpuint (srt_input_device_get_event_types (device, NULL, 0),
+                        ==, 1);
+      g_assert_cmpuint (srt_input_device_get_event_types (device, &evbits, 1),
+                        ==, 1);
+      g_assert_cmphex (evbits & (1 << EV_KEY), ==, 1 << EV_KEY);
+      g_assert_cmphex (evbits & (1 << EV_ABS), ==, 1 << EV_ABS);
+      g_assert_cmphex (evbits & (1 << EV_SW), ==, 0);
+      g_assert_cmphex (evbits & (1 << EV_MSC), ==, 0);
+      g_assert_cmpint (srt_input_device_has_event_type (device, EV_KEY), ==, TRUE);
+      g_assert_cmpint (srt_input_device_has_event_type (device, EV_SW), ==, FALSE);
+      g_assert_cmpint (srt_input_device_has_event_capability (device, 0, EV_KEY),
+                       ==, TRUE);
+      g_assert_cmpint (srt_input_device_has_event_capability (device, 0, EV_SW),
+                       ==, FALSE);
+
+      g_assert_cmpuint (srt_input_device_get_event_capabilities (device, 0,
+                                                                 bits,
+                                                                 G_N_ELEMENTS (bits)),
+                        ==, 1);
+      g_assert_cmphex (bits[0], ==, evbits);
+
+      for (i = 1; i < G_N_ELEMENTS (bits); i++)
+        g_assert_cmphex (bits[i], ==, 0);
+
+      g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_KEY,
+                                                                 bits,
+                                                                 G_N_ELEMENTS (bits)),
+                        >, 1);
+      /* Low KEY_ codes are keyboard keys, which we don't have */
+      g_assert_cmphex (bits[0], ==, 0);
+      g_assert_cmpint (test_bit (BTN_A, bits), ==, 1);
+      g_assert_cmpint (test_bit (BTN_STYLUS, bits), ==, 0);
+      g_assert_cmpint (test_bit (KEY_SEMICOLON, bits), ==, 0);
+
+      /* ABS axes also match */
+      g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_ABS,
+                                                                 bits,
+                                                                 G_N_ELEMENTS (bits)),
+                        >=, 1);
+      g_assert_cmpint (test_bit (ABS_X, bits), ==, 1);
+      g_assert_cmpint (test_bit (ABS_Z, bits), ==, 0);
+
+      /* REL axes also match (in fact we don't have any, but we still store
+       * the bitfield) */
+      g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_REL,
+                                                                 bits,
+                                                                 G_N_ELEMENTS (bits)),
+                        >=, 1);
+
+      for (i = 1; i < G_N_ELEMENTS (bits); i++)
+        g_assert_cmphex (bits[i], ==, 0);
+
+      /* We don't support EV_SW */
+      g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_SW,
+                                                                 bits,
+                                                                 G_N_ELEMENTS (bits)),
+                        ==, 0);
+
+      for (i = 1; i < G_N_ELEMENTS (bits); i++)
+        g_assert_cmphex (bits[i], ==, 0);
 
       g_ptr_array_add (f->log, g_steal_pointer (&message));
     }

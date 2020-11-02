@@ -145,6 +145,26 @@ add_uevent_member (JsonBuilder *builder,
 }
 
 static void
+append_evdev_hex (GString *buf,
+                  const unsigned long *bits,
+                  size_t n_longs)
+{
+  size_t i, j;
+
+  for (i = 0; i < n_longs; i++)
+    {
+      unsigned long word = bits[i];
+
+      for (j = 0; j < sizeof (long); j++)
+        {
+          unsigned char byte = (word >> (CHAR_BIT * j)) & 0xff;
+          g_string_append_printf (buf, "%02x ", byte);
+        }
+      g_string_append_c (buf, ' ');
+    }
+}
+
+static void
 added (SrtInputDeviceMonitor *monitor,
        SrtInputDevice *dev,
        void *user_data)
@@ -166,6 +186,7 @@ added (SrtInputDeviceMonitor *monitor,
             const char *manufacturer;
             unsigned int bus_type, vendor_id, product_id, version;
           } id, blank_id = {};
+          unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)];
 
           json_builder_set_member_name (builder, "interface_flags");
           json_builder_begin_array (builder);
@@ -211,6 +232,264 @@ added (SrtInputDeviceMonitor *monitor,
                   json_builder_set_member_name (builder, "version");
                   json_builder_add_string_value (builder, s);
                 }
+            }
+
+          if (srt_input_device_get_interface_flags (dev)
+              & SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT)
+            {
+              json_builder_set_member_name (builder, "evdev");
+              json_builder_begin_object (builder);
+
+              if (srt_input_device_get_event_types (dev, bits, G_N_ELEMENTS (bits)) > 0)
+                {
+                  json_builder_set_member_name (builder, "types");
+                  json_builder_begin_array (builder);
+                    {
+#define BIT(x) \
+                      do \
+                        { \
+                          if (test_bit_checked (EV_ ## x, bits, G_N_ELEMENTS (bits))) \
+                            { \
+                              json_builder_add_string_value (builder, #x); \
+                            } \
+                        } \
+                      while (0)
+
+                      BIT (SYN);
+                      BIT (KEY);
+                      BIT (REL);
+                      BIT (ABS);
+                      BIT (MSC);
+                      BIT (SW);
+                      BIT (LED);
+                      BIT (SND);
+                      BIT (REP);
+                      BIT (FF);
+                      BIT (PWR);
+                      BIT (FF_STATUS);
+
+#undef BIT
+                    }
+                  json_builder_end_array (builder);
+
+                  if (opt_verbose)
+                    {
+                      g_autoptr(GString) buf = g_string_new ("");
+
+                      append_evdev_hex (buf, bits, LONGS_FOR_BITS (EV_MAX));
+                      json_builder_set_member_name (builder, "raw_types");
+                      json_builder_add_string_value (builder, buf->str);
+                    }
+                }
+
+              if (srt_input_device_get_event_capabilities (dev, EV_ABS,
+                                                           bits, G_N_ELEMENTS (bits)) > 0)
+                {
+                  json_builder_set_member_name (builder, "absolute_axes");
+                  json_builder_begin_array (builder);
+                    {
+#define BIT(x) \
+                      do \
+                        { \
+                          if (test_bit_checked (ABS_ ## x, bits, G_N_ELEMENTS (bits))) \
+                            { \
+                              json_builder_add_string_value (builder, #x); \
+                            } \
+                        } \
+                      while (0)
+
+                      BIT (X);
+                      BIT (Y);
+                      BIT (Z);
+                      BIT (RX);
+                      BIT (RY);
+                      BIT (RZ);
+                      BIT (THROTTLE);
+                      BIT (RUDDER);
+                      BIT (WHEEL);
+                      BIT (GAS);
+                      BIT (BRAKE);
+                      BIT (HAT0X);
+                      BIT (HAT0Y);
+                      BIT (HAT1X);
+                      BIT (HAT1Y);
+                      BIT (HAT2X);
+                      BIT (HAT2Y);
+                      BIT (HAT3X);
+                      BIT (HAT3Y);
+                      BIT (PRESSURE);
+                      BIT (DISTANCE);
+                      BIT (TILT_X);
+                      BIT (TILT_Y);
+                      BIT (TOOL_WIDTH);
+                      BIT (VOLUME);
+                      BIT (MISC);
+                      BIT (RESERVED);
+                      BIT (MT_SLOT);
+
+#undef BIT
+                    }
+                  json_builder_end_array (builder);
+
+                  if (opt_verbose)
+                    {
+                      g_autoptr(GString) buf = g_string_new ("");
+
+                      append_evdev_hex (buf, bits, LONGS_FOR_BITS (ABS_MAX));
+                      json_builder_set_member_name (builder, "raw_abs");
+                      json_builder_add_string_value (builder, buf->str);
+                    }
+                }
+
+              if (srt_input_device_get_event_capabilities (dev, EV_REL,
+                                                           bits, G_N_ELEMENTS (bits)) > 0)
+                {
+                  json_builder_set_member_name (builder, "relative_axes");
+                  json_builder_begin_array (builder);
+                    {
+#define BIT(x) \
+                      do \
+                        { \
+                          if (test_bit_checked (REL_ ## x, bits, G_N_ELEMENTS (bits))) \
+                            { \
+                              json_builder_add_string_value (builder, #x); \
+                            } \
+                        } \
+                      while (0)
+
+                      BIT (X);
+                      BIT (Y);
+                      BIT (Z);
+                      BIT (RX);
+                      BIT (RY);
+                      BIT (RZ);
+                      BIT (HWHEEL);
+                      BIT (DIAL);
+                      BIT (WHEEL);
+                      BIT (MISC);
+                      BIT (RESERVED);
+                      BIT (WHEEL_HI_RES);
+                      BIT (HWHEEL_HI_RES);
+
+#undef BIT
+                    }
+                  json_builder_end_array (builder);
+
+                  if (opt_verbose)
+                    {
+                      g_autoptr(GString) buf = g_string_new ("");
+
+                      append_evdev_hex (buf, bits, LONGS_FOR_BITS (REL_MAX));
+                      json_builder_set_member_name (builder, "raw_rel");
+                      json_builder_add_string_value (builder, buf->str);
+                    }
+                }
+
+              if (srt_input_device_get_event_capabilities (dev, EV_KEY,
+                                                           bits, G_N_ELEMENTS (bits)) > 0)
+                {
+                  json_builder_set_member_name (builder, "keys");
+                  json_builder_begin_array (builder);
+                    {
+#define BIT(x) \
+                      do \
+                        { \
+                          if (test_bit_checked (x, bits, G_N_ELEMENTS (bits))) \
+                            { \
+                              json_builder_add_string_value (builder, #x); \
+                            } \
+                        } \
+                      while (0)
+
+                      /* We don't show all the keyboard keys here because
+                       * that would be ridiculous, but we do show a
+                       * selection that should be enough to tell the
+                       * difference between keyboards, mice, joysticks
+                       * and so on. We do show most joystick buttons. */
+
+                      /* Gamepads */
+                      BIT (BTN_A);    /* aka BTN_GAMEPAD, BTN_SOUTH */
+                      BIT (BTN_B);
+                      BIT (BTN_C);
+                      BIT (BTN_X);
+                      BIT (BTN_Y);
+                      BIT (BTN_Z);
+                      BIT (BTN_TL);
+                      BIT (BTN_TR);
+                      BIT (BTN_TL2);
+                      BIT (BTN_TR2);
+                      BIT (BTN_SELECT);
+                      BIT (BTN_START);
+                      BIT (BTN_MODE);
+                      BIT (BTN_THUMBL);
+                      BIT (BTN_THUMBR);
+                      /* Not all gamepads have a digital d-pad, some only
+                       * represent it as the hat0x and hat0y absolute axes;
+                       * but some do have it */
+                      BIT (BTN_DPAD_UP);
+                      BIT (BTN_DPAD_DOWN);
+                      BIT (BTN_DPAD_LEFT);
+                      BIT (BTN_DPAD_RIGHT);
+
+                      /* Flight sticks and similar joysticks */
+                      BIT (BTN_TRIGGER);
+                      BIT (BTN_THUMB);
+                      BIT (BTN_THUMB2);
+                      BIT (BTN_TOP);
+                      BIT (BTN_TOP2);
+                      BIT (BTN_PINKIE);
+                      BIT (BTN_BASE);
+                      BIT (BTN_BASE2);
+                      BIT (BTN_BASE3);
+                      BIT (BTN_BASE4);
+                      BIT (BTN_BASE5);
+                      BIT (BTN_BASE6);
+                      BIT (BTN_DEAD);
+                      BIT (BTN_TRIGGER_HAPPY);
+
+                      /* Steering wheels */
+                      BIT (BTN_GEAR_DOWN);
+                      BIT (BTN_GEAR_UP);
+
+                      /* Keyboards */
+                      BIT (KEY_ESC);
+                      BIT (KEY_0);
+                      BIT (KEY_A);
+                      BIT (KEY_KP0);
+                      BIT (KEY_PLAY);
+
+                      /* Mice and friends. BTN_LEFT is an alias for
+                       * BTN_MOUSE, but we use BTN_MOUSE here as a
+                       * hint that the rest are also mouse buttons. */
+                      BIT (BTN_MOUSE);
+                      BIT (BTN_RIGHT);
+                      BIT (BTN_MIDDLE);
+                      BIT (BTN_SIDE);
+                      BIT (BTN_EXTRA);
+                      BIT (BTN_FORWARD);
+                      BIT (BTN_BACK);
+                      BIT (BTN_TASK);
+                      BIT (BTN_DIGI);
+                      BIT (KEY_MACRO1);
+
+                      /* Generic buttons that nobody knows what they do... */
+                      BIT (BTN_0);
+
+#undef BIT
+                    }
+                  json_builder_end_array (builder);
+
+                  if (opt_verbose)
+                    {
+                      g_autoptr(GString) buf = g_string_new ("");
+
+                      append_evdev_hex (buf, bits, LONGS_FOR_BITS (KEY_MAX));
+                      json_builder_set_member_name (builder, "raw_keys");
+                      json_builder_add_string_value (builder, buf->str);
+                    }
+                }
+
+              json_builder_end_object (builder);
             }
 
           udev_properties = srt_input_device_dup_udev_properties (dev);

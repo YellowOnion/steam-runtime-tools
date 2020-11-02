@@ -96,6 +96,46 @@ has_all_flags (unsigned int have,
   return ((have & want) == want);
 }
 
+static gboolean
+get_evdev_caps_from_udev (struct udev_device *dev,
+                          const char *attr,
+                          unsigned long *bitmask,
+                          size_t bitmask_len_longs)
+{
+  g_autofree char *text = NULL;
+  const char *value;
+  char *word;
+  int i;
+  unsigned long v;
+
+  memset (bitmask, 0, bitmask_len_longs * sizeof (*bitmask));
+  value = symbols.udev_device_get_sysattr_value (dev, attr);
+
+  if (!value)
+    return FALSE;
+
+  text = g_strdup (value);
+  i = 0;
+
+  while ((word = strrchr (text, ' ')) != NULL)
+    {
+      v = strtoul (word + 1, NULL, 16);
+
+      if (i < bitmask_len_longs)
+        bitmask[i] = v;
+
+      ++i;
+      *word = '\0';
+    }
+
+  v = strtoul (text, NULL, 16);
+
+  if (i < bitmask_len_longs)
+    bitmask[i] = v;
+
+  return TRUE;
+}
+
 static struct udev_device *
 find_input_ancestor (struct udev_device *dev)
 {
@@ -117,6 +157,8 @@ struct _SrtUdevInputDevice
   GObject parent;
 
   struct udev_device *dev;                    /* owned */
+
+  SrtEvdevCapabilities evdev_caps;
 
   struct
   {
@@ -350,6 +392,14 @@ srt_udev_input_device_dup_uevent (SrtInputDevice *device)
   return g_strdup (symbols.udev_device_get_sysattr_value (self->dev, "uevent"));
 }
 
+static const SrtEvdevCapabilities *
+srt_udev_input_device_peek_event_capabilities (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  return &self->evdev_caps;
+}
+
 static const char *
 srt_udev_input_device_get_hid_sys_path (SrtInputDevice *device)
 {
@@ -554,6 +604,7 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (get_subsystem);
   IMPLEMENT (dup_udev_properties);
   IMPLEMENT (dup_uevent);
+  IMPLEMENT (peek_event_capabilities);
 
   IMPLEMENT (get_hid_sys_path);
   IMPLEMENT (get_input_sys_path);
@@ -790,6 +841,27 @@ read_input_ancestor (SrtUdevInputDevice *device)
                   &device->input_ancestor.product_id);
   get_uint32_hex (device->input_ancestor.dev, "id/version",
                   &device->input_ancestor.version);
+
+  get_evdev_caps_from_udev (device->input_ancestor.dev,
+                            "capabilities/ev",
+                            device->evdev_caps.ev,
+                            G_N_ELEMENTS (device->evdev_caps.ev));
+  get_evdev_caps_from_udev (device->input_ancestor.dev,
+                            "capabilities/abs",
+                            device->evdev_caps.abs,
+                            G_N_ELEMENTS (device->evdev_caps.abs));
+  get_evdev_caps_from_udev (device->input_ancestor.dev,
+                            "capabilities/rel",
+                            device->evdev_caps.rel,
+                            G_N_ELEMENTS (device->evdev_caps.rel));
+  get_evdev_caps_from_udev (device->input_ancestor.dev,
+                            "capabilities/key",
+                            device->evdev_caps.keys,
+                            G_N_ELEMENTS (device->evdev_caps.keys));
+  get_evdev_caps_from_udev (device->input_ancestor.dev,
+                            "capabilities/ff",
+                            device->evdev_caps.ff,
+                            G_N_ELEMENTS (device->evdev_caps.ff));
 }
 
 static void
@@ -916,6 +988,7 @@ add_device (SrtUdevInputDeviceMonitor *self,
           device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
         }
 
+      _srt_evdev_capabilities_set_from_evdev (&device->evdev_caps, fd);
       close (fd);
     }
 

@@ -277,6 +277,14 @@ mock_input_device_dup_uevent (SrtInputDevice *device)
   return g_strdup (self->uevent);
 }
 
+static const SrtEvdevCapabilities *
+mock_input_device_peek_event_capabilities (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return &self->evdev_caps;
+}
+
 static const char *
 mock_input_device_get_hid_sys_path (SrtInputDevice *device)
 {
@@ -337,6 +345,7 @@ mock_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (dup_udev_properties);
   IMPLEMENT (dup_uevent);
   IMPLEMENT (get_identity);
+  IMPLEMENT (peek_event_capabilities);
 
   IMPLEMENT (get_hid_sys_path);
   IMPLEMENT (dup_hid_uevent);
@@ -524,6 +533,17 @@ add_steam_controller (MockInputDeviceMonitor *self,
   device->vendor_id = VENDOR_VALVE;
   device->product_id = PRODUCT_VALVE_STEAM_CONTROLLER;
   device->version = 0x0111;
+  /* We don't set all the bits, just enough to be vaguely realistic */
+  set_bit (EV_KEY, device->evdev_caps.ev);
+  set_bit (EV_ABS, device->evdev_caps.ev);
+  set_bit (BTN_A, device->evdev_caps.keys);
+  set_bit (BTN_B, device->evdev_caps.keys);
+  set_bit (BTN_X, device->evdev_caps.keys);
+  set_bit (BTN_Y, device->evdev_caps.keys);
+  set_bit (ABS_X, device->evdev_caps.abs);
+  set_bit (ABS_Y, device->evdev_caps.abs);
+  set_bit (ABS_RX, device->evdev_caps.abs);
+  set_bit (ABS_RY, device->evdev_caps.abs);
 
   /* The part in square brackets isn't present on the real device, but
    * makes this test more thorough by letting us distinguish. */

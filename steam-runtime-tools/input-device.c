@@ -330,6 +330,246 @@ srt_input_device_default_get_identity (SrtInputDevice *device,
   return FALSE;
 }
 
+const unsigned long *
+_srt_evdev_capabilities_get_bits (const SrtEvdevCapabilities *caps,
+                                  unsigned int type,
+                                  size_t *n_longs)
+{
+  const unsigned long *buf = NULL;
+  size_t n = 0;
+
+  switch (type)
+    {
+      case 0:
+        buf = &caps->ev[0];
+        n = G_N_ELEMENTS (caps->ev);
+        break;
+
+      case EV_KEY:
+        buf = &caps->keys[0];
+        n = G_N_ELEMENTS (caps->keys);
+        break;
+
+      case EV_ABS:
+        buf = &caps->abs[0];
+        n = G_N_ELEMENTS (caps->abs);
+        break;
+
+      case EV_REL:
+        buf = &caps->rel[0];
+        n = G_N_ELEMENTS (caps->rel);
+        break;
+
+      case EV_FF:
+        buf = &caps->ff[0];
+        n = G_N_ELEMENTS (caps->ff);
+        break;
+
+      case EV_MSC:
+      case EV_SW:
+      case EV_LED:
+      case EV_SND:
+      case EV_REP:
+      case EV_PWR:
+      case EV_FF_STATUS:
+      case EV_MAX:
+      default:
+        break;
+    }
+
+  *n_longs = n;
+  return buf;
+}
+
+/* Format to print an unsigned long in hex, zero-padded to full size
+ * if possible. */
+#if G_MAXULONG == 0xffffffffUL
+# define HEX_LONG_FORMAT "08lx"
+#elif defined(__LP64__)
+# define HEX_LONG_FORMAT "016lx"
+#else
+# warning Unsupported architecture, assuming ILP32
+# define HEX_LONG_FORMAT "08lx"
+#endif
+
+void
+_srt_evdev_capabilities_dump (const SrtEvdevCapabilities *caps)
+{
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (caps->ev); i++)
+    g_debug ("ev[%zu]: %" HEX_LONG_FORMAT, i, caps->ev[i]);
+
+  for (i = 0; i < G_N_ELEMENTS (caps->keys); i++)
+    g_debug ("keys[%zu]: %" HEX_LONG_FORMAT, i, caps->keys[i]);
+
+  for (i = 0; i < G_N_ELEMENTS (caps->abs); i++)
+    g_debug ("abs[%zu]: %" HEX_LONG_FORMAT, i, caps->abs[i]);
+
+  for (i = 0; i < G_N_ELEMENTS (caps->rel); i++)
+    g_debug ("rel[%zu]: %" HEX_LONG_FORMAT, i, caps->rel[i]);
+}
+
+/**
+ * srt_input_device_get_event_capabilities:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @type: An event type from `<linux/input.h>` such as `EV_KEY`,
+ *  or 0 to get the supported event types
+ * @storage: (optional) (out caller-allocates) (array length=n_longs): An
+ *  array of @n_longs unsigned long values that will receive the bitfield,
+ *  allocated by the caller. Bit number 0 is the least significant bit
+ *  of storage[0] and so on up to the most significant bit of storage[0],
+ *  which is one place less significant than the least significant bit
+ *  of storage[1] if present.
+ * @n_longs: The length of @storage, or 0 if @storage is %NULL
+ *
+ * Fill a buffer with the event capabilities in the same encoding used
+ * for the EVIOCGBIT ioctl, or query how large that buffer would have to be.
+ *
+ * Bits in @storage above the highest known event value will be zeroed.
+ *
+ * If @storage is too small, high event values will not be represented.
+ * For example, if @type is `EV_KEY` and @n_longs is 1, then @storage
+ * will only indicate whether the first 32 or 64 key event codes are
+ * supported, and will not indicate anything about the level of support
+ * for `KEY_RIGHTALT` (event code 100).
+ *
+ * If @type is not a supported type, all of @storage will be zeroed and
+ * 0 will be returned.
+ *
+ * Returns: The number of unsigned long values that would have been
+ *  required for the highest possible event of type @type, which might
+ *  be greater than @n_longs
+ */
+size_t
+srt_input_device_get_event_capabilities (SrtInputDevice *device,
+                                         unsigned int type,
+                                         unsigned long *storage,
+                                         size_t n_longs)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+  const SrtEvdevCapabilities *caps;
+  const unsigned long *buf = NULL;
+  size_t n = 0;
+
+  g_return_val_if_fail (iface != NULL, 0);
+  g_return_val_if_fail (storage != NULL || n_longs == 0, 0);
+
+  if (n_longs != 0)
+    memset (storage, '\0', n_longs * sizeof (long));
+
+  caps = iface->peek_event_capabilities (device);
+
+  if (caps != NULL)
+    buf = _srt_evdev_capabilities_get_bits (caps, type, &n);
+
+  if (storage != NULL && buf != NULL && n_longs != 0 && n != 0)
+    memcpy (storage, buf, MIN (n_longs, n) * sizeof (long));
+
+  return n;
+}
+
+static const SrtEvdevCapabilities *
+srt_input_device_default_peek_event_capabilities (SrtInputDevice *device)
+{
+  return NULL;
+}
+
+/**
+ * srt_input_device_has_event_type:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @type: %EV_KEY, %EV_ABS, %EV_REL, %EV_FF or another evdev event type
+ *
+ * If the @device is an evdev device implementing the given event
+ * type, return %TRUE. Otherwise return %FALSE.
+ *
+ * Returns: %TRUE if the object implements the given event type.
+ */
+gboolean
+srt_input_device_has_event_type (SrtInputDevice *device,
+                                 unsigned int type)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+  const SrtEvdevCapabilities *caps;
+
+  g_return_val_if_fail (iface != NULL, 0);
+
+  caps = iface->peek_event_capabilities (device);
+
+  return (caps != NULL
+          && type <= EV_MAX
+          && test_bit_checked (type, caps->ev, G_N_ELEMENTS (caps->ev)));
+}
+
+/**
+ * srt_input_device_get_event_types:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @storage: (optional) (out caller-allocates) (array length=n_longs): An
+ *  array of @n_longs unsigned long values that will receive the bitfield,
+ *  allocated by the caller. Bit number 0 is the least significant bit
+ *  of storage[0] and so on up to the most significant bit of storage[0],
+ *  which is one place less significant than the least significant bit
+ *  of storage[1] if present.
+ * @n_longs: The length of @storage, or 0 if @storage is %NULL
+ *
+ * Fill a buffer with the supported event types in the same encoding used
+ * for the EVIOCGBIT ioctl, or query how large that buffer would have to be.
+ * This is the same as
+ * `srt_input_device_get_event_capabilities (device, 0, ...)`,
+ * except that bit numbers in @storage reflect event types, for example
+ * bit number 3 (`storage[0] & (1 << 3)`) represents
+ * event type 3 (`EV_ABS`).
+ *
+ * Returns: The number of unsigned long values that would have been
+ *  required for the highest possible event of type @type, which might
+ *  be greater than @n_longs
+ */
+size_t
+srt_input_device_get_event_types (SrtInputDevice *device,
+                                  unsigned long *storage,
+                                  size_t n_longs)
+{
+  return srt_input_device_get_event_capabilities (device, 0, storage, n_longs);
+}
+
+/**
+ * srt_input_device_has_event_capability:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @type: `EV_KEY`, `EV_ABS`, `EV_REL`, `EV_FF` or another evdev event type
+ * @code: A bit appropriate for the given evdev event type;
+ *  for example, if @type is `EV_KEY`, then @code might be `KEY_BACKSPACE`
+ *  or `BTN_X`
+ *
+ * If the @device is an evdev device implementing the given event
+ * type and code, return %TRUE. Otherwise return %FALSE.
+ *
+ * This is currently only implemented for `EV_KEY`, `EV_ABS`, `EV_REL`
+ * and `EV_FF` (the interesting event types for game controllers), and
+ * will return %FALSE for more exotic event types.
+ *
+ * Returns: %TRUE if the object implements the given event type.
+ */
+gboolean
+srt_input_device_has_event_capability (SrtInputDevice *device,
+                                       unsigned int type,
+                                       unsigned int code)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+  const SrtEvdevCapabilities *caps;
+  const unsigned long *buf = NULL;
+  size_t n = 0;
+
+  g_return_val_if_fail (iface != NULL, 0);
+
+  caps = iface->peek_event_capabilities (device);
+
+  if (caps == NULL)
+    return FALSE;
+
+  buf = _srt_evdev_capabilities_get_bits (caps, type, &n);
+  return test_bit_checked (code, buf, n);
+}
+
 /**
  * srt_input_device_get_hid_sys_path:
  * @device: An object implementing #SrtInputDeviceInterface
@@ -646,6 +886,7 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
   IMPLEMENT2 (get_sys_path, get_null_string);
   IMPLEMENT2 (get_subsystem, get_null_string);
   IMPLEMENT (get_identity);
+  IMPLEMENT (peek_event_capabilities);
 
   IMPLEMENT2 (get_hid_sys_path, get_null_string);
   IMPLEMENT (get_hid_identity);
@@ -1030,6 +1271,39 @@ _srt_input_device_monitor_emit_all_for_now (SrtInputDeviceMonitor *monitor)
 {
   g_debug ("All for now");
   g_signal_emit (monitor, monitor_signal_all_for_now, 0);
+}
+
+static gboolean
+_srt_get_caps_from_evdev (int fd,
+                          unsigned int type,
+                          unsigned long *bitmask,
+                          size_t bitmask_len_longs)
+{
+  size_t bitmask_len_bytes = bitmask_len_longs * sizeof (*bitmask);
+
+  memset (bitmask, 0, bitmask_len_bytes);
+
+  if (ioctl (fd, EVIOCGBIT (type, bitmask_len_bytes), bitmask) < 0)
+    return FALSE;
+
+  return TRUE;
+}
+
+gboolean
+_srt_evdev_capabilities_set_from_evdev (SrtEvdevCapabilities *caps,
+                                        int fd)
+{
+  if (_srt_get_caps_from_evdev (fd, 0, caps->ev, G_N_ELEMENTS (caps->ev)))
+    {
+      _srt_get_caps_from_evdev (fd, EV_KEY, caps->keys, G_N_ELEMENTS (caps->keys));
+      _srt_get_caps_from_evdev (fd, EV_ABS, caps->abs, G_N_ELEMENTS (caps->abs));
+      _srt_get_caps_from_evdev (fd, EV_REL, caps->rel, G_N_ELEMENTS (caps->rel));
+      _srt_get_caps_from_evdev (fd, EV_FF, caps->ff, G_N_ELEMENTS (caps->ff));
+      return TRUE;
+    }
+
+  memset (caps, 0, sizeof (*caps));
+  return FALSE;
 }
 
 gboolean

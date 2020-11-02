@@ -80,6 +80,88 @@ test_avoid_gvfs (Fixture *f,
                     G_OBJECT_TYPE (local));
 }
 
+static void
+test_evdev_bits (Fixture *f,
+                 gconstpointer context)
+{
+  unsigned long words[] = { 0x00020001, 0x00080005 };
+
+#ifdef __i386__
+  g_assert_cmpuint (BITS_PER_LONG, ==, 32);
+  g_assert_cmpuint (LONGS_FOR_BITS (1), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (32), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (33), ==, 2);
+  g_assert_cmpuint (CHOOSE_BIT (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (31), ==, 31);
+  g_assert_cmpuint (CHOOSE_BIT (32), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (33), ==, 1);
+  g_assert_cmpuint (CHOOSE_BIT (63), ==, 31);
+  g_assert_cmpuint (CHOOSE_BIT (64), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (31), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (32), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (33), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (63), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (64), ==, 2);
+#elif defined(__LP64__)
+  g_assert_cmpuint (BITS_PER_LONG, ==, 64);
+  g_assert_cmpuint (LONGS_FOR_BITS (1), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (64), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (65), ==, 2);
+  g_assert_cmpuint (CHOOSE_BIT (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (63), ==, 63);
+  g_assert_cmpuint (CHOOSE_BIT (64), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (65), ==, 1);
+  g_assert_cmpuint (CHOOSE_BIT (127), ==, 63);
+  g_assert_cmpuint (CHOOSE_BIT (128), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (63), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (64), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (65), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (127), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (128), ==, 2);
+#endif
+
+  /* Among bits 0 to 15, only bit 0 (0x1) is set */
+  g_assert_cmpuint (test_bit_checked (0, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (1, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (15, words, G_N_ELEMENTS (words)), ==, 0);
+
+  /* Among bits 16 to 31, only bit 17 (0x2 << 16) is set */
+  g_assert_cmpuint (test_bit_checked (16, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (17, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (18, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (31, words, G_N_ELEMENTS (words)), ==, 0);
+
+#ifdef __i386__
+  /* Among bits 32 to 63, only bits 32 (0x1 << 32), 34 (0x4 << 32)
+   * and 51 (0x8 << 48) are set, and they don't count as set unless we
+   * allow ourselves to look that far */
+  g_assert_cmpuint (test_bit_checked (32, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (32, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (33, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (34, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (34, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (35, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (50, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (51, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (52, words, G_N_ELEMENTS (words)), ==, 0);
+#elif defined(__LP64__)
+  /* Among bits 64 to 127, only bits 64 (0x1 << 64), 66 (0x4 << 64)
+   * and 83 (0x8 << 80) are set, and they don't count as set unless we
+   * allow ourselves to look that far */
+  g_assert_cmpuint (test_bit_checked (64, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (64, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (65, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (66, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (66, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (67, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (82, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (83, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (84, words, G_N_ELEMENTS (words)), ==, 0);
+#endif
+}
+
 typedef struct
 {
   const char *name;
@@ -296,6 +378,8 @@ main (int argc,
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/utils/avoid-gvfs", Fixture, NULL, setup, test_avoid_gvfs, teardown);
+  g_test_add ("/utils/evdev-bits", Fixture, NULL,
+              setup, test_evdev_bits, teardown);
   g_test_add ("/utils/test-file-in-sysroot", Fixture, NULL,
               setup, test_file_in_sysroot, teardown);
   g_test_add ("/utils/filter_gameoverlayrenderer", Fixture, NULL, setup,

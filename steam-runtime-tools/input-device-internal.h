@@ -28,6 +28,101 @@
 
 #include "steam-runtime-tools/input-device.h"
 
+#include <linux/input.h>
+
+/* Macros for the bitfield encoding used by the EVIOCGBIT ioctl. */
+#define BITS_PER_LONG           (sizeof (unsigned long) * CHAR_BIT)
+#define LONGS_FOR_BITS(x)       ((((x)-1)/BITS_PER_LONG)+1)
+#define CHOOSE_BIT(x)           ((x)%BITS_PER_LONG)
+#define CHOOSE_LONG(x)          ((x)/BITS_PER_LONG)
+
+/* Note that this always returns 0 or 1, so it can be considered to return
+ * a gboolean */
+#define test_bit(bit, ulongs)   ((ulongs[CHOOSE_LONG(bit)] >> CHOOSE_BIT(bit)) & 1)
+
+#define set_bit(bit, ulongs)    do { ulongs[CHOOSE_LONG(bit)] |= (1UL << CHOOSE_BIT(bit)); } while (0)
+
+/*
+ * @bit_number: A bit number, where 0 is the least significant bit of bits[0]
+ * @bits: (in) (array length=n_longs): Bitfields encoded as longs, where
+ *  the most significant bit of bits[0] is one place less significant than
+ *  the least significant bit of bits[1]
+ * @n_longs: The number of elements in @bits
+ *
+ * Decode the bitfield encoding used by the EVIOCGBIT ioctl.
+ */
+static inline gboolean
+test_bit_checked (unsigned int bit_number,
+                  const unsigned long *bits,
+                  size_t n_longs)
+{
+  if (CHOOSE_LONG (bit_number) >= n_longs)
+    return FALSE;
+
+  return test_bit (bit_number, bits);
+}
+
+/* We assume a buffer large enough for all the keyboard/button codes is
+ * also sufficient for all the less numerous event types. */
+#define HIGHEST_EVENT_CODE (KEY_MAX)
+G_STATIC_ASSERT (KEY_MAX >= EV_MAX);
+G_STATIC_ASSERT (KEY_MAX >= ABS_MAX);
+G_STATIC_ASSERT (KEY_MAX >= REL_MAX);
+G_STATIC_ASSERT (KEY_MAX >= FF_MAX);
+
+/* Some of the event codes we're interested in weren't in in older kernels,
+ * like the one whose headers we use for SteamRT 1 'scout'. */
+
+#ifndef ABS_RESERVED
+# define ABS_RESERVED 0x2e
+#endif
+
+G_STATIC_ASSERT (ABS_RESERVED < KEY_MAX);
+
+#ifndef REL_RESERVED
+# define REL_RESERVED 0x0a
+#endif
+
+#ifndef REL_WHEEL_HI_RES
+# define REL_WHEEL_HI_RES 0x0b
+#endif
+
+#ifndef REL_HWHEEL_HI_RES
+# define REL_HWHEEL_HI_RES 0x0c
+#endif
+
+G_STATIC_ASSERT (REL_HWHEEL_HI_RES < KEY_MAX);
+
+#ifndef BTN_DPAD_UP
+  /* We assume that these were all defined together */
+# define BTN_DPAD_UP 0x220
+# define BTN_DPAD_DOWN 0x221
+# define BTN_DPAD_LEFT 0x222
+# define BTN_DPAD_RIGHT 0x223
+#endif
+
+#ifndef KEY_MACRO1
+# define KEY_MACRO1 0x290
+#endif
+
+G_STATIC_ASSERT (KEY_MACRO1 < KEY_MAX);
+
+typedef struct
+{
+  unsigned long ev[LONGS_FOR_BITS (EV_MAX)];
+  unsigned long keys[LONGS_FOR_BITS (KEY_MAX)];
+  unsigned long abs[LONGS_FOR_BITS (ABS_MAX)];
+  unsigned long rel[LONGS_FOR_BITS (REL_MAX)];
+  unsigned long ff[LONGS_FOR_BITS (FF_MAX)];
+} SrtEvdevCapabilities;
+
+const unsigned long *_srt_evdev_capabilities_get_bits (const SrtEvdevCapabilities *caps,
+                                                       unsigned int type,
+                                                       size_t *n_longs);
+gboolean _srt_evdev_capabilities_set_from_evdev (SrtEvdevCapabilities *caps,
+                                                 int fd);
+void _srt_evdev_capabilities_dump (const SrtEvdevCapabilities *caps);
+
 struct _SrtInputDeviceInterface
 {
   GTypeInterface parent;
@@ -44,6 +139,7 @@ struct _SrtInputDeviceInterface
                             unsigned int *vendor_id,
                             unsigned int *product_id,
                             unsigned int *version);
+  const SrtEvdevCapabilities *(*peek_event_capabilities) (SrtInputDevice *device);
 
   const char * (*get_hid_sys_path) (SrtInputDevice *device);
   gchar * (*dup_hid_uevent) (SrtInputDevice *device);
@@ -101,7 +197,6 @@ void _srt_input_device_monitor_emit_added (SrtInputDeviceMonitor *monitor,
 void _srt_input_device_monitor_emit_removed (SrtInputDeviceMonitor *monitor,
                                              SrtInputDevice *device);
 void _srt_input_device_monitor_emit_all_for_now (SrtInputDeviceMonitor *monitor);
-
 
 gboolean _srt_get_identity_from_evdev (int fd,
                                        guint32 *bus_type,

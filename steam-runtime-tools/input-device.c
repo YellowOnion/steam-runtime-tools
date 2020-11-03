@@ -408,6 +408,9 @@ _srt_evdev_capabilities_dump (const SrtEvdevCapabilities *caps)
 
   for (i = 0; i < G_N_ELEMENTS (caps->rel); i++)
     g_debug ("rel[%zu]: %" HEX_LONG_FORMAT, i, caps->rel[i]);
+
+  for (i = 0; i < G_N_ELEMENTS (caps->props); i++)
+    g_debug ("props[%zu]: %" HEX_LONG_FORMAT, i, caps->props[i]);
 }
 
 /**
@@ -530,6 +533,80 @@ srt_input_device_get_event_types (SrtInputDevice *device,
                                   size_t n_longs)
 {
   return srt_input_device_get_event_capabilities (device, 0, storage, n_longs);
+}
+
+/**
+ * srt_input_device_has_input_property:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @input_prop: An input property such as `INPUT_PROP_POINTER`
+ *
+ * If the @device is an evdev device with the given input
+ * property, return %TRUE. Otherwise return %FALSE.
+ *
+ * Returns: %TRUE if the object has the given input property.
+ */
+gboolean
+srt_input_device_has_input_property (SrtInputDevice *device,
+                                     unsigned int input_prop)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+  const SrtEvdevCapabilities *caps;
+
+  g_return_val_if_fail (iface != NULL, 0);
+
+  caps = iface->peek_event_capabilities (device);
+
+  return (caps != NULL
+          && input_prop <= INPUT_PROP_MAX
+          && test_bit_checked (input_prop, caps->props, G_N_ELEMENTS (caps->props)));
+}
+
+/**
+ * srt_input_device_get_input_properties:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @storage: (optional) (out caller-allocates) (array length=n_longs): An
+ *  array of @n_longs unsigned long values that will receive the bitfield,
+ *  allocated by the caller. Bit number 0 is the least significant bit
+ *  of storage[0] and so on up to the most significant bit of storage[0],
+ *  which is one place less significant than the least significant bit
+ *  of storage[1] if present.
+ * @n_longs: The length of @storage, or 0 if @storage is %NULL
+ *
+ * Fill a buffer with the input device properties in the same encoding used
+ * for the EVIOCGPROP ioctl, or query how large that buffer would have to be.
+ *
+ * Bit numbers in @storage reflect input properties, for example
+ * bit number 6 (`storage[0] & (1 << 6)`) represents
+ * input property 6 (`INPUT_PROP_ACCELEROMETER`).
+ *
+ * Returns: The number of unsigned long values that would have been
+ *  required for the highest possible event of type @type, which might
+ *  be greater than @n_longs
+ */
+size_t
+srt_input_device_get_input_properties (SrtInputDevice *device,
+                                       unsigned long *storage,
+                                       size_t n_longs)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+  const SrtEvdevCapabilities *caps;
+
+  g_return_val_if_fail (iface != NULL, 0);
+  g_return_val_if_fail (storage != NULL || n_longs == 0, 0);
+
+  if (n_longs != 0)
+    memset (storage, '\0', n_longs * sizeof (long));
+
+  caps = iface->peek_event_capabilities (device);
+
+  if (caps == NULL)
+    return 0;
+
+  if (storage != NULL && n_longs != 0)
+    memcpy (storage, caps->props,
+            MIN (n_longs, G_N_ELEMENTS (caps->props)) * sizeof (long));
+
+  return G_N_ELEMENTS (caps->props);
 }
 
 /**
@@ -1299,6 +1376,7 @@ _srt_evdev_capabilities_set_from_evdev (SrtEvdevCapabilities *caps,
       _srt_get_caps_from_evdev (fd, EV_ABS, caps->abs, G_N_ELEMENTS (caps->abs));
       _srt_get_caps_from_evdev (fd, EV_REL, caps->rel, G_N_ELEMENTS (caps->rel));
       _srt_get_caps_from_evdev (fd, EV_FF, caps->ff, G_N_ELEMENTS (caps->ff));
+      ioctl (fd, EVIOCGPROP (sizeof (caps->props)), caps->props);
       return TRUE;
     }
 

@@ -489,6 +489,44 @@ added (SrtInputDeviceMonitor *monitor,
                     }
                 }
 
+              if (srt_input_device_get_input_properties (dev, bits,
+                                                         G_N_ELEMENTS (bits)) > 0)
+                {
+                  json_builder_set_member_name (builder, "input_properties");
+                  json_builder_begin_array (builder);
+                    {
+#define BIT(x) \
+                      do \
+                        { \
+                          if (test_bit_checked (INPUT_PROP_ ## x, bits, G_N_ELEMENTS (bits))) \
+                            { \
+                              json_builder_add_string_value (builder, #x); \
+                            } \
+                        } \
+                      while (0)
+
+                      BIT (POINTER);
+                      BIT (DIRECT);
+                      BIT (BUTTONPAD);
+                      BIT (SEMI_MT);
+                      BIT (TOPBUTTONPAD);
+                      BIT (POINTING_STICK);
+                      BIT (ACCELEROMETER);
+
+#undef BIT
+                    }
+                  json_builder_end_array (builder);
+
+                  if (opt_verbose)
+                    {
+                      g_autoptr(GString) buf = g_string_new ("");
+
+                      append_evdev_hex (buf, bits, LONGS_FOR_BITS (REL_MAX));
+                      json_builder_set_member_name (builder, "raw_input_properties");
+                      json_builder_add_string_value (builder, buf->str);
+                    }
+                }
+
               json_builder_end_object (builder);
             }
 

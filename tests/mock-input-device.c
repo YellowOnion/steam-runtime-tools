@@ -544,6 +544,9 @@ add_steam_controller (MockInputDeviceMonitor *self,
   set_bit (ABS_Y, device->evdev_caps.abs);
   set_bit (ABS_RX, device->evdev_caps.abs);
   set_bit (ABS_RY, device->evdev_caps.abs);
+  /* This is unrealistic, but it's hard to test the properties if their
+   * value is zero */
+  set_bit (INPUT_PROP_POINTER, device->evdev_caps.props);
 
   /* The part in square brackets isn't present on the real device, but
    * makes this test more thorough by letting us distinguish. */

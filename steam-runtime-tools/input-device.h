@@ -100,6 +100,13 @@ _SRT_PUBLIC
 gboolean srt_input_device_has_event_capability (SrtInputDevice *device,
                                                 unsigned int type,
                                                 unsigned int code);
+_SRT_PUBLIC
+gboolean srt_input_device_has_input_property (SrtInputDevice *device,
+                                              unsigned int input_prop);
+_SRT_PUBLIC
+size_t srt_input_device_get_input_properties (SrtInputDevice *device,
+                                              unsigned long *storage,
+                                              size_t n_longs);
 
 _SRT_PUBLIC
 const char *srt_input_device_get_hid_sys_path (SrtInputDevice *device);

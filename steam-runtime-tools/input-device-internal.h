@@ -107,6 +107,18 @@ G_STATIC_ASSERT (REL_HWHEEL_HI_RES < KEY_MAX);
 
 G_STATIC_ASSERT (KEY_MACRO1 < KEY_MAX);
 
+#ifndef INPUT_PROP_TOPBUTTONPAD
+# define INPUT_PROP_TOPBUTTONPAD 0x04
+#endif
+#ifndef INPUT_PROP_POINTING_STICK
+# define INPUT_PROP_POINTING_STICK 0x05
+#endif
+#ifndef INPUT_PROP_ACCELEROMETER
+# define INPUT_PROP_ACCELEROMETER 0x06
+#endif
+
+G_STATIC_ASSERT (INPUT_PROP_ACCELEROMETER < INPUT_PROP_MAX);
+
 typedef struct
 {
   unsigned long ev[LONGS_FOR_BITS (EV_MAX)];
@@ -114,6 +126,7 @@ typedef struct
   unsigned long abs[LONGS_FOR_BITS (ABS_MAX)];
   unsigned long rel[LONGS_FOR_BITS (REL_MAX)];
   unsigned long ff[LONGS_FOR_BITS (FF_MAX)];
+  unsigned long props[LONGS_FOR_BITS (INPUT_PROP_MAX)];
 } SrtEvdevCapabilities;
 
 const unsigned long *_srt_evdev_capabilities_get_bits (const SrtEvdevCapabilities *caps,

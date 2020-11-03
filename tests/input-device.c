@@ -144,6 +144,8 @@ test_input_device_identity_from_hid_uevent (Fixture *f,
 
 /* The test below assumes EV_MAX doesn't increase its value */
 G_STATIC_ASSERT (EV_MAX <= 31);
+/* Same for INPUT_PROP_MAX */
+G_STATIC_ASSERT (INPUT_PROP_MAX <= 31);
 
 static void
 test_input_device_usb (Fixture *f,
@@ -424,6 +426,17 @@ test_input_device_usb (Fixture *f,
                                                              bits,
                                                              G_N_ELEMENTS (bits)),
                     ==, 0);
+
+  for (i = 1; i < G_N_ELEMENTS (bits); i++)
+    g_assert_cmphex (bits[i], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_input_properties (device,
+                                                           bits,
+                                                           G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+  g_assert_cmpint (srt_input_device_has_input_property (device, INPUT_PROP_SEMI_MT),
+                   ==, FALSE);
 
   for (i = 1; i < G_N_ELEMENTS (bits); i++)
     g_assert_cmphex (bits[i], ==, 0);
@@ -716,6 +729,21 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
                                                                  bits,
                                                                  G_N_ELEMENTS (bits)),
                         ==, 0);
+
+      for (i = 1; i < G_N_ELEMENTS (bits); i++)
+        g_assert_cmphex (bits[i], ==, 0);
+
+      g_assert_cmpuint (srt_input_device_get_input_properties (device,
+                                                               bits,
+                                                               G_N_ELEMENTS (bits)),
+                        ==, 1);
+      /* The mock implementation unrealistically sets INPUT_PROP_POINTER,
+       * just so we have something nonzero to test against */
+      g_assert_cmphex (bits[0], ==, (1 << INPUT_PROP_POINTER));
+      g_assert_cmpint (srt_input_device_has_input_property (device, INPUT_PROP_POINTER),
+                       ==, TRUE);
+      g_assert_cmpint (srt_input_device_has_input_property (device, INPUT_PROP_SEMI_MT),
+                       ==, FALSE);
 
       for (i = 1; i < G_N_ELEMENTS (bits); i++)
         g_assert_cmphex (bits[i], ==, 0);

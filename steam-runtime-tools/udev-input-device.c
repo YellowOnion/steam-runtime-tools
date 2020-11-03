@@ -862,6 +862,13 @@ read_input_ancestor (SrtUdevInputDevice *device)
                             "capabilities/ff",
                             device->evdev_caps.ff,
                             G_N_ELEMENTS (device->evdev_caps.ff));
+
+  /* These are not really capabilities as such, but the encoding is
+   * the same */
+  get_evdev_caps_from_udev (device->input_ancestor.dev,
+                            "properties",
+                            device->evdev_caps.props,
+                            G_N_ELEMENTS (device->evdev_caps.props));
 }
 
 static void

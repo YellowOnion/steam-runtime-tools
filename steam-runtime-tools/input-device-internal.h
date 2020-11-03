@@ -135,11 +135,13 @@ const unsigned long *_srt_evdev_capabilities_get_bits (const SrtEvdevCapabilitie
 gboolean _srt_evdev_capabilities_set_from_evdev (SrtEvdevCapabilities *caps,
                                                  int fd);
 void _srt_evdev_capabilities_dump (const SrtEvdevCapabilities *caps);
+SrtInputDeviceTypeFlags _srt_evdev_capabilities_guess_type (const SrtEvdevCapabilities *caps);
 
 struct _SrtInputDeviceInterface
 {
   GTypeInterface parent;
 
+  SrtInputDeviceTypeFlags (*get_type_flags) (SrtInputDevice *device);
   SrtInputDeviceInterfaceFlags (*get_interface_flags) (SrtInputDevice *device);
 
   const char * (*get_dev_node) (SrtInputDevice *device);

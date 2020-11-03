@@ -191,6 +191,7 @@ struct _SrtUdevInputDevice
     guint32 device_version;
   } usb_device_ancestor;
 
+  SrtInputDeviceTypeFlags type_flags;
   SrtInputDeviceInterfaceFlags iface_flags;
 };
 
@@ -326,6 +327,14 @@ get_uint32_hex (struct udev_device *dev,
     *out = (guint32) ret;
 
   return TRUE;
+}
+
+static SrtInputDeviceTypeFlags
+srt_udev_input_device_get_type_flags (SrtInputDevice *device)
+{
+  SrtUdevInputDevice *self = SRT_UDEV_INPUT_DEVICE (device);
+
+  return self->type_flags;
 }
 
 static SrtInputDeviceInterfaceFlags
@@ -598,6 +607,7 @@ srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
 #define IMPLEMENT(x) iface->x = srt_udev_input_device_ ## x
 
+  IMPLEMENT (get_type_flags);
   IMPLEMENT (get_interface_flags);
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
@@ -885,6 +895,27 @@ read_usb_device_ancestor (SrtUdevInputDevice *device)
                   &device->usb_device_ancestor.device_version);
 }
 
+static gboolean
+get_boolean_property (struct udev_device *dev,
+                      const char *name,
+                      gboolean def)
+{
+  const char *value = symbols.udev_device_get_property_value (dev, name);
+
+  if (value == NULL)
+    return def;
+
+  if (g_strcmp0 (value, "1") == 0)
+    return TRUE;
+
+  if (g_strcmp0 (value, "0") == 0)
+    return FALSE;
+
+  g_debug ("Boolean udev property %s has unexpected value %s",
+           name, value);
+  return def;
+}
+
 static void
 add_device (SrtUdevInputDeviceMonitor *self,
             struct udev_device *dev)
@@ -1021,6 +1052,60 @@ add_device (SrtUdevInputDeviceMonitor *self,
                                                                                                "usb",
                                                                                                "usb_device");
       read_usb_device_ancestor (device);
+    }
+
+  if (get_boolean_property (device->dev, "ID_INPUT_JOYSTICK", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_ACCELEROMETER", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_ACCELEROMETER;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_KEYBOARD", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_KEYBOARD;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_KEY", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_HAS_KEYS;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_MOUSE", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_MOUSE;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_TOUCHPAD", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_TOUCHPAD;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_TOUCHSCREEN", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_TOUCHSCREEN;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_TABLET", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_TABLET;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_TABLET_PAD", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_TABLET_PAD;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_POINTING_STICK", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_POINTING_STICK;
+
+  if (get_boolean_property (device->dev, "ID_INPUT_SWITCH", FALSE))
+    device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_SWITCH;
+
+  if (device->type_flags == SRT_INPUT_DEVICE_TYPE_FLAGS_NONE)
+    {
+      /* Older versions of udev put classes on input devices */
+      const char *value = symbols.udev_device_get_property_value (device->dev,
+                                                                  "ID_CLASS");
+
+      if (g_strcmp0 (value, "joystick") == 0)
+        device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK;
+      else if (g_strcmp0 (value, "mouse") == 0)
+        device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_MOUSE;
+      else if (g_strcmp0 (value, "kbd") == 0)
+        device->type_flags |= SRT_INPUT_DEVICE_TYPE_FLAGS_KEYBOARD;
+    }
+
+  if (device->type_flags == SRT_INPUT_DEVICE_TYPE_FLAGS_NONE
+      && !get_boolean_property (device->dev, "ID_INPUT", FALSE))
+    {
+      g_debug ("input_id builtin did not run, guessing device type...");
+      device->type_flags = _srt_evdev_capabilities_guess_type (&device->evdev_caps);
     }
 
   g_hash_table_replace (self->devices, (char *) syspath, device);

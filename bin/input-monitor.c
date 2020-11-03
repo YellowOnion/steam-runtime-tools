@@ -187,11 +187,19 @@ added (SrtInputDeviceMonitor *monitor,
             unsigned int bus_type, vendor_id, product_id, version;
           } id, blank_id = {};
           unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)];
+          SrtInputDeviceTypeFlags type_flags;
 
           json_builder_set_member_name (builder, "interface_flags");
           json_builder_begin_array (builder);
           jsonify_flags (builder, SRT_TYPE_INPUT_DEVICE_INTERFACE_FLAGS,
                          srt_input_device_get_interface_flags (dev));
+          json_builder_end_array (builder);
+
+          type_flags = srt_input_device_get_type_flags (dev);
+          json_builder_set_member_name (builder, "type_flags");
+          json_builder_begin_array (builder);
+          jsonify_flags (builder, SRT_TYPE_INPUT_DEVICE_TYPE_FLAGS,
+                         type_flags);
           json_builder_end_array (builder);
 
           json_builder_set_member_name (builder, "dev_node");
@@ -237,6 +245,8 @@ added (SrtInputDeviceMonitor *monitor,
           if (srt_input_device_get_interface_flags (dev)
               & SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT)
             {
+              SrtInputDeviceTypeFlags guessed_flags;
+
               json_builder_set_member_name (builder, "evdev");
               json_builder_begin_object (builder);
 
@@ -525,6 +535,17 @@ added (SrtInputDeviceMonitor *monitor,
                       json_builder_set_member_name (builder, "raw_input_properties");
                       json_builder_add_string_value (builder, buf->str);
                     }
+                }
+
+              guessed_flags = srt_input_device_guess_type_flags_from_event_capabilities (dev);
+
+              if (opt_verbose || guessed_flags != type_flags)
+                {
+                  json_builder_set_member_name (builder, "guessed_type_flags");
+                  json_builder_begin_array (builder);
+                  jsonify_flags (builder, SRT_TYPE_INPUT_DEVICE_TYPE_FLAGS,
+                                 guessed_flags);
+                  json_builder_end_array (builder);
                 }
 
               json_builder_end_object (builder);

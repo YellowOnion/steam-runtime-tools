@@ -34,6 +34,53 @@
 #include "steam-runtime-tools/macros.h"
 
 /**
+ * SrtInputDeviceTypeFlags:
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK: A joystick, gamepad, steering wheel
+ *  or other game controller (udev ID_INPUT_JOYSTICK)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_ACCELEROMETER: An accelerometer, either motion
+ *  controls in a game controller such as Playstation 3 "sixaxis" controllers
+ *  or in the computer itself (udev ID_INPUT_ACCELEROMETER).
+ *  Note that unlike SDL, SrtInputDeviceMonitor always considers
+ *  accelerometers to be their own device type distinct from joysticks;
+ *  there is no equivalent of SDL_HINT_ACCELEROMETER_AS_JOYSTICK.
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_KEYBOARD: Keyboards with a somewhat full set
+ *  of keys (udev ID_INPUT_KEYBOARD)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_HAS_KEYS: Any device with keyboard keys, however
+ *  incomplete (udev ID_INPUT_KEY)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_MOUSE: A mouse or mouse-like pointer
+ *  controller (udev ID_INPUT_MOUSE)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_TOUCHPAD: A touchpad, perhaps built in to a
+ *  game controller like the Playstation 4 controller, or perhaps used
+ *  as a mouse replacement as in most laptops (udev ID_INPUT_TOUCHPAD)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_TOUCHSCREEN: A touchscreen (udev ID_INPUT_TOUCHSCREEN)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_TABLET: A graphics tablet (udev ID_INPUT_TABLET)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_TABLET_PAD: A graphics tablet with buttons
+ *  (udev ID_INPUT_TABLET_PAD)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_POINTING_STICK: A mouse-like control similar to
+ *  the IBM/Lenovo Trackpoint (udev ID_INPUT_POINTINGSTICK)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_SWITCH: A switch, such as a laptop lid being
+ *  opened (udev ID_INPUT_SWITCH)
+ *
+ * Flags describing a type of input device. An input device can fall into
+ * one or more of these categories.
+ */
+typedef enum
+{
+  SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK = (1 << 0),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_ACCELEROMETER = (1 << 1),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_KEYBOARD = (1 << 2),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_HAS_KEYS = (1 << 3),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_MOUSE = (1 << 4),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_TOUCHPAD = (1 << 5),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_TOUCHSCREEN = (1 << 6),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_TABLET = (1 << 7),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_TABLET_PAD = (1 << 8),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_POINTING_STICK = (1 << 9),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_SWITCH = (1 << 10),
+  SRT_INPUT_DEVICE_TYPE_FLAGS_NONE = 0
+} SrtInputDeviceTypeFlags;
+
+/**
  * SrtInputDeviceInterfaceFlags:
  * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT: evdev event device nodes,
  *  typically /dev/input/event*
@@ -68,6 +115,8 @@ GType srt_input_device_get_type (void);
 
 _SRT_PUBLIC
 SrtInputDeviceInterfaceFlags srt_input_device_get_interface_flags (SrtInputDevice *device);
+_SRT_PUBLIC
+SrtInputDeviceTypeFlags srt_input_device_get_type_flags (SrtInputDevice *device);
 _SRT_PUBLIC
 const char *srt_input_device_get_dev_node (SrtInputDevice *device);
 _SRT_PUBLIC
@@ -107,6 +156,8 @@ _SRT_PUBLIC
 size_t srt_input_device_get_input_properties (SrtInputDevice *device,
                                               unsigned long *storage,
                                               size_t n_longs);
+_SRT_PUBLIC
+SrtInputDeviceTypeFlags srt_input_device_guess_type_flags_from_event_capabilities (SrtInputDevice *device);
 
 _SRT_PUBLIC
 const char *srt_input_device_get_hid_sys_path (SrtInputDevice *device);

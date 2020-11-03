@@ -98,6 +98,7 @@ struct _MockInputDevice
     guint32 device_version;
   } usb_device_ancestor;
 
+  SrtInputDeviceTypeFlags type_flags;
   SrtInputDeviceInterfaceFlags iface_flags;
 };
 

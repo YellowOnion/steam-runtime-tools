@@ -96,6 +96,14 @@ mock_input_device_class_init (MockInputDeviceClass *cls)
   object_class->finalize = mock_input_device_finalize;
 }
 
+static SrtInputDeviceTypeFlags
+mock_input_device_get_type_flags (SrtInputDevice *device)
+{
+  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
+
+  return self->type_flags;
+}
+
 static SrtInputDeviceInterfaceFlags
 mock_input_device_get_interface_flags (SrtInputDevice *device)
 {
@@ -338,6 +346,7 @@ mock_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
 #define IMPLEMENT(x) iface->x = mock_input_device_ ## x
 
+  IMPLEMENT (get_type_flags);
   IMPLEMENT (get_interface_flags);
   IMPLEMENT (get_dev_node);
   IMPLEMENT (get_sys_path);
@@ -529,6 +538,7 @@ add_steam_controller (MockInputDeviceMonitor *self,
   device->udev_properties = (gchar **) g_ptr_array_free (g_steal_pointer (&arr), FALSE);
 
   /* This is a semi-realistic Steam Controller. */
+  device->type_flags = SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK;
   device->bus_type = BUS_USB;
   device->vendor_id = VENDOR_VALVE;
   device->product_id = PRODUCT_VALVE_STEAM_CONTROLLER;

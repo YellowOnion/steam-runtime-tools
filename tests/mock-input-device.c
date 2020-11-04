@@ -70,9 +70,80 @@ mock_input_device_class_init (MockInputDeviceClass *cls)
 {
 }
 
+static int
+mock_input_device_open_device (SrtInputDevice *device,
+                               int flags,
+                               GError **error)
+{
+  SrtInputDeviceInterfaceFlags iface_flags;
+  const char *devnode = NULL;
+  int fd = -1;
+
+  if (!_srt_input_device_check_open_flags (flags, error))
+    return -1;
+
+  iface_flags = srt_input_device_get_interface_flags (device);
+  devnode = srt_input_device_get_dev_node (device);
+
+  if (devnode == NULL)
+    {
+      glnx_throw (error, "Device has no device node");
+      return -1;
+    }
+
+  /* We aren't really going to open the device node, so provide a somewhat
+   * realistic permissions check. */
+  switch (flags & (O_RDONLY | O_RDWR | O_WRONLY))
+    {
+      case O_RDONLY:
+        if (!(iface_flags & SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE))
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED,
+                         "Device node cannot be read");
+            return -1;
+          }
+
+        break;
+
+      case O_RDWR:
+      case O_WRONLY:
+        if (!(iface_flags & SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE))
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED,
+                         "Device node cannot be written");
+            return -1;
+          }
+
+        break;
+
+      default:
+        /* _srt_input_device_check_open_flags should have caught this */
+        g_return_val_if_reached (-1);
+    }
+
+  /* This is a mock device, so open /dev/null instead of the real
+   * device node. */
+  fd = open ("/dev/null", flags | _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS);
+
+  if (fd < 0)
+    {
+      glnx_throw_errno_prefix (error,
+                               "Unable to open device node \"%s\"",
+                               devnode);
+      return -1;
+    }
+
+  return fd;
+}
+
 static void
 mock_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
+#define IMPLEMENT(x) iface->x = mock_input_device_ ## x
+
+  IMPLEMENT (open_device);
+
+#undef IMPLEMENT
 }
 
 MockInputDevice *

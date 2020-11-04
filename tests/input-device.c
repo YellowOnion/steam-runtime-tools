@@ -1904,6 +1904,7 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
                  gpointer user_data)
 {
   Fixture *f = user_data;
+  g_autoptr(GError) error = NULL;
   g_autofree gchar *message = NULL;
   struct
   {
@@ -1940,6 +1941,8 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
     const char *product;
     const char *serial;
   } usb_identity = { 1, 1, 1, "x", "x", "x" };
+  SrtInputDeviceInterfaceFlags iface_flags;
+  int fd;
 
   g_assert_true (SRT_IS_INPUT_DEVICE_MONITOR (monitor));
   g_assert_true (SRT_IS_INPUT_DEVICE (device));
@@ -1947,6 +1950,8 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
   message = g_strdup_printf ("added device: %s",
                              srt_input_device_get_dev_node (device));
   g_debug ("%s: %s", G_OBJECT_TYPE_NAME (monitor), message);
+
+  iface_flags = srt_input_device_get_interface_flags (device);
 
   if (srt_input_device_get_identity (device,
                                      &identity.bus_type,
@@ -2047,6 +2052,45 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
       g_assert_cmpstr (usb_identity.product, ==, "x");
       g_assert_cmpstr (usb_identity.serial, ==, "x");
     }
+
+  fd = srt_input_device_open (device, O_RDONLY | O_NONBLOCK, &error);
+
+  if (iface_flags & SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE)
+    {
+      g_assert_no_error (error);
+      g_assert_cmpint (fd, >=, 0);
+    }
+  else
+    {
+      g_assert_nonnull (error);
+      g_assert_cmpint (fd, <, 0);
+    }
+
+  glnx_close_fd (&fd);
+  g_clear_error (&error);
+
+  fd = srt_input_device_open (device, O_RDWR | O_NONBLOCK, &error);
+
+  if (iface_flags & SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE)
+    {
+      g_assert_no_error (error);
+      g_assert_cmpint (fd, >=, 0);
+    }
+  else
+    {
+      g_assert_nonnull (error);
+      g_assert_cmpint (fd, <, 0);
+    }
+
+  glnx_close_fd (&fd);
+  g_clear_error (&error);
+
+  /* Unsupported flags (currently everything except O_NONBLOCK) are
+   * not allowed */
+  fd = srt_input_device_open (device, O_RDONLY | O_SYNC, &error);
+  g_assert_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT);
+  glnx_close_fd (&fd);
+  g_clear_error (&error);
 
   /* For the mock device monitor, we know exactly what to expect, so
    * we can compare the expected log with what actually happened. For

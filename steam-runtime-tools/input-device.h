@@ -199,6 +199,11 @@ gboolean srt_input_device_get_usb_device_identity (SrtInputDevice *device,
                                                    const char **product,
                                                    const char **serial);
 
+_SRT_PUBLIC
+int srt_input_device_open (SrtInputDevice *device,
+                           int flags,
+                           GError **error);
+
 /**
  * SrtInputDeviceMonitorFlags:
  * @SRT_INPUT_DEVICE_MONITOR_FLAGS_ONCE: Enumerate the devices that were

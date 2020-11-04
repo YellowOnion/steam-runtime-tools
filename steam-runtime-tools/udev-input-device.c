@@ -36,8 +36,6 @@
 #include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
-#define ALWAYS_OPEN_FLAGS (O_CLOEXEC | O_NOCTTY)
-
 static void srt_udev_input_device_iface_init (SrtInputDeviceInterface *iface);
 static void srt_udev_input_device_monitor_iface_init (SrtInputDeviceMonitorInterface *iface);
 static void srt_udev_input_device_monitor_initable_iface_init (GInitableIface *iface);
@@ -986,7 +984,7 @@ add_device (SrtUdevInputDeviceMonitor *self,
   if (is_hidraw)
     device->iface_flags |= SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID;
 
-  fd = open (devnode, O_RDONLY | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+  fd = open (devnode, O_RDONLY | O_NONBLOCK | _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS);
 
   if (fd >= 0)
     {
@@ -1030,7 +1028,7 @@ add_device (SrtUdevInputDeviceMonitor *self,
       close (fd);
     }
 
-  fd = open (devnode, O_RDWR | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+  fd = open (devnode, O_RDWR | O_NONBLOCK | _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS);
 
   if (fd >= 0)
     {

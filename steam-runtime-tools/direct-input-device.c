@@ -38,8 +38,6 @@
 #include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
-#define ALWAYS_OPEN_FLAGS (O_CLOEXEC | O_NOCTTY)
-
 static void srt_direct_input_device_iface_init (SrtInputDeviceInterface *iface);
 static void srt_direct_input_device_monitor_iface_init (SrtInputDeviceMonitorInterface *iface);
 
@@ -743,7 +741,7 @@ add_device (SrtDirectInputDeviceMonitor *self,
 
   g_debug ("Trying to open %s", devnode);
 
-  fd = open (devnode, O_RDONLY | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+  fd = open (devnode, O_RDONLY | O_NONBLOCK | _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS);
 
   if (fd >= 0)
     {
@@ -798,7 +796,7 @@ add_device (SrtDirectInputDeviceMonitor *self,
       return;
     }
 
-  fd = open (devnode, O_RDWR | O_NONBLOCK | ALWAYS_OPEN_FLAGS);
+  fd = open (devnode, O_RDWR | O_NONBLOCK | _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS);
 
   if (fd >= 0)
     {

@@ -30,6 +30,8 @@
 
 #include <linux/input.h>
 
+#define _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS (O_CLOEXEC | O_NOCTTY)
+
 /* Macros for the bitfield encoding used by the EVIOCGBIT ioctl. */
 #define BITS_PER_LONG           (sizeof (unsigned long) * CHAR_BIT)
 #define LONGS_FOR_BITS(x)       ((((x)-1)/BITS_PER_LONG)+1)
@@ -186,7 +188,14 @@ struct _SrtInputDeviceInterface
                                        const char **manufacturer,
                                        const char **product,
                                        const char **serial);
+
+  int (*open_device) (SrtInputDevice *device,
+                      int mode_and_flags,
+                      GError **error);
 };
+
+gboolean _srt_input_device_check_open_flags (int mode_and_flags,
+                                             GError **error);
 
 struct _SrtInputDeviceMonitorInterface
 {

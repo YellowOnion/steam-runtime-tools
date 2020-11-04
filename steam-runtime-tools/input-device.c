@@ -42,6 +42,45 @@
 #define HIDIOCGRAWUNIQ(len)     _IOC(_IOC_READ, 'H', 0x08, len)
 #endif
 
+/*
+ * Set @error and return %FALSE if @mode_and_flags is unsupported.
+ */
+gboolean
+_srt_input_device_check_open_flags (int mode_and_flags,
+                                    GError **error)
+{
+  int mode;
+  int unhandled_flags;
+
+  mode = mode_and_flags & (O_RDONLY|O_WRONLY|O_RDWR);
+  unhandled_flags = mode_and_flags & ~mode;
+
+  if (unhandled_flags & O_NONBLOCK)
+    unhandled_flags &= ~O_NONBLOCK;
+
+  if (unhandled_flags != 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Flags not supported: 0x%x", unhandled_flags);
+      return FALSE;
+    }
+
+  switch (mode)
+    {
+      case O_RDONLY:
+      case O_WRONLY:
+      case O_RDWR:
+        break;
+
+      default:
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                     "Mode not supported: 0x%x", mode);
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 /**
  * SrtInputDevice:
  *
@@ -1003,6 +1042,70 @@ srt_input_device_default_get_input_identity (SrtInputDevice *device,
   return FALSE;
 }
 
+/**
+ * srt_input_device_open:
+ * @device: An object implementing #SrtInputDeviceInterface
+ * @flags: Flags affecting how the device is opened
+ * @error: Used to report the error on failure
+ *
+ * @flags must include one of: O_RDONLY, O_WRONLY, or O_RDWR.
+ *
+ * @flags may include zero or more of: O_NONBLOCK.
+ *
+ * The file descriptor is always opened with O_CLOEXEC and O_NOCTTY.
+ * Explicitly specifying those flags is not allowed.
+ *
+ * Returns: A file descriptor owned by the caller, which must be closed
+ *  with close(2) after use, or a negative number on error.
+ */
+int
+srt_input_device_open (SrtInputDevice *device,
+                       int flags,
+                       GError **error)
+{
+  SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
+
+  g_return_val_if_fail (iface != NULL, -1);
+  g_return_val_if_fail (error == NULL || *error == NULL, -1);
+
+  if (!_srt_input_device_check_open_flags (flags, error))
+    return -1;
+
+  return iface->open_device (device, flags, error);
+}
+
+static int
+srt_input_device_default_open_device (SrtInputDevice *device,
+                                      int flags,
+                                      GError **error)
+{
+  const char *devnode = NULL;
+  int fd = -1;
+
+  if (!_srt_input_device_check_open_flags (flags, error))
+    return -1;
+
+  devnode = srt_input_device_get_dev_node (device);
+
+  if (devnode == NULL)
+    {
+      glnx_throw (error, "Device has no device node");
+      return -1;
+    }
+
+  fd = open (devnode, flags | _SRT_INPUT_DEVICE_ALWAYS_OPEN_FLAGS);
+
+  if (fd < 0)
+    {
+      glnx_throw_errno_prefix (error,
+                               "Unable to open device node \"%s\"",
+                               devnode);
+      return -1;
+    }
+
+  return fd;
+}
+
 static void
 srt_input_device_default_init (SrtInputDeviceInterface *iface)
 {
@@ -1030,6 +1133,8 @@ srt_input_device_default_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (dup_hid_uevent);
   IMPLEMENT (dup_input_uevent);
   IMPLEMENT (dup_usb_device_uevent);
+
+  IMPLEMENT (open_device);
 
 #undef IMPLEMENT
 #undef IMPLEMENT2

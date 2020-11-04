@@ -287,15 +287,19 @@ mock_input_device_monitor_remove (MockInputDeviceMonitor *self,
 static void
 add_steam_controller (MockInputDeviceMonitor *self,
                       const char *tail,
+                      gboolean can_open,
                       MockInputDevice **dev_out)
 {
   g_autoptr(MockInputDevice) mock = mock_input_device_new ();
   SrtSimpleInputDevice *device = SRT_SIMPLE_INPUT_DEVICE (mock);
   g_autoptr(GPtrArray) arr = g_ptr_array_new_full (1, g_free);
 
-  device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
-                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE
-                         | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE);
+  device->iface_flags = SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT;
+
+  if (can_open)
+    device->iface_flags |= (SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE
+                            | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE);
+
   device->dev_node = g_strdup_printf ("/dev/input/event%s", tail);
   device->sys_path = g_strdup_printf ("/sys/devices/mock/usb/hid/input/input0/event%s",
                                       tail);
@@ -372,7 +376,7 @@ briefly_add_steam_controller_in_idle_cb (gpointer user_data)
   MockInputDeviceMonitor *self = MOCK_INPUT_DEVICE_MONITOR (user_data);
   g_autoptr(MockInputDevice) device = NULL;
 
-  add_steam_controller (self, "-connected-briefly", &device);
+  add_steam_controller (self, "-connected-briefly", FALSE, &device);
   mock_input_device_monitor_remove (self, device);
   return G_SOURCE_REMOVE;
 }
@@ -382,7 +386,7 @@ enumerate_cb (gpointer user_data)
 {
   MockInputDeviceMonitor *self = MOCK_INPUT_DEVICE_MONITOR (user_data);
 
-  add_steam_controller (self, "0", NULL);
+  add_steam_controller (self, "0", TRUE, NULL);
   _srt_input_device_monitor_emit_all_for_now (SRT_INPUT_DEVICE_MONITOR (self));
   return G_SOURCE_REMOVE;
 }

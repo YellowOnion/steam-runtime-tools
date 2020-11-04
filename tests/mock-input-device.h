@@ -33,6 +33,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/input-device.h"
 #include "steam-runtime-tools/input-device-internal.h"
+#include "steam-runtime-tools/simple-input-device-internal.h"
 
 typedef struct _MockInputDevice MockInputDevice;
 typedef struct _MockInputDeviceClass MockInputDeviceClass;
@@ -47,64 +48,12 @@ GType mock_input_device_get_type (void);
 
 struct _MockInputDevice
 {
-  GObject parent;
-
-  gchar *sys_path;
-  gchar *dev_node;
-  gchar *subsystem;
-  gchar **udev_properties;
-  gchar *uevent;
-  guint32 bus_type;
-  guint32 product_id;
-  guint32 vendor_id;
-  guint32 version;
-
-  SrtEvdevCapabilities evdev_caps;
-
-  struct
-  {
-    gchar *sys_path;
-    gchar *uevent;
-    gchar *name;
-    gchar *phys;
-    gchar *uniq;
-    guint32 bus_type;
-    guint32 product_id;
-    guint32 vendor_id;
-  } hid_ancestor;
-
-  struct
-  {
-    gchar *sys_path;
-    gchar *uevent;
-    gchar *name;
-    gchar *phys;
-    gchar *uniq;
-    guint32 bus_type;
-    guint32 product_id;
-    guint32 vendor_id;
-    guint32 version;
-  } input_ancestor;
-
-  struct
-  {
-    gchar *sys_path;
-    gchar *uevent;
-    gchar *manufacturer;
-    gchar *product;
-    gchar *serial;
-    guint32 product_id;
-    guint32 vendor_id;
-    guint32 device_version;
-  } usb_device_ancestor;
-
-  SrtInputDeviceTypeFlags type_flags;
-  SrtInputDeviceInterfaceFlags iface_flags;
+  SrtSimpleInputDevice parent;
 };
 
 struct _MockInputDeviceClass
 {
-  GObjectClass parent;
+  SrtSimpleInputDeviceClass parent;
 };
 
 MockInputDevice *mock_input_device_new (void);

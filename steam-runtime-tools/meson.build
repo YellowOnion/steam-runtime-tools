@@ -50,6 +50,8 @@ libsteamrt_sources = [
     'resolve-in-sysroot.c',
     'runtime-internal.h',
     'runtime.c',
+    'simple-input-device-internal.h',
+    'simple-input-device.c',
     'steam-internal.h',
     'steam.c',
     'system-info.c',

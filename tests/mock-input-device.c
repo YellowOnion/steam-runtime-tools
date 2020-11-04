@@ -50,7 +50,7 @@ static void mock_input_device_monitor_iface_init (SrtInputDeviceMonitorInterface
 
 G_DEFINE_TYPE_WITH_CODE (MockInputDevice,
                          mock_input_device,
-                         G_TYPE_OBJECT,
+                         SRT_TYPE_SIMPLE_INPUT_DEVICE,
                          G_IMPLEMENT_INTERFACE (SRT_TYPE_INPUT_DEVICE,
                                                 mock_input_device_iface_init))
 
@@ -66,307 +66,13 @@ mock_input_device_init (MockInputDevice *self)
 }
 
 static void
-mock_input_device_finalize (GObject *object)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (object);
-
-  g_clear_pointer (&self->sys_path, g_free);
-  g_clear_pointer (&self->dev_node, g_free);
-  g_clear_pointer (&self->subsystem, g_free);
-  g_clear_pointer (&self->udev_properties, g_strfreev);
-  g_clear_pointer (&self->uevent, g_free);
-
-  g_clear_pointer (&self->hid_ancestor.sys_path, g_free);
-  g_clear_pointer (&self->hid_ancestor.uevent, g_free);
-
-  g_clear_pointer (&self->input_ancestor.sys_path, g_free);
-  g_clear_pointer (&self->input_ancestor.uevent, g_free);
-
-  g_clear_pointer (&self->usb_device_ancestor.sys_path, g_free);
-  g_clear_pointer (&self->usb_device_ancestor.uevent, g_free);
-
-  G_OBJECT_CLASS (mock_input_device_parent_class)->finalize (object);
-}
-
-static void
 mock_input_device_class_init (MockInputDeviceClass *cls)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (cls);
-
-  object_class->finalize = mock_input_device_finalize;
-}
-
-static SrtInputDeviceTypeFlags
-mock_input_device_get_type_flags (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->type_flags;
-}
-
-static SrtInputDeviceInterfaceFlags
-mock_input_device_get_interface_flags (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->iface_flags;
-}
-
-static const char *
-mock_input_device_get_dev_node (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->dev_node;
-}
-
-static const char *
-mock_input_device_get_subsystem (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->subsystem;
-}
-
-static const char *
-mock_input_device_get_sys_path (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->sys_path;
-}
-
-static gboolean
-mock_input_device_get_identity (SrtInputDevice *device,
-                                unsigned int *bus_type,
-                                unsigned int *vendor_id,
-                                unsigned int *product_id,
-                                unsigned int *version)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  if (bus_type != NULL)
-    *bus_type = self->bus_type;
-
-  if (vendor_id != NULL)
-    *vendor_id = self->vendor_id;
-
-  if (product_id != NULL)
-    *product_id = self->product_id;
-
-  if (version != NULL)
-    *version = self->version;
-
-  return TRUE;
-}
-
-static gboolean
-mock_input_device_get_hid_identity (SrtInputDevice *device,
-                                        unsigned int *bus_type,
-                                        unsigned int *vendor_id,
-                                        unsigned int *product_id,
-                                        const char **name,
-                                        const char **phys,
-                                        const char **uniq)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  if (self->hid_ancestor.sys_path == NULL)
-    return FALSE;
-
-  if (bus_type != NULL)
-    *bus_type = self->hid_ancestor.bus_type;
-
-  if (vendor_id != NULL)
-    *vendor_id = self->hid_ancestor.vendor_id;
-
-  if (product_id != NULL)
-    *product_id = self->hid_ancestor.product_id;
-
-  if (name != NULL)
-    *name = self->hid_ancestor.name;
-
-  if (phys != NULL)
-    *phys = self->hid_ancestor.phys;
-
-  if (uniq != NULL)
-    *uniq = self->hid_ancestor.uniq;
-
-  return TRUE;
-}
-
-static gboolean
-mock_input_device_get_input_identity (SrtInputDevice *device,
-                                          unsigned int *bus_type,
-                                          unsigned int *vendor_id,
-                                          unsigned int *product_id,
-                                          unsigned int *version,
-                                          const char **name,
-                                          const char **phys,
-                                          const char **uniq)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  if (self->input_ancestor.sys_path == NULL)
-    return FALSE;
-
-  if (bus_type != NULL)
-    *bus_type = self->input_ancestor.bus_type;
-
-  if (vendor_id != NULL)
-    *vendor_id = self->input_ancestor.vendor_id;
-
-  if (product_id != NULL)
-    *product_id = self->input_ancestor.product_id;
-
-  if (version != NULL)
-    *version = self->input_ancestor.version;
-
-  if (name != NULL)
-    *name = self->input_ancestor.name;
-
-  if (phys != NULL)
-    *phys = self->input_ancestor.phys;
-
-  if (uniq != NULL)
-    *uniq = self->input_ancestor.uniq;
-
-  return TRUE;
-}
-
-static gboolean
-mock_input_device_get_usb_device_identity (SrtInputDevice *device,
-                                               unsigned int *vendor_id,
-                                               unsigned int *product_id,
-                                               unsigned int *device_version,
-                                               const char **manufacturer,
-                                               const char **product,
-                                               const char **serial)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  if (self->usb_device_ancestor.sys_path == NULL)
-    return FALSE;
-
-  if (vendor_id != NULL)
-    *vendor_id = self->usb_device_ancestor.vendor_id;
-
-  if (product_id != NULL)
-    *product_id = self->usb_device_ancestor.product_id;
-
-  if (device_version != NULL)
-    *device_version = self->usb_device_ancestor.device_version;
-
-  if (manufacturer != NULL)
-    *manufacturer = self->usb_device_ancestor.manufacturer;
-
-  if (product != NULL)
-    *product = self->usb_device_ancestor.product;
-
-  if (serial != NULL)
-    *serial = self->usb_device_ancestor.serial;
-
-  return TRUE;
-}
-
-static gchar **
-mock_input_device_dup_udev_properties (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return g_strdupv (self->udev_properties);
-}
-
-static gchar *
-mock_input_device_dup_uevent (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return g_strdup (self->uevent);
-}
-
-static const SrtEvdevCapabilities *
-mock_input_device_peek_event_capabilities (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return &self->evdev_caps;
-}
-
-static const char *
-mock_input_device_get_hid_sys_path (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->hid_ancestor.sys_path;
-}
-
-static gchar *
-mock_input_device_dup_hid_uevent (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return g_strdup (self->hid_ancestor.uevent);
-}
-
-static const char *
-mock_input_device_get_input_sys_path (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->input_ancestor.sys_path;
-}
-
-static gchar *
-mock_input_device_dup_input_uevent (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return g_strdup (self->input_ancestor.uevent);
-}
-
-static const char *
-mock_input_device_get_usb_device_sys_path (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return self->usb_device_ancestor.sys_path;
-}
-
-static gchar *
-mock_input_device_dup_usb_device_uevent (SrtInputDevice *device)
-{
-  MockInputDevice *self = MOCK_INPUT_DEVICE (device);
-
-  return g_strdup (self->usb_device_ancestor.uevent);
 }
 
 static void
 mock_input_device_iface_init (SrtInputDeviceInterface *iface)
 {
-#define IMPLEMENT(x) iface->x = mock_input_device_ ## x
-
-  IMPLEMENT (get_type_flags);
-  IMPLEMENT (get_interface_flags);
-  IMPLEMENT (get_dev_node);
-  IMPLEMENT (get_sys_path);
-  IMPLEMENT (get_subsystem);
-  IMPLEMENT (dup_udev_properties);
-  IMPLEMENT (dup_uevent);
-  IMPLEMENT (get_identity);
-  IMPLEMENT (peek_event_capabilities);
-
-  IMPLEMENT (get_hid_sys_path);
-  IMPLEMENT (dup_hid_uevent);
-  IMPLEMENT (get_hid_identity);
-  IMPLEMENT (get_input_sys_path);
-  IMPLEMENT (dup_input_uevent);
-  IMPLEMENT (get_input_identity);
-  IMPLEMENT (get_usb_device_sys_path);
-  IMPLEMENT (dup_usb_device_uevent);
-  IMPLEMENT (get_usb_device_identity);
-
-#undef IMPLEMENT
 }
 
 MockInputDevice *
@@ -512,7 +218,8 @@ add_steam_controller (MockInputDeviceMonitor *self,
                       const char *tail,
                       MockInputDevice **dev_out)
 {
-  g_autoptr(MockInputDevice) device = mock_input_device_new ();
+  g_autoptr(MockInputDevice) mock = mock_input_device_new ();
+  SrtSimpleInputDevice *device = SRT_SIMPLE_INPUT_DEVICE (mock);
   g_autoptr(GPtrArray) arr = g_ptr_array_new_full (1, g_free);
 
   device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
@@ -582,10 +289,10 @@ add_steam_controller (MockInputDeviceMonitor *self,
   device->usb_device_ancestor.product = g_strdup ("Steam Controller");
   device->usb_device_ancestor.serial = NULL;
 
-  mock_input_device_monitor_add (self, device);
+  mock_input_device_monitor_add (self, mock);
 
   if (dev_out != NULL)
-    *dev_out = g_steal_pointer (&device);
+    *dev_out = g_steal_pointer (&mock);
 }
 
 static gboolean

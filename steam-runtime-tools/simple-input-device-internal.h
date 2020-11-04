@@ -106,3 +106,5 @@ struct _SrtSimpleInputDeviceClass
 {
   GObjectClass parent;
 };
+
+SrtSimpleInputDevice *_srt_simple_input_device_new_from_json (JsonObject *obj);

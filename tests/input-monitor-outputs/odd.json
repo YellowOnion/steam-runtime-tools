@@ -1,0 +1,36 @@
+{
+  "added" : {
+    "interface_flags" : [
+      "raw-hid",
+      "__future__"
+    ],
+    "type_flags" : [
+      "__future__"
+    ],
+    "evdev" : {
+      "raw_abs" : "01 02 03 04 05 06 07 08  ff ff ff ff",
+      "raw_input_properties" : "12 34 56 78 87 65 43 21  ff ff ff ff"
+    },
+    "hid_ancestor" : {
+      "sys_path" : "/...",
+      "name" : "Acme Weird Device",
+      "bus_type" : "0xfff1",
+      "vendor_id" : "0xfff1",
+      "product_id" : "0xfff1",
+      "uniq" : "12345678"
+    },
+    "input_ancestor" : {
+      "sys_path" : "/...",
+      "bus_type" : "0xfff2",
+      "vendor_id" : "0xfff2",
+      "product_id" : "0xfff2",
+      "uniq" : "1234-5678"
+    },
+    "usb_device_ancestor" : {
+      "sys_path" : "/...",
+      "vendor_id" : "0xfff3",
+      "product_id" : "0xfff3",
+      "serial" : "12:34:56:78"
+    }
+  }
+}

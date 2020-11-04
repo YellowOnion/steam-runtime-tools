@@ -33,9 +33,12 @@
 #include <glib/gstdio.h>
 #include <glib-object.h>
 
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "mock-input-device.h"
 #include "test-utils.h"
+
+static const char *argv0;
 
 typedef struct
 {
@@ -60,6 +63,8 @@ static const Config udev_config =
 typedef struct
 {
   const Config *config;
+  gchar *srcdir;
+  gchar *builddir;
   GMainContext *monitor_context;
   GPtrArray *log;
   gboolean skipped;
@@ -71,6 +76,15 @@ setup (Fixture *f,
 {
   const Config *config = context;
   GStatBuf sb;
+
+  f->srcdir = g_strdup (g_getenv ("G_TEST_SRCDIR"));
+  f->builddir = g_strdup (g_getenv ("G_TEST_BUILDDIR"));
+
+  if (f->srcdir == NULL)
+    f->srcdir = g_path_get_dirname (argv0);
+
+  if (f->builddir == NULL)
+    f->builddir = g_path_get_dirname (argv0);
 
   if (config == NULL)
     f->config = &defconfig;
@@ -92,8 +106,498 @@ teardown (Fixture *f,
 {
   G_GNUC_UNUSED const Config *config = context;
 
+  g_free (f->srcdir);
+  g_free (f->builddir);
+
   g_clear_pointer (&f->log, g_ptr_array_unref);
   g_clear_pointer (&f->monitor_context, g_main_context_unref);
+}
+
+#define VENDOR_VALVE 0x28de
+#define PRODUCT_VALVE_STEAM_CONTROLLER 0x1142
+
+static SrtSimpleInputDevice *
+load_json (Fixture *f,
+           const char *filename)
+{
+  g_autoptr(SrtSimpleInputDevice) simple = NULL;
+  g_autoptr(JsonParser) parser = NULL;
+  g_autoptr(GError) error = NULL;
+  JsonNode *node;
+  JsonObject *object;
+  JsonObject *added;
+  g_autofree gchar *path = NULL;
+
+  parser = json_parser_new ();
+
+  path = g_build_filename (f->srcdir, "input-monitor-outputs",
+                           filename, NULL);
+  json_parser_load_from_file (parser, path, &error);
+  g_assert_no_error (error);
+  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
+  object = json_node_get_object (node);
+  g_assert_nonnull (object);
+  added = json_object_get_object_member (object, "added");
+  g_assert_nonnull (added);
+  simple = _srt_simple_input_device_new_from_json (added);
+  g_assert_nonnull (simple);
+
+  return g_steal_pointer (&simple);
+}
+
+static void
+test_input_device_from_json_no_details (Fixture *f)
+{
+  g_autoptr(SrtSimpleInputDevice) simple = load_json (f, "no-details.json");
+  SrtInputDevice *dev = SRT_INPUT_DEVICE (simple);
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+  } identity;
+  unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)];
+  g_autofree gchar *uevent = NULL;
+
+  g_assert_cmphex (srt_input_device_get_interface_flags (dev),
+                   ==, SRT_INPUT_DEVICE_INTERFACE_FLAGS_NONE);
+  g_assert_cmphex (srt_input_device_get_type_flags (dev),
+                   ==, SRT_INPUT_DEVICE_TYPE_FLAGS_NONE);
+  g_assert_cmpstr (srt_input_device_get_dev_node (dev), ==, NULL);
+  g_assert_cmpstr (srt_input_device_get_subsystem (dev), ==, NULL);
+  g_assert_cmpstr (srt_input_device_get_sys_path (dev), ==, NULL);
+
+  g_assert_false (srt_input_device_get_identity (dev,
+                                                 NULL, NULL, NULL, NULL));
+  g_assert_false (srt_input_device_get_identity (dev,
+                                                 &identity.bus_type,
+                                                 &identity.vendor_id,
+                                                 &identity.product_id,
+                                                 &identity.version));
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, 0,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+  g_assert_cmphex (bits[1], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_ABS,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_REL,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_KEY,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+  g_assert_cmpuint (srt_input_device_get_input_properties (dev, bits,
+                                                           G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  uevent = srt_input_device_dup_uevent (dev);
+  g_assert_cmpstr (uevent, ==, NULL);
+
+  g_assert_cmpstr (srt_input_device_get_hid_sys_path (dev), ==, NULL);
+  g_assert_false (srt_input_device_get_hid_identity (dev,
+                                                     NULL, NULL, NULL,
+                                                     NULL, NULL, NULL));
+  uevent = srt_input_device_dup_hid_uevent (dev);
+  g_assert_cmpstr (uevent, ==, NULL);
+
+  g_assert_cmpstr (srt_input_device_get_input_sys_path (dev), ==, NULL);
+  g_assert_false (srt_input_device_get_input_identity (dev,
+                                                       NULL, NULL, NULL, NULL,
+                                                       NULL, NULL, NULL));
+  uevent = srt_input_device_dup_input_uevent (dev);
+  g_assert_cmpstr (uevent, ==, NULL);
+
+  g_assert_cmpstr (srt_input_device_get_usb_device_sys_path (dev), ==, NULL);
+  g_assert_false (srt_input_device_get_usb_device_identity (dev,
+                                                            NULL, NULL, NULL,
+                                                            NULL, NULL, NULL));
+  uevent = srt_input_device_dup_usb_device_uevent (dev);
+  g_assert_cmpstr (uevent, ==, NULL);
+}
+
+static void
+test_input_device_from_json_odd (Fixture *f)
+{
+  g_autoptr(SrtSimpleInputDevice) simple = load_json (f, "odd.json");
+  SrtInputDevice *dev = SRT_INPUT_DEVICE (simple);
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } hid_identity;
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } input_identity;
+  struct
+  {
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *manufacturer;
+    const char *product;
+    const char *serial;
+  } usb_identity;
+  unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)];
+
+  g_assert_cmphex (srt_input_device_get_interface_flags (dev),
+                   ==, SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID);
+  g_assert_cmphex (srt_input_device_get_type_flags (dev),
+                   ==, SRT_INPUT_DEVICE_TYPE_FLAGS_NONE);
+  g_assert_cmpstr (srt_input_device_get_dev_node (dev), ==, NULL);
+  g_assert_cmpstr (srt_input_device_get_subsystem (dev), ==, NULL);
+  g_assert_cmpstr (srt_input_device_get_sys_path (dev), ==, NULL);
+
+  g_assert_false (srt_input_device_get_identity (dev,
+                                                 NULL, NULL, NULL, NULL));
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, 0,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_ABS,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+#if defined(__LP64__)
+  g_assert_cmphex (bits[0], ==, 0x0807060504030201UL);
+#elif defined(__i386__)
+  g_assert_cmphex (bits[0], ==, 0x04030201UL);
+  g_assert_cmphex (bits[1], ==, 0x08070605UL);
+#endif
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_REL,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_KEY,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+  g_assert_cmpuint (srt_input_device_get_input_properties (dev, bits,
+                                                           G_N_ELEMENTS (bits)),
+                    ==, 1);
+#if defined(__LP64__)
+  g_assert_cmphex (bits[0], ==, 0x2143658778563412UL);
+#elif defined(__i386__)
+  g_assert_cmphex (bits[0], ==, 0x78563412UL);
+#endif
+  g_assert_cmphex (bits[1], ==, 0);
+
+  g_assert_true (srt_input_device_get_hid_identity (dev,
+                                                    NULL, NULL, NULL,
+                                                    NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_hid_identity (dev,
+                                                    &hid_identity.bus_type,
+                                                    &hid_identity.vendor_id,
+                                                    &hid_identity.product_id,
+                                                    &hid_identity.name,
+                                                    &hid_identity.phys,
+                                                    &hid_identity.uniq));
+  g_assert_cmphex (hid_identity.bus_type, ==, 0xfff1);
+  g_assert_cmphex (hid_identity.vendor_id, ==, 0xfff1);
+  g_assert_cmphex (hid_identity.product_id, ==, 0xfff1);
+  g_assert_cmpstr (hid_identity.name, ==, "Acme Weird Device");
+  g_assert_cmpstr (hid_identity.phys, ==, NULL);
+  g_assert_cmpstr (hid_identity.uniq, ==, "12345678");
+
+  g_assert_true (srt_input_device_get_input_identity (dev,
+                                                      NULL, NULL, NULL, NULL,
+                                                      NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_input_identity (dev,
+                                                      &input_identity.bus_type,
+                                                      &input_identity.vendor_id,
+                                                      &input_identity.product_id,
+                                                      &input_identity.version,
+                                                      &input_identity.name,
+                                                      &input_identity.phys,
+                                                      &input_identity.uniq));
+  g_assert_cmphex (input_identity.bus_type, ==, 0xfff2);
+  g_assert_cmphex (input_identity.vendor_id, ==, 0xfff2);
+  g_assert_cmphex (input_identity.product_id, ==, 0xfff2);
+  g_assert_cmphex (input_identity.version, ==, 0);
+  g_assert_cmpstr (input_identity.name, ==, NULL);
+  g_assert_cmpstr (input_identity.phys, ==, NULL);
+  g_assert_cmpstr (input_identity.uniq, ==, "1234-5678");
+
+  g_assert_cmpstr (srt_input_device_get_usb_device_sys_path (dev), ==, "/...");
+  g_assert_true (srt_input_device_get_usb_device_identity (dev,
+                                                           NULL, NULL, NULL,
+                                                           NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_usb_device_identity (dev,
+                                                           &usb_identity.vendor_id,
+                                                           &usb_identity.product_id,
+                                                           &usb_identity.version,
+                                                           &usb_identity.manufacturer,
+                                                           &usb_identity.product,
+                                                           &usb_identity.serial));
+  g_assert_cmphex (usb_identity.vendor_id, ==, 0xfff3);
+  g_assert_cmphex (usb_identity.product_id, ==, 0xfff3);
+  g_assert_cmphex (usb_identity.version, ==, 0);
+  g_assert_cmpstr (usb_identity.manufacturer, ==, NULL);
+  g_assert_cmpstr (usb_identity.product, ==, NULL);
+  g_assert_cmpstr (usb_identity.serial, ==, "12:34:56:78");
+}
+
+static void
+test_input_device_from_json_steam_controller (Fixture *f)
+{
+  g_autoptr(SrtSimpleInputDevice) simple = load_json (f, "steam-controller.json");
+  SrtInputDevice *dev = SRT_INPUT_DEVICE (simple);
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+  } identity;
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } hid_identity;
+  struct
+  {
+    unsigned int bus_type;
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *name;
+    const char *phys;
+    const char *uniq;
+  } input_identity;
+  struct
+  {
+    unsigned int vendor_id;
+    unsigned int product_id;
+    unsigned int version;
+    const char *manufacturer;
+    const char *product;
+    const char *serial;
+  } usb_identity;
+  unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)];
+  g_autofree gchar *uevent = NULL;
+
+  g_assert_cmphex (srt_input_device_get_interface_flags (dev),
+                   ==, SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT);
+  g_assert_cmphex (srt_input_device_get_type_flags (dev),
+                   ==, (SRT_INPUT_DEVICE_TYPE_FLAGS_KEYBOARD
+                        | SRT_INPUT_DEVICE_TYPE_FLAGS_HAS_KEYS
+                        | SRT_INPUT_DEVICE_TYPE_FLAGS_MOUSE));
+  g_assert_cmpstr (srt_input_device_get_dev_node (dev),
+                   ==, "/dev/input/event20");
+  g_assert_cmpstr (srt_input_device_get_subsystem (dev),
+                   ==, "input");
+  g_assert_cmpstr (srt_input_device_get_sys_path (dev),
+                   ==, "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD/input/input308/event20");
+
+  g_assert_true (srt_input_device_get_identity (dev,
+                                                NULL, NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_identity (dev,
+                                                &identity.bus_type,
+                                                &identity.vendor_id,
+                                                &identity.product_id,
+                                                &identity.version));
+  /* Using magic numbers rather than a #define here so that it's easier
+   * to validate against the JSON */
+  g_assert_cmphex (identity.bus_type, ==, 0x0003);
+  g_assert_cmphex (identity.vendor_id, ==, 0x28de);
+  g_assert_cmphex (identity.product_id, ==, 0x1142);
+  g_assert_cmphex (identity.version, ==, 0x0111);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, 0,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, 0x120017);
+  g_assert_cmphex (bits[1], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_ABS,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_REL,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+  g_assert_cmphex (bits[0], ==, 0x0903);
+
+  g_assert_cmpuint (srt_input_device_get_event_capabilities (dev, EV_KEY,
+                                                             bits,
+                                                             G_N_ELEMENTS (bits)),
+                    >=, 1);
+#if defined(__LP64__)
+  g_assert_cmphex (bits[0], ==, 0xfffffffffffffffeUL);
+  g_assert_cmphex (bits[1], ==, 0xe080ffdf01cfffffUL);
+  g_assert_cmphex (bits[2], ==, 0);
+  g_assert_cmphex (bits[3], ==, 0);
+  g_assert_cmphex (bits[4], ==, 0x1f0000);
+  g_assert_cmphex (bits[5], ==, 0);
+#elif defined(__i386__)
+  g_assert_cmphex (bits[0], ==, 0xfffffffeUL);
+  g_assert_cmphex (bits[1], ==, 0xffffffffUL);
+  g_assert_cmphex (bits[2], ==, 0x01cfffffUL);
+  g_assert_cmphex (bits[3], ==, 0xe080ffdfUL);
+  g_assert_cmphex (bits[4], ==, 0);
+  g_assert_cmphex (bits[5], ==, 0);
+  g_assert_cmphex (bits[6], ==, 0);
+  g_assert_cmphex (bits[7], ==, 0);
+  g_assert_cmphex (bits[8], ==, 0x1f0000);
+  g_assert_cmphex (bits[9], ==, 0);
+  g_assert_cmphex (bits[10], ==, 0);
+  g_assert_cmphex (bits[11], ==, 0);
+#endif
+  g_assert_cmpuint (srt_input_device_get_input_properties (dev, bits,
+                                                           G_N_ELEMENTS (bits)),
+                    ==, 1);
+  g_assert_cmphex (bits[0], ==, 0);
+
+  uevent = srt_input_device_dup_uevent (dev);
+  g_assert_cmpstr (uevent, ==,
+                   "MAJOR=13\n"
+                   "MINOR=84\n"
+                   "DEVNAME=input/event20\n");
+  g_clear_pointer (&uevent, g_free);
+
+  g_assert_cmpstr (srt_input_device_get_hid_sys_path (dev),
+                   ==, "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD");
+  g_assert_true (srt_input_device_get_hid_identity (dev,
+                                                    NULL, NULL, NULL,
+                                                    NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_hid_identity (dev,
+                                                    &hid_identity.bus_type,
+                                                    &hid_identity.vendor_id,
+                                                    &hid_identity.product_id,
+                                                    &hid_identity.name,
+                                                    &hid_identity.phys,
+                                                    &hid_identity.uniq));
+  g_assert_cmphex (hid_identity.bus_type, ==, 0x0003);
+  g_assert_cmphex (hid_identity.vendor_id, ==, 0x28de);
+  g_assert_cmphex (hid_identity.product_id, ==, 0x1142);
+  g_assert_cmpstr (hid_identity.name, ==, "Valve Software Steam Controller");
+  g_assert_cmpstr (hid_identity.phys, ==, "usb-0000:00:14.0-1.1/input0");
+  g_assert_cmpstr (hid_identity.uniq, ==, "");
+  uevent = srt_input_device_dup_hid_uevent (dev);
+  g_assert_cmpstr (uevent, ==,
+                   "DRIVER=hid-steam\n"
+                   "HID_ID=0003:000028DE:00001142\n"
+                   "HID_NAME=Valve Software Steam Controller\n"
+                   "HID_PHYS=usb-0000:00:14.0-1.1/input0\n"
+                   "HID_UNIQ=\n"
+                   "MODALIAS=hid:b0003g0001v000028DEp00001142\n");
+  g_clear_pointer (&uevent, g_free);
+
+  g_assert_cmpstr (srt_input_device_get_input_sys_path (dev),
+                   ==, "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD/input/input308");
+  g_assert_true (srt_input_device_get_input_identity (dev,
+                                                      NULL, NULL, NULL, NULL,
+                                                      NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_input_identity (dev,
+                                                      &input_identity.bus_type,
+                                                      &input_identity.vendor_id,
+                                                      &input_identity.product_id,
+                                                      &input_identity.version,
+                                                      &input_identity.name,
+                                                      &input_identity.phys,
+                                                      &input_identity.uniq));
+  g_assert_cmphex (input_identity.bus_type, ==, 0x0003);
+  g_assert_cmphex (input_identity.vendor_id, ==, 0x28de);
+  g_assert_cmphex (input_identity.product_id, ==, 0x1142);
+  g_assert_cmphex (input_identity.version, ==, 0x0111);
+  g_assert_cmpstr (input_identity.name, ==, "Valve Software Steam Controller");
+  g_assert_cmpstr (input_identity.phys, ==, "usb-0000:00:14.0-1.1/input0");
+  g_assert_cmpstr (input_identity.uniq, ==, NULL);
+  uevent = srt_input_device_dup_input_uevent (dev);
+  g_assert_cmpstr (uevent, ==,
+                   "PRODUCT=3/28de/1142/111\n"
+                   "NAME=\"Valve Software Steam Controller\"\n"
+                   "PHYS=\"usb-0000:00:14.0-1.1/input0\"\n"
+                   "UNIQ=\"\"\n"
+                   "PROP=0\n"
+                   "EV=120017\n"
+                   "KEY=1f0000 0 0 e080ffdf01cfffff fffffffffffffffe\n"
+                   "REL=903\n"
+                   "MSC=10\n"
+                   "LED=1f\n"
+                   "MODALIAS=input:b0003v28DEp1142e0111-e0,1,2,4,11,14,k77,7D,7E,7F,110,111,112,113,114,r0,1,8,B,am4,l0,1,2,3,4,sfw\n");
+  g_clear_pointer (&uevent, g_free);
+
+  g_assert_cmpstr (srt_input_device_get_usb_device_sys_path (dev),
+                   ==, "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1");
+  g_assert_true (srt_input_device_get_usb_device_identity (dev,
+                                                           NULL, NULL, NULL,
+                                                           NULL, NULL, NULL));
+  g_assert_true (srt_input_device_get_usb_device_identity (dev,
+                                                           &usb_identity.vendor_id,
+                                                           &usb_identity.product_id,
+                                                           &usb_identity.version,
+                                                           &usb_identity.manufacturer,
+                                                           &usb_identity.product,
+                                                           &usb_identity.serial));
+  g_assert_cmphex (usb_identity.vendor_id, ==, 0x28de);
+  g_assert_cmphex (usb_identity.product_id, ==, 0x1142);
+  g_assert_cmphex (usb_identity.version, ==, 0x0001);
+  g_assert_cmpstr (usb_identity.manufacturer, ==, "Valve Software");
+  g_assert_cmpstr (usb_identity.product, ==, "Steam Controller");
+  g_assert_cmpstr (usb_identity.serial, ==, NULL);
+  uevent = srt_input_device_dup_usb_device_uevent (dev);
+  g_assert_cmpstr (uevent, ==,
+                   "MAJOR=189\n"
+                   "MINOR=66\n"
+                   "DEVNAME=bus/usb/001/067\n"
+                   "DEVTYPE=usb_device\n"
+                   "DRIVER=usb\n"
+                   "PRODUCT=28de/1142/1\n"
+                   "TYPE=0/0/0\n"
+                   "BUSNUM=001\n"
+                   "DEVNUM=067\n");
+  g_clear_pointer (&uevent, g_free);
+}
+
+static void
+test_input_device_from_json (Fixture *f,
+                             gconstpointer context)
+{
+  test_input_device_from_json_no_details (f);
+  test_input_device_from_json_odd (f);
+  test_input_device_from_json_steam_controller (f);
 }
 
 typedef struct
@@ -1074,9 +1578,6 @@ test_input_device_identity_from_hid_uevent (Fixture *f,
 #define VENDOR_SONY 0x0268
 #define PRODUCT_SONY_PS3 0x054c
 
-#define VENDOR_VALVE 0x28de
-#define PRODUCT_VALVE_STEAM_CONTROLLER 0x1142
-
 /* These aren't in the real vendor/product IDs, but we add them here
  * to make the test able to distinguish. They look a bit like HID,
  * EVDE(v) and USB, if you squint. */
@@ -1095,6 +1596,7 @@ test_input_device_usb (Fixture *f,
 {
   g_autoptr(MockInputDevice) mock_device = mock_input_device_new ();
   SrtInputDevice *device = SRT_INPUT_DEVICE (mock_device);
+  SrtSimpleInputDevice *simple = SRT_SIMPLE_INPUT_DEVICE (mock_device);
   SrtInputDeviceInterface *iface = SRT_INPUT_DEVICE_GET_INTERFACE (device);
   g_auto(GStrv) udev_properties = NULL;
   g_autofree gchar *uevent = NULL;
@@ -1141,66 +1643,66 @@ test_input_device_usb (Fixture *f,
   unsigned long bits[LONGS_FOR_BITS (HIGHEST_EVENT_CODE)] = { 0xa, 0xb };
   gsize i;
 
-  mock_device->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+  simple->iface_flags = (SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
                               | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE);
-  mock_device->dev_node = g_strdup ("/dev/input/event0");
-  mock_device->sys_path = g_strdup ("/sys/devices/mock/usb/hid/input/input0/event0");
-  mock_device->subsystem = g_strdup ("input");
-  mock_device->udev_properties = g_new0 (gchar *, 2);
-  mock_device->udev_properties[0] = g_strdup ("ID_INPUT_JOYSTICK=1");
-  mock_device->udev_properties[1] = NULL;
-  mock_device->uevent = g_strdup ("A=a\nB=b\n");
+  simple->dev_node = g_strdup ("/dev/input/event0");
+  simple->sys_path = g_strdup ("/sys/devices/mock/usb/hid/input/input0/event0");
+  simple->subsystem = g_strdup ("input");
+  simple->udev_properties = g_new0 (gchar *, 2);
+  simple->udev_properties[0] = g_strdup ("ID_INPUT_JOYSTICK=1");
+  simple->udev_properties[1] = NULL;
+  simple->uevent = g_strdup ("A=a\nB=b\n");
   /* This is a semi-realistic PS3 controller. */
-  mock_device->type_flags = SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK;
-  mock_device->bus_type = BUS_USB;
-  mock_device->vendor_id = VENDOR_SONY;
-  mock_device->product_id = PRODUCT_SONY_PS3;
-  mock_device->version = 0x8111;
+  simple->type_flags = SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK;
+  simple->bus_type = BUS_USB;
+  simple->vendor_id = VENDOR_SONY;
+  simple->product_id = PRODUCT_SONY_PS3;
+  simple->version = 0x8111;
 
   /* We don't set all the bits, just enough to be vaguely realistic */
-  set_bit (EV_KEY, mock_device->evdev_caps.ev);
-  set_bit (EV_ABS, mock_device->evdev_caps.ev);
-  set_bit (BTN_A, mock_device->evdev_caps.keys);
-  set_bit (BTN_B, mock_device->evdev_caps.keys);
-  set_bit (BTN_TL, mock_device->evdev_caps.keys);
-  set_bit (BTN_TR, mock_device->evdev_caps.keys);
-  set_bit (ABS_X, mock_device->evdev_caps.abs);
-  set_bit (ABS_Y, mock_device->evdev_caps.abs);
-  set_bit (ABS_RX, mock_device->evdev_caps.abs);
-  set_bit (ABS_RY, mock_device->evdev_caps.abs);
+  set_bit (EV_KEY, simple->evdev_caps.ev);
+  set_bit (EV_ABS, simple->evdev_caps.ev);
+  set_bit (BTN_A, simple->evdev_caps.keys);
+  set_bit (BTN_B, simple->evdev_caps.keys);
+  set_bit (BTN_TL, simple->evdev_caps.keys);
+  set_bit (BTN_TR, simple->evdev_caps.keys);
+  set_bit (ABS_X, simple->evdev_caps.abs);
+  set_bit (ABS_Y, simple->evdev_caps.abs);
+  set_bit (ABS_RX, simple->evdev_caps.abs);
+  set_bit (ABS_RY, simple->evdev_caps.abs);
 
   g_debug ("Mock device capabilities:");
-  _srt_evdev_capabilities_dump (&mock_device->evdev_caps);
+  _srt_evdev_capabilities_dump (&simple->evdev_caps);
 
-  mock_device->hid_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid");
-  mock_device->hid_ancestor.uevent = g_strdup ("HID=yes\n");
+  simple->hid_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid");
+  simple->hid_ancestor.uevent = g_strdup ("HID=yes\n");
   /* The part in square brackets isn't present on the real device, but
    * makes this test more thorough by letting us distinguish. */
-  mock_device->hid_ancestor.name = g_strdup ("Sony PLAYSTATION(R)3 Controller [hid]");
-  mock_device->hid_ancestor.phys = g_strdup ("usb-0000:00:14.0-1/input0");
-  mock_device->hid_ancestor.uniq = g_strdup ("12:34:56:78:9a:bc");
-  mock_device->hid_ancestor.bus_type = HID_MARKER | BUS_USB;
-  mock_device->hid_ancestor.vendor_id = HID_MARKER | VENDOR_SONY;
-  mock_device->hid_ancestor.product_id = HID_MARKER | PRODUCT_SONY_PS3;
+  simple->hid_ancestor.name = g_strdup ("Sony PLAYSTATION(R)3 Controller [hid]");
+  simple->hid_ancestor.phys = g_strdup ("usb-0000:00:14.0-1/input0");
+  simple->hid_ancestor.uniq = g_strdup ("12:34:56:78:9a:bc");
+  simple->hid_ancestor.bus_type = HID_MARKER | BUS_USB;
+  simple->hid_ancestor.vendor_id = HID_MARKER | VENDOR_SONY;
+  simple->hid_ancestor.product_id = HID_MARKER | PRODUCT_SONY_PS3;
 
-  mock_device->input_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid/input");
-  mock_device->input_ancestor.uevent = g_strdup ("INPUT=yes\n");
-  mock_device->input_ancestor.name = g_strdup ("Sony PLAYSTATION(R)3 Controller [input]");
-  mock_device->input_ancestor.phys = NULL;
-  mock_device->input_ancestor.uniq = NULL;
-  mock_device->input_ancestor.bus_type = EVDEV_MARKER | BUS_USB;
-  mock_device->input_ancestor.vendor_id = EVDEV_MARKER | VENDOR_SONY;
-  mock_device->input_ancestor.product_id = EVDEV_MARKER | PRODUCT_SONY_PS3;
-  mock_device->input_ancestor.version = EVDEV_MARKER | 0x8111;
+  simple->input_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb/hid/input");
+  simple->input_ancestor.uevent = g_strdup ("INPUT=yes\n");
+  simple->input_ancestor.name = g_strdup ("Sony PLAYSTATION(R)3 Controller [input]");
+  simple->input_ancestor.phys = NULL;
+  simple->input_ancestor.uniq = NULL;
+  simple->input_ancestor.bus_type = EVDEV_MARKER | BUS_USB;
+  simple->input_ancestor.vendor_id = EVDEV_MARKER | VENDOR_SONY;
+  simple->input_ancestor.product_id = EVDEV_MARKER | PRODUCT_SONY_PS3;
+  simple->input_ancestor.version = EVDEV_MARKER | 0x8111;
 
-  mock_device->usb_device_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb");
-  mock_device->usb_device_ancestor.uevent = g_strdup ("USB=usb_device\n");
-  mock_device->usb_device_ancestor.vendor_id = USB_MARKER | VENDOR_SONY;
-  mock_device->usb_device_ancestor.product_id = USB_MARKER | PRODUCT_SONY_PS3;
-  mock_device->usb_device_ancestor.device_version = USB_MARKER | 0x0100;
-  mock_device->usb_device_ancestor.manufacturer = g_strdup ("Sony");
-  mock_device->usb_device_ancestor.product = g_strdup ("PLAYSTATION(R)3 Controller");
-  mock_device->usb_device_ancestor.serial = NULL;
+  simple->usb_device_ancestor.sys_path = g_strdup ("/sys/devices/mock/usb");
+  simple->usb_device_ancestor.uevent = g_strdup ("USB=usb_device\n");
+  simple->usb_device_ancestor.vendor_id = USB_MARKER | VENDOR_SONY;
+  simple->usb_device_ancestor.product_id = USB_MARKER | PRODUCT_SONY_PS3;
+  simple->usb_device_ancestor.device_version = USB_MARKER | 0x0100;
+  simple->usb_device_ancestor.manufacturer = g_strdup ("Sony");
+  simple->usb_device_ancestor.product = g_strdup ("PLAYSTATION(R)3 Controller");
+  simple->usb_device_ancestor.serial = NULL;
 
   g_assert_cmphex (srt_input_device_get_type_flags (device), ==,
                    SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK);
@@ -1308,7 +1810,7 @@ test_input_device_usb (Fixture *f,
                     ==, 1);
   g_assert_cmpuint (srt_input_device_get_event_types (device, &evbits, 1),
                     ==, 1);
-  g_assert_cmphex (evbits, ==, mock_device->evdev_caps.ev[0]);
+  g_assert_cmphex (evbits, ==, simple->evdev_caps.ev[0]);
   g_assert_cmphex (evbits & (1 << EV_KEY), ==, 1 << EV_KEY);
   g_assert_cmphex (evbits & (1 << EV_ABS), ==, 1 << EV_ABS);
   g_assert_cmphex (evbits & (1 << EV_SW), ==, 0);
@@ -1339,9 +1841,9 @@ test_input_device_usb (Fixture *f,
   g_assert_cmpint (test_bit (BTN_STYLUS, bits), ==, 0);
   g_assert_cmpint (test_bit (KEY_SEMICOLON, bits), ==, 0);
   g_assert_cmpmem (bits,
-                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.keys)),
-                   mock_device->evdev_caps.keys,
-                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.keys)));
+                   MIN (sizeof (bits), sizeof (simple->evdev_caps.keys)),
+                   simple->evdev_caps.keys,
+                   MIN (sizeof (bits), sizeof (simple->evdev_caps.keys)));
 
   /* ABS axes also match */
   g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_ABS,
@@ -1351,9 +1853,9 @@ test_input_device_usb (Fixture *f,
   g_assert_cmpint (test_bit (ABS_X, bits), ==, 1);
   g_assert_cmpint (test_bit (ABS_Z, bits), ==, 0);
   g_assert_cmpmem (bits,
-                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.abs)),
-                   mock_device->evdev_caps.abs,
-                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.abs)));
+                   MIN (sizeof (bits), sizeof (simple->evdev_caps.abs)),
+                   simple->evdev_caps.abs,
+                   MIN (sizeof (bits), sizeof (simple->evdev_caps.abs)));
 
   /* REL axes also match (in fact we don't have any, but we still store
    * the bitfield) */
@@ -1362,9 +1864,9 @@ test_input_device_usb (Fixture *f,
                                                              G_N_ELEMENTS (bits)),
                     >=, 1);
   g_assert_cmpmem (bits,
-                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.rel)),
-                   mock_device->evdev_caps.rel,
-                   MIN (sizeof (bits), sizeof (mock_device->evdev_caps.rel)));
+                   MIN (sizeof (bits), sizeof (simple->evdev_caps.rel)),
+                   simple->evdev_caps.rel,
+                   MIN (sizeof (bits), sizeof (simple->evdev_caps.rel)));
 
   /* We don't support EV_SW */
   g_assert_cmpuint (srt_input_device_get_event_capabilities (device, EV_SW,
@@ -1967,8 +2469,11 @@ int
 main (int argc,
       char **argv)
 {
+  argv0 = argv[0];
   g_test_init (&argc, &argv, NULL);
 
+  g_test_add ("/input-device/from-json", Fixture, NULL,
+              setup, test_input_device_from_json, teardown);
   g_test_add ("/input-device/guess", Fixture, NULL,
               setup, test_input_device_guess, teardown);
   g_test_add ("/input-device/identity-from-hid-uevent", Fixture, NULL,

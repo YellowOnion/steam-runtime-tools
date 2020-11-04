@@ -31,6 +31,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/input-device.h"
 #include "steam-runtime-tools/input-device-internal.h"
+#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 static void srt_simple_input_device_iface_init (SrtInputDeviceInterface *iface);
@@ -364,4 +365,184 @@ srt_simple_input_device_iface_init (SrtInputDeviceInterface *iface)
   IMPLEMENT (dup_usb_device_uevent);
 
 #undef IMPLEMENT
+}
+
+static gchar *
+dup_json_string_member (JsonObject *obj,
+                        const gchar *name)
+{
+  JsonNode *node = json_object_get_member (obj, name);
+
+  if (node == NULL)
+    return NULL;
+
+  /* This returns NULL without error if it is a non-string */
+  return json_node_dup_string (node);
+}
+
+static unsigned long
+get_json_hex_member (JsonObject *obj,
+                     const gchar *name)
+{
+  JsonNode *node = json_object_get_member (obj, name);
+  const char *s;
+
+  if (node == NULL)
+    return 0;
+
+  s = json_node_get_string (node);
+
+  if (s == NULL)
+    return 0;
+
+  if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+    s += 2;
+
+  return strtoul (s, NULL, 16);
+}
+
+static JsonObject *
+get_json_object_member (JsonObject *obj,
+                        const char *name)
+{
+  JsonNode *node = json_object_get_member (obj, name);
+
+  if (node != NULL && JSON_NODE_HOLDS_OBJECT (node))
+    return json_node_get_object (node);
+
+  return NULL;
+}
+
+static gchar *
+dup_json_uevent (JsonObject *obj)
+{
+  return _srt_json_object_dup_array_of_lines_member (obj, "uevent");
+}
+
+static void
+get_json_evdev_caps (JsonObject *obj,
+                     const char *name,
+                     unsigned long *longs,
+                     size_t n_longs)
+{
+  JsonNode *node = json_object_get_member (obj, name);
+  /* The first pointer that is out of bounds for longs */
+  unsigned char *limit = (unsigned char *) &longs[n_longs];
+  /* The output position in longs */
+  unsigned char *out = (unsigned char *) longs;
+  /* The input position in the string we are parsing */
+  const char *iter;
+  size_t i;
+
+  if (node == NULL)
+    return;
+
+  iter = json_node_get_string (node);
+
+  if (iter == NULL)
+    return;
+
+  while (*iter != '\0')
+    {
+      unsigned int this_byte;
+      int used;
+
+      while (*iter == ' ')
+        iter++;
+
+      if (sscanf (iter, "%x%n", &this_byte, &used) == 1)
+        iter += used;
+      else
+        break;
+
+      if (out < limit)
+        *(out++) = (unsigned char) this_byte;
+      else
+        break;
+    }
+
+  for (i = 0; i < n_longs; i++)
+    longs[i] = GULONG_FROM_LE (longs[i]);
+}
+
+SrtSimpleInputDevice *
+_srt_simple_input_device_new_from_json (JsonObject *obj)
+{
+  SrtSimpleInputDevice *self = g_object_new (SRT_TYPE_SIMPLE_INPUT_DEVICE,
+                                             NULL);
+  JsonObject *sub;
+
+  self->sys_path = dup_json_string_member (obj, "sys_path");
+  self->dev_node = dup_json_string_member (obj, "dev_node");
+  self->subsystem = dup_json_string_member (obj, "subsystem");
+  self->bus_type  = get_json_hex_member (obj, "bus_type");
+  self->vendor_id  = get_json_hex_member (obj, "vendor_id");
+  self->product_id  = get_json_hex_member (obj, "product_id");
+  self->version  = get_json_hex_member (obj, "version");
+
+  self->iface_flags = srt_get_flags_from_json_array (SRT_TYPE_INPUT_DEVICE_INTERFACE_FLAGS,
+                                                     obj,
+                                                     "interface_flags",
+                                                     SRT_INPUT_DEVICE_INTERFACE_FLAGS_NONE);
+  self->type_flags = srt_get_flags_from_json_array (SRT_TYPE_INPUT_DEVICE_TYPE_FLAGS,
+                                                    obj,
+                                                    "type_flags",
+                                                    SRT_INPUT_DEVICE_TYPE_FLAGS_NONE);
+
+  if ((sub = get_json_object_member (obj, "evdev")) != NULL)
+    {
+      get_json_evdev_caps (sub, "raw_types", self->evdev_caps.ev,
+                           G_N_ELEMENTS (self->evdev_caps.ev));
+      get_json_evdev_caps (sub, "raw_abs", self->evdev_caps.abs,
+                           G_N_ELEMENTS (self->evdev_caps.abs));
+      get_json_evdev_caps (sub, "raw_rel", self->evdev_caps.rel,
+                           G_N_ELEMENTS (self->evdev_caps.rel));
+      get_json_evdev_caps (sub, "raw_keys", self->evdev_caps.keys,
+                           G_N_ELEMENTS (self->evdev_caps.keys));
+      get_json_evdev_caps (sub, "raw_input_properties",
+                           self->evdev_caps.props,
+                           G_N_ELEMENTS (self->evdev_caps.props));
+    }
+
+  self->udev_properties = _srt_json_object_dup_strv_member (obj, "udev_properties", NULL);
+  self->uevent = dup_json_uevent (obj);
+
+  if ((sub = get_json_object_member (obj, "hid_ancestor")) != NULL)
+    {
+      self->hid_ancestor.sys_path = dup_json_string_member (sub, "sys_path");
+      self->hid_ancestor.name = dup_json_string_member (sub, "name");
+      self->hid_ancestor.bus_type = get_json_hex_member (sub, "bus_type");
+      self->hid_ancestor.vendor_id = get_json_hex_member (sub, "vendor_id");
+      self->hid_ancestor.product_id = get_json_hex_member (sub, "product_id");
+      self->hid_ancestor.uniq = dup_json_string_member (sub, "uniq");
+      self->hid_ancestor.phys = dup_json_string_member (sub, "phys");
+      self->hid_ancestor.uevent = dup_json_uevent (sub);
+    }
+
+  if ((sub = get_json_object_member (obj, "input_ancestor")) != NULL)
+    {
+      self->input_ancestor.sys_path = dup_json_string_member (sub, "sys_path");
+      self->input_ancestor.name = dup_json_string_member (sub, "name");
+      self->input_ancestor.bus_type = get_json_hex_member (sub, "bus_type");
+      self->input_ancestor.vendor_id = get_json_hex_member (sub, "vendor_id");
+      self->input_ancestor.product_id = get_json_hex_member (sub, "product_id");
+      self->input_ancestor.version = get_json_hex_member (sub, "version");
+      self->input_ancestor.uniq = dup_json_string_member (sub, "uniq");
+      self->input_ancestor.phys = dup_json_string_member (sub, "phys");
+      self->input_ancestor.uevent = dup_json_uevent (sub);
+    }
+
+  if ((sub = get_json_object_member (obj, "usb_device_ancestor")) != NULL)
+    {
+      self->usb_device_ancestor.sys_path = dup_json_string_member (sub, "sys_path");
+      self->usb_device_ancestor.vendor_id = get_json_hex_member (sub, "vendor_id");
+      self->usb_device_ancestor.product_id = get_json_hex_member (sub, "product_id");
+      self->usb_device_ancestor.device_version = get_json_hex_member (sub, "version");
+      self->usb_device_ancestor.manufacturer = dup_json_string_member (sub, "manufacturer");
+      self->usb_device_ancestor.product = dup_json_string_member (sub, "product");
+      self->usb_device_ancestor.serial = dup_json_string_member (sub, "serial");
+      self->usb_device_ancestor.uevent = dup_json_uevent (sub);
+    }
+
+  return self;
 }

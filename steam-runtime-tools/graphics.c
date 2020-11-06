@@ -1622,10 +1622,10 @@ typedef struct
   gchar *api_version;   /* Always NULL when found in a SrtEglIcd */
   gchar *json_path;
   gchar *library_path;
-} SrtIcd;
+} SrtLoadable;
 
 static void
-srt_icd_clear (SrtIcd *self)
+srt_loadable_clear (SrtLoadable *self)
 {
   g_clear_error (&self->error);
   g_clear_pointer (&self->api_version, g_free);
@@ -1638,7 +1638,7 @@ srt_icd_clear (SrtIcd *self)
  * srt_vulkan_icd_resolve_library_path()
  */
 static gchar *
-srt_icd_resolve_library_path (const SrtIcd *self)
+srt_loadable_resolve_library_path (const SrtLoadable *self)
 {
   gchar *dir;
   gchar *ret;
@@ -1679,8 +1679,8 @@ srt_icd_resolve_library_path (const SrtIcd *self)
 
 /* See srt_egl_icd_check_error(), srt_vulkan_icd_check_error() */
 static gboolean
-srt_icd_check_error (const SrtIcd *self,
-                     GError **error)
+srt_loadable_check_error (const SrtLoadable *self,
+                        GError **error)
 {
   if (self->error != NULL && error != NULL)
     *error = g_error_copy (self->error);
@@ -1690,9 +1690,10 @@ srt_icd_check_error (const SrtIcd *self,
 
 /* See srt_egl_icd_write_to_file(), srt_vulkan_icd_write_to_file() */
 static gboolean
-srt_icd_write_to_file (const SrtIcd *self,
-                       const char *path,
-                       GError **error)
+srt_loadable_write_to_file (const SrtLoadable *self,
+                            const char *path,
+                            GType which,
+                            GError **error)
 {
   JsonBuilder *builder;
   JsonGenerator *generator;
@@ -1700,7 +1701,10 @@ srt_icd_write_to_file (const SrtIcd *self,
   gchar *json_output;
   gboolean ret = FALSE;
 
-  if (!srt_icd_check_error (self, error))
+  if (which != SRT_TYPE_EGL_ICD && which != SRT_TYPE_VULKAN_ICD)
+    g_return_val_if_reached (FALSE);
+
+  if (!srt_loadable_check_error (self, error))
     {
       g_prefix_error (error,
                       "Cannot save ICD metadata to file because it is invalid: ");
@@ -1726,10 +1730,8 @@ srt_icd_write_to_file (const SrtIcd *self,
       json_builder_set_member_name (builder, "library_path");
       json_builder_add_string_value (builder, self->library_path);
 
-      /* In the EGL case this will be NULL. In the Vulkan case it will
-       * be non-NULL, because if the API version was missing, we would
-       * have set the error indicator, so we wouldn't get here. */
-      if (self->api_version != NULL)
+      /* In the EGL case we don't have the "api_version" field. */
+      if (which == SRT_TYPE_VULKAN_ICD)
         {
           json_builder_set_member_name (builder, "api_version");
           json_builder_add_string_value (builder, self->api_version);
@@ -2069,7 +2071,7 @@ struct _SrtEglIcd
 {
   /*< private >*/
   GObject parent;
-  SrtIcd icd;
+  SrtLoadable icd;
 };
 
 struct _SrtEglIcdClass
@@ -2189,7 +2191,7 @@ srt_egl_icd_finalize (GObject *object)
 {
   SrtEglIcd *self = SRT_EGL_ICD (object);
 
-  srt_icd_clear (&self->icd);
+  srt_loadable_clear (&self->icd);
 
   G_OBJECT_CLASS (srt_egl_icd_parent_class)->finalize (object);
 }
@@ -2305,7 +2307,7 @@ srt_egl_icd_check_error (SrtEglIcd *self,
 {
   g_return_val_if_fail (SRT_IS_EGL_ICD (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-  return srt_icd_check_error (&self->icd, error);
+  return srt_loadable_check_error (&self->icd, error);
 }
 
 /**
@@ -2416,7 +2418,7 @@ gchar *
 srt_egl_icd_resolve_library_path (SrtEglIcd *self)
 {
   g_return_val_if_fail (SRT_IS_EGL_ICD (self), NULL);
-  return srt_icd_resolve_library_path (&self->icd);
+  return srt_loadable_resolve_library_path (&self->icd);
 }
 
 /**
@@ -2464,7 +2466,7 @@ srt_egl_icd_write_to_file (SrtEglIcd *self,
   g_return_val_if_fail (SRT_IS_EGL_ICD (self), FALSE);
   g_return_val_if_fail (path != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-  return srt_icd_write_to_file (&self->icd, path, error);
+  return srt_loadable_write_to_file (&self->icd, path, SRT_TYPE_EGL_ICD, error);
 }
 
 static void
@@ -2610,8 +2612,8 @@ _srt_resolve_library_path (const gchar *library_path)
 }
 
 static GList *
-get_driver_icds_from_json_report (JsonObject *json_obj,
-                                  GType which);
+get_driver_loadables_from_json_report (JsonObject *json_obj,
+                                       GType which);
 
 /**
  * _srt_get_egl_from_json_report:
@@ -2623,7 +2625,7 @@ get_driver_icds_from_json_report (JsonObject *json_obj,
 GList *
 _srt_get_egl_from_json_report (JsonObject *json_obj)
 {
-  return get_driver_icds_from_json_report (json_obj, SRT_TYPE_EGL_ICD);
+  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_EGL_ICD);
 }
 
 /**
@@ -4365,7 +4367,7 @@ struct _SrtVulkanIcd
 {
   /*< private >*/
   GObject parent;
-  SrtIcd icd;
+  SrtLoadable icd;
 };
 
 struct _SrtVulkanIcdClass
@@ -4500,7 +4502,7 @@ srt_vulkan_icd_finalize (GObject *object)
 {
   SrtVulkanIcd *self = SRT_VULKAN_ICD (object);
 
-  srt_icd_clear (&self->icd);
+  srt_loadable_clear (&self->icd);
 
   G_OBJECT_CLASS (srt_vulkan_icd_parent_class)->finalize (object);
 }
@@ -4626,7 +4628,7 @@ srt_vulkan_icd_check_error (SrtVulkanIcd *self,
 {
   g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-  return srt_icd_check_error (&self->icd, error);
+  return srt_loadable_check_error (&self->icd, error);
 }
 
 /**
@@ -4706,7 +4708,7 @@ gchar *
 srt_vulkan_icd_resolve_library_path (SrtVulkanIcd *self)
 {
   g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), NULL);
-  return srt_icd_resolve_library_path (&self->icd);
+  return srt_loadable_resolve_library_path (&self->icd);
 }
 
 /**
@@ -4727,7 +4729,7 @@ srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
   g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), FALSE);
   g_return_val_if_fail (path != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-  return srt_icd_write_to_file (&self->icd, path, error);
+  return srt_loadable_write_to_file (&self->icd, path, SRT_TYPE_VULKAN_ICD, error);
 }
 
 /**
@@ -4994,13 +4996,13 @@ _srt_load_vulkan_icds (const char *sysroot,
 GList *
 _srt_get_vulkan_from_json_report (JsonObject *json_obj)
 {
-  return get_driver_icds_from_json_report (json_obj, SRT_TYPE_VULKAN_ICD);
+  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_ICD);
 }
 
 /**
- * get_driver_icds_from_json_report:
+ * get_driver_loadables_from_json_report:
  * @json_obj: (not nullable): A JSON Object used to search for Icd properties
- * @which: Used to choose which ICD to search, it can be either
+ * @which: Used to choose which loadable to search, it can be either
  *  %SRT_TYPE_EGL_ICD or %SRT_TYPE_VULKAN_ICD
  *
  * Returns: A list of #SrtEglIcd (if @which is %SRT_TYPE_EGL_ICD) or
@@ -5008,22 +5010,31 @@ _srt_get_vulkan_from_json_report (JsonObject *json_obj)
  *  %NULL if none has been found.
  */
 static GList *
-get_driver_icds_from_json_report (JsonObject *json_obj,
-                                  GType which)
+get_driver_loadables_from_json_report (JsonObject *json_obj,
+                                       GType which)
 {
   const gchar *member;
+  const gchar *sub_member;
   JsonObject *json_sub_obj;
   JsonArray *array;
-  GList *driver_icds = NULL;
+  GList *driver_info = NULL;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
 
   if (which == SRT_TYPE_EGL_ICD)
-    member = "egl";
+    {
+      member = "egl";
+      sub_member = "icds";
+    }
   else if (which == SRT_TYPE_VULKAN_ICD)
-    member = "vulkan";
+    {
+      member = "vulkan";
+      sub_member = "icds";
+    }
   else
-    g_return_val_if_reached (NULL);
+    {
+      g_return_val_if_reached (NULL);
+    }
 
   if (json_object_has_member (json_obj, member))
     {
@@ -5036,14 +5047,14 @@ get_driver_icds_from_json_report (JsonObject *json_obj,
           goto out;
         }
 
-      if (json_object_has_member (json_sub_obj, "icds"))
+      if (json_object_has_member (json_sub_obj, sub_member))
         {
-          array = json_object_get_array_member (json_sub_obj, "icds");
+          array = json_object_get_array_member (json_sub_obj, sub_member);
 
           /* We are expecting an array of icds here */
           if (array == NULL)
             {
-              g_debug ("'icds' is not an array as expected");
+              g_debug ("'%s' is not an array as expected", sub_member);
               goto out;
             }
 
@@ -5055,37 +5066,38 @@ get_driver_icds_from_json_report (JsonObject *json_obj,
               GQuark error_domain;
               gint error_code;
               const gchar *error_message;
-              GError *icd_error = NULL;
-              JsonObject *json_icd_obj = json_array_get_object_element (array, i);
-              if (json_object_has_member (json_icd_obj, "json_path"))
-                json_path = json_object_get_string_member (json_icd_obj, "json_path");
+              GError *error = NULL;
+              JsonObject *json_elem_obj = json_array_get_object_element (array, i);
+              if (json_object_has_member (json_elem_obj, "json_path"))
+                json_path = json_object_get_string_member (json_elem_obj, "json_path");
               else
                 {
-                  g_debug ("The parsed 'icd' is missing the expected 'json_path' member, skipping...");
+                  g_debug ("The parsed '%s' member is missing the expected 'json_path' member, skipping...",
+                           sub_member);
                   continue;
                 }
 
-              library_path = json_object_get_string_member_with_default (json_icd_obj,
+              library_path = json_object_get_string_member_with_default (json_elem_obj,
                                                                          "library_path",
                                                                          NULL);
-              api_version = json_object_get_string_member_with_default (json_icd_obj,
+              api_version = json_object_get_string_member_with_default (json_elem_obj,
                                                                         "api_version",
                                                                         NULL);
-              error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_icd_obj,
+              error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_elem_obj,
                                                                                               "error-domain",
                                                                                               NULL));
-              error_code = json_object_get_int_member_with_default (json_icd_obj, "error-code", -1);
-              error_message = json_object_get_string_member_with_default (json_icd_obj,
+              error_code = json_object_get_int_member_with_default (json_elem_obj, "error-code", -1);
+              error_message = json_object_get_string_member_with_default (json_elem_obj,
                                                                           "error",
                                                                           "(missing error message)");
 
               if (library_path != NULL)
                 {
                   if (which == SRT_TYPE_EGL_ICD)
-                    driver_icds = g_list_prepend (driver_icds, srt_egl_icd_new (json_path,
+                    driver_info = g_list_prepend (driver_info, srt_egl_icd_new (json_path,
                                                                                 library_path));
                   else if (which == SRT_TYPE_VULKAN_ICD)
-                    driver_icds = g_list_prepend (driver_icds, srt_vulkan_icd_new (json_path,
+                    driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new (json_path,
                                                                                    api_version,
                                                                                    library_path));
                   else
@@ -5098,26 +5110,26 @@ get_driver_icds_from_json_report (JsonObject *json_obj,
                       error_domain = G_IO_ERROR;
                       error_code = G_IO_ERROR_FAILED;
                     }
-                  g_set_error_literal (&icd_error,
+                  g_set_error_literal (&error,
                                        error_domain,
                                        error_code,
                                        error_message);
                   if (which == SRT_TYPE_EGL_ICD)
-                    driver_icds = g_list_prepend (driver_icds, srt_egl_icd_new_error (json_path,
-                                                                                      icd_error));
+                    driver_info = g_list_prepend (driver_info, srt_egl_icd_new_error (json_path,
+                                                                                      error));
                   else if (which == SRT_TYPE_VULKAN_ICD)
-                    driver_icds = g_list_prepend (driver_icds, srt_vulkan_icd_new_error (json_path,
-                                                                                         icd_error));
+                    driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new_error (json_path,
+                                                                                         error));
                   else
                     g_return_val_if_reached (NULL);
 
-                  g_clear_error (&icd_error);
+                  g_clear_error (&error);
                 }
             }
         }
     }
 out:
-  return driver_icds;
+  return driver_info;
 }
 
 /**

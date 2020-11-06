@@ -4832,6 +4832,106 @@ get_vulkan_sysconfdir (void)
   return "/etc";
 }
 
+static gchar **
+get_vulkan_search_paths (const char *sysroot,
+                         gchar **envp,
+                         const char * const *multiarch_tuples)
+{
+  GPtrArray *search_paths = g_ptr_array_new ();
+  g_auto(GStrv) dirs = NULL;
+  g_autofree gchar *flatpak_info = NULL;
+  const gchar *value;
+  gsize i;
+
+  /* The reference Vulkan loader doesn't entirely follow
+   * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
+   * it skips XDG_CONFIG_HOME and goes directly to XDG_CONFIG_DIRS.
+   * https://github.com/KhronosGroup/Vulkan-Loader/issues/246 */
+  value = g_environ_getenv (envp, "XDG_CONFIG_DIRS");
+
+  /* Constant and non-configurable fallback, as per
+   * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+  if (value == NULL)
+    value = "/etc/xdg";
+
+  dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+  for (i = 0; dirs[i] != NULL; i++)
+    g_ptr_array_add (search_paths, g_build_filename (dirs[i], VULKAN_ICD_SUFFIX, NULL));
+
+  g_clear_pointer (&dirs, g_strfreev);
+
+  value = get_vulkan_sysconfdir ();
+  g_ptr_array_add (search_paths, g_build_filename (value, VULKAN_ICD_SUFFIX, NULL));
+
+  /* This is hard-coded in the reference loader: if its own sysconfdir
+   * is not /etc, it searches /etc afterwards. (In practice this
+   * won't trigger at the moment, because we assume the Vulkan
+   * loader's sysconfdir *is* /etc.) */
+  if (g_strcmp0 (value, "/etc") != 0)
+    g_ptr_array_add (search_paths, g_build_filename ("/etc", VULKAN_ICD_SUFFIX, NULL));
+
+  flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
+
+  /* freedesktop-sdk patches the Vulkan loader to look here. */
+  if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
+      && multiarch_tuples != NULL)
+    {
+      g_debug ("Flatpak detected: assuming freedesktop-based runtime");
+
+      for (i = 0; multiarch_tuples[i] != NULL; i++)
+        {
+          /* GL extensions */
+          g_ptr_array_add (search_paths, g_build_filename ("/usr/lib",
+                                                           multiarch_tuples[i],
+                                                           "GL",
+                                                           VULKAN_ICD_SUFFIX,
+                                                           NULL));
+          /* Built-in Mesa stack */
+          g_ptr_array_add (search_paths, g_build_filename ("/usr/lib",
+                                                           multiarch_tuples[i],
+                                                           VULKAN_ICD_SUFFIX,
+                                                           NULL));
+        }
+    }
+
+  /* The reference Vulkan loader doesn't entirely follow
+   * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
+   * it searches XDG_DATA_HOME *after* XDG_DATA_DIRS, and it still
+   * searches ~/.local/share even if XDG_DATA_HOME is set.
+   * https://github.com/KhronosGroup/Vulkan-Loader/issues/245 */
+
+  value = g_environ_getenv (envp, "XDG_DATA_DIRS");
+
+  /* Constant and non-configurable fallback, as per
+   * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+  if (value == NULL)
+    value = "/usr/local/share" G_SEARCHPATH_SEPARATOR_S "/usr/share";
+
+  dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+  for (i = 0; dirs[i] != NULL; i++)
+    g_ptr_array_add (search_paths, g_build_filename (dirs[i], VULKAN_ICD_SUFFIX, NULL));
+
+  /* I don't know why this is searched *after* XDG_DATA_DIRS in the
+   * reference loader, but we match that behaviour. */
+  value = g_environ_getenv (envp, "XDG_DATA_HOME");
+  if (value != NULL)
+    g_ptr_array_add (search_paths, g_build_filename (value, VULKAN_ICD_SUFFIX, NULL));
+
+  /* libvulkan searches this unconditionally, even if XDG_DATA_HOME
+   * is set. */
+  value = g_environ_getenv (envp, "HOME");
+
+  if (value == NULL)
+    value = g_get_home_dir ();
+
+  g_ptr_array_add (search_paths, g_build_filename (value, ".local", "share",
+                                                   VULKAN_ICD_SUFFIX, NULL));
+
+  g_ptr_array_add (search_paths, NULL);
+
+  return (GStrv) g_ptr_array_free (search_paths, FALSE);
+}
+
 /*
  * _srt_load_vulkan_icds:
  * @sysroot: (not nullable): The root directory, usually `/`
@@ -4879,108 +4979,9 @@ _srt_load_vulkan_icds (const char *sysroot,
     }
   else
     {
-      gchar **dirs;
-      gchar *tmp = NULL;
-      gchar *flatpak_info = NULL;
-
-      /* The reference Vulkan loader doesn't entirely follow
-       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
-       * it skips XDG_CONFIG_HOME and goes directly to XDG_CONFIG_DIRS.
-       * https://github.com/KhronosGroup/Vulkan-Loader/issues/246 */
-
-      value = g_environ_getenv (envp, "XDG_CONFIG_DIRS");
-
-      /* Constant and non-configurable fallback, as per
-       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html */
-      if (value == NULL)
-        value = "/etc/xdg";
-
-      dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
-      load_json_dirs (sysroot, dirs, VULKAN_ICD_SUFFIX, READDIR_ORDER,
+      g_auto(GStrv) search_paths = get_vulkan_search_paths (sysroot, envp, multiarch_tuples);
+      load_json_dirs (sysroot, search_paths, NULL, READDIR_ORDER,
                       vulkan_icd_load_json_cb, &ret);
-      g_strfreev (dirs);
-
-      value = get_vulkan_sysconfdir ();
-      load_json_dir (sysroot, value, VULKAN_ICD_SUFFIX,
-                     READDIR_ORDER, vulkan_icd_load_json_cb, &ret);
-
-      /* This is hard-coded in the reference loader: if its own sysconfdir
-       * is not /etc, it searches /etc afterwards. (In practice this
-       * won't trigger at the moment, because we assume the Vulkan
-       * loader's sysconfdir *is* /etc.) */
-      if (g_strcmp0 (value, "/etc") != 0)
-        load_json_dir (sysroot, "/etc", VULKAN_ICD_SUFFIX,
-                       READDIR_ORDER, vulkan_icd_load_json_cb, &ret);
-
-      flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
-
-      /* freedesktop-sdk patches the Vulkan loader to look here. */
-      if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
-          && multiarch_tuples != NULL)
-        {
-          g_debug ("Flatpak detected: assuming freedesktop-based runtime");
-
-          for (i = 0; multiarch_tuples[i] != NULL; i++)
-            {
-              /* GL extensions */
-              tmp = g_build_filename ("/usr/lib",
-                                      multiarch_tuples[i],
-                                      "GL",
-                                      VULKAN_ICD_SUFFIX,
-                                      NULL);
-              load_json_dir (sysroot, tmp, NULL, READDIR_ORDER,
-                             vulkan_icd_load_json_cb, &ret);
-              g_free (tmp);
-
-              /* Built-in Mesa stack */
-              tmp = g_build_filename ("/usr/lib",
-                                      multiarch_tuples[i],
-                                      VULKAN_ICD_SUFFIX,
-                                      NULL);
-              load_json_dir (sysroot, tmp, NULL, READDIR_ORDER,
-                             vulkan_icd_load_json_cb, &ret);
-              g_free (tmp);
-            }
-        }
-
-      g_free (flatpak_info);
-
-      /* The reference Vulkan loader doesn't entirely follow
-       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
-       * it searches XDG_DATA_HOME *after* XDG_DATA_DIRS, and it still
-       * searches ~/.local/share even if XDG_DATA_HOME is set.
-       * https://github.com/KhronosGroup/Vulkan-Loader/issues/245 */
-
-      value = g_environ_getenv (envp, "XDG_DATA_DIRS");
-
-      /* Constant and non-configurable fallback, as per
-       * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html */
-      if (value == NULL)
-        value = "/usr/local/share" G_SEARCHPATH_SEPARATOR_S "/usr/share";
-
-      dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
-      load_json_dirs (sysroot, dirs, VULKAN_ICD_SUFFIX, READDIR_ORDER,
-                      vulkan_icd_load_json_cb, &ret);
-      g_strfreev (dirs);
-
-      /* I don't know why this is searched *after* XDG_DATA_DIRS in the
-       * reference loader, but we match that behaviour. */
-      value = g_environ_getenv (envp, "XDG_DATA_HOME");
-      load_json_dir (sysroot, value, VULKAN_ICD_SUFFIX, READDIR_ORDER,
-                     vulkan_icd_load_json_cb, &ret);
-
-      /* libvulkan searches this unconditionally, even if XDG_DATA_HOME
-       * is set. */
-      value = g_environ_getenv (envp, "HOME");
-
-      if (value == NULL)
-        value = g_get_home_dir ();
-
-      tmp = g_build_filename (value, ".local", "share",
-                              VULKAN_ICD_SUFFIX, NULL);
-      load_json_dir (sysroot, tmp, NULL, READDIR_ORDER,
-                     vulkan_icd_load_json_cb, &ret);
-      g_free (tmp);
     }
 
   return g_list_reverse (ret);

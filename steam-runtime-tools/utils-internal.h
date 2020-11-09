@@ -30,8 +30,6 @@
 
 #include <glib.h>
 
-#include <json-glib/json-glib.h>
-
 #include <steam-runtime-tools/macros.h>
 
 typedef enum
@@ -73,12 +71,6 @@ gboolean srt_add_flag_from_nick (GType flags_type,
                                  guint *value_out,
                                  GError **error);
 
-_SRT_PRIVATE_EXPORT
-guint srt_get_flags_from_json_array (GType flags_type,
-                                     JsonObject *json_obj,
-                                     const gchar *array_member,
-                                     guint flag_if_unknown);
-
 G_GNUC_INTERNAL void _srt_child_setup_unblock_signals (gpointer ignored);
 
 _SRT_PRIVATE_EXPORT
@@ -86,9 +78,6 @@ void _srt_unblock_signals (void);
 
 G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
                                            gconstpointer right);
-
-gchar ** _srt_json_array_to_strv (JsonObject *json_obj,
-                                  const gchar *array_member);
 
 _SRT_PRIVATE_EXPORT
 gboolean _srt_rm_rf (const char *directory);

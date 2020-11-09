@@ -37,6 +37,7 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/utils.h"
 
 /**

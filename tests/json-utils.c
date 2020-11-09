@@ -58,6 +58,39 @@ teardown (Fixture *f,
 }
 
 static void
+test_dup_array_of_lines_member (Fixture *f,
+                                gconstpointer context)
+{
+  g_autoptr(JsonArray) arr = json_array_new ();
+  g_autoptr(JsonNode) arr_node = json_node_alloc ();
+  g_autoptr(JsonObject) obj = json_object_new ();
+  g_autofree gchar *missing = NULL;
+  g_autofree gchar *not_array = NULL;
+  g_autofree gchar *text = NULL;
+
+  json_array_add_string_element (arr, "one");
+  json_array_add_string_element (arr, "two\n");
+  json_array_add_object_element (arr, json_object_new ());
+  json_array_add_string_element (arr, "four");
+  json_node_init_array (arr_node, arr);
+  json_object_set_member (obj, "arr", g_steal_pointer (&arr_node));
+  json_object_set_double_member (obj, "not-array", 42.0);
+
+  missing = _srt_json_object_dup_array_of_lines_member (obj, "missing");
+  g_assert_null (missing);
+
+  not_array = _srt_json_object_dup_array_of_lines_member (obj, "not-array");
+  g_assert_null (not_array);
+
+  text = _srt_json_object_dup_array_of_lines_member (obj, "arr");
+  g_assert_cmpstr (text, ==,
+                   "one\n"
+                   "two\n"
+                   "\n"
+                   "four\n");
+}
+
+static void
 test_dup_strv_member (Fixture *f,
                       gconstpointer context)
 {
@@ -105,6 +138,8 @@ main (int argc,
       char **argv)
 {
   g_test_init (&argc, &argv, NULL);
+  g_test_add ("/json-utils/dup-array-of-lines-member", Fixture, NULL,
+              setup, test_dup_array_of_lines_member, teardown);
   g_test_add ("/json-utils/dup-strv-member", Fixture, NULL,
               setup, test_dup_strv_member, teardown);
 

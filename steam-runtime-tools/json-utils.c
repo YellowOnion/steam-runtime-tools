@@ -139,3 +139,56 @@ _srt_json_object_dup_strv_member (JsonObject *json_obj,
 
   return ret;
 }
+
+/**
+ * _srt_json_object_dup_array_of_lines_member:
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  @array_member property
+ * @array_member: (not nullable): The JSON member to look up
+ *
+ * If @json_obj has a member named @array_member and it is an array
+ * of strings, concatenate the strings (adding a trailing newline to
+ * each one if not already present) and return them. Otherwise,
+ * return %NULL.
+ *
+ * Returns: (transfer full) (element-type utf8) (nullable):
+ *  A string, or %NULL if not found. Free with g_free().
+ */
+gchar *
+_srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
+                                            const gchar *array_member)
+{
+  JsonArray *array;
+  JsonNode *arr_node;
+  guint length;
+  g_autoptr(GString) ret = g_string_new ("");
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+  g_return_val_if_fail (array_member != NULL, NULL);
+
+  arr_node = json_object_get_member (json_obj, array_member);
+
+  if (arr_node == NULL || !JSON_NODE_HOLDS_ARRAY (arr_node))
+    return NULL;
+
+  array = json_node_get_array (arr_node);
+
+  if (array == NULL)
+    return NULL;
+
+  length = json_array_get_length (array);
+
+  for (guint i = 0; i < length; i++)
+    {
+      JsonNode *node = json_array_get_element (array, i);
+      const gchar *element = json_node_get_string (node);
+
+      if (element != NULL)
+        g_string_append (ret, element);
+
+      if (element == NULL || element[strlen (element) - 1] != '\n')
+        g_string_append_c (ret, '\n');
+    }
+
+  return g_string_free (g_steal_pointer (&ret), FALSE);
+}

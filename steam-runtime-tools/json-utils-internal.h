@@ -43,3 +43,6 @@ guint srt_get_flags_from_json_array (GType flags_type,
 gchar ** _srt_json_object_dup_strv_member (JsonObject *json_obj,
                                            const gchar *array_member,
                                            const gchar *placeholder);
+
+gchar *_srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
+                                                   const gchar *array_member);

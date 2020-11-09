@@ -99,7 +99,6 @@ _srt_json_object_dup_strv_member (JsonObject *json_obj,
 {
   JsonArray *array;
   guint length;
-  const gchar *element;
   gchar **ret = NULL;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
@@ -118,7 +117,8 @@ _srt_json_object_dup_strv_member (JsonObject *json_obj,
 
       for (guint i = 0; i < length; i++)
         {
-          element = json_array_get_string_element (array, i);
+          JsonNode *node = json_array_get_element (array, i);
+          const gchar *element = json_node_get_string (node);
 
           if (element == NULL)
             element = placeholder;

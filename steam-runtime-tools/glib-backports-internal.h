@@ -109,3 +109,8 @@ gchar *my_g_canonicalize_filename (const gchar *filename,
 gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
                                              guint *len);
 #endif
+
+#if !GLIB_CHECK_VERSION (2, 67, 0)
+#define G_DBUS_METHOD_INVOCATION_HANDLED TRUE
+#define G_DBUS_METHOD_INVOCATION_UNHANDLED FALSE
+#endif

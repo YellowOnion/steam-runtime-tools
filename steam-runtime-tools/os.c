@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 
 #include <glib.h>
 
@@ -272,9 +273,7 @@ _srt_os_release_populate_from_report (JsonObject *json_obj,
         }
 
       self->populated = TRUE;
-
-      if (json_object_has_member (json_sub_obj, "id"))
-        self->id = g_strdup (json_object_get_string_member (json_sub_obj, "id"));
+      self->id = g_strdup (json_object_get_string_member_with_default (json_sub_obj, "id", NULL));
 
       if (json_object_has_member (json_sub_obj, "id_like"))
         {
@@ -301,25 +300,25 @@ _srt_os_release_populate_from_report (JsonObject *json_obj,
             }
         }
 
-      if (json_object_has_member (json_sub_obj, "name"))
-        self->name = g_strdup (json_object_get_string_member (json_sub_obj, "name"));
-
-      if (json_object_has_member (json_sub_obj, "pretty_name"))
-        self->pretty_name = g_strdup (json_object_get_string_member (json_sub_obj, "pretty_name"));
-
-      if (json_object_has_member (json_sub_obj, "version_id"))
-        self->version_id = g_strdup (json_object_get_string_member (json_sub_obj, "version_id"));
-
-      if (json_object_has_member (json_sub_obj, "version_codename"))
-        self->version_codename = g_strdup (json_object_get_string_member (json_sub_obj, "version_codename"));
-
-      if (json_object_has_member (json_sub_obj, "build_id"))
-        self->build_id = g_strdup (json_object_get_string_member (json_sub_obj, "build_id"));
-
-      if (json_object_has_member (json_sub_obj, "variant_id"))
-        self->variant_id = g_strdup (json_object_get_string_member (json_sub_obj, "variant_id"));
-
-      if (json_object_has_member (json_sub_obj, "variant"))
-        self->variant = g_strdup (json_object_get_string_member (json_sub_obj, "variant"));
+      self->name = g_strdup (json_object_get_string_member_with_default (json_sub_obj, "name",
+                                                                         NULL));
+      self->pretty_name = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                                "pretty_name",
+                                                                                NULL));
+      self->version_id = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                               "version_id",
+                                                                               NULL));
+      self->version_codename = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                                     "version_codename",
+                                                                                     NULL));
+      self->build_id = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                             "build_id",
+                                                                             NULL));
+      self->variant_id = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                               "variant_id",
+                                                                               NULL));
+      self->variant = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                            "variant",
+                                                                            NULL));
     }
 }

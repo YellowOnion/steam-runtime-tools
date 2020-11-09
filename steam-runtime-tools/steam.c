@@ -37,6 +37,7 @@
 #include "steam-runtime-tools/desktop-entry-internal.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -767,20 +768,15 @@ _srt_steam_get_from_report (JsonObject *json_obj)
             }
         }
 
-      if (json_object_has_member (json_sub_obj, "path"))
-        install_path = json_object_get_string_member (json_sub_obj, "path");
-
-      if (json_object_has_member (json_sub_obj, "data_path"))
-        data_path = json_object_get_string_member (json_sub_obj, "data_path");
-
-      if (json_object_has_member (json_sub_obj, "bin32_path"))
-        bin32_path = json_object_get_string_member (json_sub_obj, "bin32_path");
-
-      if (json_object_has_member (json_sub_obj, "steamscript_path"))
-        steamscript_path = json_object_get_string_member (json_sub_obj, "steamscript_path");
-
-      if (json_object_has_member (json_sub_obj, "steamscript_version"))
-        steamscript_version = json_object_get_string_member (json_sub_obj, "steamscript_version");
+      install_path = json_object_get_string_member_with_default (json_sub_obj, "path", NULL);
+      data_path = json_object_get_string_member_with_default (json_sub_obj, "data_path", NULL);
+      bin32_path = json_object_get_string_member_with_default (json_sub_obj, "bin32_path", NULL);
+      steamscript_path = json_object_get_string_member_with_default (json_sub_obj,
+                                                                     "steamscript_path",
+                                                                     NULL);
+      steamscript_version = json_object_get_string_member_with_default (json_sub_obj,
+                                                                        "steamscript_version",
+                                                                        NULL);
     }
 
 out:

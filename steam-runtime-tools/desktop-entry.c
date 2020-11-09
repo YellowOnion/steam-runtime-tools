@@ -37,6 +37,7 @@
 #include "steam-runtime-tools/desktop-entry-internal.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 
 /**
@@ -427,20 +428,16 @@ _srt_get_steam_desktop_entries_from_json_report (JsonObject *json_obj)
           gboolean is_default = FALSE;
           gboolean is_steam_handler = FALSE;
           json_sub_obj = json_array_get_object_element (array, i);
-          if (json_object_has_member (json_sub_obj, "id"))
-            id = json_object_get_string_member (json_sub_obj, "id");
-
-          if (json_object_has_member (json_sub_obj, "commandline"))
-            commandline = json_object_get_string_member (json_sub_obj, "commandline");
-
-          if (json_object_has_member (json_sub_obj, "filename"))
-            filename = json_object_get_string_member (json_sub_obj, "filename");
-
-          if (json_object_has_member (json_sub_obj, "default_steam_uri_handler"))
-            is_default = json_object_get_boolean_member (json_sub_obj, "default_steam_uri_handler");
-
-          if (json_object_has_member (json_sub_obj, "steam_uri_handler"))
-            is_steam_handler = json_object_get_boolean_member (json_sub_obj, "steam_uri_handler");
+          id = json_object_get_string_member_with_default (json_sub_obj, "id", NULL);
+          commandline = json_object_get_string_member_with_default (json_sub_obj, "commandline",
+                                                                    NULL);
+          filename = json_object_get_string_member_with_default (json_sub_obj, "filename", NULL);
+          is_default = json_object_get_boolean_member_with_default (json_sub_obj,
+                                                                    "default_steam_uri_handler",
+                                                                    FALSE);
+          is_steam_handler = json_object_get_boolean_member_with_default (json_sub_obj,
+                                                                          "steam_uri_handler",
+                                                                          FALSE);
 
           desktop_entries = g_list_prepend (desktop_entries, _srt_desktop_entry_new (id,
                                                                                      commandline,

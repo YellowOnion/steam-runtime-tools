@@ -28,6 +28,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/locale-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -378,31 +379,23 @@ _srt_locale_get_locale_from_report (JsonObject *json_obj,
   const gchar *resulting_name = NULL;
   const gchar *charset = NULL;
   gboolean is_utf8 = FALSE;
-  GQuark error_domain = 0;
-  gint error_code = -1;
-  const gchar *error_message = "(missing error message)";
+  GQuark error_domain;
+  gint error_code;
+  const gchar *error_message;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
   g_return_val_if_fail (requested_name != NULL, NULL);
   g_return_val_if_fail (error != NULL && *error == NULL, NULL);
 
-  if (json_object_has_member (json_obj, "resulting-name"))
-    resulting_name = json_object_get_string_member (json_obj, "resulting-name");
-
-  if (json_object_has_member (json_obj, "charset"))
-    charset = json_object_get_string_member (json_obj, "charset");
-
-  if (json_object_has_member (json_obj, "is_utf8"))
-    is_utf8 = json_object_get_boolean_member (json_obj, "is_utf8");
-
-  if (json_object_has_member (json_obj, "error-domain"))
-    error_domain = g_quark_from_string (json_object_get_string_member (json_obj, "error-domain"));
-
-  if (json_object_has_member (json_obj, "error-code"))
-    error_code = json_object_get_int_member (json_obj, "error-code");
-
-  if (json_object_has_member (json_obj, "error"))
-    error_message = json_object_get_string_member (json_obj, "error");
+  resulting_name = json_object_get_string_member_with_default (json_obj, "resulting-name", NULL);
+  charset = json_object_get_string_member_with_default (json_obj, "charset", NULL);
+  is_utf8 = json_object_get_boolean_member_with_default (json_obj, "is_utf8", FALSE);
+  error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_obj,
+                                                                                  "error-domain",
+                                                                                  NULL));
+  error_code = json_object_get_int_member_with_default (json_obj, "error-code", -1);
+  error_message = json_object_get_string_member_with_default (json_obj, "error",
+                                                              "(missing error message)");
 
   if (resulting_name != NULL && charset != NULL)
     {

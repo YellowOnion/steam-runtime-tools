@@ -29,6 +29,7 @@
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -1486,9 +1487,8 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
           const gchar *messages = NULL;
           const gchar *renderer = NULL;
           const gchar *version = NULL;
-          /* A missing exit_status means that its value is the default zero */
-          int exit_status = 0;
-          int terminating_signal = 0;
+          int exit_status;
+          int terminating_signal;
           SrtGraphics *graphics;
           SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
           SrtGraphicsIssues graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
@@ -1531,14 +1531,12 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
               continue;
             }
 
-          if (json_object_has_member (json_stack_obj, "messages"))
-            messages = json_object_get_string_member (json_stack_obj, "messages");
-
-          if (json_object_has_member (json_stack_obj, "renderer"))
-            renderer = json_object_get_string_member (json_stack_obj, "renderer");
-
-          if (json_object_has_member (json_stack_obj, "version"))
-            version = json_object_get_string_member (json_stack_obj, "version");
+          messages = json_object_get_string_member_with_default (json_stack_obj, "messages",
+                                                                 NULL);
+          renderer = json_object_get_string_member_with_default (json_stack_obj, "renderer",
+                                                                 NULL);
+          version = json_object_get_string_member_with_default (json_stack_obj, "version",
+                                                                NULL);
 
           /* In graphics, a missing "issues" array means that no issues were found */
           if (json_object_has_member (json_stack_obj, "issues"))
@@ -1565,11 +1563,11 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
                 }
             }
 
-          if (json_object_has_member (json_stack_obj, "exit-status"))
-            exit_status = json_object_get_int_member (json_stack_obj, "exit-status");
-
-          if (json_object_has_member (json_stack_obj, "terminating-signal"))
-            terminating_signal = json_object_get_int_member (json_stack_obj, "terminating-signal");
+          /* A missing exit_status means that its value is the default zero */
+          exit_status = json_object_get_int_member_with_default (json_stack_obj, "exit-status", 0);
+          terminating_signal = json_object_get_int_member_with_default (json_stack_obj,
+                                                                        "terminating-signal",
+                                                                        0);
 
           if (json_object_has_member (json_stack_obj, "library-vendor"))
             {
@@ -2848,11 +2846,10 @@ _srt_dri_driver_get_from_report (JsonObject *json_obj)
           const gchar *dri_path = NULL;
           gboolean is_extra = FALSE;
           JsonObject *json_dri_obj = json_array_get_object_element (array, j);
-          if (json_object_has_member (json_dri_obj, "library_path"))
-            dri_path = json_object_get_string_member (json_dri_obj, "library_path");
-
-          if (json_object_has_member (json_dri_obj, "is_extra"))
-            is_extra = json_object_get_boolean_member (json_dri_obj, "is_extra");
+          dri_path = json_object_get_string_member_with_default (json_dri_obj, "library_path",
+                                                                 NULL);
+          is_extra = json_object_get_boolean_member_with_default (json_dri_obj, "is_extra",
+                                                                  FALSE);
 
           dri_drivers = g_list_prepend (dri_drivers, srt_dri_driver_new (dri_path, is_extra));
         }
@@ -4035,11 +4032,12 @@ _srt_va_api_driver_get_from_report (JsonObject *json_obj)
           const gchar *va_api_path = NULL;
           gboolean is_extra = FALSE;
           JsonObject *json_va_api_obj = json_array_get_object_element (array, j);
-          if (json_object_has_member (json_va_api_obj, "library_path"))
-            va_api_path = json_object_get_string_member (json_va_api_obj, "library_path");
-
-          if (json_object_has_member (json_va_api_obj, "is_extra"))
-            is_extra = json_object_get_boolean_member (json_va_api_obj, "is_extra");
+          va_api_path = json_object_get_string_member_with_default (json_va_api_obj,
+                                                                    "library_path",
+                                                                    NULL);
+          is_extra = json_object_get_boolean_member_with_default (json_va_api_obj,
+                                                                  "is_extra",
+                                                                  FALSE);
 
           va_api_drivers = g_list_prepend (va_api_drivers, srt_va_api_driver_new (va_api_path, is_extra));
         }
@@ -4325,14 +4323,12 @@ _srt_vdpau_driver_get_from_report (JsonObject *json_obj)
           const gchar *vdpau_link = NULL;
           gboolean is_extra = FALSE;
           JsonObject *json_vdpau_obj = json_array_get_object_element (array, j);
-          if (json_object_has_member (json_vdpau_obj, "library_path"))
-            vdpau_path = json_object_get_string_member (json_vdpau_obj, "library_path");
-
-          if (json_object_has_member (json_vdpau_obj, "library_link"))
-            vdpau_link = json_object_get_string_member (json_vdpau_obj, "library_link");
-
-          if (json_object_has_member (json_vdpau_obj, "is_extra"))
-            is_extra = json_object_get_boolean_member (json_vdpau_obj, "is_extra");
+          vdpau_path = json_object_get_string_member_with_default (json_vdpau_obj, "library_path",
+                                                                   NULL);
+          vdpau_link = json_object_get_string_member_with_default (json_vdpau_obj, "library_link",
+                                                                   NULL);
+          is_extra = json_object_get_boolean_member_with_default (json_vdpau_obj, "is_extra",
+                                                                  FALSE);
 
           vdpau_drivers = g_list_prepend (vdpau_drivers, srt_vdpau_driver_new (vdpau_path, vdpau_link, is_extra));
         }
@@ -5039,9 +5035,9 @@ get_driver_icds_from_json_report (JsonObject *json_obj,
               const gchar *json_path = NULL;
               const gchar *library_path = NULL;
               const gchar *api_version = NULL;
-              GQuark error_domain = 0;
-              gint error_code = -1;
-              const gchar *error_message = "(missing error message)";
+              GQuark error_domain;
+              gint error_code;
+              const gchar *error_message;
               GError *icd_error = NULL;
               JsonObject *json_icd_obj = json_array_get_object_element (array, i);
               if (json_object_has_member (json_icd_obj, "json_path"))
@@ -5052,21 +5048,19 @@ get_driver_icds_from_json_report (JsonObject *json_obj,
                   continue;
                 }
 
-              if (json_object_has_member (json_icd_obj, "library_path"))
-                library_path = json_object_get_string_member (json_icd_obj, "library_path");
-
-              if (json_object_has_member (json_icd_obj, "api_version"))
-                api_version = json_object_get_string_member (json_icd_obj, "api_version");
-
-              if (json_object_has_member (json_icd_obj, "error-domain"))
-                error_domain = g_quark_from_string (json_object_get_string_member (json_icd_obj,
-                                                                                   "error-domain"));
-
-              if (json_object_has_member (json_icd_obj, "error-code"))
-                error_code = json_object_get_int_member (json_icd_obj, "error-code");
-
-              if (json_object_has_member (json_icd_obj, "error"))
-                error_message = json_object_get_string_member (json_icd_obj, "error");
+              library_path = json_object_get_string_member_with_default (json_icd_obj,
+                                                                         "library_path",
+                                                                         NULL);
+              api_version = json_object_get_string_member_with_default (json_icd_obj,
+                                                                        "api_version",
+                                                                        NULL);
+              error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_icd_obj,
+                                                                                              "error-domain",
+                                                                                              NULL));
+              error_code = json_object_get_int_member_with_default (json_icd_obj, "error-code", -1);
+              error_message = json_object_get_string_member_with_default (json_icd_obj,
+                                                                          "error",
+                                                                          "(missing error message)");
 
               if (library_path != NULL)
                 {
@@ -5315,11 +5309,10 @@ _srt_glx_icd_get_from_report (JsonObject *json_obj)
           const gchar *glx_path = NULL;
           const gchar *glx_soname = NULL;
           JsonObject *json_glx_obj = json_array_get_object_element (array, j);
-          if (json_object_has_member (json_glx_obj, "library_path"))
-            glx_path = json_object_get_string_member (json_glx_obj, "library_path");
-
-          if (json_object_has_member (json_glx_obj, "library_soname"))
-            glx_soname = json_object_get_string_member (json_glx_obj, "library_soname");
+          glx_path = json_object_get_string_member_with_default (json_glx_obj, "library_path",
+                                                                 NULL);
+          glx_soname = json_object_get_string_member_with_default (json_glx_obj, "library_soname",
+                                                                   NULL);
 
           glx_drivers = g_list_prepend (glx_drivers, srt_glx_icd_new (glx_soname, glx_path));
         }

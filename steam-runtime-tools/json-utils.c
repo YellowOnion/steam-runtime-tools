@@ -84,9 +84,9 @@ out:
  * @json_obj: (not nullable): A JSON Object used to search for
  *  @array_member property
  * @array_member: (not nullable): The JSON member to look up
- *
- * Every %NULL or non string members of the array are replaced with the value
- * "<invalid>".
+ * @placeholder: (nullable): If an item in the array is not a string,
+ *  substitute this non-%NULL value; or if %NULL, behave as though it
+ *  was not present
  *
  * Returns: (transfer full) (array zero-terminated=1) (element-type utf8) (nullable):
  *  A string array from the given @json_obj, or %NULL if it doesn't have a
@@ -94,7 +94,8 @@ out:
  */
 gchar **
 _srt_json_object_dup_strv_member (JsonObject *json_obj,
-                                  const gchar *array_member)
+                                  const gchar *array_member,
+                                  const gchar *placeholder)
 {
   JsonArray *array;
   guint length;
@@ -106,20 +107,30 @@ _srt_json_object_dup_strv_member (JsonObject *json_obj,
 
   if (json_object_has_member (json_obj, array_member))
     {
+      guint j = 0;
+
       array = json_object_get_array_member (json_obj, array_member);
       if (array == NULL)
         return ret;
 
       length = json_array_get_length (array);
       ret = g_new0 (gchar *, length + 1);
+
       for (guint i = 0; i < length; i++)
         {
           element = json_array_get_string_element (array, i);
+
           if (element == NULL)
-            element = "<invalid>";
-          ret[i] = g_strdup (element);
+            element = placeholder;
+
+          if (element == NULL)
+            continue;
+
+          ret[j++] = g_strdup (element);
         }
-      ret[length] = NULL;
+
+      g_assert (j <= length);
+      ret[j] = NULL;
     }
 
   return ret;

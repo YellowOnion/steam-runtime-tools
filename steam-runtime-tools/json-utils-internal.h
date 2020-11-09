@@ -41,4 +41,5 @@ guint srt_get_flags_from_json_array (GType flags_type,
                                      guint flag_if_unknown);
 
 gchar ** _srt_json_object_dup_strv_member (JsonObject *json_obj,
-                                           const gchar *array_member);
+                                           const gchar *array_member,
+                                           const gchar *placeholder);

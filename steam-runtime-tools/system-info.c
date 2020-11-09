@@ -1349,9 +1349,9 @@ _srt_system_info_get_pinned_libs_from_report (JsonObject *json_obj,
     {
       json_pinned_obj = json_object_get_object_member (json_obj, which);
 
-      pinned_list = _srt_json_array_to_strv (json_pinned_obj, "list");
+      pinned_list = _srt_json_object_dup_strv_member (json_pinned_obj, "list");
 
-      *messages = _srt_json_array_to_strv (json_pinned_obj, "messages");
+      *messages = _srt_json_object_dup_strv_member (json_pinned_obj, "messages");
     }
 
   return pinned_list;
@@ -3232,7 +3232,7 @@ srt_system_info_list_driver_environment (SrtSystemInfo *self)
 static gchar **
 _srt_system_info_driver_environment_from_report (JsonObject *json_obj)
 {
-  return _srt_json_array_to_strv (json_obj, "driver_environment");
+  return _srt_json_object_dup_strv_member (json_obj, "driver_environment");
 }
 
 typedef struct

@@ -80,7 +80,7 @@ out:
 }
 
 /**
- * _srt_json_array_to_strv:
+ * _srt_json_object_dup_strv_member:
  * @json_obj: (not nullable): A JSON Object used to search for
  *  @array_member property
  * @array_member: (not nullable): The JSON member to look up
@@ -93,8 +93,8 @@ out:
  *  property @array_member
  */
 gchar **
-_srt_json_array_to_strv (JsonObject *json_obj,
-                         const gchar *array_member)
+_srt_json_object_dup_strv_member (JsonObject *json_obj,
+                                  const gchar *array_member)
 {
   JsonArray *array;
   guint length;

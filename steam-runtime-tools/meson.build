@@ -82,6 +82,10 @@ install_headers(
   subdir : join_paths('steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
 )
 
+libsteamrt_generated_headers_dep = declare_dependency(
+  include_directories : project_include_dirs,
+  sources : [enums[1]],
+)
 libsteamrt_static = static_library(
   'steam-runtime-tools-internal',
   libsteamrt_sources + libsteamrt_public_headers + enums,
@@ -101,6 +105,7 @@ libsteamrt_static = static_library(
     gobject,
     libglnx_dep,
     json_glib,
+    libsteamrt_generated_headers_dep,
   ],
   install : false,
 )
@@ -115,6 +120,7 @@ libsteamrt = library(
     gobject,
     libglnx_dep,
     json_glib,
+    libsteamrt_generated_headers_dep,
   ],
   objects : [libsteamrt_static.extract_all_objects()],
   soversion : abi_major,
@@ -130,14 +136,14 @@ pkg.generate(
   version : meson.project_version(),
 )
 libsteamrt_dep = declare_dependency(
+  dependencies : libsteamrt_generated_headers_dep,
   include_directories : project_include_dirs,
   link_with : libsteamrt,
-  sources : libsteamrt_public_headers + [enums[1]],
 )
 libsteamrt_static_dep = declare_dependency(
+  dependencies : libsteamrt_generated_headers_dep,
   include_directories : project_include_dirs,
   link_with : libsteamrt_static,
-  sources : libsteamrt_public_headers + [enums[1]],
 )
 
 if get_option('introspection')

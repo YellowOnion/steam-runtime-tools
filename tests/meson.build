@@ -57,6 +57,7 @@ test_utils = static_library(
     gio_unix,
     json_glib,
     libglnx_dep,
+    libsteamrt_generated_headers_dep,
   ],
   include_directories : project_include_dirs,
   install: false,

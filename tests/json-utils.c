@@ -66,6 +66,7 @@ test_dup_strv_member (Fixture *f,
   g_autoptr(JsonObject) obj = json_object_new ();
   g_autoptr(JsonObject) empty = json_object_new ();
   g_auto(GStrv) missing = NULL;
+  g_auto(GStrv) not_array = NULL;
   g_auto(GStrv) with_placeholder = NULL;
   g_auto(GStrv) without_placeholder = NULL;
 
@@ -75,9 +76,13 @@ test_dup_strv_member (Fixture *f,
   json_array_add_string_element (arr, "four");
   json_node_init_array (arr_node, arr);
   json_object_set_member (obj, "arr", g_steal_pointer (&arr_node));
+  json_object_set_double_member (obj, "not-array", 42.0);
 
   missing = _srt_json_object_dup_strv_member (obj, "missing", NULL);
   g_assert_null (missing);
+
+  not_array = _srt_json_object_dup_strv_member (obj, "not-array", NULL);
+  g_assert_null (not_array);
 
   with_placeholder = _srt_json_object_dup_strv_member (obj, "arr", "?!");
   g_assert_nonnull (with_placeholder);

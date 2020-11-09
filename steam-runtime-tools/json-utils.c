@@ -98,17 +98,21 @@ _srt_json_object_dup_strv_member (JsonObject *json_obj,
                                   const gchar *placeholder)
 {
   JsonArray *array;
+  JsonNode *arr_node;
   guint length;
   gchar **ret = NULL;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
   g_return_val_if_fail (array_member != NULL, NULL);
 
-  if (json_object_has_member (json_obj, array_member))
+  arr_node = json_object_get_member (json_obj, array_member);
+
+  if (arr_node != NULL && JSON_NODE_HOLDS_ARRAY (arr_node))
     {
       guint j = 0;
 
-      array = json_object_get_array_member (json_obj, array_member);
+      array = json_node_get_array (arr_node);
+
       if (array == NULL)
         return ret;
 

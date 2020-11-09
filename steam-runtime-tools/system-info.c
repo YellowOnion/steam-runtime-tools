@@ -25,9 +25,10 @@
 
 #include "steam-runtime-tools/system-info.h"
 
-/* Include this at the beginning so that every backports of
+/* Include these at the beginning so that every backports of
  * G_DEFINE_AUTOPTR_CLEANUP_FUNC will be visible */
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
@@ -621,8 +622,9 @@ srt_system_info_new_from_json (const char *path,
 
   json_obj = json_node_get_object (node);
 
-  if (json_object_has_member (json_obj, "can-write-uinput"))
-    info->can_write_uinput = json_object_get_boolean_member (json_obj, "can-write-uinput");
+  info->can_write_uinput = json_object_get_boolean_member_with_default (json_obj,
+                                                                        "can-write-uinput",
+                                                                        FALSE);
 
   info->steam_data = _srt_steam_get_from_report (json_obj);
 
@@ -631,11 +633,13 @@ srt_system_info_new_from_json (const char *path,
     {
       json_sub_obj = json_object_get_object_member (json_obj, "runtime");
 
-      if (json_object_has_member (json_sub_obj, "path"))
-        info->runtime.path = g_strdup (json_object_get_string_member (json_sub_obj, "path"));
+      info->runtime.path = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                                 "path",
+                                                                                 NULL));
 
-      if (json_object_has_member (json_sub_obj, "version"))
-        info->runtime.version = g_strdup (json_object_get_string_member (json_sub_obj, "version"));
+      info->runtime.version = g_strdup (json_object_get_string_member_with_default (json_sub_obj,
+                                                                                    "version",
+                                                                                    NULL));
 
       info->pinned_libs.have_data = TRUE;
 
@@ -3444,8 +3448,8 @@ _srt_system_info_get_container_info_from_report (JsonObject *json_obj,
       if (json_object_has_member (json_sub_obj, "host"))
         {
           json_host_obj = json_object_get_object_member (json_sub_obj, "host");
-          if (json_object_has_member (json_host_obj, "path"))
-            *host_path = g_strdup (json_object_get_string_member (json_host_obj, "path"));
+          *host_path = g_strdup (json_object_get_string_member_with_default (json_host_obj, "path",
+                                                                             NULL));
         }
     }
 

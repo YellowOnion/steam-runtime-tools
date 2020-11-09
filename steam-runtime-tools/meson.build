@@ -32,6 +32,8 @@ libsteamrt_sources = [
     'glib-backports-internal.h',
     'graphics-internal.h',
     'graphics.c',
+    'json-glib-backports.c',
+    'json-glib-backports-internal.h',
     'library-internal.h',
     'library.c',
     'locale-internal.h',

@@ -27,6 +27,7 @@
 #include "steam-runtime-tools/architecture-internal.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -174,12 +175,7 @@ srt_architecture_can_run_x86_64 (void)
 gboolean
 _srt_architecture_can_run_from_report (JsonObject *json_obj)
 {
-  gboolean can_run = FALSE;
-
   g_return_val_if_fail (json_obj != NULL, FALSE);
 
-  if (json_object_has_member (json_obj, "can-run"))
-    can_run = json_object_get_boolean_member (json_obj, "can-run");
-
-  return can_run;
+  return json_object_get_boolean_member_with_default (json_obj, "can-run", FALSE);
 }

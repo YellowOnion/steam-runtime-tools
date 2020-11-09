@@ -33,7 +33,7 @@
 #include <json-glib/json-glib.h>
 
 #include <steam-runtime-tools/glib-backports-internal.h>
-#include <steam-runtime-tools/json-glib-compat.h>
+#include <steam-runtime-tools/json-glib-backports-internal.h>
 #include <steam-runtime-tools/utils-internal.h>
 
 #if !GLIB_CHECK_VERSION(2, 43, 4)

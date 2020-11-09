@@ -27,7 +27,7 @@
 
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "steam-runtime-tools/json-glib-compat.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/xdg-portal-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -736,8 +736,7 @@ _srt_xdg_portal_get_info_from_report (JsonObject *json_obj)
                                           "issues",
                                           SRT_XDG_PORTAL_ISSUES_UNKNOWN);
 
-  if (json_object_has_member (json_portals_obj, "messages"))
-    messages = json_object_get_string_member (json_portals_obj, "messages");
+  messages = json_object_get_string_member_with_default (json_portals_obj, "messages", NULL);
 
   if (!json_object_has_member (json_portals_obj, "details"))
     return _srt_xdg_portal_new (messages, issues, NULL, NULL);
@@ -751,13 +750,11 @@ _srt_xdg_portal_get_info_from_report (JsonObject *json_obj)
       for (const GList *l = interfaces_members; l != NULL; l = l->next)
         {
           gboolean available = FALSE;
-          gint64 version = 0;
+          gint64 version;
           JsonObject *json_portal_obj = json_object_get_object_member (json_interfaces_obj, l->data);
-          if (json_object_has_member (json_portal_obj, "available"))
-            available = json_object_get_boolean_member (json_portal_obj, "available");
-
-          if (json_object_has_member (json_portal_obj, "version"))
-            version = json_object_get_int_member (json_portal_obj, "version");
+          available = json_object_get_boolean_member_with_default (json_portal_obj, "available",
+                                                                   FALSE);
+          version = json_object_get_int_member_with_default (json_portal_obj, "version", 0);
 
           g_ptr_array_add (interfaces,
                            _srt_xdg_portal_interface_new (l->data, available, version));
@@ -772,8 +769,8 @@ _srt_xdg_portal_get_info_from_report (JsonObject *json_obj)
         {
           gboolean available = FALSE;
           JsonObject *json_portal_obj = json_object_get_object_member (json_backends_obj, l->data);
-          if (json_object_has_member (json_portal_obj, "available"))
-            available = json_object_get_boolean_member (json_portal_obj, "available");
+          available = json_object_get_boolean_member_with_default (json_portal_obj, "available",
+                                                                   FALSE);
 
           g_ptr_array_add (backends, _srt_xdg_portal_backend_new (l->data, available));
         }

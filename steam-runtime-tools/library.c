@@ -28,6 +28,7 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -777,10 +778,8 @@ _srt_check_library_presence (const char *helpers_path,
     }
   json = json_object_get_object_member (json, requested_name);
 
-  absolute_path = g_strdup (json_object_get_string_member (json, "path"));
-
-  if (json_object_has_member (json, "SONAME"))
-    real_soname = g_strdup (json_object_get_string_member (json, "SONAME"));
+  absolute_path = g_strdup (json_object_get_string_member_with_default (json, "path", NULL));
+  real_soname = g_strdup (json_object_get_string_member_with_default (json, "SONAME", NULL));
 
   if (json_object_has_member (json, "missing_symbols"))
     missing_array = json_object_get_array_member (json, "missing_symbols");

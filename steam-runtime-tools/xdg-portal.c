@@ -28,6 +28,7 @@
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/json-glib-backports-internal.h"
+#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/xdg-portal-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"

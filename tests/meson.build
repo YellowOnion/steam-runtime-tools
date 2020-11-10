@@ -31,6 +31,7 @@ tests = [
   {'name': 'architecture'},
   {'name': 'desktop-entry'},
   {'name': 'graphics'},
+  {'name': 'json-utils', 'static': true},
   {'name': 'library'},
   {'name': 'locale'},
   {'name': 'system-info'},

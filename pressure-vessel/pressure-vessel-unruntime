@@ -69,6 +69,10 @@ unset STEAM_RUNTIME
 
 if [ -n "${SYSTEM_LD_LIBRARY_PATH+set}" ]; then
     options+=("--env-if-host=SYSTEM_LD_LIBRARY_PATH=$SYSTEM_LD_LIBRARY_PATH")
+    # This has been superseeded by the new $PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
+    # environment variable. When we are sure that we are always using the new
+    # _v2-entry-point with $PRESSURE_VESSEL_APP_LD_LIBRARY_PATH support, the
+    # following export can be removed
     export LD_LIBRARY_PATH="$SYSTEM_LD_LIBRARY_PATH"
 fi
 
@@ -89,6 +93,13 @@ fi
 unset SYSTEM_LD_LIBRARY_PATH
 unset SYSTEM_LD_PRELOAD
 unset SYSTEM_PATH
+
+if [ -n "${PRESSURE_VESSEL_APP_LD_LIBRARY_PATH+set}" ]; then
+    options+=("--env-if-host=PRESSURE_VESSEL_APP_LD_LIBRARY_PATH=$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH")
+    export LD_LIBRARY_PATH="$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH"
+fi
+
+unset PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
 
 old_IFS="$IFS"
 IFS=":"

@@ -786,8 +786,8 @@ _argv_for_list_glx_icds_in_path (const char *helpers_path,
  * This function returns %SRT_GRAPHICS_DRIVER_VENDOR_GLVND.
  *
  * For older GLX and EGL graphics stacks, the entry-point library libGL.so.1 or libEGL.so.1
- * is part of a particular vendor's graphics library, usually Mesa or NVIDIA. This function
- * attempts to determine which one.
+ * is part of a particular vendor's graphics library, usually Mesa, NVIDIA or Primus. This
+ * function attempts to determine which one.
  *
  * For Vulkan the entry-point library libvulkan.so.1 is always vendor-neutral
  * (similar to GLVND), so this function is not useful. It always returns
@@ -808,6 +808,8 @@ _srt_check_library_vendor (gchar **envp,
   SrtLibrary *library = NULL;
   SrtLibraryIssues issues;
   const char * const *dependencies;
+  gboolean have_libstdc_deps = FALSE;
+  gboolean have_libxcb_deps = FALSE;
 
   g_return_val_if_fail (envp != NULL, SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN);
 
@@ -858,6 +860,21 @@ _srt_check_library_vendor (gchar **envp,
           library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA;
           break;
         }
+      if (strstr (dependencies[i], "/libstdc++.so.") != NULL)
+        {
+          have_libstdc_deps = TRUE;
+        }
+      if (strstr (dependencies[i], "/libxcb.so.") != NULL)
+        {
+          have_libxcb_deps = TRUE;
+        }
+    }
+
+  if (library_vendor == SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND &&
+      have_libstdc_deps &&
+      !have_libxcb_deps)
+    {
+      library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_PRIMUS;
     }
 
 out:

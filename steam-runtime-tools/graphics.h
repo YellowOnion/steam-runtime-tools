@@ -86,6 +86,7 @@ typedef enum
  *  but the exact vendor is unknown
  * @SRT_GRAPHICS_LIBRARY_VENDOR_MESA: The graphics driver is the mesa non-GLVND
  * @SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA: The graphics driver is the Nvidia non-GLVND
+ * @SRT_GRAPHICS_LIBRARY_VENDOR_PRIMUS: The graphics driver is the Primus non-GLVND
  */
 typedef enum
 {
@@ -94,6 +95,7 @@ typedef enum
   SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN_NON_GLVND,
   SRT_GRAPHICS_LIBRARY_VENDOR_MESA,
   SRT_GRAPHICS_LIBRARY_VENDOR_NVIDIA,
+  SRT_GRAPHICS_LIBRARY_VENDOR_PRIMUS,
 } SrtGraphicsLibraryVendor;
 
 /**

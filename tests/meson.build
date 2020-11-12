@@ -31,6 +31,15 @@ tests = [
   {'name': 'architecture'},
   {'name': 'desktop-entry'},
   {'name': 'graphics'},
+  {
+    'name': 'input-device',
+    'static': true,
+    'sources': [
+      'input-device.c',
+      'mock-input-device.c',
+      'mock-input-device.h',
+    ],
+  },
   {'name': 'json-utils', 'static': true},
   {'name': 'library'},
   {'name': 'locale'},
@@ -104,6 +113,7 @@ install_subdir('expectations_with_missings', install_dir : tests_dir)
 # Vulkan *.json files. (The order of EGL *.json files is well-defined.)
 install_subdir('fake-icds', install_dir : tests_dir)
 install_subdir('fake-steam-runtime', install_dir : tests_dir)
+install_subdir('input-monitor-output', install_dir : tests_dir)
 install_subdir('json-report', install_dir : tests_dir)
 
 meson.add_postconf_script(
@@ -153,9 +163,11 @@ foreach test_info : tests
     deps = [libsteamrt_dep, test_utils_dep]
   endif
 
+  sources = test_info.get('sources', files(test_name + '.c'))
+
   exe = executable(
     'test-' + test_name,
-    files(test_name + '.c'),
+    sources,
     c_args : [
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],

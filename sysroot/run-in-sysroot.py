@@ -110,6 +110,8 @@ def main():
         '--tmpfs', '/tmp',
         '--tmpfs', '/var/tmp',
         '--tmpfs', '/home',
+        '--tmpfs', '/run',
+        '--tmpfs', '/run/host',
         '--bind', abs_srcdir, abs_srcdir,
         '--bind', abs_builddir, abs_builddir,
     ]

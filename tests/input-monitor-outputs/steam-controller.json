@@ -1,0 +1,155 @@
+{
+  "added" : {
+    "interface_flags" : [
+      "event"
+    ],
+    "type_flags" : [
+      "keyboard",
+      "has-keys",
+      "mouse"
+    ],
+    "dev_node" : "/dev/input/event20",
+    "subsystem" : "input",
+    "sys_path" : "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD/input/input308/event20",
+    "bus_type" : "0x0003",
+    "vendor_id" : "0x28de",
+    "product_id" : "0x1142",
+    "version" : "0x0111",
+    "evdev" : {
+      "types" : [
+        "SYN",
+        "KEY",
+        "REL",
+        "MSC",
+        "LED",
+        "REP"
+      ],
+      "raw_types" : "17 00 12 00 00 00 00 00  ",
+      "absolute_axes" : [],
+      "raw_abs" : "00 00 00 00 00 00 00 00  ",
+      "relative_axes" : [
+        "X",
+        "Y",
+        "WHEEL",
+        "WHEEL_HI_RES"
+      ],
+      "raw_rel" : "03 09 00 00 00 00 00 00  ",
+      "keys" : [
+        "KEY_ESC",
+        "KEY_0",
+        "KEY_A",
+        "KEY_KP0",
+        "BTN_MOUSE",
+        "BTN_RIGHT",
+        "BTN_MIDDLE",
+        "BTN_SIDE",
+        "BTN_EXTRA"
+      ],
+      "raw_keys" : "fe ff ff ff ff ff ff ff  ff ff cf 01 df ff 80 e0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 1f 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ",
+      "input_properties" : [],
+      "raw_input_properties" : "00 00 00 00 00 00 00 00  ",
+      "guessed_type_flags" : [
+        "keyboard",
+        "has-keys",
+        "mouse"
+      ]
+    },
+    "udev_properties" : [
+      "BACKSPACE=guess",
+      "DEVLINKS=/dev/input/by-id/usb-Valve_Software_Steam_Controller-event-mouse /dev/input/by-path/pci-0000:00:14.0-usb-0:1.1:1.0-event-mouse",
+      "DEVNAME=/dev/input/event20",
+      "DEVPATH=/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD/input/input308/event20",
+      "ID_BUS=usb",
+      "ID_INPUT=1",
+      "ID_INPUT_KEY=1",
+      "ID_INPUT_KEYBOARD=1",
+      "ID_INPUT_MOUSE=1",
+      "ID_MODEL=Steam_Controller",
+      "ID_MODEL_ENC=Steam\\x20Controller",
+      "ID_MODEL_ID=1142",
+      "ID_PATH=pci-0000:00:14.0-usb-0:1.1:1.0",
+      "ID_PATH_TAG=pci-0000_00_14_0-usb-0_1_1_1_0",
+      "ID_REVISION=0001",
+      "ID_SERIAL=Valve_Software_Steam_Controller",
+      "ID_TYPE=hid",
+      "ID_USB_DRIVER=usbhid",
+      "ID_USB_INTERFACES=:030101:030000:",
+      "ID_USB_INTERFACE_NUM=00",
+      "ID_VENDOR=Valve_Software",
+      "ID_VENDOR_ENC=Valve\\x20Software",
+      "ID_VENDOR_ID=28de",
+      "LIBINPUT_DEVICE_GROUP=3/28de/1142:usb-0000:00:14.0-1",
+      "MAJOR=13",
+      "MINOR=84",
+      "SUBSYSTEM=input",
+      "TAGS=:power-switch:",
+      "USEC_INITIALIZED=1162877255953",
+      "XKBLAYOUT=gb",
+      "XKBMODEL=pc105"
+    ],
+    "uevent" : [
+      "MAJOR=13",
+      "MINOR=84",
+      "DEVNAME=input/event20"
+    ],
+    "hid_ancestor" : {
+      "sys_path" : "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD",
+      "name" : "Valve Software Steam Controller",
+      "bus_type" : "0x0003",
+      "vendor_id" : "0x28de",
+      "product_id" : "0x1142",
+      "uniq" : "",
+      "phys" : "usb-0000:00:14.0-1.1/input0",
+      "uevent" : [
+        "DRIVER=hid-steam",
+        "HID_ID=0003:000028DE:00001142",
+        "HID_NAME=Valve Software Steam Controller",
+        "HID_PHYS=usb-0000:00:14.0-1.1/input0",
+        "HID_UNIQ=",
+        "MODALIAS=hid:b0003g0001v000028DEp00001142"
+      ]
+    },
+    "input_ancestor" : {
+      "sys_path" : "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1/1-1.1:1.0/0003:28DE:1142.00DD/input/input308",
+      "name" : "Valve Software Steam Controller",
+      "bus_type" : "0x0003",
+      "vendor_id" : "0x28de",
+      "product_id" : "0x1142",
+      "version" : "0x0111",
+      "phys" : "usb-0000:00:14.0-1.1/input0",
+      "uevent" : [
+        "PRODUCT=3/28de/1142/111",
+        "NAME=\"Valve Software Steam Controller\"",
+        "PHYS=\"usb-0000:00:14.0-1.1/input0\"",
+        "UNIQ=\"\"",
+        "PROP=0",
+        "EV=120017",
+        "KEY=1f0000 0 0 e080ffdf01cfffff fffffffffffffffe",
+        "REL=903",
+        "MSC=10",
+        "LED=1f",
+        "MODALIAS=input:b0003v28DEp1142e0111-e0,1,2,4,11,14,k77,7D,7E,7F,110,111,112,113,114,r0,1,8,B,am4,l0,1,2,3,4,sfw"
+      ]
+    },
+    "usb_device_ancestor" : {
+      "sys_path" : "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1.1",
+      "vendor_id" : "0x28de",
+      "product_id" : "0x1142",
+      "version" : "0x0001",
+      "manufacturer" : "Valve Software",
+      "product" : "Steam Controller",
+      "serial" : null,
+      "uevent" : [
+        "MAJOR=189",
+        "MINOR=66",
+        "DEVNAME=bus/usb/001/067",
+        "DEVTYPE=usb_device",
+        "DRIVER=usb",
+        "PRODUCT=28de/1142/1",
+        "TYPE=0/0/0",
+        "BUSNUM=001",
+        "DEVNUM=067"
+      ]
+    }
+  }
+}

@@ -29,6 +29,7 @@
 #include <glib/gstdio.h>
 #include <glib-object.h>
 
+#include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "test-utils.h"
 
@@ -77,6 +78,88 @@ test_avoid_gvfs (Fixture *f,
                    G_OBJECT_TYPE_NAME (local));
   g_assert_cmpuint (G_OBJECT_TYPE (vfs), ==,
                     G_OBJECT_TYPE (local));
+}
+
+static void
+test_evdev_bits (Fixture *f,
+                 gconstpointer context)
+{
+  unsigned long words[] = { 0x00020001, 0x00080005 };
+
+#ifdef __i386__
+  g_assert_cmpuint (BITS_PER_LONG, ==, 32);
+  g_assert_cmpuint (LONGS_FOR_BITS (1), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (32), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (33), ==, 2);
+  g_assert_cmpuint (CHOOSE_BIT (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (31), ==, 31);
+  g_assert_cmpuint (CHOOSE_BIT (32), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (33), ==, 1);
+  g_assert_cmpuint (CHOOSE_BIT (63), ==, 31);
+  g_assert_cmpuint (CHOOSE_BIT (64), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (31), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (32), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (33), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (63), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (64), ==, 2);
+#elif defined(__LP64__)
+  g_assert_cmpuint (BITS_PER_LONG, ==, 64);
+  g_assert_cmpuint (LONGS_FOR_BITS (1), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (64), ==, 1);
+  g_assert_cmpuint (LONGS_FOR_BITS (65), ==, 2);
+  g_assert_cmpuint (CHOOSE_BIT (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (63), ==, 63);
+  g_assert_cmpuint (CHOOSE_BIT (64), ==, 0);
+  g_assert_cmpuint (CHOOSE_BIT (65), ==, 1);
+  g_assert_cmpuint (CHOOSE_BIT (127), ==, 63);
+  g_assert_cmpuint (CHOOSE_BIT (128), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (0), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (63), ==, 0);
+  g_assert_cmpuint (CHOOSE_LONG (64), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (65), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (127), ==, 1);
+  g_assert_cmpuint (CHOOSE_LONG (128), ==, 2);
+#endif
+
+  /* Among bits 0 to 15, only bit 0 (0x1) is set */
+  g_assert_cmpuint (test_bit_checked (0, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (1, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (15, words, G_N_ELEMENTS (words)), ==, 0);
+
+  /* Among bits 16 to 31, only bit 17 (0x2 << 16) is set */
+  g_assert_cmpuint (test_bit_checked (16, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (17, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (18, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (31, words, G_N_ELEMENTS (words)), ==, 0);
+
+#ifdef __i386__
+  /* Among bits 32 to 63, only bits 32 (0x1 << 32), 34 (0x4 << 32)
+   * and 51 (0x8 << 48) are set, and they don't count as set unless we
+   * allow ourselves to look that far */
+  g_assert_cmpuint (test_bit_checked (32, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (32, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (33, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (34, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (34, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (35, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (50, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (51, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (52, words, G_N_ELEMENTS (words)), ==, 0);
+#elif defined(__LP64__)
+  /* Among bits 64 to 127, only bits 64 (0x1 << 64), 66 (0x4 << 64)
+   * and 83 (0x8 << 80) are set, and they don't count as set unless we
+   * allow ourselves to look that far */
+  g_assert_cmpuint (test_bit_checked (64, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (64, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (65, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (66, words, 1), ==, 0);
+  g_assert_cmpuint (test_bit_checked (66, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (67, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (82, words, G_N_ELEMENTS (words)), ==, 0);
+  g_assert_cmpuint (test_bit_checked (83, words, G_N_ELEMENTS (words)), ==, 1);
+  g_assert_cmpuint (test_bit_checked (84, words, G_N_ELEMENTS (words)), ==, 0);
+#endif
 }
 
 typedef struct
@@ -216,6 +299,77 @@ filter_gameoverlayrenderer (Fixture *f,
   g_free (filtered_preload);
 }
 
+static void
+test_str_is_integer (Fixture *f,
+                     gconstpointer context)
+{
+  g_assert_false (_srt_str_is_integer (""));
+  g_assert_false (_srt_str_is_integer ("no"));
+  g_assert_true (_srt_str_is_integer ("1"));
+  g_assert_true (_srt_str_is_integer ("123456789012345678901234567890"));
+  g_assert_false (_srt_str_is_integer ("1.23"));
+  g_assert_false (_srt_str_is_integer ("x23"));
+  g_assert_false (_srt_str_is_integer ("23a"));
+}
+
+static const char uevent[] =
+"DRIVER=lenovo\n"
+"HID_ID=0003:000017EF:00006009\n"
+"HID_NAME=Lite-On Technology Corp. ThinkPad USB Keyboard with TrackPoint\n"
+"HID_PHYS=usb-0000:00:14.0-2/input0\n"
+"HID_UNIQ=\n"
+"MODALIAS=hid:b0003g0000v000017EFp00006009\n";
+
+static struct
+{
+  const char *key;
+  const char *value;
+} uevent_parsed[] =
+{
+  { "DRIVER", "lenovo" },
+  { "HID_ID", "0003:000017EF:00006009" },
+  { "HID_NAME", "Lite-On Technology Corp. ThinkPad USB Keyboard with TrackPoint" },
+  { "HID_PHYS", "usb-0000:00:14.0-2/input0" },
+  { "HID_UNIQ", "" },
+  { "MODALIAS", "hid:b0003g0000v000017EFp00006009" }
+};
+
+static const char no_newline[] = "DRIVER=lenovo";
+
+static void
+test_uevent_field (Fixture *f,
+                   gconstpointer context)
+{
+  gsize i;
+
+  g_assert_false (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", ""));
+  g_assert_false (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", "lenov"));
+  g_assert_true (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", "lenovo"));
+  g_assert_false (_srt_input_device_uevent_field_equals (no_newline, "DRIVER", "lenovoo"));
+
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "DRIVER", "lenov"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "DRIVER", "lenovoo"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "HID_ID", "0003:000017EF:0000600"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "HID_ID", "0003:000017EF:000060099"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "HID_UNIQ", "x"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "MODALIAS", "nope"));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "NOPE", ""));
+  g_assert_false (_srt_input_device_uevent_field_equals (uevent, "NOPE", "nope"));
+
+  for (i = 0; i < G_N_ELEMENTS (uevent_parsed); i++)
+    {
+      g_autofree gchar *v = NULL;
+
+      v = _srt_input_device_uevent_field (uevent, uevent_parsed[i].key);
+      g_assert_cmpstr (v, ==, uevent_parsed[i].value);
+      g_assert_true (_srt_input_device_uevent_field_equals (uevent,
+                                                            uevent_parsed[i].key,
+                                                            uevent_parsed[i].value));
+    }
+
+  g_assert_null (_srt_input_device_uevent_field (uevent, "NOPE"));
+}
+
 int
 main (int argc,
       char **argv)
@@ -224,10 +378,16 @@ main (int argc,
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/utils/avoid-gvfs", Fixture, NULL, setup, test_avoid_gvfs, teardown);
+  g_test_add ("/utils/evdev-bits", Fixture, NULL,
+              setup, test_evdev_bits, teardown);
   g_test_add ("/utils/test-file-in-sysroot", Fixture, NULL,
               setup, test_file_in_sysroot, teardown);
   g_test_add ("/utils/filter_gameoverlayrenderer", Fixture, NULL, setup,
               filter_gameoverlayrenderer, teardown);
+  g_test_add ("/utils/str_is_integer", Fixture, NULL,
+              setup, test_str_is_integer, teardown);
+  g_test_add ("/utils/uevent-field", Fixture, NULL,
+              setup, test_uevent_field, teardown);
 
   return g_test_run ();
 }

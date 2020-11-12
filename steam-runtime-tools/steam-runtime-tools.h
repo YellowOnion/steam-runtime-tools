@@ -32,6 +32,7 @@
 #include <steam-runtime-tools/desktop-entry.h>
 #include <steam-runtime-tools/enums.h>
 #include <steam-runtime-tools/graphics.h>
+#include <steam-runtime-tools/input-device.h>
 #include <steam-runtime-tools/library.h>
 #include <steam-runtime-tools/locale.h>
 #include <steam-runtime-tools/macros.h>

@@ -41,9 +41,20 @@ executable(
   install_rpath : bin_rpath,
 )
 
+executable(
+  'steam-runtime-input-monitor',
+  'input-monitor.c',
+  dependencies : [gio_unix, glib, gobject, json_glib, libglnx_dep, libsteamrt_static_dep],
+  install : true,
+  # Use the adjacent json-glib, ignoring LD_LIBRARY_PATH even if set
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
 if get_option('man')
   foreach bin_name : [
     'check-requirements',
+    'input-monitor',
     'system-info',
   ]
     custom_target(

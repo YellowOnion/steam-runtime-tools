@@ -127,6 +127,7 @@
 
 #include <json-glib/json-glib.h>
 
+#include <steam-runtime-tools/json-utils-internal.h>
 #include <steam-runtime-tools/utils-internal.h>
 
 enum
@@ -401,24 +402,10 @@ print_libraries_details (JsonBuilder *builder,
             }
 
           missing_symbols = srt_library_get_missing_symbols (l->data);
-          if (missing_symbols[0] != NULL)
-            {
-              json_builder_set_member_name (builder, "missing-symbols");
-              json_builder_begin_array (builder);
-              for (gsize i = 0; missing_symbols[i] != NULL; i++)
-                json_builder_add_string_value (builder, missing_symbols[i]);
-              json_builder_end_array (builder);
-            }
+          _srt_json_builder_add_strv_value (builder, "missing-symbols", missing_symbols, FALSE);
 
           misversioned_symbols = srt_library_get_misversioned_symbols (l->data);
-          if (misversioned_symbols[0] != NULL)
-            {
-              json_builder_set_member_name (builder, "misversioned-symbols");
-              json_builder_begin_array (builder);
-              for (gsize i = 0; misversioned_symbols[i] != NULL; i++)
-                json_builder_add_string_value (builder, misversioned_symbols[i]);
-              json_builder_end_array (builder);
-            }
+          _srt_json_builder_add_strv_value (builder, "misversioned-symbols", misversioned_symbols, FALSE);
 
           json_builder_end_object (builder);
         }
@@ -614,8 +601,7 @@ jsonify_os_release (JsonBuilder *builder,
   json_builder_set_member_name (builder, "os-release");
   json_builder_begin_object (builder);
     {
-      GStrv strv;
-      gsize i;
+      g_auto(GStrv) strv = NULL;
       gchar *tmp;
 
       tmp = srt_system_info_dup_os_id (info);
@@ -629,17 +615,8 @@ jsonify_os_release (JsonBuilder *builder,
 
       strv = srt_system_info_dup_os_id_like (info, FALSE);
 
-      if (strv != NULL)
-        {
-          json_builder_set_member_name (builder, "id_like");
-          json_builder_begin_array (builder);
-            {
-              for (i = 0; strv[i] != NULL; i++)
-                json_builder_add_string_value (builder, strv[i]);
-            }
-          json_builder_end_array (builder);
-          g_strfreev (strv);
-        }
+      _srt_json_builder_add_strv_value (builder, "id_like", (const gchar * const *)strv,
+                                        FALSE);
 
       tmp = srt_system_info_dup_os_name (info);
 
@@ -793,6 +770,7 @@ main (int argc,
   SrtX86FeatureFlags known_x86_features = SRT_X86_FEATURE_NONE;
   g_autoptr(SrtObjectList) portal_backends = NULL;
   g_autoptr(SrtObjectList) portal_interfaces = NULL;
+  g_auto(GStrv) driver_environment = NULL;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
@@ -946,22 +924,15 @@ main (int argc,
 
           json_builder_set_member_name (builder, "overrides");
           json_builder_begin_object (builder);
-          if (overrides != NULL && overrides[0] != NULL)
-            {
-              json_builder_set_member_name (builder, "list");
-              json_builder_begin_array (builder);
-              for (gsize i = 0; overrides[i] != NULL; i++)
-                json_builder_add_string_value (builder, overrides[i]);
-              json_builder_end_array (builder);
-            }
-          if (messages != NULL && messages[0] != NULL)
-            {
-              json_builder_set_member_name (builder, "messages");
-              json_builder_begin_array (builder);
-              for (gsize i = 0; messages[i] != NULL; i++)
-                json_builder_add_string_value (builder, messages[i]);
-              json_builder_end_array (builder);
-            }
+
+          _srt_json_builder_add_strv_value (builder, "list",
+                                            (const gchar * const *)overrides,
+                                            FALSE);
+
+          _srt_json_builder_add_strv_value (builder, "messages",
+                                            (const gchar * const *)messages,
+                                            FALSE);
+
           json_builder_end_object (builder);
 
           g_strfreev (overrides);
@@ -974,22 +945,15 @@ main (int argc,
 
         json_builder_set_member_name (builder, "pinned_libs_32");
         json_builder_begin_object (builder);
-        if (values != NULL && values[0] != NULL)
-          {
-            json_builder_set_member_name (builder, "list");
-            json_builder_begin_array (builder);
-            for (gsize i = 0; values[i] != NULL; i++)
-              json_builder_add_string_value (builder, values[i]);
-            json_builder_end_array (builder);
-          }
-        if (messages != NULL && messages[0] != NULL)
-          {
-            json_builder_set_member_name (builder, "messages");
-            json_builder_begin_array (builder);
-            for (gsize i = 0; messages[i] != NULL; i++)
-              json_builder_add_string_value (builder, messages[i]);
-            json_builder_end_array (builder);
-          }
+
+        _srt_json_builder_add_strv_value (builder, "list",
+                                          (const gchar * const *)values,
+                                          FALSE);
+
+        _srt_json_builder_add_strv_value (builder, "messages",
+                                          (const gchar * const *)messages,
+                                          FALSE);
+
         json_builder_end_object (builder);
 
         g_strfreev (values);
@@ -998,22 +962,15 @@ main (int argc,
 
         json_builder_set_member_name (builder, "pinned_libs_64");
         json_builder_begin_object (builder);
-        if (values != NULL && values[0] != NULL)
-          {
-            json_builder_set_member_name (builder, "list");
-            json_builder_begin_array (builder);
-            for (gsize i = 0; values[i] != NULL; i++)
-              json_builder_add_string_value (builder, values[i]);
-            json_builder_end_array (builder);
-          }
-        if (messages != NULL && messages[0] != NULL)
-          {
-            json_builder_set_member_name (builder, "messages");
-            json_builder_begin_array (builder);
-            for (gsize i = 0; messages[i] != NULL; i++)
-              json_builder_add_string_value (builder, messages[i]);
-            json_builder_end_array (builder);
-          }
+
+        _srt_json_builder_add_strv_value (builder, "list",
+                                          (const gchar * const *)values,
+                                          FALSE);
+
+        _srt_json_builder_add_strv_value (builder, "messages",
+                                          (const gchar * const *)messages,
+                                          FALSE);
+
         json_builder_end_object (builder);
 
         g_strfreev (values);
@@ -1025,19 +982,10 @@ main (int argc,
   jsonify_os_release (builder, info);
   jsonify_container (builder, info);
 
-  json_builder_set_member_name (builder, "driver_environment");
-  json_builder_begin_array (builder);
-    {
-      GStrv strv = srt_system_info_list_driver_environment (info);
-      if (strv != NULL)
-        {
-          for (gsize i = 0; strv[i] != NULL; i++)
-            json_builder_add_string_value (builder, strv[i]);
-
-          g_strfreev (strv);
-        }
-    }
-  json_builder_end_array (builder);
+  driver_environment = srt_system_info_list_driver_environment (info);
+  _srt_json_builder_add_strv_value (builder, "driver_environment",
+                                    (const gchar * const *)driver_environment,
+                                    TRUE);
 
   json_builder_set_member_name (builder, "architectures");
   json_builder_begin_object (builder);

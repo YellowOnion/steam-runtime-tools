@@ -192,3 +192,36 @@ _srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
 
   return g_string_free (g_steal_pointer (&ret), FALSE);
 }
+
+/**
+ * _srt_json_builder_add_strv_value:
+ * @builder: (not nullable): A JSON Builder where the provided @values
+ *  will be appended
+ * @array_name: (not nullable): The array member name to use
+ * @values: (nullable): Array of strings to be added in the JSON Builder
+ * @allow_empty_array: If %TRUE, a new array in JSON Builder will be always
+ *  created, even if @values is %NULL or without any elements. Otherwise the
+ *  new array will be created only if there is at least a non-NULL element in
+ *  @values
+ */
+void
+_srt_json_builder_add_strv_value (JsonBuilder *builder,
+                                  const gchar *array_name,
+                                  const gchar * const *values,
+                                  gboolean allow_empty_array)
+{
+  gsize i;
+
+  g_return_if_fail (builder != NULL);
+  g_return_if_fail (array_name != NULL);
+
+  if ((values != NULL && values[0] != NULL) ||
+      allow_empty_array)
+    {
+      json_builder_set_member_name (builder, array_name);
+      json_builder_begin_array (builder);
+      for (i = 0; values != NULL && values[i] != NULL; i++)
+        json_builder_add_string_value (builder, values[i]);
+      json_builder_end_array (builder);
+    }
+}

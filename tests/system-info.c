@@ -2442,6 +2442,20 @@ typedef struct
 
 typedef struct
 {
+  const gchar *json_path;
+  const gchar *name;
+  const gchar *description;
+  const gchar *type;
+  const gchar *api_version;
+  const gchar *implementation_version;
+  const gchar *library_path;
+  const gchar *error_domain;
+  const gchar *error_message;
+  int error_code;
+} LayerTest;
+
+typedef struct
+{
   const gchar *id;
   const gchar *commandline;
   const gchar *filename;
@@ -2479,6 +2493,8 @@ typedef struct
   LocaleTest locale[5];
   IcdTest egl_icd[3];
   IcdTest vulkan_icd[3];
+  LayerTest vulkan_explicit_layer[3];
+  LayerTest vulkan_implicit_layer[3];
   DesktopEntryTest desktop_entry[3];
   XdgPortalTest xdg_portal;
   SrtX86FeatureFlags x86_features;
@@ -2763,6 +2779,32 @@ static const JsonTest json_test[] =
       },
     },
 
+    .vulkan_explicit_layer =
+    {
+      {
+        .json_path = "/usr/share/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json",
+        .name = "VK_LAYER_MESA_overlay",
+        .description = "Mesa Overlay layer",
+        .type = "GLOBAL",
+        .api_version = "1.1.73",
+        .implementation_version = "1",
+        .library_path = "libVkLayer_MESA_overlay.so",
+      },
+    },
+
+    .vulkan_implicit_layer =
+    {
+      {
+        .json_path = "/usr/share/vulkan/implicit_layer.d/MangoHud.json",
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .type = "GLOBAL",
+        .api_version = "1.2.135",
+        .implementation_version = "1",
+        .library_path = "/usr/$LIB/libMangoHud.so",
+      },
+    },
+
     .desktop_entry =
     {
       {
@@ -2868,6 +2910,15 @@ static const JsonTest json_test[] =
     {
       {
         .json_path = "/usr/share/vulkan/icd.d/amd_icd64.json",
+        .error_domain = "g-io-error-quark", /* Default domain */
+        .error_code = G_IO_ERROR_FAILED, /* Default error code */
+        .error_message = "Something went wrong",
+      },
+    },
+    .vulkan_implicit_layer =
+    {
+      {
+        .json_path = "/usr/share/vulkan/implicit_layer.d/MangoHud.json",
         .error_domain = "g-io-error-quark", /* Default domain */
         .error_code = G_IO_ERROR_FAILED, /* Default error code */
         .error_message = "Something went wrong",
@@ -3038,6 +3089,8 @@ json_parsing (Fixture *f,
       gchar *host_directory;
       g_autoptr(SrtObjectList) portal_interfaces = NULL;
       g_autoptr(SrtObjectList) portal_backends = NULL;
+      g_autoptr(SrtObjectList) explicit_layers = NULL;
+      g_autoptr(SrtObjectList) implicit_layers = NULL;
       g_autofree gchar *portal_messages = NULL;
       g_autofree gchar *steamscript_path = NULL;
       g_autofree gchar *steamscript_version = NULL;
@@ -3262,6 +3315,67 @@ json_parsing (Fixture *f,
               g_assert_cmpstr (t->vulkan_icd[j].error_message, ==, error->message);
             }
         }
+
+      explicit_layers = srt_system_info_list_explicit_vulkan_layers (info);
+      for (j = 0, iter = explicit_layers; iter != NULL; iter = iter->next, j++)
+        {
+          error = NULL;
+          g_assert_cmpstr (t->vulkan_explicit_layer[j].json_path, ==,
+                           srt_vulkan_layer_get_json_path (iter->data));
+          if (srt_vulkan_layer_check_error (iter->data, &error))
+            {
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].name, ==,
+                               srt_vulkan_layer_get_name (iter->data));
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].description, ==,
+                               srt_vulkan_layer_get_description (iter->data));
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].type, ==,
+                               srt_vulkan_layer_get_type_value (iter->data));
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].api_version, ==,
+                               srt_vulkan_layer_get_api_version (iter->data));
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].implementation_version, ==,
+                               srt_vulkan_layer_get_implementation_version (iter->data));
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].library_path, ==,
+                               srt_vulkan_layer_get_library_path (iter->data));
+            }
+          else
+            {
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].error_domain, ==,
+                               g_quark_to_string (error->domain));
+              g_assert_cmpint (t->vulkan_explicit_layer[j].error_code, ==, error->code);
+              g_assert_cmpstr (t->vulkan_explicit_layer[j].error_message, ==, error->message);
+            }
+        }
+
+      implicit_layers = srt_system_info_list_implicit_vulkan_layers (info);
+      for (j = 0, iter = implicit_layers; iter != NULL; iter = iter->next, j++)
+        {
+          error = NULL;
+          g_assert_cmpstr (t->vulkan_implicit_layer[j].json_path, ==,
+                           srt_vulkan_layer_get_json_path (iter->data));
+          if (srt_vulkan_layer_check_error (iter->data, &error))
+            {
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].name, ==,
+                               srt_vulkan_layer_get_name (iter->data));
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].description, ==,
+                               srt_vulkan_layer_get_description (iter->data));
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].type, ==,
+                               srt_vulkan_layer_get_type_value (iter->data));
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].api_version, ==,
+                               srt_vulkan_layer_get_api_version (iter->data));
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].implementation_version, ==,
+                               srt_vulkan_layer_get_implementation_version (iter->data));
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].library_path, ==,
+                               srt_vulkan_layer_get_library_path (iter->data));
+            }
+          else
+            {
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].error_domain, ==,
+                               g_quark_to_string (error->domain));
+              g_assert_cmpint (t->vulkan_implicit_layer[j].error_code, ==, error->code);
+              g_assert_cmpstr (t->vulkan_implicit_layer[j].error_message, ==, error->message);
+            }
+        }
+      g_assert_cmpstr (t->vulkan_implicit_layer[j].json_path, ==, NULL);
 
       desktop_entries = srt_system_info_list_desktop_entries (info);
       for (j = 0, iter = desktop_entries; iter != NULL; iter = iter->next, j++)

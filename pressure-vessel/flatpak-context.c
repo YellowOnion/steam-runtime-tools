@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: 1.8.0-74-g354b9a22
+ * Taken from Flatpak, last updated: a17224cd08abf1c0f2223d2642a33018f7782fe6
  *
  * Copyright © 2014-2018 Red Hat, Inc
  *
@@ -730,6 +730,9 @@ unparse_filesystem_flags (const char           *path,
       break;
 
     case FLATPAK_FILESYSTEM_MODE_NONE:
+      g_string_insert_c (s, 0, '!');
+      break;
+
     default:
       g_warning ("Unexpected filesystem mode %d", mode);
       break;
@@ -1411,7 +1414,7 @@ flatpak_context_load_metadata (FlatpakContext *context,
 {
   gboolean remove;
   g_auto(GStrv) groups = NULL;
-  int i;
+  gsize i;
 
   if (g_key_file_has_key (metakey, FLATPAK_METADATA_GROUP_CONTEXT, FLATPAK_METADATA_KEY_SHARED, NULL))
     {
@@ -1545,7 +1548,7 @@ flatpak_context_load_metadata (FlatpakContext *context,
   if (g_key_file_has_group (metakey, FLATPAK_METADATA_GROUP_SESSION_BUS_POLICY))
     {
       g_auto(GStrv) keys = NULL;
-      gsize i, keys_count;
+      gsize keys_count;
 
       keys = g_key_file_get_keys (metakey, FLATPAK_METADATA_GROUP_SESSION_BUS_POLICY, &keys_count, NULL);
       for (i = 0; i < keys_count; i++)
@@ -1566,7 +1569,7 @@ flatpak_context_load_metadata (FlatpakContext *context,
   if (g_key_file_has_group (metakey, FLATPAK_METADATA_GROUP_SYSTEM_BUS_POLICY))
     {
       g_auto(GStrv) keys = NULL;
-      gsize i, keys_count;
+      gsize keys_count;
 
       keys = g_key_file_get_keys (metakey, FLATPAK_METADATA_GROUP_SYSTEM_BUS_POLICY, &keys_count, NULL);
       for (i = 0; i < keys_count; i++)
@@ -1587,7 +1590,7 @@ flatpak_context_load_metadata (FlatpakContext *context,
   if (g_key_file_has_group (metakey, FLATPAK_METADATA_GROUP_ENVIRONMENT))
     {
       g_auto(GStrv) keys = NULL;
-      gsize i, keys_count;
+      gsize keys_count;
 
       keys = g_key_file_get_keys (metakey, FLATPAK_METADATA_GROUP_ENVIRONMENT, &keys_count, NULL);
       for (i = 0; i < keys_count; i++)
@@ -1752,10 +1755,7 @@ flatpak_context_save_metadata (FlatpakContext *context,
         {
           FlatpakFilesystemMode mode = GPOINTER_TO_INT (value);
 
-          if (mode != FLATPAK_FILESYSTEM_MODE_NONE)
-            g_ptr_array_add (array, unparse_filesystem_flags (key, mode));
-          else
-            g_ptr_array_add (array, g_strconcat ("!", key, NULL));
+          g_ptr_array_add (array, unparse_filesystem_flags (key, mode));
         }
 
       g_key_file_set_string_list (metakey,
@@ -2172,7 +2172,7 @@ flatpak_context_export (FlatpakContext *context,
   GHashTableIter iter;
   gpointer key, value;
 
-  fs_mode = (FlatpakFilesystemMode) g_hash_table_lookup (context->filesystems, "host");
+  fs_mode = GPOINTER_TO_INT (g_hash_table_lookup (context->filesystems, "host"));
   if (fs_mode != FLATPAK_FILESYSTEM_MODE_NONE)
     {
       DIR *dir;
@@ -2200,19 +2200,19 @@ flatpak_context_export (FlatpakContext *context,
       flatpak_exports_add_path_expose (exports, fs_mode, "/run/media");
     }
 
-  os_mode = MAX ((FlatpakFilesystemMode) g_hash_table_lookup (context->filesystems, "host-os"),
+  os_mode = MAX (GPOINTER_TO_INT (g_hash_table_lookup (context->filesystems, "host-os")),
                    fs_mode);
 
   if (os_mode != FLATPAK_FILESYSTEM_MODE_NONE)
     flatpak_exports_add_host_os_expose (exports, os_mode);
 
-  etc_mode = MAX ((FlatpakFilesystemMode) g_hash_table_lookup (context->filesystems, "host-etc"),
+  etc_mode = MAX (GPOINTER_TO_INT (g_hash_table_lookup (context->filesystems, "host-etc")),
                    fs_mode);
 
   if (etc_mode != FLATPAK_FILESYSTEM_MODE_NONE)
     flatpak_exports_add_host_etc_expose (exports, etc_mode);
 
-  home_mode = (FlatpakFilesystemMode) g_hash_table_lookup (context->filesystems, "home");
+  home_mode = GPOINTER_TO_INT (g_hash_table_lookup (context->filesystems, "home"));
   if (home_mode != FLATPAK_FILESYSTEM_MODE_NONE)
     {
       g_debug ("Allowing homedir access");

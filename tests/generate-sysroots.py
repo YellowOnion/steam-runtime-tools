@@ -49,16 +49,23 @@ os.chdir(full_path)
 
 # Only the leaf directories need to be listed here.
 for name in '''
+debian10/custom_path
+debian10/expectations
+debian10/home/debian/.local/share/vulkan/implicit_layer.d
 debian10/usr/lib/i386-linux-gnu/dri
 debian10/usr/lib/i386-linux-gnu/vdpau
 debian10/usr/lib/x86_64-linux-gnu/dri
 debian10/usr/lib/x86_64-linux-gnu/vdpau
+debian10/usr/local/etc/vulkan/explicit_layer.d
+debian10/usr/share/vulkan/implicit_layer.d
 debian10/run/systemd
 debian-unstable/etc
+fedora/custom_path
 fedora/usr/lib/dri
 fedora/usr/lib/vdpau
 fedora/usr/lib64/dri
 fedora/usr/lib64/vdpau
+fedora/usr/share/vulkan/implicit_layer.d
 fedora/run/systemd
 flatpak-example/usr/lib/dri
 flatpak-example/usr/lib/mock-abi/GL/lib/dri
@@ -236,6 +243,227 @@ for name, target in {
         os.symlink(target, name)
     except FileExistsError:
         pass
+
+with open('debian10/custom_path/Single-good-layer.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.1.0",
+  "layer" : {
+    "name" : "VK_LAYER_LUNARG_overlay",
+    "type" : "INSTANCE",
+    "library_path" : "vkOverlayLayer.so",
+    "api_version" : "1.1.5",
+    "implementation_version" : "2",
+    "description" : "LunarG HUD layer",
+    "functions" : {
+      "vkNegotiateLoaderLayerInterfaceVersion" : "OverlayLayer_NegotiateLoaderLayerInterfaceVersion"
+    },
+    "instance_extensions" : [
+      {
+        "name" : "VK_EXT_debug_report",
+        "spec_version" : "1"
+      },
+      {
+        "name" : "VK_VENDOR_ext_x",
+        "spec_version" : "3"
+      }
+    ],
+    "device_extensions" : [
+      {
+        "name" : "VK_EXT_debug_marker",
+        "spec_version" : "1",
+        "entrypoints" : [
+          "vkCmdDbgMarkerBegin",
+          "vkCmdDbgMarkerEnd"
+        ]
+      }
+    ],
+    "enable_environment" : {
+      "ENABLE_LAYER_OVERLAY_1" : "1"
+    },
+    "disable_environment" : {
+      "DISABLE_LAYER_OVERLAY_1" : ""
+    }
+  }
+}''')
+
+with open('debian10/expectations/MultiLayers_part1.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.1",
+  "layer" : {
+    "name" : "VK_LAYER_first",
+    "type" : "INSTANCE",
+    "library_path" : "libFirst.so",
+    "api_version" : "1.0.13",
+    "implementation_version" : "1",
+    "description" : "Vulkan first layer"
+  }
+}''')
+
+with open('debian10/expectations/MultiLayers_part2.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.1",
+  "layer" : {
+    "name" : "VK_LAYER_second",
+    "type" : "INSTANCE",
+    "library_path" : "libSecond.so",
+    "api_version" : "1.0.13",
+    "implementation_version" : "1",
+    "description" : "Vulkan second layer"
+  }
+}''')
+
+# MangoHUD uses a library_path of "/usr/\$LIB/libMangoHud.so"
+# JSON-GLib will parse it as "/usr/$LIB/libMangoHud.so", so if we write again
+# the JSON, the '$' will not be escaped anymore.
+# With some manual testing I can confirm that escaping '$' has no real
+# effect, so this should not be a problem in practice.
+with open('debian10/custom_path/MangoHud.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name" : "VK_LAYER_MANGOHUD_overlay",
+    "type" : "GLOBAL",
+    "library_path" : "/usr/\\$LIB/libMangoHud.so",
+    "api_version" : "1.2.135",
+    "implementation_version" : "1",
+    "description" : "Vulkan Hud Overlay",
+    "functions" : {
+      "vkGetInstanceProcAddr" : "overlay_GetInstanceProcAddr",
+      "vkGetDeviceProcAddr" : "overlay_GetDeviceProcAddr"
+    },
+    "enable_environment" : {
+      "MANGOHUD" : "1"
+    },
+    "disable_environment" : {
+      "DISABLE_MANGOHUD" : "1"
+    }
+  }
+}''')
+
+with open('debian10/expectations/MangoHud.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name" : "VK_LAYER_MANGOHUD_overlay",
+    "type" : "GLOBAL",
+    "library_path" : "/usr/$LIB/libMangoHud.so",
+    "api_version" : "1.2.135",
+    "implementation_version" : "1",
+    "description" : "Vulkan Hud Overlay",
+    "functions" : {
+      "vkGetInstanceProcAddr" : "overlay_GetInstanceProcAddr",
+      "vkGetDeviceProcAddr" : "overlay_GetDeviceProcAddr"
+    },
+    "enable_environment" : {
+      "MANGOHUD" : "1"
+    },
+    "disable_environment" : {
+      "DISABLE_MANGOHUD" : "1"
+    }
+  }
+}''')
+
+with open('debian10/usr/local/etc/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name" : "VK_LAYER_MESA_overlay",
+    "type" : "GLOBAL",
+    "library_path" : "libVkLayer_MESA_overlay.so",
+    "api_version" : "1.1.73",
+    "implementation_version" : "1",
+    "description" : "Mesa Overlay layer"
+  }
+}''')
+
+with open('debian10/usr/share/vulkan/implicit_layer.d/MultiLayers.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.1",
+  "layers" : [
+    {
+      "name" : "VK_LAYER_first",
+      "type" : "INSTANCE",
+      "api_version" : "1.0.13",
+      "library_path" : "libFirst.so",
+      "implementation_version" : "1",
+      "description" : "Vulkan first layer"
+    },
+    {
+      "name" : "VK_LAYER_second",
+      "type" : "INSTANCE",
+      "api_version" : "1.0.13",
+      "library_path" : "libSecond.so",
+      "implementation_version" : "1",
+      "description" : "Vulkan second layer"
+    }
+  ]
+}''')
+
+with open('debian10/home/debian/.local/share/vulkan/implicit_layer.d/steamoverlay_x86_64.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name" : "VK_LAYER_VALVE_steam_overlay_64",
+    "type" : "GLOBAL",
+    "library_path" : "/home/debian/.local/share/Steam/ubuntu12_64/steamoverlayvulkanlayer.so",
+    "api_version" : "1.2.136",
+    "implementation_version" : "1",
+    "description" : "Steam Overlay Layer",
+    "enable_environment" : {
+      "ENABLE_VK_LAYER_VALVE_steam_overlay_1" : "1"
+    },
+    "disable_environment" : {
+      "DISABLE_VK_LAYER_VALVE_steam_overlay_1" : "1"
+    }
+  }
+}''')
+
+with open('fedora/usr/share/vulkan/implicit_layer.d/incomplete_layer.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.1.2",
+  "layer" : {
+    "name" : "VK_LAYER_VALVE_steam_overlay_64",
+    "type" : "GLOBAL",
+    "library_path" : "/home/debian/.local/share/Steam/ubuntu12_64/steamoverlayvulkanlayer.so",
+    "implementation_version" : "1",
+    "description" : "Steam Overlay Layer"
+  }
+}''')
+
+with open('fedora/usr/share/vulkan/implicit_layer.d/newer_layer.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "99.1.2",
+  "layer" : {
+    "name" : "VK_LAYER_from_a_distant_future"
+  }
+}''')
+
+with open('fedora/custom_path/meta_layer.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.1.1",
+  "layer" : {
+    "name" : "VK_LAYER_META_layer",
+    "type" : "GLOBAL",
+    "api_version" : "1.0.9000",
+    "implementation_version" : "1",
+    "description" : "Meta-layer example",
+    "component_layers" : [
+      "VK_LAYER_KHRONOS_validation",
+      "VK_LAYER_LUNARG_api_dump"
+    ]
+  }
+}''')
 
 with open('debian10/usr/lib/os-release', 'w') as writer:
     writer.write('''\

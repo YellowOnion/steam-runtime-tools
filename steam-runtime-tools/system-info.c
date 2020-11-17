@@ -142,6 +142,13 @@ struct _SrtSystemInfo
   } icds;
   struct
   {
+    GList *vulkan_explicit;
+    GList *vulkan_implicit;
+    gboolean have_vulkan_explicit;
+    gboolean have_vulkan_implicit;
+  } layers;
+  struct
+  {
     gchar **values;
     gchar **messages;
     gboolean have_data;
@@ -451,6 +458,20 @@ forget_icds (SrtSystemInfo *self)
 }
 
 /*
+ * Forget any cached information about layers.
+ */
+static void
+forget_layers (SrtSystemInfo *self)
+{
+  self->layers.have_vulkan_explicit = FALSE;
+  self->layers.have_vulkan_implicit = FALSE;
+  g_list_free_full (self->layers.vulkan_explicit, g_object_unref);
+  self->layers.vulkan_explicit = NULL;
+  g_list_free_full (self->layers.vulkan_implicit, g_object_unref);
+  self->layers.vulkan_implicit = NULL;
+}
+
+/*
  * Forget any cached information about overrides.
  */
 static void
@@ -491,6 +512,7 @@ srt_system_info_finalize (GObject *object)
   forget_desktop_entries (self);
   forget_container_info (self);
   forget_icds (self);
+  forget_layers (self);
   forget_locales (self);
   forget_os (self);
   forget_overrides (self);
@@ -749,6 +771,11 @@ srt_system_info_new_from_json (const char *path,
 
   info->icds.have_vulkan = TRUE;
   info->icds.vulkan = _srt_get_vulkan_from_json_report (json_obj);
+
+  info->layers.have_vulkan_explicit = TRUE;
+  info->layers.vulkan_explicit = _srt_get_explicit_vulkan_layers_from_json_report (json_obj);
+  info->layers.have_vulkan_implicit = TRUE;
+  info->layers.vulkan_implicit = _srt_get_implicit_vulkan_layers_from_json_report (json_obj);
 
   info->desktop_entry.have_data = TRUE;
   info->desktop_entry.values = _srt_get_steam_desktop_entries_from_json_report (json_obj);
@@ -2937,6 +2964,94 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
     }
 
   for (iter = self->icds.vulkan; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_explicit_vulkan_layers:
+ * @self: The #SrtSystemInfo object
+ *
+ * List the available explicit Vulkan layers, using the same search paths as
+ * the reference vulkan-loader.
+ *
+ * This function is not architecture-specific and may return a mixture
+ * of layers for more than one architecture or ABI, because the way the
+ * reference vulkan-loader works is to read a single search path for
+ * metadata describing layers, then filter out the ones that are for the
+ * wrong architecture at load time.
+ *
+ * Some of the entries in the result might describe a bare SONAME in the
+ * standard library search path, which might exist for any or all
+ * architectures simultaneously. Other entries might describe the relative
+ * or absolute path to a specific library, which will only be usable for
+ * the architecture for which it was compiled.
+ *
+ * Returns: (transfer full) (element-type SrtVulkanLayer): A list of
+ *  opaque #SrtVulkanLayer objects. Free with
+ *  `g_list_free_full(layers, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_explicit_vulkan_layers (SrtSystemInfo *self)
+{
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->layers.have_vulkan_explicit && !self->immutable_values)
+    {
+      g_assert (self->layers.vulkan_explicit == NULL);
+      self->layers.vulkan_explicit = _srt_load_vulkan_layers (self->sysroot, self->env, TRUE);
+      self->layers.have_vulkan_explicit = TRUE;
+    }
+
+  for (iter = self->layers.vulkan_explicit; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_implicit_vulkan_layers:
+ * @self: The #SrtSystemInfo object
+ *
+ * List the available implicit Vulkan layers, using the same search paths as
+ * the reference vulkan-loader.
+ *
+ * This function is not architecture-specific and may return a mixture
+ * of layers for more than one architecture or ABI, because the way the
+ * reference vulkan-loader works is to read a single search path for
+ * metadata describing layers, then filter out the ones that are for the
+ * wrong architecture at load time.
+ *
+ * Some of the entries in the result might describe a bare SONAME in the
+ * standard library search path, which might exist for any or all
+ * architectures simultaneously. Other entries might describe the relative
+ * or absolute path to a specific library, which will only be usable for
+ * the architecture for which it was compiled.
+ *
+ * Returns: (transfer full) (element-type SrtVulkanLayer): A list of
+ *  opaque #SrtVulkanLayer objects. Free with
+ *  `g_list_free_full(layers, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_implicit_vulkan_layers (SrtSystemInfo *self)
+{
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->layers.have_vulkan_implicit && !self->immutable_values)
+    {
+      g_assert (self->layers.vulkan_implicit == NULL);
+      self->layers.vulkan_implicit = _srt_load_vulkan_layers (self->sysroot, self->env, FALSE);
+      self->layers.have_vulkan_implicit = TRUE;
+    }
+
+  for (iter = self->layers.vulkan_implicit; iter != NULL; iter = iter->next)
     ret = g_list_prepend (ret, g_object_ref (iter->data));
 
   return g_list_reverse (ret);

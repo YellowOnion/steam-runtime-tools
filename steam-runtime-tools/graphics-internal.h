@@ -250,6 +250,8 @@ void _srt_graphics_get_from_report (JsonObject *json_obj,
 
 GList *_srt_get_egl_from_json_report (JsonObject *json_obj);
 GList *_srt_get_vulkan_from_json_report (JsonObject *json_obj);
+GList *_srt_get_explicit_vulkan_layers_from_json_report (JsonObject *json_obj);
+GList *_srt_get_implicit_vulkan_layers_from_json_report (JsonObject *json_obj);
 GList *_srt_dri_driver_get_from_report (JsonObject *json_obj);
 GList *_srt_va_api_driver_get_from_report (JsonObject *json_obj);
 GList *_srt_vdpau_driver_get_from_report (JsonObject *json_obj);

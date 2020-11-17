@@ -23,6 +23,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/* Include these before steam-runtime-tools.h so that its backport of
+ * G_DEFINE_AUTOPTR_CLEANUP_FUNC will be visible to it */
+#include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
+
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <errno.h>
@@ -1247,6 +1252,325 @@ test_icd_vulkan (Fixture *f,
   g_list_free_full (icds, g_object_unref);
 }
 
+typedef struct
+{
+  const gchar *name;
+  const gchar *description;
+  const gchar *library_path;
+  const gchar *api_version;
+  const gchar *component_layers[5];
+  /* This needs to be an explicit value because, if in input we had a single
+   * JSON with multiple layers, we write it to the filesystem as separated JSON
+   * files. So the output is not always exactly the same as the input JSON */
+  const gchar *json_to_compare;
+  const gchar *error_message_suffix;
+  const gchar *error_domain;
+  gint error_code;
+} VulkanLayerTest;
+
+typedef struct
+{
+  const gchar *description;
+  const gchar *sysroot;
+  const gchar *vk_layer_path;
+  const gchar *home;
+  const gchar *xdg_config_dirs;
+  const gchar *xdg_data_dirs;
+  VulkanLayerTest explicit_layers[5];
+  VulkanLayerTest implicit_layers[5];
+} VulkanLayersTest;
+
+static const VulkanLayersTest vulkan_layers_test[] =
+{
+  {
+    .description = "Good single VK_LAYER_PATH dir",
+    .sysroot = "debian10",
+    .vk_layer_path = "/custom_path",
+    .explicit_layers =
+    {
+      {
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .library_path = "/usr/$LIB/libMangoHud.so",
+        .api_version = "1.2.135",
+        .json_to_compare = "expectations/MangoHud.json",
+      },
+      {
+        .name = "VK_LAYER_LUNARG_overlay",
+        .description = "LunarG HUD layer",
+        .library_path = "vkOverlayLayer.so",
+        .api_version = "1.1.5",
+        .json_to_compare = "custom_path/Single-good-layer.json",
+      },
+    },
+    /* Implicit layers are not affected by VK_LAYER_PATH env */
+    .implicit_layers =
+    {
+      {
+        .name = "VK_LAYER_first",
+        .description = "Vulkan first layer",
+        .library_path = "libFirst.so",
+        .api_version = "1.0.13",
+        .json_to_compare = "expectations/MultiLayers_part1.json",
+      },
+      {
+        .name = "VK_LAYER_second",
+        .description = "Vulkan second layer",
+        .library_path = "libSecond.so",
+        .api_version = "1.0.13",
+        .json_to_compare = "expectations/MultiLayers_part2.json",
+      },
+    },
+  },
+
+  {
+    .description = "Good implicit dirs",
+    .sysroot = "debian10",
+    .home = "/home/debian",
+    .xdg_config_dirs = "/usr/local/etc:::",
+    .explicit_layers =
+    {
+      {
+        .name = "VK_LAYER_MESA_overlay",
+        .description = "Mesa Overlay layer",
+        .library_path = "libVkLayer_MESA_overlay.so",
+        .api_version = "1.1.73",
+        .json_to_compare = "usr/local/etc/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json",
+      },
+    },
+    .implicit_layers =
+    {
+      {
+        .name = "VK_LAYER_first",
+        .description = "Vulkan first layer",
+        .library_path = "libFirst.so",
+        .api_version = "1.0.13",
+        .json_to_compare = "expectations/MultiLayers_part1.json",
+      },
+      {
+        .name = "VK_LAYER_second",
+        .description = "Vulkan second layer",
+        .library_path = "libSecond.so",
+        .api_version = "1.0.13",
+        .json_to_compare = "expectations/MultiLayers_part2.json",
+      },
+      {
+        .name = "VK_LAYER_VALVE_steam_overlay_64",
+        .description = "Steam Overlay Layer",
+        .library_path = "/home/debian/.local/share/Steam/ubuntu12_64/steamoverlayvulkanlayer.so",
+        .api_version = "1.2.136",
+        .json_to_compare = "home/debian/.local/share/vulkan/implicit_layer.d/steamoverlay_x86_64.json",
+      },
+    },
+  },
+
+  {
+    .description = "Layers with missing required fields and unsupported version",
+    .sysroot = "fedora",
+    .implicit_layers =
+    {
+      // incomplete_layer.json
+      {
+        .error_message_suffix = "cannot be parsed because it is missing a required field",
+        .error_domain = "g-io-error-quark",
+        .error_code = G_IO_ERROR_FAILED,
+      },
+      // newer_layer.json
+      {
+        .error_message_suffix = "is not supported",
+        .error_domain = "g-io-error-quark",
+        .error_code = G_IO_ERROR_FAILED,
+      },
+    },
+  },
+
+  {
+    .description = "Meta layer",
+    .sysroot = "fedora",
+    .vk_layer_path = "/custom_path",
+    .explicit_layers =
+    {
+      {
+        .name = "VK_LAYER_META_layer",
+        .description = "Meta-layer example",
+        .api_version = "1.0.9000",
+        .component_layers =
+        {
+          "VK_LAYER_KHRONOS_validation",
+          "VK_LAYER_LUNARG_api_dump",
+        },
+        .json_to_compare = "custom_path/meta_layer.json",
+      },
+    },
+  },
+
+};
+
+static void
+_test_layer_values (SrtVulkanLayer *layer,
+                    const VulkanLayerTest *test,
+                    const gchar *test_dir,
+                    const gchar *sysroot)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(SrtVulkanLayer) layer_dup = NULL;
+
+  if (test->error_message_suffix != NULL)
+    {
+      g_assert_false (srt_vulkan_layer_check_error (layer, &error));
+      g_assert_true (g_str_has_suffix (error->message, test->error_message_suffix));
+      g_assert_cmpstr (g_quark_to_string (error->domain), ==, test->error_domain);
+      g_assert_cmpint (error->code, ==, test->error_code);
+      return;
+    }
+
+  g_assert_cmpstr (test->name, ==, srt_vulkan_layer_get_name (layer));
+  g_assert_cmpstr (test->description, ==,
+                    srt_vulkan_layer_get_description (layer));
+  g_assert_cmpstr (test->library_path, ==,
+                    srt_vulkan_layer_get_library_path (layer));
+  g_assert_cmpstr (test->api_version, ==,
+                    srt_vulkan_layer_get_api_version (layer));
+
+  layer_dup = srt_vulkan_layer_new_replace_library_path (layer,
+                                                         "/run/host/vulkan_layer.json");
+
+  g_assert_cmpstr (test->name, ==, srt_vulkan_layer_get_name (layer_dup));
+  g_assert_cmpstr (test->description, ==,
+                    srt_vulkan_layer_get_description (layer_dup));
+  g_assert_cmpstr (test->api_version, ==,
+                    srt_vulkan_layer_get_api_version (layer_dup));
+
+  /* If library_path was NULL, this means we have a meta-layer. So even
+   * after calling the replace function we still expect to have a
+   * NULL library_path. */
+  if (test->library_path == NULL)
+    g_assert_cmpstr (NULL, ==, srt_vulkan_layer_get_library_path (layer_dup));
+  else
+    g_assert_cmpstr ("/run/host/vulkan_layer.json", ==,
+                      srt_vulkan_layer_get_library_path (layer_dup));
+
+  if (test->json_to_compare != NULL)
+    {
+      g_autofree gchar *input_contents = NULL;
+      g_autofree gchar *output_contents = NULL;
+      g_autofree gchar *input_json = NULL;
+      g_autofree gchar *output_file = NULL;
+      g_autoptr(JsonParser) parser = NULL;
+      g_autoptr(JsonGenerator) generator = NULL;
+      JsonNode *node = NULL;  /* not owned */
+
+      output_file = g_build_filename (test_dir, test->name, NULL);
+
+      srt_vulkan_layer_write_to_file (layer, output_file, &error);
+      g_assert_no_error (error);
+      g_file_get_contents (output_file, &output_contents, NULL, &error);
+      g_assert_no_error (error);
+
+      input_json = g_build_filename (sysroot, test->json_to_compare, NULL);
+      parser = json_parser_new ();
+      json_parser_load_from_file (parser, input_json, &error);
+      g_assert_no_error (error);
+      node = json_parser_get_root (parser);
+      g_assert_nonnull (node);
+      generator = json_generator_new ();
+      json_generator_set_root (generator, node);
+      json_generator_set_pretty (generator, TRUE);
+      input_contents = json_generator_to_data (generator, NULL);
+
+      g_assert_cmpstr (input_contents, ==, output_contents);
+    }
+}
+
+static void
+test_layer_vulkan (Fixture *f,
+                   gconstpointer context)
+{
+  g_auto(GStrv) vulkan_layer_envp = g_get_environ ();
+  g_autofree gchar *tmp_dir = NULL;
+  g_autoptr(GError) error = NULL;
+  gsize i;
+
+  tmp_dir = g_dir_make_tmp ("layers-test-XXXXXX", &error);
+  g_assert_no_error (error);
+
+  for (i = 0; i < G_N_ELEMENTS (vulkan_layers_test); i++)
+    {
+      const VulkanLayersTest *test = &vulkan_layers_test[i];
+      VulkanLayerTest layer_test;
+      g_autoptr(SrtSystemInfo) info = NULL;
+      g_autoptr(SrtObjectList) explicit_layers = NULL;
+      g_autoptr(SrtObjectList) implicit_layers = NULL;
+      g_autofree gchar *sysroot = NULL;
+      /* Create a new empty temp sub directory for every test */
+      g_autofree gchar *test_num = g_strdup_printf ("%" G_GSIZE_FORMAT, i);
+      g_autofree gchar *this_test_dir = g_build_filename (tmp_dir, test_num, NULL);
+      const GList *iter;
+      gsize j;
+
+      g_test_message ("%s: %s", test->sysroot, test->description);
+
+      g_mkdir (this_test_dir, 0755);
+
+      sysroot = g_build_filename (f->sysroots, test->sysroot, NULL);
+
+      if (test->vk_layer_path == NULL)
+        vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "VK_LAYER_PATH");
+      else
+        vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
+                                              "VK_LAYER_PATH", test->vk_layer_path,
+                                              TRUE);
+
+      if (test->home == NULL)
+        vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "HOME");
+      else
+        vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
+                                              "HOME", test->home, TRUE);
+
+      if (test->xdg_config_dirs == NULL)
+        vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "XDG_CONFIG_DIRS");
+      else
+        vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
+                                              "XDG_CONFIG_DIRS", test->xdg_config_dirs, TRUE);
+
+      if (test->xdg_data_dirs == NULL)
+        vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "XDG_DATA_DIRS");
+      else
+        vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
+                                              "XDG_DATA_DIRS", test->xdg_data_dirs, TRUE);
+
+      info = srt_system_info_new (NULL);
+      g_assert_nonnull (info);
+      srt_system_info_set_environ (info, vulkan_layer_envp);
+      srt_system_info_set_sysroot (info, sysroot);
+
+      explicit_layers = srt_system_info_list_explicit_vulkan_layers (info);
+
+      for (iter = explicit_layers, j = 0; iter != NULL; iter = iter->next, j++)
+        {
+          layer_test = test->explicit_layers[j];
+          _test_layer_values (iter->data, &layer_test, this_test_dir, sysroot);
+        }
+      g_assert_cmpstr (test->explicit_layers[j].name, ==, NULL);
+
+      implicit_layers = srt_system_info_list_implicit_vulkan_layers (info);
+
+      for (iter = implicit_layers, j = 0; iter != NULL; iter = iter->next, j++)
+        {
+          layer_test = test->implicit_layers[j];
+          _test_layer_values (iter->data, &layer_test, this_test_dir, sysroot);
+        }
+      g_assert_cmpstr (test->implicit_layers[j].name, ==, NULL);
+
+      /* No need to keep this around */
+      if (!_srt_rm_rf (this_test_dir))
+        g_debug ("Unable to remove the temp layers directory: %s", this_test_dir);
+    }
+
+  if (!_srt_rm_rf (tmp_dir))
+    g_debug ("Unable to remove the temp layers directory: %s", tmp_dir);
+}
+
 static void
 check_list_suffixes (const GList *list,
                      const gchar * const *suffixes,
@@ -2402,6 +2726,9 @@ main (int argc,
               setup, test_icd_vulkan, teardown);
   g_test_add ("/graphics/icd/vulkan/xdg", Fixture, &xdg_config,
               setup, test_icd_vulkan, teardown);
+
+  g_test_add ("/graphics/layers/vulkan/xdg", Fixture, NULL,
+              setup, test_layer_vulkan, teardown);
 
   g_test_add ("/graphics/dri/debian10", Fixture, NULL,
               setup, test_dri_debian10, teardown);

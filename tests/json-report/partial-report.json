@@ -40,6 +40,12 @@
         "json_path" : "/usr/share/vulkan/icd.d/amd_icd64.json",
         "error" : "Something went wrong"
       }
+    ],
+    "implicit_layers" : [
+      {
+        "json_path" : "/usr/share/vulkan/implicit_layer.d/MangoHud.json",
+        "error": "Something went wrong"
+      }
     ]
   },
   "xdg-portals" : {

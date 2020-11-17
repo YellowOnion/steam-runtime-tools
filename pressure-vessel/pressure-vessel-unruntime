@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # pressure-vessel-unruntime — undo the Steam Runtime's environment
 #

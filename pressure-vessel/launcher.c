@@ -60,7 +60,6 @@ typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
 static PvPortalListener *global_listener;
-static const char * const *global_original_environ = NULL;
 static FILE *original_stdout = NULL;
 static FILE *info_fh = NULL;
 static GHashTable *lock_env_hash = NULL;
@@ -69,7 +68,6 @@ static GHashTable *client_pid_data_hash = NULL;
 static guint name_owner_id = 0;
 static GMainLoop *main_loop;
 static PvLauncher1 *launcher;
-static gchar *original_cwd_l = NULL;
 
 /*
  * Close the --info-fd, and also close standard output (if different).
@@ -376,7 +374,7 @@ handle_launch (PvLauncher1           *object,
     }
   else
     {
-      env = g_strdupv ((gchar **) global_original_environ);
+      env = g_strdupv (global_listener->original_environ);
     }
 
   n_envs = g_variant_n_children (arg_envs);
@@ -425,7 +423,8 @@ handle_launch (PvLauncher1           *object,
     }
 
   if (arg_cwd_path == NULL)
-    env = g_environ_setenv (env, "PWD", original_cwd_l, TRUE);
+    env = g_environ_setenv (env, "PWD", global_listener->original_cwd_l,
+                            TRUE);
   else
     env = g_environ_setenv (env, "PWD", arg_cwd_path, TRUE);
 
@@ -1109,7 +1108,6 @@ int
 main (int argc,
       char *argv[])
 {
-  g_auto(GStrv) original_environ = NULL;
   g_autoptr(AutoDBusServer) server = NULL;
   g_autoptr(GOptionContext) context = NULL;
   guint signals_id = 0;
@@ -1122,9 +1120,6 @@ main (int argc,
   my_pid = getpid ();
 
   global_listener = pv_portal_listener_new ();
-  original_environ = g_get_environ ();
-  global_original_environ = (const char * const *) original_environ;
-  pv_get_current_dirs (NULL, &original_cwd_l);
 
   setlocale (LC_ALL, "");
 
@@ -1446,9 +1441,6 @@ out:
 
   g_clear_error (&local_error);
   close_info_fh ();
-
-  g_free (original_cwd_l);
-  global_original_environ = NULL;
 
   g_debug ("Exiting with status %d", ret);
   return ret;

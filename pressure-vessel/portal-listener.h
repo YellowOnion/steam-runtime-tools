@@ -50,6 +50,8 @@ GType pv_portal_listener_get_type (void);
 struct _PvPortalListener
 {
   GObject parent;
+  GStrv original_environ;
+  gchar *original_cwd_l;
 };
 
 PvPortalListener *pv_portal_listener_new (void);

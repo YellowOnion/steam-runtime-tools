@@ -27,7 +27,12 @@
 #include "config.h"
 #include "subprojects/libglnx/config.h"
 
+#include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
+#include "libglnx/libglnx.h"
+
 #include "portal-listener.h"
+#include "utils.h"
 
 struct _PvPortalListenerClass
 {
@@ -39,6 +44,8 @@ G_DEFINE_TYPE (PvPortalListener, pv_portal_listener, G_TYPE_OBJECT)
 void
 pv_portal_listener_init (PvPortalListener *self)
 {
+  self->original_environ = g_get_environ ();
+  pv_get_current_dirs (NULL, &self->original_cwd_l);
 }
 
 static void
@@ -56,7 +63,8 @@ pv_portal_listener_finalize (GObject *object)
 {
   PvPortalListener *self = PV_PORTAL_LISTENER (object);
 
-  (void) self;
+  g_clear_pointer (&self->original_environ, g_strfreev);
+  g_clear_pointer (&self->original_cwd_l, g_free);
 
   G_OBJECT_CLASS (pv_portal_listener_parent_class)->finalize (object);
 }

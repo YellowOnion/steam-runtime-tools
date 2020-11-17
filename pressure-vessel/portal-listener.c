@@ -79,6 +79,50 @@ pv_portal_listener_set_up_info_fd (PvPortalListener *self,
   return TRUE;
 }
 
+gboolean
+pv_portal_listener_check_socket_arguments (PvPortalListener *listener,
+                                           const char *opt_bus_name,
+                                           const char *opt_socket,
+                                           const char *opt_socket_directory,
+                                           GError **error)
+{
+  gsize i;
+
+  if ((opt_socket != NULL) + (opt_socket_directory != NULL) + (opt_bus_name != NULL) != 1)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Exactly one of --bus-name, --socket, --socket-directory"
+                   "is required");
+      return FALSE;
+    }
+
+  /* --socket argument needs to be printable so we can print
+   * "socket=%s\n" without escaping */
+  if (opt_socket != NULL)
+    {
+      for (i = 0; opt_socket[i] != '\0'; i++)
+        {
+          if (!g_ascii_isprint (opt_socket[i]))
+            return glnx_throw (error,
+                               "Non-printable characters not allowed in --socket");
+        }
+    }
+
+  /* --socket-directory argument likewise */
+  if (opt_socket_directory != NULL)
+    {
+      for (i = 0; opt_socket_directory[i] != '\0'; i++)
+        {
+          if (!g_ascii_isprint (opt_socket_directory[i]))
+            return glnx_throw (error,
+                               "Non-printable characters not allowed in "
+                               "--socket-directory");
+        }
+    }
+
+  return TRUE;
+}
+
 /*
  * If @bus_name is non-NULL, print it to the info fd. Then
  * close the --info-fd, and also close standard output (if different).

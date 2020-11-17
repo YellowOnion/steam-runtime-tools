@@ -62,6 +62,12 @@ gboolean pv_portal_listener_set_up_info_fd (PvPortalListener *self,
                                             int fd,
                                             GError **error);
 
+gboolean pv_portal_listener_check_socket_arguments (PvPortalListener *self,
+                                                    const char *opt_bus_name,
+                                                    const char *opt_socket,
+                                                    const char *opt_socket_directory,
+                                                    GError **error);
+
 void pv_portal_listener_close_info_fh (PvPortalListener *self,
                                        const char *bus_name);
 

@@ -1096,7 +1096,6 @@ main (int argc,
   guint exit_on_readable_id = 0;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
-  gsize i;
   int ret = EX_USAGE;
 
   my_pid = getpid ();
@@ -1210,35 +1209,12 @@ main (int argc,
 
   client_pid_data_hash = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) pid_data_free);
 
-  /* --socket argument needs to be printable so we can print
-   * "socket=%s\n" without escaping */
-  if (opt_socket != NULL)
-    {
-      for (i = 0; opt_socket[i] != '\0'; i++)
-        {
-          if (!g_ascii_isprint (opt_socket[i]))
-            {
-              glnx_throw (error,
-                          "Non-printable characters not allowed in --socket");
-              goto out;
-            }
-        }
-    }
-
-  /* --socket-directory argument likewise */
-  if (opt_socket_directory != NULL)
-    {
-      for (i = 0; opt_socket_directory[i] != '\0'; i++)
-        {
-          if (!g_ascii_isprint (opt_socket_directory[i]))
-            {
-              glnx_throw (error,
-                          "Non-printable characters not allowed in "
-                          "--socket-directory");
-              goto out;
-            }
-        }
-    }
+  if (!pv_portal_listener_check_socket_arguments (global_listener,
+                                                  opt_bus_name,
+                                                  opt_socket,
+                                                  opt_socket_directory,
+                                                  error))
+    goto out;
 
   /* Exit with this status until we know otherwise */
   ret = EX_SOFTWARE;
@@ -1246,15 +1222,6 @@ main (int argc,
   if (opt_bus_name != NULL)
     {
       GBusNameOwnerFlags flags;
-
-      if (opt_socket != NULL || opt_socket_directory != NULL)
-        {
-          glnx_throw (error,
-                      "--bus-name cannot be combined with --socket or "
-                      "--socket-directory");
-          ret = EX_USAGE;
-          goto out;
-        }
 
       g_debug ("Connecting to D-Bus session bus...");
 
@@ -1283,14 +1250,6 @@ main (int argc,
     }
   else if (opt_socket != NULL)
     {
-      if (opt_socket_directory != NULL)
-        {
-          glnx_throw (error,
-                      "--socket and --socket-directory cannot both be used");
-          ret = EX_USAGE;
-          goto out;
-        }
-
       g_debug ("Listening on socket %s...", opt_socket);
       server = listen_on_socket (opt_socket, error);
 
@@ -1349,10 +1308,8 @@ main (int argc,
     }
   else
     {
-      glnx_throw (error,
-                  "--bus-name, --socket or --socket-directory is required");
-      ret = EX_USAGE;
-      goto out;
+      /* We already checked that exactly one of them is non-NULL */
+      g_assert_not_reached ();
     }
 
   if (opt_socket != NULL)

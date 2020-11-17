@@ -53,7 +53,11 @@ struct _PvPortalListener
   GStrv original_environ;
   FILE *original_stdout;
   FILE *info_fh;
+  GDBusConnection *session_bus;
+  GDBusServer *server;
   gchar *original_cwd_l;
+  gchar *server_socket;
+  guint name_owner_id;
 };
 
 PvPortalListener *pv_portal_listener_new (void);
@@ -68,7 +72,16 @@ gboolean pv_portal_listener_check_socket_arguments (PvPortalListener *self,
                                                     const char *opt_socket_directory,
                                                     GError **error);
 
+gboolean pv_portal_listener_listen (PvPortalListener *self,
+                                    const char *opt_bus_name,
+                                    GBusNameOwnerFlags flags,
+                                    const char *opt_socket,
+                                    const char *opt_socket_directory,
+                                    GError **error);
+
 void pv_portal_listener_close_info_fh (PvPortalListener *self,
                                        const char *bus_name);
+
+void pv_portal_listener_release_name (PvPortalListener *self);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvPortalListener, g_object_unref)

@@ -50,21 +50,10 @@
 #include "portal-listener.h"
 #include "utils.h"
 
-typedef GCredentials AutoCredentials;
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoCredentials, g_object_unref)
-
-typedef GDBusAuthObserver AutoDBusAuthObserver;
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusAuthObserver, g_object_unref)
-
-typedef GDBusServer AutoDBusServer;
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
-
 static PvPortalListener *global_listener;
 
 static GHashTable *lock_env_hash = NULL;
-static GDBusConnection *session_bus = NULL;
 static GHashTable *client_pid_data_hash = NULL;
-static guint name_owner_id = 0;
 static GMainLoop *main_loop;
 static PvLauncher1 *launcher;
 
@@ -85,10 +74,7 @@ unref_skeleton_in_timeout_cb (gpointer user_data)
 static void
 unref_skeleton_in_timeout (void)
 {
-  if (name_owner_id)
-    g_bus_unown_name (name_owner_id);
-
-  name_owner_id = 0;
+  pv_portal_listener_release_name (global_listener);
 
   /* After we've lost the name we drop the main ref on the helper
      so that we'll exit when it drops to zero. However, if there are
@@ -578,9 +564,9 @@ export_launcher (GDBusConnection *connection,
 }
 
 static void
-on_bus_acquired (GDBusConnection *connection,
-                 const gchar     *name,
-                 gpointer         user_data)
+on_bus_acquired (PvPortalListener *listener,
+                 GDBusConnection *connection,
+                 gpointer user_data)
 {
   g_autoptr(GError) error = NULL;
   int *ret = user_data;
@@ -607,9 +593,10 @@ on_bus_acquired (GDBusConnection *connection,
 }
 
 static void
-on_name_acquired (GDBusConnection *connection,
-                  const gchar     *name,
-                  gpointer         user_data)
+on_name_acquired (PvPortalListener *listener,
+                  GDBusConnection *connection,
+                  const gchar *name,
+                  gpointer user_data)
 {
   int *ret = user_data;
 
@@ -624,91 +611,13 @@ on_name_acquired (GDBusConnection *connection,
 }
 
 static void
-on_name_lost (GDBusConnection *connection,
-              const gchar     *name,
-              gpointer         user_data)
+on_name_lost (PvPortalListener *listener,
+              GDBusConnection *connection,
+              const gchar *name,
+              gpointer user_data)
 {
   g_debug ("Name lost");
   unref_skeleton_in_timeout ();
-}
-
-#if GLIB_CHECK_VERSION(2, 34, 0)
-/*
- * Callback for GDBusServer::allow-mechanism.
- * Only allow the (most secure) EXTERNAL authentication mechanism,
- * if possible.
- */
-static gboolean
-allow_external_cb (G_GNUC_UNUSED GDBusAuthObserver *observer,
-                   const char *mechanism,
-                   G_GNUC_UNUSED gpointer user_data)
-{
-  return (g_strcmp0 (mechanism, "EXTERNAL") == 0);
-}
-#endif
-
-/*
- * Callback for GDBusServer::authorize-authenticated-peer.
- * Only allow D-Bus connections from a matching uid.
- */
-static gboolean
-authorize_authenticated_peer_cb (G_GNUC_UNUSED GDBusAuthObserver *observer,
-                                 G_GNUC_UNUSED GIOStream *stream,
-                                 GCredentials *credentials,
-                                 G_GNUC_UNUSED gpointer user_data)
-{
-  g_autoptr(AutoCredentials) retry_credentials = NULL;
-  g_autoptr(AutoCredentials) myself = NULL;
-  g_autofree gchar *credentials_str = NULL;
-
-  if (g_credentials_get_unix_user (credentials, NULL) == (uid_t) -1)
-    {
-      /* Work around https://gitlab.gnome.org/GNOME/glib/issues/1831:
-       * older GLib versions might retrieve incomplete credentials.
-       * Make them try again. */
-      credentials = NULL;
-    }
-
-  if (credentials == NULL && G_IS_SOCKET_CONNECTION (stream))
-    {
-      /* Continue to work around
-       * https://gitlab.gnome.org/GNOME/glib/issues/1831:
-       * older GLib versions might retrieve incomplete or no credentials. */
-      GSocket *sock;
-
-      sock = g_socket_connection_get_socket (G_SOCKET_CONNECTION (stream));
-      retry_credentials = g_socket_get_credentials (sock, NULL);
-      credentials = retry_credentials;
-    }
-
-  myself = g_credentials_new ();
-
-  if (credentials != NULL &&
-      g_credentials_is_same_user (credentials, myself, NULL))
-    return TRUE;
-
-  if (credentials == NULL)
-    credentials_str = g_strdup ("peer with unknown credentials");
-  else
-    credentials_str = g_credentials_to_string (credentials);
-
-  g_warning ("Rejecting connection from %s", credentials_str);
-  return FALSE;
-}
-
-static GDBusAuthObserver *
-observer_new (void)
-{
-  g_autoptr(AutoDBusAuthObserver) observer = g_dbus_auth_observer_new ();
-
-#if GLIB_CHECK_VERSION(2, 34, 0)
-  g_signal_connect (observer, "allow-mechanism",
-                    G_CALLBACK (allow_external_cb), NULL);
-#endif
-  g_signal_connect (observer, "authorize-authenticated-peer",
-                    G_CALLBACK (authorize_authenticated_peer_cb), NULL);
-
-  return g_steal_pointer (&observer);
 }
 
 /*
@@ -724,67 +633,12 @@ peer_connection_closed_cb (GDBusConnection *connection,
   g_object_unref (connection);
 }
 
-/*
- * Double-check credentials of a peer, since we are working with older
- * versions of GLib that can't necessarily be completely relied on.
- * We are willing to execute arbitrary code on behalf of an authenticated
- * connection, so it seems worthwhile to be extra-careful.
- */
 static gboolean
-check_credentials (GDBusConnection *connection,
-                   GError **error)
-{
-  struct ucred creds;
-  socklen_t len;
-  GIOStream *stream;
-  GSocket *sock;
-  int sockfd;
-
-  stream = g_dbus_connection_get_stream (connection);
-  len = sizeof (creds);
-
-  if (!G_IS_SOCKET_CONNECTION (stream))
-    return glnx_throw (error, "Incoming D-Bus connection is not a socket?");
-
-  sock = g_socket_connection_get_socket (G_SOCKET_CONNECTION (stream));
-
-  if (sock == NULL)
-    return glnx_throw (error,
-                       "Incoming D-Bus connection does not have a socket?");
-
-  sockfd = g_socket_get_fd (sock);
-
-  if (getsockopt (sockfd, SOL_SOCKET, SO_PEERCRED, &creds, &len) < 0)
-    return glnx_throw_errno_prefix (error, "Unable to check credentials");
-
-  if (creds.uid != geteuid ())
-    return glnx_throw (error,
-                       "Connection from uid %ld != %ld should have been "
-                       "rejected already",
-                       (long) creds.uid, (long) geteuid ());
-
-  return TRUE;
-}
-
-/*
- * Callback for GDBusServer::new-connection.
- *
- * Returns: %TRUE if the new connection attempt was handled, even if
- *  unsuccessfully.
- */
-static gboolean
-new_connection_cb (GDBusServer *server,
+new_connection_cb (PvPortalListener *listener,
                    GDBusConnection *connection,
                    gpointer user_data)
 {
-  g_autoptr(GError) error = NULL;
-
-  if (!check_credentials (connection, &error))
-    {
-      g_warning ("Credentials verification failed: %s", error->message);
-      g_dbus_connection_close (connection, NULL, NULL, NULL);
-      return TRUE;  /* handled, unsuccessfully */
-    }
+  GError *error = NULL;
 
   /* Paired with g_object_unref() in peer_connection_closed_cb() */
   g_object_ref (connection);
@@ -799,62 +653,6 @@ new_connection_cb (GDBusServer *server,
     }
 
   return G_DBUS_METHOD_INVOCATION_HANDLED;
-}
-
-static GDBusServer *
-listen_on_address (const char *address,
-                   GError **error)
-{
-  g_autofree gchar *guid = NULL;
-  g_autoptr(AutoDBusAuthObserver) observer = NULL;
-  g_autoptr(AutoDBusServer) server = NULL;
-
-  guid = g_dbus_generate_guid ();
-
-  observer = observer_new ();
-
-  server = g_dbus_server_new_sync (address,
-                                   G_DBUS_SERVER_FLAGS_NONE,
-                                   guid,
-                                   observer,
-                                   NULL,
-                                   error);
-
-  if (server == NULL)
-    return NULL;
-
-  g_signal_connect (server, "new-connection",
-                    G_CALLBACK (new_connection_cb), NULL);
-  g_dbus_server_start (server);
-
-  return g_steal_pointer (&server);
-}
-
-static GDBusServer *
-listen_on_socket (const char *name,
-                  GError **error)
-{
-  g_autofree gchar *address = NULL;
-  g_autofree gchar *escaped = NULL;
-
-  if (name[0] == '@')
-    {
-      escaped = g_dbus_address_escape_value (&name[1]);
-      address = g_strdup_printf ("unix:abstract=%s", escaped);
-    }
-  else if (name[0] == '/')
-    {
-      escaped = g_dbus_address_escape_value (name);
-      address = g_strdup_printf ("unix:path=%s", escaped);
-    }
-  else
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Invalid socket address '%s'", name);
-      return FALSE;
-    }
-
-  return listen_on_address (address, error);
 }
 
 static gboolean
@@ -1090,13 +888,13 @@ int
 main (int argc,
       char *argv[])
 {
-  g_autoptr(AutoDBusServer) server = NULL;
   g_autoptr(GOptionContext) context = NULL;
   guint signals_id = 0;
   guint exit_on_readable_id = 0;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   int ret = EX_USAGE;
+  GBusNameOwnerFlags flags;
 
   my_pid = getpid ();
 
@@ -1219,108 +1017,39 @@ main (int argc,
   /* Exit with this status until we know otherwise */
   ret = EX_SOFTWARE;
 
+  g_signal_connect (global_listener,
+                    "new-peer-connection", G_CALLBACK (new_connection_cb),
+                    NULL);
+  g_signal_connect (global_listener,
+                    "session-bus-connected", G_CALLBACK (on_bus_acquired),
+                    &ret);
+  g_signal_connect (global_listener,
+                    "session-bus-name-acquired", G_CALLBACK (on_name_acquired),
+                    &ret);
+  g_signal_connect (global_listener,
+                    "session-bus-name-lost", G_CALLBACK (on_name_lost),
+                    NULL);
+
+  flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
+
+  if (opt_replace)
+    flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
+
+  if (!pv_portal_listener_listen (global_listener,
+                                  opt_bus_name,
+                                  flags,
+                                  opt_socket,
+                                  opt_socket_directory,
+                                  error))
+    goto out;
+
+  /* If we're using the bus name method, we can't exit successfully
+   * until we claimed the bus name at least once. Otherwise we're
+   * already content. */
   if (opt_bus_name != NULL)
-    {
-      GBusNameOwnerFlags flags;
-
-      g_debug ("Connecting to D-Bus session bus...");
-
-      session_bus = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, error);
-
-      if (session_bus == NULL)
-        {
-          glnx_prefix_error (error, "Can't find session bus");
-          goto out;
-        }
-
-      flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
-      if (opt_replace)
-        flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
-
-      ret = EX_UNAVAILABLE;
-      g_debug ("Claiming bus name %s...", opt_bus_name);
-      name_owner_id = g_bus_own_name (G_BUS_TYPE_SESSION,
-                                      opt_bus_name,
-                                      flags,
-                                      on_bus_acquired,
-                                      on_name_acquired,
-                                      on_name_lost,
-                                      &ret,
-                                      NULL);
-    }
-  else if (opt_socket != NULL)
-    {
-      g_debug ("Listening on socket %s...", opt_socket);
-      server = listen_on_socket (opt_socket, error);
-
-      if (server == NULL)
-        {
-          glnx_prefix_error (error,
-                             "Unable to listen on socket \"%s\"", opt_socket);
-          goto out;
-        }
-
-      ret = 0;
-    }
-  else if (opt_socket_directory != NULL)
-    {
-      g_autofree gchar *unique = NULL;
-      g_autofree gchar *dir = NULL;
-
-      if (strlen (opt_socket_directory) > PV_MAX_SOCKET_DIRECTORY_LEN)
-        {
-          glnx_throw (error, "Socket directory path \"%s\" too long",
-                      opt_socket_directory);
-          goto out;
-        }
-
-      dir = realpath (opt_socket_directory, NULL);
-
-      if (strlen (dir) > PV_MAX_SOCKET_DIRECTORY_LEN)
-        {
-          glnx_throw (error, "Socket directory path \"%s\" too long", dir);
-          goto out;
-        }
-
-      g_debug ("Listening on a socket in %s...", opt_socket_directory);
-
-      /* @unique is long and random, so we assume it is not guessable
-       * by an attacker seeking to deny service by using the name we
-       * intended to use; so we don't need a retry loop for alternative
-       * names in the same directory. */
-      unique = pv_get_random_uuid (error);
-
-      if (unique == NULL)
-        goto out;
-
-      opt_socket = g_build_filename (dir, unique, NULL);
-      g_debug ("Chosen socket is %s", opt_socket);
-      server = listen_on_socket (opt_socket, error);
-
-      if (server == NULL)
-        {
-          glnx_prefix_error (error,
-                             "Unable to listen on socket \"%s\"", opt_socket);
-          goto out;
-        }
-
-      ret = 0;
-    }
+    ret = EX_UNAVAILABLE;
   else
-    {
-      /* We already checked that exactly one of them is non-NULL */
-      g_assert_not_reached ();
-    }
-
-  if (opt_socket != NULL)
-    fprintf (global_listener->info_fh, "socket=%s\n", opt_socket);
-
-  if (server != NULL)
-    fprintf (global_listener->info_fh, "dbus_address=%s\n",
-             g_dbus_server_get_client_address (server));
-
-  if (opt_bus_name == NULL)
-    pv_portal_listener_close_info_fh (global_listener, NULL);
+    ret = 0;
 
   g_debug ("Entering main loop");
 
@@ -1337,16 +1066,9 @@ out:
   if (signals_id > 0)
     g_source_remove (signals_id);
 
-  if (name_owner_id)
-    g_bus_unown_name (name_owner_id);
-
-  if (server != NULL && opt_socket != NULL)
-    unlink (opt_socket);
-
   g_free (opt_bus_name);
   g_free (opt_socket);
   g_free (opt_socket_directory);
-  g_clear_object (&session_bus);
   g_clear_object (&global_listener);
   g_hash_table_destroy (lock_env_hash);
 

@@ -276,6 +276,51 @@ gboolean srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
                                        const char *path,
                                        GError **error);
 
+typedef struct _SrtVulkanLayer SrtVulkanLayer;
+typedef struct _SrtVulkanLayerClass SrtVulkanLayerClass;
+
+#define SRT_TYPE_VULKAN_LAYER (srt_vulkan_layer_get_type ())
+#define SRT_VULKAN_LAYER(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_VULKAN_LAYER, SrtVulkanLayer))
+#define SRT_VULKAN_LAYER_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_VULKAN_LAYER, SrtVulkanLayerClass))
+#define SRT_IS_VULKAN_LAYER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_VULKAN_LAYER))
+#define SRT_IS_VULKAN_LAYER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_VULKAN_LAYER))
+#define SRT_VULKAN_LAYER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_VULKAN_LAYER, SrtVulkanLayerClass)
+_SRT_PUBLIC
+GType srt_vulkan_layer_get_type (void);
+
+_SRT_PUBLIC
+gboolean srt_vulkan_layer_check_error (const SrtVulkanLayer *self,
+                                       GError **error);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_json_path (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_library_path (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_name (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_description (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_api_version (SrtVulkanLayer *self);
+_SRT_PUBLIC
+gchar *srt_vulkan_layer_resolve_library_path (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_type_value (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const gchar *srt_vulkan_layer_get_implementation_version (SrtVulkanLayer *self);
+_SRT_PUBLIC
+const char * const *srt_vulkan_layer_get_component_layers (SrtVulkanLayer *self);
+_SRT_PUBLIC
+SrtVulkanLayer *srt_vulkan_layer_new_replace_library_path (SrtVulkanLayer *self,
+                                                           const char *path);
+_SRT_PUBLIC
+GList *_srt_load_vulkan_layers (const char *sysroot,
+                                gchar **envp,
+                                gboolean explicit);
+_SRT_PUBLIC
+gboolean srt_vulkan_layer_write_to_file (SrtVulkanLayer *self,
+                                         const char *path,
+                                         GError **error);
+
 typedef struct _SrtGlxIcd SrtGlxIcd;
 typedef struct _SrtGlxIcdClass SrtGlxIcdClass;
 
@@ -300,5 +345,6 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDriDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVaApiDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVdpauDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVulkanIcd, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVulkanLayer, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGlxIcd, g_object_unref)
 #endif

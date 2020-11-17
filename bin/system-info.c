@@ -746,6 +746,84 @@ print_glx_details (JsonBuilder *builder,
   json_builder_end_array (builder); // End glx_drivers
 }
 
+static void
+print_layer_details (JsonBuilder *builder,
+                     GList *layer_list,
+                     gboolean explicit)
+{
+  GList *iter;
+  const gchar *member_name;
+  const gchar *library_path;
+  const gchar *const *component_layers;
+
+  if (explicit)
+    member_name = "explicit_layers";
+  else
+    member_name = "implicit_layers";
+
+  json_builder_set_member_name (builder, member_name);
+  json_builder_begin_array (builder);
+    {
+      for (iter = layer_list; iter != NULL; iter = iter->next)
+      {
+        g_autoptr(GError) error = NULL;
+        json_builder_begin_object (builder);
+        json_builder_set_member_name (builder, "json_path");
+        json_builder_add_string_value (builder,
+                                      srt_vulkan_layer_get_json_path (iter->data));
+        if (srt_vulkan_layer_check_error (iter->data, &error))
+          {
+            json_builder_set_member_name (builder, "name");
+            json_builder_add_string_value (builder,
+                                          srt_vulkan_layer_get_name (iter->data));
+            json_builder_set_member_name (builder, "description");
+            json_builder_add_string_value (builder,
+                                          srt_vulkan_layer_get_description (iter->data));
+            json_builder_set_member_name (builder, "type");
+            json_builder_add_string_value (builder,
+                                          srt_vulkan_layer_get_type_value (iter->data));
+            json_builder_set_member_name (builder, "api_version");
+            json_builder_add_string_value (builder,
+                                          srt_vulkan_layer_get_api_version (iter->data));
+            json_builder_set_member_name (builder, "implementation_version");
+            json_builder_add_string_value (builder,
+                                          srt_vulkan_layer_get_implementation_version (iter->data));
+            library_path = srt_vulkan_layer_get_library_path (iter->data);
+            if (library_path != NULL)
+              {
+                g_autofree gchar *tmp = NULL;
+
+                json_builder_set_member_name (builder, "library_path");
+                json_builder_add_string_value (builder, library_path);
+
+                tmp = srt_vulkan_layer_resolve_library_path (iter->data);
+                if (g_strcmp0 (library_path, tmp) != 0)
+                  {
+                    json_builder_set_member_name (builder, "dlopen");
+                    json_builder_add_string_value (builder, tmp);
+                  }
+              }
+            component_layers = srt_vulkan_layer_get_component_layers (iter->data);
+            _srt_json_builder_add_strv_value (builder, "component_layers",
+                                              (const gchar * const *) component_layers,
+                                              FALSE);
+          }
+        else
+          {
+            json_builder_set_member_name (builder, "error-domain");
+            json_builder_add_string_value (builder,
+                                          g_quark_to_string (error->domain));
+            json_builder_set_member_name (builder, "error-code");
+            json_builder_add_int_value (builder, error->code);
+            json_builder_set_member_name (builder, "error");
+            json_builder_add_string_value (builder, error->message);
+          }
+        json_builder_end_object (builder);
+      }
+    }
+  json_builder_end_array (builder);
+}
+
 static const char * const locales[] =
 {
   "",
@@ -770,6 +848,8 @@ main (int argc,
   SrtX86FeatureFlags known_x86_features = SRT_X86_FEATURE_NONE;
   g_autoptr(SrtObjectList) portal_backends = NULL;
   g_autoptr(SrtObjectList) portal_interfaces = NULL;
+  g_autoptr(SrtObjectList) explicit_layers = NULL;
+  g_autoptr(SrtObjectList) implicit_layers = NULL;
   g_auto(GStrv) driver_environment = NULL;
   char *expectations = NULL;
   gboolean verbose = FALSE;
@@ -1205,6 +1285,13 @@ main (int argc,
 
   g_list_free_full (icds, g_object_unref);
   json_builder_end_array (builder);   // vulkan.icds
+
+  explicit_layers = srt_system_info_list_explicit_vulkan_layers (info);
+  print_layer_details (builder, explicit_layers, TRUE);
+
+  implicit_layers = srt_system_info_list_implicit_vulkan_layers (info);
+  print_layer_details (builder, implicit_layers, FALSE);
+
   json_builder_end_object (builder);  // vulkan
 
   json_builder_set_member_name (builder, "desktop-entries");

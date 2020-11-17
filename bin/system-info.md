@@ -651,13 +651,38 @@ keys:
     :   A human-readable error message.
 
 **vulkan**
-:   An object describing Vulkan support. Currently the only key is
-    **icds**. Its value is an array of objects describing ICDs,
-    with the same keys and values as for EGL ICDs, plus one extra key:
+:   An object describing Vulkan support. Currently the keys are **icds**,
+    **external_layers** and **internal_layers**. For **icds**, its value is an
+    array of objects describing ICDs, with the same keys and values as for EGL
+    ICDs, plus one extra key:
 
     **api_version**
     :   Vulkan API version implemented by this ICD as a dotted-decimal
         string, for example **1.1.90**
+
+    Instead, the value of **external_layers**, and **internal_layers**, is an
+    array of objects, where the former describes external Vulkan layers and
+    the latter describes internal Vulkan layers. They have the same keys and
+    values as for Vulkan ICDs, with the differences that **library_path**
+    might be omitted, if it is not present, and they have the following extra
+    keys:
+
+    **name**
+    :   The name that uniquely identify this layer to applications
+
+    **description**
+    :   Brief description of the layer
+
+    **type**
+    :   The type of the layer, expected to be either "GLOBAL" or "INSTANCE"
+
+    **implementation_version**
+    :   Version of the implemented layer
+
+    **component_layer**
+    :   An array of strings that identifies the component layer names that
+        are part of a meta-layer. This will be omitted if **library_path**
+        is used instead.
 
 **desktop-entries**
 :   An array of objects describing the Steam related desktop entries

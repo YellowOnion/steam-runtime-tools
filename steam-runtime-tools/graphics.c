@@ -30,6 +30,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/json-glib-backports-internal.h"
+#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -1614,15 +1615,74 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
     }
 }
 
+typedef struct
+{
+  gchar *name;
+  gchar *spec_version;
+  gchar **entrypoints;
+} DeviceExtension;
+
+typedef struct
+{
+  gchar *name;
+  gchar *spec_version;
+} InstanceExtension;
+
+typedef struct
+{
+  gchar *name;
+  gchar *value;
+} EnvironmentVariable;
+
 /* EGL and Vulkan ICDs are actually basically the same, but we don't
- * hard-code that in the API. */
+ * hard-code that in the API.
+ * Vulkan Layers have the same structure too but with some extra fields. */
 typedef struct
 {
   GError *error;
   gchar *api_version;   /* Always NULL when found in a SrtEglIcd */
   gchar *json_path;
   gchar *library_path;
+  gchar *file_format_version;
+  gchar *name;
+  gchar *type;
+  gchar *implementation_version;
+  gchar *description;
+  GStrv component_layers;
+  /* Standard name => dlsym() name to call instead
+   * (element-type utf8 utf8) */
+  GHashTable *functions;
+  /* (element-type InstanceExtension) */
+  GList *instance_extensions;
+  /* Standard name to intercept => dlsym() name to call instead
+   * (element-type utf8 utf8) */
+  GHashTable *pre_instance_functions;
+  /* (element-type DeviceExtension) */
+  GList *device_extensions;
+  EnvironmentVariable enable_env_var;
+  EnvironmentVariable disable_env_var;
 } SrtLoadable;
+
+static void
+device_extension_free (gpointer p)
+{
+  DeviceExtension *self = p;
+
+  g_free (self->name);
+  g_free (self->spec_version);
+  g_strfreev (self->entrypoints);
+  g_slice_free (DeviceExtension, self);
+}
+
+static void
+instance_extension_free (gpointer p)
+{
+  InstanceExtension *self = p;
+
+  g_free (self->name);
+  g_free (self->spec_version);
+  g_slice_free (InstanceExtension, self);
+}
 
 static void
 srt_loadable_clear (SrtLoadable *self)
@@ -1631,11 +1691,26 @@ srt_loadable_clear (SrtLoadable *self)
   g_clear_pointer (&self->api_version, g_free);
   g_clear_pointer (&self->json_path, g_free);
   g_clear_pointer (&self->library_path, g_free);
+  g_clear_pointer (&self->file_format_version, g_free);
+  g_clear_pointer (&self->name, g_free);
+  g_clear_pointer (&self->type, g_free);
+  g_clear_pointer (&self->implementation_version, g_free);
+  g_clear_pointer (&self->description, g_free);
+  g_clear_pointer (&self->component_layers, g_strfreev);
+  g_clear_pointer (&self->functions, g_hash_table_unref);
+  g_list_free_full (g_steal_pointer (&self->instance_extensions), instance_extension_free);
+  g_clear_pointer (&self->pre_instance_functions, g_hash_table_unref);
+  g_list_free_full (g_steal_pointer (&self->device_extensions), device_extension_free);
+  g_clear_pointer (&self->enable_env_var.name, g_free);
+  g_clear_pointer (&self->enable_env_var.value, g_free);
+  g_clear_pointer (&self->disable_env_var.name, g_free);
+  g_clear_pointer (&self->disable_env_var.value, g_free);
 }
 
 /*
  * See srt_egl_icd_resolve_library_path(),
- * srt_vulkan_icd_resolve_library_path()
+ * srt_vulkan_icd_resolve_library_path() or
+ * srt_vulkan_layer_resolve_library_path()
  */
 static gchar *
 srt_loadable_resolve_library_path (const SrtLoadable *self)
@@ -1652,6 +1727,7 @@ srt_loadable_resolve_library_path (const SrtLoadable *self)
    * JSON manifest file. If "library_path" specifies a filename, the
    * library must live in the system's shared object search path.
    * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
+   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#layer-manifest-file-format
    *
    * In GLVND, EGL ICDs with relative pathnames are currently passed
    * directly to dlopen(), which will interpret them as relative to
@@ -1688,7 +1764,8 @@ srt_loadable_check_error (const SrtLoadable *self,
   return (self->error == NULL);
 }
 
-/* See srt_egl_icd_write_to_file(), srt_vulkan_icd_write_to_file() */
+/* See srt_egl_icd_write_to_file(), srt_vulkan_icd_write_to_file() and
+ * srt_vulkan_layer_write_to_file() */
 static gboolean
 srt_loadable_write_to_file (const SrtLoadable *self,
                             const char *path,
@@ -1700,45 +1777,191 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   JsonNode *root;
   gchar *json_output;
   gboolean ret = FALSE;
+  const gchar *member;
+  GHashTableIter iter;
+  gpointer key;
+  gpointer value;
+  const GList *l;
 
-  if (which != SRT_TYPE_EGL_ICD && which != SRT_TYPE_VULKAN_ICD)
+  if (which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD)
+    member = "ICD";
+  else if (which == SRT_TYPE_VULKAN_LAYER)
+    member = "layer";
+  else
     g_return_val_if_reached (FALSE);
 
   if (!srt_loadable_check_error (self, error))
     {
       g_prefix_error (error,
-                      "Cannot save ICD metadata to file because it is invalid: ");
+                      "Cannot save %s metadata to file because it is invalid: ",
+                      member);
       return FALSE;
     }
 
   builder = json_builder_new ();
   json_builder_begin_object (builder);
-  {
-    json_builder_set_member_name (builder, "file_format_version");
-    /* We parse and store all the information defined in file format
-     * version 1.0.0, but nothing beyond that, so we use this version
-     * in our output instead of quoting whatever was in the input.
-     *
-     * We don't currently need to distinguish between EGL and Vulkan here
-     * because the file format version we understand happens to be the
-     * same for both. */
-    json_builder_add_string_value (builder, "1.0.0");
-
-    json_builder_set_member_name (builder, "ICD");
-    json_builder_begin_object (builder);
     {
-      json_builder_set_member_name (builder, "library_path");
-      json_builder_add_string_value (builder, self->library_path);
-
-      /* In the EGL case we don't have the "api_version" field. */
-      if (which == SRT_TYPE_VULKAN_ICD)
+      if (which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD)
         {
-          json_builder_set_member_name (builder, "api_version");
-          json_builder_add_string_value (builder, self->api_version);
+          json_builder_set_member_name (builder, "file_format_version");
+          /* We parse and store all the information defined in file format
+           * version 1.0.0, but nothing beyond that, so we use this version
+           * in our output instead of quoting whatever was in the input.
+           *
+           * We don't currently need to distinguish between EGL and Vulkan here
+           * because the file format version we understand happens to be the
+           * same for both. */
+           json_builder_add_string_value (builder, "1.0.0");
+
+           json_builder_set_member_name (builder, member);
+           json_builder_begin_object (builder);
+            {
+              json_builder_set_member_name (builder, "library_path");
+              json_builder_add_string_value (builder, self->library_path);
+
+              /* In the EGL case we don't have the "api_version" field. */
+              if (which == SRT_TYPE_VULKAN_ICD)
+                {
+                  json_builder_set_member_name (builder, "api_version");
+                  json_builder_add_string_value (builder, self->api_version);
+                }
+            }
+           json_builder_end_object (builder);
+        }
+      else if (which == SRT_TYPE_VULKAN_LAYER)
+        {
+          json_builder_set_member_name (builder, "file_format_version");
+          /* In the Vulkan layer specs the file format version is a required field.
+           * However it might happen that we are not aware of its value, e.g. when we
+           * parse an s-r-s-i report. Because of that, if the file format version info
+           * is missing, we don't consider it a fatal error and we just set it to the
+           * lowest version that is required, based on the fields we have. */
+          if (self->file_format_version == NULL)
+            {
+              if (self->pre_instance_functions != NULL)
+                json_builder_add_string_value (builder, "1.1.2");
+              else if (self->component_layers != NULL && self->component_layers[0] != NULL)
+                json_builder_add_string_value (builder, "1.1.1");
+              else
+                json_builder_add_string_value (builder, "1.1.0");
+            }
+          else
+            {
+              json_builder_add_string_value (builder, self->file_format_version);
+            }
+
+          json_builder_set_member_name (builder, "layer");
+          json_builder_begin_object (builder);
+            {
+              json_builder_set_member_name (builder, "name");
+              json_builder_add_string_value (builder, self->name);
+
+              json_builder_set_member_name (builder, "type");
+              json_builder_add_string_value (builder, self->type);
+
+              if (self->library_path != NULL)
+                {
+                  json_builder_set_member_name (builder, "library_path");
+                  json_builder_add_string_value (builder, self->library_path);
+                }
+
+              json_builder_set_member_name (builder, "api_version");
+              json_builder_add_string_value (builder, self->api_version);
+
+              json_builder_set_member_name (builder, "implementation_version");
+              json_builder_add_string_value (builder, self->implementation_version);
+
+              json_builder_set_member_name (builder, "description");
+              json_builder_add_string_value (builder, self->description);
+
+              _srt_json_builder_add_strv_value (builder, "component_layers",
+                                                (const gchar * const *) self->component_layers,
+                                                FALSE);
+
+              if (self->functions != NULL)
+                {
+                  json_builder_set_member_name (builder, "functions");
+                  json_builder_begin_object (builder);
+                  g_hash_table_iter_init (&iter, self->functions);
+                  while (g_hash_table_iter_next (&iter, &key, &value))
+                    {
+                      json_builder_set_member_name (builder, key);
+                      json_builder_add_string_value (builder, value);
+                    }
+                  json_builder_end_object (builder);
+                }
+
+              if (self->pre_instance_functions != NULL)
+                {
+                  json_builder_set_member_name (builder, "pre_instance_functions");
+                  json_builder_begin_object (builder);
+                  g_hash_table_iter_init (&iter, self->pre_instance_functions);
+                  while (g_hash_table_iter_next (&iter, &key, &value))
+                    {
+                      json_builder_set_member_name (builder, key);
+                      json_builder_add_string_value (builder, value);
+                    }
+                  json_builder_end_object (builder);
+                }
+
+              if (self->instance_extensions != NULL)
+                {
+                  json_builder_set_member_name (builder, "instance_extensions");
+                  json_builder_begin_array (builder);
+                  for (l = self->instance_extensions; l != NULL; l = l->next)
+                    {
+                      InstanceExtension *ie = l->data;
+                      json_builder_begin_object (builder);
+                      json_builder_set_member_name (builder, "name");
+                      json_builder_add_string_value (builder, ie->name);
+                      json_builder_set_member_name (builder, "spec_version");
+                      json_builder_add_string_value (builder, ie->spec_version);
+                      json_builder_end_object (builder);
+                    }
+                  json_builder_end_array (builder);
+                }
+
+              if (self->device_extensions != NULL)
+                {
+                  json_builder_set_member_name (builder, "device_extensions");
+                  json_builder_begin_array (builder);
+                  for (l = self->device_extensions; l != NULL; l = l->next)
+                    {
+                      DeviceExtension *de = l->data;
+                      json_builder_begin_object (builder);
+                      json_builder_set_member_name (builder, "name");
+                      json_builder_add_string_value (builder, de->name);
+                      json_builder_set_member_name (builder, "spec_version");
+                      json_builder_add_string_value (builder, de->spec_version);
+                      _srt_json_builder_add_strv_value (builder, "entrypoints",
+                                                        (const gchar * const *) de->entrypoints,
+                                                        FALSE);
+                      json_builder_end_object (builder);
+                    }
+                  json_builder_end_array (builder);
+                }
+
+              if (self->enable_env_var.name != NULL)
+                {
+                  json_builder_set_member_name (builder, "enable_environment");
+                  json_builder_begin_object (builder);
+                  json_builder_set_member_name (builder, self->enable_env_var.name);
+                  json_builder_add_string_value (builder, self->enable_env_var.value);
+                  json_builder_end_object (builder);
+                }
+
+              if (self->disable_env_var.name != NULL)
+                {
+                  json_builder_set_member_name (builder, "disable_environment");
+                  json_builder_begin_object (builder);
+                  json_builder_set_member_name (builder, self->disable_env_var.name);
+                  json_builder_add_string_value (builder, self->disable_env_var.value);
+                  json_builder_end_object (builder);
+                }
+            }
+          json_builder_end_object (builder);
         }
     }
-    json_builder_end_object (builder);
-  }
   json_builder_end_object (builder);
 
   root = json_builder_get_root (builder);
@@ -1750,8 +1973,7 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   ret = g_file_set_contents (path, json_output, -1, error);
 
   if (!ret)
-    g_prefix_error (error,
-                    "Cannot save ICD metadata to file :");
+    g_prefix_error (error, "Cannot save %s metadata to file :", member);
 
   g_free (json_output);
   g_object_unref (generator);
@@ -2613,7 +2835,8 @@ _srt_resolve_library_path (const gchar *library_path)
 
 static GList *
 get_driver_loadables_from_json_report (JsonObject *json_obj,
-                                       GType which);
+                                       GType which,
+                                       gboolean explicit);
 
 /**
  * _srt_get_egl_from_json_report:
@@ -2625,7 +2848,7 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
 GList *
 _srt_get_egl_from_json_report (JsonObject *json_obj)
 {
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_EGL_ICD);
+  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_EGL_ICD, FALSE);
 }
 
 /**
@@ -4835,7 +5058,8 @@ get_vulkan_sysconfdir (void)
 static gchar **
 get_vulkan_search_paths (const char *sysroot,
                          gchar **envp,
-                         const char * const *multiarch_tuples)
+                         const char * const *multiarch_tuples,
+                         const char *suffix)
 {
   GPtrArray *search_paths = g_ptr_array_new ();
   g_auto(GStrv) dirs = NULL;
@@ -4856,23 +5080,23 @@ get_vulkan_search_paths (const char *sysroot,
 
   dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
   for (i = 0; dirs[i] != NULL; i++)
-    g_ptr_array_add (search_paths, g_build_filename (dirs[i], VULKAN_ICD_SUFFIX, NULL));
+    g_ptr_array_add (search_paths, g_build_filename (dirs[i], suffix, NULL));
 
   g_clear_pointer (&dirs, g_strfreev);
 
   value = get_vulkan_sysconfdir ();
-  g_ptr_array_add (search_paths, g_build_filename (value, VULKAN_ICD_SUFFIX, NULL));
+  g_ptr_array_add (search_paths, g_build_filename (value, suffix, NULL));
 
   /* This is hard-coded in the reference loader: if its own sysconfdir
    * is not /etc, it searches /etc afterwards. (In practice this
    * won't trigger at the moment, because we assume the Vulkan
    * loader's sysconfdir *is* /etc.) */
   if (g_strcmp0 (value, "/etc") != 0)
-    g_ptr_array_add (search_paths, g_build_filename ("/etc", VULKAN_ICD_SUFFIX, NULL));
+    g_ptr_array_add (search_paths, g_build_filename ("/etc", suffix, NULL));
 
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
 
-  /* freedesktop-sdk patches the Vulkan loader to look here. */
+  /* freedesktop-sdk patches the Vulkan loader to look here for ICDs. */
   if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
       && multiarch_tuples != NULL)
     {
@@ -4884,12 +5108,12 @@ get_vulkan_search_paths (const char *sysroot,
           g_ptr_array_add (search_paths, g_build_filename ("/usr/lib",
                                                            multiarch_tuples[i],
                                                            "GL",
-                                                           VULKAN_ICD_SUFFIX,
+                                                           suffix,
                                                            NULL));
           /* Built-in Mesa stack */
           g_ptr_array_add (search_paths, g_build_filename ("/usr/lib",
                                                            multiarch_tuples[i],
-                                                           VULKAN_ICD_SUFFIX,
+                                                           suffix,
                                                            NULL));
         }
     }
@@ -4909,13 +5133,13 @@ get_vulkan_search_paths (const char *sysroot,
 
   dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
   for (i = 0; dirs[i] != NULL; i++)
-    g_ptr_array_add (search_paths, g_build_filename (dirs[i], VULKAN_ICD_SUFFIX, NULL));
+    g_ptr_array_add (search_paths, g_build_filename (dirs[i], suffix, NULL));
 
   /* I don't know why this is searched *after* XDG_DATA_DIRS in the
    * reference loader, but we match that behaviour. */
   value = g_environ_getenv (envp, "XDG_DATA_HOME");
   if (value != NULL)
-    g_ptr_array_add (search_paths, g_build_filename (value, VULKAN_ICD_SUFFIX, NULL));
+    g_ptr_array_add (search_paths, g_build_filename (value, suffix, NULL));
 
   /* libvulkan searches this unconditionally, even if XDG_DATA_HOME
    * is set. */
@@ -4925,7 +5149,7 @@ get_vulkan_search_paths (const char *sysroot,
     value = g_get_home_dir ();
 
   g_ptr_array_add (search_paths, g_build_filename (value, ".local", "share",
-                                                   VULKAN_ICD_SUFFIX, NULL));
+                                                   suffix, NULL));
 
   g_ptr_array_add (search_paths, NULL);
 
@@ -4979,7 +5203,8 @@ _srt_load_vulkan_icds (const char *sysroot,
     }
   else
     {
-      g_auto(GStrv) search_paths = get_vulkan_search_paths (sysroot, envp, multiarch_tuples);
+      g_auto(GStrv) search_paths = get_vulkan_search_paths (sysroot, envp, multiarch_tuples,
+                                                            VULKAN_ICD_SUFFIX);
       load_json_dirs (sysroot, search_paths, NULL, READDIR_ORDER,
                       vulkan_icd_load_json_cb, &ret);
     }
@@ -4997,22 +5222,1187 @@ _srt_load_vulkan_icds (const char *sysroot,
 GList *
 _srt_get_vulkan_from_json_report (JsonObject *json_obj)
 {
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_ICD);
+  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_ICD, FALSE);
+}
+
+/**
+ * SrtVulkanLayer:
+ *
+ * Opaque object representing a Vulkan layer.
+ */
+
+struct _SrtVulkanLayer
+{
+  /*< private >*/
+  GObject parent;
+  SrtLoadable layer;
+};
+
+struct _SrtVulkanLayerClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  VULKAN_LAYER_PROP_0,
+  VULKAN_LAYER_PROP_ERROR,
+  VULKAN_LAYER_PROP_JSON_PATH,
+  VULKAN_LAYER_PROP_NAME,
+  VULKAN_LAYER_PROP_TYPE,
+  VULKAN_LAYER_PROP_LIBRARY_PATH,
+  VULKAN_LAYER_PROP_API_VERSION,
+  VULKAN_LAYER_PROP_IMPLEMENTATION_VERSION,
+  VULKAN_LAYER_PROP_DESCRIPTION,
+  VULKAN_LAYER_PROP_COMPONENT_LAYERS,
+  N_VULKAN_LAYER_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtVulkanLayer, srt_vulkan_layer, G_TYPE_OBJECT)
+
+static void
+srt_vulkan_layer_init (SrtVulkanLayer *self)
+{
+}
+
+static void
+srt_vulkan_layer_get_property (GObject *object,
+                               guint prop_id,
+                               GValue *value,
+                               GParamSpec *pspec)
+{
+  SrtVulkanLayer *self = SRT_VULKAN_LAYER (object);
+
+  switch (prop_id)
+    {
+      case VULKAN_LAYER_PROP_ERROR:
+        g_value_set_boxed (value, self->layer.error);
+        break;
+
+      case VULKAN_LAYER_PROP_JSON_PATH:
+        g_value_set_string (value, self->layer.json_path);
+        break;
+
+      case VULKAN_LAYER_PROP_NAME:
+        g_value_set_string (value, self->layer.name);
+        break;
+
+      case VULKAN_LAYER_PROP_TYPE:
+        g_value_set_string (value, self->layer.type);
+        break;
+
+      case VULKAN_LAYER_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->layer.library_path);
+        break;
+
+      case VULKAN_LAYER_PROP_API_VERSION:
+        g_value_set_string (value, self->layer.api_version);
+        break;
+
+      case VULKAN_LAYER_PROP_IMPLEMENTATION_VERSION:
+        g_value_set_string (value, self->layer.implementation_version);
+        break;
+
+      case VULKAN_LAYER_PROP_DESCRIPTION:
+        g_value_set_string (value, self->layer.description);
+        break;
+
+      case VULKAN_LAYER_PROP_COMPONENT_LAYERS:
+        g_value_set_boxed (value, self->layer.component_layers);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_vulkan_layer_set_property (GObject *object,
+                               guint prop_id,
+                               const GValue *value,
+                               GParamSpec *pspec)
+{
+  SrtVulkanLayer *self = SRT_VULKAN_LAYER (object);
+  const char *tmp;
+
+  switch (prop_id)
+    {
+      case VULKAN_LAYER_PROP_ERROR:
+        g_return_if_fail (self->layer.error == NULL);
+        self->layer.error = g_value_dup_boxed (value);
+        break;
+
+      case VULKAN_LAYER_PROP_JSON_PATH:
+        g_return_if_fail (self->layer.json_path == NULL);
+        tmp = g_value_get_string (value);
+
+        if (g_path_is_absolute (tmp))
+          {
+            self->layer.json_path = g_strdup (tmp);
+          }
+        else
+          {
+            g_autofree gchar *cwd = g_get_current_dir ();
+            self->layer.json_path = g_build_filename (cwd, tmp, NULL);
+          }
+        break;
+
+      case VULKAN_LAYER_PROP_NAME:
+        g_return_if_fail (self->layer.name == NULL);
+        self->layer.name = g_value_dup_string (value);
+        break;
+
+      case VULKAN_LAYER_PROP_TYPE:
+        g_return_if_fail (self->layer.type == NULL);
+        self->layer.type = g_value_dup_string (value);
+        break;
+
+      case VULKAN_LAYER_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->layer.library_path == NULL);
+        self->layer.library_path = g_value_dup_string (value);
+        break;
+
+      case VULKAN_LAYER_PROP_API_VERSION:
+        g_return_if_fail (self->layer.api_version == NULL);
+        self->layer.api_version = g_value_dup_string (value);
+        break;
+
+      case VULKAN_LAYER_PROP_IMPLEMENTATION_VERSION:
+        g_return_if_fail (self->layer.implementation_version == NULL);
+        self->layer.implementation_version = g_value_dup_string (value);
+        break;
+
+      case VULKAN_LAYER_PROP_DESCRIPTION:
+        g_return_if_fail (self->layer.description == NULL);
+        self->layer.description = g_value_dup_string (value);
+        break;
+
+      case VULKAN_LAYER_PROP_COMPONENT_LAYERS:
+        g_return_if_fail (self->layer.component_layers == NULL);
+        self->layer.component_layers = g_value_dup_boxed (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_vulkan_layer_constructed (GObject *object)
+{
+  SrtVulkanLayer *self = SRT_VULKAN_LAYER (object);
+
+  g_return_if_fail (self->layer.json_path != NULL);
+  g_return_if_fail (g_path_is_absolute (self->layer.json_path));
+
+  if (self->layer.error != NULL)
+    {
+      g_return_if_fail (self->layer.name == NULL);
+      g_return_if_fail (self->layer.type == NULL);
+      g_return_if_fail (self->layer.library_path == NULL);
+      g_return_if_fail (self->layer.api_version == NULL);
+      g_return_if_fail (self->layer.implementation_version == NULL);
+      g_return_if_fail (self->layer.description == NULL);
+      g_return_if_fail (self->layer.component_layers == NULL);
+    }
+  else
+    {
+      g_return_if_fail (self->layer.name != NULL);
+      g_return_if_fail (self->layer.type != NULL);
+      g_return_if_fail (self->layer.api_version != NULL);
+      g_return_if_fail (self->layer.implementation_version != NULL);
+      g_return_if_fail (self->layer.description != NULL);
+
+      if (self->layer.library_path == NULL)
+        g_return_if_fail (self->layer.component_layers != NULL && self->layer.component_layers[0] != NULL);
+      else if (self->layer.component_layers == NULL || self->layer.component_layers[0] == NULL)
+        g_return_if_fail (self->layer.library_path != NULL);
+      else
+        g_return_if_reached ();
+    }
+}
+
+static void
+srt_vulkan_layer_finalize (GObject *object)
+{
+  SrtVulkanLayer *self = SRT_VULKAN_LAYER (object);
+
+  srt_loadable_clear (&self->layer);
+
+  G_OBJECT_CLASS (srt_vulkan_layer_parent_class)->finalize (object);
+}
+
+static GParamSpec *vulkan_layer_properties[N_VULKAN_LAYER_PROPERTIES] = { NULL };
+
+static void
+srt_vulkan_layer_class_init (SrtVulkanLayerClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_vulkan_layer_get_property;
+  object_class->set_property = srt_vulkan_layer_set_property;
+  object_class->constructed = srt_vulkan_layer_constructed;
+  object_class->finalize = srt_vulkan_layer_finalize;
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_ERROR] =
+    g_param_spec_boxed ("error", "Error",
+                        "GError describing how this layer failed to load, or NULL",
+                        G_TYPE_ERROR,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_JSON_PATH] =
+    g_param_spec_string ("json-path", "JSON path",
+                         "Absolute path to JSON file describing this layer. "
+                         "When constructing the object, a relative path can "
+                         "be given: it will be converted to an absolute path.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_NAME] =
+    g_param_spec_string ("name", "name",
+                         "The name that uniquely identify this layer to "
+                         "applications.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_TYPE] =
+    g_param_spec_string ("type", "type",
+                         "The type of this layer. It is expected to be either "
+                         "GLOBAL or INSTANCE.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Library implementing this layer, expressed as a "
+                         "basename to be searched for in the default "
+                         "library search path (e.g. vkOverlayLayer.so), "
+                         "a relative path containing '/' to be resolved "
+                         "relative to #SrtVulkanLayer:json-path (e.g. "
+                         "./vkOverlayLayer.so), or an absolute path "
+                         "(e.g. /opt/vulkan/vkOverlayLayer.so).",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_API_VERSION] =
+    g_param_spec_string ("api-version", "API version",
+                         "The version number of the Vulkan API that the "
+                         "shared library was built against.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_IMPLEMENTATION_VERSION] =
+    g_param_spec_string ("implementation-version", "Implementation version",
+                         "Version of the implemented layer.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_DESCRIPTION] =
+    g_param_spec_string ("description", "Description",
+                         "Brief description of the layer.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  vulkan_layer_properties[VULKAN_LAYER_PROP_COMPONENT_LAYERS] =
+    g_param_spec_boxed ("component-layers", "Component layers",
+                        "Component layer names that are part of a meta-layer.",
+                        G_TYPE_STRV,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_VULKAN_LAYER_PROPERTIES,
+                                     vulkan_layer_properties);
+}
+
+/**
+ * srt_vulkan_layer_new:
+ * @json_path: (transfer none): the absolute path to the JSON file
+ * @name: (transfer none): the layer unique name
+ * @type: (transfer none): the type of the layer
+ * @library_path: (transfer none): the path to the library
+ * @api_version: (transfer none): the API version
+ * @implementation_version: (transfer none): the version of the implemented
+ *  layer
+ * @description: (transfer none): the description of the layer
+ * @component_layers: (transfer none): the component layer names part of a
+ *  meta-layer
+ *
+ * @component_layers must be %NULL if @library_path has been defined.
+ * @library_path must be %NULL if @component_layers has been defined.
+ *
+ * Returns: (transfer full): a new SrtVulkanLayer
+ */
+static SrtVulkanLayer *
+srt_vulkan_layer_new (const gchar *json_path,
+                      const gchar *name,
+                      const gchar *type,
+                      const gchar *library_path,
+                      const gchar *api_version,
+                      const gchar *implementation_version,
+                      const gchar *description,
+                      GStrv component_layers)
+{
+  g_return_val_if_fail (json_path != NULL, NULL);
+  g_return_val_if_fail (name != NULL, NULL);
+  g_return_val_if_fail (type != NULL, NULL);
+  g_return_val_if_fail (api_version != NULL, NULL);
+  g_return_val_if_fail (implementation_version != NULL, NULL);
+  g_return_val_if_fail (description != NULL, NULL);
+  if (library_path == NULL)
+    g_return_val_if_fail (component_layers != NULL && *component_layers != NULL, NULL);
+  else if (component_layers == NULL || *component_layers == NULL)
+    g_return_val_if_fail (library_path != NULL, NULL);
+  else
+    g_return_val_if_reached (NULL);
+
+  return g_object_new (SRT_TYPE_VULKAN_LAYER,
+                       "json-path", json_path,
+                       "name", name,
+                       "type", type,
+                       "library-path", library_path,
+                       "api-version", api_version,
+                       "implementation-version", implementation_version,
+                       "description", description,
+                       "component-layers", component_layers,
+                       NULL);
+}
+
+/**
+ * srt_vulkan_layer_new:
+ * @json_path: (transfer none): the absolute path to the JSON file
+ * @error: (transfer none): Error that occurred when loading the layer
+ *
+ * Returns: (transfer full): a new SrtVulkanLayer
+ */
+static SrtVulkanLayer *
+srt_vulkan_layer_new_error (const gchar *json_path,
+                            const GError *error)
+{
+  g_return_val_if_fail (json_path != NULL, NULL);
+  g_return_val_if_fail (error != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_VULKAN_LAYER,
+                       "error", error,
+                       "json-path", json_path,
+                       NULL);
+}
+
+static void
+_vulkan_layer_parse_json_environment_field (const gchar *member_name,
+                                            EnvironmentVariable *env_var,
+                                            JsonObject* json_layer)
+{
+  JsonObject *env_obj = NULL;
+  g_autoptr(GList) members = NULL;
+
+  g_return_if_fail (member_name != NULL);
+  g_return_if_fail (env_var != NULL);
+  g_return_if_fail (env_var->name == NULL);
+  g_return_if_fail (env_var->value == NULL);
+  g_return_if_fail (json_layer != NULL);
+
+  if (json_object_has_member (json_layer, member_name))
+    env_obj = json_object_get_object_member (json_layer, member_name);
+  if (env_obj != NULL)
+    {
+      members = json_object_get_members (env_obj);
+      if (members != NULL)
+        {
+          const gchar *value = json_object_get_string_member_with_default (env_obj,
+                                                                           members->data,
+                                                                           NULL);
+
+          if (value == NULL)
+            {
+              g_debug ("The Vulkan layer property '%s' has an element with an "
+                       "invalid value, trying to continue...", member_name);
+            }
+          else
+            {
+              env_var->name = g_strdup (members->data);
+              env_var->value = g_strdup (value);
+            }
+
+          if (members->next != NULL)
+            g_debug ("The Vulkan layer property '%s' has more than the expected "
+                     "number of elements, trying to continue...", member_name);
+        }
+    }
+}
+
+static SrtVulkanLayer *
+vulkan_layer_parse_json (const gchar *path,
+                         const gchar *file_format_version,
+                         JsonObject *json_layer)
+{
+  const gchar *name = NULL;
+  const gchar *type = NULL;
+  const gchar *library_path = NULL;
+  const gchar *api_version = NULL;
+  const gchar *implementation_version = NULL;
+  const gchar *description = NULL;
+  g_auto(GStrv) component_layers = NULL;
+  JsonArray *instance_json_array = NULL;
+  JsonArray *device_json_array = NULL;
+  JsonNode *arr_node;
+  JsonObject *functions_obj = NULL;
+  JsonObject *pre_instance_obj = NULL;
+  SrtVulkanLayer *vulkan_layer = NULL;
+  g_autoptr(GError) error = NULL;
+  guint array_length;
+  gsize i;
+  GList *l;
+
+  g_return_val_if_fail (path != NULL, NULL);
+  g_return_val_if_fail (file_format_version != NULL, NULL);
+  g_return_val_if_fail (json_layer != NULL, NULL);
+
+  name = json_object_get_string_member_with_default (json_layer, "name", NULL);
+  type = json_object_get_string_member_with_default (json_layer, "type", NULL);
+  library_path = json_object_get_string_member_with_default (json_layer, "library_path", NULL);
+  api_version = json_object_get_string_member_with_default (json_layer, "api_version", NULL);
+  implementation_version = json_object_get_string_member_with_default (json_layer,
+                                                                       "implementation_version",
+                                                                       NULL);
+  description = json_object_get_string_member_with_default (json_layer, "description", NULL);
+
+  component_layers = _srt_json_object_dup_strv_member (json_layer, "component_layers", NULL);
+
+  /* Don't distinguish between absent, and present with empty value */
+  if (component_layers != NULL && component_layers[0] == NULL)
+    g_clear_pointer (&component_layers, g_free);
+
+  if (library_path != NULL && component_layers != NULL)
+    {
+      g_debug ("The parsed JSON layer has both 'library_path' and 'component_layers' "
+               "fields. This is not allowed.");
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Vulkan layer in \"%s\" cannot be parsed because it is not allowed to list "
+                   "both 'library_path' and 'component_layers' fields",
+                   path);
+      return srt_vulkan_layer_new_error (path, error);
+    }
+
+  if (name == NULL ||
+      type == NULL ||
+      api_version == NULL ||
+      implementation_version == NULL ||
+      description == NULL ||
+      (library_path == NULL && component_layers == NULL))
+    {
+      g_debug ("A required field is missing from the JSON layer");
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Vulkan layer in \"%s\" cannot be parsed because it is missing a required field",
+                   path);
+      return srt_vulkan_layer_new_error (path, error);
+    }
+
+  vulkan_layer = srt_vulkan_layer_new (path, name, type, library_path, api_version,
+                                       implementation_version, description, component_layers);
+
+  vulkan_layer->layer.file_format_version = g_strdup (file_format_version);
+
+  if (json_object_has_member (json_layer, "functions"))
+    functions_obj = json_object_get_object_member (json_layer, "functions");
+  if (functions_obj != NULL)
+    {
+      g_autoptr(GList) members = NULL;
+      vulkan_layer->layer.functions = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                             g_free, g_free);
+      members = json_object_get_members (functions_obj);
+      for (l = members; l != NULL; l = l->next)
+        {
+          const gchar *value = json_object_get_string_member_with_default (functions_obj, l->data,
+                                                                           NULL);
+          if (value == NULL)
+            g_debug ("The Vulkan layer property 'functions' has an element with an invalid "
+                     "value, trying to continue...");
+          else
+            g_hash_table_insert (vulkan_layer->layer.functions,
+                                 g_strdup (l->data), g_strdup (value));
+        }
+    }
+
+  if (json_object_has_member (json_layer, "pre_instance_functions"))
+    pre_instance_obj = json_object_get_object_member (json_layer, "pre_instance_functions");
+  if (pre_instance_obj != NULL)
+    {
+      g_autoptr(GList) members = NULL;
+      vulkan_layer->layer.pre_instance_functions = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                          g_free, g_free);
+      members = json_object_get_members (pre_instance_obj);
+      for (l = members; l != NULL; l = l->next)
+        {
+          const gchar *value = json_object_get_string_member_with_default (pre_instance_obj,
+                                                                           l->data, NULL);
+          if (value == NULL)
+            g_debug ("The Vulkan layer property 'pre_instance_functions' has an "
+                     "element with an invalid value, trying to continue...");
+          else
+            g_hash_table_insert (vulkan_layer->layer.pre_instance_functions,
+                                 g_strdup (l->data), g_strdup (value));
+        }
+    }
+
+  arr_node = json_object_get_member (json_layer, "instance_extensions");
+  if (arr_node != NULL && JSON_NODE_HOLDS_ARRAY (arr_node))
+    instance_json_array = json_node_get_array (arr_node);
+  if (instance_json_array != NULL)
+    {
+      array_length = json_array_get_length (instance_json_array);
+      for (i = 0; i < array_length; i++)
+        {
+          InstanceExtension *ie = g_slice_new0 (InstanceExtension);
+          JsonObject *instance_extension = json_array_get_object_element (instance_json_array, i);
+          ie->name = g_strdup (json_object_get_string_member_with_default (instance_extension,
+                                                                           "name", NULL));
+          ie->spec_version = g_strdup (json_object_get_string_member_with_default (instance_extension,
+                                                                                   "spec_version",
+                                                                                   NULL));
+
+          if (ie->name == NULL || ie->spec_version == NULL)
+            {
+              g_debug ("The Vulkan layer property 'instance_extensions' is "
+                       "missing some expected values, trying to continue...");
+              instance_extension_free (ie);
+            }
+          else
+            {
+              vulkan_layer->layer.instance_extensions = g_list_prepend (vulkan_layer->layer.instance_extensions,
+                                                                        ie);
+            }
+        }
+      vulkan_layer->layer.instance_extensions = g_list_reverse (vulkan_layer->layer.instance_extensions);
+    }
+
+  arr_node = json_object_get_member (json_layer, "device_extensions");
+  if (arr_node != NULL && JSON_NODE_HOLDS_ARRAY (arr_node))
+    device_json_array = json_node_get_array (arr_node);
+  if (device_json_array != NULL)
+    {
+      array_length = json_array_get_length (device_json_array);
+      for (i = 0; i < array_length; i++)
+        {
+          DeviceExtension *de = g_slice_new0 (DeviceExtension);
+          JsonObject *device_extension = json_array_get_object_element (device_json_array, i);
+          de->name = g_strdup (json_object_get_string_member_with_default (device_extension,
+                                                                           "name", NULL));
+          de->spec_version = g_strdup (json_object_get_string_member_with_default (device_extension,
+                                                                                   "spec_version",
+                                                                                   NULL));
+          de->entrypoints = _srt_json_object_dup_strv_member (device_extension, "entrypoints", NULL);
+
+          if (de->name == NULL || de->spec_version == NULL)
+            {
+              g_debug ("The Vulkan layer json is missing some expected values");
+              device_extension_free (de);
+            }
+          else
+            {
+              vulkan_layer->layer.device_extensions = g_list_prepend (vulkan_layer->layer.device_extensions,
+                                                                      de);
+            }
+        }
+    }
+
+  _vulkan_layer_parse_json_environment_field ("enable_environment",
+                                              &vulkan_layer->layer.enable_env_var,
+                                              json_layer);
+
+  _vulkan_layer_parse_json_environment_field ("disable_environment",
+                                              &vulkan_layer->layer.disable_env_var,
+                                              json_layer);
+
+  return vulkan_layer;
+}
+
+/**
+ * load_vulkan_layer_json:
+ * @path: (not nullable): Path to a Vulkan layer JSON file
+ *
+ * Returns: (transfer full) (element-type SrtVulkanLayer): A list of Vulkan
+ *  layers, least-important first
+ */
+static GList *
+load_vulkan_layer_json (const gchar *path)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(JsonParser) parser = NULL;
+  JsonNode *node = NULL;
+  JsonNode *arr_node = NULL;
+  JsonObject *object = NULL;
+  JsonObject *json_layer = NULL;
+  JsonArray *json_layers = NULL;
+  const gchar *file_format_version = NULL;
+  guint length;
+  gsize i;
+  GList *ret_list = NULL;
+
+  g_return_val_if_fail (path != NULL, NULL);
+
+  g_debug ("Attempting to load the json layer from %s", path);
+
+  parser = json_parser_new ();
+
+  if (!json_parser_load_from_file (parser, path, &error))
+    {
+      g_debug ("error %s", error->message);
+      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+    }
+
+  node = json_parser_get_root (parser);
+
+  if (node == NULL || !JSON_NODE_HOLDS_OBJECT (node))
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Expected to find a JSON object in \"%s\"", path);
+      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+    }
+
+  object = json_node_get_object (node);
+
+  file_format_version = json_object_get_string_member_with_default (object,
+                                                                    "file_format_version",
+                                                                    NULL);
+
+  if (file_format_version == NULL)
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "file_format_version in \"%s\" is missing or not a string", path);
+      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+    }
+
+  /* At the time of writing the latest layer manifest file version is the
+   * 1.1.2 and forward compatibility is not guaranteed */
+  if (g_strcmp0 (file_format_version, "1.0.0") == 0 ||
+      g_strcmp0 (file_format_version, "1.0.1") == 0 ||
+      g_strcmp0 (file_format_version, "1.1.0") == 0 ||
+      g_strcmp0 (file_format_version, "1.1.1") == 0 ||
+      g_strcmp0 (file_format_version, "1.1.2") == 0)
+    {
+      g_debug ("file_format_version is \"%s\"", file_format_version);
+    }
+  else
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Vulkan layer file_format_version \"%s\" in \"%s\" is not supported",
+                   file_format_version, path);
+      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+    }
+  if (json_object_has_member (object, "layers"))
+    {
+      arr_node = json_object_get_member (object, "layers");
+      if (arr_node != NULL && JSON_NODE_HOLDS_ARRAY (arr_node))
+        json_layers = json_node_get_array (arr_node);
+
+      if (json_layers == NULL)
+        {
+          g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "\"layers\" in \"%s\" is not an array as expected", path);
+          return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+        }
+      length = json_array_get_length (json_layers);
+      for (i = 0; i < length; i++)
+        {
+          json_layer = json_array_get_object_element (json_layers, i);
+          if (json_layer == NULL)
+            {
+              /* Try to continue parsing */
+              g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "the layer in \"%s\" is not an object as expected", path);
+              ret_list = g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+              g_clear_error (&error);
+              continue;
+            }
+          ret_list = g_list_prepend (ret_list, vulkan_layer_parse_json (path, file_format_version,
+                                                                        json_layer));
+        }
+    }
+  else if (json_object_has_member (object, "layer"))
+    {
+      json_layer = json_object_get_object_member (object, "layer");
+      if (json_layer == NULL)
+        {
+          g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "\"layer\" in \"%s\" is not an object as expected", path);
+          return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+        }
+      ret_list = g_list_prepend (ret_list, vulkan_layer_parse_json (path, file_format_version,
+                                                                    json_layer));
+    }
+  else
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "The layer definitions in \"%s\" is missing both the \"layer\" and \"layers\" fields",
+                   path);
+      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+    }
+  return ret_list;
+}
+
+static void
+vulkan_layer_load_json (const char *sysroot,
+                        const char *filename,
+                        GList **list)
+{
+  g_autofree gchar *canon = NULL;
+  g_autofree gchar *in_sysroot = NULL;
+
+  g_return_if_fail (sysroot != NULL);
+  g_return_if_fail (list != NULL);
+
+  if (!g_path_is_absolute (filename))
+    {
+      canon = g_canonicalize_filename (filename, NULL);
+      filename = canon;
+    }
+
+  in_sysroot = g_build_filename (sysroot, filename, NULL);
+
+  *list = g_list_concat (load_vulkan_layer_json (in_sysroot), *list);
+}
+
+static void
+vulkan_layer_load_json_cb (const char *sysroot,
+                           const char *filename,
+                           void *user_data)
+{
+  vulkan_layer_load_json (sysroot, filename, user_data);
+}
+
+#define EXPLICIT_VULKAN_LAYER_SUFFIX "vulkan/explicit_layer.d"
+#define IMPLICIT_VULKAN_LAYER_SUFFIX "vulkan/implicit_layer.d"
+
+/*
+ * _srt_load_vulkan_layers:
+ * @sysroot: (not nullable): The root directory, usually `/`
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
+ *  was this array
+ * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
+ *
+ * Implementation of srt_system_info_list_explicit_vulkan_layers() and
+ * srt_system_info_list_implicit_vulkan_layers().
+ *
+ * Returns: (transfer full) (element-type SrtVulkanLayer): A list of Vulkan
+ *  layers, most-important first
+ */
+GList *
+_srt_load_vulkan_layers (const char *sysroot,
+                         gchar **envp,
+                         gboolean explicit)
+{
+  GList *ret = NULL;
+  g_auto(GStrv) search_paths = NULL;
+  const gchar *value;
+  const gchar *suffix;
+
+  g_return_val_if_fail (_srt_check_not_setuid (), NULL);
+  g_return_val_if_fail (envp != NULL, NULL);
+
+  if (explicit)
+    suffix = EXPLICIT_VULKAN_LAYER_SUFFIX;
+  else
+    suffix = IMPLICIT_VULKAN_LAYER_SUFFIX;
+
+  value = g_environ_getenv (envp, "VK_LAYER_PATH");
+
+  /* As in the Vulkan-Loader implementation, implicit layers are not
+   * overridden by "VK_LAYER_PATH"
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/f8a8762/loader/loader.c#L4743
+   */
+  if (value != NULL && explicit)
+    {
+      g_auto(GStrv) dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+      load_json_dirs (sysroot, dirs, NULL, _srt_indirect_strcmp0,
+                      vulkan_layer_load_json_cb, &ret);
+    }
+  else
+    {
+      search_paths = get_vulkan_search_paths (sysroot, envp, NULL, suffix);
+      g_debug ("SEARCH PATHS %s", search_paths[0]);
+      load_json_dirs (sysroot, search_paths, NULL, _srt_indirect_strcmp0,
+                      vulkan_layer_load_json_cb, &ret);
+    }
+
+  return g_list_reverse (ret);
+}
+
+static SrtVulkanLayer *
+vulkan_layer_dup (SrtVulkanLayer *self)
+{
+  GHashTableIter iter;
+  gpointer key;
+  gpointer value;
+  const GList *l;
+
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+
+  SrtVulkanLayer *ret = srt_vulkan_layer_new (self->layer.json_path, self->layer.name,
+                                              self->layer.type, self->layer.library_path,
+                                              self->layer.api_version,
+                                              self->layer.implementation_version,
+                                              self->layer.description,
+                                              self->layer.component_layers);
+
+  ret->layer.file_format_version = g_strdup (self->layer.file_format_version);
+
+  if (self->layer.functions != NULL)
+    {
+      ret->layer.functions = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+      g_hash_table_iter_init (&iter, self->layer.functions);
+      while (g_hash_table_iter_next (&iter, &key, &value))
+        g_hash_table_insert (ret->layer.functions, g_strdup (key), g_strdup (value));
+    }
+
+  if (self->layer.pre_instance_functions != NULL)
+    {
+      ret->layer.pre_instance_functions = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                 g_free, g_free);
+      g_hash_table_iter_init (&iter, self->layer.pre_instance_functions);
+      while (g_hash_table_iter_next (&iter, &key, &value))
+        g_hash_table_insert (ret->layer.pre_instance_functions, g_strdup (key), g_strdup (value));
+    }
+
+  for (l = self->layer.instance_extensions; l != NULL; l = l->next)
+    {
+      InstanceExtension *ie = g_slice_new0 (InstanceExtension);
+      InstanceExtension *self_ie = l->data;
+      ie->name = g_strdup (self_ie->name);
+      ie->spec_version = g_strdup (self_ie->spec_version);
+      ret->layer.instance_extensions = g_list_prepend (ret->layer.instance_extensions, ie);
+    }
+  ret->layer.instance_extensions = g_list_reverse (ret->layer.instance_extensions);
+
+  for (l = self->layer.device_extensions; l != NULL; l = l->next)
+    {
+      DeviceExtension *de = g_slice_new0 (DeviceExtension);
+      DeviceExtension *self_de = l->data;
+      de->name = g_strdup (self_de->name);
+      de->spec_version = g_strdup (self_de->spec_version);
+      de->entrypoints = g_strdupv (self_de->entrypoints);
+      ret->layer.device_extensions = g_list_prepend (ret->layer.device_extensions, de);
+    }
+  ret->layer.device_extensions = g_list_reverse (ret->layer.device_extensions);
+
+  ret->layer.enable_env_var.name = g_strdup (self->layer.enable_env_var.name);
+  ret->layer.enable_env_var.value = g_strdup (self->layer.enable_env_var.value);
+
+  ret->layer.disable_env_var.name = g_strdup (self->layer.disable_env_var.name);
+  ret->layer.disable_env_var.value = g_strdup (self->layer.disable_env_var.value);
+
+  return ret;
+}
+
+/**
+ * srt_vulkan_layer_new_replace_library_path:
+ * @self: A Vulkan layer
+ * @path: (type filename) (transfer none): A path
+ *
+ * Return a copy of @self with the srt_vulkan_layer_get_library_path()
+ * changed to @path. For example, this is useful when setting up a
+ * container where the underlying shared object will be made available
+ * at a different absolute path.
+ *
+ * If @self does not have #SrtVulkanLayer:library-path set, or if it
+ * is in an error state, this returns a new reference to @self.
+ *
+ * Returns: (transfer full): A new reference to a #SrtVulkanLayer. Free with
+ *  g_object_unref().
+ */
+SrtVulkanLayer *
+srt_vulkan_layer_new_replace_library_path (SrtVulkanLayer *self,
+                                           const gchar *library_path)
+{
+  SrtVulkanLayer *ret = NULL;
+
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  if (self->layer.error != NULL || self->layer.library_path == NULL)
+    return g_object_ref (self);
+
+  ret = vulkan_layer_dup (self);
+
+  g_free (ret->layer.library_path);
+
+  ret->layer.library_path = g_strdup (library_path);
+
+  return ret;
+}
+
+/**
+ * srt_vulkan_layer_write_to_file:
+ * @self: The Vulkan layer
+ * @path: (type filename): A filename
+ * @error: Used to describe the error on failure
+ *
+ * Serialize @self to the given JSON file.
+ *
+ * Returns: %TRUE on success
+ */
+gboolean
+srt_vulkan_layer_write_to_file (SrtVulkanLayer *self,
+                                const char *path,
+                                GError **error)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  return srt_loadable_write_to_file (&self->layer, path, SRT_TYPE_VULKAN_LAYER, error);
+}
+
+/**
+ * srt_vulkan_layer_get_json_path:
+ * @self: The Vulkan layer
+ *
+ * Return the absolute path to the JSON file representing this layer.
+ *
+ * Returns: (type filename) (transfer none) (not nullable):
+ *  #SrtVulkanLayer:json-path
+ */
+const gchar *
+srt_vulkan_layer_get_json_path (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.json_path;
+}
+
+/**
+ * srt_vulkan_layer_get_library_path:
+ * @self: The Vulkan layer
+ *
+ * Return the library path for this layer. It is either an absolute path,
+ * a path relative to srt_vulkan_layer_get_json_path() containing at least one
+ * directory separator (slash), or a basename to be loaded from the
+ * shared library search path.
+ *
+ * If the JSON description for this layer could not be loaded, or if
+ * #SrtVulkanLayer:component_layers is used, return %NULL instead.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtVulkanLayer:library-path
+ */
+const gchar *
+srt_vulkan_layer_get_library_path (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.library_path;
+}
+
+/**
+ * srt_vulkan_layer_get_name:
+ * @self: The Vulkan layer
+ *
+ * Return the name that uniquely identify this layer.
+ *
+ * If the JSON description for this layer could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type utf8) (transfer none) (nullable): #SrtVulkanLayer:name
+ */
+const gchar *
+srt_vulkan_layer_get_name (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.name;
+}
+
+/**
+ * srt_vulkan_layer_get_description:
+ * @self: The Vulkan layer
+ *
+ * Return the description of this layer.
+ *
+ * If the JSON description for this layer could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type utf8) (transfer none) (nullable): #SrtVulkanLayer:description
+ */
+const gchar *
+srt_vulkan_layer_get_description (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.description;
+}
+
+/**
+ * srt_vulkan_layer_get_api_version:
+ * @self: The Vulkan layer
+ *
+ * Return the Vulkan API version of this layer.
+ *
+ * If the JSON description for this layer could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type utf8) (transfer none) (nullable): #SrtVulkanLayer:api_version
+ */
+const gchar *
+srt_vulkan_layer_get_api_version (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.api_version;
+}
+
+/**
+ * srt_vulkan_layer_get_type_value:
+ * @self: The Vulkan layer
+ *
+ * Return the type of this layer.
+ * The expected values should be either "GLOBAL" or "INSTANCE".
+ *
+ * If the JSON description for this layer could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type utf8) (transfer none) (nullable): #SrtVulkanLayer:type
+ */
+const gchar *
+srt_vulkan_layer_get_type_value (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.type;
+}
+
+/**
+ * srt_vulkan_layer_get_implementation_version:
+ * @self: The Vulkan layer
+ *
+ * Return the version of the implemented layer.
+ *
+ * If the JSON description for this layer could not be loaded, return %NULL
+ * instead.
+ *
+ * Returns: (type utf8) (transfer none) (nullable):
+ *  #SrtVulkanLayer:implementation_version
+ */
+const gchar *
+srt_vulkan_layer_get_implementation_version (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return self->layer.implementation_version;
+}
+
+/**
+ * srt_vulkan_layer_get_component_layers:
+ * @self: The Vulkan layer
+ *
+ * Return the component layer names that are part of a meta-layer.
+ *
+ * If the JSON description for this layer could not be loaded, or if
+ * #SrtVulkanLayer:library-path is used, return %NULL instead.
+ *
+ * Returns: (array zero-terminated=1) (transfer none) (element-type utf8) (nullable):
+ *  #SrtVulkanLayer:component_layers
+ */
+const char * const *
+srt_vulkan_layer_get_component_layers (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return (const char * const *) self->layer.component_layers;
+}
+
+/**
+ * srt_vulkan_layer_resolve_library_path:
+ * @self: A Vulkan layer
+ *
+ * Return the path that can be passed to `dlopen()` for this layer.
+ *
+ * If srt_vulkan_layer_get_library_path() is a relative path, return the
+ * absolute path that is the result of interpreting it relative to
+ * srt_vulkan_layer_get_json_path(). Otherwise return a copy of
+ * srt_vulkan_layer_get_library_path().
+ *
+ * The result is either the basename of a shared library (to be found
+ * relative to some directory listed in `$LD_LIBRARY_PATH`, `/etc/ld.so.conf`,
+ * `/etc/ld.so.conf.d` or the hard-coded library search path), or an
+ * absolute path.
+ *
+ * Returns: (transfer full) (type filename) (nullable): The basename of a
+ *  shared library or an absolute path. Free with g_free().
+ */
+gchar *
+srt_vulkan_layer_resolve_library_path (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), NULL);
+  return srt_loadable_resolve_library_path (&self->layer);
+}
+
+/**
+ * srt_vulkan_layer_check_error:
+ * @self: The layer
+ * @error: Used to return details if the layer description could not be loaded
+ *
+ * Check whether we failed to load the JSON describing this Vulkan layer.
+ * Note that this does not actually `dlopen()` the layer itself.
+ *
+ * Returns: %TRUE if the JSON was loaded successfully
+ */
+gboolean
+srt_vulkan_layer_check_error (const SrtVulkanLayer *self,
+                              GError **error)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (self->layer.error != NULL && error != NULL)
+    *error = g_error_copy (self->layer.error);
+
+  return (self->layer.error == NULL);
+}
+
+/**
+ * _srt_get_explicit_vulkan_layers_from_json_report:
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  "explicit_layers" property in "vulkan"
+ *
+ * Returns: A list of explicit #SrtVulkanLayer that have been found, or %NULL
+ *  if none has been found.
+ */
+GList *
+_srt_get_explicit_vulkan_layers_from_json_report (JsonObject *json_obj)
+{
+  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_LAYER, TRUE);
+}
+
+/**
+ * _srt_get_implicit_vulkan_layers_from_json_report:
+ * @json_obj: (not nullable): A JSON Object used to search for
+ *  "implicit_layers" property in "vulkan"
+ *
+ * Returns: A list of implicit #SrtVulkanLayer that have been found, or %NULL
+ *  if none has been found.
+ */
+GList *
+_srt_get_implicit_vulkan_layers_from_json_report (JsonObject *json_obj)
+{
+  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_LAYER, FALSE);
 }
 
 /**
  * get_driver_loadables_from_json_report:
- * @json_obj: (not nullable): A JSON Object used to search for Icd properties
- * @which: Used to choose which loadable to search, it can be either
- *  %SRT_TYPE_EGL_ICD or %SRT_TYPE_VULKAN_ICD
+ * @json_obj: (not nullable): A JSON Object used to search for Icd or Layer
+ *  properties
+ * @which: Used to choose which loadable to search, it can be
+ *  %SRT_TYPE_EGL_ICD, %SRT_TYPE_VULKAN_ICD or %SRT_TYPE_VULKAN_LAYER
+ * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
+ *  Currently this value is used only if @which is %SRT_TYPE_VULKAN_LAYER
  *
  * Returns: A list of #SrtEglIcd (if @which is %SRT_TYPE_EGL_ICD) or
- *  #SrtVulkanIcd (if @which is %SRT_TYPE_VULKAN_ICD) that have been found, or
+ *  #SrtVulkanIcd (if @which is %SRT_TYPE_VULKAN_ICD) or #SrtVulkanLayer (if
+ *  @which is %SRT_TYPE_VULKAN_LAYER) that have been found, or
  *  %NULL if none has been found.
  */
 static GList *
 get_driver_loadables_from_json_report (JsonObject *json_obj,
-                                       GType which)
+                                       GType which,
+                                       gboolean explicit)
 {
   const gchar *member;
   const gchar *sub_member;
@@ -5031,6 +6421,14 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
     {
       member = "vulkan";
       sub_member = "icds";
+    }
+  else if (which == SRT_TYPE_VULKAN_LAYER)
+    {
+      member = "vulkan";
+      if (explicit)
+        sub_member = "explicit_layers";
+      else
+        sub_member = "implicit_layers";
     }
   else
     {
@@ -5062,20 +6460,48 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
           for (guint i = 0; i < json_array_get_length (array); i++)
             {
               const gchar *json_path = NULL;
+              const gchar *name = NULL;
+              const gchar *type = NULL;
+              const gchar *description = NULL;
               const gchar *library_path = NULL;
               const gchar *api_version = NULL;
+              const gchar *implementation_version = NULL;
+              g_auto(GStrv) component_layers = NULL;
+              SrtVulkanLayer *layer = NULL;
               GQuark error_domain;
               gint error_code;
               const gchar *error_message;
               GError *error = NULL;
               JsonObject *json_elem_obj = json_array_get_object_element (array, i);
               if (json_object_has_member (json_elem_obj, "json_path"))
-                json_path = json_object_get_string_member (json_elem_obj, "json_path");
+                {
+                  json_path = json_object_get_string_member (json_elem_obj, "json_path");
+                }
               else
                 {
                   g_debug ("The parsed '%s' member is missing the expected 'json_path' member, skipping...",
                            sub_member);
                   continue;
+                }
+
+              if (which == SRT_TYPE_VULKAN_LAYER)
+                {
+                  name = json_object_get_string_member_with_default (json_elem_obj, "name", NULL);
+                  type = json_object_get_string_member_with_default (json_elem_obj, "type", NULL);
+                  implementation_version = json_object_get_string_member_with_default (json_elem_obj,
+                                                                                       "implementation_version",
+                                                                                       NULL);
+                  description = json_object_get_string_member_with_default (json_elem_obj,
+                                                                            "description",
+                                                                            NULL);
+
+                  component_layers = _srt_json_object_dup_strv_member (json_elem_obj,
+                                                                       "component_layers",
+                                                                       NULL);
+
+                  /* Don't distinguish between absent, and present with empty value */
+                  if (component_layers != NULL && component_layers[0] == NULL)
+                    g_clear_pointer (&component_layers, g_free);
                 }
 
               library_path = json_object_get_string_member_with_default (json_elem_obj,
@@ -5092,7 +6518,23 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                                                                           "error",
                                                                           "(missing error message)");
 
-              if (library_path != NULL)
+              if (which == SRT_TYPE_VULKAN_LAYER &&
+                  (name != NULL &&
+                   type != NULL &&
+                   api_version != NULL &&
+                   implementation_version != NULL &&
+                   description != NULL &&
+                   ( (library_path != NULL && component_layers == NULL) ||
+                     (library_path == NULL && component_layers != NULL) )))
+                {
+                  layer = srt_vulkan_layer_new (json_path, name, type,
+                                                library_path, api_version,
+                                                implementation_version,
+                                                description, component_layers);
+                  driver_info = g_list_prepend (driver_info, layer);
+                }
+              else if ((which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD) &&
+                       library_path != NULL)
                 {
                   if (which == SRT_TYPE_EGL_ICD)
                     driver_info = g_list_prepend (driver_info, srt_egl_icd_new (json_path,
@@ -5121,6 +6563,9 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                   else if (which == SRT_TYPE_VULKAN_ICD)
                     driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new_error (json_path,
                                                                                          error));
+                  else if (which == SRT_TYPE_VULKAN_LAYER)
+                    driver_info = g_list_prepend (driver_info, srt_vulkan_layer_new_error (json_path,
+                                                                                           error));
                   else
                     g_return_val_if_reached (NULL);
 

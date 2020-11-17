@@ -2154,9 +2154,20 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
             {
-              g_warning ("Unable to delete %s/%s/%s: %s",
-                         self->mutable_sysroot, multiarch_libdirs[i],
-                         name, local_error->message);
+              if (g_error_matches (local_error, G_IO_ERROR,
+                                   G_IO_ERROR_NOT_FOUND))
+                {
+                  /* Ignore: probably we already deleted it from /lib,
+                   * now we are trying to delete it from /usr/lib, and
+                   * they are the same place. */
+                }
+              else
+                {
+                  g_warning ("Unable to delete %s/%s/%s: %s",
+                             self->mutable_sysroot, multiarch_libdirs[i],
+                             name, local_error->message);
+                }
+
               g_clear_error (&local_error);
             }
         }

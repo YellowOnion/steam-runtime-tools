@@ -1738,8 +1738,6 @@ main (int argc,
       if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
         goto out;
 
-      /* This mounts over the top of the subset of /etc mounted by
-       * pv_bwrap_bind_usr(), but that's harmless. */
       for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
         {
           const char *dir = export_os_mutable[i];

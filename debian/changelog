@@ -1,3 +1,33 @@
+steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * input-device: Add a new API for input device enumeration and monitoring.
+    This can list and inspect input devices using libudev or directly, and
+    is potentially a basis for a future input device portal (see
+    steam-runtime-tools#11).
+  * bin: Add new steam-runtime-input-monitor diagnostic tool
+  * bin, pressure-vessel: Disable GIO modules differently.
+    This avoids some misleading warnings (steam-runtime-tools#32).
+  * bin: Link diagnostic tools to libsteam-runtime-tools statically
+  * lib: Don't export private _srt_filter_gameoverlayrenderer
+  * tests: Link utils test to libsteam-runtime-tools statically
+  * tests: Move some tests for utility code out of pressure-vessel
+  * utils: Add the ability to find our prefix when statically linked
+  * build: Fix dependencies on generated headers
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Make the original environment available
+  * pressure-vessel: Treat LD_LIBRARY_PATH as system libraries.
+    At this stage we expect to have `LD_LIBRARY_PATH` set to the
+    `SYSTEM_LD_LIBRARY_PATH` of `steam.sh`.
+    This means that we should treat the `LD_LIBRARY_PATH` entries as
+    OS-level search path too.
+  * pressure-vessel-unruntime: Support PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
+  * system-info: Add helper to check for xdg-desktop-portal
+  * graphics: Detect Primus graphics driver in diagnostic tools
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 17 Nov 2020 12:20:49 +0000
+
 steam-runtime-tools (0.20201022.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

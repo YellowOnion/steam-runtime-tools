@@ -51,9 +51,18 @@ struct _PvPortalListener
 {
   GObject parent;
   GStrv original_environ;
+  FILE *original_stdout;
+  FILE *info_fh;
   gchar *original_cwd_l;
 };
 
 PvPortalListener *pv_portal_listener_new (void);
+
+gboolean pv_portal_listener_set_up_info_fd (PvPortalListener *self,
+                                            int fd,
+                                            GError **error);
+
+void pv_portal_listener_close_info_fh (PvPortalListener *self,
+                                       const char *bus_name);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvPortalListener, g_object_unref)

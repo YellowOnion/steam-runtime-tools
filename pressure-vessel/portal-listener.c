@@ -48,12 +48,67 @@ pv_portal_listener_init (PvPortalListener *self)
   pv_get_current_dirs (NULL, &self->original_cwd_l);
 }
 
+/*
+ * Divert stdout to stderr, and set up the --info-fd to be the
+ * original stdout or a specified fd.
+ */
+gboolean
+pv_portal_listener_set_up_info_fd (PvPortalListener *self,
+                                   int fd,
+                                   GError **error)
+{
+  self->original_stdout = _srt_divert_stdout_to_stderr (error);
+
+  if (self->original_stdout == NULL)
+    return FALSE;
+
+  if (fd > 0)   /* < 0 means unset, and 0 is stdout itself */
+    {
+      self->info_fh = fdopen (fd, "w");
+
+      if (self->info_fh == NULL)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to create a stdio wrapper for fd %d",
+                                        fd);
+    }
+  else
+    {
+      self->info_fh = self->original_stdout;
+    }
+
+  return TRUE;
+}
+
+/*
+ * If @bus_name is non-NULL, print it to the info fd. Then
+ * close the --info-fd, and also close standard output (if different).
+ */
+void
+pv_portal_listener_close_info_fh (PvPortalListener *self,
+                                  const char *bus_name)
+{
+  if (self->info_fh != NULL)
+    {
+      if (bus_name != NULL)
+        fprintf (self->info_fh, "bus_name=%s\n", bus_name);
+
+      fflush (self->info_fh);
+    }
+
+  if (self->info_fh == self->original_stdout)
+    self->original_stdout = NULL;
+  else
+    g_clear_pointer (&self->original_stdout, fclose);
+
+  g_clear_pointer (&self->info_fh, fclose);
+}
+
 static void
 pv_portal_listener_dispose (GObject *object)
 {
   PvPortalListener *self = PV_PORTAL_LISTENER (object);
 
-  (void) self;
+  pv_portal_listener_close_info_fh (self, NULL);
 
   G_OBJECT_CLASS (pv_portal_listener_parent_class)->dispose (object);
 }

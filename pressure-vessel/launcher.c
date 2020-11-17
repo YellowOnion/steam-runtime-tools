@@ -60,28 +60,13 @@ typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
 static PvPortalListener *global_listener;
-static FILE *original_stdout = NULL;
-static FILE *info_fh = NULL;
+
 static GHashTable *lock_env_hash = NULL;
 static GDBusConnection *session_bus = NULL;
 static GHashTable *client_pid_data_hash = NULL;
 static guint name_owner_id = 0;
 static GMainLoop *main_loop;
 static PvLauncher1 *launcher;
-
-/*
- * Close the --info-fd, and also close standard output (if different).
- */
-static void
-close_info_fh (void)
-{
-  if (info_fh == original_stdout)
-    original_stdout = NULL;
-  else
-    g_clear_pointer (&original_stdout, fclose);
-
-  g_clear_pointer (&info_fh, fclose);
-}
 
 static void
 skeleton_died_cb (gpointer data)
@@ -634,10 +619,7 @@ on_name_acquired (GDBusConnection *connection,
   if (*ret == EX_UNAVAILABLE)
     {
       *ret = 0;
-      g_assert (info_fh != NULL);
-      fprintf (info_fh, "bus_name=%s\n", name);
-      fflush (info_fh);
-      close_info_fh ();
+      pv_portal_listener_close_info_fh (global_listener, name);
     }
 }
 
@@ -1158,30 +1140,12 @@ main (int argc,
                        G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
                        cli_log_func, (void *) g_get_prgname ());
 
-  original_stdout = _srt_divert_stdout_to_stderr (error);
-
-  if (original_stdout == NULL)
+  if (!pv_portal_listener_set_up_info_fd (global_listener,
+                                          opt_info_fd,
+                                          error))
     {
       ret = EX_OSERR;
       goto out;
-    }
-
-  if (opt_info_fd > 0)   /* < 0 means unset, and 0 is stdout itself */
-    {
-      info_fh = fdopen (opt_info_fd, "w");
-
-      if (info_fh == NULL)
-        {
-          glnx_null_throw_errno_prefix (error,
-                                        "Unable to create a stdio wrapper for fd %d",
-                                        opt_info_fd);
-          ret = EX_OSERR;
-          goto out;
-        }
-    }
-  else
-    {
-      info_fh = original_stdout;
     }
 
   lock_env_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -1392,17 +1356,14 @@ main (int argc,
     }
 
   if (opt_socket != NULL)
-    fprintf (info_fh, "socket=%s\n", opt_socket);
+    fprintf (global_listener->info_fh, "socket=%s\n", opt_socket);
 
   if (server != NULL)
-    fprintf (info_fh, "dbus_address=%s\n",
+    fprintf (global_listener->info_fh, "dbus_address=%s\n",
              g_dbus_server_get_client_address (server));
 
   if (opt_bus_name == NULL)
-    {
-      fflush (info_fh);
-      close_info_fh ();
-    }
+    pv_portal_listener_close_info_fh (global_listener, NULL);
 
   g_debug ("Entering main loop");
 
@@ -1440,7 +1401,6 @@ out:
     ret = EX_UNAVAILABLE;
 
   g_clear_error (&local_error);
-  close_info_fh ();
 
   g_debug ("Exiting with status %d", ret);
   return ret;

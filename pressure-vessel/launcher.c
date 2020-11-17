@@ -47,6 +47,7 @@
 
 #include "flatpak-utils-base-private.h"
 #include "launcher.h"
+#include "portal-listener.h"
 #include "utils.h"
 
 typedef GCredentials AutoCredentials;
@@ -58,6 +59,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusAuthObserver, g_object_unref)
 typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
+static PvPortalListener *global_listener;
 static const char * const *global_original_environ = NULL;
 static FILE *original_stdout = NULL;
 static FILE *info_fh = NULL;
@@ -1119,6 +1121,7 @@ main (int argc,
 
   my_pid = getpid ();
 
+  global_listener = pv_portal_listener_new ();
   original_environ = g_get_environ ();
   global_original_environ = (const char * const *) original_environ;
   pv_get_current_dirs (NULL, &original_cwd_l);
@@ -1431,6 +1434,7 @@ out:
   g_free (opt_socket);
   g_free (opt_socket_directory);
   g_clear_object (&session_bus);
+  g_clear_object (&global_listener);
   g_hash_table_destroy (lock_env_hash);
 
   if (local_error == NULL)

@@ -33,10 +33,6 @@
 
 #include "launcher1.h"
 
-#define DBUS_NAME_DBUS "org.freedesktop.DBus"
-#define DBUS_INTERFACE_DBUS DBUS_NAME_DBUS
-#define DBUS_PATH_DBUS "/org/freedesktop/DBus"
-
 #define LAUNCHER_IFACE "com.steampowered.PressureVessel.Launcher1"
 #define LAUNCHER_PATH "/com/steampowered/PressureVessel/Launcher1"
 

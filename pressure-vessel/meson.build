@@ -167,6 +167,8 @@ executable(
   'pressure-vessel-launcher',
   sources: [
     'launcher.c',
+    'portal-listener.c',
+    'portal-listener.h',
   ],
   c_args : pv_c_args,
   dependencies : [

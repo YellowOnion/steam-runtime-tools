@@ -147,6 +147,7 @@ build:devel:
         ${NULL+}
 
         # g++ 4.6 is too old (see also debian/rules)
+        export CC=gcc-4.8
         export CXX=g++-4.8
 
         mkdir -p -m700 "${STEAM_CI_TMPDIR}"

@@ -2109,10 +2109,6 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
 
       g_assert_cmphex (srt_input_device_get_type_flags (device), ==,
                        SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK);
-      g_assert_cmpuint (srt_input_device_get_interface_flags (device), ==,
-                        SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
-                        | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READABLE
-                        | SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE);
 
       g_assert_cmphex (identity.bus_type, ==, BUS_USB);
       g_assert_cmphex (identity.vendor_id, ==, VENDOR_VALVE);

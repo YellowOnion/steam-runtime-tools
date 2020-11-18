@@ -49,11 +49,7 @@
  * g_object_unref() to manage its lifecycle.
  */
 
-GQuark
-srt_locale_error_quark (void)
-{
-  return g_quark_from_static_string ("srt-locale-error-quark");
-}
+G_DEFINE_QUARK (srt-locale-error-quark, srt_locale_error)
 
 struct _SrtLocale
 {

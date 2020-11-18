@@ -53,3 +53,34 @@ _SRT_PUBLIC
 gboolean srt_architecture_can_run_i386 (void);
 _SRT_PUBLIC
 gboolean srt_architecture_can_run_x86_64 (void);
+
+/**
+ * SrtArchitectureError:
+ * @SRT_ARCHITECTURE_ERROR_FAILED: Generic error
+ * @SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR: An internal error occurred
+ * @SRT_ARCHITECTURE_ERROR_NO_INFORMATION: It is unknown whether the
+ *  given architecture, ld.so, etc. is available or not, for example
+ *  because the interoperable ld.so path for the architecture is unknown,
+ *  or because SrtSystemInfo is reading a JSON report that does not
+ *  contain this information
+ *
+ * Errors raised when checking facts about an architecture.
+ *
+ * Errors in the #GIOErrorEnum domain can also be raised: for example,
+ * if srt_system_info_check_runtime_linker() raises %G_IO_ERROR_NOT_FOUND,
+ * it means the interoperable path for ld.so does not exist.
+ */
+typedef enum
+{
+  SRT_ARCHITECTURE_ERROR_FAILED = 0,
+  SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
+  SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+} SrtArchitectureError;
+
+_SRT_PUBLIC
+GQuark srt_architecture_error_quark (void);
+
+#define SRT_ARCHITECTURE_ERROR (srt_architecture_error_quark ())
+
+_SRT_PUBLIC
+const char *srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple);

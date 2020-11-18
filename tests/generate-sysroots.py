@@ -107,6 +107,7 @@ ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau
     os.makedirs(name, mode=0o755, exist_ok=True)
 
 for name in '''
+debian10/usr/lib/i386-linux-gnu/ld.so
 debian10/usr/lib/i386-linux-gnu/dri/i965_dri.so
 debian10/usr/lib/i386-linux-gnu/dri/r300_dri.so
 debian10/usr/lib/i386-linux-gnu/dri/r600_drv_video.so
@@ -116,6 +117,7 @@ debian10/usr/lib/i386-linux-gnu/libva.so.2
 debian10/usr/lib/i386-linux-gnu/libvdpau.so.1
 debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_r600.so
 debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so.1.0.0
+debian10/usr/lib/x86_64-linux-gnu/ld.so
 debian10/usr/lib/x86_64-linux-gnu/dri/i965_dri.so
 debian10/usr/lib/x86_64-linux-gnu/dri/r600_dri.so
 debian10/usr/lib/x86_64-linux-gnu/dri/r600_drv_video.so
@@ -188,6 +190,7 @@ steamrt/overrides/lib/i386-linux-gnu/libGLX_nvidia.so.0
 steamrt/run/pressure-vessel/.exists
 steamrt-overrides-issues/overrides/bin/.keep
 steamrt-overrides-issues/overrides/lib/i386-linux-gnu/.keep
+ubuntu16/lib64/ld-linux-x86-64.so.2
 ubuntu16/usr/lib/dri/radeonsi_dri.so
 ubuntu16/usr/lib/mock-ubuntu-64-bit/dri/i965_dri.so
 ubuntu16/usr/lib/mock-ubuntu-64-bit/dri/radeon_dri.so
@@ -201,6 +204,10 @@ ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau/libvdpau_radeonsi.so.1.0.0
     open(name, 'w').close()
 
 for name, target in {
+    'debian10/lib/ld-linux.so.2':
+        '/usr/lib/i386-linux-gnu/ld.so',
+    'debian10/lib64/ld-linux-x86-64.so.2':
+        '../usr/lib/x86_64-linux-gnu/ld.so',
     'debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so':
         'libvdpau_radeonsi.so.1.0.0',
     'debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so.1':

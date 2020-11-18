@@ -67,6 +67,13 @@ test_architecture (Fixture *f,
 #if defined(__i386__)
   g_assert_true (srt_architecture_can_run_i386 ());
 #endif
+
+  g_assert_cmpstr (srt_architecture_get_expected_runtime_linker (SRT_ABI_X86_64),
+                   ==, "/lib64/ld-linux-x86-64.so.2");
+  g_assert_cmpstr (srt_architecture_get_expected_runtime_linker (SRT_ABI_I386),
+                   ==, "/lib/ld-linux.so.2");
+  g_assert_cmpstr (srt_architecture_get_expected_runtime_linker ("potato-glados"),
+                   ==, NULL);
 }
 
 int

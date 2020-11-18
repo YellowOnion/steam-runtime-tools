@@ -24,6 +24,10 @@
   "architectures" : {
     "x86_64-linux-gnu" : {
       "can-run" : true,
+      "runtime-linker": {
+        "path": "/foobar",
+        "resolved": "/foo/bar"
+      },
       "graphics-details" : {
         "x11/vulkan" : {
         }

@@ -29,6 +29,14 @@
 #include <glib.h>
 #include <json-glib/json-glib.h>
 
+typedef struct
+{
+  const char *multiarch_tuple;
+  const char *interoperable_runtime_linker;
+} SrtKnownArchitecture;
+
+G_GNUC_INTERNAL const SrtKnownArchitecture *_srt_architecture_get_known (void);
+
 G_GNUC_INTERNAL gboolean _srt_architecture_can_run (gchar **envp,
                                                     const char *helpers_path,
                                                     const char *multiarch);

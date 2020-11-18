@@ -225,3 +225,19 @@ _srt_json_builder_add_strv_value (JsonBuilder *builder,
       json_builder_end_array (builder);
     }
 }
+
+void
+_srt_json_builder_add_error_members (JsonBuilder *builder,
+                                     const GError *error)
+{
+  g_return_if_fail (builder != NULL);
+  g_return_if_fail (error != NULL);
+
+  json_builder_set_member_name (builder, "error-domain");
+  json_builder_add_string_value (builder,
+                                 g_quark_to_string (error->domain));
+  json_builder_set_member_name (builder, "error-code");
+  json_builder_add_int_value (builder, error->code);
+  json_builder_set_member_name (builder, "error");
+  json_builder_add_string_value (builder, error->message);
+}

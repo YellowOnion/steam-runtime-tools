@@ -251,6 +251,9 @@ typedef struct
 typedef struct
 {
   GQuark multiarch_tuple;
+  const SrtKnownArchitecture *known_architecture;
+  gchar *runtime_linker_resolved;
+  GError *runtime_linker_error;
   Tristate can_run;
   GHashTable *cached_results;
   SrtLibraryIssues cached_combined_issues;
@@ -267,6 +270,7 @@ static Abi *
 ensure_abi_unless_immutable (SrtSystemInfo *self,
                              const char *multiarch_tuple)
 {
+  const SrtKnownArchitecture *iter;
   GQuark quark;
   guint i;
   Abi *abi = NULL;
@@ -286,6 +290,18 @@ ensure_abi_unless_immutable (SrtSystemInfo *self,
 
   abi = g_slice_new0 (Abi);
   abi->multiarch_tuple = quark;
+
+  for (iter = _srt_architecture_get_known ();
+       iter->multiarch_tuple != NULL;
+       iter++)
+    {
+      if (strcmp (iter->multiarch_tuple, multiarch_tuple) == 0)
+        {
+          abi->known_architecture = iter;
+          break;
+        }
+    }
+
   abi->can_run = TRI_MAYBE;
   abi->cached_results = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
   abi->cached_combined_issues = SRT_LIBRARY_ISSUES_NONE;
@@ -319,6 +335,8 @@ abi_free (gpointer self)
   for (i = 0; i < G_N_ELEMENTS (abi->graphics_modules); i++)
     g_list_free_full (abi->graphics_modules[i].modules, g_object_unref);
 
+  g_free (abi->runtime_linker_resolved);
+  g_clear_error (&abi->runtime_linker_error);
   g_slice_free (Abi, self);
 }
 
@@ -595,6 +613,79 @@ static gchar ** _srt_system_info_get_pinned_libs_from_report (JsonObject *json_o
                                                               const gchar *which,
                                                               gchar ***messages);
 
+static void
+get_runtime_linker_from_report (SrtSystemInfo *self,
+                                Abi *abi,
+                                JsonObject *json_arch_obj)
+{
+  JsonObject *runtime_linker_obj;
+  const char *path;
+  const char *resolved;
+
+  g_return_if_fail (abi->runtime_linker_resolved == NULL);
+  g_return_if_fail (abi->runtime_linker_error == NULL);
+
+  if (abi->known_architecture == NULL)
+    return;
+
+  if (abi->known_architecture->interoperable_runtime_linker == NULL)
+    return;
+
+  if (!json_object_has_member (json_arch_obj, "runtime-linker"))
+    return;
+
+  runtime_linker_obj = json_object_get_object_member (json_arch_obj, "runtime-linker");
+
+  path = json_object_get_string_member_with_default (runtime_linker_obj,
+                                                     "path", NULL);
+  resolved = json_object_get_string_member_with_default (runtime_linker_obj,
+                                                         "resolved", NULL);
+
+  if (json_object_has_member (runtime_linker_obj, "error"))
+    {
+      GQuark error_domain;
+      int error_code;
+      const char *error_message;
+
+      error_domain = g_quark_from_string (json_object_get_string_member_with_default (runtime_linker_obj, "error-domain", NULL));
+      error_code = json_object_get_int_member_with_default (runtime_linker_obj,
+                                                            "error-code",
+                                                            -1);
+      error_message = json_object_get_string_member_with_default (runtime_linker_obj,
+                                                                  "error",
+                                                                  NULL);
+
+      if (error_domain == 0)
+        {
+          error_domain = SRT_ARCHITECTURE_ERROR;
+          error_code = SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR;
+        }
+
+      if (error_message == NULL)
+        error_message = "Unknown error";
+
+      g_set_error_literal (&abi->runtime_linker_error, error_domain, error_code,
+                           error_message);
+    }
+  else if (path == NULL)
+    {
+      /* no information */
+      return;
+    }
+  else if (g_strcmp0 (path, abi->known_architecture->interoperable_runtime_linker) != 0)
+    {
+      g_set_error (&abi->runtime_linker_error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
+                   "Expected \"%s\" in report, but got \"%s\"",
+                   abi->known_architecture->interoperable_runtime_linker,
+                   path);
+    }
+  else
+    {
+      abi->runtime_linker_resolved = g_strdup (resolved);
+    }
+}
+
 /**
  * srt_system_info_new_from_json:
  * @path: (not nullable) (type filename): Path to a JSON report
@@ -705,6 +796,8 @@ srt_system_info_new_from_json (const char *path,
 
           abi->libraries_cache_available = TRUE;
           abi->cached_combined_issues = _srt_library_get_issues_from_report (json_arch_obj);
+
+          get_runtime_linker_from_report (info, abi, json_arch_obj);
 
           _srt_graphics_get_from_report (json_arch_obj,
                                          l->data,
@@ -3832,4 +3925,138 @@ srt_system_info_get_xdg_portal_issues (SrtSystemInfo *self,
     *messages = g_strdup (srt_xdg_portal_get_messages (self->xdg_portal_data));
 
   return srt_xdg_portal_get_issues (self->xdg_portal_data);
+}
+
+static void
+ensure_runtime_linker (SrtSystemInfo *self,
+                       Abi *abi)
+{
+  g_autofree gchar *tmp = NULL;
+  int fd;
+
+  if (abi->runtime_linker_resolved != NULL)
+    return;
+
+  if (abi->runtime_linker_error != NULL)
+    return;
+
+  if (abi->known_architecture == NULL)
+    return;
+
+  if (abi->known_architecture->interoperable_runtime_linker == NULL)
+    {
+      g_set_error (&abi->runtime_linker_error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+                   "Interoperable runtime_linker for \"%s\" not known",
+                   abi->known_architecture->multiarch_tuple);
+      return;
+    }
+
+  if (self->sysroot_fd < 0)
+    {
+      g_set_error (&abi->runtime_linker_error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
+                   "Unable to open sysroot");
+      return;
+    }
+
+  fd = _srt_resolve_in_sysroot (self->sysroot_fd,
+                                abi->known_architecture->interoperable_runtime_linker,
+                                SRT_RESOLVE_FLAGS_READABLE,
+                                &tmp,
+                                &abi->runtime_linker_error);
+
+  if (fd >= 0)
+    {
+      abi->runtime_linker_resolved = g_strconcat ("/", tmp, NULL);
+      close (fd);
+    }
+}
+
+/**
+ * srt_system_info_check_runtime_linker:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: A multiarch tuple defining an ABI, as printed
+ *  by `gcc -print-multiarch` in the Steam Runtime
+ * @resolved: (out) (type filename) (transfer full) (optional): Used
+ *  to return the path to the runtime linker after resolving all
+ *  symbolic links. Free with g_free(); may be %NULL to ignore.
+ * @error: Used to raise an error on failure.
+ *
+ * Check whether the runtime linker `ld.so(8)` for the ABI described
+ * by @multiarch_tuple, as returned by
+ * srt_architecture_get_expected_runtime_linker(), is available.
+ *
+ * If `ld.so` is unavailable, return %FALSE with @error set.
+ *
+ * If not enough information is available to determine whether `ld.so`
+ * is available, raise %SRT_ARCHITECTURE_ERROR_NO_INFORMATION.
+ *
+ * Returns: %TRUE if `ld.so(8)` is available at the interoperable path
+ *  for the given architecture
+ */
+gboolean
+srt_system_info_check_runtime_linker (SrtSystemInfo *self,
+                                      const char *multiarch_tuple,
+                                      gchar **resolved,
+                                      GError **error)
+{
+  Abi *abi;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), FALSE);
+  g_return_val_if_fail (multiarch_tuple != NULL, FALSE);
+
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    {
+      g_set_error (error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+                   "ABI \"%s\" not included in report",
+                   multiarch_tuple);
+      return FALSE;
+    }
+
+  if (!self->immutable_values)
+    ensure_runtime_linker (self, abi);
+
+  if (abi->known_architecture == NULL)
+    {
+      g_set_error (error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+                   "Interoperable runtime linker for \"%s\" not known",
+                   multiarch_tuple);
+      return FALSE;
+    }
+  else if (abi->runtime_linker_resolved != NULL)
+    {
+      if (resolved != NULL)
+        *resolved = g_strdup (abi->runtime_linker_resolved);
+
+      return TRUE;
+    }
+  else if (abi->runtime_linker_error != NULL)
+    {
+      if (error != NULL)
+        *error = g_error_copy (abi->runtime_linker_error);
+
+      return FALSE;
+    }
+  else if (self->immutable_values)
+    {
+      g_set_error (error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+                   "Runtime linker for \"%s\" not included in report",
+                   multiarch_tuple);
+      return FALSE;
+    }
+  else
+    {
+      /* We shouldn't be able to get here */
+      g_set_error (error, SRT_ARCHITECTURE_ERROR,
+                   SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
+                   "Runtime linker for \"%s\" not checked",
+                   multiarch_tuple);
+      g_return_val_if_reached (FALSE);
+    }
 }

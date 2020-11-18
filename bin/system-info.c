@@ -1166,13 +1166,7 @@ main (int argc,
         }
       else
         {
-          json_builder_set_member_name (builder, "error-domain");
-          json_builder_add_string_value (builder,
-                                         g_quark_to_string (error->domain));
-          json_builder_set_member_name (builder, "error-code");
-          json_builder_add_int_value (builder, error->code);
-          json_builder_set_member_name (builder, "error");
-          json_builder_add_string_value (builder, error->message);
+          _srt_json_builder_add_error_members (builder, error);
         }
 
       json_builder_end_object (builder);
@@ -1216,13 +1210,7 @@ main (int argc,
         }
       else
         {
-          json_builder_set_member_name (builder, "error-domain");
-          json_builder_add_string_value (builder,
-                                         g_quark_to_string (error->domain));
-          json_builder_set_member_name (builder, "error-code");
-          json_builder_add_int_value (builder, error->code);
-          json_builder_set_member_name (builder, "error");
-          json_builder_add_string_value (builder, error->message);
+          _srt_json_builder_add_error_members (builder, error);
           g_clear_error (&error);
         }
 
@@ -1270,13 +1258,7 @@ main (int argc,
         }
       else
         {
-          json_builder_set_member_name (builder, "error-domain");
-          json_builder_add_string_value (builder,
-                                         g_quark_to_string (error->domain));
-          json_builder_set_member_name (builder, "error-code");
-          json_builder_add_int_value (builder, error->code);
-          json_builder_set_member_name (builder, "error");
-          json_builder_add_string_value (builder, error->message);
+          _srt_json_builder_add_error_members (builder, error);
           g_clear_error (&error);
         }
 

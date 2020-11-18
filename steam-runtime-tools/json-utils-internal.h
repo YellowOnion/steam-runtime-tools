@@ -51,3 +51,6 @@ void _srt_json_builder_add_strv_value (JsonBuilder *builder,
                                        const gchar *array_name,
                                        const gchar * const *values,
                                        gboolean allow_empty_array);
+
+void _srt_json_builder_add_error_members (JsonBuilder *builder,
+                                          const GError *error);

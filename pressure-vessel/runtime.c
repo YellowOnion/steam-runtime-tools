@@ -1352,7 +1352,7 @@ typedef enum
 typedef struct
 {
   /* (type SrtEglIcd) or (type SrtVulkanIcd) or (type SrtVdpauDriver)
-   * or (type SrtVaApiDriver) */
+   * or (type SrtVaApiDriver) or (type SrtVulkanLayer) */
   gpointer icd;
   gchar *resolved_library;
   /* Last entry is always NONEXISTENT.
@@ -1373,6 +1373,7 @@ icd_details_new (gpointer icd)
   g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
   g_return_val_if_fail (SRT_IS_EGL_ICD (icd) ||
                         SRT_IS_VULKAN_ICD (icd) ||
+                        SRT_IS_VULKAN_LAYER (icd) ||
                         SRT_IS_VDPAU_DRIVER (icd) ||
                         SRT_IS_VA_API_DRIVER (icd),
                         NULL);
@@ -2284,6 +2285,185 @@ pv_runtime_search_in_path_and_bin (PvRuntime *self,
 }
 
 static gboolean
+setup_vulkan_loadable_json (PvRuntime *self,
+                            FlatpakBwrap *bwrap,
+                            const gchar *sub_dir,
+                            GPtrArray *vulkan_details,
+                            GString *vulkan_path,
+                            GError **error)
+{
+  gsize i, j;
+  g_autofree gchar *dir_on_host = NULL;
+
+  dir_on_host = g_build_filename (self->overrides,
+                                  "share", "vulkan", sub_dir, NULL);
+
+  if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
+    {
+      glnx_throw_errno_prefix (error, "Unable to create %s", dir_on_host);
+      return FALSE;
+    }
+
+  for (j = 0; j < vulkan_details->len; j++)
+    {
+      SrtVulkanLayer *layer = NULL;
+      SrtVulkanIcd *icd = NULL;
+      IcdDetails *details = g_ptr_array_index (vulkan_details, j);
+      gboolean need_provider_json = FALSE;
+
+      if (SRT_IS_VULKAN_LAYER (details->icd))
+        layer = SRT_VULKAN_LAYER (details->icd);
+      else if (SRT_IS_VULKAN_ICD (details->icd))
+        icd = SRT_VULKAN_ICD (details->icd);
+      else
+        g_return_val_if_reached (FALSE);
+
+      if (layer != NULL)
+        {
+          if (!srt_vulkan_layer_check_error (layer, NULL))
+            continue;
+        }
+      else
+        {
+          if (!srt_vulkan_icd_check_error (icd, NULL))
+            continue;
+        }
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+        {
+          g_assert (i < G_N_ELEMENTS (details->kinds));
+          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
+
+          if (details->kinds[i] == ICD_KIND_ABSOLUTE)
+            {
+              g_autofree gchar *json_on_host = NULL;
+              g_autofree gchar *json_in_container = NULL;
+              g_autofree gchar *json_base = NULL;
+
+              g_assert (details->paths_in_container[i] != NULL);
+
+              json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
+                                           j, multiarch_tuples[i]);
+              json_on_host = g_build_filename (dir_on_host, json_base, NULL);
+              json_in_container = g_build_filename (self->overrides_in_container,
+                                                    "share", "vulkan", sub_dir,
+                                                    json_base, NULL);
+
+              if (layer != NULL)
+                {
+                  g_autoptr(SrtVulkanLayer) replacement = NULL;
+                  replacement = srt_vulkan_layer_new_replace_library_path (layer,
+                                                                           details->paths_in_container[i]);
+
+                  if (!srt_vulkan_layer_write_to_file (replacement, json_on_host, error))
+                    return FALSE;
+                }
+              else
+                {
+                  g_autoptr(SrtVulkanIcd) replacement = NULL;
+                  replacement = srt_vulkan_icd_new_replace_library_path (icd,
+                                                                         details->paths_in_container[i]);
+
+                  if (!srt_vulkan_icd_write_to_file (replacement, json_on_host, error))
+                    return FALSE;
+                }
+
+
+              pv_search_path_append (vulkan_path, json_in_container);
+            }
+          else if (details->kinds[i] == ICD_KIND_SONAME)
+            {
+              need_provider_json = TRUE;
+            }
+        }
+
+      if (need_provider_json)
+        {
+          g_autofree gchar *json_in_container = NULL;
+          g_autofree gchar *json_base = NULL;
+          const char *json_on_host = NULL;
+          if (layer != NULL)
+            json_on_host = srt_vulkan_layer_get_json_path (layer);
+          else
+            json_on_host = srt_vulkan_icd_get_json_path (icd);
+
+          json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
+          json_in_container = g_build_filename (self->overrides_in_container,
+                                                "share", "vulkan", sub_dir,
+                                                json_base, NULL);
+
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              json_on_host,
+                                              json_in_container,
+                                              TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
+                                              error))
+            return FALSE;
+
+          pv_search_path_append (vulkan_path, json_in_container);
+        }
+    }
+  return TRUE;
+}
+
+static gboolean
+collect_vulkan_layers (PvRuntime *self,
+                       const GPtrArray *layer_details,
+                       RuntimeArchitecture *arch,
+                       const gchar *dir_name,
+                       GError **error)
+{
+  gsize j;
+
+  for (j = 0; j < layer_details->len; j++)
+    {
+      g_autoptr(SrtLibrary) library = NULL;
+      SrtLibraryIssues issues;
+      IcdDetails *details = g_ptr_array_index (layer_details, j);
+      SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
+
+      if (!srt_vulkan_layer_check_error (layer, NULL))
+        continue;
+
+      details->resolved_library = srt_vulkan_layer_resolve_library_path (layer);
+      g_assert (details->resolved_library != NULL);
+
+      if (g_strcmp0 (self->provider_in_host_namespace, "/") == 0)
+        {
+          issues = srt_check_library_presence (details->resolved_library,
+                                               arch->details->tuple, NULL,
+                                               SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
+                                               &library);
+          if (issues & (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                        SRT_LIBRARY_ISSUES_UNKNOWN |
+                        SRT_LIBRARY_ISSUES_TIMEOUT))
+            {
+              g_debug ("Unable to load library %s: %s", details->resolved_library,
+                      srt_library_get_messages (library));
+              continue;
+            }
+          g_free (details->resolved_library);
+          details->resolved_library = g_strdup (srt_library_get_absolute_path (library));
+        }
+      else if (strstr (details->resolved_library, "$ORIGIN/") != NULL ||
+               strstr (details->resolved_library, "${ORIGIN}") != NULL ||
+               strstr (details->resolved_library, "$LIB/") != NULL ||
+               strstr (details->resolved_library, "${LIB}") != NULL ||
+               strstr (details->resolved_library, "$PLATFORM/") != NULL ||
+               strstr (details->resolved_library, "${PLATFORM}") != NULL)
+        {
+          g_debug ("Cannot support ld.so special tokens, e.g. ${LIB}, when provider "
+                   "is not the root filesystem");
+          continue;
+        }
+
+      if (!bind_icd (self, arch, j, dir_name, details, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         GHashTable *extra_locked_vars_to_unset,
@@ -2294,6 +2474,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) dri_path = g_string_new ("");
   g_autoptr(GString) egl_path = g_string_new ("");
   g_autoptr(GString) vulkan_path = g_string_new ("");
+  /* We are currently using the explicit and implicit Vulkan layer paths
+   * only to check if we binded at least a single layer */
+  g_autoptr(GString) vulkan_exp_layer_path = g_string_new ("");
+  g_autoptr(GString) vulkan_imp_layer_path = g_string_new ("");
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autofree gchar *localedef = NULL;
@@ -2303,8 +2487,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
+  g_autoptr(SrtObjectList) vulkan_explicit_layers = NULL;
+  g_autoptr(SrtObjectList) vulkan_implicit_layers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) va_api_icd_details = NULL;   /* (element-type IcdDetails) */
   guint n_egl_icds;
   guint n_vulkan_icds;
@@ -2392,6 +2580,62 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                j, path, srt_vulkan_icd_get_library_path (icd));
 
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
+    }
+
+  g_debug ("Enumerating Vulkan explicit layers on provider system...");
+  vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+
+  vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_explicit_layers),
+                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = vulkan_explicit_layers, j = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, j++)
+    {
+      SrtVulkanLayer *layer = icd_iter->data;
+      const gchar *path = srt_vulkan_layer_get_json_path (layer);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_layer_check_error (layer, &local_error))
+        {
+          g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
+                   j, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_debug ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
+               j, path, srt_vulkan_layer_get_library_path (layer));
+
+      g_ptr_array_add (vulkan_exp_layer_details, icd_details_new (layer));
+    }
+
+  g_debug ("Enumerating Vulkan implicit layers on provider system...");
+  vulkan_implicit_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
+
+  vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_implicit_layers),
+                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = vulkan_implicit_layers, j = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, j++)
+    {
+      SrtVulkanLayer *layer = icd_iter->data;
+      const gchar *path = srt_vulkan_layer_get_json_path (layer);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_layer_check_error (layer, &local_error))
+        {
+          g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
+                   j, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_debug ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
+               j, path, srt_vulkan_layer_get_library_path (layer));
+
+      g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -2608,6 +2852,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               if (!bind_icd (self, arch, j, "vulkan", details, error))
                 return FALSE;
             }
+
+          g_debug ("Collecting Vulkan explicit layers from host system...");
+          if (!collect_vulkan_layers (self, vulkan_exp_layer_details, arch,
+                                      "vulkan_exp_layer", error))
+            return FALSE;
+
+          g_debug ("Collecting Vulkan implicit layers from host system...");
+          if (!collect_vulkan_layers (self, vulkan_imp_layer_details, arch,
+                                      "vulkan_imp_layer", error))
+            return FALSE;
 
           g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->details->tuple);
           vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
@@ -3099,82 +3353,21 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   g_debug ("Setting up Vulkan ICD JSON...");
+  if (!setup_vulkan_loadable_json (self, bwrap, "icd.d", vulkan_icd_details,
+                                   vulkan_path, error))
+    return FALSE;
 
-  dir_on_host = g_build_filename (self->overrides,
-                                  "share", "vulkan", "icd.d", NULL);
+  g_debug ("Setting up Vulkan explicit layer JSON...");
+  if (!setup_vulkan_loadable_json (self, bwrap, "explicit_layer.d",
+                                   vulkan_exp_layer_details,
+                                   vulkan_exp_layer_path, error))
+    return FALSE;
 
-  if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
-    {
-      glnx_throw_errno_prefix (error, "Unable to create %s", dir_on_host);
-      return FALSE;
-    }
-
-  for (j = 0; j < vulkan_icd_details->len; j++)
-    {
-      IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
-      SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
-      gboolean need_provider_json = FALSE;
-
-      if (!srt_vulkan_icd_check_error (icd, NULL))
-        continue;
-
-      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
-        {
-          g_assert (i < G_N_ELEMENTS (details->kinds));
-          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
-
-          if (details->kinds[i] == ICD_KIND_ABSOLUTE)
-            {
-              g_autoptr(SrtVulkanIcd) replacement = NULL;
-              g_autofree gchar *json_on_host = NULL;
-              g_autofree gchar *json_in_container = NULL;
-              g_autofree gchar *json_base = NULL;
-
-              g_assert (details->paths_in_container[i] != NULL);
-
-              json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
-                                           j, multiarch_tuples[i]);
-              json_on_host = g_build_filename (dir_on_host, json_base, NULL);
-              json_in_container = g_build_filename (self->overrides_in_container,
-                                                    "share", "vulkan", "icd.d",
-                                                    json_base, NULL);
-
-              replacement = srt_vulkan_icd_new_replace_library_path (icd,
-                                                                     details->paths_in_container[i]);
-
-              if (!srt_vulkan_icd_write_to_file (replacement, json_on_host,
-                                                 error))
-                return FALSE;
-
-              pv_search_path_append (vulkan_path, json_in_container);
-            }
-          else if (details->kinds[i] == ICD_KIND_SONAME)
-            {
-              need_provider_json = TRUE;
-            }
-        }
-
-      if (need_provider_json)
-        {
-          g_autofree gchar *json_in_container = NULL;
-          g_autofree gchar *json_base = NULL;
-          const char *json_on_host = srt_vulkan_icd_get_json_path (icd);
-
-          json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
-          json_in_container = g_build_filename (self->overrides_in_container,
-                                                "share", "vulkan", "icd.d",
-                                                json_base, NULL);
-
-          if (!pv_runtime_take_from_provider (self, bwrap,
-                                              json_on_host,
-                                              json_in_container,
-                                              TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
-                                              error))
-            return FALSE;
-
-          pv_search_path_append (vulkan_path, json_in_container);
-        }
-    }
+  g_debug ("Setting up Vulkan implicit layer JSON...");
+  if (!setup_vulkan_loadable_json (self, bwrap, "implicit_layer.d",
+                                   vulkan_imp_layer_details,
+                                   vulkan_imp_layer_path, error))
+    return FALSE;
 
   for (j = 0; j < va_api_icd_details->len; j++)
     {
@@ -3217,6 +3410,28 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     flatpak_bwrap_set_env (bwrap, "VK_ICD_FILENAMES", vulkan_path->str, TRUE);
   else
     g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_ICD_FILENAMES"));
+
+  /* Implicit layers are not affected by "VK_LAYER_PATH". So instead of using
+   * this environment variable, we prepend our "/overrides/share" to
+   * "XDG_DATA_DIRS" to cover any explicit and implicit layers that we may
+   * have. */
+  if (vulkan_exp_layer_path->len != 0 || vulkan_imp_layer_path->len != 0)
+    {
+      const gchar *xdg_data_dirs;
+      g_autofree gchar *prepended_data_dirs = NULL;
+      g_autofree gchar *override_share = NULL;
+
+      xdg_data_dirs = g_environ_getenv (self->original_environ, "XDG_DATA_DIRS");
+      override_share = g_build_filename (self->overrides_in_container, "share", NULL);
+
+      if (xdg_data_dirs != NULL)
+        prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
+      else
+        prepended_data_dirs = g_steal_pointer (&override_share);
+
+      flatpak_bwrap_set_env (bwrap, "XDG_DATA_DIRS", prepended_data_dirs, TRUE);
+    }
+  g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_LAYER_PATH"));
 
   if (va_api_path->len != 0)
     flatpak_bwrap_set_env (bwrap, "LIBVA_DRIVERS_PATH", va_api_path->str, TRUE);

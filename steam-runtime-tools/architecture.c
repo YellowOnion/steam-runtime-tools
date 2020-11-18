@@ -44,6 +44,38 @@
  * operating system.
  */
 
+G_DEFINE_QUARK (srt-architecture-error-quark, srt_architecture_error)
+
+static const SrtKnownArchitecture known_architectures[] =
+{
+    {
+      .multiarch_tuple = SRT_ABI_X86_64,
+      .interoperable_runtime_linker = "/lib64/ld-linux-x86-64.so.2",
+    },
+
+    {
+      .multiarch_tuple = SRT_ABI_I386,
+      .interoperable_runtime_linker = "/lib/ld-linux.so.2",
+    },
+
+    {
+      .multiarch_tuple = "x86_64-linux-gnux32",
+      .interoperable_runtime_linker = "/libx32/ld-linux-x32.so.2",
+    },
+
+    { NULL }
+};
+
+/*
+ * Returns: A table of known architectures, terminated by one
+ *  with @multiarch_tuple set to %NULL.
+ */
+const SrtKnownArchitecture *
+_srt_architecture_get_known (void)
+{
+  return &known_architectures[0];
+}
+
 gboolean
 _srt_architecture_can_run (gchar **envp,
                            const char *helpers_path,
@@ -162,6 +194,35 @@ srt_architecture_can_run_x86_64 (void)
 {
   return _srt_architecture_can_run ((gchar **) _srt_peek_environ_nonnull (),
                                     NULL, SRT_ABI_X86_64);
+}
+
+/**
+ * srt_architecture_get_expected_runtime_linker:
+ * @multiarch_tuple: A multiarch tuple defining an ABI, as printed
+ *  by `gcc -print-multiarch` in the Steam Runtime
+ *
+ * Return the interoperable path to the runtime linker `ld.so(8)`,
+ * if known. For example, for x86_64, this returns
+ * `/lib64/ld-linux-x86-64.so.2`.
+ *
+ * Returns: (type filename) (transfer none): An absolute path,
+ *  or %NULL if not known
+ */
+const char *
+srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple)
+{
+  gsize i;
+
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+
+  for (i = 0; known_architectures[i].multiarch_tuple != NULL; i++)
+    {
+      if (strcmp (multiarch_tuple,
+                  known_architectures[i].multiarch_tuple) == 0)
+        return known_architectures[i].interoperable_runtime_linker;
+    }
+
+  return NULL;
 }
 
 /**

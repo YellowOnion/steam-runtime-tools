@@ -1079,12 +1079,41 @@ main (int argc,
       GList *va_api_list = NULL;
       GList *vdpau_list = NULL;
       GList *glx_list = NULL;
+      const char *ld_so;
 
       json_builder_set_member_name (builder, multiarch_tuples[i]);
       json_builder_begin_object (builder);
       json_builder_set_member_name (builder, "can-run");
       can_run = srt_system_info_can_run (info, multiarch_tuples[i]);
       json_builder_add_boolean_value (builder, can_run);
+
+      ld_so = srt_architecture_get_expected_runtime_linker (multiarch_tuples[i]);
+
+      if (ld_so != NULL)
+        {
+          json_builder_set_member_name (builder, "runtime-linker");
+          json_builder_begin_object (builder);
+            {
+              g_autoptr(GError) local_error = NULL;
+              g_autofree gchar *real = NULL;
+
+              json_builder_set_member_name (builder, "path");
+              json_builder_add_string_value (builder, ld_so);
+
+              if (srt_system_info_check_runtime_linker (info,
+                                                        multiarch_tuples[i],
+                                                        &real, &local_error))
+                {
+                  json_builder_set_member_name (builder, "resolved");
+                  json_builder_add_string_value (builder, real);
+                }
+              else
+                {
+                  _srt_json_builder_add_error_members (builder, local_error);
+                }
+            }
+          json_builder_end_object (builder);
+        }
 
       if (can_run)
         {

@@ -13,6 +13,9 @@
   "architectures" : {
     "i386-linux-gnu" : {
       "can-run" : false,
+      "runtime-linker": {
+        "error": "We just don't know"
+      },
       "graphics-details" : {
         "x11/vdpau" : {
           "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",

@@ -2410,8 +2410,18 @@ typedef struct
 
 typedef struct
 {
+  const char *path;
+  const char *resolved;
+  const char *error_domain;
+  int error_code;
+  const char *error_message;
+} RuntimeLinkerTest;
+
+typedef struct
+{
   gboolean can_run;
   SrtLibraryIssues issues;
+  RuntimeLinkerTest runtime_linker;
   DriverTest dri_drivers[5];
   DriverTest va_api_drivers[5];
   DriverTest vdpau_drivers[5];
@@ -2556,6 +2566,13 @@ static const JsonTest json_test[] =
     {
       {
         .can_run = FALSE,
+        .runtime_linker =
+        {
+          .path = "/lib/ld-linux.so.2",
+          .error_domain = "g-io-error-quark",
+          .error_code = G_IO_ERROR_NOT_FOUND,
+          .error_message = "No such file or directory",
+        },
         .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
         .graphics =
         {
@@ -2641,6 +2658,11 @@ static const JsonTest json_test[] =
 
       {
         .can_run = TRUE,
+        .runtime_linker =
+        {
+          .path = "/lib64/ld-linux-x86-64.so.2",
+          .resolved = "/lib/x86_64-linux-gnu/ld-2.31.so",
+        },
         .graphics =
         {
           {
@@ -2874,6 +2896,15 @@ static const JsonTest json_test[] =
     {
       {
         .can_run = FALSE,
+        .runtime_linker =
+        {
+          .path = "/lib/ld-linux.so.2",
+          /* Error domain and code are missing from the report, so we
+           * make something up */
+          .error_domain = "srt-architecture-error-quark",
+          .error_code = SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
+          .error_message = "We just don't know",
+        },
         .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
         .graphics =
         {
@@ -2888,6 +2919,13 @@ static const JsonTest json_test[] =
       {
         .can_run = TRUE,
         .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+        .runtime_linker =
+        {
+          .path = "/lib64/ld-linux-x86-64.so.2",
+          .error_domain = "srt-architecture-error-quark",
+          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+          .error_message = "Runtime linker for \"x86_64-linux-gnu\" not included in report",
+        },
       },
     },
     .locale_issues = SRT_LOCALE_ISSUES_UNKNOWN,
@@ -2958,10 +2996,26 @@ static const JsonTest json_test[] =
       {
         /* i386 */
         .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
+        .runtime_linker =
+        {
+          .path = "/lib/ld-linux.so.2",
+          /* i386 is completely missing from this report */
+          .error_domain = "srt-architecture-error-quark",
+          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+          .error_message = "ABI \"i386-linux-gnu\" not included in report",
+        },
       },
       {
         .can_run = TRUE,
         .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+        .runtime_linker =
+        {
+          .path = "/lib64/ld-linux-x86-64.so.2",
+          /* We don't have the expected ld.so in the report */
+          .error_domain = "srt-architecture-error-quark",
+          .error_code = SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
+          .error_message = "Expected \"/lib64/ld-linux-x86-64.so.2\" in report, but got \"/foobar\"",
+        },
       },
     },
     .locale_issues = SRT_LOCALE_ISSUES_UNKNOWN,
@@ -3001,9 +3055,23 @@ static const JsonTest json_test[] =
     .architecture =
     {
       {
+        .runtime_linker =
+        {
+          .path = "/lib/ld-linux.so.2",
+          .error_domain = "srt-architecture-error-quark",
+          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+          .error_message = "ABI \"i386-linux-gnu\" not included in report",
+        },
         .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
       },
       {
+        .runtime_linker =
+        {
+          .path = "/lib64/ld-linux-x86-64.so.2",
+          .error_domain = "srt-architecture-error-quark",
+          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+          .error_message = "ABI \"x86_64-linux-gnu\" not included in report",
+        },
         .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
       },
     },
@@ -3062,6 +3130,49 @@ static const JsonTest json_test[] =
     .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_UNKNOWN,
   }, /* End Newer JSON report */
 };
+
+static void
+assert_expected_runtime_linker (SrtSystemInfo *info,
+                                const char *multiarch_tuple,
+                                const RuntimeLinkerTest *rtld)
+{
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *resolved = NULL;
+  const char *expected;
+  gboolean ok;
+
+  /* shorthand notation for having no expectations */
+  if (rtld->path == NULL)
+    return;
+
+  expected = srt_architecture_get_expected_runtime_linker (multiarch_tuple);
+  ok = srt_system_info_check_runtime_linker (info, multiarch_tuple,
+                                             &resolved, &error);
+
+  g_assert_cmpstr (rtld->path, ==, expected);
+
+  if (rtld->resolved != NULL)
+    {
+      g_assert (rtld->error_domain == NULL);
+      g_assert (rtld->error_code == 0);
+      g_assert (rtld->error_message == NULL);
+
+      g_assert_no_error (error);
+      g_assert_true (ok);
+      g_assert_cmpstr (resolved, ==, rtld->resolved);
+    }
+  else
+    {
+      g_assert (rtld->error_domain != NULL);
+      g_assert (rtld->error_message != NULL);
+
+      g_assert_error (error, g_quark_from_string (rtld->error_domain),
+                      rtld->error_code);
+      g_assert_cmpstr (error->message, ==, rtld->error_message);
+      g_assert_false (ok);
+      g_assert_cmpstr (resolved, ==, NULL);
+    }
+}
 
 static void
 json_parsing (Fixture *f,
@@ -3170,6 +3281,10 @@ json_parsing (Fixture *f,
 
           g_assert_cmpint (this_arch.issues, ==,
                            srt_system_info_check_libraries (info, multiarch_tuples[j], NULL));
+
+          assert_expected_runtime_linker (info,
+                                          multiarch_tuples[j],
+                                          &this_arch.runtime_linker);
 
           for (jj = 0; this_arch.graphics[jj].is_available; jj++)
             {
@@ -3442,6 +3557,112 @@ json_parsing (Fixture *f,
     }
 }
 
+static void
+architecture_symlinks (Fixture *f,
+                       gconstpointer context)
+{
+  g_autoptr(SrtSystemInfo) info;
+  g_autofree gchar *sysroot = NULL;
+  gboolean ret;
+
+  sysroot = g_build_filename (f->sysroots, "debian10", NULL);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_sysroot (info, sysroot);
+
+  /* In the mock Debian 10 sysroot created by tests/generate-sysroots.py,
+   * the well-known linker paths are symbolic links, much like they are
+   * on a real Debian system. */
+
+    {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *resolved = NULL;
+
+      ret = srt_system_info_check_runtime_linker (info, SRT_ABI_X86_64,
+                                                  &resolved, &error);
+      g_assert_no_error (error);
+      g_assert_true (ret);
+      g_assert_cmpstr (resolved, ==, "/usr/lib/x86_64-linux-gnu/ld.so");
+    }
+
+    {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *resolved = NULL;
+
+      ret = srt_system_info_check_runtime_linker (info, SRT_ABI_I386,
+                                                  &resolved, &error);
+      g_assert_no_error (error);
+      g_assert_true (ret);
+      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-linux-gnu/ld.so");
+    }
+
+  /* The sysroot doesn't include x32 support. */
+    {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *resolved = NULL;
+
+      ret = srt_system_info_check_runtime_linker (info, "x86_64-linux-gnux32",
+                                                  &resolved, &error);
+      g_assert_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND);
+      g_assert_false (ret);
+      g_assert_cmpstr (resolved, ==, NULL);
+    }
+
+    {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *resolved = NULL;
+
+      ret = srt_system_info_check_runtime_linker (info, "hal9000-netbsd",
+                                                  &resolved, &error);
+      /* We have no idea what the runtime linker would be, so we have
+       * no way to check for it */
+      g_assert_error (error, SRT_ARCHITECTURE_ERROR,
+                      SRT_ARCHITECTURE_ERROR_NO_INFORMATION);
+      g_assert_false (ret);
+      g_assert_cmpstr (resolved, ==, NULL);
+    }
+}
+
+static void
+architecture_notlinks (Fixture *f,
+                       gconstpointer context)
+{
+  g_autoptr(SrtSystemInfo) info;
+  g_autofree gchar *sysroot = NULL;
+  gboolean ret;
+
+  sysroot = g_build_filename (f->sysroots, "ubuntu16", NULL);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_sysroot (info, sysroot);
+
+  /* In the mock Ubuntu 16.04 sysroot created by tests/generate-sysroots.py,
+   * the well-known runtime linker for x86_64 is a real file (unlike
+   * real Ubuntu systems) and the runtime linker for i386 is missing. */
+
+    {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *resolved = NULL;
+
+      ret = srt_system_info_check_runtime_linker (info, "x86_64-linux-gnu",
+                                                  &resolved, &error);
+      g_assert_no_error (error);
+      g_assert_true (ret);
+      g_assert_cmpstr (resolved, ==, "/lib64/ld-linux-x86-64.so.2");
+    }
+
+    {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *resolved = NULL;
+
+      ret = srt_system_info_check_runtime_linker (info, "i386-linux-gnu",
+                                                  &resolved, &error);
+      g_assert_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND);
+      g_assert_false (ret);
+      g_assert_cmpstr (resolved, ==, NULL);
+    }
+}
+
 int
 main (int argc,
       char **argv)
@@ -3530,6 +3751,11 @@ main (int argc,
 
   g_test_add ("/system-info/json_parsing", Fixture, NULL,
               setup, json_parsing, teardown);
+
+  g_test_add ("/system-info/architecture/symlinks", Fixture, NULL,
+              setup, architecture_symlinks, teardown);
+  g_test_add ("/system-info/architecture/notlinks", Fixture, NULL,
+              setup, architecture_notlinks, teardown);
 
   status = g_test_run ();
 

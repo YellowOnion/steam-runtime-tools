@@ -354,6 +354,32 @@ keys:
     :   A boolean value indicating whether a simple executable for this
         architecture was run successfully.
 
+    **runtime-linker**
+    :   If the multiarch tuple is a known one, an object with the
+        following keys and values describing the runtime linker **ld.so**(8):
+
+        **path**
+        :   The path required to run Steam binaries on this architecture,
+            for example `/lib64/ld-linux-x86-64.so.2` on x86_64
+
+        **resolved**
+        :   The result of resolving symbolic links in **path** if possible,
+            for example `/lib/x86_64-linux-gnu/ld-2.28.so` on
+            Debian 10 x86_64
+
+        If the runtime linker is detected to be missing or unusable,
+        details of the error appear here:
+
+        **error-domain**
+        :   A machine-readable string indicating a category of errors.
+
+        **error-code**
+        :   A small integer indicating a specific error. Its meaning depends
+            on the **error-domain**.
+
+        **error**
+        :   A human-readable error message.
+
     **library-issues-summary**
     :   A summary of issues found when loading the expected libraries,
         as an array of strings. If empty, no problems were found.

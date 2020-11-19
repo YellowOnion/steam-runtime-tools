@@ -1577,8 +1577,13 @@ check_list_suffixes (const GList *list,
                      SrtGraphicsModule module)
 {
   const gchar *value = NULL;
-  gsize i = 0;
-  for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
+  const GList *iter;
+  gsize i;
+
+  for (i = 0; suffixes[i] != NULL; i++)
+    g_test_message ("Expecting: %s", suffixes[i]);
+
+  for (iter = list, i = 0; iter != NULL; iter = iter->next, i++)
     {
       switch (module)
         {
@@ -1599,6 +1604,7 @@ check_list_suffixes (const GList *list,
           default:
             g_return_if_reached ();
         }
+      g_test_message ("Got: %s", value);
       g_assert_nonnull (suffixes[i]);
       g_assert_true (g_str_has_suffix (value, suffixes[i]));
     }

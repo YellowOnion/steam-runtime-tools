@@ -61,6 +61,10 @@ test_utils = static_library(
     'fake-home.c',
     'test-utils.c',
   ],
+  c_args : [
+    '-D_SRT_MULTIARCH="' + multiarch + '"',
+    '-D_SRT_PYTHON="' + python.path() + '"',
+  ],
   dependencies : [
     glib,
     gobject,
@@ -116,18 +120,7 @@ install_subdir('fake-steam-runtime', install_dir : tests_dir)
 install_subdir('input-monitor-outputs', install_dir : tests_dir)
 install_subdir('json-report', install_dir : tests_dir)
 
-meson.add_postconf_script(
-  python.path(),
-  join_paths(meson.current_source_dir(), 'generate-sysroots.py'),
-  join_paths(meson.current_build_dir(), 'sysroots'),
-)
-
-meson.add_install_script(
-  python.path(),
-  join_paths(meson.current_source_dir(), 'generate-sysroots.py'),
-  '--install',
-  join_paths(tests_dir, 'sysroots'),
-)
+install_data('generate-sysroots.py', install_dir : tests_dir)
 
 # These are all the same: they just exit 0.
 foreach helper : [

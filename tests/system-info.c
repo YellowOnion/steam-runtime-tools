@@ -46,12 +46,13 @@
 
 static const char *argv0;
 static gchar *fake_home_path;
+static gchar *global_sysroots;
 
 typedef struct
 {
   gchar *srcdir;
   gchar *builddir;
-  gchar *sysroots;
+  const gchar *sysroots;
 } Fixture;
 
 typedef struct
@@ -74,7 +75,7 @@ setup (Fixture *f,
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
 
-  f->sysroots = g_build_filename (f->builddir, "sysroots", NULL);
+  f->sysroots = global_sysroots;
 }
 
 static void
@@ -85,7 +86,6 @@ teardown (Fixture *f,
 
   g_free (f->srcdir);
   g_free (f->builddir);
-  g_free (f->sysroots);
 
   /* We expect that fake_home already cleaned this up, but just to be sure we
    * do it too */
@@ -3676,6 +3676,7 @@ main (int argc,
    * doesn't support a custom environ. */
   g_test_init (&argc, &argv, NULL);
   fake_home_path = _srt_global_setup_private_xdg_dirs ();
+  global_sysroots = _srt_global_setup_sysroots (argv0);
 
   g_test_add ("/system-info/object", Fixture, NULL,
               setup, test_object, teardown);
@@ -3761,6 +3762,9 @@ main (int argc,
 
   if (!_srt_global_teardown_private_xdg_dirs ())
     g_debug ("Unable to remove the fake home parent directory of: %s", fake_home_path);
+
+  _srt_global_teardown_sysroots ();
+  g_clear_pointer (&global_sysroots, g_free);
 
   return status;
 }

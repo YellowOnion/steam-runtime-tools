@@ -98,6 +98,83 @@ _srt_global_teardown_private_xdg_dirs (void)
   return result;
 }
 
+static gchar *sysroots_parent = NULL;
+
+/**
+ * _srt_global_setup_sysroots:
+ * @argv0: `argv[0]`
+ *
+ * Create mock sysroots in a temporary directory.
+ *
+ * Returns: (type filename) (transfer full): Absolute path to the newly created
+ *  sysroots directory.
+ */
+gchar *
+_srt_global_setup_sysroots (const char *argv0)
+{
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *srcdir = NULL;
+  g_autofree gchar *sysroots = NULL;
+  g_autofree gchar *generate_sysroots = NULL;
+  g_autofree gchar *out = NULL;
+  g_autofree gchar *err = NULL;
+  const char *argv[] =
+  {
+    _SRT_PYTHON,
+    "<generate_sysroots.py>",
+    "<sysroot>",
+    NULL
+  };
+  int wait_status;
+
+  g_return_val_if_fail (sysroots_parent == NULL, NULL);
+
+  /* Create a directory that we control, and then put the fake home
+   * directory inside it, so we can delete and recreate the fake home
+   * directory without being vulnerable to symlink attacks. */
+  sysroots_parent = g_dir_make_tmp ("srt-test-XXXXXX", &error);
+  g_assert_no_error (error);
+  sysroots = g_build_filename (sysroots_parent, "sysroots", NULL);
+
+  srcdir = g_strdup (g_getenv ("G_TEST_SRCDIR"));
+
+  if (srcdir == NULL)
+    srcdir = g_path_get_dirname (argv0);
+
+  generate_sysroots = g_build_filename (srcdir, "generate-sysroots.py", NULL);
+  argv[1] = generate_sysroots;
+  argv[2] = sysroots;
+
+  g_spawn_sync (NULL, (gchar **) argv, NULL, G_SPAWN_SEARCH_PATH,
+                NULL, NULL, &out, &err, &wait_status, &error);
+  g_assert_no_error (error);
+  g_test_message ("stdout from generate-sysroots.py:\n%s", out);
+  g_test_message ("stderr from generate-sysroots.py:\n%s", err);
+  g_assert_cmpint (wait_status, ==, 0);
+
+  return g_steal_pointer (&sysroots);
+}
+
+/**
+ * _srt_global_teardown_sysroots:
+ *
+ * Tear down the previously created temporary directory.
+ *
+ * Returns: %TRUE if no errors occurred removing the temporary directory.
+ */
+gboolean
+_srt_global_teardown_sysroots (void)
+{
+  gboolean result;
+  g_return_val_if_fail (sysroots_parent != NULL, FALSE);
+
+  result = _srt_rm_rf (sysroots_parent);
+  g_free (sysroots_parent);
+  sysroots_parent = NULL;
+
+  return result;
+}
+
 TestsOpenFdSet
 tests_check_fd_leaks_enter (void)
 {

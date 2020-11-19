@@ -37,6 +37,7 @@
 #include "test-utils.h"
 
 static const char *argv0;
+static gchar *global_sysroots;
 
 typedef struct
 {
@@ -210,7 +211,7 @@ test_check_xdg_portal (Fixture *f,
       srt_system_info_set_test_flags (info, t->test_flags);
       if (t->sysroot != NULL)
         {
-          sysroot = g_build_filename (f->builddir, "sysroots", t->sysroot, NULL);
+          sysroot = g_build_filename (global_sysroots, t->sysroot, NULL);
           srt_system_info_set_sysroot (info, sysroot);
         }
 
@@ -247,11 +248,17 @@ int
 main (int argc,
       char **argv)
 {
+  int ret;
+
   argv0 = argv[0];
+  global_sysroots = _srt_global_setup_sysroots (argv0);
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/xdg-portal/test_check_xdg_portal", Fixture, NULL, setup,
               test_check_xdg_portal, teardown);
 
-  return g_test_run ();
+  ret = g_test_run ();
+  _srt_global_teardown_sysroots ();
+  g_clear_pointer (&global_sysroots, g_free);
+  return ret;
 }

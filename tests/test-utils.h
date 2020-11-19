@@ -66,3 +66,6 @@ gboolean _srt_global_teardown_private_xdg_dirs (void);
 typedef GHashTable *TestsOpenFdSet;
 TestsOpenFdSet tests_check_fd_leaks_enter (void);
 void tests_check_fd_leaks_leave (TestsOpenFdSet fds);
+
+gchar *_srt_global_setup_sysroots (const char *argv0);
+gboolean _srt_global_teardown_sysroots (void);

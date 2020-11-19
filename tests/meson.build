@@ -164,13 +164,7 @@ foreach test_info : tests
     c_args : [
       '-D_SRT_MULTIARCH="' + multiarch + '"',
     ],
-    dependencies : [
-      glib,
-      gobject,
-      gio_unix,
-      json_glib,
-      libglnx_dep,
-    ] + deps,
+    dependencies : deps,
     include_directories : project_include_dirs,
     install : get_option('installed_tests'),
     install_dir : tests_dir,

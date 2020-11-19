@@ -117,6 +117,14 @@ override_dh_install:
 	rm -f debian/tmp/usr/bin/capsule-version
 	dh_install
 
+# The debug symbols for libcapsule-tools-relocatable would be the same
+# as for libcapsule-tools, making them non-co-installable.
+# Use the environment variable instead of --no-automatic-dbgsym for
+# compatibility with Steam Runtime 1 'scout'.
+override_dh_strip:
+	DEB_BUILD_OPTIONS='$(DEB_BUILD_OPTIONS) noautodbgsym' dh_strip -plibcapsule-tools-relocatable
+	dh_strip --remaining-packages
+
 override_dh_missing:
 	dh_missing --fail-missing
 

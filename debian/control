@@ -9,7 +9,7 @@ Build-Depends:
  gcc (>= 4:4.8) | gcc-4.8,
  glslang-tools,
  gtk-doc-tools <!nodoc>,
- libcapsule-tools,
+ libcapsule-tools | libcapsule-tools-relocatable,
  libelf-dev,
  libgl1-mesa-dev | libgl-dev,
  libglib2.0-dev,

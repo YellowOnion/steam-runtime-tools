@@ -1217,6 +1217,8 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                                      RuntimeArchitecture *arch)
 {
   const gchar *ld_library_path;
+  g_autofree gchar *remap_usr = NULL;
+  g_autofree gchar *remap_lib = NULL;
   FlatpakBwrap *ret = pv_bwrap_copy (self->container_access_adverb);
 
   /* If we have a custom "LD_LIBRARY_PATH", we want to preserve
@@ -1225,10 +1227,21 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   if (ld_library_path != NULL)
     flatpak_bwrap_set_env (ret, "LD_LIBRARY_PATH", ld_library_path, TRUE);
 
+  /* Every symlink that starts with exactly /usr/ */
+  remap_usr = g_strjoin (NULL, "/usr/", "=",
+                         self->provider_in_container_namespace,
+                         "/usr/", NULL);
+
+  /* Every symlink that starts with /lib, e.g. /lib64 */
+  remap_lib = g_strjoin (NULL, "/lib", "=",
+                         self->provider_in_container_namespace,
+                         "/lib", NULL);
+
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,
                           "--container", self->container_access,
-                          "--link-target", self->provider_in_container_namespace,
+                          "--remap-link-prefix", remap_usr,
+                          "--remap-link-prefix", remap_lib,
                           "--provider",
                             self->provider_in_current_namespace,
                           NULL);

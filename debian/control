@@ -139,7 +139,7 @@ Architecture: amd64 i386
 Multi-Arch: foreign
 Depends:
  bubblewrap,
- libcapsule-tools-relocatable (>= 0.20200707.0~),
+ libcapsule-tools-relocatable (>= 0.20201120.0),
  python3 (>= 3.5) | python3.5,
  steam-runtime-tools-bin,
  ${misc:Depends},
@@ -157,7 +157,7 @@ Section: libs
 Architecture: amd64
 Multi-Arch: foreign
 Depends:
- libcapsule-tools-relocatable (>= 0.20200707.0~),
+ libcapsule-tools-relocatable (>= 0.20201120.0),
  libsteam-runtime-tools-0-helpers,
  ${misc:Depends},
  ${shlibs:Depends},
@@ -171,7 +171,7 @@ Section: libs
 Architecture: i386
 Multi-Arch: foreign
 Depends:
- libcapsule-tools-relocatable (>= 0.20200707.0~),
+ libcapsule-tools-relocatable (>= 0.20201120.0),
  libsteam-runtime-tools-0-helpers,
  ${misc:Depends},
  ${shlibs:Depends},

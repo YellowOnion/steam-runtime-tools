@@ -6131,6 +6131,7 @@ srt_vulkan_layer_new_replace_library_path (SrtVulkanLayer *self,
     return g_object_ref (self);
 
   ret = vulkan_layer_dup (self);
+  g_return_val_if_fail (ret != NULL, NULL);
 
   g_free (ret->layer.library_path);
 

@@ -44,12 +44,13 @@
 #include "test-utils.h"
 
 static const char *argv0;
+static gchar *global_sysroots;
 
 typedef struct
 {
   gchar *srcdir;
   gchar *builddir;
-  gchar *sysroots;
+  const gchar *sysroots;
   gchar *sysroot;
   gchar **fake_icds_envp;
 } Fixture;
@@ -82,7 +83,7 @@ setup (Fixture *f,
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
 
-  f->sysroots = g_build_filename (f->builddir, "sysroots", NULL);
+  f->sysroots = global_sysroots;
 
   if (g_chdir (f->srcdir) != 0)
     g_error ("chdir %s: %s", f->srcdir, g_strerror (errno));
@@ -193,7 +194,6 @@ teardown (Fixture *f,
   g_free (f->srcdir);
   g_free (f->builddir);
   g_free (f->sysroot);
-  g_free (f->sysroots);
   g_strfreev (f->fake_icds_envp);
 }
 
@@ -1577,8 +1577,13 @@ check_list_suffixes (const GList *list,
                      SrtGraphicsModule module)
 {
   const gchar *value = NULL;
-  gsize i = 0;
-  for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
+  const GList *iter;
+  gsize i;
+
+  for (i = 0; suffixes[i] != NULL; i++)
+    g_test_message ("Expecting: %s", suffixes[i]);
+
+  for (iter = list, i = 0; iter != NULL; iter = iter->next, i++)
     {
       switch (module)
         {
@@ -1599,6 +1604,7 @@ check_list_suffixes (const GList *list,
           default:
             g_return_if_reached ();
         }
+      g_test_message ("Got: %s", value);
       g_assert_nonnull (suffixes[i]);
       g_assert_true (g_str_has_suffix (value, suffixes[i]));
     }
@@ -2036,9 +2042,10 @@ test_dri_with_env (Fixture *f,
   g_list_free_full (va_api, g_object_unref);
 
   /* Test relative path.
-   * Move to the build directory because otherwise we can't use the relative sysroots path */
-  if (g_chdir (f->builddir) != 0)
-    g_error ("chdir %s: %s", f->builddir, g_strerror (errno));
+   * Move to the sysroots path because otherwise we can't use the
+   * relative paths */
+  if (g_chdir (global_sysroots) != 0)
+    g_error ("chdir %s: %s", global_sysroots, g_strerror (errno));
   g_free (libgl);
   g_free (libgl2);
   g_free (libgl3);
@@ -2047,12 +2054,12 @@ test_dri_with_env (Fixture *f,
   g_free (libva3);
   g_free (libgl_combined);
   g_free (libva_combined);
-  libgl = g_build_filename ("sysroots", "no-os-release", "custom_path32", "dri", NULL);
-  libgl2 = g_build_filename ("sysroots", "no-os-release", "custom_path32_2", "dri", NULL);
-  libgl3 = g_build_filename ("sysroots", "no-os-release", "custom_path64", "dri", NULL);
-  libva = g_build_filename ("sysroots", "no-os-release", "custom_path32", "va", NULL);
-  libva2 = g_build_filename ("sysroots", "no-os-release", "custom_path32_2", "va", NULL);
-  libva3 = g_build_filename ("sysroots", "no-os-release", "custom_path64", "va", NULL);
+  libgl = g_build_filename ("no-os-release", "custom_path32", "dri", NULL);
+  libgl2 = g_build_filename ("no-os-release", "custom_path32_2", "dri", NULL);
+  libgl3 = g_build_filename ("no-os-release", "custom_path64", "dri", NULL);
+  libva = g_build_filename ("no-os-release", "custom_path32", "va", NULL);
+  libva2 = g_build_filename ("no-os-release", "custom_path32_2", "va", NULL);
+  libva3 = g_build_filename ("no-os-release", "custom_path64", "va", NULL);
   libgl_combined = g_strjoin (":", libgl, libgl2, libgl3, NULL);
   libva_combined = g_strjoin (":", libva, libva2, libva3, NULL);
   envp = g_environ_setenv (envp, "LIBGL_DRIVERS_PATH", libgl_combined, TRUE);
@@ -2285,7 +2292,7 @@ test_vdpau (Fixture *f,
       else
         {
           vdpau_path = g_build_filename (sysroot, test->vdpau_path_env, "vdpau", NULL);
-          vdpau_relative_path = g_build_filename ("sysroots", test->sysroot, test->vdpau_path_env,
+          vdpau_relative_path = g_build_filename (test->sysroot, test->vdpau_path_env,
                                                   "vdpau", NULL);
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
         }
@@ -2334,8 +2341,9 @@ test_vdpau (Fixture *f,
         {
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_relative_path, TRUE);
           /* Move to the build directory because otherwise we can't use the relative sysroots path */
-          if (g_chdir (f->builddir) != 0)
-            g_error ("chdir %s: %s", f->builddir, g_strerror (errno));
+          if (g_chdir (global_sysroots) != 0)
+            g_error ("chdir %s: %s", global_sysroots, g_strerror (errno));
+
           srt_system_info_set_environ (info, envp);
           vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_NONE);
           check_list_suffixes (vdpau, test->vdpau_suffixes, SRT_GRAPHICS_VDPAU_MODULE);
@@ -2694,7 +2702,10 @@ int
 main (int argc,
       char **argv)
 {
+  int ret;
+
   argv0 = argv[0];
+  global_sysroots = _srt_global_setup_sysroots (argv0);
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/graphics/object", Fixture, NULL,
@@ -2752,5 +2763,8 @@ main (int argc,
   g_test_add ("/graphics/glx/container", Fixture, NULL,
               setup, test_glx_container, teardown);
 
-  return g_test_run ();
+  ret = g_test_run ();
+  _srt_global_teardown_sysroots ();
+  g_clear_pointer (&global_sysroots, g_free);
+  return ret;
 }

@@ -110,6 +110,7 @@ override_dh_link:
 	:
 	install -d $(relocatable_pkglibdir)
 	ln -fnsv ../libsteam-runtime-tools-0.so.0 $(relocatable_pkglibdir)
+	export PATH=/usr/lib/libcapsule/relocatable:$$PATH; \
 	LD_LIBRARY_PATH='$(DESTDIR)/usr/$(libdir)' \
 	$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
 		--container / \

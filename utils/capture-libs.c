@@ -110,15 +110,22 @@ enum
   OPTION_NO_GLIBC,
   OPTION_PRINT_LD_SO,
   OPTION_PROVIDER,
+  OPTION_REMAP_LINK_PREFIX,
   OPTION_RESOLVE_LD_SO,
   OPTION_VERSION,
 };
+
+typedef struct {
+    char *from;
+    const char *to;
+} remap_tuple;
 
 static const char * const *arg_patterns = NULL;
 static const char *option_container = "/";
 static const char *option_dest = ".";
 static const char *option_provider = "/";
 static const char *option_link_target = NULL;
+static remap_tuple *remap_prefix = NULL;
 static bool option_glibc = true;
 
 static struct option long_options[] =
@@ -132,6 +139,7 @@ static struct option long_options[] =
     { "no-glibc", no_argument, NULL, OPTION_NO_GLIBC },
     { "print-ld.so", no_argument, NULL, OPTION_PRINT_LD_SO },
     { "provider", required_argument, NULL, OPTION_PROVIDER },
+    { "remap-link-prefix", required_argument, NULL, OPTION_REMAP_LINK_PREFIX },
     { "resolve-ld.so", required_argument, NULL, OPTION_RESOLVE_LD_SO },
     { "version", no_argument, NULL, OPTION_VERSION },
     { NULL }
@@ -243,6 +251,10 @@ static void usage (int code)
                "\tcontainer is used [default: PROVIDER]\n" );
   fprintf( fh, "--provider=PROVIDER\n"
                "\tFind libraries in PROVIDER [default: /]\n" );
+  fprintf( fh, "--remap-link-prefix=FROM=TO\n"
+               "\tWhile in the process of creating symlinks, if their prefix\n"
+               "\twas supposed to be FROM, they will instead be changed with\n"
+               "\tTO\n" );
   fprintf( fh, "--no-glibc\n"
                "\tDon't capture libraries that are part of glibc\n" );
   fprintf( fh, "\n" );
@@ -349,6 +361,7 @@ capture_one( const char *soname, const capture_options *options,
              int *code, char **message )
 {
     unsigned int i;
+    unsigned int j;
     _capsule_cleanup(ld_libs_finish) ld_libs provider = {};
     int local_code = 0;
     _capsule_autofree char *local_message = NULL;
@@ -398,6 +411,7 @@ capture_one( const char *soname, const capture_options *options,
         const char *needed_name = provider.needed[i].name;
         const char *needed_path_in_provider = provider.needed[i].path;
         const char *needed_basename;
+        bool remapped_prefix = false;
 
         if( !needed_name )
         {
@@ -423,7 +437,6 @@ capture_one( const char *soname, const capture_options *options,
 
         if( !option_glibc )
         {
-            unsigned int j;
             bool capture = true;
 
             for( j = 0; j < N_ELEMENTS( libc_patterns ); j++ )
@@ -554,11 +567,7 @@ capture_one( const char *soname, const capture_options *options,
         /* By this point we've decided we want the version from the
          * provider, not the version from the container */
 
-        if( option_link_target == NULL )
-        {
-            target = xstrdup( needed_path_in_provider );
-        }
-        else
+        if( option_link_target != NULL || remap_prefix != NULL )
         {
             char path[PATH_MAX];
             size_t prefix_len = strlen( option_provider );
@@ -591,9 +600,35 @@ capture_one( const char *soname, const capture_options *options,
                 continue;
             }
 
-            target = build_filename_alloc( option_link_target,
+            target = build_filename_alloc( option_link_target ? option_link_target : "/",
                                            path + prefix_len,
                                            NULL );
+
+            for( j = 0; remap_prefix != NULL && remap_prefix[j].from != NULL; j++ )
+            {
+                if( strstarts( target, remap_prefix[j].from ) )
+                {
+                    char *tmp;
+                    assert( remap_prefix[j].to != NULL );
+                    DEBUG( DEBUG_TOOL, "Remapping \"%s\" to \"%s\" in \"%s\"",
+                           remap_prefix[j].from, remap_prefix[j].to, target );
+                    xasprintf( &tmp, "%s%s", remap_prefix[j].to,
+                               target + strlen( remap_prefix[j].from ) );
+                    free( target );
+                    target = tmp;
+                    remapped_prefix = true;
+                }
+            }
+        }
+
+        // If we don't have the link target option and we didn't remap the
+        // prefix, we just set the target to the needed path in provider
+        // without following the eventual link chain
+        if( !remapped_prefix && option_link_target == NULL )
+        {
+            if( target != NULL )
+                free( target );
+            target = xstrdup( needed_path_in_provider );
         }
 
         assert( target != NULL );
@@ -1134,6 +1169,8 @@ main (int argc, char **argv)
     const char *option_library_knowledge = NULL;
     int code = 0;
     char *message = NULL;
+    // Arbitrary initialization size
+    ptr_list *remap_list = ptr_list_alloc( 4 );
 
     set_debug_flags( getenv("CAPSULE_DEBUG") );
 
@@ -1182,7 +1219,7 @@ main (int argc, char **argv)
 
             case OPTION_PRINT_LD_SO:
                 puts( LD_SO );
-                return 0;
+                goto out;
 
             case OPTION_PROVIDER:
                 option_provider = optarg;
@@ -1194,7 +1231,14 @@ main (int argc, char **argv)
 
             case OPTION_VERSION:
                 _capsule_tools_print_version( "capsule-capture-libs" );
-                return 0;
+                goto out;
+
+            case OPTION_REMAP_LINK_PREFIX:
+                if( strchr( optarg, '=' ) == NULL )
+                    errx( 1, "--remap-link-prefix value must follow the FROM=TO pattern" );
+
+                ptr_list_push_ptr( remap_list, xstrdup( optarg ) );
+                break;
 
             case OPTION_RESOLVE_LD_SO:
                 {
@@ -1208,7 +1252,7 @@ main (int argc, char **argv)
                     }
 
                     puts( within_prefix );
-                    return 0;
+                    goto out;
                 }
                 break;
         }
@@ -1218,6 +1262,28 @@ main (int argc, char **argv)
     {
         warnx( "One or more patterns must be provided" );
         usage( 2 );
+    }
+
+    if (remap_list->next > 0)
+    {
+        size_t n = 0;
+        char **remap_array = (char **) ptr_list_free_to_array( _capsule_steal_pointer( &remap_list ), &n );
+        remap_prefix = xcalloc( n + 1, sizeof( remap_tuple ) );
+        for( size_t i = 0; remap_array[i] != NULL; i++ )
+        {
+            char *buf = xstrdup( remap_array[i] );
+            char *equals = strchr( buf, '=' );
+            if( equals == NULL || equals == buf || *(equals + 1) == '\0' )
+            {
+                free( buf );
+                free_strv_full( remap_array );
+                errx( 1, "--remap-link-prefix value must follow the FROM=TO pattern" );
+            }
+            *equals = '\0';
+            remap_prefix[i].from = buf;
+            remap_prefix[i].to = equals + 1;
+        }
+        free_strv_full( remap_array );
     }
 
     arg_patterns = (const char * const *) argv + optind;
@@ -1272,6 +1338,20 @@ main (int argc, char **argv)
     close( dest_fd );
     free( options.comparators );
     library_knowledge_clear( &options.knowledge );
+
+    for( size_t i = 0; remap_prefix != NULL && remap_prefix[i].from != NULL; i++ )
+    {
+        free( remap_prefix[i].from );
+        remap_prefix[i].from = NULL;
+        remap_prefix[i].to = NULL;
+    }
+
+out:
+    if( remap_list != NULL )
+    {
+        char **tmp_to_free = (char **) ptr_list_free_to_array( _capsule_steal_pointer( &remap_list ), NULL );
+        free_strv_full( tmp_to_free );
+    }
 
     return 0;
 }

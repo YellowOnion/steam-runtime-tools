@@ -116,6 +116,105 @@ like(readlink "$libdir/libc.so.6", qr{^/run/host\Q$libc\E$},
 
 run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+        '--remap-link-prefix=/run/host/=/run/media/', "--dest=$libdir",
+        'soname-match:libc.so.6'], '>&2');
+{
+    opendir(my $dir_iter, $libdir);
+    my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;
+    foreach my $symlink (@links) {
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+    is_deeply(\@links, \@libc_family,
+        'the same libraries are captured when using --link-target');
+}
+like(readlink "$libdir/libc.so.6", qr{^/run/media\Q$libc\E$},
+     '$libdir/libc.so.6 is a symlink to /run/media + realpath of libc.so.6');
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+        '--remap-link-prefix=/one=/two', '--remap-link-prefix=/run/ho=/run/co',
+        "--dest=$libdir", 'soname-match:libc.so.6'], '>&2');
+{
+    opendir(my $dir_iter, $libdir);
+    my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;
+    foreach my $symlink (@links) {
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+    is_deeply(\@links, \@libc_family,
+        'the same libraries are captured when using --link-target');
+}
+like(readlink "$libdir/libc.so.6", qr{^/run/cost\Q$libc\E$},
+     '$libdir/libc.so.6 is a symlink to /run/cost + realpath of libc.so.6');
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+        '--remap-link-prefix=/run/host2=/run/media', "--dest=$libdir",
+        'soname-match:libc.so.6'], '>&2');
+{
+    opendir(my $dir_iter, $libdir);
+    my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;
+    foreach my $symlink (@links) {
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+    is_deeply(\@links, \@libc_family,
+        'the same libraries are captured when using --link-target');
+}
+like(readlink "$libdir/libc.so.6", qr{^/run/host\Q$libc\E$},
+     '$libdir/libc.so.6 is a symlink to /run/host + realpath of libc.so.6');
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+# We already asserted that libc will be either in /usr/ or /lib*
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--remap-link-prefix=/usr/=/run/host/usr/',
+        '--remap-link-prefix=/lib=/run/host/lib', "--dest=$libdir",
+        'soname-match:libc.so.6'], '>&2');
+like(readlink "$libdir/libc.so.6", qr{^/run/host\Q$libc\E$},
+     "$libdir/libc.so.6 is a symlink to /run/host + realpath of libc.so.6");
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+# We already asserted that libc will be either in /usr/ or /lib*
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--remap-link-prefix=/usr/=/tmp+foo=what/usr/',
+        '--remap-link-prefix=/lib=/tmp+foo=what/lib', "--dest=$libdir",
+        'soname-match:libc.so.6'], '>&2');
+like(readlink "$libdir/libc.so.6", qr{^/tmp\+foo=what\Q$libc\E$},
+     "$libdir/libc.so.6 is a symlink to /run/host + realpath of libc.so.6");
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--remap-link-prefix=/opt/=/OPT/',
+        "--dest=$libdir", 'soname-match:libc.so.6'], '>&2');
+like(readlink "$libdir/libc.so.6", qr{^$LIBDIR/libc\.so\.6$},
+     "$libdir/libc.so.6 is a symlink to the real libc.so.6");
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+my $stderr;
+run_assert_exit_status(1, [$CAPSULE_CAPTURE_LIBS_TOOL,
+                        '--remap-link-prefix==/run/host',
+                        "--dest=$libdir", 'soname-match:libc.so.6'],
+                       '2>', \$stderr, '>&2');
+like($stderr, qr{--remap-link-prefix value must follow the FROM=TO pattern$},
+     '--remap-link-prefix should follow the pattern FROM=TO');
+
+run_assert_exit_status(1, [$CAPSULE_CAPTURE_LIBS_TOOL, '--remap-link-prefix=/usr=',
+            "--dest=$libdir", 'soname-match:libc.so.6'], '2>', \$stderr, '>&2');
+like($stderr, qr{--remap-link-prefix value must follow the FROM=TO pattern$},
+     '--remap-link-prefix should follow the pattern FROM=TO');
+
+run_assert_exit_status(1, [$CAPSULE_CAPTURE_LIBS_TOOL, '--remap-link-prefix=/usr',
+            "--dest=$libdir", 'soname-match:libc.so.6'], '2>', \$stderr, '>&2');
+like($stderr, qr{--remap-link-prefix value must follow the FROM=TO pattern$},
+     '--remap-link-prefix should follow the pattern FROM=TO');
+
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
 run_ok([qw(bwrap --ro-bind / / --ro-bind /), $host,
         '--bind', $libdir, $libdir,
         qw(--dev-bind /dev /dev),
@@ -179,7 +278,6 @@ like(readlink "$libdir/libjpeg.so.62", qr{^$LIBDIR/libjpeg\.so\.62(?:[0-9.]+)$},
 
 run_ok(['rm', '-fr', $libdir]);
 mkdir($libdir);
-my $stderr;
 my $result = run_verbose([qw(bwrap --ro-bind / / --ro-bind /), $host,
                           '--bind', $libdir, $libdir,
                           qw(--dev-bind /dev /dev),

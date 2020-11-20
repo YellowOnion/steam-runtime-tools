@@ -35,6 +35,7 @@ our @EXPORT = qw(
     explain_wait_status
     get_symbols_with_nm
     libcapsule_uninstalled
+    run_assert_exit_status
     run_ok
     run_verbose
     skip_all_unless_bwrap
@@ -229,6 +230,29 @@ sub explain_wait_status {
     }
 
     return join(', ', @ret);
+}
+
+=item run_assert_exit_status(I<STATUS>, I<ARGV>, ...)
+
+A TAP assertion that the given command exits with I<STATUS>. I<ARGV> is an
+array-reference containing arguments. Subsequent parameters are
+passed to C<IPC::Run::run> and can be used to redirect output.
+
+=cut
+
+sub run_assert_exit_status {
+    my $exp_status = shift;
+    my $argv = shift;
+    my $debug = join(' ', @$argv);
+    diag($debug);
+    run($argv, @_);
+    my $explained = explain_wait_status($?);
+    my $actual_status = ($? >> 8);
+    if ($actual_status == $exp_status) {
+        ok(1, "Command exited with status $? ($explained): '$debug'");
+    } else {
+        ok(0, "Command unexpectedly exited with status $? ($explained): '$debug'");
+    }
 }
 
 =item run_ok(I<ARGV>, ...)

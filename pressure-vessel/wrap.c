@@ -331,7 +331,7 @@ export_contents_of_run (FlatpakBwrap *bwrap,
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-  g_return_val_if_fail (g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS),
+  g_return_val_if_fail (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR),
                         FALSE);
 
   dir = g_dir_open ("/run", 0, error);

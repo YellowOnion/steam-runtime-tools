@@ -361,6 +361,7 @@ typedef enum
 {
   ENV_MOUNT_FLAGS_COLON_DELIMITED = (1 << 0),
   ENV_MOUNT_FLAGS_DEPRECATED = (1 << 1),
+  ENV_MOUNT_FLAGS_READ_ONLY = (1 << 2),
   ENV_MOUNT_FLAGS_NONE = 0
 } EnvMountFlags;
 
@@ -390,11 +391,11 @@ static const EnvMount known_required_env[] =
 static void
 bind_and_propagate_from_environ (FlatpakExports *exports,
                                  FlatpakBwrap *bwrap,
-                                 FlatpakFilesystemMode mode,
                                  const char *variable,
                                  EnvMountFlags flags)
 {
   g_auto(GStrv) values = NULL;
+  FlatpakFilesystemMode mode = FLATPAK_FILESYSTEM_MODE_READ_WRITE;
   const char *value;
   const char *before;
   const char *after;
@@ -402,7 +403,6 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
   gsize i;
 
   g_return_if_fail (exports != NULL);
-  g_return_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST);
   g_return_if_fail (variable != NULL);
 
   value = g_getenv (variable);
@@ -412,6 +412,9 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
 
   if (flags & ENV_MOUNT_FLAGS_DEPRECATED)
     g_message ("Setting $%s is deprecated", variable);
+
+  if (flags & ENV_MOUNT_FLAGS_READ_ONLY)
+    mode = FLATPAK_FILESYSTEM_MODE_READ_ONLY;
 
   if (flags & ENV_MOUNT_FLAGS_COLON_DELIMITED)
     {
@@ -1871,7 +1874,6 @@ main (int argc,
   g_debug ("Making Steam environment variables available if required...");
   for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
     bind_and_propagate_from_environ (exports, bwrap,
-                                     FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                      known_required_env[i].name,
                                      known_required_env[i].flags);
 

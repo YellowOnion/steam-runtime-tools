@@ -119,6 +119,11 @@ class TestContainers(BaseTest):
     pv_dir = ''
     pv_wrap = ''
 
+    @staticmethod
+    def copy2(src, dest):
+        logger.info('Copying %r to %r', src, dest)
+        shutil.copy2(src, dest)
+
     @classmethod
     def setUpClass(cls) -> None:
         super().setUpClass()
@@ -181,7 +186,7 @@ class TestContainers(BaseTest):
             for exe in (
                 'pressure-vessel-wrap',
             ):
-                shutil.copy2(
+                cls.copy2(
                     os.path.join(cls.top_builddir, 'pressure-vessel', exe),
                     os.path.join(cls.pv_dir, 'bin', exe),
                 )
@@ -189,7 +194,7 @@ class TestContainers(BaseTest):
             for exe in (
                 'pressure-vessel-locale-gen',
             ):
-                shutil.copy2(
+                cls.copy2(
                     os.path.join(cls.top_srcdir, 'pressure-vessel', exe),
                     os.path.join(cls.pv_dir, 'bin', exe),
                 )
@@ -215,7 +220,7 @@ class TestContainers(BaseTest):
                         'Copying pre-existing %s from %s',
                         exe, in_containers_dir,
                     )
-                    shutil.copy2(
+                    cls.copy2(
                         in_containers_dir,
                         os.path.join(cls.pv_dir, 'bin', exe),
                     )
@@ -224,7 +229,7 @@ class TestContainers(BaseTest):
                         'Copying just-built %s from %s/pressure-vessel',
                         exe, cls.top_builddir,
                     )
-                    shutil.copy2(
+                    cls.copy2(
                         os.path.join(cls.top_builddir, 'pressure-vessel', exe),
                         os.path.join(cls.pv_dir, 'bin', exe),
                     )
@@ -260,9 +265,9 @@ class TestContainers(BaseTest):
                     )
 
                     if found is not None:
-                        shutil.copy2(found, tool_path)
+                        cls.copy2(found, tool_path)
                     elif os.path.isfile(relocatable):
-                        shutil.copy2(relocatable, tool_path)
+                        cls.copy2(relocatable, tool_path)
                     else:
                         raise unittest.SkipTest('{} not found'.format(exe))
         else:
@@ -355,7 +360,7 @@ class TestContainers(BaseTest):
         os.makedirs(os.path.join(cls.artifacts, 'tmp'), exist_ok=True)
 
         for f in ('testutils.py', 'inside-runtime.py'):
-            shutil.copy2(
+            self.copy2(
                 os.path.join(cls.G_TEST_SRCDIR, f),
                 os.path.join(cls.artifacts, 'tmp', f),
             )

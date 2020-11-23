@@ -1958,6 +1958,8 @@ main (int argc,
   adjust_exports (exports_bwrap, home);
   flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
 
+  flatpak_run_add_font_path_args (bwrap);
+
   /* We need to set up IPC rendezvous points relatively late, so that
    * even if we are sharing /tmp via --filesystem=/tmp, we'll still
    * mount our own /tmp/.X11-unix over the top of the OS's. */

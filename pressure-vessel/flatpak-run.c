@@ -1672,8 +1672,10 @@ out:
   return res;
 }
 
-static void
-add_font_path_args (FlatpakBwrap *bwrap)
+#endif
+
+void
+flatpak_run_add_font_path_args (FlatpakBwrap *bwrap)
 {
   g_autoptr(GString) xml_snippet = g_string_new ("");
   gchar *path_build_tmp = NULL;
@@ -1786,6 +1788,8 @@ add_font_path_args (FlatpakBwrap *bwrap)
   if (!flatpak_bwrap_add_args_data (bwrap, "font-dirs.xml", xml_snippet->str, xml_snippet->len, "/run/host/font-dirs.xml", NULL))
     g_warning ("Unable to add fontconfig data snippet");
 }
+
+#if 0
 
 static void
 add_icon_path_args (FlatpakBwrap *bwrap)

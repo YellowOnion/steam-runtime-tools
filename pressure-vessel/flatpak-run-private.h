@@ -49,6 +49,7 @@ gboolean flatpak_run_add_session_dbus_args (FlatpakBwrap *app_bwrap);
 void     flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,
                                       GFile        *app_dir);
 GFile *flatpak_get_data_dir (const char *app_id);
+void flatpak_run_add_font_path_args (FlatpakBwrap *bwrap);
 
 extern const char * const *flatpak_abs_usrmerged_dirs;
 #endif /* __FLATPAK_RUN_H__ */

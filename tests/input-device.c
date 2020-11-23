@@ -696,6 +696,24 @@ static const GuessTest guess_tests[] =
       },
     },
     {
+      .name = "DualSense (PS5) - gamepad",
+      .bus_type = 0x0003,
+      .vendor_id = 0x054c,
+      .product_id = 0x0ce6,
+      .version = 0x111,
+      .expected = SRT_INPUT_DEVICE_TYPE_FLAGS_JOYSTICK,
+      /* SYN, KEY, ABS */
+      .ev = { 0x0b },
+      /* X, Y, Z, RX, RY, RZ, HAT0X, HAT0Y */
+      .abs = { 0x3f, 0x00, 0x03 },
+      .keys = {
+          /* 0x00-0xff */ ZEROx8, ZEROx8, ZEROx8, ZEROx8,
+          /* ABC, XYZ, TL, TR, TL2, TR2, select, start, mode, thumbl,
+           * thumbr */
+          /* 0x100 */ ZEROx4, 0x00, 0x00, 0xff, 0x7f,
+      },
+    },
+    {
       .name = "DualShock 4 - gamepad",
       .bus_type = 0x0003,
       .vendor_id = 0x054c,

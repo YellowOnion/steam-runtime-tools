@@ -115,6 +115,7 @@ logger = logging.getLogger('test-containers')
 class TestContainers(BaseTest):
     bwrap = None            # type: typing.Optional[str]
     containers_dir = ''
+    host_srsi = None        # type: typing.Optional[str]
     host_srsi_parsed = {}   # type: typing.Dict[str, typing.Any]
     pv_dir = ''
     pv_wrap = ''
@@ -295,6 +296,8 @@ class TestContainers(BaseTest):
         if host_srsi is None:
             host_srsi = shutil.which('steam-runtime-system-info')
 
+        cls.host_srsi = host_srsi
+
         if host_srsi is not None:
             with open(
                 os.path.join(cls.artifacts, 'host-srsi.json'),
@@ -345,6 +348,7 @@ class TestContainers(BaseTest):
         cls = self.__class__
         self.bwrap = cls.bwrap
         self.containers_dir = cls.containers_dir
+        self.host_srsi = cls.host_srsi
         self.host_srsi_parsed = cls.host_srsi_parsed
         self.pv_dir = cls.pv_dir
         self.pv_wrap = cls.pv_wrap
@@ -1041,6 +1045,44 @@ class TestContainers(BaseTest):
 
         with self.subTest('transient'):
             self._test_soldier('soldier', soldier)
+
+    def test_no_runtime(self) -> None:
+        if self.bwrap is None:
+            self.skipTest('Unable to run bwrap (in a container?)')
+
+        artifacts = os.path.join(
+            self.artifacts,
+            'no-runtime',
+        )
+        os.makedirs(artifacts, exist_ok=True)
+
+        bwrap_temp_file = os.path.join(self.artifacts, 'bwrap-args')
+
+        argv = [
+            self.pv_wrap,
+            '--verbose',
+            '--write-bwrap-arguments', bwrap_temp_file,
+        ]
+
+        var = os.path.join(self.containers_dir, 'var')
+        os.makedirs(var, exist_ok=True)
+
+        with open(os.path.join(artifacts, 'srsi.json'), 'w') as writer:
+            completed = self.run_subprocess(
+                argv + [
+                    '--',
+                    'env',
+                    'LD_BIND_NOW=1',
+                    self.host_srsi or 'true',
+                    '--verbose',
+                ],
+                cwd=artifacts,
+                stdout=writer,
+                stderr=2,
+                universal_newlines=True,
+            )
+
+        self.assertEqual(completed.returncode, 0)
 
 
 if __name__ == '__main__':

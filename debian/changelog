@@ -3,8 +3,7 @@ steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
   [ Simon McVittie ]
   * runtime: Expand libqual into an array of multilib directories.
     This is a step towards searching all the necessary places for unusual
-    distributions like Exherbo (see
-    https://github.com/ValveSoftware/steam-runtime/issues/230), and gives us
+    distributions like Exherbo (see steam-runtime#230), and gives us
     an obvious extension point for adding more multilib directories.
   * runtime: Don't issue warnings when unable to delete from runtime copy
   * pressure-vessel-unruntime: Don't assume bash is at /bin/bash.

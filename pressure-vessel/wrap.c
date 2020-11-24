@@ -475,6 +475,12 @@ static const char * const steam_api_subdirs[] =
   "root", "steam", "steambeta", "bin", "bin32", "bin64", "sdk32", "sdk64",
 };
 
+static gboolean expose_steam (FlatpakExports *exports,
+                              FlatpakFilesystemMode mode,
+                              const char *real_home,
+                              const char *fake_home,
+                              GError **error);
+
 static gboolean
 use_fake_home (FlatpakExports *exports,
                FlatpakBwrap *bwrap,
@@ -490,9 +496,6 @@ use_fake_home (FlatpakExports *exports,
   g_autofree gchar *local = g_build_filename (fake_home, ".local", NULL);
   g_autofree gchar *data = g_build_filename (local, "share", NULL);
   g_autofree gchar *data2 = g_build_filename (fake_home, "data", NULL);
-  g_autofree gchar *steam_pid = NULL;
-  g_autofree gchar *steam_pipe = NULL;
-  gsize i;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
@@ -549,54 +552,85 @@ use_fake_home (FlatpakExports *exports,
                                    FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                    fake_home);
 
+  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                       real_home, fake_home, error);
+}
+
+static gboolean
+expose_steam (FlatpakExports *exports,
+              FlatpakFilesystemMode mode,
+              const char *real_home,
+              const char *fake_home,
+              GError **error)
+{
+  g_autofree gchar *dot_steam = g_build_filename (real_home, ".steam", NULL);
+  gsize i;
+
+  g_return_val_if_fail (exports != NULL, FALSE);
+  g_return_val_if_fail (real_home != NULL, FALSE);
+  g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* We need ~/.steam to be visible in the container, even if it's a
+   * symlink to somewhere outside $HOME. (It's better not to do this; use
+   * a separate Steam library instead, or use bind-mounts.) */
+  if (fake_home != NULL)
+    {
+      flatpak_exports_add_path_expose (exports, mode, dot_steam);
+    }
+  else
+    {
+      /* Expose the target, but don't try to create the symlink itself:
+       * that will fail, because we are already sharing the home directory
+       * with the container, and there's already a symlink where we want
+       * to put it. */
+      g_autofree gchar *target = flatpak_resolve_link (dot_steam, NULL);
+
+      if (target != NULL)
+        flatpak_exports_add_path_expose (exports, mode, target);
+    }
+
   /*
    * These might be API entry points, according to Steam/steam.sh.
    * They're usually symlinks into the Steam root, except for in
    * older steam Debian packages that had Debian bug #916303.
+   *
+   * Even though the symlinks themselves are exposed as part of ~/.steam,
+   * we need to tell FlatpakExports to also expose the directory to which
+   * they point, typically (but not necessarily!) ~/.local/share/Steam.
    *
    * TODO: We probably want to hide part or all of root, steam,
    * steambeta?
    */
   for (i = 0; i < G_N_ELEMENTS (steam_api_subdirs); i++)
     {
-      g_autofree gchar *dir = g_build_filename (real_home, ".steam",
+      g_autofree gchar *dir = g_build_filename (dot_steam,
                                                 steam_api_subdirs[i], NULL);
-      g_autofree gchar *mount_point = g_build_filename (fake_home, ".steam",
-                                                        steam_api_subdirs[i],
-                                                        NULL);
-      g_autofree gchar *target = NULL;
 
-      target = glnx_readlinkat_malloc (-1, dir, NULL, NULL);
-
-      if (target != NULL)
+      if (fake_home != NULL)
         {
-          /* We used to bind-mount these directories, so transition them
-           * to symbolic links if we can. */
-          if (rmdir (mount_point) != 0 && errno != ENOENT && errno != ENOTDIR)
-            g_debug ("rmdir %s: %s", mount_point, g_strerror (errno));
+          g_autofree gchar *mount_point = g_build_filename (fake_home, ".steam",
+                                                            steam_api_subdirs[i],
+                                                            NULL);
+          g_autofree gchar *target = NULL;
 
-          /* Remove any symlinks that might have already been there. */
-          if (unlink (mount_point) != 0 && errno != ENOENT)
-            g_debug ("unlink %s: %s", mount_point, g_strerror (errno));
+          target = glnx_readlinkat_malloc (-1, dir, NULL, NULL);
+
+          if (target != NULL)
+            {
+              /* We used to bind-mount these directories, so transition them
+               * to symbolic links if we can. */
+              if (rmdir (mount_point) != 0 && errno != ENOENT && errno != ENOTDIR)
+                g_debug ("rmdir %s: %s", mount_point, g_strerror (errno));
+
+              /* Remove any symlinks that might have already been there. */
+              if (unlink (mount_point) != 0 && errno != ENOENT)
+                g_debug ("unlink %s: %s", mount_point, g_strerror (errno));
+            }
         }
 
-      flatpak_exports_add_path_expose (exports,
-                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                       dir);
+      flatpak_exports_add_path_expose (exports, mode, dir);
     }
-
-  /* steamclient.so relies on this for communication with Steam */
-  steam_pid = g_build_filename (real_home, ".steam", "steam.pid", NULL);
-  flatpak_exports_add_path_expose (exports,
-                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                   steam_pid);
-
-  /* Make sure Steam IPC is available.
-   * TODO: do we need this? do we need more? */
-  steam_pipe = g_build_filename (real_home, ".steam", "steam.pipe", NULL);
-  flatpak_exports_add_path_expose (exports,
-                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                   steam_pipe);
 
   return TRUE;
 }
@@ -1786,6 +1820,14 @@ main (int argc,
       flatpak_exports_add_path_expose (exports,
                                        FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                        home);
+
+      /* TODO: All of ~/.steam has traditionally been read/write when not
+       * using a per-game home directory, but does it need to be? Maybe we
+       * should have a future "compat level" in which it's read-only,
+       * like it already is when using a per-game home directory. */
+      if (!expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                         home, NULL, error))
+        goto out;
     }
   else
     {

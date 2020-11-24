@@ -1875,6 +1875,11 @@ main (int argc,
                                      known_required_env[i].name,
                                      known_required_env[i].flags);
 
+  /* On NixOS, all paths hard-coded into libraries are in here */
+  flatpak_exports_add_path_expose (exports,
+                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                   "/nix");
+
   /* Make arbitrary filesystems available. This is not as complete as
    * Flatpak yet. */
   if (opt_filesystems != NULL)

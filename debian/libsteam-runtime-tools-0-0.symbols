@@ -1,11 +1,15 @@
 libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
 * Build-Depends-Package: libsteam-runtime-tools-0-dev
  _srt_divert_stdout_to_stderr@Base 0.20201002.0
+ _srt_load_vulkan_layers@Base 0.20201124.0
  _srt_rm_rf@Base 0.20200306.0
  _srt_unblock_signals@Base 0.20200109.0
  srt_add_flag_from_nick@Base 0.20200908.0
  srt_architecture_can_run_i386@Base 0.20190717.0
  srt_architecture_can_run_x86_64@Base 0.20190717.0
+ srt_architecture_error_get_type@Base 0.20201124.0
+ srt_architecture_error_quark@Base 0.20201124.0
+ srt_architecture_get_expected_runtime_linker@Base 0.20201124.0
  srt_check_library_presence@Base 0.20190801.0
  srt_container_type_get_type@Base 0.20200306.0
  srt_desktop_entry_get_commandline@Base 0.20200415.0
@@ -46,6 +50,43 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_graphics_issues_get_type@Base 0.20190822.0
  srt_graphics_library_is_vendor_neutral@Base 0.20191120.0
  srt_graphics_library_vendor_get_type@Base 0.20191120.0
+ srt_input_device_dup_hid_uevent@Base 0.20201124.0
+ srt_input_device_dup_input_uevent@Base 0.20201124.0
+ srt_input_device_dup_udev_properties@Base 0.20201124.0
+ srt_input_device_dup_uevent@Base 0.20201124.0
+ srt_input_device_dup_usb_device_uevent@Base 0.20201124.0
+ srt_input_device_get_dev_node@Base 0.20201124.0
+ srt_input_device_get_event_capabilities@Base 0.20201124.0
+ srt_input_device_get_event_types@Base 0.20201124.0
+ srt_input_device_get_hid_identity@Base 0.20201124.0
+ srt_input_device_get_hid_sys_path@Base 0.20201124.0
+ srt_input_device_get_identity@Base 0.20201124.0
+ srt_input_device_get_input_identity@Base 0.20201124.0
+ srt_input_device_get_input_properties@Base 0.20201124.0
+ srt_input_device_get_input_sys_path@Base 0.20201124.0
+ srt_input_device_get_interface_flags@Base 0.20201124.0
+ srt_input_device_get_subsystem@Base 0.20201124.0
+ srt_input_device_get_sys_path@Base 0.20201124.0
+ srt_input_device_get_type@Base 0.20201124.0
+ srt_input_device_get_type_flags@Base 0.20201124.0
+ srt_input_device_get_usb_device_identity@Base 0.20201124.0
+ srt_input_device_get_usb_device_sys_path@Base 0.20201124.0
+ srt_input_device_guess_type_flags_from_event_capabilities@Base 0.20201124.0
+ srt_input_device_has_event_capability@Base 0.20201124.0
+ srt_input_device_has_event_type@Base 0.20201124.0
+ srt_input_device_has_input_property@Base 0.20201124.0
+ srt_input_device_interface_flags_get_type@Base 0.20201124.0
+ srt_input_device_monitor_flags_get_type@Base 0.20201124.0
+ srt_input_device_monitor_get_flags@Base 0.20201124.0
+ srt_input_device_monitor_get_type@Base 0.20201124.0
+ srt_input_device_monitor_is_active@Base 0.20201124.0
+ srt_input_device_monitor_new@Base 0.20201124.0
+ srt_input_device_monitor_request_evdev@Base 0.20201124.0
+ srt_input_device_monitor_request_raw_hid@Base 0.20201124.0
+ srt_input_device_monitor_start@Base 0.20201124.0
+ srt_input_device_monitor_stop@Base 0.20201124.0
+ srt_input_device_open@Base 0.20201124.0
+ srt_input_device_type_flags_get_type@Base 0.20201124.0
  srt_library_get_absolute_path@Base 0.20190801.0
  srt_library_get_dependencies@Base 0.20190801.0
  srt_library_get_exit_status@Base 0.20191209.0
@@ -86,6 +127,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_check_libraries@Base 0.20190802.0
  srt_system_info_check_library@Base 0.20190802.0
  srt_system_info_check_locale@Base 0.20190909.0
+ srt_system_info_check_runtime_linker@Base 0.20201124.0
  srt_system_info_dup_container_host_directory@Base 0.20200306.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
  srt_system_info_dup_os_build_id@Base 0.20190926.1
@@ -113,17 +155,22 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_get_steam_issues@Base 0.20190816.0
  srt_system_info_get_type@Base 0.20190801.0
  srt_system_info_get_x86_features@Base 0.20200415.0
+ srt_system_info_get_xdg_portal_issues@Base 0.20201124.0
  srt_system_info_list_desktop_entries@Base 0.20200415.0
  srt_system_info_list_dri_drivers@Base 0.20200109.0
  srt_system_info_list_driver_environment@Base 0.20200306.0
  srt_system_info_list_egl_icds@Base 0.20190926.0
+ srt_system_info_list_explicit_vulkan_layers@Base 0.20201124.0
  srt_system_info_list_glx_icds@Base 0.20200306.0
+ srt_system_info_list_implicit_vulkan_layers@Base 0.20201124.0
  srt_system_info_list_pinned_libs_32@Base 0.20191024.0
  srt_system_info_list_pinned_libs_64@Base 0.20191024.0
  srt_system_info_list_pressure_vessel_overrides@Base 0.20191024.0
  srt_system_info_list_va_api_drivers@Base 0.20200109.0
  srt_system_info_list_vdpau_drivers@Base 0.20200306.0
  srt_system_info_list_vulkan_icds@Base 0.20190926.0
+ srt_system_info_list_xdg_portal_backends@Base 0.20201124.0
+ srt_system_info_list_xdg_portal_interfaces@Base 0.20201124.0
  srt_system_info_new@Base 0.20190801.0
  srt_system_info_new_from_json@Base 0.20200908.0
  srt_system_info_set_environ@Base 0.20190816.0
@@ -150,5 +197,26 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_vulkan_icd_new_replace_library_path@Base 0.20190926.0
  srt_vulkan_icd_resolve_library_path@Base 0.20190926.0
  srt_vulkan_icd_write_to_file@Base 0.20190926.0
+ srt_vulkan_layer_check_error@Base 0.20201124.0
+ srt_vulkan_layer_get_api_version@Base 0.20201124.0
+ srt_vulkan_layer_get_component_layers@Base 0.20201124.0
+ srt_vulkan_layer_get_description@Base 0.20201124.0
+ srt_vulkan_layer_get_implementation_version@Base 0.20201124.0
+ srt_vulkan_layer_get_json_path@Base 0.20201124.0
+ srt_vulkan_layer_get_library_path@Base 0.20201124.0
+ srt_vulkan_layer_get_name@Base 0.20201124.0
+ srt_vulkan_layer_get_type@Base 0.20201124.0
+ srt_vulkan_layer_get_type_value@Base 0.20201124.0
+ srt_vulkan_layer_new_replace_library_path@Base 0.20201124.0
+ srt_vulkan_layer_resolve_library_path@Base 0.20201124.0
+ srt_vulkan_layer_write_to_file@Base 0.20201124.0
  srt_window_system_get_type@Base 0.20190822.0
  srt_x86_feature_flags_get_type@Base 0.20200415.0
+ srt_xdg_portal_backend_get_name@Base 0.20201124.0
+ srt_xdg_portal_backend_get_type@Base 0.20201124.0
+ srt_xdg_portal_backend_is_available@Base 0.20201124.0
+ srt_xdg_portal_interface_get_name@Base 0.20201124.0
+ srt_xdg_portal_interface_get_type@Base 0.20201124.0
+ srt_xdg_portal_interface_get_version@Base 0.20201124.0
+ srt_xdg_portal_interface_is_available@Base 0.20201124.0
+ srt_xdg_portal_issues_get_type@Base 0.20201124.0

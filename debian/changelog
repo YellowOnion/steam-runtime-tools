@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20201124.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * runtime: Expand libqual into an array of multilib directories.
@@ -67,7 +67,7 @@ steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
   * system-info: Add helper to check for xdg-desktop-portal
   * system-info: Detect Primus graphics driver
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 24 Nov 2020 15:20:35 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 24 Nov 2020 19:18:06 +0000
 
 steam-runtime-tools (0.20201022.0) scout; urgency=medium
 

@@ -210,6 +210,17 @@ The following environment variables (among others) are read by
 :   Equivalent to
     `--copy-runtime-into="$PRESSURE_VESSEL_COPY_RUNTIME_INTO"`.
 
+`PRESSURE_VESSEL_FILESYSTEMS_RO` (`:`-separated list of paths)
+:   Make these paths available read-only inside the container if they
+    exist, similar to `--filesystem` but read-only.
+    For example, MangoHUD and vkBasalt users might use
+    `PRESSURE_VESSEL_FILESYSTEMS_RO="$MANGOHUD_CONFIGFILE:$VKBASALT_CONFIG_FILE"`
+    if the configuration files are outside the home directory.
+
+`PRESSURE_VESSEL_FILESYSTEMS_RW` (`:`-separated list of paths)
+:   Make these paths available read/write inside the container if they
+    exist, similar to `--filesystem`.
+
 `PRESSURE_VESSEL_FDO_APP_ID` (string)
 :   Equivalent to
     `--freedesktop-app-id="$PRESSURE_VESSEL_FDO_APP_ID"`.

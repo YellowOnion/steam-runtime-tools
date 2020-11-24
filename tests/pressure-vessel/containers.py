@@ -112,6 +112,42 @@ from testutils import (
 logger = logging.getLogger('test-containers')
 
 
+class FilesystemEnvVar:
+    def __init__(
+        self,
+        name,       # type: str
+        *,
+        plural=False,
+        read_only=False
+    ) -> None:
+        self.name = name
+        self.plural = plural
+        self.read_only = read_only
+
+    def __str__(self) -> str:
+        return self.name
+
+
+FILESYSTEM_ENV_VARS = [
+    FilesystemEnvVar(
+        'PRESSURE_VESSEL_FILESYSTEMS_RO', plural=True, read_only=True,
+    ),
+    FilesystemEnvVar('PRESSURE_VESSEL_FILESYSTEMS_RW', plural=True),
+    FilesystemEnvVar('STEAM_COMPAT_APP_LIBRARY_PATH'),
+    FilesystemEnvVar('STEAM_COMPAT_APP_LIBRARY_PATHS', plural=True),
+    FilesystemEnvVar('STEAM_COMPAT_CLIENT_INSTALL_PATH'),
+    FilesystemEnvVar('STEAM_COMPAT_DATA_PATH'),
+    FilesystemEnvVar('STEAM_COMPAT_INSTALL_PATH'),
+    FilesystemEnvVar('STEAM_COMPAT_LIBRARY_PATHS', plural=True),
+    FilesystemEnvVar('STEAM_COMPAT_MOUNT_PATHS', plural=True),
+    FilesystemEnvVar('STEAM_COMPAT_MOUNTS', plural=True),
+    FilesystemEnvVar('STEAM_COMPAT_SHADER_PATH'),
+    FilesystemEnvVar('STEAM_COMPAT_TOOL_PATH'),
+    FilesystemEnvVar('STEAM_COMPAT_TOOL_PATHS', plural=True),
+    FilesystemEnvVar('STEAM_EXTRA_COMPAT_TOOLS_PATHS', plural=True),
+]
+
+
 class TestContainers(BaseTest):
     bwrap = None            # type: typing.Optional[str]
     containers_dir = ''
@@ -152,34 +188,22 @@ class TestContainers(BaseTest):
         cls.pv_dir = os.path.join(cls.tmpdir.name, 'pressure-vessel')
         os.makedirs(cls.pv_dir, exist_ok=True)
 
-        for var, plural in (
-            ('STEAM_COMPAT_APP_LIBRARY_PATH', False),
-            ('STEAM_COMPAT_APP_LIBRARY_PATHS', True),
-            ('STEAM_COMPAT_CLIENT_INSTALL_PATH', False),
-            ('STEAM_COMPAT_DATA_PATH', False),
-            ('STEAM_COMPAT_INSTALL_PATH', False),
-            ('STEAM_COMPAT_LIBRARY_PATHS', True),
-            ('STEAM_COMPAT_MOUNT_PATHS', True),
-            ('STEAM_COMPAT_MOUNTS', True),
-            ('STEAM_COMPAT_SHADER_PATH', False),
-            ('STEAM_COMPAT_TOOL_PATH', False),
-            ('STEAM_COMPAT_TOOL_PATHS', True),
-        ):
+        for var in FILESYSTEM_ENV_VARS:
             paths = []
 
-            if plural:
-                names = [var + '_n1', var + '_n2']
+            if var.plural:
+                names = [var.name + '_n1', var.name + '_n2']
             else:
                 # Use an inconvenient name with colon and space
                 # to check that we handle those correctly
-                names = [var + ': .d']
+                names = [var.name + ': .d']
 
             for name in names:
                 path = os.path.join(cls.tmpdir.name, name)
                 os.makedirs(path, exist_ok=True)
                 paths.append(path)
 
-            os.environ[var] = ':'.join(paths)
+            os.environ[var.name] = ':'.join(paths)
 
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             os.makedirs(os.path.join(cls.pv_dir, 'bin'))
@@ -568,26 +592,20 @@ class TestContainers(BaseTest):
                 self.assertNotIn("\0--generate-locales\0", bwrap_arguments)
 
             if only_prepare:
-                for var, plural in (
-                    ('STEAM_COMPAT_APP_LIBRARY_PATH', False),
-                    ('STEAM_COMPAT_APP_LIBRARY_PATHS', True),
-                    ('STEAM_COMPAT_CLIENT_INSTALL_PATH', False),
-                    ('STEAM_COMPAT_INSTALL_PATH', False),
-                    ('STEAM_COMPAT_LIBRARY_PATHS', True),
-                    ('STEAM_COMPAT_MOUNT_PATHS', True),
-                    ('STEAM_COMPAT_MOUNTS', True),
-                    ('STEAM_COMPAT_SHADER_PATH', False),
-                    ('STEAM_COMPAT_TOOL_PATH', False),
-                    ('STEAM_COMPAT_TOOL_PATHS', True),
-                ):
-                    if plural:
-                        paths = os.environ[var].split(':')
+                for var in FILESYSTEM_ENV_VARS:
+                    if var.plural:
+                        paths = os.environ[var.name].split(':')
                     else:
-                        paths = [os.environ[var]]
+                        paths = [os.environ[var.name]]
+
+                    if var.read_only:
+                        bind_mode = 'ro-bind'
+                    else:
+                        bind_mode = 'bind'
 
                     for path in paths:
                         self.assertIn(
-                            "\0--bind\0{}\0{}".format(path, path),
+                            "\0--{}\0{}\0{}".format(bind_mode, path, path),
                             bwrap_arguments,
                         )
 

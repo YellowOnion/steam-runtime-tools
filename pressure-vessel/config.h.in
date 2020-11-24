@@ -1,1 +1,4 @@
 #define G_LOG_DOMAIN "pressure-vessel"
+/* These are the paths where we expect to find the system fonts */
+#define SYSTEM_FONTS_DIR "/usr/share/fonts"
+#define SYSTEM_FONT_CACHE_DIRS "/var/cache/fontconfig:/usr/lib/fontconfig/cache"

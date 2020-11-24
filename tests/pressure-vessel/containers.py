@@ -144,6 +144,7 @@ FILESYSTEM_ENV_VARS = [
     FilesystemEnvVar('STEAM_COMPAT_SHADER_PATH'),
     FilesystemEnvVar('STEAM_COMPAT_TOOL_PATH'),
     FilesystemEnvVar('STEAM_COMPAT_TOOL_PATHS', plural=True),
+    FilesystemEnvVar('STEAM_EXTRA_COMPAT_TOOLS_PATHS', plural=True),
 ]
 
 

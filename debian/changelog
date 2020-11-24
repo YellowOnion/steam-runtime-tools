@@ -1,10 +1,36 @@
 steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
+  * runtime: Expand libqual into an array of multilib directories.
+    This is a step towards searching all the necessary places for unusual
+    distributions like Exherbo (see
+    https://github.com/ValveSoftware/steam-runtime/issues/230), and gives us
+    an obvious extension point for adding more multilib directories.
+  * runtime: Don't issue warnings when unable to delete from runtime copy
+  * pressure-vessel-unruntime: Don't assume bash is at /bin/bash.
+    Apparently NixOS puts it somewhere else.
+  * pressure-vessel: Fix a wrong assertion that prevented running the
+    container with libraries from the host system instead of a runtime.
+    Steam never does this, but it's occasionally useful for debugging.
+  * pressure-vessel: Make /nix available read-only, if it exists.
+    This is necessary (but not sufficient!) for NixOS support.
+  * pressure-vessel: Make sure ~/.steam is available in the container,
+    even if it's a symbolic link (steam-runtime#291)
+  * pressure-vessel-wrap: Add environment variables to share filesystems
+  * pressure-vessel: Make STEAM_EXTRA_COMPAT_TOOLS_PATHS available
+    (partially addresses steam-runtime#302)
   * input-device: Add a new API for input device enumeration and monitoring.
     This can list and inspect input devices using libudev or directly, and
     is potentially a basis for a future input device portal (see
     steam-runtime-tools#11).
+  * system-info: Detect whether the expected runtime linker is present.
+    On operating systems with unusual path layouts, such as Exherbo and
+    NixOS, the de facto standard path for the runtime linker is not
+    necessarily present for all architectures.
+    (Of course, if the x86_64 runtime linker is not present, we won't
+    normally be able to run steam-runtime-system-info either, but at least
+    users of such operating systems can compile it from source code if they
+    need to provide diagnostics.)
   * bin: Add new steam-runtime-input-monitor diagnostic tool
   * bin, pressure-vessel: Disable GIO modules differently.
     This avoids some misleading warnings (steam-runtime-tools#32).
@@ -14,6 +40,9 @@ steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
   * tests: Move some tests for utility code out of pressure-vessel
   * utils: Add the ability to find our prefix when statically linked
   * build: Fix dependencies on generated headers
+  * build: Compile using gcc-4.8 on scout
+  * debian: Allow building with only libcapsule-tools-relocatable installed
+  * tests: Generate sysroots for each test, instead of per-build
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Make the original environment available
@@ -23,10 +52,23 @@ steam-runtime-tools (0.20201117.0) UNRELEASED; urgency=medium
     This means that we should treat the `LD_LIBRARY_PATH` entries as
     OS-level search path too.
   * pressure-vessel-unruntime: Support PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
+  * pressure-vessel: Add support for Vulkan layers.
+    When we use the provider graphics stack we also try to collect the
+    available Vulkan layers, similarly to what we already do for ICDs.
+  * pressure-vessel: use the new libcapsule "--remap-link-prefix" option.
+    Using the new "--remap-link-prefix" option we can now avoid breaking
+    symlinks not available under `/run/host`, such as Vulkan layers or
+    drivers in the home directory or in /opt. (steam-runtime-tools#29)
+  * pressure-vessel: Include host's fonts in the newly built container.
+    Soldier and Scout include a limited set of fonts that doesn't cover all
+    use cases. For example it is missing the necessary glyphs for Asian
+    languages. For this change to be effective, the container also needs an
+    updated steamrt-container-host-compat package. (steam-runtime#289)
+  * system-info: Diagnose implicit and explicit Vulkan layers
   * system-info: Add helper to check for xdg-desktop-portal
-  * graphics: Detect Primus graphics driver in diagnostic tools
+  * system-info: Detect Primus graphics driver
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 17 Nov 2020 12:20:49 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 24 Nov 2020 15:20:35 +0000
 
 steam-runtime-tools (0.20201022.0) scout; urgency=medium
 

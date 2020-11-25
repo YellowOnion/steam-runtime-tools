@@ -54,6 +54,7 @@ steam-runtime-tools (0.20201124.0) scout; urgency=medium
   * pressure-vessel: Add support for Vulkan layers.
     When we use the provider graphics stack we also try to collect the
     available Vulkan layers, similarly to what we already do for ICDs.
+    (T24365, T24347, T24348)
   * pressure-vessel: use the new libcapsule "--remap-link-prefix" option.
     Using the new "--remap-link-prefix" option we can now avoid breaking
     symlinks not available under `/run/host`, such as Vulkan layers or
@@ -62,7 +63,8 @@ steam-runtime-tools (0.20201124.0) scout; urgency=medium
     Soldier and Scout include a limited set of fonts that doesn't cover all
     use cases. For example it is missing the necessary glyphs for Asian
     languages. For this change to be effective, the container also needs an
-    updated steamrt-container-host-compat package. (steam-runtime#289)
+    updated steamrt-container-host-compat package.
+    (steam-runtime#289, T24559)
   * system-info: Diagnose implicit and explicit Vulkan layers
   * system-info: Add helper to check for xdg-desktop-portal
   * system-info: Detect Primus graphics driver

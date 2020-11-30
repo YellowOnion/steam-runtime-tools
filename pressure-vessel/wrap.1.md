@@ -69,6 +69,13 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     *COMMAND*. If *COMMAND* is run in a container, the path of the
     *MODULE* will be adjusted appropriately.
 
+`--import-vulkan-layers`, `--no-import-vulkan-layers`
+:   If `--no-import-vulkan-layers` is specified, the Vulkan layers will
+    not be imported from the host system. Please note that some layers might
+    still be reachable from inside the container. E.g. layers located in
+    `~/.local/share/vulkan` if used in combination with `--share-home`.
+    The default is `--import-vulkan-layers`.
+
 `--keep-game-overlay`, `--remove-game-overlay`
 :   If `--remove-game-overlay` is specified, remove the Steam Overlay
     from the `LD_PRELOAD`. The default is `--keep-game-overlay`.
@@ -239,6 +246,10 @@ The following environment variables (among others) are read by
 `PRESSURE_VESSEL_HOST_GRAPHICS` (boolean)
 :   If set to `1`, equivalent to `--with-host-graphics`.
     If set to `0`, equivalent to `--without-host-graphics`.
+
+`PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS` (boolean)
+:   If set to `1`, equivalent to `--import-vulkan-layers`.
+    If set to `0`, equivalent to `--no-import-vulkan-layers`.
 
 `PRESSURE_VESSEL_REMOVE_GAME_OVERLAY` (boolean)
 :   If set to `1`, equivalent to `--remove-game-overlay`.

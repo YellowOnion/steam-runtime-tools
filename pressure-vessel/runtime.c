@@ -2952,10 +2952,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
             }
 
-          if (self->mutable_sysroot != NULL &&
-              !pv_runtime_remove_overridden_libraries (self, arch, error))
-            return FALSE;
-
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
@@ -3183,6 +3179,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                 "Unable to create symlink %s -> %s",
                                                 platform_link, arch->details->tuple);
             }
+
+          /* Make sure we do this last, so that we have really copied
+           * everything from the host that we are going to */
+          if (self->mutable_sysroot != NULL &&
+              !pv_runtime_remove_overridden_libraries (self, arch, error))
+            return FALSE;
         }
     }
 

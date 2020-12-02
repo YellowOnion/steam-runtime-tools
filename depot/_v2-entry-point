@@ -137,9 +137,25 @@ log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
 # done securely.
 log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}"
 
-# In non-session mode, we always behave like the main program
+relaunch=
+
 if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
+    verbose "Non-session mode, behaving like the main program"
     is_main=yes
+elif [ -n "$is_main" ]; then
+    verbose "Main program in session mode"
+    case "${PRESSURE_VESSEL_RELAUNCH_CONTAINER-0}" in
+        (1)
+            relaunch=yes
+            ;;
+        (0)
+            ;;
+        (*)
+            echo "\$PRESSURE_VESSEL_RELAUNCH_CONTAINER should be either 0 or 1" >&2
+            ;;
+    esac
+else
+    verbose "Setup program in session mode"
 fi
 
 # At this point $LD_LIBRARY_PATH might
@@ -193,7 +209,7 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 # Arguments for pressure-vessel-wrap, currently none
 declare -a container_args=()
 
-if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
+exec_container () {
     # Run as a single command
     exec "$here/run-in-steamrt" \
         --arch=amd64,i386 \
@@ -207,10 +223,16 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
         "$@" \
         ${NULL+}
     exit 125
+}
+
+if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
+    verbose "Non-session mode, just running the container"
+    exec_container "$@"
     # not reached
 fi
 
 # Session mode. Either PRESSURE_VESSEL_SOCKET_DIR or XDG_RUNTIME_DIR are required.
+verbose "Session mode"
 
 if [[ -v PRESSURE_VESSEL_SOCKET_DIR ]]; then
     if ! [ -O "$PRESSURE_VESSEL_SOCKET_DIR" ]; then
@@ -247,10 +269,22 @@ terminate_container () {
         --terminate
 }
 
-if [ -n "$is_main" ] && [ -n "$rendezvous" ]; then
+if [ -n "$relaunch" ]; then
+    verbose "Terminating and re-launching container for main game"
+    terminate_container || :
+    exec_container "$@"
+    # not reached
+fi
+
+if [ -n "$is_main" ]; then
     trap terminate_container EXIT
 fi
 
+# Launch the pressure-vessel-launcher(1). This is used to run the
+# setup commands (--verb=run), if any. If not requested via
+# PRESSURE_VESSEL_RELAUNCH_CONTAINER=1, it is also used to run the
+# actual game.
+#
 # We have to launch pressure-vessel-launcher(1) *without* setting
 # SteamAppId, SteamAppUser, etc., otherwise Steam will think the game
 # is already running and refuse to run it again. (Tested with SteamAppId,

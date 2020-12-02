@@ -41,6 +41,7 @@
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/graphics-test-defines.h"
 #include "steam-runtime-tools/system-info.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "test-utils.h"
 
 static const char *argv0;
@@ -528,13 +529,6 @@ assert_egl_icd_no_error (SrtEglIcd *icd)
   assert_egl_icd (icd);
 }
 
-static gboolean
-same_stat (GStatBuf *left,
-           GStatBuf *right)
-{
-  return left->st_dev == right->st_dev && left->st_ino == right->st_ino;
-}
-
 /*
  * We don't assert that filenames are literally the same, because they
  * might canonicalize differently in the presence of symlinks: we just
@@ -544,15 +538,15 @@ static void
 assert_same_file (const char *expected,
                   const char *actual)
 {
-  GStatBuf expected_stat, actual_stat;
+  struct stat expected_stat, actual_stat;
 
-  if (g_stat (expected, &expected_stat) != 0)
+  if (stat (expected, &expected_stat) != 0)
     g_error ("stat %s: %s", expected, g_strerror (errno));
 
-  if (g_stat (actual, &actual_stat) != 0)
+  if (stat (actual, &actual_stat) != 0)
     g_error ("stat %s: %s", actual, g_strerror (errno));
 
-  if (!same_stat (&expected_stat, &actual_stat))
+  if (!_srt_is_same_stat (&expected_stat, &actual_stat))
     g_error ("%s is not the same file as %s", expected, actual);
 }
 

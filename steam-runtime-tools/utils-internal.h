@@ -26,7 +26,9 @@
 
 #pragma once
 
+#include <fcntl.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 #include <glib.h>
 
@@ -103,3 +105,35 @@ G_GNUC_INTERNAL const char * const *_srt_peek_environ_nonnull (void);
 G_GNUC_INTERNAL void _srt_setenv_disable_gio_modules (void);
 
 G_GNUC_INTERNAL gboolean _srt_str_is_integer (const char *str);
+
+gboolean _srt_fstatat_is_same_file (int afd, const char *a,
+                                    int bfd, const char *b);
+
+/*
+ * _srt_is_same_stat:
+ * @a: a stat buffer
+ * @b: a stat buffer
+ *
+ * Returns: %TRUE if a and b identify the same inode
+ */
+ __attribute__((nonnull)) static inline gboolean
+_srt_is_same_stat (const struct stat *a,
+                   const struct stat *b)
+{
+  return (a->st_dev == b->st_dev && a->st_ino == b->st_ino);
+}
+
+/*
+ * _srt_is_same_file:
+ * @a: a path
+ * @b: a path
+ *
+ * Returns: %TRUE if a and b are names for the same inode.
+ */
+static inline gboolean
+_srt_is_same_file (const gchar *a,
+                   const gchar *b)
+{
+  return _srt_fstatat_is_same_file (AT_FDCWD, a,
+                                    AT_FDCWD, b);
+}

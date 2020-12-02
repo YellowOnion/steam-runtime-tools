@@ -1973,7 +1973,7 @@ main (int argc,
 
   cwd_p_host = pv_current_namespace_path_to_host_path (cwd_p);
 
-  if (pv_is_same_file (home, cwd_p))
+  if (_srt_is_same_file (home, cwd_p))
     {
       g_debug ("Not making physical working directory \"%s\" available to "
                "container because it is the home directory",

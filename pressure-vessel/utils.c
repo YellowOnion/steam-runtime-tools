@@ -37,6 +37,7 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
@@ -148,36 +149,11 @@ pv_get_current_dirs (gchar **cwd_p,
     {
       pwd = g_getenv ("PWD");
 
-      if (pwd != NULL && pv_is_same_file (pwd, cwd))
+      if (pwd != NULL && _srt_is_same_file (pwd, cwd))
         *cwd_l = g_strdup (pwd);
       else
         *cwd_l = g_strdup (cwd);
     }
-}
-
-/**
- * pv_is_same_file:
- * @a: a path
- * @b: a path
- *
- * Returns: %TRUE if a and b are names for the same inode.
- */
-gboolean
-pv_is_same_file (const gchar *a,
-                 const gchar *b)
-{
-  GStatBuf a_buffer, b_buffer;
-
-  g_return_val_if_fail (a != NULL, FALSE);
-  g_return_val_if_fail (b != NULL, FALSE);
-
-  if (strcmp (a, b) == 0)
-    return TRUE;
-
-  return (stat (a, &a_buffer) == 0
-          && stat (b, &b_buffer) == 0
-          && a_buffer.st_dev == b_buffer.st_dev
-          && a_buffer.st_ino == b_buffer.st_ino);
 }
 
 void

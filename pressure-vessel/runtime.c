@@ -158,11 +158,11 @@ typedef struct
   const char *tuple;
 
   /* Directories other than /usr/lib that we must search for loadable
-   * modules, most-ambiguous first, least-ambiguous last, not including
+   * modules, least-ambiguous first, most-ambiguous last, not including
    * Debian-style multiarch directories which are automatically derived
    * from @tuple.
-   * - Red-Hat- or Arch-style lib<QUAL>
    * - Exherbo <GNU-tuple>/lib
+   * - Red-Hat- or Arch-style lib<QUAL>
    * - etc.
    * Size is completely arbitrary, expand as needed */
   const char *multilib[3];
@@ -181,17 +181,71 @@ static const MultiarchDetails multiarch_details[] =
 {
   {
     .tuple = "x86_64-linux-gnu",
-    .multilib = { "lib64", "x86_64-pc-linux-gnu/lib", NULL },
+    .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
     .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
   },
   {
     .tuple = "i386-linux-gnu",
-    .multilib = { "lib32", "i686-pc-linux-gnu/lib", NULL },
+    .multilib = { "i686-pc-linux-gnu/lib", "lib32", NULL },
     .platforms = { "i686", "i586", "i486", "i386", NULL },
   },
 };
 G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
                  == G_N_ELEMENTS (multiarch_tuples) - 1);
+
+typedef enum
+{
+  MULTIARCH_LIBDIRS_FLAGS_NONE = 0
+} MultiarchLibdirsFlags;
+
+/*
+ * Get the library directories associated with @self, most important or
+ * unambiguous first.
+ *
+ * Returns: (transfer container) (element-type filename):
+ */
+static GPtrArray *
+multiarch_details_get_libdirs (const MultiarchDetails *self,
+                               MultiarchLibdirsFlags flags)
+{
+  g_autoptr(GPtrArray) dirs = g_ptr_array_new_with_free_func (g_free);
+  gsize j;
+
+  /* Multiarch is the least ambiguous so we put it first.
+   *
+   * We historically searched /usr/lib before /lib, but Debian actually
+   * does the opposite, and we follow that here.
+   *
+   * Arguably we should search /usr/local/lib before /lib before /usr/lib,
+   * but we don't currently try /usr/local/lib. We could add a flag
+   * for that if we don't want to do it unconditionally. */
+  g_ptr_array_add (dirs,
+                   g_build_filename ("/lib", self->tuple, NULL));
+  g_ptr_array_add (dirs,
+                   g_build_filename ("/usr", "lib", self->tuple, NULL));
+
+  /* Try other multilib variants next. This includes
+   * Exherbo/cross-compilation-style per-architecture prefixes,
+   * Red-Hat-style lib64 and Arch-style lib32. */
+  for (j = 0; j < G_N_ELEMENTS (self->multilib); j++)
+    {
+      if (self->multilib[j] == NULL)
+        break;
+
+      g_ptr_array_add (dirs,
+                       g_build_filename ("/", self->multilib[j], NULL));
+      g_ptr_array_add (dirs,
+                       g_build_filename ("/usr", self->multilib[j], NULL));
+    }
+
+  /* /lib and /usr/lib are lowest priority because they're the most
+   * ambiguous: we don't know whether they're meant to contain 32- or
+   * 64-bit libraries. */
+  g_ptr_array_add (dirs, g_strdup ("/lib"));
+  g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
+
+  return g_steal_pointer (&dirs);
+}
 
 typedef struct
 {
@@ -3131,34 +3185,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libdrm_from_provider = FALSE;
             }
 
-          /* Order matters: drivers from a later entry will overwrite
-           * drivers from an earlier entry. Because we don't know whether
-           * /lib and /usr/lib are 32- or 64-bit, we need to prioritize
-           * libQUAL higher. Prioritize Debian-style multiarch higher
-           * still, because it's completely unambiguous. */
-          dirs = g_ptr_array_new_with_free_func (g_free);
-          g_ptr_array_add (dirs, g_strdup ("/lib"));
-          g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
+          dirs = multiarch_details_get_libdirs (arch->details,
+                                                MULTIARCH_LIBDIRS_FLAGS_NONE);
 
-          for (j = 0; j < G_N_ELEMENTS (arch->details->multilib); j++)
-            {
-              if (arch->details->multilib[j] == NULL)
-                break;
-
-              g_ptr_array_add (dirs,
-                               g_build_filename ("/", arch->details->multilib[j], NULL));
-              g_ptr_array_add (dirs,
-                               g_build_filename ("/usr", arch->details->multilib[j], NULL));
-            }
-
-          g_ptr_array_add (dirs,
-                           g_build_filename ("/lib", arch->details->tuple, NULL));
-          g_ptr_array_add (dirs,
-                           g_build_filename ("/usr", "lib", arch->details->tuple, NULL));
-
+          /* We iterate in reverse order, from dirs->len - 1 down to 0,
+           * because we want to see the most important *last*: drivers
+           * checked later will overwrite drivers checked earlier. */
           for (j = 0; j < dirs->len; j++)
             {
-              if (!try_bind_dri (self, arch, bwrap, g_ptr_array_index (dirs, j), error))
+              if (!try_bind_dri (self, arch, bwrap,
+                                 g_ptr_array_index (dirs, dirs->len - 1 - j),
+                                 error))
                 return FALSE;
             }
 

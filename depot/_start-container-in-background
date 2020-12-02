@@ -142,7 +142,8 @@ verbose "Starting pressure-vessel-launcher in background"
         --info-fd=3 \
         --socket-directory="$rendezvous" \
         < /dev/null >&2 3>"$rendezvous/fifo" &
-verbose "Started pressure-vessel-launcher in background"
+container_pid="$!"
+verbose "Started pressure-vessel-launcher in background, pid $container_pid"
 socket=$(
     while read -r line; do
         case "$line" in
@@ -153,6 +154,16 @@ socket=$(
         esac
     done < "$rendezvous/fifo"
 )
+
+if [ -z "$socket" ] || ! [ -S "$socket" ]; then
+    log "Error starting pressure-vessel container"
+    if [ -z "${PRESSURE_VESSEL_VERBOSE-}" ]; then
+        log "Try environment variable PRESSURE_VESSEL_VERBOSE=1 for more details"
+    fi
+    kill "$container_pid" || :
+    exit 70     # EX_SOFTWARE
+fi
+
 ln -fns "$socket" "$rendezvous/socket"
 verbose "OK, ready to exit"
 exit 0

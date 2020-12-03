@@ -290,6 +290,28 @@ class Gui:
         self.grid.attach(label, 1, row, 1, 1)
         row += 1
 
+        self.import_vulkan_layers_check = Gtk.CheckButton.new_with_label(
+            'Import Vulkan layers'
+        )
+        import_val = boolean_environment(
+            'PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS', True
+        )
+        self.import_vulkan_layers_check.set_active(import_val)
+        self.grid.attach(self.import_vulkan_layers_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'If you are experiencing crashes, or other issues, you may try '
+            'disabling this and check whether it helps.'
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
         self.xterm_check = Gtk.CheckButton.new_with_label('Run in an xterm')
         self.xterm_check.set_active(False)
         self.grid.attach(self.xterm_check, 1, row, 1, 1)
@@ -520,6 +542,11 @@ class Gui:
             argv.append('--keep-game-overlay')
         else:
             argv.append('--remove-game-overlay')
+
+        if self.import_vulkan_layers_check.get_active():
+            argv.append('--import-vulkan-layers')
+        else:
+            argv.append('--no-import-vulkan-layers')
 
         if self.xterm_check.get_active():
             argv.append('--terminal=xterm')

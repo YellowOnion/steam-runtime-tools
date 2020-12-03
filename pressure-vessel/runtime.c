@@ -2612,60 +2612,63 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
     }
 
-  g_debug ("Enumerating Vulkan explicit layers on provider system...");
-  vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
-
-  vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_explicit_layers),
-                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = vulkan_explicit_layers, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
+  if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
-      SrtVulkanLayer *layer = icd_iter->data;
-      const gchar *path = srt_vulkan_layer_get_json_path (layer);
-      GError *local_error = NULL;
+      g_debug ("Enumerating Vulkan explicit layers on provider system...");
+      vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
 
-      if (!srt_vulkan_layer_check_error (layer, &local_error))
+      vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_explicit_layers),
+                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+      for (icd_iter = vulkan_explicit_layers, j = 0;
+          icd_iter != NULL;
+          icd_iter = icd_iter->next, j++)
         {
-          g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
-                   j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
+          SrtVulkanLayer *layer = icd_iter->data;
+          const gchar *path = srt_vulkan_layer_get_json_path (layer);
+          GError *local_error = NULL;
+
+          if (!srt_vulkan_layer_check_error (layer, &local_error))
+            {
+              g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
+                       j, path, local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+
+          g_debug ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
+                   j, path, srt_vulkan_layer_get_library_path (layer));
+
+          g_ptr_array_add (vulkan_exp_layer_details, icd_details_new (layer));
         }
 
-      g_debug ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-               j, path, srt_vulkan_layer_get_library_path (layer));
+      g_debug ("Enumerating Vulkan implicit layers on provider system...");
+      vulkan_implicit_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
 
-      g_ptr_array_add (vulkan_exp_layer_details, icd_details_new (layer));
-    }
+      vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_implicit_layers),
+                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
 
-  g_debug ("Enumerating Vulkan implicit layers on provider system...");
-  vulkan_implicit_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
-
-  vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_implicit_layers),
-                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = vulkan_implicit_layers, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
-    {
-      SrtVulkanLayer *layer = icd_iter->data;
-      const gchar *path = srt_vulkan_layer_get_json_path (layer);
-      GError *local_error = NULL;
-
-      if (!srt_vulkan_layer_check_error (layer, &local_error))
+      for (icd_iter = vulkan_implicit_layers, j = 0;
+          icd_iter != NULL;
+          icd_iter = icd_iter->next, j++)
         {
-          g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
-                   j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
+          SrtVulkanLayer *layer = icd_iter->data;
+          const gchar *path = srt_vulkan_layer_get_json_path (layer);
+          GError *local_error = NULL;
+
+          if (!srt_vulkan_layer_check_error (layer, &local_error))
+            {
+              g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
+                       j, path, local_error->message);
+              g_clear_error (&local_error);
+              continue;
+            }
+
+          g_debug ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
+                   j, path, srt_vulkan_layer_get_library_path (layer));
+
+          g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
         }
-
-      g_debug ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-               j, path, srt_vulkan_layer_get_library_path (layer));
-
-      g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -2883,15 +2886,18 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          g_debug ("Collecting Vulkan explicit layers from host system...");
-          if (!collect_vulkan_layers (self, vulkan_exp_layer_details, arch,
-                                      "vulkan_exp_layer", error))
-            return FALSE;
+          if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+            {
+              g_debug ("Collecting Vulkan explicit layers from host system...");
+              if (!collect_vulkan_layers (self, vulkan_exp_layer_details, arch,
+                                          "vulkan_exp_layer", error))
+                return FALSE;
 
-          g_debug ("Collecting Vulkan implicit layers from host system...");
-          if (!collect_vulkan_layers (self, vulkan_imp_layer_details, arch,
-                                      "vulkan_imp_layer", error))
-            return FALSE;
+              g_debug ("Collecting Vulkan implicit layers from host system...");
+              if (!collect_vulkan_layers (self, vulkan_imp_layer_details, arch,
+                                          "vulkan_imp_layer", error))
+                return FALSE;
+            }
 
           g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->details->tuple);
           vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
@@ -3387,17 +3393,20 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                    vulkan_path, error))
     return FALSE;
 
-  g_debug ("Setting up Vulkan explicit layer JSON...");
-  if (!setup_vulkan_loadable_json (self, bwrap, "explicit_layer.d",
-                                   vulkan_exp_layer_details,
-                                   vulkan_exp_layer_path, error))
-    return FALSE;
+  if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+    {
+      g_debug ("Setting up Vulkan explicit layer JSON...");
+      if (!setup_vulkan_loadable_json (self, bwrap, "explicit_layer.d",
+                                       vulkan_exp_layer_details,
+                                       vulkan_exp_layer_path, error))
+        return FALSE;
 
-  g_debug ("Setting up Vulkan implicit layer JSON...");
-  if (!setup_vulkan_loadable_json (self, bwrap, "implicit_layer.d",
-                                   vulkan_imp_layer_details,
-                                   vulkan_imp_layer_path, error))
-    return FALSE;
+      g_debug ("Setting up Vulkan implicit layer JSON...");
+      if (!setup_vulkan_loadable_json (self, bwrap, "implicit_layer.d",
+                                       vulkan_imp_layer_details,
+                                       vulkan_imp_layer_path, error))
+        return FALSE;
+    }
 
   for (j = 0; j < va_api_icd_details->len; j++)
     {
@@ -3441,27 +3450,30 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   else
     g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_ICD_FILENAMES"));
 
-  /* Implicit layers are not affected by "VK_LAYER_PATH". So instead of using
-   * this environment variable, we prepend our "/overrides/share" to
-   * "XDG_DATA_DIRS" to cover any explicit and implicit layers that we may
-   * have. */
-  if (vulkan_exp_layer_path->len != 0 || vulkan_imp_layer_path->len != 0)
+  if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
-      const gchar *xdg_data_dirs;
-      g_autofree gchar *prepended_data_dirs = NULL;
-      g_autofree gchar *override_share = NULL;
+      /* Implicit layers are not affected by "VK_LAYER_PATH". So instead of using
+       * this environment variable, we prepend our "/overrides/share" to
+       * "XDG_DATA_DIRS" to cover any explicit and implicit layers that we may
+       * have. */
+      if (vulkan_exp_layer_path->len != 0 || vulkan_imp_layer_path->len != 0)
+        {
+          const gchar *xdg_data_dirs;
+          g_autofree gchar *prepended_data_dirs = NULL;
+          g_autofree gchar *override_share = NULL;
 
-      xdg_data_dirs = g_environ_getenv (self->original_environ, "XDG_DATA_DIRS");
-      override_share = g_build_filename (self->overrides_in_container, "share", NULL);
+          xdg_data_dirs = g_environ_getenv (self->original_environ, "XDG_DATA_DIRS");
+          override_share = g_build_filename (self->overrides_in_container, "share", NULL);
 
-      if (xdg_data_dirs != NULL)
-        prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
-      else
-        prepended_data_dirs = g_steal_pointer (&override_share);
+          if (xdg_data_dirs != NULL)
+            prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
+          else
+            prepended_data_dirs = g_steal_pointer (&override_share);
 
-      flatpak_bwrap_set_env (bwrap, "XDG_DATA_DIRS", prepended_data_dirs, TRUE);
+          flatpak_bwrap_set_env (bwrap, "XDG_DATA_DIRS", prepended_data_dirs, TRUE);
+        }
+      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_LAYER_PATH"));
     }
-  g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_LAYER_PATH"));
 
   if (va_api_path->len != 0)
     flatpak_bwrap_set_env (bwrap, "LIBVA_DRIVERS_PATH", va_api_path->str, TRUE);

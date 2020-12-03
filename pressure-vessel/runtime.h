@@ -34,6 +34,8 @@
  * @PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK: Use provider graphics stack
  * @PV_RUNTIME_FLAGS_GENERATE_LOCALES: Generate missing locales
  * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
+ * @PV_RUNTIME_FLAGS_VERBOSE: Be more verbose
+ * @PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS: Include host Vulkan layers
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -44,6 +46,7 @@ typedef enum
   PV_RUNTIME_FLAGS_GENERATE_LOCALES = (1 << 1),
   PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_VERBOSE = (1 << 3),
+  PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS = (1 << 4),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -52,6 +55,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_GENERATE_LOCALES \
    | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    | PV_RUNTIME_FLAGS_VERBOSE \
+   | PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS \
    )
 
 typedef struct _PvRuntime PvRuntime;

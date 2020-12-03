@@ -728,6 +728,7 @@ static char *graphics_provider_mount_point = NULL;
 static gboolean opt_launcher = FALSE;
 static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
+static gboolean opt_import_vulkan_layers = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static GArray *opt_pass_fds = NULL;
@@ -1056,6 +1057,20 @@ static GOptionEntry options[] =
     "Do not disable the Steam Overlay. "
     "[Default unless $PRESSURE_VESSEL_REMOVE_GAME_OVERLAY is 1]",
     NULL },
+  { "import-vulkan-layers", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_import_vulkan_layers,
+    "Import Vulkan layers from the host system. "
+    "[Default unless $PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS is 0]",
+    NULL },
+  { "no-import-vulkan-layers", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_import_vulkan_layers,
+    "Do not import Vulkan layers from the host system. Please note that "
+    "certain Vulkan layers might still continue to be reachable from inside "
+    "the container. This could be the case for all the layers located in "
+    " `~/.local/share/vulkan` for example, because we usually share the real "
+    "home directory."
+    "[Default if $PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS is 0]",
+    NULL },
   { "runtime", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime,
     "Mount the given sysroot or merged /usr in the container, and augment "
@@ -1282,6 +1297,9 @@ main (int argc,
 
   opt_remove_game_overlay = pv_boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
                                                     FALSE);
+  opt_import_vulkan_layers = pv_boolean_environment ("PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS",
+                                                     TRUE);
+
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
   opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
@@ -1743,6 +1761,9 @@ main (int argc,
 
       if (opt_verbose)
         flags |= PV_RUNTIME_FLAGS_VERBOSE;
+
+      if (opt_import_vulkan_layers)
+        flags |= PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS;
 
       g_debug ("Configuring runtime %s...", opt_runtime);
 

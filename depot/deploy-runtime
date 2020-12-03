@@ -188,6 +188,16 @@ else
     rm -fr --one-file-system "${here}/.${name}_${current_build_id}_unpack-temp"
     mkdir "${here}/.${name}_${current_build_id}_unpack-temp"
     tar -C "${here}/.${name}_${current_build_id}_unpack-temp" -z"${tar_v}"xf "${here}/${basename}-runtime.tar.gz"
+
+    # If we have the detached debug symbols, we extract them too
+    if [ -f "${here}/${basename}-debug.tar.gz" ]; then
+        tar -C "${here}/.${name}_${current_build_id}_unpack-temp/files/lib/debug" \
+            --strip-components=1 \
+            -z"${tar_v}"xf \
+            "${here}/${basename}-debug.tar.gz" \
+            "files/"
+    fi
+
     mv "${here}/.${name}_${current_build_id}_unpack-temp" "${here}/${name}_${current_build_id}"
 
     updated=yes

@@ -2437,36 +2437,53 @@ collect_vulkan_layers (PvRuntime *self,
       if (!srt_vulkan_layer_check_error (layer, NULL))
         continue;
 
+      /* If the library_path is relative to the JSON file, turn it into an
+       * absolute path. If it's already absolute, or if it's a basename to be
+       * looked up in the system library search path, use it as-is. */
       details->resolved_library = srt_vulkan_layer_resolve_library_path (layer);
       g_assert (details->resolved_library != NULL);
 
-      if (g_strcmp0 (self->provider_in_host_namespace, "/") == 0)
+      if (strchr (details->resolved_library, '/') != NULL &&
+          (strstr (details->resolved_library, "$ORIGIN/") != NULL ||
+           strstr (details->resolved_library, "${ORIGIN}") != NULL ||
+           strstr (details->resolved_library, "$LIB/") != NULL ||
+           strstr (details->resolved_library, "${LIB}") != NULL ||
+           strstr (details->resolved_library, "$PLATFORM/") != NULL ||
+           strstr (details->resolved_library, "${PLATFORM}") != NULL))
         {
-          issues = srt_check_library_presence (details->resolved_library,
-                                               arch->details->tuple, NULL,
-                                               SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                               &library);
-          if (issues & (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
-                        SRT_LIBRARY_ISSUES_UNKNOWN |
-                        SRT_LIBRARY_ISSUES_TIMEOUT))
+          /* When loading a library by its absolute or relative path
+           * (but not when searching the library path for its basename),
+           * glibc expands dynamic string tokens: LIB, PLATFORM, ORIGIN.
+           * libcapsule cannot expand these special tokens: the only thing
+           * that knows the correct magic values for them is glibc, which has
+           * no API to tell us. The only way we can find out the library's
+           * real location is to tell libdl to load (dlopen) the library, and
+           * see what the resulting path is. */
+          if (g_strcmp0 (self->provider_in_current_namespace, "/") == 0)
             {
-              g_debug ("Unable to load library %s: %s", details->resolved_library,
-                      srt_library_get_messages (library));
+              /* It's in our current namespace, so we can dlopen it. */
+              issues = srt_check_library_presence (details->resolved_library,
+                                                   arch->details->tuple, NULL,
+                                                   SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
+                                                   &library);
+              if (issues & (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
+                            SRT_LIBRARY_ISSUES_UNKNOWN |
+                            SRT_LIBRARY_ISSUES_TIMEOUT))
+                {
+                  g_debug ("Unable to load library %s: %s", details->resolved_library,
+                           srt_library_get_messages (library));
+                  continue;
+                }
+              g_free (details->resolved_library);
+              details->resolved_library = g_strdup (srt_library_get_absolute_path (library));
+            }
+          else
+            {
+              /* Sorry, we can't know how to load this. */
+              g_debug ("Cannot support ld.so special tokens, e.g. ${LIB}, when provider "
+                       "is not the root filesystem");
               continue;
             }
-          g_free (details->resolved_library);
-          details->resolved_library = g_strdup (srt_library_get_absolute_path (library));
-        }
-      else if (strstr (details->resolved_library, "$ORIGIN/") != NULL ||
-               strstr (details->resolved_library, "${ORIGIN}") != NULL ||
-               strstr (details->resolved_library, "$LIB/") != NULL ||
-               strstr (details->resolved_library, "${LIB}") != NULL ||
-               strstr (details->resolved_library, "$PLATFORM/") != NULL ||
-               strstr (details->resolved_library, "${PLATFORM}") != NULL)
-        {
-          g_debug ("Cannot support ld.so special tokens, e.g. ${LIB}, when provider "
-                   "is not the root filesystem");
-          continue;
         }
 
       if (!bind_icd (self, arch, j, dir_name, details, error))

@@ -1,3 +1,28 @@
+steam-runtime-tools (0.20201203.0) scout; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Cope with Vulkan meta-layers and handle them specially,
+    fixing an assertion failure (Resolves: steam-runtime#306)
+  * pressure-vessel: Add option to disable the import of Vulkan layers.
+    Users experiencing problems with Vulkan layers can disable their
+    inclusion in the container with environment variable
+    PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS=0. (Resolves: steam-runtime-tools#37)
+  * pressure-vessel: Do not dlopen layers if it isn't necessary.
+    This makes it more likely that we can share the same JSON manifest
+    for all word-sizes, working around some overzealous deduplication
+    in the Vulkan loader. (Partially addresses: steam-runtime-tools#39)
+  * diagnostic tools: Try more VA-API code paths, so that the check can pass
+    on Intel GPUs (Resolves: steam-runtime-tools#24)
+
+  [ Simon McVittie ]
+  * pressure-vessel: Fix VDPAU driver loading when using newer glibc on
+    post-Haswell CPUs
+  * pressure-vessel: Improve correctness of PRESSURE_VESSEL_COPY_RUNTIME_INTO
+    by removing more conflicting libraries
+  * input-device test: Add more test data
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 03 Dec 2020 18:20:30 +0000
+
 steam-runtime-tools (0.20201124.0) scout; urgency=medium
 
   [ Simon McVittie ]

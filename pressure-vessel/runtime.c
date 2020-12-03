@@ -167,6 +167,10 @@ typedef struct
    * Size is completely arbitrary, expand as needed */
   const char *multilib[3];
 
+  /* Alternative paths for ld.so.cache, other than ld.so.cache itself.
+   * Size is completely arbitrary, expand as needed */
+  const char *other_ld_so_cache[2];
+
   /* Known values that ${PLATFORM} can expand to.
    * Refer to sysdeps/x86/cpu-features.c and sysdeps/x86/dl-procinfo.c
    * in glibc.
@@ -182,11 +186,13 @@ static const MultiarchDetails multiarch_details[] =
   {
     .tuple = "x86_64-linux-gnu",
     .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
+    .other_ld_so_cache = { "ld-x86_64-pc-linux-gnu.cache", NULL },
     .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
   },
   {
     .tuple = "i386-linux-gnu",
     .multilib = { "i686-pc-linux-gnu/lib", "lib32", NULL },
+    .other_ld_so_cache = { "ld-i686-pc-linux-gnu.cache", NULL },
     .platforms = { "i686", "i586", "i486", "i386", NULL },
   },
 };

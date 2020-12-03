@@ -166,6 +166,12 @@ typedef struct
    * - etc.
    * Size is completely arbitrary, expand as needed */
   const char *multilib[3];
+
+  /* Known values that ${PLATFORM} can expand to.
+   * Refer to sysdeps/x86/cpu-features.c and sysdeps/x86/dl-procinfo.c
+   * in glibc.
+   * Size is completely arbitrary, expand as needed */
+  const char *platforms[5];
 } MultiarchDetails;
 
 /*
@@ -176,10 +182,12 @@ static const MultiarchDetails multiarch_details[] =
   {
     .tuple = "x86_64-linux-gnu",
     .multilib = { "lib64", "x86_64-pc-linux-gnu/lib", NULL },
+    .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
   },
   {
     .tuple = "i386-linux-gnu",
-    .multilib = { "lib32", "i686-pc-linux-gnu/lib", NULL }
+    .multilib = { "lib32", "i686-pc-linux-gnu/lib", NULL },
+    .platforms = { "i686", "i586", "i486", "i386", NULL },
   },
 };
 G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
@@ -3150,6 +3158,31 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               if (!try_bind_dri (self, arch, bwrap, g_ptr_array_index (dirs, j), error))
                 return FALSE;
             }
+
+          /* Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't
+           * easily list both x86_64 and i386 paths. As a workaround we set
+           * VDPAU_DRIVER_PATH based on ${PLATFORM} - but each of our
+           * supported ABIs can have multiple values for ${PLATFORM}, so we
+           * need to create symlinks. Try to avoid making use of this,
+           * because it's fragile (a new glibc version can introduce
+           * new platform strings), but for some things like VDPAU it's our
+           * only choice. */
+          for (j = 0; j < G_N_ELEMENTS (arch->details->platforms); j++)
+            {
+              g_autofree gchar *platform_link = NULL;
+
+              if (arch->details->platforms[j] == NULL)
+                break;
+
+              platform_link = g_strdup_printf ("%s/lib/platform-%s",
+                                               self->overrides,
+                                               arch->details->platforms[j]);
+
+              if (symlink (arch->details->tuple, platform_link) != 0)
+                return glnx_throw_errno_prefix (error,
+                                                "Unable to create symlink %s -> %s",
+                                                platform_link, arch->details->tuple);
+            }
         }
     }
 
@@ -3484,46 +3517,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
    * Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't
    * easily list both x86_64 and i386 drivers path.
    * As a workaround we set VDPAU_DRIVER_PATH to
-   * "/overrides/lib/${PLATFORM}-linux-gnu/vdpau". And because we can't control
-   * the ${PLATFORM} placeholder value we also create symlinks from `i486`, up
-   * to `i686`, to the library directory `i386` that we expect to have
-   * already. */
-  g_autofree gchar *vdpau_val = g_strdup_printf ("%s/lib/${PLATFORM}-linux-gnu/vdpau",
+   * "/overrides/lib/platform-${PLATFORM}/vdpau" (which is a symlink that we
+   * already created). */
+  g_autofree gchar *vdpau_val = g_strdup_printf ("%s/lib/platform-${PLATFORM}/vdpau",
                                                  self->overrides_in_container);
 
   flatpak_bwrap_set_env (bwrap, "VDPAU_DRIVER_PATH", vdpau_val, TRUE);
-
-  static const char * const extra_multiarch_tuples[] =
-  {
-    "i486-linux-gnu",
-    "i586-linux-gnu",
-    "i686-linux-gnu",
-    NULL
-  };
-
-  g_autofree gchar *i386_libdir_in_current_namespace = g_build_filename (self->overrides,
-                                                                         "lib",
-                                                                         "i386-linux-gnu",
-                                                                         NULL);
-
-  for (i = 0; i < G_N_ELEMENTS (extra_multiarch_tuples) - 1; i++)
-    {
-      g_autofree gchar *extra_libdir_in_current_namespace = g_build_filename (self->overrides,
-                                                                              "lib",
-                                                                              extra_multiarch_tuples[i],
-                                                                              NULL);
-
-      if (!g_file_test (extra_libdir_in_current_namespace, G_FILE_TEST_EXISTS) &&
-          g_file_test (i386_libdir_in_current_namespace, G_FILE_TEST_IS_DIR))
-        {
-          g_unlink (extra_libdir_in_current_namespace);
-
-          if (symlink ("i386-linux-gnu", extra_libdir_in_current_namespace) != 0)
-            return glnx_throw_errno_prefix (error,
-                                            "Unable to create symlink %s -> i386-linux-gnu",
-                                            extra_libdir_in_current_namespace);
-        }
-    }
 
   return TRUE;
 }

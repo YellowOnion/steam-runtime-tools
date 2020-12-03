@@ -1367,7 +1367,8 @@ typedef enum
 {
   ICD_KIND_NONEXISTENT,
   ICD_KIND_ABSOLUTE,
-  ICD_KIND_SONAME
+  ICD_KIND_SONAME,
+  ICD_KIND_META_LAYER,
 } IcdKind;
 
 typedef struct
@@ -2392,7 +2393,8 @@ setup_vulkan_loadable_json (PvRuntime *self,
 
               pv_search_path_append (vulkan_path, json_in_container);
             }
-          else if (details->kinds[i] == ICD_KIND_SONAME)
+          else if (details->kinds[i] == ICD_KIND_SONAME
+                   || details->kinds[i] == ICD_KIND_META_LAYER)
             {
               need_provider_json = TRUE;
             }
@@ -2444,6 +2446,13 @@ collect_vulkan_layers (PvRuntime *self,
 
       if (!srt_vulkan_layer_check_error (layer, NULL))
         continue;
+
+      /* For meta-layers we don't have a library path */
+      if (srt_vulkan_layer_get_library_path(layer) == NULL)
+        {
+          details->kinds[arch->multiarch_index] = ICD_KIND_META_LAYER;
+          continue;
+        }
 
       /* If the library_path is relative to the JSON file, turn it into an
        * absolute path. If it's already absolute, or if it's a basename to be
@@ -2662,6 +2671,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         {
           SrtVulkanLayer *layer = icd_iter->data;
           const gchar *path = srt_vulkan_layer_get_json_path (layer);
+          const gchar *library_path = NULL;
           GError *local_error = NULL;
 
           if (!srt_vulkan_layer_check_error (layer, &local_error))
@@ -2672,8 +2682,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               continue;
             }
 
+          library_path = srt_vulkan_layer_get_library_path (layer);
+
           g_debug ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                   j, path, srt_vulkan_layer_get_library_path (layer));
+                   j, path, library_path != NULL ? library_path : "meta-layer");
 
           g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
         }

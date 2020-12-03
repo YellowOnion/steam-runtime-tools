@@ -713,6 +713,17 @@ class TestContainers(BaseTest):
             host_usr_libdir = os.path.join(
                 '/', 'usr', 'lib', multiarch,
             )
+
+            if multiarch == 'i386-linux-gnu':
+                libqualdir = os.path.join(tree, 'lib32')
+                usr_libqualdir = os.path.join(tree, 'usr', 'lib32')
+            elif multiarch == 'x86_64-linux-gnu':
+                libqualdir = os.path.join(tree, 'lib64')
+                usr_libqualdir = os.path.join(tree, 'usr', 'lib64')
+            else:
+                libqualdir = ''
+                usr_libqualdir = ''
+
             with self.subTest(arch=multiarch):
 
                 self.assertTrue(os.path.isdir(overrides_libdir))
@@ -728,6 +739,8 @@ class TestContainers(BaseTest):
                         'libdl.so.2',
                         'libm.so.6',
                         'libnsl.so.1',
+                        'libnss_dns.so.2',
+                        'libnss_files.so.2',
                         'libpthread.so.0',
                         'libresolv.so.2',
                         'librt.so.1',
@@ -754,7 +767,7 @@ class TestContainers(BaseTest):
                                         os.path.join(root_libdir, soname)
                                     ),
                                 )
-                            # ... and /usr/lib, if present
+                            # ... and /usr/lib, if present...
                             with self.assertRaises(FileNotFoundError):
                                 print(
                                     '#',
@@ -764,6 +777,28 @@ class TestContainers(BaseTest):
                                         os.path.join(usr_libdir, soname)
                                     ),
                                 )
+                            # ... and /libQUAL and /usr/libQUAL, if present
+                            if libqualdir:
+                                with self.assertRaises(FileNotFoundError):
+                                    print(
+                                        '#',
+                                        os.path.join(libqualdir, soname),
+                                        '->',
+                                        os.readlink(
+                                            os.path.join(libqualdir, soname)
+                                        ),
+                                    )
+                                with self.assertRaises(FileNotFoundError):
+                                    print(
+                                        '#',
+                                        os.path.join(usr_libqualdir, soname),
+                                        '->',
+                                        os.readlink(
+                                            os.path.join(
+                                                usr_libqualdir, soname,
+                                            )
+                                        ),
+                                    )
 
                             # In most cases we expect the development
                             # symlink to be removed, too - but some of

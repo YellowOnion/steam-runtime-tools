@@ -158,14 +158,18 @@ typedef struct
   const char *tuple;
 
   /* Directories other than /usr/lib that we must search for loadable
-   * modules, most-ambiguous first, least-ambiguous last, not including
+   * modules, least-ambiguous first, most-ambiguous last, not including
    * Debian-style multiarch directories which are automatically derived
    * from @tuple.
-   * - Red-Hat- or Arch-style lib<QUAL>
    * - Exherbo <GNU-tuple>/lib
+   * - Red-Hat- or Arch-style lib<QUAL>
    * - etc.
    * Size is completely arbitrary, expand as needed */
   const char *multilib[3];
+
+  /* Alternative paths for ld.so.cache, other than ld.so.cache itself.
+   * Size is completely arbitrary, expand as needed */
+  const char *other_ld_so_cache[2];
 
   /* Known values that ${PLATFORM} can expand to.
    * Refer to sysdeps/x86/cpu-features.c and sysdeps/x86/dl-procinfo.c
@@ -181,17 +185,84 @@ static const MultiarchDetails multiarch_details[] =
 {
   {
     .tuple = "x86_64-linux-gnu",
-    .multilib = { "lib64", "x86_64-pc-linux-gnu/lib", NULL },
+    .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
+    .other_ld_so_cache = { "ld-x86_64-pc-linux-gnu.cache", NULL },
     .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
   },
   {
     .tuple = "i386-linux-gnu",
-    .multilib = { "lib32", "i686-pc-linux-gnu/lib", NULL },
+    .multilib = { "i686-pc-linux-gnu/lib", "lib32", NULL },
+    .other_ld_so_cache = { "ld-i686-pc-linux-gnu.cache", NULL },
     .platforms = { "i686", "i586", "i486", "i386", NULL },
   },
 };
 G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
                  == G_N_ELEMENTS (multiarch_tuples) - 1);
+
+/*
+ * @MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN:
+ *  Return all library directories from which we might need to delete
+ *  overridden libraries shipped in the runtime.
+ */
+typedef enum
+{
+  MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN = (1 << 0),
+  MULTIARCH_LIBDIRS_FLAGS_NONE = 0
+} MultiarchLibdirsFlags;
+
+/*
+ * Get the library directories associated with @self, most important or
+ * unambiguous first.
+ *
+ * Returns: (transfer container) (element-type filename):
+ */
+static GPtrArray *
+multiarch_details_get_libdirs (const MultiarchDetails *self,
+                               MultiarchLibdirsFlags flags)
+{
+  g_autoptr(GPtrArray) dirs = g_ptr_array_new_with_free_func (g_free);
+  gsize j;
+
+  /* Multiarch is the least ambiguous so we put it first.
+   *
+   * We historically searched /usr/lib before /lib, but Debian actually
+   * does the opposite, and we follow that here.
+   *
+   * Arguably we should search /usr/local/lib before /lib before /usr/lib,
+   * but we don't currently try /usr/local/lib. We could add a flag
+   * for that if we don't want to do it unconditionally. */
+  g_ptr_array_add (dirs,
+                   g_build_filename ("/lib", self->tuple, NULL));
+  g_ptr_array_add (dirs,
+                   g_build_filename ("/usr", "lib", self->tuple, NULL));
+
+  if (flags & MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN)
+    g_ptr_array_add (dirs,
+                     g_build_filename ("/usr", "lib", "mesa",
+                                       self->tuple, NULL));
+
+  /* Try other multilib variants next. This includes
+   * Exherbo/cross-compilation-style per-architecture prefixes,
+   * Red-Hat-style lib64 and Arch-style lib32. */
+  for (j = 0; j < G_N_ELEMENTS (self->multilib); j++)
+    {
+      if (self->multilib[j] == NULL)
+        break;
+
+      g_ptr_array_add (dirs,
+                       g_build_filename ("/", self->multilib[j], NULL));
+      g_ptr_array_add (dirs,
+                       g_build_filename ("/usr", self->multilib[j], NULL));
+    }
+
+  /* /lib and /usr/lib are lowest priority because they're the most
+   * ambiguous: we don't know whether they're meant to contain 32- or
+   * 64-bit libraries. */
+  g_ptr_array_add (dirs, g_strdup ("/lib"));
+  g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
+
+  return g_steal_pointer (&dirs);
+}
 
 typedef struct
 {
@@ -1969,10 +2040,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                                         RuntimeArchitecture *arch,
                                         GError **error)
 {
-  static const char * const libdirs[] = { "lib", "usr/lib", "usr/lib/mesa" };
-  GHashTable *delete[G_N_ELEMENTS (libdirs)] = { NULL };
-  GLnxDirFdIterator iters[G_N_ELEMENTS (libdirs)] = { { FALSE } };
-  gchar *multiarch_libdirs[G_N_ELEMENTS (libdirs)] = { NULL };
+  g_autoptr(GPtrArray) dirs = NULL;
+  GHashTable **delete = NULL;
+  GLnxDirFdIterator *iters = NULL;
   gboolean ret = FALSE;
   gsize i;
 
@@ -1984,15 +2054,20 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   /* Not applicable/possible if we don't have a mutable sysroot */
   g_return_val_if_fail (self->mutable_sysroot != NULL, FALSE);
 
+  dirs = multiarch_details_get_libdirs (arch->details,
+                                        MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
+  delete = g_new0 (GHashTable *, dirs->len);
+  iters = g_new0 (GLnxDirFdIterator, dirs->len);
+
   /* We have to figure out what we want to delete before we delete anything,
    * because we can't tell whether a symlink points to a library of a
    * particular SONAME if we already deleted the library. */
-  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+  for (i = 0; i < dirs->len; i++)
     {
+      const char *libdir = g_ptr_array_index (dirs, i);
       glnx_autofd int libdir_fd = -1;
       struct dirent *dent;
-
-      multiarch_libdirs[i] = g_build_filename (libdirs[i], arch->details->tuple, NULL);
+      gsize j;
 
       /* Mostly ignore error: if the library directory cannot be opened,
        * presumably we don't need to do anything with it... */
@@ -2000,7 +2075,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           g_autoptr(GError) local_error = NULL;
 
           libdir_fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                               multiarch_libdirs[i],
+                                               libdir,
                                                SRT_RESOLVE_FLAGS_READABLE,
                                                NULL, &local_error);
 
@@ -2008,21 +2083,37 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               g_debug ("Cannot resolve \"%s\" in \"%s\", so no need to delete "
                        "libraries from it: %s",
-                       multiarch_libdirs[i], self->mutable_sysroot,
-                       local_error->message);
+                       libdir, self->mutable_sysroot, local_error->message);
               g_clear_error (&local_error);
+              continue;
+            }
+
+          for (j = 0; j < i; j++)
+            {
+              /* No need to inspect a directory if it's one we already
+               * looked at (perhaps via symbolic links) */
+              if (iters[j].initialized
+                  && _srt_fstatat_is_same_file (libdir_fd, "",
+                                                iters[j].fd, ""))
+                break;
+            }
+
+          if (j < i)
+            {
+              g_debug ("%s is the same directory as %s, skipping it",
+                       libdir, (const char *) g_ptr_array_index (dirs, j));
               continue;
             }
         }
 
       g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
-               arch->details->tuple, multiarch_libdirs[i], self->mutable_sysroot);
+               arch->details->tuple, libdir, self->mutable_sysroot);
 
       if (!glnx_dirfd_iterator_init_take_fd (&libdir_fd, &iters[i], error))
         {
           glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
                              self->mutable_sysroot,
-                             multiarch_libdirs[i]);
+                             libdir);
           goto out;
         }
 
@@ -2042,7 +2133,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                                                            NULL, error))
             return glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
                                       self->mutable_sysroot,
-                                      multiarch_libdirs[i]);
+                                      libdir);
 
           if (dent == NULL)
             break;
@@ -2070,7 +2161,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
               strstr (dent->d_name, ".so.") == NULL)
             continue;
 
-          path = g_build_filename (multiarch_libdirs[i], dent->d_name, NULL);
+          path = g_build_filename (libdir, dent->d_name, NULL);
 
           /* scope for soname_link */
             {
@@ -2158,8 +2249,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         }
     }
 
-  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+  for (i = 0; i < dirs->len; i++)
     {
+      const char *libdir = g_ptr_array_index (dirs, i);
+
       if (delete[i] == NULL)
         continue;
 
@@ -2173,24 +2266,13 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           g_autoptr(GError) local_error = NULL;
 
           g_debug ("Deleting %s/%s/%s because %s replaces it",
-                   self->mutable_sysroot, multiarch_libdirs[i], name, reason);
+                   self->mutable_sysroot, libdir, name, reason);
 
           if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
             {
-              if (g_error_matches (local_error, G_IO_ERROR,
-                                   G_IO_ERROR_NOT_FOUND))
-                {
-                  /* Ignore: probably we already deleted it from /lib,
-                   * now we are trying to delete it from /usr/lib, and
-                   * they are the same place. */
-                }
-              else
-                {
-                  g_warning ("Unable to delete %s/%s/%s: %s",
-                             self->mutable_sysroot, multiarch_libdirs[i],
-                             name, local_error->message);
-                }
-
+              g_warning ("Unable to delete %s/%s/%s: %s",
+                         self->mutable_sysroot, libdir,
+                         name, local_error->message);
               g_clear_error (&local_error);
             }
         }
@@ -2199,13 +2281,20 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   ret = TRUE;
 
 out:
-  for (i = 0; i < G_N_ELEMENTS (libdirs); i++)
+  if (dirs != NULL)
     {
-      g_clear_pointer (&delete[i], g_hash_table_unref);
-      glnx_dirfd_iterator_clear (&iters[i]);
-      g_free (multiarch_libdirs[i]);
+      g_assert (delete != NULL);
+      g_assert (iters != NULL);
+
+      for (i = 0; i < dirs->len; i++)
+        {
+          g_clear_pointer (&delete[i], g_hash_table_unref);
+          glnx_dirfd_iterator_clear (&iters[i]);
+        }
     }
 
+  g_free (delete);
+  g_free (iters);
   return ret;
 }
 
@@ -2964,10 +3053,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
             }
 
-          if (self->mutable_sysroot != NULL &&
-              !pv_runtime_remove_overridden_libraries (self, arch, error))
-            return FALSE;
-
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
@@ -3140,34 +3225,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libdrm_from_provider = FALSE;
             }
 
-          /* Order matters: drivers from a later entry will overwrite
-           * drivers from an earlier entry. Because we don't know whether
-           * /lib and /usr/lib are 32- or 64-bit, we need to prioritize
-           * libQUAL higher. Prioritize Debian-style multiarch higher
-           * still, because it's completely unambiguous. */
-          dirs = g_ptr_array_new_with_free_func (g_free);
-          g_ptr_array_add (dirs, g_strdup ("/lib"));
-          g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
+          dirs = multiarch_details_get_libdirs (arch->details,
+                                                MULTIARCH_LIBDIRS_FLAGS_NONE);
 
-          for (j = 0; j < G_N_ELEMENTS (arch->details->multilib); j++)
-            {
-              if (arch->details->multilib[j] == NULL)
-                break;
-
-              g_ptr_array_add (dirs,
-                               g_build_filename ("/", arch->details->multilib[j], NULL));
-              g_ptr_array_add (dirs,
-                               g_build_filename ("/usr", arch->details->multilib[j], NULL));
-            }
-
-          g_ptr_array_add (dirs,
-                           g_build_filename ("/lib", arch->details->tuple, NULL));
-          g_ptr_array_add (dirs,
-                           g_build_filename ("/usr", "lib", arch->details->tuple, NULL));
-
+          /* We iterate in reverse order, from dirs->len - 1 down to 0,
+           * because we want to see the most important *last*: drivers
+           * checked later will overwrite drivers checked earlier. */
           for (j = 0; j < dirs->len; j++)
             {
-              if (!try_bind_dri (self, arch, bwrap, g_ptr_array_index (dirs, j), error))
+              if (!try_bind_dri (self, arch, bwrap,
+                                 g_ptr_array_index (dirs, dirs->len - 1 - j),
+                                 error))
                 return FALSE;
             }
 
@@ -3195,6 +3263,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                 "Unable to create symlink %s -> %s",
                                                 platform_link, arch->details->tuple);
             }
+
+          /* Make sure we do this last, so that we have really copied
+           * everything from the host that we are going to */
+          if (self->mutable_sysroot != NULL &&
+              !pv_runtime_remove_overridden_libraries (self, arch, error))
+            return FALSE;
         }
     }
 

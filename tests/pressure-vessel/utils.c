@@ -183,52 +183,6 @@ test_envp_cmp (Fixture *f,
 }
 
 static void
-test_same_file (Fixture *f,
-                gconstpointer context)
-{
-  g_autoptr(GError) error = NULL;
-  g_autofree gchar *temp = NULL;
-  g_autofree gchar *hard_link_from = NULL;
-  g_autofree gchar *hard_link_to = NULL;
-  g_autofree gchar *symlink_to_dev_null = NULL;
-
-  g_assert_true (pv_is_same_file ("/dev/null", "/dev/null"));
-  g_assert_true (pv_is_same_file ("/nonexistent", "/nonexistent"));
-  g_assert_false (pv_is_same_file ("/dev/null", "/dev/zero"));
-  g_assert_false (pv_is_same_file ("/dev/null", "/nonexistent"));
-  g_assert_false (pv_is_same_file ("/nonexistent", "/dev/null"));
-  g_assert_false (pv_is_same_file ("/nonexistent", "/nonexistent/also"));
-
-  temp = g_dir_make_tmp (NULL, &error);
-  g_assert_no_error (error);
-  g_assert_nonnull (temp);
-
-  hard_link_from = g_build_filename (temp, "hard-link-from", NULL);
-  hard_link_to = g_build_filename (temp, "hard-link-to", NULL);
-  symlink_to_dev_null = g_build_filename (temp, "symlink", NULL);
-
-  g_file_set_contents (hard_link_from, "hello", -1, NULL);
-  g_assert_no_error (error);
-
-  if (link (hard_link_from, hard_link_to) != 0)
-    g_error ("Could not create hard link \"%s\" -> /dev/null: %s",
-             symlink_to_dev_null, g_strerror (errno));
-
-  g_assert_true (pv_is_same_file (hard_link_from, hard_link_to));
-  g_assert_false (pv_is_same_file (hard_link_from, "/dev/null"));
-
-  if (symlink ("/dev/null", symlink_to_dev_null) != 0)
-    g_error ("Could not create symlink \"%s\" -> /dev/null: %s",
-             symlink_to_dev_null, g_strerror (errno));
-
-  g_assert_true (pv_is_same_file (symlink_to_dev_null, "/dev/null"));
-  g_assert_false (pv_is_same_file (symlink_to_dev_null, "/dev/zero"));
-
-  glnx_shutil_rm_rf_at (-1, temp, NULL, &error);
-  g_assert_no_error (error);
-}
-
-static void
 test_search_path_append (Fixture *f,
                          gconstpointer context)
 {
@@ -269,7 +223,6 @@ main (int argc,
   g_test_add ("/capture-output", Fixture, NULL,
               setup, test_capture_output, teardown);
   g_test_add ("/envp-cmp", Fixture, NULL, setup, test_envp_cmp, teardown);
-  g_test_add ("/same-file", Fixture, NULL, setup, test_same_file, teardown);
   g_test_add ("/search-path-append", Fixture, NULL,
               setup, test_search_path_append, teardown);
 

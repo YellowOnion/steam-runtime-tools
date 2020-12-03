@@ -986,3 +986,35 @@ _srt_str_is_integer (const char *str)
 
   return (*p == '\0');
 }
+
+/*
+ * _srt_fstatat_is_same_file:
+ * @afd: a file descriptor, `AT_FDCWD` or -1
+ * @a: a path
+ * @bfd: a file descriptor, `AT_FDCWD` or -1
+ * @b: a path
+ *
+ * Returns: %TRUE if a (relative to afd) and b (relative to bfd)
+ *  are names for the same inode.
+ */
+gboolean
+_srt_fstatat_is_same_file (int afd,
+                           const char *a,
+                           int bfd,
+                           const char *b)
+{
+  struct stat a_buffer, b_buffer;
+
+  g_return_val_if_fail (a != NULL, FALSE);
+  g_return_val_if_fail (b != NULL, FALSE);
+
+  afd = glnx_dirfd_canonicalize (afd);
+  bfd = glnx_dirfd_canonicalize (bfd);
+
+  if (afd == bfd && strcmp (a, b) == 0)
+    return TRUE;
+
+  return (fstatat (afd, a, &a_buffer, AT_EMPTY_PATH) == 0
+          && fstatat (bfd, b, &b_buffer, AT_EMPTY_PATH) == 0
+          && _srt_is_same_stat (&a_buffer, &b_buffer));
+}

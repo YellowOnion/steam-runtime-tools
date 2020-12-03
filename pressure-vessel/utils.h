@@ -45,9 +45,6 @@ int pv_envp_cmp (const void *p1,
 void pv_get_current_dirs (gchar **cwd_p,
                           gchar **cwd_l);
 
-gboolean pv_is_same_file (const gchar *a,
-                          const gchar *b);
-
 void pv_search_path_append (GString *search_path,
                             const gchar *item);
 

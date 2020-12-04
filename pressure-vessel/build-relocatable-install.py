@@ -79,6 +79,8 @@ ARCHS = [
 DEPENDENCIES = {
     'libcapsule-tools-relocatable': 'libcapsule',
     'libelf1': 'elfutils',
+    'vulkan-tools-multiarch': 'vulkan-tools',
+    'waffle-utils-multiarch': 'waffle',
     'zlib1g': 'zlib',
 }
 # program to install => binary package
@@ -96,6 +98,10 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libpcre3': 'pcre3',
     'libselinux1': 'libselinux',
     'libxau6': 'libxau',
+}
+HELPERS = {
+    'vulkaninfo': 'vulkan-tools-multiarch',
+    'wflinfo': 'waffle-utils-multiarch',
 }
 SCRIPTS = [
     'pressure-vessel-locale-gen',
@@ -434,6 +440,40 @@ def main():
                         installation, 'lib', arch.multiarch,
                         'steam-runtime-tools-0',
                         os.path.basename(so)
+                    )
+                )
+
+            for helper, package in HELPERS.items():
+                exe = arch.multiarch + '-' + helper
+                path = os.path.join(args.prefix, 'bin', exe)
+
+                if not os.path.exists(path):
+                    path = '/usr/bin/{}'.format(exe)
+
+                if not os.path.exists(path):
+                    v_check_call([
+                        'apt-get',
+                        'download',
+                        package,
+                    ], cwd=tmpdir)
+                    v_check_call(
+                        'dpkg-deb -x {}_*.deb build-relocatable'.format(
+                            quote(package),
+                        ),
+                        cwd=tmpdir,
+                        shell=True,
+                    )
+                    path = '{}/build-relocatable/usr/bin/{}'.format(
+                        tmpdir, exe,
+                    )
+
+                install_exe(
+                    path,
+                    os.path.join(
+                        installation,
+                        'libexec',
+                        'steam-runtime-tools-0',
+                        exe,
                     )
                 )
 

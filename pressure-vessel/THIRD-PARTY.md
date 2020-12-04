@@ -58,11 +58,16 @@ programs and libraries:
 - libjson-glib-1.0.so.0 from json-glib: [LGPL-2.0-or-later][]. See
   json-glib.txt.
 
+- vulkaninfo from Vulkan-Tools: [Apache-2.0][]. See vulkan-tools.txt.
+
+- wflinfo from waffle: [BSD-2-clause][]. See waffle.txt.
+
 Complete source code can be obtained from the same place as
 pressure-vessel, or from <https://repo.steampowered.com/steamrt/>
 and <https://repo.steampowered.com/steamrt-images-scout/snapshots/>
 
 [Apache-2.0]: https://spdx.org/licenses/Apache-2.0.html
+[BSD-2-Clause]: https://spdx.org/licenses/BSD-2-Clause.html
 [BSD-3-Clause]: https://spdx.org/licenses/BSD-3-Clause.html
 [GPL-2.0-only]: https://spdx.org/licenses/GPL-2.0-only.html
 [GPL-2.0-or-later]: https://spdx.org/licenses/GPL-2.0-or-later.html

@@ -10,18 +10,19 @@ same place as pressure-vessel, or from
 pressure-vessel incorporates code from GNOME libglnx, variously licensed
 under [LGPL-2.0-or-later][] and [LGPL-2.1-or-later][].
 Complete source code can be obtained from the same place as
-pressure-vessel, or from <http://repo.steampowered.com/steamrt/>.
+pressure-vessel, or from
+<https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 pressure-vessel incorporates code from Flatpak, licensed under
 [LGPL-2.1-or-later][]. Complete source code can be obtained from the
 same place as pressure-vessel, or from
-<http://repo.steampowered.com/steamrt/>.
+<https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 pressure-vessel includes the steam-runtime-tools library and utilities,
 which contain code licensed under the [Apache-2.0][], [LGPL-2.1-or-later][]
 and [MIT][] licenses. See steam-runtime-tools.txt.
 Complete source code can be obtained from the same place as pressure-vessel,
-or from <http://repo.steampowered.com/steamrt/>.
+or from <https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 Binary releases of pressure-vessel include the following third-party
 programs and libraries:

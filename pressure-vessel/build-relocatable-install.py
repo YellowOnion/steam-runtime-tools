@@ -84,7 +84,6 @@ DEPENDENCIES = {
 # program to install => binary package
 WRAPPED_PROGRAMS = {
     'bwrap': 'bubblewrap',
-    'steam-runtime-system-info': 'steam-runtime-tools-bin',
 }
 PRIMARY_ARCH_DEPENDENCIES = {
     'bubblewrap': 'bubblewrap',
@@ -109,6 +108,7 @@ EXECUTABLES = [
     'pressure-vessel-launcher',
     'pressure-vessel-try-setlocale',
     'pressure-vessel-wrap',
+    'steam-runtime-system-info',
 ]
 LIBCAPSULE_TOOLS = [
     'capsule-capture-libs',
@@ -275,10 +275,15 @@ def main():
             )
 
         for exe in EXECUTABLES:
-            install_exe(
-                os.path.join(args.pv_dir, 'bin', exe),
-                os.path.join(installation, 'bin'),
-            )
+            path = os.path.join(args.pv_dir, 'bin', exe)
+
+            if not os.path.exists(path):
+                path = os.path.join(args.prefix, 'bin', exe)
+
+            if not os.path.exists(path):
+                path = '/usr/bin/{}'.format(exe)
+
+            install_exe(path, os.path.join(installation, 'bin'))
 
         install(
             os.path.join(args.srcdir, 'pressure-vessel', 'THIRD-PARTY.md'),

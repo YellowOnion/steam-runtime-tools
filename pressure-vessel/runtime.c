@@ -2867,8 +2867,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                       provider_etc_dest,
                                       NULL);
 
+              flatpak_bwrap_set_env (temp_bwrap, "PATH", "/usr/bin:/bin", TRUE);
               flatpak_bwrap_add_args (temp_bwrap,
-                                      "env", "PATH=/usr/bin:/bin",
                                       "readlink", "-e", arch->ld_so,
                                       NULL);
               flatpak_bwrap_finish (temp_bwrap);

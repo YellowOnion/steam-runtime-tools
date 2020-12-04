@@ -59,7 +59,8 @@ programs and libraries:
   json-glib.txt.
 
 Complete source code can be obtained from the same place as
-pressure-vessel, or from <http://repo.steampowered.com/steamrt/>.
+pressure-vessel, or from <https://repo.steampowered.com/steamrt/>
+and <https://repo.steampowered.com/steamrt-images-scout/snapshots/>
 
 [Apache-2.0]: https://spdx.org/licenses/Apache-2.0.html
 [BSD-3-Clause]: https://spdx.org/licenses/BSD-3-Clause.html

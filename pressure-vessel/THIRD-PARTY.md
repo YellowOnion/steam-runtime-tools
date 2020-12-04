@@ -18,7 +18,8 @@ same place as pressure-vessel, or from
 <http://repo.steampowered.com/steamrt/>.
 
 pressure-vessel includes the steam-runtime-tools library and utilities,
-which are licensed under the [MIT][] license. See steam-runtime-tools.txt.
+which contain code licensed under the [Apache-2.0][], [LGPL-2.1-or-later][]
+and [MIT][] licenses. See steam-runtime-tools.txt.
 Complete source code can be obtained from the same place as pressure-vessel,
 or from <http://repo.steampowered.com/steamrt/>.
 
@@ -59,6 +60,7 @@ programs and libraries:
 Complete source code can be obtained from the same place as
 pressure-vessel, or from <http://repo.steampowered.com/steamrt/>.
 
+[Apache-2.0]: https://spdx.org/licenses/Apache-2.0.html
 [BSD-3-Clause]: https://spdx.org/licenses/BSD-3-Clause.html
 [GPL-2.0-only]: https://spdx.org/licenses/GPL-2.0-only.html
 [GPL-2.0-or-later]: https://spdx.org/licenses/GPL-2.0-or-later.html

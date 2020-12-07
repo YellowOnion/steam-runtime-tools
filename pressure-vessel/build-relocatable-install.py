@@ -79,12 +79,13 @@ ARCHS = [
 DEPENDENCIES = {
     'libcapsule-tools-relocatable': 'libcapsule',
     'libelf1': 'elfutils',
+    'vulkan-tools-multiarch': 'vulkan-tools',
+    'waffle-utils-multiarch': 'waffle',
     'zlib1g': 'zlib',
 }
 # program to install => binary package
 WRAPPED_PROGRAMS = {
     'bwrap': 'bubblewrap',
-    'steam-runtime-system-info': 'steam-runtime-tools-bin',
 }
 PRIMARY_ARCH_DEPENDENCIES = {
     'bubblewrap': 'bubblewrap',
@@ -98,6 +99,10 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libselinux1': 'libselinux',
     'libxau6': 'libxau',
 }
+HELPERS = {
+    'vulkaninfo': 'vulkan-tools-multiarch',
+    'wflinfo': 'waffle-utils-multiarch',
+}
 SCRIPTS = [
     'pressure-vessel-locale-gen',
     'pressure-vessel-test-ui',
@@ -109,6 +114,7 @@ EXECUTABLES = [
     'pressure-vessel-launcher',
     'pressure-vessel-try-setlocale',
     'pressure-vessel-wrap',
+    'steam-runtime-system-info',
 ]
 LIBCAPSULE_TOOLS = [
     'capsule-capture-libs',
@@ -275,10 +281,15 @@ def main():
             )
 
         for exe in EXECUTABLES:
-            install_exe(
-                os.path.join(args.pv_dir, 'bin', exe),
-                os.path.join(installation, 'bin'),
-            )
+            path = os.path.join(args.pv_dir, 'bin', exe)
+
+            if not os.path.exists(path):
+                path = os.path.join(args.prefix, 'bin', exe)
+
+            if not os.path.exists(path):
+                path = '/usr/bin/{}'.format(exe)
+
+            install_exe(path, os.path.join(installation, 'bin'))
 
         install(
             os.path.join(args.srcdir, 'pressure-vessel', 'THIRD-PARTY.md'),
@@ -429,6 +440,40 @@ def main():
                         installation, 'lib', arch.multiarch,
                         'steam-runtime-tools-0',
                         os.path.basename(so)
+                    )
+                )
+
+            for helper, package in HELPERS.items():
+                exe = arch.multiarch + '-' + helper
+                path = os.path.join(args.prefix, 'bin', exe)
+
+                if not os.path.exists(path):
+                    path = '/usr/bin/{}'.format(exe)
+
+                if not os.path.exists(path):
+                    v_check_call([
+                        'apt-get',
+                        'download',
+                        package,
+                    ], cwd=tmpdir)
+                    v_check_call(
+                        'dpkg-deb -x {}_*.deb build-relocatable'.format(
+                            quote(package),
+                        ),
+                        cwd=tmpdir,
+                        shell=True,
+                    )
+                    path = '{}/build-relocatable/usr/bin/{}'.format(
+                        tmpdir, exe,
+                    )
+
+                install_exe(
+                    path,
+                    os.path.join(
+                        installation,
+                        'libexec',
+                        'steam-runtime-tools-0',
+                        exe,
                     )
                 )
 

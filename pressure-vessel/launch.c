@@ -865,14 +865,14 @@ main (int argc,
 
   if (g_hash_table_size (opt_unsetenv) > 0)
     {
-      GVariantBuilder strv_builder;
-
-      g_variant_builder_init (&strv_builder, G_VARIANT_TYPE_STRING_ARRAY);
-
       g_hash_table_iter_init (&iter, opt_unsetenv);
 
       if (api == &launcher_api)
         {
+          GVariantBuilder strv_builder;
+
+          g_variant_builder_init (&strv_builder, G_VARIANT_TYPE_STRING_ARRAY);
+
           while (g_hash_table_iter_next (&iter, &key, NULL))
             g_variant_builder_add (&strv_builder, "s", key);
 

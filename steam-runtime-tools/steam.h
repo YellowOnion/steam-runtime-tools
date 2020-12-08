@@ -88,6 +88,9 @@ GType srt_steam_get_type (void);
  *  one `STEAMSCRIPT` points to.
  * @SRT_STEAM_ISSUES_UNEXPECTED_STEAM_DESKTOP_ID: The default Steam desktop
  *  application ID is not what we expected.
+ * @SRT_STEAM_ISSUES_UNEXPECTED_STEAM_COMPAT_CLIENT_INSTALL_PATH: If the
+ *  environment `STEAM_COMPAT_CLIENT_INSTALL_PATH` is set, its realpath() is
+ *  not the equivalent of `~/.steam/root`.
  * @SRT_STEAM_ISSUES_UNKNOWN: The Steam problems are not known
  *
  * A bitfield with flags representing problems with the Steam
@@ -109,6 +112,7 @@ typedef enum
   SRT_STEAM_ISSUES_MISSING_STEAM_URI_HANDLER = (1 << 8),
   SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER = (1 << 9),
   SRT_STEAM_ISSUES_UNEXPECTED_STEAM_DESKTOP_ID = (1 << 10),
+  SRT_STEAM_ISSUES_UNEXPECTED_STEAM_COMPAT_CLIENT_INSTALL_PATH = (1 << 11),
   SRT_STEAM_ISSUES_NONE = 0
 } SrtSteamIssues;
 

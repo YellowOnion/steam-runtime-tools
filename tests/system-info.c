@@ -1214,6 +1214,57 @@ steam_symlink (Fixture *f,
   g_free (ubuntu12_32);
 }
 
+static void
+steam_compat_environment_variable (Fixture *f,
+                                   gconstpointer context)
+{
+  g_autoptr(SrtSystemInfo) info = NULL;
+  SrtSteamIssues issues;
+  g_autofree gchar *dot_steam_root = NULL;
+  g_autofree gchar *dot_steam_root_resolved = NULL;
+  g_autofree gchar *dot_steam_bin32 = NULL;
+  FakeHome *fake_home;
+
+  fake_home = fake_home_new (fake_home_path);
+  fake_home_create_structure (fake_home);
+
+  info = srt_system_info_new (NULL);
+  dot_steam_root = g_build_filename (fake_home->home, ".steam", "root", NULL);
+  dot_steam_bin32 = g_build_filename (fake_home->home, ".steam", "bin32", NULL);
+
+  fake_home->env = g_environ_unsetenv (fake_home->env,
+                                       "STEAM_COMPAT_CLIENT_INSTALL_PATH");
+  fake_home_apply_to_system_info (fake_home, info);
+  issues = srt_system_info_get_steam_issues (info);
+  g_assert_cmpint (issues, ==, SRT_STEAM_ISSUES_NONE);
+
+  fake_home->env = g_environ_setenv (fake_home->env,
+                                     "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+                                     dot_steam_root, TRUE);
+  fake_home_apply_to_system_info (fake_home, info);
+  issues = srt_system_info_get_steam_issues (info);
+  g_assert_cmpint (issues, ==, SRT_STEAM_ISSUES_NONE);
+
+  dot_steam_root_resolved = realpath (dot_steam_root, NULL);
+  fake_home->env = g_environ_setenv (fake_home->env,
+                                     "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+                                     dot_steam_root_resolved, TRUE);
+  fake_home_apply_to_system_info (fake_home, info);
+  issues = srt_system_info_get_steam_issues (info);
+  g_assert_cmpint (issues, ==, SRT_STEAM_ISSUES_NONE);
+
+  /* Set STEAM_COMPAT_CLIENT_INSTALL_PATH to an unexpected value */
+  fake_home->env = g_environ_setenv (fake_home->env,
+                                     "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+                                     dot_steam_bin32, TRUE);
+  fake_home_apply_to_system_info (fake_home, info);
+  issues = srt_system_info_get_steam_issues (info);
+  g_assert_cmpint (issues, ==,
+                   SRT_STEAM_ISSUES_UNEXPECTED_STEAM_COMPAT_CLIENT_INSTALL_PATH);
+
+  fake_home_clean_up (fake_home);
+}
+
 /* Recreate the conditions that triggered the Debian bug 916303.
  * Steam was installed into "~/.steam", which meant that the "steam/"
  * directory inside the Steam installation collided with the "~/.steam/steam"
@@ -3707,6 +3758,8 @@ main (int argc,
               setup, runtime_unexpected_location, teardown);
   g_test_add ("/system-info/steam_symlink", Fixture, NULL,
               setup, steam_symlink, teardown);
+  g_test_add ("/system-info/steam_compat_environment_variable", Fixture, NULL,
+              setup, steam_compat_environment_variable, teardown);
   g_test_add ("/system-info/debian_bug_916303", Fixture, NULL,
               setup, debian_bug_916303, teardown);
   g_test_add ("/system-info/testing_beta_client", Fixture, NULL,

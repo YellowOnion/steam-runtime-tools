@@ -206,35 +206,26 @@ check_bwrap (const char *tools_dir,
   return NULL;
 }
 
-static gchar *
-check_flatpak_spawn (void)
+static gboolean
+check_launch_on_host (const char *launch_executable,
+                      GError **error)
 {
-  g_autoptr(GError) local_error = NULL;
-  GError **error = &local_error;
-  g_autofree gchar *spawn_exec = NULL;
   g_autofree gchar *child_stdout = NULL;
   g_autofree gchar *child_stderr = NULL;
   int wait_status;
-  const char *spawn_test_argv[] =
+  const char *test_argv[] =
   {
     NULL,
-    "--host",
-    "--directory=/",
+    "--bus-name=org.freedesktop.Flatpak",
+    "--",
     "true",
     NULL
   };
 
-  /* All known Flatpak runtimes have flatpak-spawn in the PATH */
-  spawn_exec = g_find_program_in_path ("flatpak-spawn");
-
-  if (spawn_exec == NULL
-      || !g_file_test (spawn_exec, G_FILE_TEST_IS_EXECUTABLE))
-    return NULL;
-
-  spawn_test_argv[0] = spawn_exec;
+  test_argv[0] = launch_executable;
 
   if (!g_spawn_sync (NULL,  /* cwd */
-                     (gchar **) spawn_test_argv,
+                     (gchar **) test_argv,
                      NULL,  /* environ */
                      G_SPAWN_DEFAULT,
                      NULL, NULL,    /* child setup */
@@ -243,25 +234,24 @@ check_flatpak_spawn (void)
                      &wait_status,
                      error))
     {
-      g_warning ("Cannot run flatpak-spawn: %s", local_error->message);
-      g_clear_error (&local_error);
+      return FALSE;
     }
-  else if (wait_status != 0)
+
+  if (wait_status != 0)
     {
-      g_warning ("Cannot run flatpak-spawn: wait status %d", wait_status);
+      g_warning ("Cannot run commands on host system: wait status %d",
+                 wait_status);
 
       if (child_stdout != NULL && child_stdout[0] != '\0')
         g_warning ("Output:\n%s", child_stdout);
 
       if (child_stderr != NULL && child_stderr[0] != '\0')
         g_warning ("Diagnostic output:\n%s", child_stderr);
-    }
-  else
-    {
-      return g_steal_pointer (&spawn_exec);
+
+      return glnx_throw (error, "Unable to run a command on the host system");
     }
 
-  return NULL;
+  return TRUE;
 }
 
 /*
@@ -1231,7 +1221,7 @@ main (int argc,
   g_autoptr(FlatpakBwrap) adverb_args = NULL;
   g_autofree gchar *adverb_in_container = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
-  g_autofree gchar *spawn_executable = NULL;
+  g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
@@ -1625,10 +1615,16 @@ main (int argc,
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
     {
-      g_debug ("Checking for flatpak-spawn...");
-      spawn_executable = check_flatpak_spawn ();
+      launch_executable = g_build_filename (tools_dir,
+                                            "pressure-vessel-launch",
+                                            NULL);
       /* Assume "bwrap" to exist in the host system and to be in its PATH */
       bwrap_executable = g_strdup ("bwrap");
+
+      /* If we can't launch a command on the host, just fail.
+       * We don't implement --host-fallback here. */
+      if (!check_launch_on_host (launch_executable, error))
+        goto out;
     }
   else
     {
@@ -1638,27 +1634,23 @@ main (int argc,
 
   if (opt_test)
     {
-      if ((is_flatpak_env && spawn_executable == NULL)
-          || bwrap_executable == NULL)
+      if (bwrap_executable == NULL)
         {
           ret = 1;
           goto out;
         }
       else
         {
-          if (spawn_executable != NULL)
-            g_debug ("OK (%s) (%s)", spawn_executable, bwrap_executable);
-          else
-            g_debug ("OK (%s)", bwrap_executable);
+          g_debug ("OK (%s)", bwrap_executable);
           ret = 0;
           goto out;
         }
     }
 
-  if ((is_flatpak_env && spawn_executable == NULL)
-      || bwrap_executable == NULL)
+  if (bwrap_executable == NULL)
     {
-      /* TODO in a Flatpak environment, host is not what we expect it to be */
+      g_assert (!is_flatpak_env);
+
       if (opt_host_fallback)
         {
           g_message ("Falling back to executing wrapped command directly");
@@ -2090,8 +2082,9 @@ main (int argc,
       g_hash_table_add (extra_locked_vars_to_inherit, g_strdup ("XDG_RUNTIME_DIR"));
 
       /* The bwrap envp will be completely ignored when calling
-       * `flatpak-spawn --host`. For this reason we convert them to
-       * `--setenv`. */
+       * pv-launch. For this reason we convert them to `--setenv`.
+       * (TODO: Now that we're using pv-launch instead of flatpak-spawn,
+       * we could use --pass-env) */
       for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
         {
           g_auto(GStrv) split = g_strsplit (bwrap->envp[i], "=", 2);
@@ -2325,24 +2318,26 @@ main (int argc,
   if (is_flatpak_env)
     {
       /* Just use the envp from @bwrap */
-      g_autoptr(FlatpakBwrap) flatpak_spawn = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      flatpak_bwrap_add_arg (flatpak_spawn, spawn_executable);
-      flatpak_bwrap_add_arg (flatpak_spawn, "--host");
+      g_autoptr(FlatpakBwrap) launch_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      flatpak_bwrap_add_arg (launch_on_host, launch_executable);
+      flatpak_bwrap_add_arg (launch_on_host, "--bus-name=org.freedesktop.Flatpak");
 
       for (i = 0; i < bwrap->fds->len; i++)
         {
           g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
                                                      g_array_index (bwrap->fds, int, i));
-          flatpak_bwrap_add_arg (flatpak_spawn, fd_str);
+          flatpak_bwrap_add_arg (launch_on_host, fd_str);
         }
-      /* Change the current working directory where flatpak-spawn will run.
+      /* Change the current working directory where pv-launch will run bwrap.
        * Bwrap will then set its directory by itself. For this reason here
        * we just need a directory that it's known to exist. */
-      flatpak_bwrap_add_arg (flatpak_spawn, "--directory=/");
+      flatpak_bwrap_add_arg (launch_on_host, "--directory=/");
 
-      flatpak_bwrap_append_bwrap (flatpak_spawn, bwrap);
+      flatpak_bwrap_add_arg (launch_on_host, "--");
+
+      flatpak_bwrap_append_bwrap (launch_on_host, bwrap);
       g_clear_pointer (&bwrap, flatpak_bwrap_free);
-      bwrap = g_steal_pointer (&flatpak_spawn);
+      bwrap = g_steal_pointer (&launch_on_host);
     }
 
   if (opt_verbose)

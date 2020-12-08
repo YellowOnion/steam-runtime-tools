@@ -28,6 +28,7 @@
 
 #include <locale.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -1897,6 +1898,12 @@ main (int argc,
            * support is it coming from the host. */
           g_assert (g_str_has_prefix (preload, "host:"));
           preload = preload + 5;
+
+          if (strstr (preload, "gtk3-nocsd") != NULL)
+            {
+              g_warning ("Disabling gtk3-nocsd LD_PRELOAD: it is known to cause crashes.");
+              continue;
+            }
 
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {

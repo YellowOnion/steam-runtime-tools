@@ -391,6 +391,7 @@ _srt_steam_check (const GStrv my_environ,
   const char *commandline = NULL;
   const char *executable = NULL;
   const char *app_id = NULL;
+  const char *steam_compat_client_install_path = NULL;
   gboolean in_flatpak = FALSE;
   GStrv env = NULL;
   GError *error = NULL;
@@ -690,6 +691,24 @@ _srt_steam_check (const GStrv my_environ,
           g_debug ("Unexpectedly \"STEAMSCRIPT\" environment variable and the default Steam app "
                    "executable point to different paths: \"%s\" and \"%s\"", steam_script, executable);
           issues |= SRT_STEAM_ISSUES_UNEXPECTED_STEAM_URI_HANDLER;
+        }
+    }
+
+  steam_compat_client_install_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
+  /* Is not an issue if STEAM_COMPAT_CLIENT_INSTALL_PATH is missing */
+  if (steam_compat_client_install_path != NULL)
+    {
+      /* We expect STEAM_COMPAT_CLIENT_INSTALL_PATH to be equivalent to
+       * "~/.steam/root" */
+      g_autofree gchar *steam_compat_resolved = realpath (steam_compat_client_install_path, NULL);
+      g_autofree gchar *dot_steam_root_resolved = realpath (dot_steam_root, NULL);
+      if (g_strcmp0 (steam_compat_resolved, dot_steam_root_resolved) != 0)
+        {
+          g_debug ("\"STEAM_COMPAT_CLIENT_INSTALL_PATH\" points to \"%s\", "
+                   "that is different from the expected \"%s\" pointed by "
+                   "\"~/.steam/root\"", steam_compat_resolved,
+                   dot_steam_root_resolved);
+          issues |= SRT_STEAM_ISSUES_UNEXPECTED_STEAM_COMPAT_CLIENT_INSTALL_PATH;
         }
     }
 

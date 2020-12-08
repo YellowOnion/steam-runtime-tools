@@ -60,9 +60,7 @@ as a subprocess of **pressure-vessel-launcher**.
     owned by the **flatpak-session-helper** per-user service, and the
     *COMMAND* is launched on the host system, similar to the
     **--host** option of **flatpak-spawn**(1).
-    The **--terminate** option is not allowed in this mode, and most
-    options that would unset environment variables, such as **--unset-env**,
-    are ignored with a warning (but **--clear-env** is still possible).
+    The **--terminate** option is not allowed in this mode.
 
     As another special case, if the *NAME* is
     **org.freedesktop.portal.Flatpak**, then it is assumed to be
@@ -72,8 +70,7 @@ as a subprocess of **pressure-vessel-launcher**.
     Options that alter how the sub-sandbox is created, such as
     **--sandbox-flag**, are not currently supported.
     As with **org.freedesktop.Flatpak**, the
-    **--terminate** option is not allowed in this mode, and most
-    options that would unset environment variables are ignored with a warning.
+    **--terminate** option is not allowed in this mode.
 
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment

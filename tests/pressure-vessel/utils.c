@@ -183,6 +183,46 @@ test_envp_cmp (Fixture *f,
 }
 
 static void
+test_get_path_after (Fixture *f,
+                     gconstpointer context)
+{
+  static const struct
+  {
+    const char *str;
+    const char *prefix;
+    const char *expected;
+  } tests[] =
+  {
+    { "/run/host/usr", "/run/host", "usr" },
+    { "/run/host/usr", "/run/host/", "usr" },
+    { "/run/host", "/run/host", "" },
+    { "////run///host////usr", "//run//host", "usr" },
+    { "////run///host////usr", "//run//host////", "usr" },
+    { "/run/hostage", "/run/host", NULL },
+    /* Any number of leading slashes is ignored, even zero */
+    { "foo/bar", "/foo", "bar" },
+    { "/foo/bar", "foo", "bar" },
+  };
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    {
+      const char *str = tests[i].str;
+      const char *prefix = tests[i].prefix;
+      const char *expected = tests[i].expected;
+
+      if (expected == NULL)
+        g_test_message ("%s should not have path prefix %s",
+                        str, prefix);
+      else
+        g_test_message ("%s should have path prefix %s followed by %s",
+                        str, prefix, expected);
+
+      g_assert_cmpstr (pv_get_path_after (str, prefix), ==, expected);
+    }
+}
+
+static void
 test_search_path_append (Fixture *f,
                          gconstpointer context)
 {
@@ -223,6 +263,8 @@ main (int argc,
   g_test_add ("/capture-output", Fixture, NULL,
               setup, test_capture_output, teardown);
   g_test_add ("/envp-cmp", Fixture, NULL, setup, test_envp_cmp, teardown);
+  g_test_add ("/get-path-after", Fixture, NULL,
+              setup, test_get_path_after, teardown);
   g_test_add ("/search-path-append", Fixture, NULL,
               setup, test_search_path_append, teardown);
 

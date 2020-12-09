@@ -795,6 +795,50 @@ pv_terminate_all_child_processes (GTimeSpan wait_period,
   return TRUE;
 }
 
+/*
+ * @str: A path
+ * @prefix: A possible prefix
+ *
+ * The same as flatpak_has_path_prefix(), but instead of a boolean,
+ * return the part of @str after @prefix (non-%NULL but possibly empty)
+ * if @str has prefix @prefix, or %NULL if it does not.
+ *
+ * Returns: (nullable) (transfer none): the part of @str after @prefix,
+ *  or %NULL if @str is not below @prefix
+ */
+const char *
+pv_get_path_after (const char *str,
+                   const char *prefix)
+{
+  while (TRUE)
+    {
+      /* Skip consecutive slashes to reach next path
+         element */
+      while (*str == '/')
+        str++;
+      while (*prefix == '/')
+        prefix++;
+
+      /* No more prefix path elements? Done! */
+      if (*prefix == 0)
+        return str;
+
+      /* Compare path element */
+      while (*prefix != 0 && *prefix != '/')
+        {
+          if (*str != *prefix)
+            return NULL;
+          str++;
+          prefix++;
+        }
+
+      /* Matched prefix path element,
+         must be entire str path element */
+      if (*str != '/' && *str != 0)
+        return NULL;
+    }
+}
+
 /**
  * pv_current_namespace_path_to_host_path:
  * @current_env_path: a path in the current environment
@@ -807,40 +851,32 @@ gchar *
 pv_current_namespace_path_to_host_path (const gchar *current_env_path)
 {
   gchar *path_on_host = NULL;
-  g_autofree gchar *home_env_guarded = NULL;
-  const gchar *home_env = g_getenv ("HOME");
 
   g_return_val_if_fail (g_path_is_absolute (current_env_path),
                         g_strdup (current_env_path));
-
-  if (home_env == NULL)
-    home_env = g_get_home_dir ();
-
-  if (home_env != NULL)
-    {
-      /* Avoid the edge case where e.g. current_env_path is
-       * '/home/melanie/Games' and home_env is '/home/me' */
-      if (g_str_has_suffix (home_env, "/"))
-        home_env_guarded = g_strdup (home_env);
-      else
-        home_env_guarded = g_strdup_printf ("%s/", home_env);
-    }
 
   if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
     {
       struct stat via_current_env_stat;
       struct stat via_persist_stat;
+      const gchar *home = g_getenv ("HOME");
+      const gchar *after = NULL;
+
+      if (home == NULL)
+        home = g_get_home_dir ();
+
+      if (home != NULL)
+        after = pv_get_path_after (current_env_path, home);
 
       /* If we are inside a Flatpak container, usually, the home
        * folder is '${HOME}/.var/app/${FLATPAK_ID}' on the host system */
-      if (home_env != NULL
-          && g_str_has_prefix (current_env_path, home_env_guarded))
+      if (after != NULL)
         {
-          path_on_host = g_build_filename (home_env,
+          path_on_host = g_build_filename (home,
                                            ".var",
                                            "app",
                                            g_getenv ("FLATPAK_ID"),
-                                           current_env_path + strlen (home_env),
+                                           after,
                                            NULL);
 
           if (lstat (path_on_host, &via_persist_stat) < 0)
@@ -860,12 +896,12 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
             }
         }
 
+      after = pv_get_path_after (current_env_path, "/run/host");
+
       /* In a Flatpak container, usually, '/run/host' is the root of the
        * host system */
-      if (g_str_has_prefix (current_env_path, "/run/host/"))
-        path_on_host = g_strdup (current_env_path + strlen ("/run/host"));
-      else if (g_strcmp0 (current_env_path, "/run/host") == 0)
-        path_on_host = g_strdup ("/");
+      if (after != NULL && path_on_host == NULL)
+        path_on_host = g_build_filename ("/", after, NULL);
     }
   /* Either we are not in a Flatpak container or it's not obvious how the
    * container to host translation should happen. Just keep the same path. */

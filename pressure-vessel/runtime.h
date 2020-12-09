@@ -27,6 +27,7 @@
 #include "libglnx/libglnx.h"
 
 #include "flatpak-bwrap-private.h"
+#include "flatpak-exports-private.h"
 #include "flatpak-utils-base-private.h"
 
 /**
@@ -82,6 +83,7 @@ PvRuntime *pv_runtime_new (const char *source_files,
 gchar *pv_runtime_get_adverb (PvRuntime *self,
                               FlatpakBwrap *adverb_args);
 gboolean pv_runtime_bind (PvRuntime *self,
+                          FlatpakExports *exports,
                           FlatpakBwrap *bwrap,
                           GHashTable *extra_locked_vars_to_unset,
                           GHashTable *extra_locked_vars_to_inherit,

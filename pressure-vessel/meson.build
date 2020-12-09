@@ -191,6 +191,8 @@ executable(
   sources : [
     'bwrap.c',
     'bwrap.h',
+    'exports.c',
+    'exports.h',
     'flatpak-common-types-private.h',
     'flatpak-context.c',
     'flatpak-context-private.h',

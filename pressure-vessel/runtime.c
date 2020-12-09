@@ -36,6 +36,7 @@
 #include "bwrap-lock.h"
 #include "elf-utils.h"
 #include "enumtypes.h"
+#include "exports.h"
 #include "flatpak-run-private.h"
 #include "tree-copy.h"
 #include "utils.h"
@@ -1626,6 +1627,7 @@ bind_icd (PvRuntime *self,
 
 static gboolean
 bind_runtime (PvRuntime *self,
+              FlatpakExports *exports,
               FlatpakBwrap *bwrap,
               GHashTable *extra_locked_vars_to_unset,
               GHashTable *extra_locked_vars_to_inherit,
@@ -1816,6 +1818,8 @@ bind_runtime (PvRuntime *self,
                                                    extra_locked_vars_to_inherit, error))
         return FALSE;
     }
+
+  pv_export_symlink_targets (exports, self->overrides);
 
   if (self->mutable_sysroot == NULL)
     {
@@ -3615,6 +3619,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
 gboolean
 pv_runtime_bind (PvRuntime *self,
+                 FlatpakExports *exports,
                  FlatpakBwrap *bwrap,
                  GHashTable *extra_locked_vars_to_unset,
                  GHashTable *extra_locked_vars_to_inherit,
@@ -3623,13 +3628,18 @@ pv_runtime_bind (PvRuntime *self,
   g_autofree gchar *pressure_vessel_prefix = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (extra_locked_vars_to_unset != NULL, FALSE);
   g_return_val_if_fail (extra_locked_vars_to_inherit != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!bind_runtime (self, bwrap, extra_locked_vars_to_unset,
-                     extra_locked_vars_to_inherit, error))
+  if (!bind_runtime (self,
+                     exports,
+                     bwrap,
+                     extra_locked_vars_to_unset,
+                     extra_locked_vars_to_inherit,
+                     error))
     return FALSE;
 
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);

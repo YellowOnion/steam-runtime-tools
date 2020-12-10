@@ -2948,6 +2948,59 @@ pv_runtime_collect_libc_family (PvRuntime *self,
   return TRUE;
 }
 
+static void
+pv_runtime_collect_libdrm_data (PvRuntime *self,
+                                RuntimeArchitecture *arch,
+                                const char *libdrm,
+                                const char *provider_in_container_namespace_guarded,
+                                GHashTable *libdrm_data_in_provider)
+{
+  g_autofree char *target = NULL;
+  target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
+
+  if (target != NULL)
+    {
+      g_autofree gchar *dir = NULL;
+      g_autofree gchar *lib_multiarch = NULL;
+      g_autofree gchar *libdrm_dir_in_provider = NULL;
+
+      dir = g_path_get_dirname (target);
+
+      lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
+      if (g_str_has_suffix (dir, lib_multiarch))
+        dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
+      else if (g_str_has_suffix (dir, "/lib64"))
+        dir[strlen (dir) - strlen ("/lib64")] = '\0';
+      else if (g_str_has_suffix (dir, "/lib32"))
+        dir[strlen (dir) - strlen ("/lib32")] = '\0';
+      else if (g_str_has_suffix (dir, "/lib"))
+        dir[strlen (dir) - strlen ("/lib")] = '\0';
+
+      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+        memmove (dir,
+                 dir + strlen (self->provider_in_container_namespace),
+                 strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
+
+      libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
+
+      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                     -1,
+                                     libdrm_dir_in_provider,
+                                     G_FILE_TEST_IS_DIR))
+        {
+          g_hash_table_add (libdrm_data_in_provider,
+                            g_steal_pointer (&libdrm_dir_in_provider));
+        }
+      else
+        {
+          g_debug ("We were expecting to have the libdrm directory "
+                   "in the provider to be located in "
+                   "\"%s/share/libdrm\", but instead it is missing",
+                   dir);
+        }
+    }
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -3301,50 +3354,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * the absolute path of libdrm.so.2 */
           if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autofree char *target = NULL;
-              target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
-
-              if (target != NULL)
-                {
-                  g_autofree gchar *dir = NULL;
-                  g_autofree gchar *lib_multiarch = NULL;
-                  g_autofree gchar *libdrm_dir_in_provider = NULL;
-
-                  dir = g_path_get_dirname (target);
-
-                  lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
-                  if (g_str_has_suffix (dir, lib_multiarch))
-                    dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
-                  else if (g_str_has_suffix (dir, "/lib64"))
-                    dir[strlen (dir) - strlen ("/lib64")] = '\0';
-                  else if (g_str_has_suffix (dir, "/lib32"))
-                    dir[strlen (dir) - strlen ("/lib32")] = '\0';
-                  else if (g_str_has_suffix (dir, "/lib"))
-                    dir[strlen (dir) - strlen ("/lib")] = '\0';
-
-                  if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-                    memmove (dir,
-                             dir + strlen (self->provider_in_container_namespace),
-                             strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
-
-                  libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
-
-                  if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                 -1,
-                                                 libdrm_dir_in_provider,
-                                                 G_FILE_TEST_IS_DIR))
-                    {
-                      g_hash_table_add (libdrm_data_in_provider,
-                                        g_steal_pointer (&libdrm_dir_in_provider));
-                    }
-                  else
-                    {
-                      g_debug ("We were expecting to have the libdrm directory "
-                               "in the provider to be located in "
-                               "\"%s/share/libdrm\", but instead it is missing",
-                               dir);
-                    }
-                }
+              pv_runtime_collect_libdrm_data (self, arch, libdrm,
+                                              provider_in_container_namespace_guarded,
+                                              libdrm_data_in_provider);
             }
           else
             {

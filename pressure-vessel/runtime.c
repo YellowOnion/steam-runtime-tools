@@ -2769,6 +2769,72 @@ pv_runtime_get_ld_so (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_collect_graphics_libraries (PvRuntime *self,
+                                       RuntimeArchitecture *arch,
+                                       GError **error)
+{
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          "--dest", arch->libdir_in_current_namespace,
+                          /* Mesa GLX, etc. */
+                          "gl:",
+                          /* Vulkan */
+                          "if-exists:if-same-abi:soname:libvulkan.so.1",
+                          /* VDPAU */
+                          "if-exists:if-same-abi:soname:libvdpau.so.1",
+                          /* VA-API */
+                          "if-exists:if-same-abi:soname:libva.so.1",
+                          "if-exists:if-same-abi:soname:libva-drm.so.1",
+                          "if-exists:if-same-abi:soname:libva-glx.so.1",
+                          "if-exists:if-same-abi:soname:libva-x11.so.1",
+                          "if-exists:if-same-abi:soname:libva.so.2",
+                          "if-exists:if-same-abi:soname:libva-drm.so.2",
+                          "if-exists:if-same-abi:soname:libva-glx.so.2",
+                          "if-exists:if-same-abi:soname:libva-x11.so.2",
+                          /* NVIDIA proprietary stack */
+                          "if-exists:even-if-older:soname-match:libEGL.so.*",
+                          "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGL.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv1_CM.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv2.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGLX.so.*",
+                          "if-exists:even-if-older:soname-match:libGLX_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGLX_indirect.so.*",
+                          "if-exists:even-if-older:soname-match:libGLdispatch.so.*",
+                          "if-exists:even-if-older:soname-match:libOpenGL.so.*",
+                          "if-exists:even-if-older:soname-match:libcuda.so.*",
+                          "if-exists:even-if-older:soname-match:libglx.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-cbl.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-cfg.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-compiler.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-encode.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-fbc.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-glcore.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-glsi.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-ifr.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-ml.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-opencl.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-tls.so.*",
+                          "if-exists:even-if-older:soname-match:libOpenCL.so.*",
+                          "if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*",
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  return pv_bwrap_run_sync (temp_bwrap, NULL, error);
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         GHashTable *extra_locked_vars_to_unset,
@@ -2964,7 +3030,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       if (runtime_architecture_init (arch, self))
         {
           g_autoptr(GPtrArray) dirs = NULL;
-          g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
           g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_in_current_namespace,
                                                                       "dri", NULL);
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
@@ -2998,66 +3063,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_debug ("Collecting graphics drivers from provider system...");
 
-          temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  "--dest", arch->libdir_in_current_namespace,
-                                  /* Mesa GLX, etc. */
-                                  "gl:",
-                                  /* Vulkan */
-                                  "if-exists:if-same-abi:soname:libvulkan.so.1",
-                                  /* VDPAU */
-                                  "if-exists:if-same-abi:soname:libvdpau.so.1",
-                                  /* VA-API */
-                                  "if-exists:if-same-abi:soname:libva.so.1",
-                                  "if-exists:if-same-abi:soname:libva-drm.so.1",
-                                  "if-exists:if-same-abi:soname:libva-glx.so.1",
-                                  "if-exists:if-same-abi:soname:libva-x11.so.1",
-                                  "if-exists:if-same-abi:soname:libva.so.2",
-                                  "if-exists:if-same-abi:soname:libva-drm.so.2",
-                                  "if-exists:if-same-abi:soname:libva-glx.so.2",
-                                  "if-exists:if-same-abi:soname:libva-x11.so.2",
-                                  /* NVIDIA proprietary stack */
-                                  "if-exists:even-if-older:soname-match:libEGL.so.*",
-                                  "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGL.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv1_CM.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv2.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLX.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLX_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLX_indirect.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLdispatch.so.*",
-                                  "if-exists:even-if-older:soname-match:libOpenGL.so.*",
-                                  "if-exists:even-if-older:soname-match:libcuda.so.*",
-                                  "if-exists:even-if-older:soname-match:libglx.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-cbl.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-cfg.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-compiler.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-encode.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-fbc.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-glcore.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-glsi.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-ifr.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-ml.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-opencl.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-tls.so.*",
-                                  "if-exists:even-if-older:soname-match:libOpenCL.so.*",
-                                  "if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*",
-                                  NULL);
-          flatpak_bwrap_finish (temp_bwrap);
-
-          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+          if (!pv_runtime_collect_graphics_libraries (self, arch, error))
             return FALSE;
-
-          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
           g_debug ("Collecting %s EGL drivers from host system...",
                    arch->details->tuple);
@@ -3159,6 +3166,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
+              g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
               g_autofree char *libc_target = NULL;
 
               if (!pv_runtime_take_ld_so_from_provider (self, arch,
@@ -3167,7 +3175,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
 
               /* Collect miscellaneous libraries that libc might dlopen. */
-              g_assert (temp_bwrap == NULL);
               temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
               flatpak_bwrap_add_args (temp_bwrap,
                                       "--dest", arch->libdir_in_current_namespace,

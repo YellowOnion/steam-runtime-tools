@@ -258,6 +258,11 @@ else
 fi
 
 terminate_container () {
+    if ! [ -S "$rendezvous/socket" ]; then
+        # nothing to do
+        return
+    fi
+
     "$pressure_vessel/bin/pressure-vessel-adverb" \
         --create \
         --wait \

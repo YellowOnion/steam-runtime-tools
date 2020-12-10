@@ -2675,6 +2675,99 @@ collect_vulkan_layers (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * @self: the runtime
+ * @arch: An architecture
+ * @ld_so_in_runtime: (out) (nullable) (not optional): Used to return
+ *  the path to the architecture's ld.so in the runtime, or to
+ *  return %NULL if there is none.
+ * @error: Used to raise an error on failure
+ *
+ * Get the path to the ld.so in the runtime, which is either absolute
+ * or relative to the sysroot.
+ *
+ * Returns: %TRUE on success (possibly yielding %NULL via @ld_so_in_runtime)
+ */
+static gboolean
+pv_runtime_get_ld_so (PvRuntime *self,
+                      RuntimeArchitecture *arch,
+                      gchar **ld_so_in_runtime,
+                      GError **error)
+{
+  if (self->mutable_sysroot != NULL)
+    {
+      glnx_autofd int fd = -1;
+
+      fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                    arch->ld_so,
+                                    SRT_RESOLVE_FLAGS_NONE,
+                                    ld_so_in_runtime,
+                                    NULL);
+
+      /* Ignore fd, and just let it close: we're resolving
+       * the path for its side-effect of populating
+       * ld_so_in_runtime. */
+    }
+  else
+    {
+      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+      g_autofree gchar *etc = NULL;
+      g_autofree gchar *provider_etc = NULL;
+      g_autofree gchar *provider_etc_dest = NULL;
+
+      /* Do it the hard way, by asking a process running in the
+       * container (or at least a container resembling the one we
+       * are going to use) to resolve it for us */
+      temp_bwrap = flatpak_bwrap_new (NULL);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              self->bubblewrap,
+                              NULL);
+
+      if (!pv_bwrap_bind_usr (temp_bwrap,
+                              self->runtime_files_on_host,
+                              self->runtime_files,
+                              "/",
+                              error))
+        return FALSE;
+
+      etc = g_build_filename (self->runtime_files_on_host,
+                              "etc", NULL);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "--ro-bind",
+                              etc,
+                              "/etc",
+                              NULL);
+
+      if (!pv_bwrap_bind_usr (temp_bwrap,
+                              self->provider_in_host_namespace,
+                              self->provider_in_current_namespace,
+                              self->provider_in_container_namespace,
+                              error))
+        return FALSE;
+
+      provider_etc = g_build_filename (self->provider_in_host_namespace,
+                                       "etc", NULL);
+      provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
+                                            "etc", NULL);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "--ro-bind",
+                              provider_etc,
+                              provider_etc_dest,
+                              NULL);
+
+      flatpak_bwrap_set_env (temp_bwrap, "PATH", "/usr/bin:/bin", TRUE);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "readlink", "-e", arch->ld_so,
+                              NULL);
+      flatpak_bwrap_finish (temp_bwrap);
+
+      *ld_so_in_runtime = pv_capture_output (
+          (const char * const *) temp_bwrap->argv->pdata, NULL);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -2883,77 +2976,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
-          if (self->mutable_sysroot != NULL)
-            {
-              glnx_autofd int fd = -1;
-
-              fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                            arch->ld_so,
-                                            SRT_RESOLVE_FLAGS_NONE,
-                                            &ld_so_in_runtime,
-                                            NULL);
-
-              /* Ignore fd, and just let it close: we're resolving
-               * the path for its side-effect of populating
-               * ld_so_in_runtime. */
-            }
-          else
-            {
-              g_autofree gchar *etc = NULL;
-              g_autofree gchar *provider_etc = NULL;
-              g_autofree gchar *provider_etc_dest = NULL;
-
-              /* Do it the hard way, by asking a process running in the
-               * container (or at least a container resembling the one we
-               * are going to use) to resolve it for us */
-              temp_bwrap = flatpak_bwrap_new (NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      self->bubblewrap,
-                                      NULL);
-
-              if (!pv_bwrap_bind_usr (temp_bwrap,
-                                      self->runtime_files_on_host,
-                                      self->runtime_files,
-                                      "/",
-                                      error))
-                return FALSE;
-
-              etc = g_build_filename (self->runtime_files_on_host,
-                                      "etc", NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "--ro-bind",
-                                      etc,
-                                      "/etc",
-                                      NULL);
-
-              if (!pv_bwrap_bind_usr (temp_bwrap,
-                                      self->provider_in_host_namespace,
-                                      self->provider_in_current_namespace,
-                                      self->provider_in_container_namespace,
-                                      error))
-                return FALSE;
-
-              provider_etc = g_build_filename (self->provider_in_host_namespace,
-                                               "etc", NULL);
-              provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
-                                                    "etc", NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "--ro-bind",
-                                      provider_etc,
-                                      provider_etc_dest,
-                                      NULL);
-
-              flatpak_bwrap_set_env (temp_bwrap, "PATH", "/usr/bin:/bin", TRUE);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "readlink", "-e", arch->ld_so,
-                                      NULL);
-              flatpak_bwrap_finish (temp_bwrap);
-
-              ld_so_in_runtime = pv_capture_output (
-                  (const char * const *) temp_bwrap->argv->pdata, NULL);
-
-              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-            }
+          if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
+            return FALSE;
 
           if (ld_so_in_runtime == NULL)
             {

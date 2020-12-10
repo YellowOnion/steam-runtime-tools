@@ -1781,8 +1781,12 @@ main (int argc,
       if (runtime == NULL)
         goto out;
 
-      if (!pv_runtime_bind (runtime, bwrap, extra_locked_vars_to_unset,
-                            extra_locked_vars_to_inherit, error))
+      if (!pv_runtime_bind (runtime,
+                            exports,
+                            bwrap,
+                            extra_locked_vars_to_unset,
+                            extra_locked_vars_to_inherit,
+                            error))
         goto out;
     }
   else if (is_flatpak_env)

@@ -306,6 +306,7 @@ env \
     -u SteamGameId \
     -u SteamOverlayGameId \
 "${here}/_start-container-in-background" \
+    ${is_main:+--force} \
     --session="$rendezvous" \
     --suite="$suite" \
     -- \

@@ -258,6 +258,11 @@ else
 fi
 
 terminate_container () {
+    if ! [ -S "$rendezvous/socket" ]; then
+        # nothing to do
+        return
+    fi
+
     "$pressure_vessel/bin/pressure-vessel-adverb" \
         --create \
         --wait \
@@ -306,6 +311,7 @@ env \
     -u SteamGameId \
     -u SteamOverlayGameId \
 "${here}/_start-container-in-background" \
+    ${is_main:+--force} \
     --session="$rendezvous" \
     --suite="$suite" \
     -- \

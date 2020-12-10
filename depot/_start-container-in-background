@@ -9,6 +9,7 @@ me="${me##*/}"
 # Don't rely on it.
 
 deploy=
+force=
 rendezvous=
 suite=scout
 verbose=
@@ -44,6 +45,7 @@ usage () {
     echo
     echo "Options"
     echo "--deploy=DIR      Deploy to this directory [default=SUITE]."
+    echo "--force           Try even if an earlier attempt failed."
     echo "--session=PATH    Directory representing a session."
     echo "--suite=SUITE     Run in this runtime [default=scout]."
     echo "--verbose         Be more verbose."
@@ -53,6 +55,7 @@ usage () {
 
 getopt_temp="help"
 getopt_temp="${getopt_temp},deploy:"
+getopt_temp="${getopt_temp},force"
 getopt_temp="${getopt_temp},session:"
 getopt_temp="${getopt_temp},suite:"
 getopt_temp="${getopt_temp},verbose"
@@ -71,6 +74,11 @@ while [ "$#" -gt 0 ]; do
         (--deploy)
             deploy="$2"
             shift 2
+            ;;
+
+        (--force)
+            force=yes
+            shift
             ;;
 
         (--session)
@@ -122,6 +130,12 @@ if [ -S "$rendezvous/socket" ]; then
     exit 0
 fi
 
+if [ -z "$force" ] && [ -e "$rendezvous/failed" ]; then
+    log "Starting session already failed, not trying again."
+    log "Remove $rendezvous/failed to retry."
+    exit 70     # EX_SOFTWARE
+fi
+
 rm -f "$rendezvous/fifo"
 mkfifo "$rendezvous/fifo"
 
@@ -156,6 +170,7 @@ socket=$(
 )
 
 if [ -z "$socket" ] || ! [ -S "$socket" ]; then
+    : > "$rendezvous/failed"
     log "Error starting pressure-vessel container"
     if [ -z "${PRESSURE_VESSEL_VERBOSE-}" ]; then
         log "Try environment variable PRESSURE_VESSEL_VERBOSE=1 for more details"

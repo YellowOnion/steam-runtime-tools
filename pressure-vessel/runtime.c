@@ -3002,6 +3002,54 @@ pv_runtime_collect_libdrm_data (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_finish_libdrm_data (PvRuntime *self,
+                               FlatpakBwrap *bwrap,
+                               gboolean all_libdrm_from_provider,
+                               GHashTable *libdrm_data_in_provider,
+                               GError **error)
+{
+  g_autofree gchar *best_libdrm_data_in_provider = NULL;
+
+  if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
+    {
+      /* See the explanation in the similar
+       * "any_libc_from_provider && !all_libc_from_provider" case, above */
+      g_warning ("Using libdrm.so.2 from provider system for some but not all "
+                 "architectures! Will take /usr/share/libdrm from provider.");
+    }
+
+  if (g_hash_table_size (libdrm_data_in_provider) == 1)
+    {
+      best_libdrm_data_in_provider = g_strdup (
+        pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
+    }
+  else if (g_hash_table_size (libdrm_data_in_provider) > 1)
+    {
+      g_warning ("Found more than one possible libdrm data directory from provider");
+      /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
+       * the first directory in the hash table */
+      if (g_hash_table_contains (libdrm_data_in_provider, "/usr/share/libdrm"))
+        best_libdrm_data_in_provider = g_strdup ("/usr/share/libdrm");
+      else
+        best_libdrm_data_in_provider = g_strdup (
+          pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
+    }
+
+  if (best_libdrm_data_in_provider != NULL)
+    {
+      return pv_runtime_take_from_provider (self, bwrap,
+                                            best_libdrm_data_in_provider,
+                                            "/usr/share/libdrm",
+                                            TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                            error);
+    }
+  else
+    {
+      return TRUE;
+    }
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         GHashTable *extra_locked_vars_to_unset,
@@ -3040,7 +3088,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                      g_free, NULL);
-  g_autofree gchar *best_libdrm_data_in_provider = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
   g_autofree gchar *provider_in_container_namespace_guarded = NULL;
@@ -3531,40 +3578,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_debug ("Using included gconv modules from container");
     }
 
-  if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
-    {
-      /* See the explanation in the similar
-       * "any_libc_from_provider && !all_libc_from_provider" case, above */
-      g_warning ("Using libdrm.so.2 from provider system for some but not all "
-                 "architectures! Will take /usr/share/libdrm from provider.");
-    }
-
-  if (g_hash_table_size (libdrm_data_in_provider) == 1)
-    {
-      best_libdrm_data_in_provider = g_strdup (
-        pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
-    }
-  else if (g_hash_table_size (libdrm_data_in_provider) > 1)
-    {
-      g_warning ("Found more than one possible libdrm data directory from provider");
-      /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
-       * the first directory in the hash table */
-      if (g_hash_table_contains (libdrm_data_in_provider, "/usr/share/libdrm"))
-        best_libdrm_data_in_provider = g_strdup ("/usr/share/libdrm");
-      else
-        best_libdrm_data_in_provider = g_strdup (
-          pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
-    }
-
-  if (best_libdrm_data_in_provider != NULL)
-    {
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          best_libdrm_data_in_provider,
-                                          "/usr/share/libdrm",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                          error))
-        return FALSE;
-    }
+  if (!pv_runtime_finish_libdrm_data (self, bwrap, all_libdrm_from_provider,
+                                      libdrm_data_in_provider, error))
+    return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");
 

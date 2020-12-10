@@ -3050,6 +3050,119 @@ pv_runtime_finish_libdrm_data (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_finish_libc_family (PvRuntime *self,
+                               FlatpakBwrap *bwrap,
+                               GHashTable *gconv_in_provider,
+                               GError **error)
+{
+  g_autofree gchar *localedef = NULL;
+  g_autofree gchar *ldconfig = NULL;
+  g_autofree gchar *locale = NULL;
+  GHashTableIter iter;
+  const gchar *gconv_path;
+
+  if (self->any_libc_from_provider && !self->all_libc_from_provider)
+    {
+      /*
+       * This shouldn't happen. It would mean that there exist at least
+       * two architectures (let's say aaa and bbb) for which we have:
+       * provider libc6:aaa < container libc6 < provider libc6:bbb
+       * (we know that the container's libc6:aaa and libc6:bbb are
+       * constrained to be the same version because that's how multiarch
+       * works).
+       *
+       * If the provider system locales work OK with both the aaa and bbb
+       * versions, let's assume they will also work with the intermediate
+       * version from the container...
+       */
+      g_warning ("Using glibc from provider system for some but not all "
+                 "architectures! Arbitrarily using provider locales.");
+    }
+
+  if (self->any_libc_from_provider)
+    {
+      g_debug ("Making provider locale data visible in container");
+
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          "/usr/lib/locale",
+                                          "/usr/lib/locale",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                          error))
+        return FALSE;
+
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          "/usr/share/i18n",
+                                          "/usr/share/i18n",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                          error))
+        return FALSE;
+
+      localedef = pv_runtime_search_in_path_and_bin (self, "localedef");
+
+      if (localedef == NULL)
+        {
+          g_warning ("Cannot find localedef");
+        }
+      else if (!pv_runtime_take_from_provider (self, bwrap, localedef,
+                                               "/usr/bin/localedef",
+                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                               error))
+        {
+          return FALSE;
+        }
+
+      locale = pv_runtime_search_in_path_and_bin (self, "locale");
+
+      if (locale == NULL)
+        {
+          g_warning ("Cannot find locale");
+        }
+      else if (!pv_runtime_take_from_provider (self, bwrap, locale,
+                                               "/usr/bin/locale",
+                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                               error))
+        {
+          return FALSE;
+        }
+
+      ldconfig = pv_runtime_search_in_path_and_bin (self, "ldconfig");
+
+      if (ldconfig == NULL)
+        {
+          g_warning ("Cannot find ldconfig");
+        }
+      else if (!pv_runtime_take_from_provider (self, bwrap,
+                                               ldconfig,
+                                               "/sbin/ldconfig",
+                                               TAKE_FROM_PROVIDER_FLAGS_NONE,
+                                               error))
+        {
+          return FALSE;
+        }
+
+      g_debug ("Making provider gconv modules visible in container");
+
+      g_hash_table_iter_init (&iter, gconv_in_provider);
+      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
+        {
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              gconv_path,
+                                              gconv_path,
+                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                              error))
+            return FALSE;
+        }
+    }
+  else
+    {
+      g_debug ("Using included locale data from container");
+      g_debug ("Using included gconv modules from container");
+    }
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         GHashTable *extra_locked_vars_to_unset,
@@ -3066,9 +3179,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) vulkan_imp_layer_path = g_string_new ("");
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
-  g_autofree gchar *localedef = NULL;
-  g_autofree gchar *ldconfig = NULL;
-  g_autofree gchar *locale = NULL;
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
@@ -3088,8 +3198,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                      g_free, NULL);
-  GHashTableIter iter;
-  const gchar *gconv_path;
   g_autofree gchar *provider_in_container_namespace_guarded = NULL;
   if (g_str_has_suffix (self->provider_in_container_namespace, "/"))
     provider_in_container_namespace_guarded =
@@ -3480,103 +3588,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       return FALSE;
     }
 
-  if (self->any_libc_from_provider && !self->all_libc_from_provider)
-    {
-      /*
-       * This shouldn't happen. It would mean that there exist at least
-       * two architectures (let's say aaa and bbb) for which we have:
-       * provider libc6:aaa < container libc6 < provider libc6:bbb
-       * (we know that the container's libc6:aaa and libc6:bbb are
-       * constrained to be the same version because that's how multiarch
-       * works).
-       *
-       * If the provider system locales work OK with both the aaa and bbb
-       * versions, let's assume they will also work with the intermediate
-       * version from the container...
-       */
-      g_warning ("Using glibc from provider system for some but not all "
-                 "architectures! Arbitrarily using provider locales.");
-    }
-
-  if (self->any_libc_from_provider)
-    {
-      g_debug ("Making provider locale data visible in container");
-
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          "/usr/lib/locale",
-                                          "/usr/lib/locale",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
-                                          error))
-        return FALSE;
-
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          "/usr/share/i18n",
-                                          "/usr/share/i18n",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
-                                          error))
-        return FALSE;
-
-      localedef = pv_runtime_search_in_path_and_bin (self, "localedef");
-
-      if (localedef == NULL)
-        {
-          g_warning ("Cannot find localedef");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap, localedef,
-                                               "/usr/bin/localedef",
-                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                               error))
-        {
-          return FALSE;
-        }
-
-      locale = pv_runtime_search_in_path_and_bin (self, "locale");
-
-      if (locale == NULL)
-        {
-          g_warning ("Cannot find locale");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap, locale,
-                                               "/usr/bin/locale",
-                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                               error))
-        {
-          return FALSE;
-        }
-
-      ldconfig = pv_runtime_search_in_path_and_bin (self, "ldconfig");
-
-      if (ldconfig == NULL)
-        {
-          g_warning ("Cannot find ldconfig");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap,
-                                               ldconfig,
-                                               "/sbin/ldconfig",
-                                               TAKE_FROM_PROVIDER_FLAGS_NONE,
-                                               error))
-        {
-          return FALSE;
-        }
-
-      g_debug ("Making provider gconv modules visible in container");
-
-      g_hash_table_iter_init (&iter, gconv_in_provider);
-      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
-        {
-          if (!pv_runtime_take_from_provider (self, bwrap,
-                                              gconv_path,
-                                              gconv_path,
-                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
-                                              error))
-            return FALSE;
-        }
-    }
-  else
-    {
-      g_debug ("Using included locale data from container");
-      g_debug ("Using included gconv modules from container");
-    }
+  if (!pv_runtime_finish_libc_family (self, bwrap, gconv_in_provider, error))
+    return FALSE;
 
   if (!pv_runtime_finish_libdrm_data (self, bwrap, all_libdrm_from_provider,
                                       libdrm_data_in_provider, error))

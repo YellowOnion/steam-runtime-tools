@@ -58,12 +58,6 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 `--home` *DIR*
 :   Use *DIR* as the home directory. This implies `--unshare-home`.
 
-`--host-fallback`
-:   If **bwrap**(1) cannot be run, attempt to run *COMMAND* in the
-    current execution environment using the `LD_LIBRARY_PATH`
-    Steam Runtime instead. In practice this will only work for
-    Steam Runtime version 1, "scout".
-
 `--host-ld-preload` *MODULE*
 :   Add *MODULE* from the host system to `LD_PRELOAD` when executing
     *COMMAND*. If *COMMAND* is run in a container, the path of the

@@ -534,6 +534,7 @@ main (int argc,
   g_auto(GStrv) original_environ = NULL;
   g_autoptr(GMainLoop) loop = NULL;
   g_autoptr(GOptionContext) context = NULL;
+  g_autoptr(GPtrArray) replacement_command_and_args = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   char **command_and_args;
@@ -865,14 +866,14 @@ main (int argc,
 
   if (g_hash_table_size (opt_unsetenv) > 0)
     {
-      GVariantBuilder strv_builder;
-
-      g_variant_builder_init (&strv_builder, G_VARIANT_TYPE_STRING_ARRAY);
-
       g_hash_table_iter_init (&iter, opt_unsetenv);
 
       if (api == &launcher_api)
         {
+          GVariantBuilder strv_builder;
+
+          g_variant_builder_init (&strv_builder, G_VARIANT_TYPE_STRING_ARRAY);
+
           while (g_hash_table_iter_next (&iter, &key, NULL))
             g_variant_builder_add (&strv_builder, "s", key);
 
@@ -881,9 +882,29 @@ main (int argc,
         }
       else
         {
+          replacement_command_and_args = g_ptr_array_new_with_free_func (g_free);
+
+          g_ptr_array_add (replacement_command_and_args, g_strdup ("/usr/bin/env"));
+
           while (g_hash_table_iter_next (&iter, &key, NULL))
-            g_warning ("Cannot unset %s when using Flatpak services",
-                       (const char *) key);
+            {
+              g_ptr_array_add (replacement_command_and_args, g_strdup ("-u"));
+              g_ptr_array_add (replacement_command_and_args, g_strdup (key));
+            }
+
+          if (strchr (command_and_args[0], '=') != NULL)
+            {
+              g_ptr_array_add (replacement_command_and_args, g_strdup ("/bin/sh"));
+              g_ptr_array_add (replacement_command_and_args, g_strdup ("-euc"));
+              g_ptr_array_add (replacement_command_and_args, g_strdup ("exec \"$@\""));
+              g_ptr_array_add (replacement_command_and_args, g_strdup ("sh"));  /* argv[0] */
+            }
+
+          for (i = 0; command_and_args[i] != NULL; i++)
+            g_ptr_array_add (replacement_command_and_args, g_strdup (command_and_args[i]));
+
+          g_ptr_array_add (replacement_command_and_args, NULL);
+          command_and_args = (char **) replacement_command_and_args->pdata;
         }
     }
 

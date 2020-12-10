@@ -2497,11 +2497,11 @@ setup_vulkan_loadable_json (PvRuntime *self,
         {
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
-          const char *json_on_host = NULL;
+          const char *json_in_provider = NULL;
           if (layer != NULL)
-            json_on_host = srt_vulkan_layer_get_json_path (layer);
+            json_in_provider = srt_vulkan_layer_get_json_path (layer);
           else
-            json_on_host = srt_vulkan_icd_get_json_path (icd);
+            json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
           json_in_container = g_build_filename (self->overrides_in_container,
@@ -2509,7 +2509,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
                                                 json_base, NULL);
 
           if (!pv_runtime_take_from_provider (self, bwrap,
-                                              json_on_host,
+                                              json_in_provider,
                                               json_in_container,
                                               TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
                                               error))

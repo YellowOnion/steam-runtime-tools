@@ -5833,7 +5833,8 @@ vulkan_layer_parse_json (const gchar *path,
  *  layers, least-important first
  */
 static GList *
-load_vulkan_layer_json (const gchar *path)
+load_vulkan_layer_json (const gchar *sysroot,
+                        const gchar *path)
 {
   g_autoptr(GError) error = NULL;
   g_autoptr(JsonParser) parser = NULL;
@@ -5843,17 +5844,27 @@ load_vulkan_layer_json (const gchar *path)
   JsonObject *json_layer = NULL;
   JsonArray *json_layers = NULL;
   const gchar *file_format_version = NULL;
+  g_autofree gchar *in_sysroot = NULL;
+  g_autofree gchar *canon = NULL;
   guint length;
   gsize i;
   GList *ret_list = NULL;
 
   g_return_val_if_fail (path != NULL, NULL);
 
-  g_debug ("Attempting to load the json layer from %s", path);
+  if (!g_path_is_absolute (path))
+    {
+      canon = g_canonicalize_filename (path, NULL);
+      path = canon;
+    }
+
+  in_sysroot = g_build_filename (sysroot, path, NULL);
+
+  g_debug ("Attempting to load the json layer from %s", in_sysroot);
 
   parser = json_parser_new ();
 
-  if (!json_parser_load_from_file (parser, path, &error))
+  if (!json_parser_load_from_file (parser, in_sysroot, &error))
     {
       g_debug ("error %s", error->message);
       return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
@@ -5954,21 +5965,11 @@ vulkan_layer_load_json (const char *sysroot,
                         const char *filename,
                         GList **list)
 {
-  g_autofree gchar *canon = NULL;
-  g_autofree gchar *in_sysroot = NULL;
-
   g_return_if_fail (sysroot != NULL);
+  g_return_if_fail (filename != NULL);
   g_return_if_fail (list != NULL);
 
-  if (!g_path_is_absolute (filename))
-    {
-      canon = g_canonicalize_filename (filename, NULL);
-      filename = canon;
-    }
-
-  in_sysroot = g_build_filename (sysroot, filename, NULL);
-
-  *list = g_list_concat (load_vulkan_layer_json (in_sysroot), *list);
+  *list = g_list_concat (load_vulkan_layer_json (sysroot, filename), *list);
 }
 
 static void

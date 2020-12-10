@@ -52,4 +52,8 @@ GFile *flatpak_get_data_dir (const char *app_id);
 void flatpak_run_add_font_path_args (FlatpakBwrap *bwrap);
 
 extern const char * const *flatpak_abs_usrmerged_dirs;
+
+int open_namespace_fd_if_needed (const char *path,
+                                 const char *other_path);
+
 #endif /* __FLATPAK_RUN_H__ */

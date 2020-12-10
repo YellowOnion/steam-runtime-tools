@@ -3418,8 +3418,9 @@ check_parental_controls (const char     *app_ref,
 
   return TRUE;
 }
+#endif
 
-static int
+int
 open_namespace_fd_if_needed (const char *path,
                              const char *other_path) {
   struct stat s, other_s;
@@ -3438,6 +3439,7 @@ open_namespace_fd_if_needed (const char *path,
   return -1;
 }
 
+#if 0
 static gboolean
 check_sudo (GError **error)
 {

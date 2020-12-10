@@ -1245,6 +1245,7 @@ main (int argc,
                                                                             g_str_equal,
                                                                             g_free, NULL);
   g_autofree char *lock_env_fd = NULL;
+  g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
 
   my_pid = getpid ();
 
@@ -2187,6 +2188,49 @@ main (int argc,
   lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
   flatpak_bwrap_add_fd (bwrap, glnx_steal_fd (&lock_env_tmpf.fd));
 
+  if (is_flatpak_env)
+    {
+      int userns_fd, userns2_fd, pidns_fd;
+
+      /* Tell the bwrap instance on the host to join the same user and pid
+       * namespaces as Steam in Flatpak. Otherwise, pid-based IPC between
+       * the Steam client and the game will fail.
+       *
+       * This is not expected to work if bwrap on the host is setuid,
+       * so it will not work for users of Debian, Arch linux-hardened, etc.,
+       * but it's better than nothing. */
+      userns_fd = open ("/run/.userns", O_RDONLY | O_CLOEXEC);
+
+      if (userns_fd >= 0)
+        {
+          g_array_append_val (pass_fds_through_adverb, userns_fd);
+          flatpak_bwrap_add_args_data_fd (bwrap, "--userns",
+                                          glnx_steal_fd (&userns_fd),
+                                          NULL);
+
+          userns2_fd = open_namespace_fd_if_needed ("/proc/self/ns/user",
+                                                    "/run/.userns");
+
+          if (userns2_fd >= 0)
+            {
+              g_array_append_val (pass_fds_through_adverb, userns2_fd);
+              flatpak_bwrap_add_args_data_fd (bwrap, "--userns2",
+                                              glnx_steal_fd (&userns2_fd),
+                                              NULL);
+            }
+        }
+
+      pidns_fd = open ("/proc/self/ns/pid", O_RDONLY | O_CLOEXEC);
+
+      if (pidns_fd >= 0)
+        {
+          g_array_append_val (pass_fds_through_adverb, pidns_fd);
+          flatpak_bwrap_add_args_data_fd (bwrap, "--pidns",
+                                          glnx_steal_fd (&pidns_fd),
+                                          NULL);
+        }
+    }
+
   if (opt_verbose)
     {
       g_message ("%s options before bundling:", bwrap_executable);
@@ -2245,6 +2289,13 @@ main (int argc,
           flatpak_bwrap_add_fd (bwrap, fd);
           flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
         }
+    }
+
+  for (i = 0; i < pass_fds_through_adverb->len; i++)
+    {
+      int fd = g_array_index (pass_fds_through_adverb, int, i);
+
+      flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
     }
 
   flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%s", lock_env_fd);

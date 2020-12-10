@@ -713,7 +713,6 @@ static char *opt_steam_app_id = NULL;
 static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
-static gboolean opt_host_fallback = FALSE;
 static char *opt_graphics_provider = NULL;
 static char *graphics_provider_mount_point = NULL;
 static gboolean opt_launcher = FALSE;
@@ -1011,9 +1010,6 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_home,
     "Use HOME as home directory. Implies --unshare-home. "
     "[Default: $PRESSURE_VESSEL_HOME if set]", "HOME" },
-  { "host-fallback", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_host_fallback,
-    "Run COMMAND on the host system if we cannot run it in a container.", NULL },
   { "host-ld-preload", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
     "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
@@ -1622,72 +1618,27 @@ main (int argc,
       /* Assume "bwrap" to exist in the host system and to be in its PATH */
       bwrap_executable = g_strdup ("bwrap");
 
-      /* If we can't launch a command on the host, just fail.
-       * We don't implement --host-fallback here. */
+      /* If we can't launch a command on the host, just fail. */
       if (!check_launch_on_host (launch_executable, error))
         goto out;
     }
   else
     {
       g_debug ("Checking for bwrap...");
+
+      /* if this fails, it will warn */
       bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
+
+      if (bwrap_executable == NULL)
+        goto out;
+
+      g_debug ("OK (%s)", bwrap_executable);
     }
 
   if (opt_test)
     {
-      if (bwrap_executable == NULL)
-        {
-          ret = 1;
-          goto out;
-        }
-      else
-        {
-          g_debug ("OK (%s)", bwrap_executable);
-          ret = 0;
-          goto out;
-        }
-    }
-
-  if (bwrap_executable == NULL)
-    {
-      g_assert (!is_flatpak_env);
-
-      if (opt_host_fallback)
-        {
-          g_message ("Falling back to executing wrapped command directly");
-
-          if (opt_env_if_host != NULL)
-            {
-              for (i = 0; opt_env_if_host[i] != NULL; i++)
-                {
-                  char *equals = strchr (opt_env_if_host[i], '=');
-
-                  g_assert (equals != NULL);
-
-                  *equals = '\0';
-                  flatpak_bwrap_set_env (wrapped_command, opt_env_if_host[i],
-                                         equals + 1, TRUE);
-                }
-            }
-
-          flatpak_bwrap_finish (wrapped_command);
-
-          /* flatpak_bwrap_finish did this */
-          g_assert (g_ptr_array_index (wrapped_command->argv,
-                                       wrapped_command->argv->len - 1) == NULL);
-
-          execvpe (g_ptr_array_index (wrapped_command->argv, 0),
-                   (char * const *) wrapped_command->argv->pdata,
-                   wrapped_command->envp);
-
-          glnx_throw_errno_prefix (error, "execvpe %s",
-                                   (gchar *) g_ptr_array_index (wrapped_command->argv, 0));
-          goto out;
-        }
-      else
-        {
-          goto out;
-        }
+      ret = 0;
+      goto out;
     }
 
   if (!is_flatpak_env)

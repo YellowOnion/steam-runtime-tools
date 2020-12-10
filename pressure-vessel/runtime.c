@@ -2835,6 +2835,120 @@ pv_runtime_collect_graphics_libraries (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_collect_libc_family (PvRuntime *self,
+                                RuntimeArchitecture *arch,
+                                FlatpakBwrap *bwrap,
+                                const char *libc,
+                                const char *ld_so_in_runtime,
+                                const char *provider_in_container_namespace_guarded,
+                                GHashTable *gconv_in_provider,
+                                GError **error)
+{
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  g_autofree char *libc_target = NULL;
+
+  if (!pv_runtime_take_ld_so_from_provider (self, arch,
+                                            ld_so_in_runtime,
+                                            bwrap, error))
+    return FALSE;
+
+  /* Collect miscellaneous libraries that libc might dlopen. */
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          "--dest", arch->libdir_in_current_namespace,
+                          "if-exists:libidn2.so.0",
+                          "if-exists:even-if-older:soname-match:libnss_compat.so.*",
+                          "if-exists:even-if-older:soname-match:libnss_db.so.*",
+                          "if-exists:even-if-older:soname-match:libnss_dns.so.*",
+                          "if-exists:even-if-older:soname-match:libnss_files.so.*",
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+  libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
+  if (libc_target != NULL)
+    {
+      g_autofree gchar *dir = NULL;
+      g_autofree gchar *gconv_dir_in_provider = NULL;
+      gboolean found = FALSE;
+
+      dir = g_path_get_dirname (libc_target);
+
+      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+        memmove (dir,
+                 dir + strlen (self->provider_in_container_namespace),
+                 strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
+
+      /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
+       * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
+       * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
+       * had its default value "$(libdir)/gconv".
+       * We check /usr first because otherwise, if the host is merged-/usr and the
+       * container is not, we might end up binding /lib instead of /usr/lib
+       * and that could cause issues. */
+      if (g_str_has_prefix (dir, "/usr/"))
+        memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
+
+      gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+
+      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                     -1,
+                                     gconv_dir_in_provider,
+                                     G_FILE_TEST_IS_DIR))
+        {
+          g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
+          found = TRUE;
+        }
+
+      if (!found)
+        {
+          /* Try again without hwcaps subdirectories.
+           * For example, libc6-i386 on SteamOS 2 'brewmaster'
+           * contains /lib/i386-linux-gnu/i686/cmov/libc.so.6,
+           * for which we want gconv modules from
+           * /usr/lib/i386-linux-gnu/gconv, not from
+           * /usr/lib/i386-linux-gnu/i686/cmov/gconv. */
+          while (g_str_has_suffix (dir, "/cmov") ||
+                 g_str_has_suffix (dir, "/i686") ||
+                 g_str_has_suffix (dir, "/sse2") ||
+                 g_str_has_suffix (dir, "/tls") ||
+                 g_str_has_suffix (dir, "/x86_64"))
+            {
+              char *slash = strrchr (dir, '/');
+
+              g_assert (slash != NULL);
+              *slash = '\0';
+            }
+
+          g_clear_pointer (&gconv_dir_in_provider, g_free);
+          gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+
+          if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                         -1,
+                                         gconv_dir_in_provider,
+                                         G_FILE_TEST_IS_DIR))
+            {
+              g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
+              found = TRUE;
+            }
+        }
+
+      if (!found)
+        {
+          g_debug ("We were expecting to have the gconv modules directory in the "
+                   "provider to be located in \"%s/gconv\", but instead it is missing",
+                   dir);
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         GHashTable *extra_locked_vars_to_unset,
@@ -3166,106 +3280,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-              g_autofree char *libc_target = NULL;
-
-              if (!pv_runtime_take_ld_so_from_provider (self, arch,
-                                                        ld_so_in_runtime,
-                                                        bwrap, error))
+              if (!pv_runtime_collect_libc_family (self, arch, bwrap,
+                                                   libc, ld_so_in_runtime,
+                                                   provider_in_container_namespace_guarded,
+                                                   gconv_in_provider,
+                                                   error))
                 return FALSE;
-
-              /* Collect miscellaneous libraries that libc might dlopen. */
-              temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "--dest", arch->libdir_in_current_namespace,
-                                      "if-exists:libidn2.so.0",
-                                      "if-exists:even-if-older:soname-match:libnss_compat.so.*",
-                                      "if-exists:even-if-older:soname-match:libnss_db.so.*",
-                                      "if-exists:even-if-older:soname-match:libnss_dns.so.*",
-                                      "if-exists:even-if-older:soname-match:libnss_files.so.*",
-                                      NULL);
-              flatpak_bwrap_finish (temp_bwrap);
-
-              if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-                return FALSE;
-
-              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-
-              libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
-              if (libc_target != NULL)
-                {
-                  g_autofree gchar *dir = NULL;
-                  g_autofree gchar *gconv_dir_in_provider = NULL;
-                  gboolean found = FALSE;
-
-                  dir = g_path_get_dirname (libc_target);
-
-                  if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-                    memmove (dir,
-                             dir + strlen (self->provider_in_container_namespace),
-                             strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
-
-                  /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
-                   * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
-                   * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
-                   * had its default value "$(libdir)/gconv".
-                   * We check /usr first because otherwise, if the host is merged-/usr and the
-                   * container is not, we might end up binding /lib instead of /usr/lib
-                   * and that could cause issues. */
-                  if (g_str_has_prefix (dir, "/usr/"))
-                    memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
-
-                  gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
-
-                  if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                 -1,
-                                                 gconv_dir_in_provider,
-                                                 G_FILE_TEST_IS_DIR))
-                    {
-                      g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
-                      found = TRUE;
-                    }
-
-                  if (!found)
-                    {
-                      /* Try again without hwcaps subdirectories.
-                       * For example, libc6-i386 on SteamOS 2 'brewmaster'
-                       * contains /lib/i386-linux-gnu/i686/cmov/libc.so.6,
-                       * for which we want gconv modules from
-                       * /usr/lib/i386-linux-gnu/gconv, not from
-                       * /usr/lib/i386-linux-gnu/i686/cmov/gconv. */
-                      while (g_str_has_suffix (dir, "/cmov") ||
-                             g_str_has_suffix (dir, "/i686") ||
-                             g_str_has_suffix (dir, "/sse2") ||
-                             g_str_has_suffix (dir, "/tls") ||
-                             g_str_has_suffix (dir, "/x86_64"))
-                        {
-                          char *slash = strrchr (dir, '/');
-
-                          g_assert (slash != NULL);
-                          *slash = '\0';
-                        }
-
-                      g_clear_pointer (&gconv_dir_in_provider, g_free);
-                      gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
-
-                      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                     -1,
-                                                     gconv_dir_in_provider,
-                                                     G_FILE_TEST_IS_DIR))
-                        {
-                          g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
-                          found = TRUE;
-                        }
-                    }
-
-                  if (!found)
-                    {
-                      g_debug ("We were expecting to have the gconv modules directory in the "
-                               "provider to be located in \"%s/gconv\", but instead it is missing",
-                               dir);
-                    }
-                }
 
               self->any_libc_from_provider = TRUE;
             }

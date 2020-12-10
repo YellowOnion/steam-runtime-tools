@@ -2891,10 +2891,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                             arch->ld_so,
                                             SRT_RESOLVE_FLAGS_NONE,
                                             &ld_so_in_runtime,
-                                            error);
+                                            NULL);
 
-              if (fd < 0)
-                return FALSE;
+              /* Ignore fd, and just let it close: we're resolving
+               * the path for its side-effect of populating
+               * ld_so_in_runtime. */
             }
           else
             {

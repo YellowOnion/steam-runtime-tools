@@ -241,9 +241,9 @@ if [ -n "$deploy" ]; then
     fi
 fi
 
-if [ -e /.flatpak-info ]; then
+if [ -e /.flatpak-info ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then
     mkdir -p "${here}/var"
-    touch "${here}/var/copy-runtime"
+    export PRESSURE_VESSEL_COPY_RUNTIME_INTO="${here}/var"
 fi
 
 if [ -e "${here}/var/copy-runtime" ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then

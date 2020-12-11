@@ -207,6 +207,9 @@ class TestContainers(BaseTest):
 
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             os.makedirs(os.path.join(cls.pv_dir, 'bin'))
+            os.makedirs(
+                os.path.join(cls.pv_dir, 'libexec', 'steam-runtime-tools-0'),
+            )
 
             for exe in (
                 'pressure-vessel-wrap',
@@ -295,6 +298,45 @@ class TestContainers(BaseTest):
                         cls.copy2(relocatable, tool_path)
                     else:
                         raise unittest.SkipTest('{} not found'.format(exe))
+
+                for tool in ('inspect-library',):
+                    exe = multiarch + '-' + tool
+                    tool_path = os.path.join(
+                        cls.pv_dir,
+                        'libexec',
+                        'steam-runtime-tools-0',
+                        exe,
+                    )
+                    in_containers_dir = os.path.join(
+                        cls.containers_dir,
+                        'pressure-vessel',
+                        'libexec',
+                        'steam-runtime-tools-0',
+                        exe,
+                    )
+
+                    if os.path.exists(in_containers_dir):
+                        # Asssume it's a close enough version that we can
+                        # use it with the newer pressure-vessel-wrap.
+                        logger.info(
+                            'Copying pre-existing %s from %s',
+                            exe, in_containers_dir,
+                        )
+                        cls.copy2(
+                            in_containers_dir,
+                            tool_path,
+                        )
+                    else:
+                        logger.info(
+                            'Copying just-built %s from %s/pressure-vessel',
+                            exe, cls.top_builddir,
+                        )
+                        cls.copy2(
+                            os.path.join(
+                                cls.top_builddir, 'helpers', exe,
+                            ),
+                            tool_path,
+                        )
         else:
             cls.pv_dir = os.path.join(cls.containers_dir, 'pressure-vessel')
 

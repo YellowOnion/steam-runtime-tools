@@ -2400,33 +2400,34 @@ pv_runtime_search_in_path_and_bin (PvRuntime *self,
 }
 
 /*
- * setup_vulkan_loadable_json:
+ * setup_json_manifest:
  * @self: The runtime
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
- * @sub_dir: `icd.d`, `explicit_layer.d` or `implicit_layer.d`
- * @write_to_dir: Path to `/overrides/share/vulkan/${sub_dir}` in the
+ * @sub_dir: `vulkan/icd.d`, `glvnd/egl_vendor.d` or similar
+ * @write_to_dir: Path to `/overrides/share/${sub_dir}` in the
  *  current execution environment
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
  * @seq: Sequence number of @details, used to make unique filenames
- * @vulkan_path: Used to build `$VK_ICD_FILENAMES` or a similar search path
+ * @search_path: Used to build `$VK_ICD_FILENAMES` or a similar search path
  * @error: Used to raise an error on failure
  *
  * Make a single Vulkan layer or ICD available in the container.
  */
 static gboolean
-setup_vulkan_loadable_json (PvRuntime *self,
-                            FlatpakBwrap *bwrap,
-                            const gchar *sub_dir,
-                            const gchar *write_to_dir,
-                            IcdDetails *details,
-                            gsize seq,
-                            GString *vulkan_path,
-                            GError **error)
+setup_json_manifest (PvRuntime *self,
+                     FlatpakBwrap *bwrap,
+                     const gchar *sub_dir,
+                     const gchar *write_to_dir,
+                     IcdDetails *details,
+                     gsize seq,
+                     GString *search_path,
+                     GError **error)
 {
   SrtVulkanLayer *layer = NULL;
   SrtVulkanIcd *icd = NULL;
+  SrtEglIcd *egl = NULL;
   gboolean need_provider_json = FALSE;
   gsize i;
 
@@ -2434,6 +2435,8 @@ setup_vulkan_loadable_json (PvRuntime *self,
     layer = SRT_VULKAN_LAYER (details->icd);
   else if (SRT_IS_VULKAN_ICD (details->icd))
     icd = SRT_VULKAN_ICD (details->icd);
+  else if (SRT_IS_EGL_ICD (details->icd))
+    egl = SRT_EGL_ICD (details->icd);
   else
     g_return_val_if_reached (FALSE);
 
@@ -2441,6 +2444,11 @@ setup_vulkan_loadable_json (PvRuntime *self,
   if (layer != NULL)
     {
       if (!srt_vulkan_layer_check_error (layer, NULL))
+        return TRUE;
+    }
+  else if (egl != NULL)
+    {
+      if (!srt_egl_icd_check_error (egl, NULL))
         return TRUE;
     }
   else
@@ -2466,7 +2474,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
                                        seq, multiarch_tuples[i]);
           write_to_file = g_build_filename (write_to_dir, json_base, NULL);
           json_in_container = g_build_filename (self->overrides_in_container,
-                                                "share", "vulkan", sub_dir,
+                                                "share", sub_dir,
                                                 json_base, NULL);
 
           if (layer != NULL)
@@ -2476,6 +2484,17 @@ setup_vulkan_loadable_json (PvRuntime *self,
                                                                        details->paths_in_container[i]);
 
               if (!srt_vulkan_layer_write_to_file (replacement, write_to_file, error))
+                return FALSE;
+            }
+          else if (egl != NULL)
+            {
+              g_autoptr(SrtEglIcd) replacement = NULL;
+
+              replacement = srt_egl_icd_new_replace_library_path (egl,
+                                                                  details->paths_in_container[i]);
+
+              if (!srt_egl_icd_write_to_file (replacement, write_to_file,
+                                              error))
                 return FALSE;
             }
           else
@@ -2488,7 +2507,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
                 return FALSE;
             }
 
-          pv_search_path_append (vulkan_path, json_in_container);
+          pv_search_path_append (search_path, json_in_container);
         }
       else if (details->kinds[i] == ICD_KIND_SONAME
                || details->kinds[i] == ICD_KIND_META_LAYER)
@@ -2504,12 +2523,14 @@ setup_vulkan_loadable_json (PvRuntime *self,
       const char *json_in_provider = NULL;
       if (layer != NULL)
         json_in_provider = srt_vulkan_layer_get_json_path (layer);
+      else if (egl != NULL)
+        json_in_provider = srt_egl_icd_get_json_path (egl);
       else
         json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
       json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", seq);
       json_in_container = g_build_filename (self->overrides_in_container,
-                                            "share", "vulkan", sub_dir,
+                                            "share", sub_dir,
                                             json_base, NULL);
 
       if (!pv_runtime_take_from_provider (self, bwrap,
@@ -2519,40 +2540,41 @@ setup_vulkan_loadable_json (PvRuntime *self,
                                           error))
         return FALSE;
 
-      pv_search_path_append (vulkan_path, json_in_container);
+      pv_search_path_append (search_path, json_in_container);
     }
 
   return TRUE;
 }
 
 /*
- * setup_vulkan_loadable_json:
+ * setup_each_json_manifest:
  * @self: The runtime
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
- * @sub_dir: `icd.d`, `explicit_layer.d` or `implicit_layer.d`
- * @write_to_dir: Path to `/overrides/share/vulkan/${sub_dir}` in the
+ * @sub_dir: `vulkan/icd.d` or similar
+ * @write_to_dir: Path to `/overrides/share/${sub_dir}` in the
  *  current execution environment
- * @vulkan_details: (element-type IcdDetails): A list of #IcdDetails
- *  holding #SrtVulkanLayer or #SrtVulkanIcd, as appropriate for @sub_dir
- * @vulkan_path: Used to build `$VK_ICD_FILENAMES` or a similar search path
+ * @details: (element-type IcdDetails): A list of #IcdDetails
+ *  holding #SrtVulkanLayer, #SrtVulkanIcd or #SrtEglIcd, as appropriate
+ *  for @sub_dir
+ * @search_path: Used to build `$VK_ICD_FILENAMES` or a similar search path
  * @error: Used to raise an error on failure
  *
  * Make a list of Vulkan layers or ICDs available in the container.
  */
 static gboolean
-setup_each_vulkan_loadable_json (PvRuntime *self,
-                                 FlatpakBwrap *bwrap,
-                                 const gchar *sub_dir,
-                                 GPtrArray *vulkan_details,
-                                 GString *vulkan_path,
-                                 GError **error)
+setup_each_json_manifest (PvRuntime *self,
+                          FlatpakBwrap *bwrap,
+                          const gchar *sub_dir,
+                          GPtrArray *details,
+                          GString *search_path,
+                          GError **error)
 {
   gsize j;
   g_autofree gchar *write_to_dir = NULL;
 
   write_to_dir = g_build_filename (self->overrides,
-                                  "share", "vulkan", sub_dir, NULL);
+                                  "share", sub_dir, NULL);
 
   if (g_mkdir_with_parents (write_to_dir, 0700) != 0)
     {
@@ -2560,11 +2582,11 @@ setup_each_vulkan_loadable_json (PvRuntime *self,
       return FALSE;
     }
 
-  for (j = 0; j < vulkan_details->len; j++)
+  for (j = 0; j < details->len; j++)
     {
-      if (!setup_vulkan_loadable_json (self, bwrap, sub_dir, write_to_dir,
-                                       g_ptr_array_index (vulkan_details, j),
-                                       j, vulkan_path, error))
+      if (!setup_json_manifest (self, bwrap, sub_dir, write_to_dir,
+                                g_ptr_array_index (details, j),
+                                j, search_path, error))
         return FALSE;
     }
 
@@ -2673,7 +2695,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autofree gchar *localedef = NULL;
   g_autofree gchar *ldconfig = NULL;
   g_autofree gchar *locale = NULL;
-  g_autofree gchar *dir_on_host = NULL;
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
@@ -3483,102 +3504,27 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   g_debug ("Setting up EGL ICD JSON...");
 
-  dir_on_host = g_build_filename (self->overrides,
-                                  "share", "glvnd", "egl_vendor.d", NULL);
-
-  if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
-    {
-      glnx_throw_errno_prefix (error, "Unable to create %s", dir_on_host);
-      return FALSE;
-    }
-
-  for (j = 0; j < egl_icd_details->len; j++)
-    {
-      IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
-      SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
-      gboolean need_provider_json = FALSE;
-
-      if (!srt_egl_icd_check_error (icd, NULL))
-        continue;
-
-      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
-        {
-          g_assert (i < G_N_ELEMENTS (details->kinds));
-          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
-
-          if (details->kinds[i] == ICD_KIND_ABSOLUTE)
-            {
-              g_autoptr(SrtEglIcd) replacement = NULL;
-              g_autofree gchar *json_on_host = NULL;
-              g_autofree gchar *json_in_container = NULL;
-              g_autofree gchar *json_base = NULL;
-
-              g_assert (details->paths_in_container[i] != NULL);
-
-              json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
-                                           j, multiarch_tuples[i]);
-              json_on_host = g_build_filename (dir_on_host, json_base, NULL);
-              json_in_container = g_build_filename (self->overrides_in_container,
-                                                    "share", "glvnd",
-                                                    "egl_vendor.d",
-                                                    json_base, NULL);
-
-              replacement = srt_egl_icd_new_replace_library_path (icd,
-                                                                  details->paths_in_container[i]);
-
-              if (!srt_egl_icd_write_to_file (replacement, json_on_host,
-                                                 error))
-                return FALSE;
-
-              pv_search_path_append (egl_path, json_in_container);
-            }
-          else if (details->kinds[i] == ICD_KIND_SONAME)
-            {
-              need_provider_json = TRUE;
-            }
-        }
-
-      if (need_provider_json)
-        {
-          g_autofree gchar *json_in_container = NULL;
-          g_autofree gchar *json_base = NULL;
-          const char *json_on_host = srt_egl_icd_get_json_path (icd);
-
-          json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
-          json_in_container = g_build_filename (self->overrides_in_container,
-                                                "share", "glvnd",
-                                                "egl_vendor.d",
-                                                json_base, NULL);
-
-          if (!pv_runtime_take_from_provider (self, bwrap,
-                                              json_on_host,
-                                              json_in_container,
-                                              TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
-                                              error))
-            return FALSE;
-
-          pv_search_path_append (egl_path, json_in_container);
-        }
-    }
+  if (!setup_each_json_manifest (self, bwrap, "glvnd/egl_vendor.d",
+                                 egl_icd_details, egl_path, error))
+    return FALSE;
 
   g_debug ("Setting up Vulkan ICD JSON...");
-  if (!setup_each_vulkan_loadable_json (self, bwrap, "icd.d",
-                                        vulkan_icd_details,
-                                        vulkan_path, error))
+  if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
+                                 vulkan_icd_details, vulkan_path, error))
     return FALSE;
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
       g_debug ("Setting up Vulkan explicit layer JSON...");
-      if (!setup_each_vulkan_loadable_json (self, bwrap, "explicit_layer.d",
-                                            vulkan_exp_layer_details,
-                                            vulkan_exp_layer_path, error))
+      if (!setup_each_json_manifest (self, bwrap, "vulkan/explicit_layer.d",
+                                     vulkan_exp_layer_details,
+                                     vulkan_exp_layer_path, error))
         return FALSE;
 
       g_debug ("Setting up Vulkan implicit layer JSON...");
-      if (!setup_each_vulkan_loadable_json (self, bwrap, "implicit_layer.d",
-                                            vulkan_imp_layer_details,
-                                            vulkan_imp_layer_path, error))
+      if (!setup_each_json_manifest (self, bwrap, "vulkan/implicit_layer.d",
+                                     vulkan_imp_layer_details,
+                                     vulkan_imp_layer_path, error))
         return FALSE;
     }
 

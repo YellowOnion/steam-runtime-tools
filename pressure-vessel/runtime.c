@@ -1449,10 +1449,8 @@ typedef struct
    * or (type SrtVaApiDriver) or (type SrtVulkanLayer) */
   gpointer icd;
   gchar *resolved_library;
-  /* Last entry is always NONEXISTENT.
-   * For VA-API, we use [0] and ignore the other elements.
-   * For the rest, this is keyed by the index of a multiarch tuple
-   * in multiarch_tuples. */
+  /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
+   * tuple in multiarch_tuples. */
   IcdKind kinds[G_N_ELEMENTS (multiarch_tuples)];
   /* Last entry is always NULL */
   gchar *paths_in_container[G_N_ELEMENTS (multiarch_tuples)];

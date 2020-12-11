@@ -1337,7 +1337,6 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
 static gboolean
 try_bind_dri (PvRuntime *self,
               RuntimeArchitecture *arch,
-              FlatpakBwrap *bwrap,
               const char *libdir,
               GError **error)
 {
@@ -3525,7 +3524,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * checked later will overwrite drivers checked earlier. */
           for (j = 0; j < dirs->len; j++)
             {
-              if (!try_bind_dri (self, arch, bwrap,
+              if (!try_bind_dri (self, arch,
                                  g_ptr_array_index (dirs, dirs->len - 1 - j),
                                  error))
                 return FALSE;

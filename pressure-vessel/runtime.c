@@ -1509,8 +1509,14 @@ icd_details_free (IcdDetails *self)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 
 /*
- * @sequence_number: numbered directory to use. Set to G_MAXSIZE to
- *  use just @subdir without a numbered sub directory
+ * @sequence_number: numbered directory to use to disambiguate between
+ *  colliding files with the same basename
+ * @subdir: (not nullable):
+ * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
+ *  numbered subdirectory per ICD, for the rare case where not all
+ *  drivers have a unique basename or where order matters
+ * @search_path: (nullable): Add the parent directory of the resulting
+ *  ICD to this search path if necessary
  */
 static gboolean
 bind_icd (PvRuntime *self,
@@ -1518,6 +1524,8 @@ bind_icd (PvRuntime *self,
           gsize sequence_number,
           const char *subdir,
           IcdDetails *details,
+          gboolean *use_numbered_subdirs,
+          GString *search_path,
           GError **error)
 {
   static const char options[] = "if-exists:if-same-abi";
@@ -1538,37 +1546,56 @@ bind_icd (PvRuntime *self,
                         FALSE);
   g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
                         FALSE);
+  g_return_val_if_fail (use_numbered_subdirs != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  g_debug ("Capturing loadable module: %s", details->resolved_library);
+
+  in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
+                                           subdir, NULL);
+
+  if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
+    return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                    in_current_namespace);
+
+  /* Check whether we can get away with avoiding the sequence number.
+   * Depending on the type of ICD, we might want to use the sequence
+   * number to force a specific load order. */
+  if (!*use_numbered_subdirs)
+    {
+      g_autofree gchar *path = NULL;
+      const char *base;
+
+      base = glnx_basename (details->resolved_library);
+      path = g_build_filename (in_current_namespace, base, NULL);
+
+      /* No, we can't: the ICD would collide with one that we already
+       * set up */
+      if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
+        *use_numbered_subdirs = TRUE;
+    }
+
+  /* If we can't avoid the numbered subdirectory, or want to use one
+   * to force a specific load order, create it. */
+  if (*use_numbered_subdirs)
+    {
+      seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
+      g_clear_pointer (&in_current_namespace, g_free);
+      in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
+                                               subdir, seq_str, NULL);
+
+      if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
+        return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                        in_current_namespace);
+    }
 
   if (g_path_is_absolute (details->resolved_library))
     {
       details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
       mode = "path";
-
-      /* Because the ICDs might have collisions among their
-       * basenames (might differ only by directory), we put each
-       * in its own numbered directory. */
-      if (sequence_number != G_MAXSIZE)
-        {
-          seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
-          in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                                   subdir, seq_str, NULL);
-        }
-      else
-        {
-          in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                                   subdir, NULL);
-        }
-
-      g_debug ("Ensuring %s exists", in_current_namespace);
-
-      if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
-        return glnx_throw_errno_prefix (error, "Unable to create %s", in_current_namespace);
     }
   else
     {
-      /* ICDs in the default search path by definition can't collide:
-       * one of them is the first one we find, and we use that one. */
       details->kinds[multiarch_index] = ICD_KIND_SONAME;
       mode = "soname";
     }
@@ -1583,8 +1610,7 @@ bind_icd (PvRuntime *self,
 
   temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
   flatpak_bwrap_add_args (temp_bwrap,
-                          "--dest",
-                            in_current_namespace == NULL ? arch->libdir_in_current_namespace : in_current_namespace,
+                          "--dest", in_current_namespace,
                           pattern,
                           NULL);
   flatpak_bwrap_finish (temp_bwrap);
@@ -1594,7 +1620,7 @@ bind_icd (PvRuntime *self,
 
   g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-  if (in_current_namespace != NULL)
+  if (seq_str != NULL)
     {
       /* Try to remove the directory we created. If it succeeds, then we
        * can optimize slightly by not capturing the dependencies: there's
@@ -1605,6 +1631,17 @@ bind_icd (PvRuntime *self,
           details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
           return TRUE;
         }
+    }
+
+  /* Only add the numbered subdirectories to the search path. Their
+   * parent is expected to be there already. */
+  if (search_path != NULL && seq_str != NULL)
+    {
+      g_autofree gchar *in_container = NULL;
+
+      in_container = g_build_filename (arch->libdir_in_container,
+                                       subdir, seq_str, NULL);
+      pv_search_path_append (search_path, in_container);
     }
 
   temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
@@ -2609,12 +2646,18 @@ collect_vulkan_layers (PvRuntime *self,
 {
   gsize j;
 
+  g_return_val_if_fail (dir_name != NULL, FALSE);
+
   for (j = 0; j < layer_details->len; j++)
     {
       g_autoptr(SrtLibrary) library = NULL;
       SrtLibraryIssues issues;
       IcdDetails *details = g_ptr_array_index (layer_details, j);
       SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
+      /* We don't have to use multiple directories unless there are
+       * filename collisions, because the order of the JSON manifests
+       * might matter, but the order of the actual libraries does not. */
+      gboolean use_numbered_subdirs = FALSE;
 
       if (!srt_vulkan_layer_check_error (layer, NULL))
         continue;
@@ -2675,7 +2718,8 @@ collect_vulkan_layers (PvRuntime *self,
             }
         }
 
-      if (!bind_icd (self, arch, j, dir_name, details, error))
+      if (!bind_icd (self, arch, j, dir_name, details,
+                     &use_numbered_subdirs, NULL, error))
         return FALSE;
     }
 
@@ -3368,6 +3412,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *libdrm = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
+          gboolean use_numbered_subdirs;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -3385,9 +3430,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                    arch->ld_so, ld_so_in_runtime);
 
           pv_search_path_append (dri_path, this_dri_path_in_container);
+          pv_search_path_append (va_api_path, this_dri_path_in_container);
 
           g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
           g_mkdir_with_parents (this_dri_path_on_host, 0755);
+
 
           g_debug ("Collecting graphics drivers from provider system...");
 
@@ -3396,6 +3443,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_debug ("Collecting %s EGL drivers from host system...",
                    arch->details->tuple);
+          /* As with Vulkan layers, the order of the manifests matters
+           * but the order of the actual libraries does not. */
+          use_numbered_subdirs = FALSE;
 
           for (j = 0; j < egl_icd_details->len; j++)
             {
@@ -3408,12 +3458,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               details->resolved_library = srt_egl_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!bind_icd (self, arch, j, "glvnd", details, error))
+              if (!bind_icd (self, arch, j, "glvnd", details,
+                             &use_numbered_subdirs, NULL, error))
                 return FALSE;
             }
 
           g_debug ("Collecting %s Vulkan drivers from host system...",
                    arch->details->tuple);
+          /* As with Vulkan layers, the order of the manifests matters
+           * but the order of the actual libraries does not. */
+          use_numbered_subdirs = FALSE;
 
           for (j = 0; j < vulkan_icd_details->len; j++)
             {
@@ -3426,7 +3480,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!bind_icd (self, arch, j, "vulkan", details, error))
+              if (!bind_icd (self, arch, j, "vulkan", details,
+                             &use_numbered_subdirs, NULL, error))
                 return FALSE;
             }
 
@@ -3447,18 +3502,23 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
                                                               arch->details->tuple,
                                                               SRT_DRIVER_FLAGS_NONE);
+          /* The VDPAU loader looks up drivers by name, not by readdir(),
+           * so order doesn't matter unless there are name collisions. */
+          use_numbered_subdirs = FALSE;
 
-          for (icd_iter = vdpau_drivers; icd_iter != NULL; icd_iter = icd_iter->next)
+          for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
               g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
               details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
 
-              /* We avoid using the sequence number for VDPAU because they can only
-               * be located in a single directory, so by definition we can't have
-               * collisions */
-              if (!bind_icd (self, arch, G_MAXSIZE, "vdpau", details, error))
+              /* In practice we won't actually use the sequence number for VDPAU
+               * because they can only be located in a single directory,
+               * so by definition we can't have collisions. Anything that
+               * ends up in a numbered subdirectory won't get used. */
+              if (!bind_icd (self, arch, j, "vdpau", details,
+                             &use_numbered_subdirs, NULL, error))
                 return FALSE;
             }
 
@@ -3467,27 +3527,21 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
                                                                 arch->details->tuple,
                                                                 SRT_DRIVER_FLAGS_NONE);
+          /* The VA-API loader looks up drivers by name, not by readdir(),
+           * so order doesn't matter unless there are name collisions. */
+          use_numbered_subdirs = FALSE;
 
           for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
               g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-              g_autofree gchar *parent = NULL;
 
               details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
 
-              if (!bind_icd (self, arch, j, "dri", details, error))
+              if (!bind_icd (self, arch, j, "dri", details,
+                             &use_numbered_subdirs, va_api_path, error))
                 return FALSE;
-
-              if (details->kinds[i] != ICD_KIND_NONEXISTENT)
-                {
-                  g_assert (details->kinds[i] == ICD_KIND_ABSOLUTE);
-                  g_assert (details->paths_in_container[i] != NULL);
-
-                  parent = g_path_get_dirname (details->paths_in_container[i]);
-                  pv_search_path_append (va_api_path, parent);
-                }
             }
 
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);

@@ -2408,14 +2408,14 @@ setup_vulkan_loadable_json (PvRuntime *self,
                             GError **error)
 {
   gsize i, j;
-  g_autofree gchar *dir_on_host = NULL;
+  g_autofree gchar *write_to_dir = NULL;
 
-  dir_on_host = g_build_filename (self->overrides,
+  write_to_dir = g_build_filename (self->overrides,
                                   "share", "vulkan", sub_dir, NULL);
 
-  if (g_mkdir_with_parents (dir_on_host, 0700) != 0)
+  if (g_mkdir_with_parents (write_to_dir, 0700) != 0)
     {
-      glnx_throw_errno_prefix (error, "Unable to create %s", dir_on_host);
+      glnx_throw_errno_prefix (error, "Unable to create %s", write_to_dir);
       return FALSE;
     }
 
@@ -2451,7 +2451,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
 
           if (details->kinds[i] == ICD_KIND_ABSOLUTE)
             {
-              g_autofree gchar *json_on_host = NULL;
+              g_autofree gchar *write_to_file = NULL;
               g_autofree gchar *json_in_container = NULL;
               g_autofree gchar *json_base = NULL;
 
@@ -2459,7 +2459,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
 
               json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
                                            j, multiarch_tuples[i]);
-              json_on_host = g_build_filename (dir_on_host, json_base, NULL);
+              write_to_file = g_build_filename (write_to_dir, json_base, NULL);
               json_in_container = g_build_filename (self->overrides_in_container,
                                                     "share", "vulkan", sub_dir,
                                                     json_base, NULL);
@@ -2470,7 +2470,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
                   replacement = srt_vulkan_layer_new_replace_library_path (layer,
                                                                            details->paths_in_container[i]);
 
-                  if (!srt_vulkan_layer_write_to_file (replacement, json_on_host, error))
+                  if (!srt_vulkan_layer_write_to_file (replacement, write_to_file, error))
                     return FALSE;
                 }
               else
@@ -2479,7 +2479,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
                   replacement = srt_vulkan_icd_new_replace_library_path (icd,
                                                                          details->paths_in_container[i]);
 
-                  if (!srt_vulkan_icd_write_to_file (replacement, json_on_host, error))
+                  if (!srt_vulkan_icd_write_to_file (replacement, write_to_file, error))
                     return FALSE;
                 }
 
@@ -2497,11 +2497,11 @@ setup_vulkan_loadable_json (PvRuntime *self,
         {
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
-          const char *json_on_host = NULL;
+          const char *json_in_provider = NULL;
           if (layer != NULL)
-            json_on_host = srt_vulkan_layer_get_json_path (layer);
+            json_in_provider = srt_vulkan_layer_get_json_path (layer);
           else
-            json_on_host = srt_vulkan_icd_get_json_path (icd);
+            json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", j);
           json_in_container = g_build_filename (self->overrides_in_container,
@@ -2509,7 +2509,7 @@ setup_vulkan_loadable_json (PvRuntime *self,
                                                 json_base, NULL);
 
           if (!pv_runtime_take_from_provider (self, bwrap,
-                                              json_on_host,
+                                              json_in_provider,
                                               json_in_container,
                                               TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK,
                                               error))

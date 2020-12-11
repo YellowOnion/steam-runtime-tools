@@ -1335,6 +1335,43 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
 }
 
 static gboolean
+collect_s2tc (PvRuntime *self,
+              RuntimeArchitecture *arch,
+              const char *libdir,
+              GError **error)
+{
+  g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
+  g_autofree gchar *s2tc_in_current_namespace = g_build_filename (
+                                                  self->provider_in_current_namespace,
+                                                  s2tc,
+                                                  NULL);
+
+  if (g_file_test (s2tc_in_current_namespace, G_FILE_TEST_EXISTS))
+    {
+      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+      g_autofree gchar *expr = NULL;
+
+      g_debug ("Collecting s2tc \"%s\" and its dependencies...", s2tc);
+      expr = g_strdup_printf ("path-match:%s", s2tc);
+
+      if (!pv_runtime_provide_container_access (self, error))
+        return FALSE;
+
+      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "--dest", arch->libdir_in_current_namespace,
+                              expr,
+                              NULL);
+      flatpak_bwrap_finish (temp_bwrap);
+
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
 try_bind_dri (PvRuntime *self,
               RuntimeArchitecture *arch,
               const char *libdir,
@@ -1347,11 +1384,6 @@ try_bind_dri (PvRuntime *self,
                                                 self->provider_in_current_namespace,
                                                 dri,
                                                 NULL);
-  g_autofree gchar *s2tc = g_build_filename (libdir, "libtxc_dxtn.so", NULL);
-  g_autofree gchar *s2tc_in_current_namespace = g_build_filename (
-                                                  self->provider_in_current_namespace,
-                                                  s2tc,
-                                                  NULL);
 
   if (g_file_test (dri_in_current_namespace, G_FILE_TEST_IS_DIR))
     {
@@ -1407,28 +1439,6 @@ try_bind_dri (PvRuntime *self,
                                             "Unable to create symlink \"%s\" -> \"%s\"",
                                             dest, target);
         }
-    }
-
-  if (g_file_test (s2tc_in_current_namespace, G_FILE_TEST_EXISTS))
-    {
-      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-      g_autofree gchar *expr = NULL;
-
-      g_debug ("Collecting s2tc \"%s\" and its dependencies...", s2tc);
-      expr = g_strdup_printf ("path-match:%s", s2tc);
-
-      if (!pv_runtime_provide_container_access (self, error))
-        return FALSE;
-
-      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              "--dest", arch->libdir_in_current_namespace,
-                              expr,
-                              NULL);
-      flatpak_bwrap_finish (temp_bwrap);
-
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-        return FALSE;
     }
 
   return TRUE;
@@ -3525,6 +3535,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           for (j = 0; j < dirs->len; j++)
             {
               if (!try_bind_dri (self, arch,
+                                 g_ptr_array_index (dirs, dirs->len - 1 - j),
+                                 error))
+                return FALSE;
+
+              if (!collect_s2tc (self, arch,
                                  g_ptr_array_index (dirs, dirs->len - 1 - j),
                                  error))
                 return FALSE;

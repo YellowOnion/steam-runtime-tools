@@ -2675,6 +2675,493 @@ collect_vulkan_layers (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * @self: the runtime
+ * @arch: An architecture
+ * @ld_so_in_runtime: (out) (nullable) (not optional): Used to return
+ *  the path to the architecture's ld.so in the runtime, or to
+ *  return %NULL if there is none.
+ * @error: Used to raise an error on failure
+ *
+ * Get the path to the ld.so in the runtime, which is either absolute
+ * or relative to the sysroot.
+ *
+ * Returns: %TRUE on success (possibly yielding %NULL via @ld_so_in_runtime)
+ */
+static gboolean
+pv_runtime_get_ld_so (PvRuntime *self,
+                      RuntimeArchitecture *arch,
+                      gchar **ld_so_in_runtime,
+                      GError **error)
+{
+  if (self->mutable_sysroot != NULL)
+    {
+      glnx_autofd int fd = -1;
+
+      fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                    arch->ld_so,
+                                    SRT_RESOLVE_FLAGS_NONE,
+                                    ld_so_in_runtime,
+                                    NULL);
+
+      /* Ignore fd, and just let it close: we're resolving
+       * the path for its side-effect of populating
+       * ld_so_in_runtime. */
+    }
+  else
+    {
+      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+      g_autofree gchar *etc = NULL;
+      g_autofree gchar *provider_etc = NULL;
+      g_autofree gchar *provider_etc_dest = NULL;
+
+      /* Do it the hard way, by asking a process running in the
+       * container (or at least a container resembling the one we
+       * are going to use) to resolve it for us */
+      temp_bwrap = flatpak_bwrap_new (NULL);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              self->bubblewrap,
+                              NULL);
+
+      if (!pv_bwrap_bind_usr (temp_bwrap,
+                              self->runtime_files_on_host,
+                              self->runtime_files,
+                              "/",
+                              error))
+        return FALSE;
+
+      etc = g_build_filename (self->runtime_files_on_host,
+                              "etc", NULL);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "--ro-bind",
+                              etc,
+                              "/etc",
+                              NULL);
+
+      if (!pv_bwrap_bind_usr (temp_bwrap,
+                              self->provider_in_host_namespace,
+                              self->provider_in_current_namespace,
+                              self->provider_in_container_namespace,
+                              error))
+        return FALSE;
+
+      provider_etc = g_build_filename (self->provider_in_host_namespace,
+                                       "etc", NULL);
+      provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
+                                            "etc", NULL);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "--ro-bind",
+                              provider_etc,
+                              provider_etc_dest,
+                              NULL);
+
+      flatpak_bwrap_set_env (temp_bwrap, "PATH", "/usr/bin:/bin", TRUE);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "readlink", "-e", arch->ld_so,
+                              NULL);
+      flatpak_bwrap_finish (temp_bwrap);
+
+      *ld_so_in_runtime = pv_capture_output (
+          (const char * const *) temp_bwrap->argv->pdata, NULL);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+pv_runtime_collect_graphics_libraries (PvRuntime *self,
+                                       RuntimeArchitecture *arch,
+                                       GError **error)
+{
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          "--dest", arch->libdir_in_current_namespace,
+                          /* Mesa GLX, etc. */
+                          "gl:",
+                          /* Vulkan */
+                          "if-exists:if-same-abi:soname:libvulkan.so.1",
+                          /* VDPAU */
+                          "if-exists:if-same-abi:soname:libvdpau.so.1",
+                          /* VA-API */
+                          "if-exists:if-same-abi:soname:libva.so.1",
+                          "if-exists:if-same-abi:soname:libva-drm.so.1",
+                          "if-exists:if-same-abi:soname:libva-glx.so.1",
+                          "if-exists:if-same-abi:soname:libva-x11.so.1",
+                          "if-exists:if-same-abi:soname:libva.so.2",
+                          "if-exists:if-same-abi:soname:libva-drm.so.2",
+                          "if-exists:if-same-abi:soname:libva-glx.so.2",
+                          "if-exists:if-same-abi:soname:libva-x11.so.2",
+                          /* NVIDIA proprietary stack */
+                          "if-exists:even-if-older:soname-match:libEGL.so.*",
+                          "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGL.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv1_CM.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv2.so.*",
+                          "if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGLX.so.*",
+                          "if-exists:even-if-older:soname-match:libGLX_nvidia.so.*",
+                          "if-exists:even-if-older:soname-match:libGLX_indirect.so.*",
+                          "if-exists:even-if-older:soname-match:libGLdispatch.so.*",
+                          "if-exists:even-if-older:soname-match:libOpenGL.so.*",
+                          "if-exists:even-if-older:soname-match:libcuda.so.*",
+                          "if-exists:even-if-older:soname-match:libglx.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-cbl.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-cfg.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-compiler.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-encode.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-fbc.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-glcore.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-glsi.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-ifr.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-ml.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-opencl.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*",
+                          "if-exists:even-if-older:soname-match:libnvidia-tls.so.*",
+                          "if-exists:even-if-older:soname-match:libOpenCL.so.*",
+                          "if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*",
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  return pv_bwrap_run_sync (temp_bwrap, NULL, error);
+}
+
+static gboolean
+pv_runtime_collect_libc_family (PvRuntime *self,
+                                RuntimeArchitecture *arch,
+                                FlatpakBwrap *bwrap,
+                                const char *libc,
+                                const char *ld_so_in_runtime,
+                                const char *provider_in_container_namespace_guarded,
+                                GHashTable *gconv_in_provider,
+                                GError **error)
+{
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  g_autofree char *libc_target = NULL;
+
+  if (!pv_runtime_take_ld_so_from_provider (self, arch,
+                                            ld_so_in_runtime,
+                                            bwrap, error))
+    return FALSE;
+
+  /* Collect miscellaneous libraries that libc might dlopen. */
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          "--dest", arch->libdir_in_current_namespace,
+                          "if-exists:libidn2.so.0",
+                          "if-exists:even-if-older:soname-match:libnss_compat.so.*",
+                          "if-exists:even-if-older:soname-match:libnss_db.so.*",
+                          "if-exists:even-if-older:soname-match:libnss_dns.so.*",
+                          "if-exists:even-if-older:soname-match:libnss_files.so.*",
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+  libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
+  if (libc_target != NULL)
+    {
+      g_autofree gchar *dir = NULL;
+      g_autofree gchar *gconv_dir_in_provider = NULL;
+      gboolean found = FALSE;
+
+      dir = g_path_get_dirname (libc_target);
+
+      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+        memmove (dir,
+                 dir + strlen (self->provider_in_container_namespace),
+                 strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
+
+      /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
+       * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
+       * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
+       * had its default value "$(libdir)/gconv".
+       * We check /usr first because otherwise, if the host is merged-/usr and the
+       * container is not, we might end up binding /lib instead of /usr/lib
+       * and that could cause issues. */
+      if (g_str_has_prefix (dir, "/usr/"))
+        memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
+
+      gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+
+      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                     -1,
+                                     gconv_dir_in_provider,
+                                     G_FILE_TEST_IS_DIR))
+        {
+          g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
+          found = TRUE;
+        }
+
+      if (!found)
+        {
+          /* Try again without hwcaps subdirectories.
+           * For example, libc6-i386 on SteamOS 2 'brewmaster'
+           * contains /lib/i386-linux-gnu/i686/cmov/libc.so.6,
+           * for which we want gconv modules from
+           * /usr/lib/i386-linux-gnu/gconv, not from
+           * /usr/lib/i386-linux-gnu/i686/cmov/gconv. */
+          while (g_str_has_suffix (dir, "/cmov") ||
+                 g_str_has_suffix (dir, "/i686") ||
+                 g_str_has_suffix (dir, "/sse2") ||
+                 g_str_has_suffix (dir, "/tls") ||
+                 g_str_has_suffix (dir, "/x86_64"))
+            {
+              char *slash = strrchr (dir, '/');
+
+              g_assert (slash != NULL);
+              *slash = '\0';
+            }
+
+          g_clear_pointer (&gconv_dir_in_provider, g_free);
+          gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+
+          if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                         -1,
+                                         gconv_dir_in_provider,
+                                         G_FILE_TEST_IS_DIR))
+            {
+              g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
+              found = TRUE;
+            }
+        }
+
+      if (!found)
+        {
+          g_debug ("We were expecting to have the gconv modules directory in the "
+                   "provider to be located in \"%s/gconv\", but instead it is missing",
+                   dir);
+        }
+    }
+
+  return TRUE;
+}
+
+static void
+pv_runtime_collect_libdrm_data (PvRuntime *self,
+                                RuntimeArchitecture *arch,
+                                const char *libdrm,
+                                const char *provider_in_container_namespace_guarded,
+                                GHashTable *libdrm_data_in_provider)
+{
+  g_autofree char *target = NULL;
+  target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
+
+  if (target != NULL)
+    {
+      g_autofree gchar *dir = NULL;
+      g_autofree gchar *lib_multiarch = NULL;
+      g_autofree gchar *libdrm_dir_in_provider = NULL;
+
+      dir = g_path_get_dirname (target);
+
+      lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
+      if (g_str_has_suffix (dir, lib_multiarch))
+        dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
+      else if (g_str_has_suffix (dir, "/lib64"))
+        dir[strlen (dir) - strlen ("/lib64")] = '\0';
+      else if (g_str_has_suffix (dir, "/lib32"))
+        dir[strlen (dir) - strlen ("/lib32")] = '\0';
+      else if (g_str_has_suffix (dir, "/lib"))
+        dir[strlen (dir) - strlen ("/lib")] = '\0';
+
+      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+        memmove (dir,
+                 dir + strlen (self->provider_in_container_namespace),
+                 strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
+
+      libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
+
+      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                     -1,
+                                     libdrm_dir_in_provider,
+                                     G_FILE_TEST_IS_DIR))
+        {
+          g_hash_table_add (libdrm_data_in_provider,
+                            g_steal_pointer (&libdrm_dir_in_provider));
+        }
+      else
+        {
+          g_debug ("We were expecting to have the libdrm directory "
+                   "in the provider to be located in "
+                   "\"%s/share/libdrm\", but instead it is missing",
+                   dir);
+        }
+    }
+}
+
+static gboolean
+pv_runtime_finish_libdrm_data (PvRuntime *self,
+                               FlatpakBwrap *bwrap,
+                               gboolean all_libdrm_from_provider,
+                               GHashTable *libdrm_data_in_provider,
+                               GError **error)
+{
+  g_autofree gchar *best_libdrm_data_in_provider = NULL;
+
+  if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
+    {
+      /* See the explanation in the similar
+       * "any_libc_from_provider && !all_libc_from_provider" case, above */
+      g_warning ("Using libdrm.so.2 from provider system for some but not all "
+                 "architectures! Will take /usr/share/libdrm from provider.");
+    }
+
+  if (g_hash_table_size (libdrm_data_in_provider) == 1)
+    {
+      best_libdrm_data_in_provider = g_strdup (
+        pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
+    }
+  else if (g_hash_table_size (libdrm_data_in_provider) > 1)
+    {
+      g_warning ("Found more than one possible libdrm data directory from provider");
+      /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
+       * the first directory in the hash table */
+      if (g_hash_table_contains (libdrm_data_in_provider, "/usr/share/libdrm"))
+        best_libdrm_data_in_provider = g_strdup ("/usr/share/libdrm");
+      else
+        best_libdrm_data_in_provider = g_strdup (
+          pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
+    }
+
+  if (best_libdrm_data_in_provider != NULL)
+    {
+      return pv_runtime_take_from_provider (self, bwrap,
+                                            best_libdrm_data_in_provider,
+                                            "/usr/share/libdrm",
+                                            TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                            error);
+    }
+  else
+    {
+      return TRUE;
+    }
+}
+
+static gboolean
+pv_runtime_finish_libc_family (PvRuntime *self,
+                               FlatpakBwrap *bwrap,
+                               GHashTable *gconv_in_provider,
+                               GError **error)
+{
+  g_autofree gchar *localedef = NULL;
+  g_autofree gchar *ldconfig = NULL;
+  g_autofree gchar *locale = NULL;
+  GHashTableIter iter;
+  const gchar *gconv_path;
+
+  if (self->any_libc_from_provider && !self->all_libc_from_provider)
+    {
+      /*
+       * This shouldn't happen. It would mean that there exist at least
+       * two architectures (let's say aaa and bbb) for which we have:
+       * provider libc6:aaa < container libc6 < provider libc6:bbb
+       * (we know that the container's libc6:aaa and libc6:bbb are
+       * constrained to be the same version because that's how multiarch
+       * works).
+       *
+       * If the provider system locales work OK with both the aaa and bbb
+       * versions, let's assume they will also work with the intermediate
+       * version from the container...
+       */
+      g_warning ("Using glibc from provider system for some but not all "
+                 "architectures! Arbitrarily using provider locales.");
+    }
+
+  if (self->any_libc_from_provider)
+    {
+      g_debug ("Making provider locale data visible in container");
+
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          "/usr/lib/locale",
+                                          "/usr/lib/locale",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                          error))
+        return FALSE;
+
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          "/usr/share/i18n",
+                                          "/usr/share/i18n",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                          error))
+        return FALSE;
+
+      localedef = pv_runtime_search_in_path_and_bin (self, "localedef");
+
+      if (localedef == NULL)
+        {
+          g_warning ("Cannot find localedef");
+        }
+      else if (!pv_runtime_take_from_provider (self, bwrap, localedef,
+                                               "/usr/bin/localedef",
+                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                               error))
+        {
+          return FALSE;
+        }
+
+      locale = pv_runtime_search_in_path_and_bin (self, "locale");
+
+      if (locale == NULL)
+        {
+          g_warning ("Cannot find locale");
+        }
+      else if (!pv_runtime_take_from_provider (self, bwrap, locale,
+                                               "/usr/bin/locale",
+                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                               error))
+        {
+          return FALSE;
+        }
+
+      ldconfig = pv_runtime_search_in_path_and_bin (self, "ldconfig");
+
+      if (ldconfig == NULL)
+        {
+          g_warning ("Cannot find ldconfig");
+        }
+      else if (!pv_runtime_take_from_provider (self, bwrap,
+                                               ldconfig,
+                                               "/sbin/ldconfig",
+                                               TAKE_FROM_PROVIDER_FLAGS_NONE,
+                                               error))
+        {
+          return FALSE;
+        }
+
+      g_debug ("Making provider gconv modules visible in container");
+
+      g_hash_table_iter_init (&iter, gconv_in_provider);
+      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
+        {
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              gconv_path,
+                                              gconv_path,
+                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                              error))
+            return FALSE;
+        }
+    }
+  else
+    {
+      g_debug ("Using included locale data from container");
+      g_debug ("Using included gconv modules from container");
+    }
+
+  return TRUE;
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -2692,9 +3179,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) vulkan_imp_layer_path = g_string_new ("");
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
-  g_autofree gchar *localedef = NULL;
-  g_autofree gchar *ldconfig = NULL;
-  g_autofree gchar *locale = NULL;
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
@@ -2714,9 +3198,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                      g_free, NULL);
-  g_autofree gchar *best_libdrm_data_in_provider = NULL;
-  GHashTableIter iter;
-  const gchar *gconv_path;
   g_autofree gchar *provider_in_container_namespace_guarded = NULL;
   if (g_str_has_suffix (self->provider_in_container_namespace, "/"))
     provider_in_container_namespace_guarded =
@@ -2871,7 +3352,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       if (runtime_architecture_init (arch, self))
         {
           g_autoptr(GPtrArray) dirs = NULL;
-          g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
           g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_in_current_namespace,
                                                                       "dri", NULL);
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
@@ -2883,76 +3363,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
 
-          if (self->mutable_sysroot != NULL)
-            {
-              glnx_autofd int fd = -1;
-
-              fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
-                                            arch->ld_so,
-                                            SRT_RESOLVE_FLAGS_NONE,
-                                            &ld_so_in_runtime,
-                                            error);
-
-              if (fd < 0)
-                return FALSE;
-            }
-          else
-            {
-              g_autofree gchar *etc = NULL;
-              g_autofree gchar *provider_etc = NULL;
-              g_autofree gchar *provider_etc_dest = NULL;
-
-              /* Do it the hard way, by asking a process running in the
-               * container (or at least a container resembling the one we
-               * are going to use) to resolve it for us */
-              temp_bwrap = flatpak_bwrap_new (NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      self->bubblewrap,
-                                      NULL);
-
-              if (!pv_bwrap_bind_usr (temp_bwrap,
-                                      self->runtime_files_on_host,
-                                      self->runtime_files,
-                                      "/",
-                                      error))
-                return FALSE;
-
-              etc = g_build_filename (self->runtime_files_on_host,
-                                      "etc", NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "--ro-bind",
-                                      etc,
-                                      "/etc",
-                                      NULL);
-
-              if (!pv_bwrap_bind_usr (temp_bwrap,
-                                      self->provider_in_host_namespace,
-                                      self->provider_in_current_namespace,
-                                      self->provider_in_container_namespace,
-                                      error))
-                return FALSE;
-
-              provider_etc = g_build_filename (self->provider_in_host_namespace,
-                                               "etc", NULL);
-              provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
-                                                    "etc", NULL);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "--ro-bind",
-                                      provider_etc,
-                                      provider_etc_dest,
-                                      NULL);
-
-              flatpak_bwrap_set_env (temp_bwrap, "PATH", "/usr/bin:/bin", TRUE);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "readlink", "-e", arch->ld_so,
-                                      NULL);
-              flatpak_bwrap_finish (temp_bwrap);
-
-              ld_so_in_runtime = pv_capture_output (
-                  (const char * const *) temp_bwrap->argv->pdata, NULL);
-
-              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-            }
+          if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
+            return FALSE;
 
           if (ld_so_in_runtime == NULL)
             {
@@ -2973,66 +3385,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_debug ("Collecting graphics drivers from provider system...");
 
-          temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-          flatpak_bwrap_add_args (temp_bwrap,
-                                  "--dest", arch->libdir_in_current_namespace,
-                                  /* Mesa GLX, etc. */
-                                  "gl:",
-                                  /* Vulkan */
-                                  "if-exists:if-same-abi:soname:libvulkan.so.1",
-                                  /* VDPAU */
-                                  "if-exists:if-same-abi:soname:libvdpau.so.1",
-                                  /* VA-API */
-                                  "if-exists:if-same-abi:soname:libva.so.1",
-                                  "if-exists:if-same-abi:soname:libva-drm.so.1",
-                                  "if-exists:if-same-abi:soname:libva-glx.so.1",
-                                  "if-exists:if-same-abi:soname:libva-x11.so.1",
-                                  "if-exists:if-same-abi:soname:libva.so.2",
-                                  "if-exists:if-same-abi:soname:libva-drm.so.2",
-                                  "if-exists:if-same-abi:soname:libva-glx.so.2",
-                                  "if-exists:if-same-abi:soname:libva-x11.so.2",
-                                  /* NVIDIA proprietary stack */
-                                  "if-exists:even-if-older:soname-match:libEGL.so.*",
-                                  "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGL.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv1_CM.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv2.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLX.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLX_nvidia.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLX_indirect.so.*",
-                                  "if-exists:even-if-older:soname-match:libGLdispatch.so.*",
-                                  "if-exists:even-if-older:soname-match:libOpenGL.so.*",
-                                  "if-exists:even-if-older:soname-match:libcuda.so.*",
-                                  "if-exists:even-if-older:soname-match:libglx.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-cbl.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-cfg.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-compiler.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-encode.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-fbc.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-glcore.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-glsi.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-ifr.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-ml.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-opencl.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*",
-                                  "if-exists:even-if-older:soname-match:libnvidia-tls.so.*",
-                                  "if-exists:even-if-older:soname-match:libOpenCL.so.*",
-                                  "if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*",
-                                  NULL);
-          flatpak_bwrap_finish (temp_bwrap);
-
-          if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+          if (!pv_runtime_collect_graphics_libraries (self, arch, error))
             return FALSE;
-
-          g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
           g_debug ("Collecting %s EGL drivers from host system...",
                    arch->details->tuple);
@@ -3134,106 +3488,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * then we have to use its ld.so too. */
           if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autofree char *libc_target = NULL;
-
-              if (!pv_runtime_take_ld_so_from_provider (self, arch,
-                                                        ld_so_in_runtime,
-                                                        bwrap, error))
+              if (!pv_runtime_collect_libc_family (self, arch, bwrap,
+                                                   libc, ld_so_in_runtime,
+                                                   provider_in_container_namespace_guarded,
+                                                   gconv_in_provider,
+                                                   error))
                 return FALSE;
-
-              /* Collect miscellaneous libraries that libc might dlopen. */
-              g_assert (temp_bwrap == NULL);
-              temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-              flatpak_bwrap_add_args (temp_bwrap,
-                                      "--dest", arch->libdir_in_current_namespace,
-                                      "if-exists:libidn2.so.0",
-                                      "if-exists:even-if-older:soname-match:libnss_compat.so.*",
-                                      "if-exists:even-if-older:soname-match:libnss_db.so.*",
-                                      "if-exists:even-if-older:soname-match:libnss_dns.so.*",
-                                      "if-exists:even-if-older:soname-match:libnss_files.so.*",
-                                      NULL);
-              flatpak_bwrap_finish (temp_bwrap);
-
-              if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-                return FALSE;
-
-              g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-
-              libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
-              if (libc_target != NULL)
-                {
-                  g_autofree gchar *dir = NULL;
-                  g_autofree gchar *gconv_dir_in_provider = NULL;
-                  gboolean found = FALSE;
-
-                  dir = g_path_get_dirname (libc_target);
-
-                  if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-                    memmove (dir,
-                             dir + strlen (self->provider_in_container_namespace),
-                             strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
-
-                  /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
-                   * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
-                   * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
-                   * had its default value "$(libdir)/gconv".
-                   * We check /usr first because otherwise, if the host is merged-/usr and the
-                   * container is not, we might end up binding /lib instead of /usr/lib
-                   * and that could cause issues. */
-                  if (g_str_has_prefix (dir, "/usr/"))
-                    memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
-
-                  gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
-
-                  if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                 -1,
-                                                 gconv_dir_in_provider,
-                                                 G_FILE_TEST_IS_DIR))
-                    {
-                      g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
-                      found = TRUE;
-                    }
-
-                  if (!found)
-                    {
-                      /* Try again without hwcaps subdirectories.
-                       * For example, libc6-i386 on SteamOS 2 'brewmaster'
-                       * contains /lib/i386-linux-gnu/i686/cmov/libc.so.6,
-                       * for which we want gconv modules from
-                       * /usr/lib/i386-linux-gnu/gconv, not from
-                       * /usr/lib/i386-linux-gnu/i686/cmov/gconv. */
-                      while (g_str_has_suffix (dir, "/cmov") ||
-                             g_str_has_suffix (dir, "/i686") ||
-                             g_str_has_suffix (dir, "/sse2") ||
-                             g_str_has_suffix (dir, "/tls") ||
-                             g_str_has_suffix (dir, "/x86_64"))
-                        {
-                          char *slash = strrchr (dir, '/');
-
-                          g_assert (slash != NULL);
-                          *slash = '\0';
-                        }
-
-                      g_clear_pointer (&gconv_dir_in_provider, g_free);
-                      gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
-
-                      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                     -1,
-                                                     gconv_dir_in_provider,
-                                                     G_FILE_TEST_IS_DIR))
-                        {
-                          g_hash_table_add (gconv_in_provider, g_steal_pointer (&gconv_dir_in_provider));
-                          found = TRUE;
-                        }
-                    }
-
-                  if (!found)
-                    {
-                      g_debug ("We were expecting to have the gconv modules directory in the "
-                               "provider to be located in \"%s/gconv\", but instead it is missing",
-                               dir);
-                    }
-                }
 
               self->any_libc_from_provider = TRUE;
             }
@@ -3249,50 +3509,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * the absolute path of libdrm.so.2 */
           if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
             {
-              g_autofree char *target = NULL;
-              target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
-
-              if (target != NULL)
-                {
-                  g_autofree gchar *dir = NULL;
-                  g_autofree gchar *lib_multiarch = NULL;
-                  g_autofree gchar *libdrm_dir_in_provider = NULL;
-
-                  dir = g_path_get_dirname (target);
-
-                  lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
-                  if (g_str_has_suffix (dir, lib_multiarch))
-                    dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
-                  else if (g_str_has_suffix (dir, "/lib64"))
-                    dir[strlen (dir) - strlen ("/lib64")] = '\0';
-                  else if (g_str_has_suffix (dir, "/lib32"))
-                    dir[strlen (dir) - strlen ("/lib32")] = '\0';
-                  else if (g_str_has_suffix (dir, "/lib"))
-                    dir[strlen (dir) - strlen ("/lib")] = '\0';
-
-                  if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-                    memmove (dir,
-                             dir + strlen (self->provider_in_container_namespace),
-                             strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
-
-                  libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
-
-                  if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
-                                                 -1,
-                                                 libdrm_dir_in_provider,
-                                                 G_FILE_TEST_IS_DIR))
-                    {
-                      g_hash_table_add (libdrm_data_in_provider,
-                                        g_steal_pointer (&libdrm_dir_in_provider));
-                    }
-                  else
-                    {
-                      g_debug ("We were expecting to have the libdrm directory "
-                               "in the provider to be located in "
-                               "\"%s/share/libdrm\", but instead it is missing",
-                               dir);
-                    }
-                }
+              pv_runtime_collect_libdrm_data (self, arch, libdrm,
+                                              provider_in_container_namespace_guarded,
+                                              libdrm_data_in_provider);
             }
           else
             {
@@ -3369,138 +3588,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       return FALSE;
     }
 
-  if (self->any_libc_from_provider && !self->all_libc_from_provider)
-    {
-      /*
-       * This shouldn't happen. It would mean that there exist at least
-       * two architectures (let's say aaa and bbb) for which we have:
-       * provider libc6:aaa < container libc6 < provider libc6:bbb
-       * (we know that the container's libc6:aaa and libc6:bbb are
-       * constrained to be the same version because that's how multiarch
-       * works).
-       *
-       * If the provider system locales work OK with both the aaa and bbb
-       * versions, let's assume they will also work with the intermediate
-       * version from the container...
-       */
-      g_warning ("Using glibc from provider system for some but not all "
-                 "architectures! Arbitrarily using provider locales.");
-    }
+  if (!pv_runtime_finish_libc_family (self, bwrap, gconv_in_provider, error))
+    return FALSE;
 
-  if (self->any_libc_from_provider)
-    {
-      g_debug ("Making provider locale data visible in container");
-
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          "/usr/lib/locale",
-                                          "/usr/lib/locale",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
-                                          error))
-        return FALSE;
-
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          "/usr/share/i18n",
-                                          "/usr/share/i18n",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
-                                          error))
-        return FALSE;
-
-      localedef = pv_runtime_search_in_path_and_bin (self, "localedef");
-
-      if (localedef == NULL)
-        {
-          g_warning ("Cannot find localedef");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap, localedef,
-                                               "/usr/bin/localedef",
-                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                               error))
-        {
-          return FALSE;
-        }
-
-      locale = pv_runtime_search_in_path_and_bin (self, "locale");
-
-      if (locale == NULL)
-        {
-          g_warning ("Cannot find locale");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap, locale,
-                                               "/usr/bin/locale",
-                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                               error))
-        {
-          return FALSE;
-        }
-
-      ldconfig = pv_runtime_search_in_path_and_bin (self, "ldconfig");
-
-      if (ldconfig == NULL)
-        {
-          g_warning ("Cannot find ldconfig");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap,
-                                               ldconfig,
-                                               "/sbin/ldconfig",
-                                               TAKE_FROM_PROVIDER_FLAGS_NONE,
-                                               error))
-        {
-          return FALSE;
-        }
-
-      g_debug ("Making provider gconv modules visible in container");
-
-      g_hash_table_iter_init (&iter, gconv_in_provider);
-      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
-        {
-          if (!pv_runtime_take_from_provider (self, bwrap,
-                                              gconv_path,
-                                              gconv_path,
-                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
-                                              error))
-            return FALSE;
-        }
-    }
-  else
-    {
-      g_debug ("Using included locale data from container");
-      g_debug ("Using included gconv modules from container");
-    }
-
-  if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
-    {
-      /* See the explanation in the similar
-       * "any_libc_from_provider && !all_libc_from_provider" case, above */
-      g_warning ("Using libdrm.so.2 from provider system for some but not all "
-                 "architectures! Will take /usr/share/libdrm from provider.");
-    }
-
-  if (g_hash_table_size (libdrm_data_in_provider) == 1)
-    {
-      best_libdrm_data_in_provider = g_strdup (
-        pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
-    }
-  else if (g_hash_table_size (libdrm_data_in_provider) > 1)
-    {
-      g_warning ("Found more than one possible libdrm data directory from provider");
-      /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
-       * the first directory in the hash table */
-      if (g_hash_table_contains (libdrm_data_in_provider, "/usr/share/libdrm"))
-        best_libdrm_data_in_provider = g_strdup ("/usr/share/libdrm");
-      else
-        best_libdrm_data_in_provider = g_strdup (
-          pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
-    }
-
-  if (best_libdrm_data_in_provider != NULL)
-    {
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          best_libdrm_data_in_provider,
-                                          "/usr/share/libdrm",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                          error))
-        return FALSE;
-    }
+  if (!pv_runtime_finish_libdrm_data (self, bwrap, all_libdrm_from_provider,
+                                      libdrm_data_in_provider, error))
+    return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");
 

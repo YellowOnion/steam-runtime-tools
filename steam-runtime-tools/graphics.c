@@ -3749,6 +3749,23 @@ _srt_get_modules_full (const char *sysroot,
                                       libdir_driver, is_extra, module, drivers_out);
         }
 
+      if (module == SRT_GRAPHICS_DRI_MODULE)
+        {
+          /* Used on Slackware according to
+           * https://github.com/ValveSoftware/steam-runtime/issues/318 */
+          g_autofree gchar *slackware = g_build_filename (libdir, "xorg",
+                                                          "modules", "dri",
+                                                          NULL);
+
+          if (!g_hash_table_contains (drivers_set, slackware))
+            {
+              _srt_get_modules_from_path (envp, helpers_path,
+                                          multiarch_tuple, slackware,
+                                          is_extra, module, drivers_out);
+              g_hash_table_add (drivers_set, g_steal_pointer (&slackware));
+            }
+        }
+
       if (force_elf_class)
         {
           if (g_strcmp0 (force_elf_class, "64") == 0)

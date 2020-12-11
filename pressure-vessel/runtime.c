@@ -887,10 +887,16 @@ pv_runtime_initable_init (GInitable *initable,
     {
       /* We currently only need a temporary directory if we don't have
        * a mutable sysroot to work with. */
-      self->tmpdir = g_dir_make_tmp ("pressure-vessel-wrap.XXXXXX", error);
+      g_autofree gchar *tmpdir = g_dir_make_tmp ("pressure-vessel-wrap.XXXXXX",
+                                                 error);
+
+      if (tmpdir == NULL)
+        return FALSE;
+
+      self->tmpdir = realpath (tmpdir, NULL);
 
       if (self->tmpdir == NULL)
-        return FALSE;
+        return glnx_throw_errno_prefix (error, "realpath(\"%s\")", tmpdir);
 
       self->overrides = g_build_filename (self->tmpdir, "overrides", NULL);
       self->overrides_in_container = "/overrides";

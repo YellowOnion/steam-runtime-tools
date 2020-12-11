@@ -1371,79 +1371,6 @@ collect_s2tc (PvRuntime *self,
   return TRUE;
 }
 
-static gboolean
-try_bind_dri (PvRuntime *self,
-              RuntimeArchitecture *arch,
-              const char *libdir,
-              GError **error)
-{
-  /* e.g. /usr/lib/dri */
-  g_autofree gchar *dri = g_build_filename (libdir, "dri", NULL);
-  /* e.g. /run/host/usr/lib/dri */
-  g_autofree gchar *dri_in_current_namespace = g_build_filename (
-                                                self->provider_in_current_namespace,
-                                                dri,
-                                                NULL);
-
-  if (g_file_test (dri_in_current_namespace, G_FILE_TEST_IS_DIR))
-    {
-      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-      g_autofree gchar *expr = NULL;
-      g_autoptr(GDir) dir = NULL;
-      const char *member;
-
-      g_debug ("Collecting dependencies of DRI drivers in \"%s\"...", dri);
-      expr = g_strdup_printf ("only-dependencies:if-exists:path-match:%s/dri/*.so",
-                              libdir);
-
-      if (!pv_runtime_provide_container_access (self, error))
-        return FALSE;
-
-      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              "--dest", arch->libdir_in_current_namespace,
-                              expr,
-                              NULL);
-      flatpak_bwrap_finish (temp_bwrap);
-
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-        return FALSE;
-
-      g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
-
-      dir = g_dir_open (dri_in_current_namespace, 0, error);
-
-      if (dir == NULL)
-        return FALSE;
-
-      for (member = g_dir_read_name (dir);
-           member != NULL;
-           member = g_dir_read_name (dir))
-        {
-          g_autofree gchar *target = g_build_filename (self->provider_in_container_namespace,
-                                                       dri, member, NULL);
-          g_autofree gchar *dest = g_build_filename (arch->libdir_in_current_namespace,
-                                                     "dri", member, NULL);
-
-          g_debug ("Creating symbolic link \"%s\" -> \"%s\" for \"%s\" DRI driver",
-                   dest, target, arch->details->tuple);
-
-          /* Delete an existing symlink if any, like ln -f */
-          if (unlink (dest) != 0 && errno != ENOENT)
-            return glnx_throw_errno_prefix (error,
-                                            "Unable to remove \"%s\"",
-                                            dest);
-
-          if (symlink (target, dest) != 0)
-            return glnx_throw_errno_prefix (error,
-                                            "Unable to create symlink \"%s\" -> \"%s\"",
-                                            dest, target);
-        }
-    }
-
-  return TRUE;
-}
-
 typedef enum
 {
   ICD_KIND_NONEXISTENT,
@@ -1455,7 +1382,8 @@ typedef enum
 typedef struct
 {
   /* (type SrtEglIcd) or (type SrtVulkanIcd) or (type SrtVdpauDriver)
-   * or (type SrtVaApiDriver) or (type SrtVulkanLayer) */
+   * or (type SrtVaApiDriver) or (type SrtVulkanLayer) or
+   * (type SrtDriDriver) */
   gpointer icd;
   gchar *resolved_library;
   /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
@@ -1472,7 +1400,8 @@ icd_details_new (gpointer icd)
   gsize i;
 
   g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
-  g_return_val_if_fail (SRT_IS_EGL_ICD (icd) ||
+  g_return_val_if_fail (SRT_IS_DRI_DRIVER (icd) ||
+                        SRT_IS_EGL_ICD (icd) ||
                         SRT_IS_VULKAN_ICD (icd) ||
                         SRT_IS_VULKAN_LAYER (icd) ||
                         SRT_IS_VDPAU_DRIVER (icd) ||
@@ -3402,14 +3331,13 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       if (runtime_architecture_init (arch, self))
         {
           g_autoptr(GPtrArray) dirs = NULL;
-          g_autofree gchar *this_dri_path_on_host = g_build_filename (arch->libdir_in_current_namespace,
-                                                                      "dri", NULL);
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
           g_autofree gchar *libc = NULL;
           /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
+          g_autoptr(SrtObjectList) dri_drivers = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
           gboolean use_numbered_subdirs;
@@ -3433,7 +3361,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           pv_search_path_append (va_api_path, this_dri_path_in_container);
 
           g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
-          g_mkdir_with_parents (this_dri_path_on_host, 0755);
 
 
           g_debug ("Collecting graphics drivers from provider system...");
@@ -3522,6 +3449,28 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
+          g_debug ("Enumerating %s DRI drivers on host system...",
+                   arch->details->tuple);
+          dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                          arch->details->tuple,
+                                                          SRT_DRIVER_FLAGS_NONE);
+          /* The DRI loader looks up drivers by name, not by readdir(),
+           * so order doesn't matter unless there are name collisions. */
+          use_numbered_subdirs = FALSE;
+
+          for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+            {
+              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+
+              details->resolved_library = srt_dri_driver_resolve_library_path (details->icd);
+              g_assert (details->resolved_library != NULL);
+              g_assert (g_path_is_absolute (details->resolved_library));
+
+              if (!bind_icd (self, arch, j, "dri", details,
+                             &use_numbered_subdirs, dri_path, error))
+                return FALSE;
+            }
+
           g_debug ("Enumerating %s VA-API drivers on host system...",
                    arch->details->tuple);
           va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
@@ -3583,17 +3532,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           dirs = multiarch_details_get_libdirs (arch->details,
                                                 MULTIARCH_LIBDIRS_FLAGS_NONE);
-
-          /* We iterate in reverse order, from dirs->len - 1 down to 0,
-           * because we want to see the most important *last*: drivers
-           * checked later will overwrite drivers checked earlier. */
-          for (j = 0; j < dirs->len; j++)
-            {
-              if (!try_bind_dri (self, arch,
-                                 g_ptr_array_index (dirs, dirs->len - 1 - j),
-                                 error))
-                return FALSE;
-            }
 
           for (j = 0; j < dirs->len; j++)
             {

@@ -3538,9 +3538,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                  g_ptr_array_index (dirs, dirs->len - 1 - j),
                                  error))
                 return FALSE;
+            }
 
+          for (j = 0; j < dirs->len; j++)
+            {
               if (!collect_s2tc (self, arch,
-                                 g_ptr_array_index (dirs, dirs->len - 1 - j),
+                                 g_ptr_array_index (dirs, j),
                                  error))
                 return FALSE;
             }

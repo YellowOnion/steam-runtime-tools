@@ -3195,7 +3195,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) va_api_icd_details = NULL;   /* (element-type IcdDetails) */
   guint n_egl_icds;
   guint n_vulkan_icds;
   const GList *icd_iter;
@@ -3469,16 +3468,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                 arch->details->tuple,
                                                                 SRT_DRIVER_FLAGS_NONE);
 
-          /* Guess that there will be about the same number of VA-API ICDs
-           * for each word size. This only needs to be approximately right:
-           * g_ptr_array_add() will resize the allocated buffer if needed. */
-          if (va_api_icd_details == NULL)
-            va_api_icd_details = g_ptr_array_new_full (g_list_length (va_api_drivers) * (G_N_ELEMENTS (multiarch_tuples) - 1),
-                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
-
           for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
               g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+              g_autofree gchar *parent = NULL;
+
               details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
@@ -3486,7 +3480,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               if (!bind_icd (self, arch, j, "dri", details, error))
                 return FALSE;
 
-              g_ptr_array_add (va_api_icd_details, g_steal_pointer (&details));
+              if (details->kinds[i] != ICD_KIND_NONEXISTENT)
+                {
+                  g_assert (details->kinds[i] == ICD_KIND_ABSOLUTE);
+                  g_assert (details->paths_in_container[i] != NULL);
+
+                  parent = g_path_get_dirname (details->paths_in_container[i]);
+                  pv_search_path_append (va_api_path, parent);
+                }
             }
 
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
@@ -3634,31 +3635,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                      vulkan_imp_layer_details,
                                      vulkan_imp_layer_path, error))
         return FALSE;
-    }
-
-  for (j = 0; j < va_api_icd_details->len; j++)
-    {
-      IcdDetails *details = g_ptr_array_index (va_api_icd_details, j);
-
-      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
-        {
-          g_assert (i < G_N_ELEMENTS (details->kinds));
-          g_assert (i < G_N_ELEMENTS (details->paths_in_container));
-
-          if (details->kinds[i] == ICD_KIND_NONEXISTENT)
-            {
-              continue;
-            }
-          else
-            {
-              g_autofree gchar *parent = NULL;
-
-              g_assert (details->kinds[i] == ICD_KIND_ABSOLUTE);
-
-              parent = g_path_get_dirname (details->paths_in_container[i]);
-              pv_search_path_append (va_api_path, parent);
-            }
-        }
     }
 
   if (dri_path->len != 0)

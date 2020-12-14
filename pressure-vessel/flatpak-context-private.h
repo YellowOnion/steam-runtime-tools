@@ -151,12 +151,14 @@ FlatpakContext *flatpak_context_load_for_deploy (FlatpakDeploy *deploy,
 FlatpakExports *flatpak_context_get_exports (FlatpakContext *context,
                                              const char     *app_id);
 
+#if 0
 void flatpak_context_append_bwrap_filesystem (FlatpakContext  *context,
                                               FlatpakBwrap    *bwrap,
                                               const char      *app_id,
                                               GFile           *app_id_dir,
                                               GPtrArray       *extra_app_id_dirs,
                                               FlatpakExports **exports_out);
+#endif
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (FlatpakContext, flatpak_context_free)
 

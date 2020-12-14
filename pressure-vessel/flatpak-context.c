@@ -553,6 +553,7 @@ get_xdg_dir_from_prefix (const char  *prefix,
   return FALSE;
 }
 
+#if 0
 /* This looks only in the xdg dirs (config, cache, data), not the user
    definable ones */
 static char *
@@ -587,6 +588,7 @@ get_xdg_dir_from_string (const char  *filesystem,
 
   return NULL;
 }
+#endif
 
 static gboolean
 get_xdg_user_dir_from_string (const char  *filesystem,
@@ -2350,6 +2352,7 @@ flatpak_context_get_run_flags (FlatpakContext *context)
   return flags;
 }
 
+#if 0
 void
 flatpak_context_append_bwrap_filesystem (FlatpakContext  *context,
                                          FlatpakBwrap    *bwrap,
@@ -2360,9 +2363,7 @@ flatpak_context_append_bwrap_filesystem (FlatpakContext  *context,
 {
   g_autoptr(FlatpakExports) exports = flatpak_exports_new ();
   g_autoptr(GString) xdg_dirs_conf = g_string_new ("");
-#if 0
   g_autoptr(GFile) user_flatpak_dir = NULL;
-#endif
   gboolean home_access = FALSE;
   GHashTableIter iter;
   gpointer key, value;
@@ -2404,11 +2405,9 @@ flatpak_context_append_bwrap_filesystem (FlatpakContext  *context,
                                 NULL);
     }
 
-#if 0
   /* Hide the flatpak dir by default (unless explicitly made visible) */
   user_flatpak_dir = flatpak_get_user_base_dir_location ();
   flatpak_exports_add_path_tmpfs (exports, flatpak_file_get_path_cached (user_flatpak_dir));
-#endif
 
   /* Ensure we always have a homedir */
   flatpak_exports_add_path_dir (exports, g_get_home_dir ());
@@ -2475,3 +2474,4 @@ flatpak_context_append_bwrap_filesystem (FlatpakContext  *context,
   if (exports_out)
     *exports_out = g_steal_pointer (&exports);
 }
+#endif

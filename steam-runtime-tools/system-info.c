@@ -1146,25 +1146,25 @@ ensure_hidden_deps (SrtSystemInfo *self)
 static void
 ensure_overrides_cached (SrtSystemInfo *self)
 {
-  const gchar *argv[] = {"find", "overrides", "-ls", NULL};
-  gchar *output = NULL;
-  gchar *messages = NULL;
-  gchar *runtime = NULL;
-  int exit_status = -1;
-  GError *error = NULL;
-
   g_return_if_fail (_srt_check_not_setuid ());
   g_return_if_fail (!self->immutable_values);
 
   if (!self->overrides.have_data)
     {
+      g_autoptr(GError) error = NULL;
+      g_autofree gchar *output = NULL;
+      g_autofree gchar *messages = NULL;
+      g_autofree gchar *runtime = NULL;
+      const gchar *argv[] = {"find", "overrides", "-ls", NULL};
+      int exit_status = -1;
+
       self->overrides.have_data = TRUE;
 
       runtime = srt_system_info_dup_runtime_path (self);
       /* Skip checking the overridden folder if we are not in a pressure-vessel
        * Steam Runtime container */
       if (g_strcmp0 (runtime, "/") != 0)
-        goto out;
+        return;
 
       if (!g_spawn_sync (self->sysroot,     /* working directory */
                         (gchar **) argv,
@@ -1181,7 +1181,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
           self->overrides.messages = g_new0 (gchar *, 2);
           self->overrides.messages[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
           self->overrides.messages[1] = NULL;
-          goto out;
+          return;
         }
 
       if (exit_status != 0)
@@ -1199,12 +1199,6 @@ ensure_overrides_cached (SrtSystemInfo *self)
           self->overrides.messages = g_strsplit (messages, "\n", -1);
         }
     }
-
-  out:
-    g_free (output);
-    g_free (messages);
-    g_free (runtime);
-    g_clear_error (&error);
 }
 
 /**

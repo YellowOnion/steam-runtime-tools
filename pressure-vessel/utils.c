@@ -907,3 +907,19 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
 
   return path_on_host;
 }
+
+/**
+ * pv_log_to_stderr:
+ * @log_domain: the log domain of the message
+ * @log_level: the log level of the message
+ * @message: the message to process
+ * @user_data: not used
+ */
+void
+pv_log_to_stderr (const gchar *log_domain,
+                  GLogLevelFlags log_level,
+                  const gchar *message,
+                  gpointer user_data)
+{
+  g_printerr ("%s[%d]: %s\n", g_get_prgname (), getpid (), message);
+}

@@ -620,17 +620,6 @@ static GOptionEntry options[] =
   { NULL }
 };
 
-static int my_pid = -1;
-
-static void
-cli_log_func (const gchar *log_domain,
-              GLogLevelFlags log_level,
-              const gchar *message,
-              gpointer user_data)
-{
-  g_printerr ("%s[%d]: %s\n", (const char *) user_data, my_pid, message);
-}
-
 int
 main (int argc,
       char *argv[])
@@ -648,8 +637,6 @@ main (int argc,
   sigset_t mask;
   struct sigaction terminate_child_action = {};
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
-
-  my_pid = getpid ();
 
   sigemptyset (&mask);
   sigaddset (&mask, SIGCHLD);
@@ -674,7 +661,7 @@ main (int argc,
 
   g_log_set_handler (G_LOG_DOMAIN,
                      G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     cli_log_func, (void *) g_get_prgname ());
+                     pv_log_to_stderr, NULL);
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -710,7 +697,7 @@ main (int argc,
   if (opt_verbose)
     g_log_set_handler (G_LOG_DOMAIN,
                        G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                       cli_log_func, (void *) g_get_prgname ());
+                       pv_log_to_stderr, NULL);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 

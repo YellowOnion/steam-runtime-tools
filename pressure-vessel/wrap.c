@@ -1187,17 +1187,6 @@ tristate_environment (const gchar *name)
   return TRISTATE_MAYBE;
 }
 
-static int my_pid = -1;
-
-static void
-cli_log_func (const gchar *log_domain,
-              GLogLevelFlags log_level,
-              const gchar *message,
-              gpointer user_data)
-{
-  g_printerr ("%s[%d]: %s\n", (const char *) user_data, my_pid, message);
-}
-
 int
 main (int argc,
       char *argv[])
@@ -1243,15 +1232,13 @@ main (int argc,
   g_autofree char *lock_env_fd = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
 
-  my_pid = getpid ();
-
   setlocale (LC_ALL, "");
 
   g_set_prgname ("pressure-vessel-wrap");
 
   g_log_set_handler (G_LOG_DOMAIN,
                      G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     cli_log_func, (void *) g_get_prgname ());
+                     pv_log_to_stderr, NULL);
 
   original_argv = g_new0 (char *, argc + 1);
 
@@ -1310,6 +1297,11 @@ main (int argc,
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
+
+  if (opt_verbose)
+    g_log_set_handler (G_LOG_DOMAIN,
+                       G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
+                       pv_log_to_stderr, NULL);
 
   if (opt_runtime == NULL)
     opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
@@ -1545,10 +1537,6 @@ main (int argc,
   if (opt_verbose)
     {
       g_auto(GStrv) env = g_strdupv (original_environ);
-
-      g_log_set_handler (G_LOG_DOMAIN,
-                         G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                         cli_log_func, (void *) g_get_prgname ());
 
       g_message ("Original argv:");
 

@@ -1149,7 +1149,6 @@ ensure_overrides_cached (SrtSystemInfo *self)
   const gchar *argv[] = {"find", "overrides", "-ls", NULL};
   gchar *output = NULL;
   gchar *messages = NULL;
-  gchar *overrides_path = NULL;
   gchar *runtime = NULL;
   int exit_status = -1;
   GError *error = NULL;
@@ -1204,7 +1203,6 @@ ensure_overrides_cached (SrtSystemInfo *self)
   out:
     g_free (output);
     g_free (messages);
-    g_free (overrides_path);
     g_free (runtime);
     g_clear_error (&error);
 }

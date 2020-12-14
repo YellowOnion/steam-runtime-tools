@@ -1212,7 +1212,6 @@ main (int argc,
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
-  g_autoptr(FlatpakBwrap) exports_bwrap = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
   g_autoptr(FlatpakBwrap) adverb_args = NULL;
   g_autofree gchar *adverb_in_container = NULL;
@@ -1973,10 +1972,15 @@ main (int argc,
     }
 
   /* Convert the exported directories into extra bubblewrap arguments */
-  exports_bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-  flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-  adjust_exports (exports_bwrap, home);
-  flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+    {
+      g_autoptr(FlatpakBwrap) exports_bwrap =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
+      flatpak_exports_append_bwrap_args (exports, exports_bwrap);
+      adjust_exports (exports_bwrap, home);
+      g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
+      flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+    }
 
   flatpak_run_add_font_path_args (bwrap);
 

@@ -2369,18 +2369,7 @@ srt_egl_icd_set_property (GObject *object,
       case EGL_ICD_PROP_JSON_PATH:
         g_return_if_fail (self->icd.json_path == NULL);
         tmp = g_value_get_string (value);
-
-        if (g_path_is_absolute (tmp))
-          {
-            self->icd.json_path = g_strdup (tmp);
-          }
-        else
-          {
-            gchar *cwd = g_get_current_dir ();
-
-            self->icd.json_path = g_build_filename (cwd, tmp, NULL);
-            g_free (cwd);
-          }
+        self->icd.json_path = g_canonicalize_filename (tmp, NULL);
         break;
 
       case EGL_ICD_PROP_LIBRARY_PATH:
@@ -2815,24 +2804,6 @@ _srt_load_egl_icds (const char *sysroot,
   return g_list_reverse (ret);
 }
 
-static gchar *
-_srt_resolve_library_path (const gchar *library_path)
-{
-  gchar *base;
-  gchar *ret;
-
-  g_return_val_if_fail (library_path != NULL, NULL);
-
-  /* We can't use g_canonicalize_filename() because we are targeting an earlier glib version */
-  if (library_path[0] == '/')
-    return g_strdup (library_path);
-
-  base = g_get_current_dir ();
-  ret = g_build_filename (base, library_path, NULL);
-  g_free (base);
-  return ret;
-}
-
 static GList *
 get_driver_loadables_from_json_report (JsonObject *json_obj,
                                        GType which,
@@ -3053,7 +3024,7 @@ srt_dri_driver_resolve_library_path (SrtDriDriver *self)
   g_return_val_if_fail (SRT_IS_DRI_DRIVER (self), NULL);
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
-  return _srt_resolve_library_path (self->library_path);
+  return g_canonicalize_filename (self->library_path, NULL);
 }
 
 /**
@@ -3778,6 +3749,23 @@ _srt_get_modules_full (const char *sysroot,
                                       libdir_driver, is_extra, module, drivers_out);
         }
 
+      if (module == SRT_GRAPHICS_DRI_MODULE)
+        {
+          /* Used on Slackware according to
+           * https://github.com/ValveSoftware/steam-runtime/issues/318 */
+          g_autofree gchar *slackware = g_build_filename (libdir, "xorg",
+                                                          "modules", "dri",
+                                                          NULL);
+
+          if (!g_hash_table_contains (drivers_set, slackware))
+            {
+              _srt_get_modules_from_path (envp, helpers_path,
+                                          multiarch_tuple, slackware,
+                                          is_extra, module, drivers_out);
+              g_hash_table_add (drivers_set, g_steal_pointer (&slackware));
+            }
+        }
+
       if (force_elf_class)
         {
           if (g_strcmp0 (force_elf_class, "64") == 0)
@@ -4239,7 +4227,7 @@ srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self)
   g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), NULL);
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
-  return _srt_resolve_library_path (self->library_path);
+  return g_canonicalize_filename (self->library_path, NULL);
 }
 
 /**
@@ -4529,7 +4517,7 @@ srt_vdpau_driver_resolve_library_path (SrtVdpauDriver *self)
   g_return_val_if_fail (SRT_IS_VDPAU_DRIVER (self), NULL);
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
-  return _srt_resolve_library_path (self->library_path);
+  return g_canonicalize_filename (self->library_path, NULL);
 }
 
 /**
@@ -4676,18 +4664,7 @@ srt_vulkan_icd_set_property (GObject *object,
       case VULKAN_ICD_PROP_JSON_PATH:
         g_return_if_fail (self->icd.json_path == NULL);
         tmp = g_value_get_string (value);
-
-        if (g_path_is_absolute (tmp))
-          {
-            self->icd.json_path = g_strdup (tmp);
-          }
-        else
-          {
-            gchar *cwd = g_get_current_dir ();
-
-            self->icd.json_path = g_build_filename (cwd, tmp, NULL);
-            g_free (cwd);
-          }
+        self->icd.json_path = g_canonicalize_filename (tmp, NULL);
         break;
 
       case VULKAN_ICD_PROP_LIBRARY_PATH:
@@ -5336,16 +5313,7 @@ srt_vulkan_layer_set_property (GObject *object,
       case VULKAN_LAYER_PROP_JSON_PATH:
         g_return_if_fail (self->layer.json_path == NULL);
         tmp = g_value_get_string (value);
-
-        if (g_path_is_absolute (tmp))
-          {
-            self->layer.json_path = g_strdup (tmp);
-          }
-        else
-          {
-            g_autofree gchar *cwd = g_get_current_dir ();
-            self->layer.json_path = g_build_filename (cwd, tmp, NULL);
-          }
+        self->layer.json_path = g_canonicalize_filename (tmp, NULL);
         break;
 
       case VULKAN_LAYER_PROP_NAME:

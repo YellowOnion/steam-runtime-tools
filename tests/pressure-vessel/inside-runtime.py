@@ -490,7 +490,7 @@ class TestInsideRuntime(BaseTest):
                         '/usr/lib32/dri/',
                         '/usr/lib64/dri/',
                         '/usr/lib/{}/dri/'.format(multiarch),
-                    )):
+                    )) and not dri.get('is_extra', False):
                         # We don't make any assertion about the search
                         # order here.
                         host_path = '/run/host' + path

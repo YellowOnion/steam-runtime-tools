@@ -1151,12 +1151,17 @@ ensure_overrides_cached (SrtSystemInfo *self)
 
   if (!self->overrides.have_data)
     {
+      static const char * const paths[] = {
+          "overrides",
+          "usr/lib/pressure-vessel/overrides",
+      };
       g_autoptr(GError) error = NULL;
       g_autofree gchar *output = NULL;
       g_autofree gchar *messages = NULL;
       g_autofree gchar *runtime = NULL;
-      const gchar *argv[] = {"find", "overrides", "-ls", NULL};
+      const gchar *argv[] = {"find", NULL, "-ls", NULL};
       int exit_status = -1;
+      gsize i;
 
       self->overrides.have_data = TRUE;
 
@@ -1164,6 +1169,19 @@ ensure_overrides_cached (SrtSystemInfo *self)
       /* Skip checking the overridden folder if we are not in a pressure-vessel
        * Steam Runtime container */
       if (g_strcmp0 (runtime, "/") != 0)
+        return;
+
+      for (i = 0; i < G_N_ELEMENTS (paths); i++)
+        {
+          if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                         paths[i], G_FILE_TEST_EXISTS))
+            {
+              argv[1] = paths[i];
+              break;
+            }
+        }
+
+      if (argv[1] == NULL)
         return;
 
       if (!g_spawn_sync (self->sysroot,     /* working directory */

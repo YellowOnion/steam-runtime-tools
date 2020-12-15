@@ -1213,8 +1213,6 @@ main (int argc,
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
-  g_autoptr(FlatpakBwrap) adverb_args = NULL;
-  g_autofree gchar *adverb_in_container = NULL;
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
   g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
@@ -2196,106 +2194,116 @@ main (int argc,
         goto out;
     }
 
-  adverb_args = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-
-  if (runtime != NULL)
-    adverb_in_container = pv_runtime_get_adverb (runtime, adverb_args);
-
-  if (opt_terminate_timeout >= 0.0)
+  /* Set up adverb inside container */
     {
-      if (opt_terminate_idle_timeout > 0.0)
-        flatpak_bwrap_add_arg_printf (adverb_args,
-                                      "--terminate-idle-timeout=%f",
-                                      opt_terminate_idle_timeout);
+      g_autoptr(FlatpakBwrap) adverb_argv = NULL;
 
-      flatpak_bwrap_add_arg_printf (adverb_args,
-                                    "--terminate-timeout=%f",
-                                    opt_terminate_timeout);
-    }
+      adverb_argv = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-  /* If not using a runtime, the adverb in the container has the
-   * same path as outside */
-  if (adverb_in_container == NULL)
-    adverb_in_container = g_build_filename (tools_dir,
-                                            "pressure-vessel-adverb",
-                                            NULL);
-
-  flatpak_bwrap_add_args (bwrap,
-                          adverb_in_container,
-                          "--exit-with-parent",
-                          "--subreaper",
-                          NULL);
-
-  if (opt_pass_fds != NULL)
-    {
-      for (i = 0; i < opt_pass_fds->len; i++)
+      if (runtime != NULL)
         {
-          int fd = g_array_index (opt_pass_fds, int, i);
-
-          flatpak_bwrap_add_fd (bwrap, fd);
-          flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
+          if (!pv_runtime_get_adverb (runtime, adverb_argv))
+            goto out;
         }
+      else
+        {
+          /* If not using a runtime, the adverb in the container has the
+           * same path as outside */
+          g_autofree gchar *adverb_in_container =
+            g_build_filename (tools_dir, "pressure-vessel-adverb", NULL);
+
+          flatpak_bwrap_add_arg (adverb_argv, adverb_in_container);
+        }
+
+      if (opt_terminate_timeout >= 0.0)
+        {
+          if (opt_terminate_idle_timeout > 0.0)
+            flatpak_bwrap_add_arg_printf (adverb_argv,
+                                          "--terminate-idle-timeout=%f",
+                                          opt_terminate_idle_timeout);
+
+          flatpak_bwrap_add_arg_printf (adverb_argv,
+                                        "--terminate-timeout=%f",
+                                        opt_terminate_timeout);
+        }
+
+      flatpak_bwrap_add_args (adverb_argv,
+                              "--exit-with-parent",
+                              "--subreaper",
+                              NULL);
+
+      if (opt_pass_fds != NULL)
+        {
+          for (i = 0; i < opt_pass_fds->len; i++)
+            {
+              int fd = g_array_index (opt_pass_fds, int, i);
+
+              flatpak_bwrap_add_fd (adverb_argv, fd);
+              flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
+            }
+        }
+
+      for (i = 0; i < pass_fds_through_adverb->len; i++)
+        {
+          int fd = g_array_index (pass_fds_through_adverb, int, i);
+
+          flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
+        }
+
+      flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
+
+      switch (opt_shell)
+        {
+          case PV_SHELL_AFTER:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=after");
+            break;
+
+          case PV_SHELL_FAIL:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=fail");
+            break;
+
+          case PV_SHELL_INSTEAD:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=instead");
+            break;
+
+          case PV_SHELL_NONE:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=none");
+            break;
+
+          default:
+            g_warn_if_reached ();
+        }
+
+      switch (opt_terminal)
+        {
+          case PV_TERMINAL_AUTO:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=auto");
+            break;
+
+          case PV_TERMINAL_NONE:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=none");
+            break;
+
+          case PV_TERMINAL_TTY:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=tty");
+            break;
+
+          case PV_TERMINAL_XTERM:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=xterm");
+            break;
+
+          default:
+            g_warn_if_reached ();
+            break;
+        }
+
+      if (opt_verbose)
+        flatpak_bwrap_add_arg (adverb_argv, "--verbose");
+
+      flatpak_bwrap_add_arg (adverb_argv, "--");
+
+      flatpak_bwrap_append_bwrap (bwrap, adverb_argv);
     }
-
-  for (i = 0; i < pass_fds_through_adverb->len; i++)
-    {
-      int fd = g_array_index (pass_fds_through_adverb, int, i);
-
-      flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
-    }
-
-  flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%s", lock_env_fd);
-
-  switch (opt_shell)
-    {
-      case PV_SHELL_AFTER:
-        flatpak_bwrap_add_arg (bwrap, "--shell=after");
-        break;
-
-      case PV_SHELL_FAIL:
-        flatpak_bwrap_add_arg (bwrap, "--shell=fail");
-        break;
-
-      case PV_SHELL_INSTEAD:
-        flatpak_bwrap_add_arg (bwrap, "--shell=instead");
-        break;
-
-      case PV_SHELL_NONE:
-        flatpak_bwrap_add_arg (bwrap, "--shell=none");
-        break;
-
-      default:
-        g_warn_if_reached ();
-    }
-
-  switch (opt_terminal)
-    {
-      case PV_TERMINAL_AUTO:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=auto");
-        break;
-
-      case PV_TERMINAL_NONE:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=none");
-        break;
-
-      case PV_TERMINAL_TTY:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=tty");
-        break;
-
-      case PV_TERMINAL_XTERM:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=xterm");
-        break;
-
-      default:
-        g_warn_if_reached ();
-        break;
-    }
-
-  if (opt_verbose)
-    flatpak_bwrap_add_arg (bwrap, "--verbose");
-
-  flatpak_bwrap_append_bwrap (bwrap, adverb_args);
-  flatpak_bwrap_add_arg (bwrap, "--");
 
   if (opt_launcher)
     {

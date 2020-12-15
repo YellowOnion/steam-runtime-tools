@@ -80,8 +80,8 @@ PvRuntime *pv_runtime_new (const char *source_files,
                            PvRuntimeFlags flags,
                            GError **error);
 
-gchar *pv_runtime_get_adverb (PvRuntime *self,
-                              FlatpakBwrap *adverb_args);
+gboolean pv_runtime_get_adverb (PvRuntime *self,
+                                FlatpakBwrap *adverb_args);
 gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakExports *exports,
                           FlatpakBwrap *bwrap,

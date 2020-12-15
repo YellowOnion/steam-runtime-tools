@@ -1143,15 +1143,18 @@ pv_runtime_new (const char *source_files,
  * and rely on bubblewrap's init process for this, but we currently
  * can't do that without breaking gameoverlayrender.so's assumptions,
  * and we want -adverb for its locale functionality anyway. */
-gchar *
+gboolean
 pv_runtime_get_adverb (PvRuntime *self,
                        FlatpakBwrap *bwrap)
 {
-  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   /* This will be true if pv_runtime_bind() was successfully called. */
-  g_return_val_if_fail (self->adverb_in_container != NULL, NULL);
-  g_return_val_if_fail (bwrap != NULL, NULL);
-  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), NULL);
+  g_return_val_if_fail (self->adverb_in_container != NULL, FALSE);
+  g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (flatpak_bwrap_is_empty (bwrap), FALSE);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+
+  flatpak_bwrap_add_arg (bwrap, self->adverb_in_container);
 
   if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
     flatpak_bwrap_add_args (bwrap, "--generate-locales", NULL);
@@ -1190,7 +1193,7 @@ pv_runtime_get_adverb (PvRuntime *self,
                               NULL);
     }
 
-  return g_strdup (self->adverb_in_container);
+  return TRUE;
 }
 
 /*

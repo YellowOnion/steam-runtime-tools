@@ -733,7 +733,7 @@ static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
 static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
-static char *opt_write_bwrap = NULL;
+static char *opt_write_final_argv = NULL;
 
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
@@ -1157,9 +1157,9 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
     opt_with_host_graphics_cb,
     "Deprecated alias for \"--graphics-provider=\"", NULL },
-  { "write-bwrap-arguments", '\0',
-    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_bwrap,
-    "Write the final bwrap arguments, as null terminated strings, to the "
+  { "write-final-argv", '\0',
+    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_final_argv,
+    "Write the final argument vector, as null terminated strings, to the "
     "given file path.", "PATH" },
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
@@ -1212,6 +1212,7 @@ main (int argc,
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
+  g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
   g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
@@ -2318,7 +2319,8 @@ main (int argc,
 
   if (is_flatpak_env)
     {
-      /* Just use the envp from @bwrap */
+      /* Use pv-launch to launch bwrap on the host. */
+      /* Just use the envp from @bwrap, don't add to it */
       g_autoptr(FlatpakBwrap) launch_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       flatpak_bwrap_add_arg (launch_on_host, launch_executable);
       flatpak_bwrap_add_arg (launch_on_host, "--bus-name=org.freedesktop.Flatpak");
@@ -2336,30 +2338,35 @@ main (int argc,
 
       flatpak_bwrap_add_arg (launch_on_host, "--");
 
+      /* Transfer bwrap to launch_on_host */
       flatpak_bwrap_append_bwrap (launch_on_host, bwrap);
-      g_clear_pointer (&bwrap, flatpak_bwrap_free);
-      bwrap = g_steal_pointer (&launch_on_host);
+      final_argv = g_steal_pointer (&launch_on_host);
+    }
+  else
+    {
+      /* Run bwrap directly */
+      final_argv = g_steal_pointer (&bwrap);
     }
 
   if (opt_verbose)
     {
-      g_message ("Final %s options:", bwrap_executable);
+      g_message ("Final command to execute:");
 
-      for (i = 0; i < bwrap->argv->len; i++)
+      for (i = 0; i < final_argv->argv->len; i++)
         {
           g_autofree gchar *quoted = NULL;
 
-          quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
+          quoted = g_shell_quote (g_ptr_array_index (final_argv->argv, i));
           g_message ("\t%s", quoted);
         }
 
-      g_message ("%s environment:", bwrap_executable);
+      g_message ("Final environment:");
 
-      for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
+      for (i = 0; final_argv->envp != NULL && final_argv->envp[i] != NULL; i++)
         {
           g_autofree gchar *quoted = NULL;
 
-          quoted = g_shell_quote (bwrap->envp[i]);
+          quoted = g_shell_quote (final_argv->envp[i]);
           g_message ("\t%s", quoted);
         }
     }
@@ -2368,21 +2375,22 @@ main (int argc,
   if (runtime != NULL)
     pv_runtime_cleanup (runtime);
 
-  flatpak_bwrap_finish (bwrap);
+  flatpak_bwrap_finish (final_argv);
 
-  if (opt_write_bwrap != NULL)
+  if (opt_write_final_argv != NULL)
     {
-      FILE *file = fopen (opt_write_bwrap, "w");
+      FILE *file = fopen (opt_write_final_argv, "w");
       if (file == NULL)
         {
-          g_warning ("An error occurred trying to write the bwrap arguments: %s",
+          g_warning ("An error occurred trying to write out the arguments: %s",
                     g_strerror (errno));
           /* This is not a fatal error, try to continue */
         }
       else
         {
-          for (i = 0; i < bwrap->argv->len; i++)
-            fprintf (file, "%s%c", (gchar *)g_ptr_array_index (bwrap->argv, i), '\0');
+          for (i = 0; i < final_argv->argv->len; i++)
+            fprintf (file, "%s%c",
+                     (gchar *) g_ptr_array_index (final_argv->argv, i), '\0');
 
           fclose (file);
         }
@@ -2391,7 +2399,7 @@ main (int argc,
   if (opt_only_prepare)
     ret = 0;
   else
-    pv_bwrap_execve (bwrap, fileno (original_stdout), error);
+    pv_bwrap_execve (final_argv, fileno (original_stdout), error);
 
 out:
   if (local_error != NULL)

@@ -1572,7 +1572,10 @@ main (int argc,
           g_message ("\t%s", quoted);
         }
 
-      g_message ("Wrapped command:");
+      if (opt_launcher)
+        g_message ("Arguments for pv-launcher:");
+      else
+        g_message ("Wrapped command:");
 
       for (i = 1; i < argc; i++)
         {

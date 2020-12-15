@@ -1213,7 +1213,6 @@ main (int argc,
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
-  g_autoptr(FlatpakBwrap) wrapped_command = NULL;
   g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
@@ -1588,24 +1587,6 @@ main (int argc,
     goto out;
 
   g_debug ("Found executable directory: %s", tools_dir);
-
-  wrapped_command = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-
-  if (argc > 1 && argv[1][0] == '-' && !opt_launcher)
-    {
-      /* Make sure wrapped_command is something we can validly pass to env(1) */
-      if (strchr (argv[1], '=') != NULL)
-        flatpak_bwrap_add_args (wrapped_command,
-                                "sh", "-euc", "exec \"$@\"", "sh",
-                                NULL);
-
-      /* Make sure bwrap will interpret wrapped_command as the end of its
-       * options */
-      flatpak_bwrap_add_arg (wrapped_command, "env");
-    }
-
-  g_debug ("Setting arguments for wrapped command");
-  flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
 
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
@@ -2307,18 +2288,47 @@ main (int argc,
 
   if (opt_launcher)
     {
+      g_autoptr(FlatpakBwrap) launcher_argv =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
       g_autofree gchar *pressure_vessel_launcher = g_build_filename (tools_dir,
                                                                      "pressure-vessel-launcher",
                                                                      NULL);
       g_debug ("Adding pressure-vessel-launcher '%s'...", pressure_vessel_launcher);
-      flatpak_bwrap_add_arg (bwrap, pressure_vessel_launcher);
+      flatpak_bwrap_add_arg (launcher_argv, pressure_vessel_launcher);
 
       g_debug ("Adding locked environment variables...");
-      flatpak_bwrap_add_args (bwrap, "--lock-env-from-fd", lock_env_fd, NULL);
-    }
+      flatpak_bwrap_add_args (launcher_argv,
+                              "--lock-env-from-fd", lock_env_fd, NULL);
 
-  g_debug ("Adding wrapped command...");
-  flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
+      /* In --launcher mode, arguments after the "--" separator are
+       * passed to the launcher */
+      flatpak_bwrap_append_argsv (launcher_argv, &argv[1], argc - 1);
+
+      flatpak_bwrap_append_bwrap (bwrap, launcher_argv);
+    }
+  else
+    {
+      g_autoptr(FlatpakBwrap) wrapped_command =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
+      if (argc > 1 && argv[1][0] == '-')
+        {
+          /* Make sure wrapped_command is something we can validly pass to env(1) */
+          if (strchr (argv[1], '=') != NULL)
+            flatpak_bwrap_add_args (wrapped_command,
+                                    "sh", "-euc", "exec \"$@\"", "sh",
+                                    NULL);
+
+          /* Make sure bwrap will interpret wrapped_command as the end of its
+           * options */
+          flatpak_bwrap_add_arg (wrapped_command, "env");
+        }
+
+      g_debug ("Setting arguments for wrapped command");
+      flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
+
+      flatpak_bwrap_append_bwrap (bwrap, wrapped_command);
+    }
 
   if (is_flatpak_env)
     {

@@ -1471,6 +1471,9 @@ bind_icd (PvRuntime *self,
   const char *mode;
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize multiarch_index;
+  g_autoptr(GDir) dir = NULL;
+  gsize dir_elements_before = 0;
+  gsize dir_elements_after = 0;
 
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
@@ -1535,6 +1538,14 @@ bind_icd (PvRuntime *self,
       mode = "soname";
     }
 
+  dir = g_dir_open (in_current_namespace, 0, error);
+  if (dir == NULL)
+    return FALSE;
+
+  /* Number of elements before trying to capture the library */
+  while (g_dir_read_name (dir))
+    dir_elements_before++;
+
   pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
                              options, mode, details->resolved_library);
   dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
@@ -1555,17 +1566,21 @@ bind_icd (PvRuntime *self,
 
   g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-  if (seq_str != NULL)
+  g_dir_rewind (dir);
+  while (g_dir_read_name (dir))
+    dir_elements_after++;
+
+  if (dir_elements_before == dir_elements_after)
     {
-      /* Try to remove the directory we created. If it succeeds, then we
-       * can optimize slightly by not capturing the dependencies: there's
-       * no point, because we know we didn't create a symlink to the ICD
-       * itself. (It must have been nonexistent or for a different ABI.) */
-      if (g_rmdir (in_current_namespace) == 0)
-        {
-          details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
-          return TRUE;
-        }
+      /* If we have the same number of elements it means that we didn't
+       * create a symlink to the ICD itself (it must have been nonexistent
+       * or for a different ABI). When this happens we set the kinds to
+       * "NONEXISTENT" and return early without trying to capture the
+       * dependencies. */
+      details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
+      /* If the directory is empty we can also remove it */
+      g_rmdir (in_current_namespace);
+      return TRUE;
     }
 
   /* Only add the numbered subdirectories to the search path. Their

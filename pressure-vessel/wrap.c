@@ -2019,9 +2019,10 @@ main (int argc,
       g_hash_table_add (extra_locked_vars_to_inherit, g_strdup ("XDG_RUNTIME_DIR"));
 
       /* The bwrap envp will be completely ignored when calling
-       * pv-launch. For this reason we convert them to `--setenv`.
-       * (TODO: Now that we're using pv-launch instead of flatpak-spawn,
-       * we could use --pass-env) */
+       * pv-launch, and in fact putting them in its environment
+       * variables would be wrong, because pv-launch needs to see the
+       * current execution environment's DBUS_SESSION_BUS_ADDRESS
+       * (if different). For this reason we convert them to `--setenv`. */
       for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
         {
           g_auto(GStrv) split = g_strsplit (bwrap->envp[i], "=", 2);
@@ -2334,11 +2335,16 @@ main (int argc,
 
   flatpak_bwrap_append_bwrap (bwrap, argv_in_container);
 
+  final_argv = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
   if (is_flatpak_env)
     {
-      /* Use pv-launch to launch bwrap on the host. */
-      /* Just use the envp from @bwrap, don't add to it */
-      g_autoptr(FlatpakBwrap) launch_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      /* Use pv-launch to launch bwrap on the host. This needs to run
+       * with the environment variables from the current execution
+       * environment (not the container that we are setting up!)
+       * so that it gets the right DBUS_SESSION_BUS_ADDRESS, if
+       * different. */
+      g_autoptr(FlatpakBwrap) launch_on_host = flatpak_bwrap_new (original_environ);
       flatpak_bwrap_add_arg (launch_on_host, launch_executable);
       flatpak_bwrap_add_arg (launch_on_host, "--bus-name=org.freedesktop.Flatpak");
 
@@ -2355,15 +2361,14 @@ main (int argc,
 
       flatpak_bwrap_add_arg (launch_on_host, "--");
 
-      /* Transfer bwrap to launch_on_host */
-      flatpak_bwrap_append_bwrap (launch_on_host, bwrap);
-      final_argv = g_steal_pointer (&launch_on_host);
+      /* Don't use the environment variables from @bwrap any more.
+       * We already converted them to --setenv and locked them. */
+      g_strfreev (pv_bwrap_steal_envp (bwrap));
+
+      flatpak_bwrap_append_bwrap (final_argv, launch_on_host);
     }
-  else
-    {
-      /* Run bwrap directly */
-      final_argv = g_steal_pointer (&bwrap);
-    }
+
+  flatpak_bwrap_append_bwrap (final_argv, bwrap);
 
   if (opt_verbose)
     {

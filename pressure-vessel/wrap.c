@@ -1212,6 +1212,7 @@ main (int argc,
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
+  g_autoptr(FlatpakBwrap) argv_in_container = NULL;
   g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
   g_autofree gchar *launch_executable = NULL;
@@ -2185,6 +2186,8 @@ main (int argc,
         goto out;
     }
 
+  argv_in_container = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
   /* Set up adverb inside container */
     {
       g_autoptr(FlatpakBwrap) adverb_argv = NULL;
@@ -2293,7 +2296,7 @@ main (int argc,
 
       flatpak_bwrap_add_arg (adverb_argv, "--");
 
-      flatpak_bwrap_append_bwrap (bwrap, adverb_argv);
+      flatpak_bwrap_append_bwrap (argv_in_container, adverb_argv);
     }
 
   if (opt_launcher)
@@ -2317,7 +2320,7 @@ main (int argc,
        * passed to the launcher */
       flatpak_bwrap_append_argsv (launcher_argv, &argv[1], argc - 1);
 
-      flatpak_bwrap_append_bwrap (bwrap, launcher_argv);
+      flatpak_bwrap_append_bwrap (argv_in_container, launcher_argv);
     }
   else
     {
@@ -2326,8 +2329,10 @@ main (int argc,
        * Because we always use the adverb, we don't need to worry about
        * whether argv[1] starts with "-". */
       g_debug ("Setting arguments for wrapped command");
-      flatpak_bwrap_append_argsv (bwrap, &argv[1], argc - 1);
+      flatpak_bwrap_append_argsv (argv_in_container, &argv[1], argc - 1);
     }
+
+  flatpak_bwrap_append_bwrap (bwrap, argv_in_container);
 
   if (is_flatpak_env)
     {

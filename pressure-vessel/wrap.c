@@ -1224,9 +1224,7 @@ main (int argc,
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
   const gchar *home;
-  g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
-  const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   GHashTableIter iter;
@@ -1639,16 +1637,6 @@ main (int argc,
     {
       ret = 0;
       goto out;
-    }
-
-  if (!is_flatpak_env)
-    {
-      g_debug ("Checking bwrap features...");
-      bwrap_help_argv[0] = bwrap_executable;
-      bwrap_help = pv_capture_output (bwrap_help_argv, error);
-
-      if (bwrap_help == NULL)
-        goto out;
     }
 
   /* Start with an empty environment and populate it later */

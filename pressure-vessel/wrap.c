@@ -1962,34 +1962,43 @@ main (int argc,
       flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
     }
 
-  flatpak_run_add_font_path_args (bwrap);
-
-  /* We need to set up IPC rendezvous points relatively late, so that
-   * even if we are sharing /tmp via --filesystem=/tmp, we'll still
-   * mount our own /tmp/.X11-unix over the top of the OS's. */
-  if (runtime != NULL)
+  /* Use code borrowed from Flatpak to share various other bits of the
+   * execution environment with the host system */
     {
-      flatpak_run_add_wayland_args (bwrap);
+      g_autoptr(FlatpakBwrap) sharing_bwrap =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-      /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
-       * but it might be different on the host system. As a workaround we simply
-       * bind the whole "/tmp/.X11-unix" directory and later unset the container
-       * "DISPLAY" env.
-       */
-      if (is_flatpak_env)
+      flatpak_run_add_font_path_args (sharing_bwrap);
+
+      /* We need to set up IPC rendezvous points relatively late, so that
+       * even if we are sharing /tmp via --filesystem=/tmp, we'll still
+       * mount our own /tmp/.X11-unix over the top of the OS's. */
+      if (runtime != NULL)
         {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
-                                  NULL);
-        }
-      else
-        {
-          flatpak_run_add_x11_args (bwrap, extra_locked_vars_to_unset, TRUE);
+          flatpak_run_add_wayland_args (sharing_bwrap);
+
+          /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
+           * but it might be different on the host system. As a workaround we simply
+           * bind the whole "/tmp/.X11-unix" directory and later unset the container
+           * "DISPLAY" env.
+           */
+          if (is_flatpak_env)
+            {
+              flatpak_bwrap_add_args (sharing_bwrap,
+                                      "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
+                                      NULL);
+            }
+          else
+            {
+              flatpak_run_add_x11_args (sharing_bwrap, extra_locked_vars_to_unset, TRUE);
+            }
+
+          flatpak_run_add_pulseaudio_args (sharing_bwrap, extra_locked_vars_to_unset);
+          flatpak_run_add_session_dbus_args (sharing_bwrap);
+          flatpak_run_add_system_dbus_args (sharing_bwrap);
         }
 
-      flatpak_run_add_pulseaudio_args (bwrap, extra_locked_vars_to_unset);
-      flatpak_run_add_session_dbus_args (bwrap);
-      flatpak_run_add_system_dbus_args (bwrap);
+      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
     }
 
   if (is_flatpak_env)

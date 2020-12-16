@@ -2308,26 +2308,12 @@ main (int argc,
     }
   else
     {
-      g_autoptr(FlatpakBwrap) wrapped_command =
-        flatpak_bwrap_new (flatpak_bwrap_empty_env);
-
-      if (argc > 1 && argv[1][0] == '-')
-        {
-          /* Make sure wrapped_command is something we can validly pass to env(1) */
-          if (strchr (argv[1], '=') != NULL)
-            flatpak_bwrap_add_args (wrapped_command,
-                                    "sh", "-euc", "exec \"$@\"", "sh",
-                                    NULL);
-
-          /* Make sure bwrap will interpret wrapped_command as the end of its
-           * options */
-          flatpak_bwrap_add_arg (wrapped_command, "env");
-        }
-
+      /* In non-"--launcher" mode, arguments after the "--" separator
+       * are the command to execute, passed to the adverb after "--".
+       * Because we always use the adverb, we don't need to worry about
+       * whether argv[1] starts with "-". */
       g_debug ("Setting arguments for wrapped command");
-      flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
-
-      flatpak_bwrap_append_bwrap (bwrap, wrapped_command);
+      flatpak_bwrap_append_argsv (bwrap, &argv[1], argc - 1);
     }
 
   if (is_flatpak_env)

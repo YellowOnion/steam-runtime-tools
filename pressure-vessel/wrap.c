@@ -2306,6 +2306,9 @@ main (int argc,
       g_debug ("Adding pressure-vessel-launcher '%s'...", pressure_vessel_launcher);
       flatpak_bwrap_add_arg (launcher_argv, pressure_vessel_launcher);
 
+      if (opt_verbose)
+        flatpak_bwrap_add_arg (launcher_argv, "--verbose");
+
       g_debug ("Adding locked environment variables...");
       flatpak_bwrap_add_args (launcher_argv,
                               "--lock-env-from-fd", lock_env_fd, NULL);

@@ -26,6 +26,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
+#include "environ.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-exports-private.h"
 #include "flatpak-utils-base-private.h"
@@ -85,8 +86,7 @@ gboolean pv_runtime_get_adverb (PvRuntime *self,
 gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakExports *exports,
                           FlatpakBwrap *bwrap,
-                          GHashTable *extra_locked_vars_to_unset,
-                          GHashTable *extra_locked_vars_to_inherit,
+                          PvEnviron *container_env,
                           GError **error);
 void pv_runtime_cleanup (PvRuntime *self);
 

@@ -160,7 +160,6 @@ write_xauth (char *number, FILE *output)
 
 void
 flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
-                          GHashTable   *extra_locked_vars_to_unset,
                           gboolean      allowed)
 {
   g_autofree char *x11_socket = NULL;
@@ -176,7 +175,7 @@ flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
 
   if (!allowed)
     {
-      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("DISPLAY"));
+      flatpak_bwrap_unset_env (bwrap, "DISPLAY");
       return;
     }
 
@@ -230,7 +229,7 @@ flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
     }
   else
     {
-      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("DISPLAY"));
+      flatpak_bwrap_unset_env (bwrap, "DISPLAY");
     }
 }
 
@@ -534,8 +533,7 @@ flatpak_run_parse_pulse_server (const char *value)
 }
 
 void
-flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap,
-                                 GHashTable   *extra_locked_vars_to_unset)
+flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap)
 {
   g_autofree char *pulseaudio_server = flatpak_run_get_pulseaudio_server ();
   g_autofree char *pulseaudio_socket = NULL;
@@ -547,7 +545,7 @@ flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap,
   if (!pulseaudio_socket)
     pulseaudio_socket = g_build_filename (user_runtime_dir, "pulse/native", NULL);
 
-  g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("PULSE_SERVER"));
+  flatpak_bwrap_unset_env (bwrap, "PULSE_SERVER");
 
   /* SteamOS system-wide PulseAudio instance */
   if (!g_file_test (pulseaudio_socket, G_FILE_TEST_EXISTS))

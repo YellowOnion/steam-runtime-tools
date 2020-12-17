@@ -32,8 +32,8 @@
  *  or -1 if it could not be launched or was killed by a signal
  * @error: Used to raise an error on failure
  *
- * Try to run a command. Its standard output and standard error go to
- * pressure-vessel's own stdout and stderr.
+ * Try to run a command. It inherits pressure-vessel's own file
+ * descriptors.
  *
  * Returns: %TRUE if the subprocess runs to completion
  */
@@ -47,7 +47,6 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
   g_autofree gchar *errors = NULL;
   guint i;
   g_autoptr(GString) command = g_string_new ("");
-  GArray *child_setup_data = NULL;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (bwrap->argv->len >= 2, FALSE);
@@ -69,20 +68,20 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
       g_string_append_printf (command, " %s", quoted);
     }
 
-  if (bwrap->fds != NULL && bwrap->fds->len > 0)
-    child_setup_data = bwrap->fds;
-
   g_debug ("run:%s", command->str);
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-   * see flatpak_close_fds_workaround */
+   * and to avoid wasting a lot of time closing fds if the rlimit for
+   * maximum open file descriptors is high. Because we're waiting for the
+   * subprocess to finish anyway, it doesn't really matter that any fds
+   * that are not close-on-execute will get leaked into the child. */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) bwrap->argv->pdata,
                      bwrap->envp,
                      (G_SPAWN_SEARCH_PATH |
                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
-                     flatpak_bwrap_child_setup_cb,
-                     child_setup_data,
+                     NULL,
+                     NULL,
                      &output,
                      &errors,
                      &exit_status,

@@ -42,12 +42,6 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
-static void
-child_setup_cb (gpointer user_data)
-{
-  flatpak_close_fds_workaround (3);
-}
-
 /**
  * pv_envp_cmp:
  * @p1: a `const char * const *`
@@ -196,13 +190,16 @@ pv_capture_output (const char * const * argv,
   g_debug ("run:%s", command->str);
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-   * see flatpak_close_fds_workaround */
+   * and to avoid wasting a lot of time closing fds if the rlimit for
+   * maximum open file descriptors is high. Because we're waiting for the
+   * subprocess to finish anyway, it doesn't really matter that any fds
+   * that are not close-on-execute will get leaked into the child. */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) argv,
                      NULL,  /* env */
                      (G_SPAWN_SEARCH_PATH |
                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
-                     child_setup_cb, NULL,
+                     NULL, NULL,
                      &output,
                      &errors,
                      &wait_status,

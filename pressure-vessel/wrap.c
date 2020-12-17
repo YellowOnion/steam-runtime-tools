@@ -227,7 +227,7 @@ check_launch_on_host (const char *launch_executable,
   if (!g_spawn_sync (NULL,  /* cwd */
                      (gchar **) test_argv,
                      NULL,  /* environ */
-                     G_SPAWN_DEFAULT,
+                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
                      NULL, NULL,    /* child setup */
                      &child_stdout,
                      &child_stderr,

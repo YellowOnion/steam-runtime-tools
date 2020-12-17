@@ -106,12 +106,12 @@ child_setup_cb (gpointer user_data)
       dup2 (data->original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
     pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
 
-  /* Make all other file descriptors close-on-exec */
-  flatpak_close_fds_workaround (3);
-
   /* Make the fds we pass through *not* be close-on-exec */
   if (data != NULL && data->pass_fds)
     {
+      /* Make all other file descriptors close-on-exec */
+      flatpak_close_fds_workaround (3);
+
       for (iter = data->pass_fds; *iter >= 0; iter++)
         {
           int fd = *iter;
@@ -381,7 +381,10 @@ run_helper_sync (const char *cwd,
     return glnx_throw_errno_prefix (error, "pthread_sigmask");
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-   * see flatpak_close_fds_workaround */
+   * and to avoid wasting a lot of time closing fds if the rlimit for
+   * maximum open file descriptors is high. Because we're waiting for the
+   * subprocess to finish anyway, it doesn't really matter that any fds
+   * that are not close-on-execute will get leaked into the child. */
   ret = g_spawn_sync (cwd,
                       (gchar **) argv,
                       (gchar **) envp,

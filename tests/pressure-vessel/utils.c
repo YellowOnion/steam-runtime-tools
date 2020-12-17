@@ -105,7 +105,25 @@ test_capture_output (Fixture *f,
 
   argv[0] = "/nonexistent/doesnotexist";
   output = pv_capture_output (argv, &error);
-  g_assert_error (error, G_SPAWN_ERROR, G_SPAWN_ERROR_NOENT);
+  g_assert_nonnull (error);
+
+  if (error->domain == G_SPAWN_ERROR
+      && error->code == G_SPAWN_ERROR_NOENT)
+    {
+      /* OK: specific failure could be reported */
+    }
+  else if (error->domain == G_SPAWN_ERROR
+           && error->code == G_SPAWN_ERROR_FAILED)
+    {
+      /* less specific, but also OK */
+    }
+  else
+    {
+      g_error ("Expected pv_capture_output() with nonexistent executable "
+               "to fail, got %s #%d",
+               g_quark_to_string (error->domain), error->code);
+    }
+
   g_assert_cmpstr (output, ==, NULL);
   g_clear_error (&error);
 

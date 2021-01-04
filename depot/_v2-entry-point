@@ -13,8 +13,10 @@ is_main=yes
 suite=scout
 verbose=
 
-if [ "${PRESSURE_VESSEL_VERBOSE-}" = 1 ]; then
+if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
     verbose=yes
+    # Propagate it to pressure-vessel too
+    export PRESSURE_VESSEL_VERBOSE=1
 fi
 
 log () {
@@ -96,6 +98,8 @@ while [ "$#" -gt 0 ]; do
 
         (--verbose)
             verbose=yes
+            # Propagate it to pressure-vessel too
+            export PRESSURE_VESSEL_VERBOSE=1
             shift
             ;;
 

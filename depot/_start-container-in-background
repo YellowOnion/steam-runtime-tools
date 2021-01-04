@@ -14,8 +14,10 @@ rendezvous=
 suite=scout
 verbose=
 
-if [ "${PRESSURE_VESSEL_VERBOSE-}" = 1 ]; then
+if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
     verbose=yes
+    # Propagate it to pressure-vessel too
+    export PRESSURE_VESSEL_VERBOSE=1
 fi
 
 log () {
@@ -93,6 +95,8 @@ while [ "$#" -gt 0 ]; do
 
         (--verbose)
             verbose=yes
+            # Propagate it to pressure-vessel too
+            export PRESSURE_VESSEL_VERBOSE=1
             shift
             ;;
 
@@ -172,8 +176,8 @@ socket=$(
 if [ -z "$socket" ] || ! [ -S "$socket" ]; then
     : > "$rendezvous/failed"
     log "Error starting pressure-vessel container"
-    if [ -z "${PRESSURE_VESSEL_VERBOSE-}" ]; then
-        log "Try environment variable PRESSURE_VESSEL_VERBOSE=1 for more details"
+    if [ -z "${STEAM_LINUX_RUNTIME_VERBOSE-}" ]; then
+        log "Try environment variable STEAM_LINUX_RUNTIME_VERBOSE=1 for more details"
     fi
     kill "$container_pid" || :
     exit 70     # EX_SOFTWARE

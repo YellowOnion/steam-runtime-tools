@@ -32,6 +32,7 @@
 #include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/library-internal.h"
+#include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -2077,6 +2078,9 @@ load_json_dir (const char *sysroot,
  * @sort: (nullable): If not %NULL, load ICDs sorted by filename in this order
  * @load_json_cb: Called for each potential ICD found
  * @user_data: Passed to @load_json_cb
+ *
+ * If @search_paths contains duplicated directories they'll be filtered out
+ * to prevent loading the same JSONs multiple times.
  */
 static void
 load_json_dirs (const char *sysroot,
@@ -2087,14 +2091,52 @@ load_json_dirs (const char *sysroot,
                 void *user_data)
 {
   gchar **iter;
+  g_autoptr(GHashTable) searched_set = NULL;
+  g_autoptr(GError) error = NULL;
+  glnx_autofd int sysroot_fd = -1;
 
   g_return_if_fail (sysroot != NULL);
   g_return_if_fail (load_json_cb != NULL);
 
+  searched_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  if (!glnx_opendirat (-1, sysroot, FALSE, &sysroot_fd, &error))
+    {
+      g_warning ("An error occurred trying to open \"%s\": %s", sysroot,
+                 error->message);
+      return;
+    }
+
   for (iter = search_paths;
        iter != NULL && *iter != NULL;
        iter++)
-    load_json_dir (sysroot, *iter, suffix, sort, load_json_cb, user_data);
+    {
+      glnx_autofd int file_fd = -1;
+      g_autofree gchar *file_realpath_in_sysroot = NULL;
+
+      file_fd = _srt_resolve_in_sysroot (sysroot_fd,
+                                         *iter, SRT_RESOLVE_FLAGS_NONE,
+                                         &file_realpath_in_sysroot, &error);
+
+      if (file_realpath_in_sysroot == NULL)
+        {
+          /* Skip it if the path doesn't exist or is not reachable */
+          g_debug ("An error occurred while resolving \"%s\": %s", *iter, error->message);
+          g_clear_error (&error);
+          continue;
+        }
+
+      if (!g_hash_table_contains (searched_set, file_realpath_in_sysroot))
+        {
+          g_hash_table_add (searched_set, g_steal_pointer (&file_realpath_in_sysroot));
+          load_json_dir (sysroot, *iter, suffix, sort, load_json_cb, user_data);
+        }
+      else
+        {
+          g_debug ("Skipping \"%s\" because we already loaded the JSONs from it",
+                   file_realpath_in_sysroot);
+        }
+    }
 }
 
 /*

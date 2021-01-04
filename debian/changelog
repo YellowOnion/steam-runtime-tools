@@ -1,3 +1,20 @@
+libcapsule (0.20210104.0-0co1) UNRELEASED; urgency=medium
+
+  * ld-libs: Try loading Exherbo architecture-specific ld.so cache
+    before generic path.
+    I'm using Exherbo as an example of a host OS with an unusual layout that
+    breaks libcapsule's normal assumptions. As well as fixing Exherbo
+    itself, this puts the framework in place to deal with other
+    distributions' architecture-specific ld.so caches.
+    - Developers of other distributions with unusual ld.so cache paths
+      can edit ld_cache_filenames in utils/ld-cache.c and bind_usr() in
+      tests/CapsuleTest.pm to teach libcapsule about their paths.
+  * tests: Use libxml2 instead of libjpeg to test versioned symbols
+  * tests: Make Exherbo architecture-specific ld.so stuff available too
+  * tests: Allow even more variations of what a $libdir looks like
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 04 Jan 2021 16:09:30 +0000
+
 libcapsule (0.20201120.0-0co1) upstream; urgency=medium
 
   [ Ludovico de Nittis ]

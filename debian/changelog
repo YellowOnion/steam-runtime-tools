@@ -1,4 +1,4 @@
-libcapsule (0.20210104.0-0co1) UNRELEASED; urgency=medium
+libcapsule (0.20210104.0-0co1) upstream; urgency=medium
 
   * ld-libs: Try loading Exherbo architecture-specific ld.so cache
     before generic path.
@@ -13,7 +13,7 @@ libcapsule (0.20210104.0-0co1) UNRELEASED; urgency=medium
   * tests: Make Exherbo architecture-specific ld.so stuff available too
   * tests: Allow even more variations of what a $libdir looks like
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 04 Jan 2021 16:09:30 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 04 Jan 2021 17:08:59 +0000
 
 libcapsule (0.20201120.0-0co1) upstream; urgency=medium
 

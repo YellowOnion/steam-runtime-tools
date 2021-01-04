@@ -23,7 +23,7 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
-use File::Glob ':bsd_glob';
+use File::Glob qw(bsd_glob);
 use FindBin;
 use Exporter qw(import);
 use IPC::Run qw(run);

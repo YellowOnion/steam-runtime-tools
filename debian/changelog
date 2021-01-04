@@ -1,3 +1,61 @@
+steam-runtime-tools (0.20210104.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pv-wrap: Make graphics drivers outside $HOME available, if used
+    (Resolves: #29, steam-runtime#313)
+  * pv-wrap: Refactor collection of DRI drivers so we use all the search
+    paths that SrtGraphics knows about
+    - Also look for Mesa DRI drivers in ${libdir}/xorg/modules/dri,
+      used on Slackware (Resolves: steam-runtime#318)
+  * pv-wrap: Don't assume container's env is in the PATH.
+    Some OS distributions, notably Exherbo, don't put /usr/bin in their
+    PATH. This means we can't safely use their PATH to invoke standard tools
+    inside the container. (Partially addresses steam-runtime#230)
+  * pv-wrap: Always disable gtk3-nocsd.
+    This module interposes in front of g_object_get(), and is known to cause
+    crashes, even in programs that use GObject but not GTK.
+    (Resolves: steam-runtime#286)
+  * pv-wrap: Cope with /tmp being a symlink.
+    If /tmp is a symlink in the current execution environment, then when
+    we ask bwrap to bind-mount /tmp/pressure-vessel-wrap.XXXXXX/overrides
+    over itself, it will try to create the parent directory /tmp, and fail
+    because there's a symlink in the way. Canonicalize the path and use that
+    instead. Partially addresses steam-runtime#321 (symlinks "above" the home
+    directory have the same problem, but are harder to fix).
+  * Improve diagnostic tools bundled with relocatable pressure-vessel:
+    - Don't wrap steam-runtime-system-info, so it can find its helpers
+    - Include vulkaninfo and wflinfo in relocatable installs
+  * pv-wrap: Remove --host-fallback option.
+    We are not going to be able to do this from within Flatpak, and it is
+    unsuitable for running runtimes other than Steam Runtime 1 'scout',
+    for which the LD_LIBRARY_PATH runtime mostly already works.
+    If we need an automatic fallback to running on the host for scout games,
+    we can do that better by running `pressure-vessel-wrap --test`.
+  * pressure-vessel: Speed up execution of short-lived subprocesses.
+    In particular, if the soft limit on open file descriptors is very large
+    (formerly recommended for Proton "esync", although the current
+    recommendation is to set a small soft limit and a large hard limit)
+    this can speed up pressure-vessel by as much as 90%. In more normal
+    configurations it can still save 10%. (Resolves: steam-runtime#323)
+  * Preparatory work for being able to run inside Flatpak:
+    - pv-wrap: In Flatpak, use pv-launch to run commands on the host
+    - pv-wrap: Remap $HOME for Flatpak correctly
+    - pv-wrap: In Flatpak, put game in same userns/pidns as Steam if possible
+    - pv-launch: Add the ability to unset environment variables when using
+      Flatpak APIs on the host
+    - Lots of refactoring in PvRuntime
+  * THIRD-PARTY.md: Add more licenses for steam-runtime-tools
+  * THIRD-PARTY.md: Point to git repo for steam-runtime-tools source
+  * THIRD-PARTY.md: Point to scout images for third-party library source
+
+  [ Ludovico de Nittis ]
+  * system-info: Diagnose STEAM_COMPAT_CLIENT_INSTALL_PATH mismatch
+    (Resolves: #41)
+  * runtime: correctly handle ICD for different ABI even without subdirs
+    (Resolves: #45)
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 04 Jan 2021 12:38:13 +0000
+
 steam-runtime-tools (0.20201203.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

@@ -12,6 +12,10 @@ deploy=
 is_main=yes
 suite=scout
 verbose=
+log_to_file=
+log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${here}/var"}
+keep_logs=
+use_timestamp=
 
 if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
     verbose=yes
@@ -19,8 +23,22 @@ if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
     export PRESSURE_VESSEL_VERBOSE=1
 fi
 
+if [ "${STEAM_LINUX_RUNTIME_LOG-}" = 1 ]; then
+    log_to_file=yes
+    use_timestamp=yes
+fi
+
+if [ "${STEAM_LINUX_RUNTIME_KEEP_LOGS-}" = 1 ]; then
+    keep_logs=yes
+fi
+
 log () {
-    printf '%s\n' "${me}[$$]: $*" >&2
+    if [ -n "$use_timestamp" ]; then
+        timestamp=$(date +'%H:%M:%S.%6N')
+        printf '%s\n' "${timestamp}: ${me}[$$]: $*" >&2
+    else
+        printf '%s\n' "${me}[$$]: $*" >&2
+    fi
 }
 
 verbose () {
@@ -28,8 +46,6 @@ verbose () {
         log "$@"
     fi
 }
-
-verbose "argv: $(printf '%q ' "$@")"
 
 usage () {
     local code="$1"
@@ -50,7 +66,10 @@ usage () {
     echo
     echo "Options"
     echo "--deploy=DIR      Deploy to this directory [default=SUITE]."
+    echo "--keep-logs       Do not remove the older logs of this same app id."
+    echo "--log-to-file     Log to a file instead of the default stderr."
     echo "--suite=SUITE     Run in this runtime [default=scout]."
+    echo "--use-timestamp   Prepend the timestamp to the log entries [default with --log-to-file]."
     echo "--verb=%verb%     Mode to operate in [default=waitforexitandrun]."
     echo "--verbose         Be more verbose."
 
@@ -59,7 +78,10 @@ usage () {
 
 getopt_temp="help"
 getopt_temp="${getopt_temp},deploy:"
+getopt_temp="${getopt_temp},log-to-file:"
+getopt_temp="${getopt_temp},keep-logs:"
 getopt_temp="${getopt_temp},suite:"
+getopt_temp="${getopt_temp},use-timestamp:"
 getopt_temp="${getopt_temp},verb:"
 getopt_temp="${getopt_temp},verbose"
 
@@ -79,6 +101,17 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
 
+        (--log-to-file)
+            log_to_file=yes
+            use_timestamp=yes
+            shift
+            ;;
+
+        (--keep-logs)
+            keep_logs=yes
+            shift
+            ;;
+
         (--suite)
             suite="$2"
             shift 2
@@ -94,6 +127,11 @@ while [ "$#" -gt 0 ]; do
                     ;;
             esac
             shift 2
+            ;;
+
+        (--use-timestamp)
+            use_timestamp=yes
+            shift
             ;;
 
         (--verbose)
@@ -123,6 +161,37 @@ done
 if [ -z "$deploy" ]; then
     deploy="$suite"
 fi
+
+if [ -n "$log_to_file" ]; then
+    app=
+    log_filename=
+    if [[ -z "${STEAM_COMPAT_APP_ID-}" && -z "${SteamAppId-}" ]]; then
+        app="non-steam-game"
+    else
+        app="app${STEAM_COMPAT_APP_ID-${SteamAppId}}"
+    fi
+
+    if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
+        log_filename="slr-${app}-t$(date +'%Y%m%dT%H%M%S').log"
+    else
+        log_filename="slr-${app}-s${STEAM_COMPAT_SESSION_ID}.log"
+    fi
+
+    mkdir -p "${log_dir}"
+
+    # Remove older logs of the same app
+    if [ -z "${keep_logs}" ]; then
+        find "${log_dir}" -maxdepth 1 -name "slr-${app}-*.log" '!' -name "${log_filename}" -type f -delete
+    fi
+
+    ln -fns "${log_filename}" "${log_dir}/slr-latest.log" || :
+
+    exec >> "${log_dir}/${log_filename}" 2>&1
+
+    export PRESSURE_VESSEL_LOG_WITH_TIMESTAMP=1
+fi
+
+verbose "argv: $(printf '%q ' "$@")"
 
 if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
     log "Error: A command to run is required"

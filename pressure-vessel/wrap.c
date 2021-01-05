@@ -1201,7 +1201,6 @@ main (int argc,
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(FlatpakBwrap) bwrap = NULL;
-  g_autoptr(FlatpakBwrap) exports_bwrap = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
   g_autoptr(FlatpakBwrap) adverb_args = NULL;
   g_autofree gchar *adverb_in_container = NULL;
@@ -1213,9 +1212,7 @@ main (int argc,
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
   const gchar *home;
-  g_autofree gchar *bwrap_help = NULL;
   g_autofree gchar *tools_dir = NULL;
-  const gchar *bwrap_help_argv[] = { "<bwrap>", "--help", NULL };
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   GHashTableIter iter;
@@ -1550,7 +1547,10 @@ main (int argc,
           g_message ("\t%s", quoted);
         }
 
-      g_message ("Wrapped command:");
+      if (opt_launcher)
+        g_message ("Arguments for pv-launcher:");
+      else
+        g_message ("Wrapped command:");
 
       for (i = 1; i < argc; i++)
         {
@@ -1615,16 +1615,6 @@ main (int argc,
     {
       ret = 0;
       goto out;
-    }
-
-  if (!is_flatpak_env)
-    {
-      g_debug ("Checking bwrap features...");
-      bwrap_help_argv[0] = bwrap_executable;
-      bwrap_help = pv_capture_output (bwrap_help_argv, error);
-
-      if (bwrap_help == NULL)
-        goto out;
     }
 
   /* Start with an empty environment and populate it later */
@@ -1958,10 +1948,15 @@ main (int argc,
     }
 
   /* Convert the exported directories into extra bubblewrap arguments */
-  exports_bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-  flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-  adjust_exports (exports_bwrap, home);
-  flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+    {
+      g_autoptr(FlatpakBwrap) exports_bwrap =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
+      flatpak_exports_append_bwrap_args (exports, exports_bwrap);
+      adjust_exports (exports_bwrap, home);
+      g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
+      flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+    }
 
   flatpak_run_add_font_path_args (bwrap);
 

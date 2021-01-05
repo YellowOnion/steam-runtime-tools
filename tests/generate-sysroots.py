@@ -92,9 +92,9 @@ steamrt/overrides/lib/i386-linux-gnu
 steamrt/usr/lib
 steamrt/run/pressure-vessel
 steamrt-overrides-issues/etc
-steamrt-overrides-issues/overrides/bin
-steamrt-overrides-issues/overrides/lib/i386-linux-gnu
-steamrt-overrides-issues/overrides/lib/x86_64-linux-gnu
+steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/bin
+steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/i386-linux-gnu
+steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/x86_64-linux-gnu
 steamrt-overrides-issues/usr/lib
 steamrt-unofficial/etc
 steamrt-unofficial/usr/lib
@@ -188,8 +188,8 @@ steamrt/overrides/lib/x86_64-linux-gnu/libGLX_custom.so.0
 steamrt/overrides/lib/x86_64-linux-gnu/libGLX_mesa.so.0
 steamrt/overrides/lib/i386-linux-gnu/libGLX_nvidia.so.0
 steamrt/run/pressure-vessel/.exists
-steamrt-overrides-issues/overrides/bin/.keep
-steamrt-overrides-issues/overrides/lib/i386-linux-gnu/.keep
+steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/bin/.keep
+steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/i386-linux-gnu/.keep
 ubuntu16/lib64/ld-linux-x86-64.so.2
 ubuntu16/usr/lib/dri/radeonsi_dri.so
 ubuntu16/usr/lib/mock-ubuntu-64-bit/dri/i965_dri.so
@@ -234,7 +234,8 @@ for name, target in {
         '/run/host/usr/lib/libgcc_s.so.1',
     'steamrt-overrides-issues/etc/os-release':
         '../usr/lib/os-release',
-    'steamrt-overrides-issues/overrides/lib/x86_64-linux-gnu/libgcc_s.so.1':
+    ('steamrt-overrides-issues/usr/lib/pressure-vessel/'
+     + 'overrides/lib/x86_64-linux-gnu/libgcc_s.so.1'):
         '/run/host/usr/lib/libgcc_s.so.1',
     'steamrt-unofficial/etc/os-release':
         '../usr/lib/os-release',

@@ -1830,7 +1830,8 @@ overrides_issues (Fixture *f,
   info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (info, sysroot);
 
-  lib_folder = g_build_filename (sysroot, "overrides", "lib", NULL);
+  lib_folder = g_build_filename (sysroot, "usr", "lib", "pressure-vessel",
+                                 "overrides", "lib", NULL);
 
   /* Remove the read permission for the "lib" folder */
   g_assert_cmpint (g_chmod (lib_folder, 0200), ==, 0);
@@ -1842,6 +1843,7 @@ overrides_issues (Fixture *f,
     }
 
   output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
+  g_assert_nonnull (output);
 
   /* In the steamrt test overrides folder we expect to have a symbolic
    * link to "/run/host/usr/lib/libgcc_s.so.1" */

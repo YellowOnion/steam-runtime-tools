@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210104.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210105.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * pv-wrap: Make graphics drivers outside $HOME available, if used
@@ -37,7 +37,9 @@ steam-runtime-tools (0.20210104.0) UNRELEASED; urgency=medium
     recommendation is to set a small soft limit and a large hard limit)
     this can speed up pressure-vessel by as much as 90%. In more normal
     configurations it can still save 10%. (Resolves: steam-runtime#323)
+  * pressure-vessel: Stop running bwrap --help, no longer needed.
   * Preparatory work for being able to run inside Flatpak:
+    - system-info: Look in both /overrides and /usr/lib/p-v/overrides
     - pv-wrap: In Flatpak, use pv-launch to run commands on the host
     - pv-wrap: Remap $HOME for Flatpak correctly
     - pv-wrap: In Flatpak, put game in same userns/pidns as Steam if possible
@@ -53,8 +55,13 @@ steam-runtime-tools (0.20210104.0) UNRELEASED; urgency=medium
     (Resolves: #41)
   * runtime: correctly handle ICD for different ABI even without subdirs
     (Resolves: #45)
+  * graphics: Do not load JSON ICDs multiple times from the same directory
+    (Resolves: #48; partially addresses steam-runtime#336)
+  * Refactor logging
+  * Add PRESSURE_VESSEL_LOG_INFO and PRESSURE_VESSEL_LOG_WITH_TIMESTAMP
+    environment variables
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 04 Jan 2021 12:38:13 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 05 Jan 2021 11:41:12 +0000
 
 steam-runtime-tools (0.20201203.0) scout; urgency=medium
 

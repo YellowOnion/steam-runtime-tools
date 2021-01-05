@@ -188,6 +188,7 @@ if [ -n "$log_to_file" ]; then
 
     exec >> "${log_dir}/${log_filename}" 2>&1
 
+    export PRESSURE_VESSEL_LOG_INFO=1
     export PRESSURE_VESSEL_LOG_WITH_TIMESTAMP=1
 fi
 

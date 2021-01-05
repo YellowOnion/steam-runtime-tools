@@ -249,6 +249,10 @@ The following environment variables (among others) are read by
 :   If set to `1`, increase the log verbosity up to the info level.
     If set to `0`, no effect.
 
+`PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
+:   If set to `1`, prepend the log entries with a timestamp.
+    If set to `0`, no effect.
+
 `PRESSURE_VESSEL_REMOVE_GAME_OVERLAY` (boolean)
 :   If set to `1`, equivalent to `--remove-game-overlay`.
     If set to `0`, equivalent to `--keep-game-overlay`.

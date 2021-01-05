@@ -912,6 +912,30 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
 }
 
 /**
+ * log_handler_with_timestamp:
+ * @log_domain: the log domain of the message
+ * @log_level: the log level of the message
+ * @message: the message to process
+ * @user_data: not used
+ */
+static void
+pv_log_to_stderr_with_timestamp (const gchar *log_domain,
+                                 GLogLevelFlags log_level,
+                                 const gchar *message,
+                                 gpointer user_data)
+{
+  g_autoptr(GDateTime) date_time = g_date_time_new_now_local ();
+
+  /* We can't use the format specifier "%f" for microseconds because it
+   * was introduced in GLib 2.66 and we are targeting an older version */
+  g_autofree gchar *timestamp = g_date_time_format (date_time, "%T");
+
+  g_printerr ("%s.%06i: %s[%d]: %s\n", timestamp,
+              g_date_time_get_microsecond (date_time),
+              my_prgname, my_pid, message);
+}
+
+/**
  * pv_log_to_stderr:
  * @log_domain: the log domain of the message
  * @log_level: the log level of the message
@@ -935,6 +959,8 @@ void
 pv_set_up_logging (gboolean opt_verbose)
 {
   GLogLevelFlags log_levels = G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE;
+  gboolean opt_timestamp = pv_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
+                                                   FALSE);
   gboolean opt_info = pv_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
 
   my_pid = getpid ();
@@ -947,6 +973,6 @@ pv_set_up_logging (gboolean opt_verbose)
     log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
 
   g_log_set_handler (G_LOG_DOMAIN, log_levels,
-                     pv_log_to_stderr,
+                     opt_timestamp ? pv_log_to_stderr_with_timestamp : pv_log_to_stderr,
                      NULL);
 }

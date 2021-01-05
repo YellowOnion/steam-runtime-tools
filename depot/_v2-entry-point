@@ -206,16 +206,14 @@ if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
 fi
 
 # Steam App ID of this app or game
-log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
+verbose "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
 
 # Session ID used for coordination between processes involving the same game.
 # If unset/empty, only execute a single command.
-log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
+verbose "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
 
 # Used to create sockets.
-# A future version will fall back to /tmp, but only when this can be
-# done securely.
-log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}"
+verbose "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}"
 
 relaunch=
 

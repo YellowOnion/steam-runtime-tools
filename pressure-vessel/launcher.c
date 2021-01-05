@@ -267,7 +267,7 @@ handle_launch (PvLauncher1           *object,
 
   g_variant_lookup (arg_options, "terminate-after", "b", &terminate_after);
 
-  g_debug ("Running spawn command %s", arg_argv[0]);
+  g_info ("Running spawn command %s", arg_argv[0]);
 
   n_fds = 0;
   if (fds != NULL)
@@ -364,8 +364,8 @@ handle_launch (PvLauncher1           *object,
         {
           const gchar *locked_val = g_environ_getenv (env, var);
           if (g_strcmp0 (val, locked_val) != 0)
-            g_debug ("Ignoring request to set %s=\"%s\" because it was locked to \"%s\"",
-                     var, val, locked_val ? locked_val : "<unset>");
+            g_info ("Ignoring request to set %s=\"%s\" because it was locked to \"%s\"",
+                    var, val, locked_val ? locked_val : "<unset>");
           continue;
         }
 
@@ -384,7 +384,7 @@ handle_launch (PvLauncher1           *object,
         {
           const gchar *locked_val = g_environ_getenv (env, unset_env[i]);
           if (locked_val != NULL)
-             g_debug ("Ignoring request to unset %s because it was locked to \"%s\"",
+             g_info ("Ignoring request to unset %s because it was locked to \"%s\"",
                      unset_env[i], locked_val);
           continue;
         }

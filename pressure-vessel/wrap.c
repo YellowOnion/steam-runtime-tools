@@ -436,17 +436,17 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
 
       if (!g_file_test (values[i], G_FILE_TEST_EXISTS))
         {
-          g_debug ("Not bind-mounting %s=\"%s%s%s\" because it does not exist",
-                   variable, before, values[i], after);
+          g_info ("Not bind-mounting %s=\"%s%s%s\" because it does not exist",
+                  variable, before, values[i], after);
           continue;
         }
 
       canon = g_canonicalize_filename (values[i], NULL);
       value_host = pv_current_namespace_path_to_host_path (canon);
 
-      g_debug ("Bind-mounting %s=\"%s%s%s\" from the current env as %s=\"%s%s%s\" in the host",
-               variable, before, values[i], after,
-               variable, before, value_host, after);
+      g_info ("Bind-mounting %s=\"%s%s%s\" from the current env as %s=\"%s%s%s\" in the host",
+              variable, before, values[i], after,
+              variable, before, value_host, after);
       flatpak_exports_add_path_expose (exports, mode, canon);
 
       if (strcmp (values[i], value_host) != 0)
@@ -1826,7 +1826,7 @@ main (int argc,
               if (opt_remove_game_overlay
                   && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
                 {
-                  g_debug ("Disabling Steam Overlay: %s", preload);
+                  g_info ("Disabling Steam Overlay: %s", preload);
                   continue;
                 }
 
@@ -1853,7 +1853,7 @@ main (int argc,
             }
           else
             {
-              g_debug ("LD_PRELOAD module '%s' does not exist", preload);
+              g_info ("LD_PRELOAD module '%s' does not exist", preload);
             }
         }
     }
@@ -1883,7 +1883,7 @@ main (int argc,
           /* We already checked this */
           g_assert (g_path_is_absolute (opt_filesystems[i]));
 
-          g_debug ("Bind-mounting \"%s\"", opt_filesystems[i]);
+          g_info ("Bind-mounting \"%s\"", opt_filesystems[i]);
           flatpak_exports_add_path_expose (exports,
                                            FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                            opt_filesystems[i]);
@@ -1898,9 +1898,9 @@ main (int argc,
 
   if (_srt_is_same_file (home, cwd_p))
     {
-      g_debug ("Not making physical working directory \"%s\" available to "
-               "container because it is the home directory",
-               cwd_p);
+      g_info ("Not making physical working directory \"%s\" available to "
+              "container because it is the home directory",
+              cwd_p);
     }
   else
     {

@@ -462,7 +462,7 @@ generate_locales (gchar **locpath_out,
     {
       /* locale-gen exits 72 (EX_OSFILE) if it had to correct for
        * missing locales at OS level. This is not an error. */
-      g_debug ("pressure-vessel-locale-gen created missing locales");
+      g_info ("pressure-vessel-locale-gen created missing locales");
     }
   else if (!g_spawn_check_exit_status (wait_status, error))
     {
@@ -476,7 +476,7 @@ generate_locales (gchar **locpath_out,
   
   if (dir == NULL || g_dir_read_name (dir) == NULL)
     {
-      g_debug ("No locales have been generated");
+      g_info ("No locales have been generated");
       return TRUE;
     }
 
@@ -812,12 +812,12 @@ main (int argc,
         }
       else if (locales_temp_dir != NULL)
         {
-          g_debug ("Generated locales in %s", locales_temp_dir);
+          g_info ("Generated locales in %s", locales_temp_dir);
           flatpak_bwrap_set_env (wrapped_command, "LOCPATH", locales_temp_dir, TRUE);
         }
       else
         {
-          g_debug ("No locales were missing");
+          g_info ("No locales were missing");
         }
     }
 
@@ -917,18 +917,21 @@ main (int argc,
   if (WIFEXITED (wait_status))
     {
       ret = WEXITSTATUS (wait_status);
-      g_debug ("Command exited with status %d", ret);
+      if (ret == 0)
+        g_debug ("Command exited with status %d", ret);
+      else
+        g_info ("Command exited with status %d", ret);
     }
   else if (WIFSIGNALED (wait_status))
     {
       ret = 128 + WTERMSIG (wait_status);
-      g_debug ("Command killed by signal %d", ret - 128);
+      g_info ("Command killed by signal %d", ret - 128);
     }
   else
     {
       ret = EX_SOFTWARE;
-      g_debug ("Command terminated in an unknown way (wait status %d)",
-               wait_status);
+      g_info ("Command terminated in an unknown way (wait status %d)",
+              wait_status);
     }
 
   if (opt_terminate_idle_timeout < 0.0)

@@ -1236,6 +1236,8 @@ main (int argc,
   /* Set up the initial base logging */
   pv_set_up_logging (FALSE);
 
+  g_info ("pressure-vessel version %s", VERSION);
+
   original_argv = g_new0 (char *, argc + 1);
 
   for (i = 0; i < argc; i++)

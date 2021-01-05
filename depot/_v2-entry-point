@@ -34,10 +34,16 @@ fi
 
 log () {
     if [ -n "$use_timestamp" ]; then
-        timestamp=$(date +'%H:%M:%S.%6N')
+        timestamp=$(LD_PRELOAD= date +'%H:%M:%S.%6N')
         printf '%s\n' "${timestamp}: ${me}[$$]: $*" >&2
     else
         printf '%s\n' "${me}[$$]: $*" >&2
+    fi
+}
+
+info () {
+    if [ -n "${log_to_file}${verbose}" ]; then
+        log "$@"
     fi
 }
 
@@ -192,7 +198,7 @@ if [ -n "$log_to_file" ]; then
     export PRESSURE_VESSEL_LOG_WITH_TIMESTAMP=1
 fi
 
-verbose "argv: $(printf '%q ' "$@")"
+info "argv: $(printf '%q ' "$@")"
 
 if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
     log "Error: A command to run is required"
@@ -200,24 +206,22 @@ if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
 fi
 
 # Steam App ID of this app or game
-log "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
+verbose "STEAM_COMPAT_APP_ID=${STEAM_COMPAT_APP_ID-}"
 
 # Session ID used for coordination between processes involving the same game.
 # If unset/empty, only execute a single command.
-log "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
+verbose "STEAM_COMPAT_SESSION_ID=${STEAM_COMPAT_SESSION_ID-}"
 
 # Used to create sockets.
-# A future version will fall back to /tmp, but only when this can be
-# done securely.
-log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}"
+verbose "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}"
 
 relaunch=
 
 if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
-    verbose "Non-session mode, behaving like the main program"
+    info "Non-session mode, behaving like the main program"
     is_main=yes
 elif [ -n "$is_main" ]; then
-    verbose "Main program in session mode"
+    info "Main program in session mode"
     case "${PRESSURE_VESSEL_RELAUNCH_CONTAINER-0}" in
         (1)
             relaunch=yes
@@ -349,7 +353,7 @@ terminate_container () {
 }
 
 if [ -n "$relaunch" ]; then
-    verbose "Terminating and re-launching container for main game"
+    info "Terminating and re-launching container for main game"
     terminate_container || :
     exec_container "$@"
     # not reached

@@ -516,17 +516,6 @@ static const GOptionEntry options[] =
   { NULL }
 };
 
-static int my_pid = -1;
-
-static void
-cli_log_func (const gchar *log_domain,
-              GLogLevelFlags log_level,
-              const gchar *message,
-              gpointer user_data)
-{
-  g_printerr ("%s[%d]: %s\n", (const char *) user_data, my_pid, message);
-}
-
 int
 main (int argc,
       char *argv[])
@@ -555,8 +544,6 @@ main (int argc,
   GHashTableIter iter;
   gpointer key, value;
 
-  my_pid = getpid ();
-
   setlocale (LC_ALL, "");
 
   original_environ = g_get_environ ();
@@ -564,9 +551,8 @@ main (int argc,
 
   g_set_prgname ("pressure-vessel-launch");
 
-  g_log_set_handler (G_LOG_DOMAIN,
-                     G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     cli_log_func, (void *) g_get_prgname ());
+  /* Set up the initial base logging */
+  pv_set_up_logging (FALSE);
 
   context = g_option_context_new ("COMMAND [ARG...]");
   g_option_context_set_summary (context,
@@ -592,9 +578,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    g_log_set_handler (G_LOG_DOMAIN,
-                       G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                       cli_log_func, (void *) g_get_prgname ());
+    pv_set_up_logging (opt_verbose);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 

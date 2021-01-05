@@ -139,6 +139,14 @@ it set, and pass through **FONTS** from the caller.
     launcher) for each command executed inside the container,
     overriding the environment options shown above.
 
+`PRESSURE_VESSEL_LOG_INFO` (boolean)
+:   If set to `1`, increase the log verbosity up to the info level.
+    If set to `0`, no effect.
+
+`PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
+:   If set to `1`, prepend the log entries with a timestamp.
+    If set to `0`, no effect.
+
 # OUTPUT
 
 The standard output from *COMMAND* is printed on standard output.

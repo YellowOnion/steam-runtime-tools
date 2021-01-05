@@ -1187,17 +1187,6 @@ tristate_environment (const gchar *name)
   return TRISTATE_MAYBE;
 }
 
-static int my_pid = -1;
-
-static void
-cli_log_func (const gchar *log_domain,
-              GLogLevelFlags log_level,
-              const gchar *message,
-              gpointer user_data)
-{
-  g_printerr ("%s[%d]: %s\n", (const char *) user_data, my_pid, message);
-}
-
 int
 main (int argc,
       char *argv[])
@@ -1243,15 +1232,12 @@ main (int argc,
   g_autofree char *lock_env_fd = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
 
-  my_pid = getpid ();
-
   setlocale (LC_ALL, "");
 
   g_set_prgname ("pressure-vessel-wrap");
 
-  g_log_set_handler (G_LOG_DOMAIN,
-                     G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     cli_log_func, (void *) g_get_prgname ());
+  /* Set up the initial base logging */
+  pv_set_up_logging (FALSE);
 
   original_argv = g_new0 (char *, argc + 1);
 
@@ -1260,10 +1246,8 @@ main (int argc,
 
   if (g_getenv ("STEAM_RUNTIME") != NULL)
     {
-      g_printerr ("%s: This program should not be run in the Steam Runtime.",
-                  g_get_prgname ());
-      g_printerr ("%s: Use pressure-vessel-unruntime instead.",
-                  g_get_prgname ());
+      g_warning ("This program should not be run in the Steam Runtime. "
+                 "Use pressure-vessel-unruntime instead.");
       ret = 2;
       goto out;
     }
@@ -1311,6 +1295,9 @@ main (int argc,
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
+  if (opt_verbose)
+    pv_set_up_logging (opt_verbose);
+
   if (opt_runtime == NULL)
     opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
 
@@ -1352,8 +1339,8 @@ main (int argc,
   g_assert (opt_graphics_provider != NULL);
   if (opt_graphics_provider[0] != '\0' && opt_graphics_provider[0] != '/')
     {
-      g_printerr ("%s: --graphics-provider path must be absolute, not \"%s\"\n",
-                  g_get_prgname (), opt_graphics_provider);
+      g_warning ("--graphics-provider path must be absolute, not \"%s\"",
+                 opt_graphics_provider);
       goto out;
     }
 
@@ -1391,8 +1378,7 @@ main (int argc,
 
   if (argc < 2 && !opt_test && !opt_only_prepare)
     {
-      g_printerr ("%s: An executable to run is required\n",
-                  g_get_prgname ());
+      g_warning ("An executable to run is required");
       goto out;
     }
 
@@ -1406,8 +1392,7 @@ main (int argc,
 
   if (opt_terminal == PV_TERMINAL_NONE && opt_shell != PV_SHELL_NONE)
     {
-      g_printerr ("%s: --terminal=none is incompatible with --shell\n",
-                  g_get_prgname ());
+      g_warning ("--terminal=none is incompatible with --shell");
       goto out;
     }
 
@@ -1470,9 +1455,8 @@ main (int argc,
     }
   else
     {
-      g_printerr ("%s: Either --home, --freedesktop-app-id, --steam-app-id "
-                  "or $SteamAppId is required\n",
-                  g_get_prgname ());
+      g_warning ("Either --home, --freedesktop-app-id, --steam-app-id "
+                 "or $SteamAppId is required");
       goto out;
     }
 
@@ -1484,9 +1468,8 @@ main (int argc,
 
           if (equals == NULL)
             {
-              g_printerr ("%s: --env-if-host argument must be of the form "
-                          "NAME=VALUE, not \"%s\"\n",
-                          g_get_prgname (), opt_env_if_host[i]);
+              g_warning ("--env-if-host argument must be of the form "
+                         "NAME=VALUE, not \"%s\"", opt_env_if_host[i]);
               goto out;
             }
         }
@@ -1494,8 +1477,7 @@ main (int argc,
 
   if (opt_only_prepare && opt_test)
     {
-      g_printerr ("%s: --only-prepare and --test are mutually exclusive",
-                  g_get_prgname ());
+      g_warning ("--only-prepare and --test are mutually exclusive");
       goto out;
     }
 
@@ -1506,16 +1488,14 @@ main (int argc,
           if (strchr (opt_filesystems[i], ':') != NULL ||
               strchr (opt_filesystems[i], '\\') != NULL)
             {
-              g_printerr ("%s: ':' and '\\' in --filesystem argument "
-                          "not handled yet\n",
-                          g_get_prgname ());
+              g_warning ("':' and '\\' in --filesystem argument "
+                         "not handled yet");
               goto out;
             }
           else if (!g_path_is_absolute (opt_filesystems[i]))
             {
-              g_printerr ("%s: --filesystem argument must be an absolute "
-                          "path, not \"%s\"\n",
-                          g_get_prgname (), opt_filesystems[i]);
+              g_warning ("--filesystem argument must be an absolute "
+                         "path, not \"%s\"", opt_filesystems[i]);
               goto out;
             }
         }
@@ -1545,10 +1525,6 @@ main (int argc,
   if (opt_verbose)
     {
       g_auto(GStrv) env = g_strdupv (original_environ);
-
-      g_log_set_handler (G_LOG_DOMAIN,
-                         G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                         cli_log_func, (void *) g_get_prgname ());
 
       g_message ("Original argv:");
 

@@ -73,3 +73,5 @@ gchar *pv_current_namespace_path_to_host_path (const gchar *current_env_path);
 
 const char *pv_get_path_after (const char *str,
                                const char *prefix);
+
+void pv_set_up_logging (gboolean opt_verbose);

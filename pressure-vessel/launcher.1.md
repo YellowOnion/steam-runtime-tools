@@ -80,6 +80,14 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 :   Set to the current working directory for each command executed
     inside the container, overriding **--lock-env-from-fd**.
 
+`PRESSURE_VESSEL_LOG_INFO` (boolean)
+:   If set to `1`, increase the log verbosity up to the info level.
+    If set to `0`, no effect.
+
+`PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
+:   If set to `1`, prepend the log entries with a timestamp.
+    If set to `0`, no effect.
+
 # OUTPUT
 
 **pressure-vessel-launcher** prints zero or more lines of

@@ -10,6 +10,7 @@ me="${me##*/}"
 
 deploy=
 force=
+info=
 rendezvous=
 suite=scout
 use_timestamp=
@@ -23,6 +24,7 @@ fi
 
 if [ "${STEAM_LINUX_RUNTIME_LOG-}" = 1 ]; then
     # If we are logging to a file, use the timestamp
+    info=yes
     use_timestamp=yes
 fi
 
@@ -34,13 +36,19 @@ log () {
     fi
 }
 
+info () {
+    if [ -n "${info}${verbose}" ]; then
+        log "$@"
+    fi
+}
+
 verbose () {
     if [ -n "$verbose" ]; then
         log "$@"
     fi
 }
 
-verbose "argv: $(printf '%q ' "$@")"
+info "argv: $(printf '%q ' "$@")"
 
 usage () {
     local code="$1"
@@ -147,7 +155,7 @@ if [ -z "$rendezvous" ]; then
 fi
 
 if [ -S "$rendezvous/socket" ]; then
-    verbose "Session already started in $rendezvous"
+    info "Session already started in $rendezvous"
     exit 0
 fi
 
@@ -160,7 +168,7 @@ fi
 rm -f "$rendezvous/fifo"
 mkfifo "$rendezvous/fifo"
 
-verbose "Starting pressure-vessel-launcher in background"
+info "Starting pressure-vessel-launcher in background"
 "${run_in_steamrt}" \
     --arch=amd64,i386 \
     --deploy \
@@ -178,7 +186,7 @@ verbose "Starting pressure-vessel-launcher in background"
         --socket-directory="$rendezvous" \
         < /dev/null >&2 3>"$rendezvous/fifo" &
 container_pid="$!"
-verbose "Started pressure-vessel-launcher in background, pid $container_pid"
+info "Started pressure-vessel-launcher in background, pid $container_pid"
 socket=$(
     while read -r line; do
         case "$line" in

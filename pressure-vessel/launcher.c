@@ -891,9 +891,8 @@ main (int argc,
 
   g_set_prgname ("pressure-vessel-launcher");
 
-  g_log_set_handler (G_LOG_DOMAIN,
-                     G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     pv_log_to_stderr, NULL);
+  /* Set up the initial base logging */
+  pv_set_up_logging (FALSE);
 
   context = g_option_context_new ("");
   g_option_context_set_summary (context,
@@ -920,9 +919,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    g_log_set_handler (G_LOG_DOMAIN,
-                       G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                       pv_log_to_stderr, NULL);
+    pv_set_up_logging (opt_verbose);
 
   if (!pv_portal_listener_set_up_info_fd (global_listener,
                                           opt_info_fd,

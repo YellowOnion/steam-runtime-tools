@@ -659,9 +659,8 @@ main (int argc,
 
   g_set_prgname ("pressure-vessel-adverb");
 
-  g_log_set_handler (G_LOG_DOMAIN,
-                     G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     pv_log_to_stderr, NULL);
+  /* Set up the initial base logging */
+  pv_set_up_logging (FALSE);
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -695,9 +694,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    g_log_set_handler (G_LOG_DOMAIN,
-                       G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                       pv_log_to_stderr, NULL);
+    pv_set_up_logging (opt_verbose);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 

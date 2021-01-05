@@ -42,6 +42,9 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
+static int my_pid = -1;
+static const gchar *my_prgname = NULL;
+
 /**
  * pv_envp_cmp:
  * @p1: a `const char * const *`
@@ -915,11 +918,35 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
  * @message: the message to process
  * @user_data: not used
  */
-void
+static void
 pv_log_to_stderr (const gchar *log_domain,
                   GLogLevelFlags log_level,
                   const gchar *message,
                   gpointer user_data)
 {
-  g_printerr ("%s[%d]: %s\n", g_get_prgname (), getpid (), message);
+  g_printerr ("%s[%d]: %s\n", my_prgname, my_pid, message);
+}
+
+/**
+ * pv_set_up_logging:
+ * @opt_verbose: If the log should be more verbose
+ */
+void
+pv_set_up_logging (gboolean opt_verbose)
+{
+  GLogLevelFlags log_levels = G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE;
+  gboolean opt_info = pv_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
+
+  my_pid = getpid ();
+  my_prgname = g_get_prgname ();
+
+  if (opt_info)
+    log_levels |= G_LOG_LEVEL_INFO;
+
+  if (opt_verbose)
+    log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
+
+  g_log_set_handler (G_LOG_DOMAIN, log_levels,
+                     pv_log_to_stderr,
+                     NULL);
 }

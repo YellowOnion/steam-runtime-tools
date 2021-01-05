@@ -1236,9 +1236,8 @@ main (int argc,
 
   g_set_prgname ("pressure-vessel-wrap");
 
-  g_log_set_handler (G_LOG_DOMAIN,
-                     G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE,
-                     pv_log_to_stderr, NULL);
+  /* Set up the initial base logging */
+  pv_set_up_logging (FALSE);
 
   original_argv = g_new0 (char *, argc + 1);
 
@@ -1297,9 +1296,7 @@ main (int argc,
     goto out;
 
   if (opt_verbose)
-    g_log_set_handler (G_LOG_DOMAIN,
-                       G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO,
-                       pv_log_to_stderr, NULL);
+    pv_set_up_logging (opt_verbose);
 
   if (opt_runtime == NULL)
     opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));

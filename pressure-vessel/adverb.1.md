@@ -153,6 +153,12 @@ exit status.
     lock), until a **--no-write** option is seen. **--no-write** results
     in use of **F_RDLCK** (a shared/read lock), and is the default.
 
+# ENVIRONMENT
+
+`PRESSURE_VESSEL_LOG_INFO` (boolean)
+:   If set to `1`, increase the log verbosity up to the info level.
+    If set to `0`, no effect.
+
 # OUTPUT
 
 The standard output from *COMMAND* is printed on standard output.

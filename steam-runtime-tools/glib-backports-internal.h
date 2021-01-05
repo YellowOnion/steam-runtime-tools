@@ -120,3 +120,9 @@ gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
 gchar *my_g_utf8_make_valid (const gchar *str,
                              gssize len);
 #endif
+
+#ifndef g_info
+#define g_info(...)     g_log (G_LOG_DOMAIN,         \
+                               G_LOG_LEVEL_INFO,     \
+                               __VA_ARGS__)
+#endif

@@ -38,6 +38,9 @@ steam-runtime-tools (0.20210105.0) UNRELEASED; urgency=medium
     this can speed up pressure-vessel by as much as 90%. In more normal
     configurations it can still save 10%. (Resolves: steam-runtime#323)
   * pressure-vessel: Stop running bwrap --help, no longer needed.
+  * pv-wrap: Log pressure-vessel version on startup.
+    This serves two purposes: it gives us a timestamp for when
+    pressure-vessel started, and it puts the version number in the log.
   * Preparatory work for being able to run inside Flatpak:
     - system-info: Look in both /overrides and /usr/lib/p-v/overrides
     - pv-wrap: In Flatpak, use pv-launch to run commands on the host
@@ -60,8 +63,9 @@ steam-runtime-tools (0.20210105.0) UNRELEASED; urgency=medium
   * Refactor logging
   * Add PRESSURE_VESSEL_LOG_INFO and PRESSURE_VESSEL_LOG_WITH_TIMESTAMP
     environment variables
+  * pressure-vessel: Start to use the "info" log level
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 05 Jan 2021 11:41:12 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 05 Jan 2021 15:35:41 +0000
 
 steam-runtime-tools (0.20201203.0) scout; urgency=medium
 

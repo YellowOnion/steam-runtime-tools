@@ -239,11 +239,11 @@ forward_signal (int sig)
                                        -1, NULL, &error);
 
   if (error)
-    g_debug ("Failed to forward signal: %s", error->message);
+    g_info ("Failed to forward signal: %s", error->message);
 
   if (sig == SIGSTOP)
     {
-      g_debug ("SIGSTOP:ing myself");
+      g_info ("SIGSTOP:ing myself");
       raise (SIGSTOP);
     }
 }

@@ -313,7 +313,7 @@ runtime_architecture_init (RuntimeArchitecture *self,
 
   if (self->ld_so == NULL)
     {
-      g_debug ("Cannot determine ld.so for %s", self->details->tuple);
+      g_info ("Cannot determine ld.so for %s", self->details->tuple);
       return FALSE;
     }
 
@@ -608,9 +608,9 @@ pv_runtime_garbage_collect (PvRuntime *self,
 
       if (temp_lock == NULL)
         {
-          g_debug ("Ignoring \"%s/%s\": unable to get lock: %s",
-                   self->mutable_parent, dent->d_name,
-                   local_error->message);
+          g_info ("Not deleting \"%s/%s\": unable to get lock: %s",
+                  self->mutable_parent, dent->d_name,
+                  local_error->message);
           g_clear_error (&local_error);
           continue;
         }
@@ -1223,8 +1223,8 @@ pv_runtime_provide_container_access (PvRuntime *self,
        *
        * In particular, if we are working with a writeable copy of a runtime
        * that we are editing in-place, it's always like that. */
-      g_debug ("%s: Setting up runtime without using bwrap",
-               G_STRFUNC);
+      g_info ("%s: Setting up runtime without using bwrap",
+              G_STRFUNC);
       self->container_access_adverb = flatpak_bwrap_new (NULL);
       self->container_access = g_strdup (self->runtime_files);
 
@@ -1259,8 +1259,8 @@ pv_runtime_provide_container_access (PvRuntime *self,
 
       /* Otherwise, will we need to use bwrap to build a directory hierarchy
        * that is the same shape as the final system. */
-      g_debug ("%s: Using bwrap to set up runtime that is just /usr",
-               G_STRFUNC);
+      g_info ("%s: Using bwrap to set up runtime that is just /usr",
+              G_STRFUNC);
 
       /* By design, writeable copies of the runtime never need this:
        * the writeable copy is a complete sysroot, not just a merged /usr. */
@@ -1487,7 +1487,7 @@ bind_icd (PvRuntime *self,
   g_return_val_if_fail (use_numbered_subdirs != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  g_debug ("Capturing loadable module: %s", details->resolved_library);
+  g_info ("Capturing loadable module: %s", details->resolved_library);
 
   in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
                                            subdir, NULL);
@@ -2652,8 +2652,8 @@ collect_vulkan_layers (PvRuntime *self,
                             SRT_LIBRARY_ISSUES_UNKNOWN |
                             SRT_LIBRARY_ISSUES_TIMEOUT))
                 {
-                  g_debug ("Unable to load library %s: %s", details->resolved_library,
-                           srt_library_get_messages (library));
+                  g_info ("Unable to load library %s: %s", details->resolved_library,
+                          srt_library_get_messages (library));
                   continue;
                 }
               g_free (details->resolved_library);
@@ -2662,8 +2662,8 @@ collect_vulkan_layers (PvRuntime *self,
           else
             {
               /* Sorry, we can't know how to load this. */
-              g_debug ("Cannot support ld.so special tokens, e.g. ${LIB}, when provider "
-                       "is not the root filesystem");
+              g_info ("Cannot support ld.so special tokens, e.g. ${LIB}, when provider "
+                      "is not the root filesystem");
               continue;
             }
         }
@@ -2940,9 +2940,9 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 
       if (!found)
         {
-          g_debug ("We were expecting to have the gconv modules directory in the "
-                   "provider to be located in \"%s/gconv\", but instead it is missing",
-                   dir);
+          g_info ("We were expecting the gconv modules directory in the provider "
+                  "to be located in \"%s/gconv\", but instead it is missing",
+                  dir);
         }
     }
 
@@ -2994,10 +2994,9 @@ pv_runtime_collect_libdrm_data (PvRuntime *self,
         }
       else
         {
-          g_debug ("We were expecting to have the libdrm directory "
-                   "in the provider to be located in "
-                   "\"%s/share/libdrm\", but instead it is missing",
-                   dir);
+          g_info ("We were expecting the libdrm directory in the provider to "
+                  "be located in \"%s/share/libdrm\", but instead it is "
+                  "missing", dir);
         }
     }
 }
@@ -3232,14 +3231,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
       if (!srt_egl_icd_check_error (icd, &local_error))
         {
-          g_debug ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
-                   j, path, local_error->message);
+          g_info ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
+                  j, path, local_error->message);
           g_clear_error (&local_error);
           continue;
         }
 
-      g_debug ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
-               j, path, srt_egl_icd_get_library_path (icd));
+      g_info ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
+              j, path, srt_egl_icd_get_library_path (icd));
 
       g_ptr_array_add (egl_icd_details, icd_details_new (icd));
     }
@@ -3262,14 +3261,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
       if (!srt_vulkan_icd_check_error (icd, &local_error))
         {
-          g_debug ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
-                   j, path, local_error->message);
+          g_info ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
+                  j, path, local_error->message);
           g_clear_error (&local_error);
           continue;
         }
 
-      g_debug ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
-               j, path, srt_vulkan_icd_get_library_path (icd));
+      g_info ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
+              j, path, srt_vulkan_icd_get_library_path (icd));
 
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
     }
@@ -3292,14 +3291,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           if (!srt_vulkan_layer_check_error (layer, &local_error))
             {
-              g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
-                       j, path, local_error->message);
+              g_info ("Failed to load Vulkan explicit layer #%" G_GSIZE_FORMAT
+                      " from %s: %s", j, path, local_error->message);
               g_clear_error (&local_error);
               continue;
             }
 
-          g_debug ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                   j, path, srt_vulkan_layer_get_library_path (layer));
+          g_info ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
+                  j, path, srt_vulkan_layer_get_library_path (layer));
 
           g_ptr_array_add (vulkan_exp_layer_details, icd_details_new (layer));
         }
@@ -3321,16 +3320,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           if (!srt_vulkan_layer_check_error (layer, &local_error))
             {
-              g_debug ("Failed to load Vulkan Layer #%" G_GSIZE_FORMAT " from %s: %s",
-                       j, path, local_error->message);
+              g_info ("Failed to load Vulkan implicit layer #%" G_GSIZE_FORMAT
+                      " from %s: %s", j, path, local_error->message);
               g_clear_error (&local_error);
               continue;
             }
 
           library_path = srt_vulkan_layer_get_library_path (layer);
 
-          g_debug ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                   j, path, library_path != NULL ? library_path : "meta-layer");
+          g_info ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
+                  j, path, library_path != NULL ? library_path : "meta-layer");
 
           g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
         }
@@ -3368,9 +3367,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           if (ld_so_in_runtime == NULL)
             {
-              g_debug ("Container does not have %s so it cannot run "
-                       "%s binaries",
-                       arch->ld_so, arch->details->tuple);
+              g_info ("Container does not have %s so it cannot run "
+                      "%s binaries",
+                      arch->ld_so, arch->details->tuple);
               continue;
             }
 

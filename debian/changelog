@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210105.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210105.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * pv-wrap: Make graphics drivers outside $HOME available, if used
@@ -65,7 +65,7 @@ steam-runtime-tools (0.20210105.0) UNRELEASED; urgency=medium
     environment variables
   * pressure-vessel: Start to use the "info" log level
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 05 Jan 2021 15:35:41 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 05 Jan 2021 18:12:58 +0000
 
 steam-runtime-tools (0.20201203.0) scout; urgency=medium
 

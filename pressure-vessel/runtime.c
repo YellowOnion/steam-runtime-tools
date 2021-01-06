@@ -350,11 +350,10 @@ G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RuntimeArchitecture,
 
 static gboolean pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                         FlatpakBwrap *bwrap,
-                                                        GHashTable *extra_locked_vars_to_unset,
-                                                        GHashTable *extra_locked_vars_to_inherit,
+                                                        PvEnviron *container_env,
                                                         GError **error);
 static void pv_runtime_set_search_paths (PvRuntime *self,
-                                         FlatpakBwrap *bwrap);
+                                         PvEnviron *container_env);
 
 static void
 pv_runtime_init (PvRuntime *self)
@@ -1143,15 +1142,18 @@ pv_runtime_new (const char *source_files,
  * and rely on bubblewrap's init process for this, but we currently
  * can't do that without breaking gameoverlayrender.so's assumptions,
  * and we want -adverb for its locale functionality anyway. */
-gchar *
+gboolean
 pv_runtime_get_adverb (PvRuntime *self,
                        FlatpakBwrap *bwrap)
 {
-  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   /* This will be true if pv_runtime_bind() was successfully called. */
-  g_return_val_if_fail (self->adverb_in_container != NULL, NULL);
-  g_return_val_if_fail (bwrap != NULL, NULL);
-  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), NULL);
+  g_return_val_if_fail (self->adverb_in_container != NULL, FALSE);
+  g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (flatpak_bwrap_is_empty (bwrap), FALSE);
+  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+
+  flatpak_bwrap_add_arg (bwrap, self->adverb_in_container);
 
   if (self->flags & PV_RUNTIME_FLAGS_GENERATE_LOCALES)
     flatpak_bwrap_add_args (bwrap, "--generate-locales", NULL);
@@ -1190,7 +1192,7 @@ pv_runtime_get_adverb (PvRuntime *self,
                               NULL);
     }
 
-  return g_strdup (self->adverb_in_container);
+  return TRUE;
 }
 
 /*
@@ -1639,8 +1641,7 @@ static gboolean
 bind_runtime (PvRuntime *self,
               FlatpakExports *exports,
               FlatpakBwrap *bwrap,
-              GHashTable *extra_locked_vars_to_unset,
-              GHashTable *extra_locked_vars_to_inherit,
+              PvEnviron *container_env,
               GError **error)
 {
   static const char * const bind_mutable[] =
@@ -1706,7 +1707,7 @@ bind_runtime (PvRuntime *self,
                           "--symlink", "../run", "/var/run",
                           NULL);
 
-  flatpak_bwrap_set_env (bwrap, "XDG_RUNTIME_DIR", xrd, TRUE);
+  pv_environ_lock_env (container_env, "XDG_RUNTIME_DIR", xrd);
 
   if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
       || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
@@ -1824,8 +1825,8 @@ bind_runtime (PvRuntime *self,
 
   if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
     {
-      if (!pv_runtime_use_provider_graphics_stack (self, bwrap, extra_locked_vars_to_unset,
-                                                   extra_locked_vars_to_inherit, error))
+      if (!pv_runtime_use_provider_graphics_stack (self, bwrap, container_env,
+                                                   error))
         return FALSE;
     }
 
@@ -3185,8 +3186,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
-                                        GHashTable *extra_locked_vars_to_unset,
-                                        GHashTable *extra_locked_vars_to_inherit,
+                                        PvEnviron *container_env,
                                         GError **error)
 {
   gsize i, j;
@@ -3227,6 +3227,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   if (!pv_runtime_provide_container_access (self, error))
@@ -3691,21 +3692,23 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   if (dri_path->len != 0)
-    flatpak_bwrap_set_env (bwrap, "LIBGL_DRIVERS_PATH", dri_path->str, TRUE);
+    pv_environ_lock_env (container_env, "LIBGL_DRIVERS_PATH", dri_path->str);
   else
-    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("LIBGL_DRIVERS_PATH"));
+    pv_environ_lock_env (container_env, "LIBGL_DRIVERS_PATH", NULL);
 
   if (egl_path->len != 0)
-    flatpak_bwrap_set_env (bwrap, "__EGL_VENDOR_LIBRARY_FILENAMES", egl_path->str, TRUE);
+    pv_environ_lock_env (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
+                         egl_path->str);
   else
-    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("__EGL_VENDOR_LIBRARY_FILENAMES"));
+    pv_environ_lock_env (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
+                         NULL);
 
-  g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("__EGL_VENDOR_LIBRARY_DIRS"));
+  pv_environ_lock_env (container_env, "__EGL_VENDOR_LIBRARY_DIRS", NULL);
 
   if (vulkan_path->len != 0)
-    flatpak_bwrap_set_env (bwrap, "VK_ICD_FILENAMES", vulkan_path->str, TRUE);
+    pv_environ_lock_env (container_env, "VK_ICD_FILENAMES", vulkan_path->str);
   else
-    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_ICD_FILENAMES"));
+    pv_environ_lock_env (container_env, "VK_ICD_FILENAMES", NULL);
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
@@ -3727,15 +3730,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           else
             prepended_data_dirs = g_steal_pointer (&override_share);
 
-          flatpak_bwrap_set_env (bwrap, "XDG_DATA_DIRS", prepended_data_dirs, TRUE);
+          pv_environ_lock_env (container_env, "XDG_DATA_DIRS",
+                               prepended_data_dirs);
         }
-      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("VK_LAYER_PATH"));
+      pv_environ_lock_env (container_env, "VK_LAYER_PATH", NULL);
     }
 
   if (va_api_path->len != 0)
-    flatpak_bwrap_set_env (bwrap, "LIBVA_DRIVERS_PATH", va_api_path->str, TRUE);
+    pv_environ_lock_env (container_env, "LIBVA_DRIVERS_PATH",
+                         va_api_path->str);
   else
-    g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("LIBVA_DRIVERS_PATH"));
+    pv_environ_lock_env (container_env, "LIBVA_DRIVERS_PATH", NULL);
 
   /* We binded the VDPAU drivers in "%{libdir}/vdpau".
    * Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't
@@ -3746,8 +3751,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autofree gchar *vdpau_val = g_strdup_printf ("%s/lib/platform-${PLATFORM}/vdpau",
                                                  self->overrides_in_container);
 
-  flatpak_bwrap_set_env (bwrap, "VDPAU_DRIVER_PATH", vdpau_val, TRUE);
-
+  pv_environ_lock_env (container_env, "VDPAU_DRIVER_PATH", vdpau_val);
   return TRUE;
 }
 
@@ -3755,8 +3759,7 @@ gboolean
 pv_runtime_bind (PvRuntime *self,
                  FlatpakExports *exports,
                  FlatpakBwrap *bwrap,
-                 GHashTable *extra_locked_vars_to_unset,
-                 GHashTable *extra_locked_vars_to_inherit,
+                 PvEnviron *container_env,
                  GError **error)
 {
   g_autofree gchar *pressure_vessel_prefix = NULL;
@@ -3764,15 +3767,13 @@ pv_runtime_bind (PvRuntime *self,
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
-  g_return_val_if_fail (extra_locked_vars_to_unset != NULL, FALSE);
-  g_return_val_if_fail (extra_locked_vars_to_inherit != NULL, FALSE);
+  g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   if (!bind_runtime (self,
                      exports,
                      bwrap,
-                     extra_locked_vars_to_unset,
-                     extra_locked_vars_to_inherit,
+                     container_env,
                      error))
     return FALSE;
 
@@ -3829,16 +3830,16 @@ pv_runtime_bind (PvRuntime *self,
    * backwards compatibility is not a concern for game developers who
    * have specifically opted-in to using the newer runtime. */
   if (self->is_scout)
-    flatpak_bwrap_set_env (bwrap, "STEAM_RUNTIME", "/", TRUE);
+    pv_environ_lock_env (container_env, "STEAM_RUNTIME", "/");
 
-  pv_runtime_set_search_paths (self, bwrap);
+  pv_runtime_set_search_paths (self, container_env);
 
   return TRUE;
 }
 
 void
 pv_runtime_set_search_paths (PvRuntime *self,
-                             FlatpakBwrap *bwrap)
+                             PvEnviron *container_env)
 {
   g_autoptr(GString) ld_library_path = g_string_new ("");
   gsize i;
@@ -3861,8 +3862,8 @@ pv_runtime_set_search_paths (PvRuntime *self,
 
   /* The PATH from outside the container doesn't really make sense inside the
    * container: in principle the layout could be totally different. */
-  flatpak_bwrap_set_env (bwrap, "PATH", "/usr/bin:/bin", TRUE);
-  flatpak_bwrap_set_env (bwrap, "LD_LIBRARY_PATH", ld_library_path->str, TRUE);
+  pv_environ_lock_env (container_env, "PATH", "/usr/bin:/bin");
+  pv_environ_lock_env (container_env, "LD_LIBRARY_PATH", ld_library_path->str);
 }
 
 static void

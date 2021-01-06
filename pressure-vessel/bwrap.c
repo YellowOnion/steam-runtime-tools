@@ -431,3 +431,16 @@ pv_bwrap_copy (FlatpakBwrap *bwrap)
   flatpak_bwrap_append_bwrap (ret, bwrap);
   return ret;
 }
+
+/*
+ * Return @bwrap's @envp, while resetting @bwrap's @envp to an empty
+ * environment block.
+ */
+GStrv
+pv_bwrap_steal_envp (FlatpakBwrap *bwrap)
+{
+  GStrv envp = g_steal_pointer (&bwrap->envp);
+
+  bwrap->envp = g_strdupv (flatpak_bwrap_empty_env);
+  return envp;
+}

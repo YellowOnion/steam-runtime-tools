@@ -36,6 +36,7 @@
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
+#include "environ.h"
 #include "flatpak-bwrap-private.h"
 #include "flatpak-run-private.h"
 #include "flatpak-utils-base-private.h"
@@ -385,7 +386,7 @@ static const EnvMount known_required_env[] =
 
 static void
 bind_and_propagate_from_environ (FlatpakExports *exports,
-                                 FlatpakBwrap *bwrap,
+                                 PvEnviron *container_env,
                                  const char *variable,
                                  EnvMountFlags flags)
 {
@@ -461,7 +462,7 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
     {
       g_autofree gchar *joined = g_strjoinv (":", values);
 
-      flatpak_bwrap_set_env (bwrap, variable, joined, TRUE);
+      pv_environ_lock_env (container_env, variable, joined);
     }
 }
 
@@ -482,6 +483,7 @@ static gboolean expose_steam (FlatpakExports *exports,
 static gboolean
 use_fake_home (FlatpakExports *exports,
                FlatpakBwrap *bwrap,
+               PvEnviron *container_env,
                const gchar *fake_home,
                GError **error)
 {
@@ -542,9 +544,9 @@ use_fake_home (FlatpakExports *exports,
                           "--bind", tmp, "/var/tmp",
                           NULL);
 
-  flatpak_bwrap_set_env (bwrap, "XDG_CACHE_HOME", cache, TRUE);
-  flatpak_bwrap_set_env (bwrap, "XDG_CONFIG_HOME", config, TRUE);
-  flatpak_bwrap_set_env (bwrap, "XDG_DATA_HOME", data, TRUE);
+  pv_environ_lock_env (container_env, "XDG_CACHE_HOME", cache);
+  pv_environ_lock_env (container_env, "XDG_CONFIG_HOME", config);
+  pv_environ_lock_env (container_env, "XDG_DATA_HOME", data);
 
   flatpak_exports_add_path_expose (exports,
                                    FLATPAK_FILESYSTEM_MODE_READ_WRITE,
@@ -733,7 +735,7 @@ static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
 static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
-static char *opt_write_bwrap = NULL;
+static char *opt_write_final_argv = NULL;
 
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
@@ -1157,9 +1159,9 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
     opt_with_host_graphics_cb,
     "Deprecated alias for \"--graphics-provider=\"", NULL },
-  { "write-bwrap-arguments", '\0',
-    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_bwrap,
-    "Write the final bwrap arguments, as null terminated strings, to the "
+  { "write-final-argv", '\0',
+    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_write_final_argv,
+    "Write the final argument vector, as null terminated strings, to the "
     "given file path.", "PATH" },
   { "test", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_test,
@@ -1200,11 +1202,11 @@ main (int argc,
   g_auto(GStrv) original_environ = NULL;
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
+  g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
+  g_autoptr(FlatpakBwrap) argv_in_container = NULL;
+  g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
-  g_autoptr(FlatpakBwrap) adverb_args = NULL;
-  g_autofree gchar *adverb_in_container = NULL;
-  g_autoptr(FlatpakBwrap) wrapped_command = NULL;
   g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
@@ -1215,17 +1217,8 @@ main (int argc,
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
-  GHashTableIter iter;
-  const gchar *env_var;
   g_autoptr(GString) lock_env = g_string_new ("");
   g_auto(GLnxTmpfile) lock_env_tmpf  = { 0, };
-  gpointer k;
-  g_autoptr(GHashTable) extra_locked_vars_to_unset = g_hash_table_new_full (g_str_hash,
-                                                                            g_str_equal,
-                                                                            g_free, NULL);
-  g_autoptr(GHashTable) extra_locked_vars_to_inherit = g_hash_table_new_full (g_str_hash,
-                                                                            g_str_equal,
-                                                                            g_free, NULL);
   g_autofree char *lock_env_fd = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
 
@@ -1569,24 +1562,6 @@ main (int argc,
 
   g_debug ("Found executable directory: %s", tools_dir);
 
-  wrapped_command = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-
-  if (argc > 1 && argv[1][0] == '-' && !opt_launcher)
-    {
-      /* Make sure wrapped_command is something we can validly pass to env(1) */
-      if (strchr (argv[1], '=') != NULL)
-        flatpak_bwrap_add_args (wrapped_command,
-                                "sh", "-euc", "exec \"$@\"", "sh",
-                                NULL);
-
-      /* Make sure bwrap will interpret wrapped_command as the end of its
-       * options */
-      flatpak_bwrap_add_arg (wrapped_command, "env");
-    }
-
-  g_debug ("Setting arguments for wrapped command");
-  flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
-
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
     {
@@ -1623,6 +1598,7 @@ main (int argc,
   bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
   flatpak_bwrap_add_arg (bwrap, bwrap_executable);
   exports = flatpak_exports_new ();
+  container_env = pv_environ_new ();
 
   if (is_flatpak_env)
     {
@@ -1696,8 +1672,7 @@ main (int argc,
       if (!pv_runtime_bind (runtime,
                             exports,
                             bwrap,
-                            extra_locked_vars_to_unset,
-                            extra_locked_vars_to_inherit,
+                            container_env,
                             error))
         goto out;
     }
@@ -1776,7 +1751,8 @@ main (int argc,
     }
   else
     {
-      if (!use_fake_home (exports, bwrap, opt_fake_home, error))
+      if (!use_fake_home (exports, bwrap, container_env, opt_fake_home,
+                          error))
         goto out;
     }
 
@@ -1859,11 +1835,12 @@ main (int argc,
     }
 
   if (adjusted_ld_preload->len != 0)
-    flatpak_bwrap_set_env (bwrap, "LD_PRELOAD", adjusted_ld_preload->str, TRUE);
+    pv_environ_set_env_overridable (container_env, "LD_PRELOAD",
+                                    adjusted_ld_preload->str);
 
   g_debug ("Making Steam environment variables available if required...");
   for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
-    bind_and_propagate_from_environ (exports, bwrap,
+    bind_and_propagate_from_environ (exports, container_env,
                                      known_required_env[i].name,
                                      known_required_env[i].flags);
 
@@ -1917,7 +1894,7 @@ main (int argc,
                           "--chdir", cwd_p_host,
                           NULL);
 
-  g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("PWD"));
+  pv_environ_lock_env (container_env, "PWD", NULL);
 
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
@@ -1942,7 +1919,8 @@ main (int argc,
 
               *equals = '\0';
 
-              flatpak_bwrap_set_env (bwrap, opt_env_if_host[i], equals + 1, TRUE);
+              pv_environ_lock_env (container_env, opt_env_if_host[i],
+                                   equals + 1);
 
               *equals = '=';
             }
@@ -1960,149 +1938,196 @@ main (int argc,
       flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
     }
 
-  flatpak_run_add_font_path_args (bwrap);
-
-  /* We need to set up IPC rendezvous points relatively late, so that
-   * even if we are sharing /tmp via --filesystem=/tmp, we'll still
-   * mount our own /tmp/.X11-unix over the top of the OS's. */
-  if (runtime != NULL)
+  /* Use code borrowed from Flatpak to share various other bits of the
+   * execution environment with the host system */
     {
-      flatpak_run_add_wayland_args (bwrap);
+      g_autoptr(FlatpakBwrap) sharing_bwrap =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      g_auto(GStrv) envp = NULL;
 
-      /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
-       * but it might be different on the host system. As a workaround we simply
-       * bind the whole "/tmp/.X11-unix" directory and later unset the container
-       * "DISPLAY" env.
-       */
-      if (is_flatpak_env)
+      /* If these are set by flatpak_run_add_x11_args(), etc., we'll
+       * change them from locked-and-unset to locked-and-set later.
+       * Every variable that is unset with flatpak_bwrap_unset_env() in
+       * the functions we borrow from Flatpak (below) should be listed
+       * here. */
+      pv_environ_lock_env (container_env, "DISPLAY", NULL);
+      pv_environ_lock_env (container_env, "PULSE_SERVER", NULL);
+      pv_environ_lock_env (container_env, "XAUTHORITY", NULL);
+
+      flatpak_run_add_font_path_args (sharing_bwrap);
+
+      /* We need to set up IPC rendezvous points relatively late, so that
+       * even if we are sharing /tmp via --filesystem=/tmp, we'll still
+       * mount our own /tmp/.X11-unix over the top of the OS's. */
+      if (runtime != NULL)
         {
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
-                                  NULL);
-        }
-      else
-        {
-          flatpak_run_add_x11_args (bwrap, extra_locked_vars_to_unset, TRUE);
+          flatpak_run_add_wayland_args (sharing_bwrap);
+
+          /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
+           * but it might be different on the host system. As a workaround we simply
+           * bind the whole "/tmp/.X11-unix" directory and later unset the container
+           * "DISPLAY" env.
+           */
+          if (is_flatpak_env)
+            {
+              flatpak_bwrap_add_args (sharing_bwrap,
+                                      "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
+                                      NULL);
+            }
+          else
+            {
+              flatpak_run_add_x11_args (sharing_bwrap, TRUE);
+            }
+
+          flatpak_run_add_pulseaudio_args (sharing_bwrap);
+          flatpak_run_add_session_dbus_args (sharing_bwrap);
+          flatpak_run_add_system_dbus_args (sharing_bwrap);
         }
 
-      flatpak_run_add_pulseaudio_args (bwrap, extra_locked_vars_to_unset);
-      flatpak_run_add_session_dbus_args (bwrap);
-      flatpak_run_add_system_dbus_args (bwrap);
+      envp = pv_bwrap_steal_envp (sharing_bwrap);
+
+      for (i = 0; envp[i] != NULL; i++)
+        {
+          static const char * const known_vars[] =
+          {
+            "DBUS_SESSION_BUS_ADDRESS",
+            "DBUS_SYSTEM_BUS_ADDRESS",
+            "DISPLAY",
+            "PULSE_CLIENTCONFIG",
+            "PULSE_SERVER",
+            "XAUTHORITY",
+          };
+          char *equals = strchr (envp[i], '=');
+          const char *var = envp[i];
+          const char *val = NULL;
+          gsize j;
+
+          if (equals != NULL)
+            {
+              *equals = '\0';
+              val = equals + 1;
+            }
+
+          for (j = 0; j < G_N_ELEMENTS (known_vars); j++)
+            {
+              if (strcmp (var, known_vars[j]) == 0)
+                break;
+            }
+
+          /* If this warning is reached, we might need to add this
+           * variable to the block of
+           * pv_environ_lock_env (container_env, ., NULL) calls above */
+          if (j >= G_N_ELEMENTS (known_vars))
+            g_warning ("Extra environment variable %s set during container "
+                       "setup but not in known_vars; check logic",
+                       var);
+
+          pv_environ_lock_env (container_env, var, val);
+        }
+
+      g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
+      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
     }
 
   if (is_flatpak_env)
     {
+      g_autoptr(GList) vars = NULL;
+      const GList *iter;
+
       /* These are the environment variables that will be wrong, or useless,
-       * in the new container that will be created. */
-      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("FLATPAK_ID"));
-      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("FLATPAK_SANDBOX_DIR"));
-      g_hash_table_add (extra_locked_vars_to_unset, g_strdup ("LD_AUDIT"));
+       * in the new container that will be created by escaping from the
+       * sandbox. Force them to be unset. */
+      pv_environ_lock_env (container_env, "FLATPAK_ID", NULL);
+      pv_environ_lock_env (container_env, "FLATPAK_SANDBOX_DIR", NULL);
+      pv_environ_lock_env (container_env, "LD_AUDIT", NULL);
 
       /* These are the environment variables that might differ in the host
        * system. However from inside a container we are not able to know the
        * host's value. So we allow them to inherit the value from the host. */
-      g_hash_table_add (extra_locked_vars_to_inherit, g_strdup ("DBUS_SESSION_BUS_ADDRESS"));
-      g_hash_table_add (extra_locked_vars_to_inherit, g_strdup ("DBUS_SYSTEM_BUS_ADDRESS"));
-      g_hash_table_add (extra_locked_vars_to_inherit, g_strdup ("DISPLAY"));
-      g_hash_table_add (extra_locked_vars_to_inherit, g_strdup ("XDG_RUNTIME_DIR"));
+      pv_environ_lock_inherit_env (container_env, "DBUS_SESSION_BUS_ADDRESS");
+      pv_environ_lock_inherit_env (container_env, "DBUS_SYSTEM_BUS_ADDRESS");
+      pv_environ_lock_inherit_env (container_env, "DISPLAY");
+      pv_environ_lock_inherit_env (container_env, "XDG_RUNTIME_DIR");
 
       /* The bwrap envp will be completely ignored when calling
-       * pv-launch. For this reason we convert them to `--setenv`.
-       * (TODO: Now that we're using pv-launch instead of flatpak-spawn,
-       * we could use --pass-env) */
-      for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
+       * pv-launch, and in fact putting them in its environment
+       * variables would be wrong, because pv-launch needs to see the
+       * current execution environment's DBUS_SESSION_BUS_ADDRESS
+       * (if different). For this reason we convert them to `--setenv`. */
+      vars = pv_environ_get_vars (container_env);
+
+      for (iter = vars; iter != NULL; iter = iter->next)
         {
-          g_auto(GStrv) split = g_strsplit (bwrap->envp[i], "=", 2);
+          const char *var = iter->data;
+          const char *val = pv_environ_getenv (container_env, var);
 
-          g_assert (split != NULL);
-          g_assert (split[0] != NULL);
-          g_assert (split[1] != NULL);
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--setenv", split[0], split[1],
-                                  NULL);
+          if (val != NULL)
+            flatpak_bwrap_add_args (bwrap,
+                                    "--setenv", var, val,
+                                    NULL);
+          else
+            flatpak_bwrap_add_args (bwrap,
+                                    "--unsetenv", var,
+                                    NULL);
         }
     }
 
-  for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
+  final_argv = flatpak_bwrap_new (original_environ);
+
+  /* Lock variables where appropriate */
     {
-      /* List only the variables names and not their values */
-      char *equals = strchr (bwrap->envp[i], '=');
+      g_autoptr(GList) vars = pv_environ_get_locked (container_env);
+      const GList *iter;
 
-      g_assert (equals != NULL);
+      for (iter = vars; iter != NULL; iter = iter->next)
+        {
+          const char *var = iter->data;
 
-      /* Never lock LD_PRELOAD, otherwise, for example, we might miss the
-       * overlay renderer library that the Steam client adds to LD_PRELOAD */
-      if (g_str_has_prefix (bwrap->envp[i], "LD_PRELOAD="))
-        continue;
-
-      *equals = '\0';
-
-      g_string_append (lock_env, bwrap->envp[i]);
-
-      *equals = '=';
-
-      g_string_append_c (lock_env, '\0');
+          g_debug ("Locking environment variable: %s", var);
+          g_string_append (lock_env, var);
+          g_string_append_c (lock_env, '\0');
+        }
     }
 
-  g_hash_table_iter_init (&iter, extra_locked_vars_to_unset);
-  while (g_hash_table_iter_next (&iter, &k, NULL))
-    {
-      env_var = k;
-      g_string_append (lock_env, env_var);
-      g_string_append_c (lock_env, '\0');
-
-      flatpak_bwrap_add_args (bwrap,
-                              "--unsetenv", env_var,
-                              NULL);
-    }
-
-  g_hash_table_iter_init (&iter, extra_locked_vars_to_inherit);
-  while (g_hash_table_iter_next (&iter, &k, NULL))
-    {
-      /* To inherit the variable value, we just use the lock
-       * mechanism without `--setenv` or '--unsetenv'. In this way, when we
-       * execute `launcher` with `--host`, it will inherit the value from the
-       * host system. */
-      env_var = k;
-      g_string_append (lock_env, env_var);
-      g_string_append_c (lock_env, '\0');
-    }
-
-  /* Populate the bwrap environ with the variables that are not in the
-   * `extra_locked_vars_to_unset` list or `extra_locked_vars_to_inherit` list,
-   * and without overriding the values that are already present in
-   * bwrap->envp.
+  /* Populate final_argv->envp, overwriting its copy of original_environ.
    * We skip this if we are in a Flatpak environment, because in that case
    * we already used `--setenv` for all the variables that we care about and
-   * the bwrap envp will be ignored anyway. */
+   * the final_argv->envp will be ignored anyway, other than as a way to
+   * invoke pv-launch (for which original_environ is appropriate). */
   if (!is_flatpak_env)
     {
-      for (i = 0; original_environ[i] != NULL; i++)
+      g_autoptr(GList) vars = NULL;
+      const GList *iter;
+
+      vars = pv_environ_get_vars (container_env);
+
+      for (iter = vars; iter != NULL; iter = iter->next)
         {
-          char *eq = strchr (original_environ[i], '=');
-          if (eq)
-            {
-              g_autofree gchar *key = g_strndup (original_environ[i],
-                                                 eq - original_environ[i]);
-              if (!g_hash_table_contains (extra_locked_vars_to_unset, key)
-                  && !g_hash_table_contains (extra_locked_vars_to_inherit, key))
-                flatpak_bwrap_set_env (bwrap, key, eq + 1, FALSE);
-            }
+          const char *var = iter->data;
+          const char *val = pv_environ_getenv (container_env, var);
+
+          if (val != NULL)
+            flatpak_bwrap_set_env (final_argv, var, val, TRUE);
+          else
+            flatpak_bwrap_unset_env (final_argv, var);
         }
 
       /* The setuid bwrap will filter out some of the environment variables,
-       * so we have to go via --setenv */
+       * so we still have to go via --setenv for these. */
       for (i = 0; unsecure_environment_variables[i] != NULL; i++)
         {
-          const gchar *val = g_environ_getenv (bwrap->envp, unsecure_environment_variables[i]);
+          const char *var = unsecure_environment_variables[i];
+          const gchar *val = pv_environ_getenv (container_env, var);
+
           if (val != NULL)
-            {
-              flatpak_bwrap_add_args (bwrap, "--setenv",
-                                      unsecure_environment_variables[i], val, NULL);
-            }
+            flatpak_bwrap_add_args (bwrap, "--setenv", var, val, NULL);
         }
     }
+
+  /* Now that we've populated final_argv->envp, it's too late to change
+   * any environment variables. Make sure we get an assertion failure
+   * if we try. */
+  g_clear_pointer (&container_env, pv_environ_free);
 
   if (!flatpak_buffer_to_sealed_memfd_or_tmpfile (&lock_env_tmpf, "lock-env",
                                                   lock_env->str, lock_env->len,
@@ -2174,126 +2199,164 @@ main (int argc,
         goto out;
     }
 
-  adverb_args = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+  argv_in_container = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-  if (runtime != NULL)
-    adverb_in_container = pv_runtime_get_adverb (runtime, adverb_args);
-
-  if (opt_terminate_timeout >= 0.0)
+  /* Set up adverb inside container */
     {
-      if (opt_terminate_idle_timeout > 0.0)
-        flatpak_bwrap_add_arg_printf (adverb_args,
-                                      "--terminate-idle-timeout=%f",
-                                      opt_terminate_idle_timeout);
+      g_autoptr(FlatpakBwrap) adverb_argv = NULL;
 
-      flatpak_bwrap_add_arg_printf (adverb_args,
-                                    "--terminate-timeout=%f",
-                                    opt_terminate_timeout);
-    }
+      adverb_argv = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-  /* If not using a runtime, the adverb in the container has the
-   * same path as outside */
-  if (adverb_in_container == NULL)
-    adverb_in_container = g_build_filename (tools_dir,
-                                            "pressure-vessel-adverb",
-                                            NULL);
-
-  flatpak_bwrap_add_args (bwrap,
-                          adverb_in_container,
-                          "--exit-with-parent",
-                          "--subreaper",
-                          NULL);
-
-  if (opt_pass_fds != NULL)
-    {
-      for (i = 0; i < opt_pass_fds->len; i++)
+      if (runtime != NULL)
         {
-          int fd = g_array_index (opt_pass_fds, int, i);
-
-          flatpak_bwrap_add_fd (bwrap, fd);
-          flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
+          if (!pv_runtime_get_adverb (runtime, adverb_argv))
+            goto out;
         }
+      else
+        {
+          /* If not using a runtime, the adverb in the container has the
+           * same path as outside */
+          g_autofree gchar *adverb_in_container =
+            g_build_filename (tools_dir, "pressure-vessel-adverb", NULL);
+
+          flatpak_bwrap_add_arg (adverb_argv, adverb_in_container);
+        }
+
+      if (opt_terminate_timeout >= 0.0)
+        {
+          if (opt_terminate_idle_timeout > 0.0)
+            flatpak_bwrap_add_arg_printf (adverb_argv,
+                                          "--terminate-idle-timeout=%f",
+                                          opt_terminate_idle_timeout);
+
+          flatpak_bwrap_add_arg_printf (adverb_argv,
+                                        "--terminate-timeout=%f",
+                                        opt_terminate_timeout);
+        }
+
+      flatpak_bwrap_add_args (adverb_argv,
+                              "--exit-with-parent",
+                              "--subreaper",
+                              NULL);
+
+      if (opt_pass_fds != NULL)
+        {
+          for (i = 0; i < opt_pass_fds->len; i++)
+            {
+              int fd = g_array_index (opt_pass_fds, int, i);
+
+              flatpak_bwrap_add_fd (adverb_argv, fd);
+              flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
+            }
+        }
+
+      for (i = 0; i < pass_fds_through_adverb->len; i++)
+        {
+          int fd = g_array_index (pass_fds_through_adverb, int, i);
+
+          flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
+        }
+
+      flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
+
+      switch (opt_shell)
+        {
+          case PV_SHELL_AFTER:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=after");
+            break;
+
+          case PV_SHELL_FAIL:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=fail");
+            break;
+
+          case PV_SHELL_INSTEAD:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=instead");
+            break;
+
+          case PV_SHELL_NONE:
+            flatpak_bwrap_add_arg (adverb_argv, "--shell=none");
+            break;
+
+          default:
+            g_warn_if_reached ();
+        }
+
+      switch (opt_terminal)
+        {
+          case PV_TERMINAL_AUTO:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=auto");
+            break;
+
+          case PV_TERMINAL_NONE:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=none");
+            break;
+
+          case PV_TERMINAL_TTY:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=tty");
+            break;
+
+          case PV_TERMINAL_XTERM:
+            flatpak_bwrap_add_arg (adverb_argv, "--terminal=xterm");
+            break;
+
+          default:
+            g_warn_if_reached ();
+            break;
+        }
+
+      if (opt_verbose)
+        flatpak_bwrap_add_arg (adverb_argv, "--verbose");
+
+      flatpak_bwrap_add_arg (adverb_argv, "--");
+
+      g_warn_if_fail (g_strv_length (adverb_argv->envp) == 0);
+      flatpak_bwrap_append_bwrap (argv_in_container, adverb_argv);
     }
-
-  for (i = 0; i < pass_fds_through_adverb->len; i++)
-    {
-      int fd = g_array_index (pass_fds_through_adverb, int, i);
-
-      flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%d", fd);
-    }
-
-  flatpak_bwrap_add_arg_printf (bwrap, "--pass-fd=%s", lock_env_fd);
-
-  switch (opt_shell)
-    {
-      case PV_SHELL_AFTER:
-        flatpak_bwrap_add_arg (bwrap, "--shell=after");
-        break;
-
-      case PV_SHELL_FAIL:
-        flatpak_bwrap_add_arg (bwrap, "--shell=fail");
-        break;
-
-      case PV_SHELL_INSTEAD:
-        flatpak_bwrap_add_arg (bwrap, "--shell=instead");
-        break;
-
-      case PV_SHELL_NONE:
-        flatpak_bwrap_add_arg (bwrap, "--shell=none");
-        break;
-
-      default:
-        g_warn_if_reached ();
-    }
-
-  switch (opt_terminal)
-    {
-      case PV_TERMINAL_AUTO:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=auto");
-        break;
-
-      case PV_TERMINAL_NONE:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=none");
-        break;
-
-      case PV_TERMINAL_TTY:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=tty");
-        break;
-
-      case PV_TERMINAL_XTERM:
-        flatpak_bwrap_add_arg (bwrap, "--terminal=xterm");
-        break;
-
-      default:
-        g_warn_if_reached ();
-        break;
-    }
-
-  if (opt_verbose)
-    flatpak_bwrap_add_arg (bwrap, "--verbose");
-
-  flatpak_bwrap_append_bwrap (bwrap, adverb_args);
-  flatpak_bwrap_add_arg (bwrap, "--");
 
   if (opt_launcher)
     {
+      g_autoptr(FlatpakBwrap) launcher_argv =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
       g_autofree gchar *pressure_vessel_launcher = g_build_filename (tools_dir,
                                                                      "pressure-vessel-launcher",
                                                                      NULL);
       g_debug ("Adding pressure-vessel-launcher '%s'...", pressure_vessel_launcher);
-      flatpak_bwrap_add_arg (bwrap, pressure_vessel_launcher);
+      flatpak_bwrap_add_arg (launcher_argv, pressure_vessel_launcher);
+
+      if (opt_verbose)
+        flatpak_bwrap_add_arg (launcher_argv, "--verbose");
 
       g_debug ("Adding locked environment variables...");
-      flatpak_bwrap_add_args (bwrap, "--lock-env-from-fd", lock_env_fd, NULL);
+      flatpak_bwrap_add_args (launcher_argv,
+                              "--lock-env-from-fd", lock_env_fd, NULL);
+
+      /* In --launcher mode, arguments after the "--" separator are
+       * passed to the launcher */
+      flatpak_bwrap_append_argsv (launcher_argv, &argv[1], argc - 1);
+
+      g_warn_if_fail (g_strv_length (launcher_argv->envp) == 0);
+      flatpak_bwrap_append_bwrap (argv_in_container, launcher_argv);
+    }
+  else
+    {
+      /* In non-"--launcher" mode, arguments after the "--" separator
+       * are the command to execute, passed to the adverb after "--".
+       * Because we always use the adverb, we don't need to worry about
+       * whether argv[1] starts with "-". */
+      g_debug ("Setting arguments for wrapped command");
+      flatpak_bwrap_append_argsv (argv_in_container, &argv[1], argc - 1);
     }
 
-  g_debug ("Adding wrapped command...");
-  flatpak_bwrap_append_args (bwrap, wrapped_command->argv);
+  g_warn_if_fail (g_strv_length (argv_in_container->envp) == 0);
+  flatpak_bwrap_append_bwrap (bwrap, argv_in_container);
+
+  g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
 
   if (is_flatpak_env)
     {
-      /* Just use the envp from @bwrap */
-      g_autoptr(FlatpakBwrap) launch_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      /* Use pv-launch to launch bwrap on the host. */
+      g_autoptr(FlatpakBwrap) launch_on_host =
+        flatpak_bwrap_new (flatpak_bwrap_empty_env);
       flatpak_bwrap_add_arg (launch_on_host, launch_executable);
       flatpak_bwrap_add_arg (launch_on_host, "--bus-name=org.freedesktop.Flatpak");
 
@@ -2310,30 +2373,37 @@ main (int argc,
 
       flatpak_bwrap_add_arg (launch_on_host, "--");
 
-      flatpak_bwrap_append_bwrap (launch_on_host, bwrap);
-      g_clear_pointer (&bwrap, flatpak_bwrap_free);
-      bwrap = g_steal_pointer (&launch_on_host);
+      g_warn_if_fail (g_strv_length (launch_on_host->envp) == 0);
+      flatpak_bwrap_append_bwrap (final_argv, launch_on_host);
     }
+
+  flatpak_bwrap_append_bwrap (final_argv, bwrap);
+
+  /* We'll have permuted the order anyway, so we might as well sort it,
+   * to make debugging a bit easier. */
+  if (final_argv->envp != NULL)
+    qsort (final_argv->envp, g_strv_length (final_argv->envp),
+           sizeof (char *), pv_envp_cmp);
 
   if (opt_verbose)
     {
-      g_message ("Final %s options:", bwrap_executable);
+      g_message ("Final command to execute:");
 
-      for (i = 0; i < bwrap->argv->len; i++)
+      for (i = 0; i < final_argv->argv->len; i++)
         {
           g_autofree gchar *quoted = NULL;
 
-          quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
+          quoted = g_shell_quote (g_ptr_array_index (final_argv->argv, i));
           g_message ("\t%s", quoted);
         }
 
-      g_message ("%s environment:", bwrap_executable);
+      g_message ("Final environment:");
 
-      for (i = 0; bwrap->envp != NULL && bwrap->envp[i] != NULL; i++)
+      for (i = 0; final_argv->envp != NULL && final_argv->envp[i] != NULL; i++)
         {
           g_autofree gchar *quoted = NULL;
 
-          quoted = g_shell_quote (bwrap->envp[i]);
+          quoted = g_shell_quote (final_argv->envp[i]);
           g_message ("\t%s", quoted);
         }
     }
@@ -2342,21 +2412,22 @@ main (int argc,
   if (runtime != NULL)
     pv_runtime_cleanup (runtime);
 
-  flatpak_bwrap_finish (bwrap);
+  flatpak_bwrap_finish (final_argv);
 
-  if (opt_write_bwrap != NULL)
+  if (opt_write_final_argv != NULL)
     {
-      FILE *file = fopen (opt_write_bwrap, "w");
+      FILE *file = fopen (opt_write_final_argv, "w");
       if (file == NULL)
         {
-          g_warning ("An error occurred trying to write the bwrap arguments: %s",
+          g_warning ("An error occurred trying to write out the arguments: %s",
                     g_strerror (errno));
           /* This is not a fatal error, try to continue */
         }
       else
         {
-          for (i = 0; i < bwrap->argv->len; i++)
-            fprintf (file, "%s%c", (gchar *)g_ptr_array_index (bwrap->argv, i), '\0');
+          for (i = 0; i < final_argv->argv->len; i++)
+            fprintf (file, "%s%c",
+                     (gchar *) g_ptr_array_index (final_argv->argv, i), '\0');
 
           fclose (file);
         }
@@ -2365,7 +2436,7 @@ main (int argc,
   if (opt_only_prepare)
     ret = 0;
   else
-    pv_bwrap_execve (bwrap, fileno (original_stdout), error);
+    pv_bwrap_execve (final_argv, fileno (original_stdout), error);
 
 out:
   if (local_error != NULL)

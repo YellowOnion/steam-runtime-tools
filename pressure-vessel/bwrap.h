@@ -53,3 +53,5 @@ pv_bwrap_was_finished (FlatpakBwrap *bwrap)
 }
 
 FlatpakBwrap *pv_bwrap_copy (FlatpakBwrap *bwrap);
+
+GStrv pv_bwrap_steal_envp (FlatpakBwrap *bwrap);

@@ -537,13 +537,13 @@ class TestContainers(BaseTest):
         )
         os.makedirs(artifacts, exist_ok=True)
 
-        bwrap_temp_file = tempfile.NamedTemporaryFile()
+        final_argv_temp = tempfile.NamedTemporaryFile()
 
         argv = [
             self.pv_wrap,
             '--runtime', runtime,
             '--verbose',
-            '--write-bwrap-arguments', bwrap_temp_file.name
+            '--write-final-argv', final_argv_temp.name
         ]
 
         var = os.path.join(self.containers_dir, 'var')
@@ -627,11 +627,11 @@ class TestContainers(BaseTest):
                     )
                     self.assertEqual(completed.returncode, 0)
 
-            bwrap_arguments = bwrap_temp_file.read().decode()
+            final_argv = final_argv_temp.read().decode()
             if locales:
-                self.assertIn("\0--generate-locales\0", bwrap_arguments)
+                self.assertIn("\0--generate-locales\0", final_argv)
             else:
-                self.assertNotIn("\0--generate-locales\0", bwrap_arguments)
+                self.assertNotIn("\0--generate-locales\0", final_argv)
 
             if only_prepare:
                 for var in FILESYSTEM_ENV_VARS:
@@ -648,10 +648,10 @@ class TestContainers(BaseTest):
                     for path in paths:
                         self.assertIn(
                             "\0--{}\0{}\0{}".format(bind_mode, path, path),
-                            bwrap_arguments,
+                            final_argv,
                         )
 
-            bwrap_temp_file.close()
+            final_argv_temp.close()
 
             if copy:
                 members = set(os.listdir(temp))
@@ -1156,12 +1156,12 @@ class TestContainers(BaseTest):
         )
         os.makedirs(artifacts, exist_ok=True)
 
-        bwrap_temp_file = os.path.join(self.artifacts, 'bwrap-args')
+        final_argv_path = os.path.join(self.artifacts, 'final-argv')
 
         argv = [
             self.pv_wrap,
             '--verbose',
-            '--write-bwrap-arguments', bwrap_temp_file,
+            '--write-final-argv', final_argv_path,
         ]
 
         var = os.path.join(self.containers_dir, 'var')

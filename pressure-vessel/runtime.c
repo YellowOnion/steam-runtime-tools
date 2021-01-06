@@ -1446,10 +1446,13 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 /*
  * @sequence_number: numbered directory to use to disambiguate between
  *  colliding files with the same basename
- * @subdir: (not nullable):
+ * @requested_subdir: (not nullable):
  * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
  *  numbered subdirectory per ICD, for the rare case where not all
  *  drivers have a unique basename or where order matters
+ * @use_subdir_for_soname: if %TRUE, the @requested_subdir will be always
+ *  used. If %FALSE, the @requested_subdir will not be used when the provided
+ *  library is of the kind "ICD_KIND_SONAME".
  * @search_path: (nullable): Add the parent directory of the resulting
  *  ICD to this search path if necessary
  */
@@ -1457,9 +1460,10 @@ static gboolean
 bind_icd (PvRuntime *self,
           RuntimeArchitecture *arch,
           gsize sequence_number,
-          const char *subdir,
+          const char *requested_subdir,
           IcdDetails *details,
           gboolean *use_numbered_subdirs,
+          gboolean use_subdir_for_kind_soname,
           GString *search_path,
           GError **error)
 {
@@ -1468,12 +1472,15 @@ bind_icd (PvRuntime *self,
   g_autofree gchar *pattern = NULL;
   g_autofree gchar *dependency_pattern = NULL;
   g_autofree gchar *seq_str = NULL;
+  g_autofree gchar *final_path = NULL;
+  const char *base;
   const char *mode;
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize multiarch_index;
   g_autoptr(GDir) dir = NULL;
   gsize dir_elements_before = 0;
   gsize dir_elements_after = 0;
+  const gchar *subdir = requested_subdir;
 
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
@@ -1489,6 +1496,19 @@ bind_icd (PvRuntime *self,
 
   g_info ("Capturing loadable module: %s", details->resolved_library);
 
+  if (g_path_is_absolute (details->resolved_library))
+    {
+      details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
+      mode = "path";
+    }
+  else
+    {
+      details->kinds[multiarch_index] = ICD_KIND_SONAME;
+      mode = "soname";
+      if (!use_subdir_for_kind_soname)
+        subdir = "";
+    }
+
   in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
                                            subdir, NULL);
 
@@ -1496,15 +1516,15 @@ bind_icd (PvRuntime *self,
     return glnx_throw_errno_prefix (error, "Unable to create %s",
                                     in_current_namespace);
 
+  base = glnx_basename (details->resolved_library);
+
   /* Check whether we can get away with avoiding the sequence number.
    * Depending on the type of ICD, we might want to use the sequence
    * number to force a specific load order. */
   if (!*use_numbered_subdirs)
     {
       g_autofree gchar *path = NULL;
-      const char *base;
 
-      base = glnx_basename (details->resolved_library);
       path = g_build_filename (in_current_namespace, base, NULL);
 
       /* No, we can't: the ICD would collide with one that we already
@@ -1515,7 +1535,7 @@ bind_icd (PvRuntime *self,
 
   /* If we can't avoid the numbered subdirectory, or want to use one
    * to force a specific load order, create it. */
-  if (*use_numbered_subdirs)
+  if (*use_numbered_subdirs && subdir[0] != '\0')
     {
       seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
       g_clear_pointer (&in_current_namespace, g_free);
@@ -1527,15 +1547,11 @@ bind_icd (PvRuntime *self,
                                         in_current_namespace);
     }
 
-  if (g_path_is_absolute (details->resolved_library))
+  final_path = g_build_filename (in_current_namespace, base, NULL);
+  if (g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
     {
-      details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
-      mode = "path";
-    }
-  else
-    {
-      details->kinds[multiarch_index] = ICD_KIND_SONAME;
-      mode = "soname";
+      g_info ("\"%s\" is already present, skipping", final_path);
+      return TRUE;
     }
 
   dir = g_dir_open (in_current_namespace, 0, error);
@@ -2608,6 +2624,9 @@ collect_vulkan_layers (PvRuntime *self,
        * filename collisions, because the order of the JSON manifests
        * might matter, but the order of the actual libraries does not. */
       gboolean use_numbered_subdirs = FALSE;
+      /* If we have just a SONAME, we do not want to place the library
+       * under a subdir, otherwise ld.so will not be able to find it */
+      const gboolean use_subdir_for_kind_soname = FALSE;
 
       if (!srt_vulkan_layer_check_error (layer, NULL))
         continue;
@@ -2669,7 +2688,8 @@ collect_vulkan_layers (PvRuntime *self,
         }
 
       if (!bind_icd (self, arch, j, dir_name, details,
-                     &use_numbered_subdirs, NULL, error))
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     NULL, error))
         return FALSE;
     }
 
@@ -3361,6 +3381,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
           gboolean use_numbered_subdirs;
+          gboolean use_subdir_for_kind_soname;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -3393,6 +3414,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* As with Vulkan layers, the order of the manifests matters
            * but the order of the actual libraries does not. */
           use_numbered_subdirs = FALSE;
+          /* If we have just a SONAME, we do not want to place the library
+           * under a subdir, otherwise ld.so will not be able to find it */
+          use_subdir_for_kind_soname = FALSE;
 
           for (j = 0; j < egl_icd_details->len; j++)
             {
@@ -3406,7 +3430,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
 
               if (!bind_icd (self, arch, j, "glvnd", details,
-                             &use_numbered_subdirs, NULL, error))
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             NULL, error))
                 return FALSE;
             }
 
@@ -3415,6 +3440,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* As with Vulkan layers, the order of the manifests matters
            * but the order of the actual libraries does not. */
           use_numbered_subdirs = FALSE;
+          /* If we have just a SONAME, we do not want to place the library
+           * under a subdir, otherwise ld.so will not be able to find it */
+          use_subdir_for_kind_soname = FALSE;
 
           for (j = 0; j < vulkan_icd_details->len; j++)
             {
@@ -3428,7 +3456,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
 
               if (!bind_icd (self, arch, j, "vulkan", details,
-                             &use_numbered_subdirs, NULL, error))
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             NULL, error))
                 return FALSE;
             }
 
@@ -3452,6 +3481,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* The VDPAU loader looks up drivers by name, not by readdir(),
            * so order doesn't matter unless there are name collisions. */
           use_numbered_subdirs = FALSE;
+          /* These libraries are always expected to be located under the
+           * "vdpau" subdir */
+          use_subdir_for_kind_soname = TRUE;
 
           for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
@@ -3465,7 +3497,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                * so by definition we can't have collisions. Anything that
                * ends up in a numbered subdirectory won't get used. */
               if (!bind_icd (self, arch, j, "vdpau", details,
-                             &use_numbered_subdirs, NULL, error))
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             NULL, error))
                 return FALSE;
             }
 
@@ -3477,6 +3510,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* The DRI loader looks up drivers by name, not by readdir(),
            * so order doesn't matter unless there are name collisions. */
           use_numbered_subdirs = FALSE;
+          /* These libraries are always expected to be located under the
+           * "dri" subdir */
+          use_subdir_for_kind_soname = TRUE;
 
           for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
@@ -3487,7 +3523,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_assert (g_path_is_absolute (details->resolved_library));
 
               if (!bind_icd (self, arch, j, "dri", details,
-                             &use_numbered_subdirs, dri_path, error))
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             dri_path, error))
                 return FALSE;
             }
 
@@ -3499,6 +3536,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* The VA-API loader looks up drivers by name, not by readdir(),
            * so order doesn't matter unless there are name collisions. */
           use_numbered_subdirs = FALSE;
+          /* These libraries are always expected to be located under the
+           * "dri" subdir */
+          use_subdir_for_kind_soname = TRUE;
 
           for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
             {
@@ -3509,7 +3549,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_assert (g_path_is_absolute (details->resolved_library));
 
               if (!bind_icd (self, arch, j, "dri", details,
-                             &use_numbered_subdirs, va_api_path, error))
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             va_api_path, error))
                 return FALSE;
             }
 

@@ -2129,13 +2129,15 @@ main (int argc,
    * if we try. */
   g_clear_pointer (&container_env, pv_environ_free);
 
-  if (!flatpak_buffer_to_sealed_memfd_or_tmpfile (&lock_env_tmpf, "lock-env",
-                                                  lock_env->str, lock_env->len,
-                                                  error))
-    goto out;
+  if (opt_launcher)
+    {
+      if (!flatpak_buffer_to_sealed_memfd_or_tmpfile (&lock_env_tmpf, "lock-env",
+                                                      lock_env->str, lock_env->len,
+                                                      error))
+        goto out;
 
-  lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
-  flatpak_bwrap_add_fd (bwrap, glnx_steal_fd (&lock_env_tmpf.fd));
+      lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
+    }
 
   if (is_flatpak_env)
     {
@@ -2257,7 +2259,8 @@ main (int argc,
           flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
         }
 
-      flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
+      if (lock_env_fd != NULL)
+        flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
 
       switch (opt_shell)
         {
@@ -2327,6 +2330,9 @@ main (int argc,
         flatpak_bwrap_add_arg (launcher_argv, "--verbose");
 
       g_debug ("Adding locked environment variables...");
+      g_assert (lock_env_fd != NULL);
+      g_assert (lock_env_tmpf.fd >= 0);
+      flatpak_bwrap_add_fd (launcher_argv, glnx_steal_fd (&lock_env_tmpf.fd));
       flatpak_bwrap_add_args (launcher_argv,
                               "--lock-env-from-fd", lock_env_fd, NULL);
 

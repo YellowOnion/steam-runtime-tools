@@ -2361,11 +2361,6 @@ main (int argc,
       flatpak_bwrap_append_argsv (argv_in_container, &argv[1], argc - 1);
     }
 
-  g_warn_if_fail (g_strv_length (argv_in_container->envp) == 0);
-  flatpak_bwrap_append_bwrap (bwrap, argv_in_container);
-
-  g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
-
   if (is_flatpak_env)
     {
       /* Use pv-launch to launch bwrap on the host. */
@@ -2380,6 +2375,14 @@ main (int argc,
                                                      g_array_index (bwrap->fds, int, i));
           flatpak_bwrap_add_arg (launch_on_host, fd_str);
         }
+
+      for (i = 0; i < argv_in_container->fds->len; i++)
+        {
+          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
+                                                     g_array_index (argv_in_container->fds, int, i));
+          flatpak_bwrap_add_arg (launch_on_host, fd_str);
+        }
+
       /* Change the current working directory where pv-launch will run bwrap.
        * Bwrap will then set its directory by itself. For this reason here
        * we just need a directory that it's known to exist. */
@@ -2391,7 +2394,11 @@ main (int argc,
       flatpak_bwrap_append_bwrap (final_argv, launch_on_host);
     }
 
+  g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
   flatpak_bwrap_append_bwrap (final_argv, bwrap);
+
+  g_warn_if_fail (g_strv_length (argv_in_container->envp) == 0);
+  flatpak_bwrap_append_bwrap (final_argv, argv_in_container);
 
   /* We'll have permuted the order anyway, so we might as well sort it,
    * to make debugging a bit easier. */

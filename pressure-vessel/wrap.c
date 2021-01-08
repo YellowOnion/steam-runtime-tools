@@ -1656,6 +1656,14 @@ main (int argc,
 
       g_debug ("Configuring runtime %s...", opt_runtime);
 
+      if (is_flatpak_env && opt_copy_runtime_into == NULL)
+        {
+          glnx_throw (error,
+                      "Cannot set up a runtime inside Flatpak without "
+                      "making a mutable copy");
+          goto out;
+        }
+
       runtime = pv_runtime_new (opt_runtime,
                                 opt_copy_runtime_into,
                                 bwrap_executable,

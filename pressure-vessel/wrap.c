@@ -4,7 +4,7 @@
  * Contains code taken from Flatpak.
  *
  * Copyright © 2014-2019 Red Hat, Inc
- * Copyright © 2017-2020 Collabora Ltd.
+ * Copyright © 2017-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -2233,6 +2233,22 @@ main (int argc,
 
   /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
     {
+      /* Tell the application that it's running under a container manager
+       * in a generic way (based on https://systemd.io/CONTAINER_INTERFACE/,
+       * although a lot of that document is intended for "system"
+       * containers and is less suitable for "app" containers like
+       * Flatpak and pressure-vessel). */
+      flatpak_bwrap_add_args (bwrap,
+                              "--setenv", "container", "pressure-vessel",
+                              NULL);
+      if (!flatpak_bwrap_add_args_data (bwrap,
+                                        "container-manager",
+                                        "pressure-vessel\n", -1,
+                                        "/run/host/container-manager",
+                                        error))
+        return FALSE;
+
+
       if (opt_verbose)
         {
           g_message ("%s options before bundling:", bwrap_executable);

@@ -159,6 +159,11 @@ class TestInsideRuntime(BaseTest):
         elif os.environ.get('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
             self.assertEqual(os.environ.get('STEAM_RUNTIME'), None)
 
+        self.assertEqual(os.environ.get('container'), 'pressure-vessel')
+
+        with open('/run/host/container-manager', 'r') as reader:
+            self.assertEqual(reader.read(), 'pressure-vessel\n')
+
     def test_overrides(self) -> None:
         if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
             target = os.readlink('/overrides')

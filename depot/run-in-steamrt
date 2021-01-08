@@ -3,7 +3,7 @@
 # run-in-steamrt — undo the Steam Runtime's environment and use
 # a given runtime, assuming the layout of the SteamLinuxRuntime depot.
 #
-# Copyright © 2019-2020 Collabora Ltd.
+# Copyright © 2019-2021 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -204,6 +204,20 @@ check_ok_for_filename SUITE "$suite"
 
 pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 
+if [ -z "${PRESSURE_VESSEL_VARIABLE_DIR-}" ]; then
+    mkdir -p "${here}/var"
+    export PRESSURE_VESSEL_VARIABLE_DIR="${here}/var"
+fi
+
+# Make it absolute
+case "$PRESSURE_VESSEL_VARIABLE_DIR" in
+    (/*)
+        ;;
+    (*)
+        export PRESSURE_VESSEL_VARIABLE_DIR="${here}/${PRESSURE_VESSEL_VARIABLE_DIR}"
+        ;;
+esac
+
 adverb="$pressure_vessel/bin/pressure-vessel-adverb"
 
 if [ -n "$deploy" ]; then
@@ -211,10 +225,10 @@ if [ -n "$deploy" ]; then
         # Ignore: there is no build ID in the depot. We'll just use a
         # ${name} directory if it exists.
         :
-    elif [ -d "${here}/${name}_${current_build_id}/files" ] \
-        && [ -d "${here}/${name}" ] \
-        && [ -L "${here}/${name}" ] \
-        && [ "x$(readlink "${here}/${name}")" = "x${name}_${current_build_id}" ]
+    elif [ -d "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}_${current_build_id}/files" ] \
+        && [ -d "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}" ] \
+        && [ -L "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}" ] \
+        && [ "x$(readlink "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}")" = "x${name}_${current_build_id}" ]
     then
         # Fast path: skip the locking and the deploy step if the correct runtime
         # is already in place.
@@ -227,7 +241,7 @@ if [ -n "$deploy" ]; then
             unset LD_PRELOAD
             "$adverb" \
                 --create --write --wait \
-                --lock-file "$here/.ref" \
+                --lock-file "${PRESSURE_VESSEL_VARIABLE_DIR}/.ref" \
                 -- \
                 "$here/deploy-runtime" \
                 --arch="${arch}" \
@@ -242,16 +256,21 @@ if [ -n "$deploy" ]; then
 fi
 
 if [ -e /.flatpak-info ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then
-    mkdir -p "${here}/var"
-    export PRESSURE_VESSEL_COPY_RUNTIME_INTO="${here}/var"
+    export PRESSURE_VESSEL_COPY_RUNTIME_INTO="$PRESSURE_VESSEL_VARIABLE_DIR"
 fi
 
 if [ -e "${here}/var/copy-runtime" ] && [ -z "${PRESSURE_VESSEL_COPY_RUNTIME_INTO+set}" ]; then
-    export PRESSURE_VESSEL_COPY_RUNTIME_INTO="${here}/var"
+    export PRESSURE_VESSEL_COPY_RUNTIME_INTO="$PRESSURE_VESSEL_VARIABLE_DIR"
 fi
 
 export PRESSURE_VESSEL_RUNTIME_BASE="${here}"
-export PRESSURE_VESSEL_RUNTIME="${name}/files"
+
+if [ -d "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}/files" ]; then
+    export PRESSURE_VESSEL_RUNTIME="${PRESSURE_VESSEL_VARIABLE_DIR}/${name}/files"
+else
+    export PRESSURE_VESSEL_RUNTIME="${name}/files"
+fi
+
 exec "$pressure_vessel/bin/pressure-vessel-unruntime" "$@"
 
 # vim:set sw=4 sts=4 et:

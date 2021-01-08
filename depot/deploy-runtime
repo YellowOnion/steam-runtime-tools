@@ -2,7 +2,7 @@
 
 # deploy-runtime — unpack and deploy a new runtime
 #
-# Copyright © 2019 Collabora Ltd.
+# Copyright © 2019-2021 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -64,7 +64,7 @@ usage () {
     echo "Options:"
     echo "--arch ARCH       Use architecture(s) ARCH instead of amd64,i386"
     echo "--basename NAME   Unpack archive based on NAME instead of RUNTIME-SUITE-ARCH"
-    echo "--name DIR        Unpack into DIR instead of SUITE"
+    echo "--name DIR        Unpack into var/DIR, instead of var/SUITE"
     echo "--runtime RUNTIME Use runtime RUNTIME instead of"
     echo "                  com.valvesoftware.SteamRuntime.Platform"
     echo "--suite SUITE     Use suite SUITE instead of scout"
@@ -156,6 +156,20 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+if [ -z "${PRESSURE_VESSEL_VARIABLE_DIR-}" ]; then
+    mkdir -p "${here}/var"
+    export PRESSURE_VESSEL_VARIABLE_DIR="${here}/var"
+fi
+
+# Make it absolute
+case "$PRESSURE_VESSEL_VARIABLE_DIR" in
+    (/*)
+        ;;
+    (*)
+        export PRESSURE_VESSEL_VARIABLE_DIR="${here}/${PRESSURE_VESSEL_VARIABLE_DIR}"
+        ;;
+esac
+
 if [ -z "$basename" ]; then
     basename="${runtime}-${arch}-${suite}"
 fi
@@ -182,38 +196,47 @@ check_ok_for_filename "build ID" "$current_build_id"
 updated=
 
 # Ensure that current_build_id is unpacked
-if [ -d "${here}/${name}_${current_build_id}/files" ]; then
+if [ -d "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}_${current_build_id}/files" ]; then
     verbose "${name}_${current_build_id}/files already unpacked"
 else
-    rm -fr --one-file-system "${here}/.${name}_${current_build_id}_unpack-temp"
-    mkdir "${here}/.${name}_${current_build_id}_unpack-temp"
-    tar -C "${here}/.${name}_${current_build_id}_unpack-temp" -z"${tar_v}"xf "${here}/${basename}-runtime.tar.gz"
+    rm -fr --one-file-system "${PRESSURE_VESSEL_VARIABLE_DIR}/.${name}_${current_build_id}_unpack-temp"
+    mkdir "${PRESSURE_VESSEL_VARIABLE_DIR}/.${name}_${current_build_id}_unpack-temp"
+    tar \
+        -C "${PRESSURE_VESSEL_VARIABLE_DIR}/.${name}_${current_build_id}_unpack-temp" \
+        -z"${tar_v}"xf \
+        "${here}/${basename}-runtime.tar.gz"
 
     # If we have the detached debug symbols, we extract them too
     if [ -f "${here}/${basename}-debug.tar.gz" ]; then
-        tar -C "${here}/.${name}_${current_build_id}_unpack-temp/files/lib/debug" \
+        tar \
+            -C "${PRESSURE_VESSEL_VARIABLE_DIR}/.${name}_${current_build_id}_unpack-temp/files/lib/debug" \
             --strip-components=1 \
             -z"${tar_v}"xf \
             "${here}/${basename}-debug.tar.gz" \
             "files/"
     fi
 
-    mv "${here}/.${name}_${current_build_id}_unpack-temp" "${here}/${name}_${current_build_id}"
+    mv \
+        "${PRESSURE_VESSEL_VARIABLE_DIR}/.${name}_${current_build_id}_unpack-temp" \
+        "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}_${current_build_id}"
 
     updated=yes
 fi
 
 if [ -z "$updated" ] \
-    && [ -d "${here}/${name}/files" ] \
-    && [ -L "${here}/${name}" ]
+    && [ -d "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}/files" ] \
+    && [ -L "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}" ]
 then
     verbose "${name} is already a symlink to some runtime"
 else
-    if [ -e "${here}/${name}" ] && ! [ -L "${here}/${name}" ]; then
-        mv "${here}/${name}" "${here}/${name}_before_${current_build_id}"
-    fi
+    rm -fr "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}"
+    ln -fns "${name}_${current_build_id}" "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}"
+fi
 
-    ln -fns "${name}_${current_build_id}" "${here}/${name}"
+if [ -L "${here}/${name}" ]
+then
+    verbose "Removing old symbolic link ${here}/${name}"
+    rm -f "${here}/${name}" || :
 fi
 
 pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
@@ -221,11 +244,17 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 adverb="$pressure_vessel/bin/pressure-vessel-adverb"
 
 # GC old runtimes
-for deployment in "${here}/${name}"_before_* "${here}/${name}"_[0-9].* "${here}/.${name}"_*_unpack-temp; do
+for deployment in \
+    "${here}/${name}"_before_* \
+    "${here}/${name}"_[0-9].* \
+    "${here}/.${name}"_*_unpack-temp \
+    "${PRESSURE_VESSEL_VARIABLE_DIR}/${name}"_[0-9].* \
+    "${PRESSURE_VESSEL_VARIABLE_DIR}/.${name}"_*_unpack-temp \
+; do
     if ! [ -d "$deployment" ]; then
         continue
     fi
-    if [ "x$deployment" = "x${here}/${name}_${current_build_id}" ]; then
+    if [ "x$deployment" = "x${PRESSURE_VESSEL_VARIABLE_DIR}/${name}_${current_build_id}" ]; then
         continue
     fi
     if ! [ -d "$deployment/files" ]; then

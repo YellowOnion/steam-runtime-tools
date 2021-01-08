@@ -222,7 +222,8 @@ if [ -z "${STEAM_COMPAT_SESSION_ID-}" ]; then
     is_main=yes
 elif [ -n "$is_main" ]; then
     info "Main program in session mode"
-    case "${PRESSURE_VESSEL_RELAUNCH_CONTAINER-0}" in
+    # Use the relaunch mode by default
+    case "${PRESSURE_VESSEL_RELAUNCH_CONTAINER-1}" in
         (1)
             relaunch=yes
             ;;

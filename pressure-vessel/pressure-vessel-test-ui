@@ -92,8 +92,10 @@ class Gui:
 
         for search in (
             os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
+            os.getenv('PRESSURE_VESSEL_VARIABLE_DIR'),
             '..',
             '../..',
+            '../../var',
         ):
             if search is None:
                 continue

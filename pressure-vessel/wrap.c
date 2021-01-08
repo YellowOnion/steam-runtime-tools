@@ -1805,15 +1805,15 @@ main (int argc,
               continue;
             }
 
+          if (opt_remove_game_overlay
+              && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+            {
+              g_info ("Disabling Steam Overlay: %s", preload);
+              continue;
+            }
+
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
-              if (opt_remove_game_overlay
-                  && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
-                {
-                  g_info ("Disabling Steam Overlay: %s", preload);
-                  continue;
-                }
-
               if (runtime != NULL
                   && (g_str_has_prefix (preload, "/usr/")
                       || g_str_has_prefix (preload, "/lib")))

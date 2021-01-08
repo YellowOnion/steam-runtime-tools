@@ -1638,11 +1638,10 @@ bind_icd (PvRuntime *self,
 }
 
 static gboolean
-bind_runtime (PvRuntime *self,
-              FlatpakExports *exports,
-              FlatpakBwrap *bwrap,
-              PvEnviron *container_env,
-              GError **error)
+bind_runtime_base (PvRuntime *self,
+                   FlatpakBwrap *bwrap,
+                   PvEnviron *container_env,
+                   GError **error)
 {
   static const char * const bind_mutable[] =
   {
@@ -1671,6 +1670,7 @@ bind_runtime (PvRuntime *self,
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   if (!pv_bwrap_bind_usr (bwrap, self->runtime_files_on_host, self->runtime_files, "/", error))
@@ -1823,12 +1823,17 @@ bind_runtime (PvRuntime *self,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
 
-  if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
-    {
-      if (!pv_runtime_use_provider_graphics_stack (self, bwrap, container_env,
-                                                   error))
-        return FALSE;
-    }
+  return TRUE;
+}
+
+static void
+bind_runtime_finish (PvRuntime *self,
+                     FlatpakExports *exports,
+                     FlatpakBwrap *bwrap)
+{
+  g_return_if_fail (PV_IS_RUNTIME (self));
+  g_return_if_fail (exports != NULL);
+  g_return_if_fail (!pv_bwrap_was_finished (bwrap));
 
   pv_export_symlink_targets (exports, self->overrides);
 
@@ -1888,8 +1893,6 @@ bind_runtime (PvRuntime *self,
                                    timezone_content, -1, "/etc/timezone",
                                    NULL);
     }
-
-  return TRUE;
 }
 
 typedef enum
@@ -1910,7 +1913,8 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                GError **error)
 {
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
-  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_DIR)
@@ -2005,6 +2009,7 @@ pv_runtime_take_from_provider (PvRuntime *self,
     {
       /* We can't edit the runtime in-place, so tell bubblewrap to mount
        * a new version over the top */
+      g_assert (bwrap != NULL);
 
       if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE)
         {
@@ -2325,6 +2330,8 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
   g_autofree gchar *ld_so_relative_to_provider = NULL;
   g_autofree gchar *ld_so_in_provider = NULL;
 
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+
   g_debug ("Making provider's ld.so visible in container");
 
   if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
@@ -2441,6 +2448,8 @@ setup_json_manifest (PvRuntime *self,
   SrtEglIcd *egl = NULL;
   gboolean need_provider_json = FALSE;
   gsize i;
+
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   if (SRT_IS_VULKAN_LAYER (details->icd))
     layer = SRT_VULKAN_LAYER (details->icd);
@@ -2583,6 +2592,8 @@ setup_each_json_manifest (PvRuntime *self,
 {
   gsize j;
   g_autofree gchar *write_to_dir = NULL;
+
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   write_to_dir = g_build_filename (self->overrides,
                                   "share", sub_dir, NULL);
@@ -2869,6 +2880,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   g_autofree char *libc_target = NULL;
 
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+
   if (!pv_runtime_take_ld_so_from_provider (self, arch,
                                             ld_so_in_runtime,
                                             bwrap, error))
@@ -3031,6 +3044,8 @@ pv_runtime_finish_libdrm_data (PvRuntime *self,
 {
   g_autofree gchar *best_libdrm_data_in_provider = NULL;
 
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+
   if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
     {
       /* See the explanation in the similar
@@ -3081,6 +3096,8 @@ pv_runtime_finish_libc_family (PvRuntime *self,
   g_autofree gchar *locale = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
+
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   if (self->any_libc_from_provider && !self->all_libc_from_provider)
     {
@@ -3226,7 +3243,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_strdup_printf ("%s/", self->provider_in_container_namespace);
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
-  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+  g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
@@ -3765,17 +3783,26 @@ pv_runtime_bind (PvRuntime *self,
   g_autofree gchar *pressure_vessel_prefix = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
-  g_return_val_if_fail (exports != NULL, FALSE);
-  g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail ((exports == NULL) == (bwrap == NULL), FALSE);
+  g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
   g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!bind_runtime (self,
-                     exports,
-                     bwrap,
-                     container_env,
-                     error))
+  if (bwrap != NULL
+      && !bind_runtime_base (self, bwrap, container_env, error))
     return FALSE;
+
+  if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
+    {
+      if (!pv_runtime_use_provider_graphics_stack (self, bwrap,
+                                                   container_env,
+                                                   error))
+        return FALSE;
+    }
+
+  if (bwrap != NULL)
+    bind_runtime_finish (self, exports, bwrap);
 
   pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);
 
@@ -3802,11 +3829,12 @@ pv_runtime_bind (PvRuntime *self,
                                PV_COPY_FLAGS_NONE, error))
         return FALSE;
 
-      flatpak_bwrap_add_args (bwrap,
-                              "--symlink",
-                              "/usr/lib/pressure-vessel/from-host",
-                              "/run/pressure-vessel/pv-from-host",
-                              NULL);
+      if (bwrap != NULL)
+        flatpak_bwrap_add_args (bwrap,
+                                "--symlink",
+                                "/usr/lib/pressure-vessel/from-host",
+                                "/run/pressure-vessel/pv-from-host",
+                                NULL);
 
       self->adverb_in_container = "/usr/lib/pressure-vessel/from-host/bin/pressure-vessel-adverb";
     }
@@ -3814,6 +3842,9 @@ pv_runtime_bind (PvRuntime *self,
     {
       g_autofree gchar *pressure_vessel_prefix_in_host_namespace =
         pv_current_namespace_path_to_host_path (pressure_vessel_prefix);
+
+      g_assert (bwrap != NULL);
+
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind",
                               pressure_vessel_prefix_in_host_namespace,

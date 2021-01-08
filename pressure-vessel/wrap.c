@@ -1594,46 +1594,53 @@ main (int argc,
       goto out;
     }
 
-  /* Start with an empty environment and populate it later */
-  bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-  flatpak_bwrap_add_arg (bwrap, bwrap_executable);
-  exports = flatpak_exports_new ();
-  container_env = pv_environ_new ();
-
-  if (is_flatpak_env)
+  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
     {
-      glnx_autofd int fd = TEMP_FAILURE_RETRY (open ("/run/host",
-                                                     O_CLOEXEC | O_PATH));
-
-      if (fd < 0)
-        {
-          glnx_throw_errno_prefix (error, "Unable to open /run/host");
-          goto out;
-        }
-
-      flatpak_exports_take_host_fd (exports, glnx_steal_fd (&fd));
+      /* Start with an empty environment and populate it later */
+      bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      flatpak_bwrap_add_arg (bwrap, bwrap_executable);
+      exports = flatpak_exports_new ();
     }
 
-  /* Protect the controlling terminal from the app/game, unless we are
-   * running an interactive shell in which case that would break its
-   * job control. */
-  if (opt_terminal != PV_TERMINAL_TTY)
-    flatpak_bwrap_add_arg (bwrap, "--new-session");
+  container_env = pv_environ_new ();
 
-  /* Start with just the root tmpfs (which appears automatically)
-   * and the standard API filesystems */
-  pv_bwrap_add_api_filesystems (bwrap);
+  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+    {
+      if (is_flatpak_env)
+        {
+          glnx_autofd int fd = TEMP_FAILURE_RETRY (open ("/run/host",
+                                                         O_CLOEXEC | O_PATH));
 
-  /* The FlatpakExports will populate /run/host for us */
-  flatpak_exports_add_host_os_expose (exports,
-                                      FLATPAK_FILESYSTEM_MODE_READ_ONLY);
+          if (fd < 0)
+            {
+              glnx_throw_errno_prefix (error, "Unable to open /run/host");
+              goto out;
+            }
 
-  /* steam-runtime-system-info uses this to detect pressure-vessel, so we
-   * need to create it even if it will be empty */
-  flatpak_bwrap_add_args (bwrap,
-                          "--dir",
-                          "/run/pressure-vessel",
-                          NULL);
+          flatpak_exports_take_host_fd (exports, glnx_steal_fd (&fd));
+        }
+
+      /* Protect the controlling terminal from the app/game, unless we are
+       * running an interactive shell in which case that would break its
+       * job control. */
+      if (opt_terminal != PV_TERMINAL_TTY)
+        flatpak_bwrap_add_arg (bwrap, "--new-session");
+
+      /* Start with just the root tmpfs (which appears automatically)
+       * and the standard API filesystems */
+      pv_bwrap_add_api_filesystems (bwrap);
+
+      /* The FlatpakExports will populate /run/host for us */
+      flatpak_exports_add_host_os_expose (exports,
+                                          FLATPAK_FILESYSTEM_MODE_READ_ONLY);
+
+      /* steam-runtime-system-info uses this to detect pressure-vessel, so we
+       * need to create it even if it will be empty */
+      flatpak_bwrap_add_args (bwrap,
+                              "--dir",
+                              "/run/pressure-vessel",
+                              NULL);
+    }
 
   if (opt_runtime != NULL && opt_runtime[0] != '\0')
     {
@@ -1655,6 +1662,14 @@ main (int argc,
         flags |= PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS;
 
       g_debug ("Configuring runtime %s...", opt_runtime);
+
+      if (is_flatpak_env && opt_copy_runtime_into == NULL)
+        {
+          glnx_throw (error,
+                      "Cannot set up a runtime inside Flatpak without "
+                      "making a mutable copy");
+          goto out;
+        }
 
       runtime = pv_runtime_new (opt_runtime,
                                 opt_copy_runtime_into,
@@ -1735,25 +1750,29 @@ main (int argc,
 
   g_debug ("Making home directory available...");
 
-  if (opt_fake_home == NULL)
+  /* TODO: In future we will do something different when using Flatpak
+   * sub-sandboxing */
     {
-      flatpak_exports_add_path_expose (exports,
-                                       FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                       home);
+      if (opt_fake_home == NULL)
+        {
+          flatpak_exports_add_path_expose (exports,
+                                           FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                           home);
 
-      /* TODO: All of ~/.steam has traditionally been read/write when not
-       * using a per-game home directory, but does it need to be? Maybe we
-       * should have a future "compat level" in which it's read-only,
-       * like it already is when using a per-game home directory. */
-      if (!expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                         home, NULL, error))
-        goto out;
-    }
-  else
-    {
-      if (!use_fake_home (exports, bwrap, container_env, opt_fake_home,
-                          error))
-        goto out;
+          /* TODO: All of ~/.steam has traditionally been read/write when not
+           * using a per-game home directory, but does it need to be? Maybe we
+           * should have a future "compat level" in which it's read-only,
+           * like it already is when using a per-game home directory. */
+          if (!expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                             home, NULL, error))
+            goto out;
+        }
+      else
+        {
+          if (!use_fake_home (exports, bwrap, container_env, opt_fake_home,
+                              error))
+            goto out;
+        }
     }
 
   if (!opt_share_pid)
@@ -1797,15 +1816,15 @@ main (int argc,
               continue;
             }
 
+          if (opt_remove_game_overlay
+              && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+            {
+              g_info ("Disabling Steam Overlay: %s", preload);
+              continue;
+            }
+
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
-              if (opt_remove_game_overlay
-                  && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
-                {
-                  g_info ("Disabling Steam Overlay: %s", preload);
-                  continue;
-                }
-
               if (runtime != NULL
                   && (g_str_has_prefix (preload, "/usr/")
                       || g_str_has_prefix (preload, "/lib")))
@@ -1838,61 +1857,66 @@ main (int argc,
     pv_environ_set_env_overridable (container_env, "LD_PRELOAD",
                                     adjusted_ld_preload->str);
 
-  g_debug ("Making Steam environment variables available if required...");
-  for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
-    bind_and_propagate_from_environ (exports, container_env,
-                                     known_required_env[i].name,
-                                     known_required_env[i].flags);
-
-  /* On NixOS, all paths hard-coded into libraries are in here */
-  flatpak_exports_add_path_expose (exports,
-                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                   "/nix");
-
-  /* Make arbitrary filesystems available. This is not as complete as
-   * Flatpak yet. */
-  if (opt_filesystems != NULL)
+  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+  if (1)
     {
-      g_debug ("Processing --filesystem arguments...");
+      g_debug ("Making Steam environment variables available if required...");
 
-      for (i = 0; opt_filesystems[i] != NULL; i++)
+      for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
+        bind_and_propagate_from_environ (exports, container_env,
+                                         known_required_env[i].name,
+                                         known_required_env[i].flags);
+
+      /* On NixOS, all paths hard-coded into libraries are in here */
+      flatpak_exports_add_path_expose (exports,
+                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                       "/nix");
+
+      /* Make arbitrary filesystems available. This is not as complete as
+       * Flatpak yet. */
+      if (opt_filesystems != NULL)
         {
-          /* We already checked this */
-          g_assert (g_path_is_absolute (opt_filesystems[i]));
+          g_debug ("Processing --filesystem arguments...");
 
-          g_info ("Bind-mounting \"%s\"", opt_filesystems[i]);
+          for (i = 0; opt_filesystems[i] != NULL; i++)
+            {
+              /* We already checked this */
+              g_assert (g_path_is_absolute (opt_filesystems[i]));
+
+              g_info ("Bind-mounting \"%s\"", opt_filesystems[i]);
+              flatpak_exports_add_path_expose (exports,
+                                               FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                               opt_filesystems[i]);
+            }
+        }
+
+      /* Make sure the current working directory (the game we are going to
+       * run) is available. Some games write here. */
+      g_debug ("Making current working directory available...");
+
+      cwd_p_host = pv_current_namespace_path_to_host_path (cwd_p);
+
+      if (_srt_is_same_file (home, cwd_p))
+        {
+          g_info ("Not making physical working directory \"%s\" available to "
+                  "container because it is the home directory",
+                  cwd_p);
+        }
+      else
+        {
+          /* If in Flatpak, we assume that cwd_p_host is visible in the
+           * current namespace as well as in the host, because it's
+           * either in our ~/.var/app/$FLATPAK_ID, or a --filesystem that
+           * was exposed from the host. */
           flatpak_exports_add_path_expose (exports,
                                            FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                           opt_filesystems[i]);
+                                           cwd_p_host);
         }
+
+      flatpak_bwrap_add_args (bwrap,
+                              "--chdir", cwd_p_host,
+                              NULL);
     }
-
-  /* Make sure the current working directory (the game we are going to
-   * run) is available. Some games write here. */
-  g_debug ("Making current working directory available...");
-
-  cwd_p_host = pv_current_namespace_path_to_host_path (cwd_p);
-
-  if (_srt_is_same_file (home, cwd_p))
-    {
-      g_info ("Not making physical working directory \"%s\" available to "
-              "container because it is the home directory",
-              cwd_p);
-    }
-  else
-    {
-      /* If in Flatpak, we assume that cwd_p_host is visible in the
-       * current namespace as well as in the host, because it's
-       * either in our ~/.var/app/$FLATPAK_ID, or a --filesystem that
-       * was exposed from the host. */
-      flatpak_exports_add_path_expose (exports,
-                                       FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                       cwd_p_host);
-    }
-
-  flatpak_bwrap_add_args (bwrap,
-                          "--chdir", cwd_p_host,
-                          NULL);
 
   pv_environ_lock_env (container_env, "PWD", NULL);
 
@@ -2061,14 +2085,20 @@ main (int argc,
           const char *var = iter->data;
           const char *val = pv_environ_getenv (container_env, var);
 
-          if (val != NULL)
-            flatpak_bwrap_add_args (bwrap,
-                                    "--setenv", var, val,
-                                    NULL);
-          else
-            flatpak_bwrap_add_args (bwrap,
-                                    "--unsetenv", var,
-                                    NULL);
+          /* TODO: In future we will behave differently here when
+           * using Flatpak sub-sandboxing */
+            {
+              g_assert (bwrap != NULL);
+
+              if (val != NULL)
+                flatpak_bwrap_add_args (bwrap,
+                                        "--setenv", var, val,
+                                        NULL);
+              else
+                flatpak_bwrap_add_args (bwrap,
+                                        "--unsetenv", var,
+                                        NULL);
+            }
         }
     }
 
@@ -2129,13 +2159,15 @@ main (int argc,
    * if we try. */
   g_clear_pointer (&container_env, pv_environ_free);
 
-  if (!flatpak_buffer_to_sealed_memfd_or_tmpfile (&lock_env_tmpf, "lock-env",
-                                                  lock_env->str, lock_env->len,
-                                                  error))
-    goto out;
+  if (opt_launcher)
+    {
+      if (!flatpak_buffer_to_sealed_memfd_or_tmpfile (&lock_env_tmpf, "lock-env",
+                                                      lock_env->str, lock_env->len,
+                                                      error))
+        goto out;
 
-  lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
-  flatpak_bwrap_add_fd (bwrap, glnx_steal_fd (&lock_env_tmpf.fd));
+      lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
+    }
 
   if (is_flatpak_env)
     {
@@ -2180,23 +2212,26 @@ main (int argc,
         }
     }
 
-  if (opt_verbose)
+  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
     {
-      g_message ("%s options before bundling:", bwrap_executable);
-
-      for (i = 0; i < bwrap->argv->len; i++)
+      if (opt_verbose)
         {
-          g_autofree gchar *quoted = NULL;
+          g_message ("%s options before bundling:", bwrap_executable);
 
-          quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
-          g_message ("\t%s", quoted);
+          for (i = 0; i < bwrap->argv->len; i++)
+            {
+              g_autofree gchar *quoted = NULL;
+
+              quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
+              g_message ("\t%s", quoted);
+            }
         }
-    }
 
-  if (!opt_only_prepare)
-    {
-      if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
-        goto out;
+      if (!opt_only_prepare)
+        {
+          if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
+            goto out;
+        }
     }
 
   argv_in_container = flatpak_bwrap_new (flatpak_bwrap_empty_env);
@@ -2257,7 +2292,8 @@ main (int argc,
           flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
         }
 
-      flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
+      if (lock_env_fd != NULL)
+        flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
 
       switch (opt_shell)
         {
@@ -2327,6 +2363,9 @@ main (int argc,
         flatpak_bwrap_add_arg (launcher_argv, "--verbose");
 
       g_debug ("Adding locked environment variables...");
+      g_assert (lock_env_fd != NULL);
+      g_assert (lock_env_tmpf.fd >= 0);
+      flatpak_bwrap_add_fd (launcher_argv, glnx_steal_fd (&lock_env_tmpf.fd));
       flatpak_bwrap_add_args (launcher_argv,
                               "--lock-env-from-fd", lock_env_fd, NULL);
 
@@ -2347,11 +2386,6 @@ main (int argc,
       flatpak_bwrap_append_argsv (argv_in_container, &argv[1], argc - 1);
     }
 
-  g_warn_if_fail (g_strv_length (argv_in_container->envp) == 0);
-  flatpak_bwrap_append_bwrap (bwrap, argv_in_container);
-
-  g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
-
   if (is_flatpak_env)
     {
       /* Use pv-launch to launch bwrap on the host. */
@@ -2366,6 +2400,14 @@ main (int argc,
                                                      g_array_index (bwrap->fds, int, i));
           flatpak_bwrap_add_arg (launch_on_host, fd_str);
         }
+
+      for (i = 0; i < argv_in_container->fds->len; i++)
+        {
+          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
+                                                     g_array_index (argv_in_container->fds, int, i));
+          flatpak_bwrap_add_arg (launch_on_host, fd_str);
+        }
+
       /* Change the current working directory where pv-launch will run bwrap.
        * Bwrap will then set its directory by itself. For this reason here
        * we just need a directory that it's known to exist. */
@@ -2377,7 +2419,14 @@ main (int argc,
       flatpak_bwrap_append_bwrap (final_argv, launch_on_host);
     }
 
-  flatpak_bwrap_append_bwrap (final_argv, bwrap);
+  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+    {
+      g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
+      flatpak_bwrap_append_bwrap (final_argv, bwrap);
+    }
+
+  g_warn_if_fail (g_strv_length (argv_in_container->envp) == 0);
+  flatpak_bwrap_append_bwrap (final_argv, argv_in_container);
 
   /* We'll have permuted the order anyway, so we might as well sort it,
    * to make debugging a bit easier. */

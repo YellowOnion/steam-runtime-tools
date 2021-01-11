@@ -86,6 +86,7 @@ const char * const ld_cache_filenames[] =
     "/etc/ld-x86_64-pc-linux-gnu.cache",  /* Exherbo */
 #endif
     "/etc/ld.so.cache",                   /* interoperable */
+    "/var/cache/ldconfig/ld.so.cache",    /* Clear Linux */
     NULL
 };
 

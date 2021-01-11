@@ -200,6 +200,15 @@ static const MultiarchDetails multiarch_details[] =
 G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
                  == G_N_ELEMENTS (multiarch_tuples) - 1);
 
+/* Architecture-independent ld.so.cache filenames, other than the
+ * conventional filename /etc/ld.so.cache used upstream and in Debian
+ * (we assume this is also what's used in our runtimes). */
+static const char * const other_ld_so_cache[] =
+{
+  /* Clear Linux */
+  "/var/cache/ldconfig/ld.so.cache",
+};
+
 /*
  * @MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN:
  *  Return all library directories from which we might need to delete
@@ -1658,6 +1667,7 @@ bind_runtime_base (PvRuntime *self,
     "/etc/localtime",
     "/etc/machine-id",
     "/etc/resolv.conf",
+    "/var/cache/ldconfig",
     "/var/lib/dbus",
     "/var/lib/dhcp",
     "/var/lib/sudo",
@@ -1665,7 +1675,7 @@ bind_runtime_base (PvRuntime *self,
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
-  gsize i;
+  gsize i, j;
   const gchar *member;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
@@ -1761,6 +1771,44 @@ bind_runtime_base (PvRuntime *self,
               g_autofree gchar *on_host = pv_current_namespace_path_to_host_path (full);
               flatpak_bwrap_add_args (bwrap, "--ro-bind", on_host, dest, NULL);
             }
+        }
+    }
+
+  /* glibc from some distributions will want to load the ld.so cache from
+   * a distribution-specific path, e.g. Clear Linux uses
+   * /var/cache/ldconfig/ld.so.cache. For simplicity, we make all these
+   * paths symlinks to /etc/ld.so.cache, so that we only have to populate
+   * the cache in one place. */
+  for (i = 0; i < G_N_ELEMENTS (other_ld_so_cache); i++)
+    {
+      const char *path = other_ld_so_cache[i];
+
+      flatpak_bwrap_add_args (bwrap,
+                              "--symlink", "/etc/ld.so.cache", path,
+                              NULL);
+    }
+
+  /* glibc from some distributions will want to load the ld.so cache from
+   * a distribution- and architecture-specific path, e.g. Exherbo
+   * does this. Again, for simplicity we direct all these to the same path:
+   * it's OK to mix multiple architectures' libraries into one cache,
+   * as done in upstream glibc (and Debian, Arch, etc.). */
+  for (i = 0; i < G_N_ELEMENTS (multiarch_details); i++)
+    {
+      const MultiarchDetails *details = &multiarch_details[i];
+
+      for (j = 0; j < G_N_ELEMENTS (details->other_ld_so_cache); j++)
+        {
+          const char *base = details->other_ld_so_cache[j];
+          g_autofree gchar *path = NULL;
+
+          if (base == NULL)
+            break;
+
+          path = g_build_filename ("/etc", base, NULL);
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", "/etc/ld.so.cache", path,
+                                  NULL);
         }
     }
 

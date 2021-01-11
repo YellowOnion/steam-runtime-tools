@@ -227,6 +227,25 @@ class TestInsideRuntime(BaseTest):
             # soldier's version
             self.assertGreaterEqual((int(major), int(minor)), (2, 28))
 
+    def test_ld_so_cache(self) -> None:
+        """
+        For simplicity, we use symlinks to make all the known ld.so.cache
+        paths equivalent.
+        """
+
+        cache = Path('/etc/ld.so.cache').resolve()
+        # Clear Linux
+        self.assertEqual(
+            cache, Path('/var/cache/ldconfig/ld.so.cache').resolve()
+        )
+        # Exherbo
+        self.assertEqual(
+            cache, Path('/etc/ld-x86_64-pc-linux-gnu.cache').resolve()
+        )
+        self.assertEqual(
+            cache, Path('/etc/ld-i686-pc-linux-gnu.cache').resolve()
+        )
+
     def test_srsi(self) -> None:
         overrides = Path('/overrides').resolve()
 

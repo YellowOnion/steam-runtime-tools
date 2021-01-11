@@ -1840,9 +1840,22 @@ main (int argc,
                 }
               else
                 {
-                  flatpak_exports_add_path_expose (exports,
-                                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                                   preload);
+                  const gchar *steam_path = NULL;
+                  steam_path = g_getenv ("STEAM_COMPAT_CLIENT_INSTALL_PATH");
+
+                  if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
+                    {
+                      g_debug ("Skipping exposing \"%s\" because it is located "
+                               "under the Steam client install path that we "
+                               "bind by default", preload);
+                    }
+                  else
+                    {
+                      flatpak_exports_add_path_expose (exports,
+                                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                                       preload);
+                    }
+
                   pv_search_path_append (adjusted_ld_preload, preload);
                 }
             }

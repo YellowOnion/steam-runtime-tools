@@ -1,3 +1,19 @@
+steam-runtime-tools (0.20210111.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Fix loading of ICDs and Vulkan layers that are
+    referenced by a bare SONAME (Resolves: #49)
+    - In particular this fixes the Mesa device selection layer
+  * pressure-vessel: Improve handling of LD_PRELOAD
+
+  [ Simon McVittie ]
+  * pressure-vessel: Find PulseAudio socket on systems that do not use
+    XDG_RUNTIME_DIR (Resolves: #51, steam-runtime#343)
+  * pressure-vessel: Further refactoring towards being able to run from
+    inside Flatpak
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 11 Jan 2021 18:12:17 +0000
+
 steam-runtime-tools (0.20210105.0) scout; urgency=medium
 
   [ Simon McVittie ]

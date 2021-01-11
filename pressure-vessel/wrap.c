@@ -1840,9 +1840,22 @@ main (int argc,
                 }
               else
                 {
-                  flatpak_exports_add_path_expose (exports,
-                                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                                   preload);
+                  const gchar *steam_path = NULL;
+                  steam_path = g_getenv ("STEAM_COMPAT_CLIENT_INSTALL_PATH");
+
+                  if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
+                    {
+                      g_debug ("Skipping exposing \"%s\" because it is located "
+                               "under the Steam client install path that we "
+                               "bind by default", preload);
+                    }
+                  else
+                    {
+                      flatpak_exports_add_path_expose (exports,
+                                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                                       preload);
+                    }
+
                   pv_search_path_append (adjusted_ld_preload, preload);
                 }
             }
@@ -1853,9 +1866,15 @@ main (int argc,
         }
     }
 
+  /* If we adjusted the LD_PRELOAD entries, from the one provided by the host,
+   * to something that is valid in the container, we shouldn't add them to
+   * the bwrap envp. Otherwise when we call "pv_bwrap_execve()" we will
+   * create an environment that tries to preload libraries that are not
+   * available, until it actually executes "bwrap".
+   * This can be avoided by using the bwrap option "--setenv" instead. */
   if (adjusted_ld_preload->len != 0)
-    pv_environ_set_env_overridable (container_env, "LD_PRELOAD",
-                                    adjusted_ld_preload->str);
+    flatpak_bwrap_add_args (bwrap, "--setenv", "LD_PRELOAD",
+                            adjusted_ld_preload->str, NULL);
 
   /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
   if (1)

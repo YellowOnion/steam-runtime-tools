@@ -119,6 +119,7 @@ sub uniq {
 }
 
 my @symbols_produced =
+    grep { !/^ZLIB_\d+\./ }
     get_symbols_with_nm("$test_tempdir/libz-proxy/.libs/libz.so.1");
 is_deeply \@symbols_wanted, [grep {! m/^capsule_meta $/} @symbols_produced];
 
@@ -210,6 +211,7 @@ run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1',
 run_ok(['make', '-C', "$test_tempdir/libz-proxy", 'V=1'], '>&2');
 
 @symbols_produced =
+    grep { !/^ZLIB_\d+\./ }
     get_symbols_with_nm("$test_tempdir/libz-proxy/.libs/libz.so.1");
 is_deeply \@symbols_wanted, [grep {! m/^capsule_meta $/} @symbols_produced];
 

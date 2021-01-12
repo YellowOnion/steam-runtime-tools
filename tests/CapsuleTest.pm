@@ -344,14 +344,14 @@ sub get_symbols_with_nm {
         if ($line =~ m/^[[:xdigit:]]+\s+[ABCDGIRSTW]+\s+([^@]+)(\@\@?.*)?/) {
             my $symbol = $1;
             my $version = $2;
-            if ($version =~ m/^(\@\@?[^@]+)\1$/) {
+            if (defined $version && $version =~ m/^(\@\@?[^@]+)\1$/) {
                 # Ignore doubled symbol-version suffix.
                 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=964457
                 $version = $1;
             }
             require CapsuleTestDpkg;
             next if CapsuleTestDpkg::symbol_is_blacklisted($symbol);
-            next if "\@\@$symbol" eq $version;
+            next if defined $version && "\@\@$symbol" eq $version;
 
             # Put them in the same format that capsule-symbols uses
             if (length $version && $version ne '@@Base') {

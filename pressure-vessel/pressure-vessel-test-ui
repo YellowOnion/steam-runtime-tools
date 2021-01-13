@@ -92,8 +92,10 @@ class Gui:
 
         for search in (
             os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
+            os.getenv('PRESSURE_VESSEL_VARIABLE_DIR'),
             '..',
             '../..',
+            '../../var',
         ):
             if search is None:
                 continue
@@ -170,13 +172,16 @@ class Gui:
 
         if var_path is None:
             value = False
+            var_path = os.getenv('PRESSURE_VESSEL_VARIABLE_DIR', None)
+        else:
+            value = True
+
+        if var_path is None:
             var_path = os.getenv(
                 'PRESSURE_VESSEL_RUNTIME_BASE',
                 os.path.dirname(__file__) + '/../..',
             ) + '/var'
             assert var_path is not None
-        else:
-            value = True
 
         self.var_path = os.path.realpath(var_path)
         self.copy_runtime_into_check = Gtk.CheckButton.new_with_label(

@@ -87,24 +87,25 @@ test_capture_output (Fixture *f,
 {
   const gchar * argv[] =
   {
-    "printf", "hello\\n", NULL
+    "printf", "hello\\n", NULL, NULL,
   };
   g_autofree gchar *output = NULL;
   g_autoptr(GError) error = NULL;
+  g_auto(GStrv) envp = g_get_environ ();
 
-  output = pv_capture_output (argv, &error);
+  output = pv_capture_output (argv, NULL, &error);
   g_assert_cmpstr (output, ==, "hello");
   g_assert_no_error (error);
   g_clear_pointer (&output, g_free);
 
   argv[1] = "hello\\nworld";    /* deliberately no trailing newline */
-  output = pv_capture_output (argv, &error);
+  output = pv_capture_output (argv, NULL, &error);
   g_assert_no_error (error);
   g_assert_cmpstr (output, ==, "hello\nworld");
   g_clear_pointer (&output, g_free);
 
   argv[0] = "/nonexistent/doesnotexist";
-  output = pv_capture_output (argv, &error);
+  output = pv_capture_output (argv, NULL, &error);
   g_assert_nonnull (error);
 
   if (error->domain == G_SPAWN_ERROR
@@ -129,10 +130,36 @@ test_capture_output (Fixture *f,
 
   argv[0] = "false";
   argv[1] = NULL;
-  output = pv_capture_output (argv, &error);
+  output = pv_capture_output (argv, NULL, &error);
   g_assert_error (error, G_SPAWN_EXIT_ERROR, 1);
   g_assert_cmpstr (output, ==, NULL);
   g_clear_error (&error);
+
+  argv[0] = "sh";
+  argv[1] = "-euc";
+  argv[2] = "echo \"$PATH\"";
+  output = pv_capture_output (argv, NULL, &error);
+  g_assert_no_error (error);
+  g_assert_cmpstr (output, ==, g_getenv ("PATH"));
+  g_clear_pointer (&output, g_free);
+
+  envp = g_environ_setenv (envp, "FOO", "bar", TRUE);
+  argv[0] = "sh";
+  argv[1] = "-euc";
+  argv[2] = "echo \"${FOO-unset}\"";
+  output = pv_capture_output (argv, (const char * const *) envp, &error);
+  g_assert_no_error (error);
+  g_assert_cmpstr (output, ==, "bar");
+  g_clear_pointer (&output, g_free);
+
+  envp = g_environ_unsetenv (envp, "FOO");
+  argv[0] = "sh";
+  argv[1] = "-euc";
+  argv[2] = "echo \"${FOO-unset}\"";
+  output = pv_capture_output (argv, (const char * const *) envp, &error);
+  g_assert_no_error (error);
+  g_assert_cmpstr (output, ==, "unset");
+  g_clear_pointer (&output, g_free);
 }
 
 static void

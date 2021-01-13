@@ -49,6 +49,7 @@ void pv_search_path_append (GString *search_path,
                             const gchar *item);
 
 gchar *pv_capture_output (const char * const * argv,
+                          const char * const * envp,
                           GError **error);
 
 gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);

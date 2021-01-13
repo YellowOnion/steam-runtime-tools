@@ -170,6 +170,7 @@ pv_search_path_append (GString *search_path,
 
 gchar *
 pv_capture_output (const char * const * argv,
+                   const char * const * envp,
                    GError **error)
 {
   gsize len;
@@ -199,7 +200,7 @@ pv_capture_output (const char * const * argv,
    * that are not close-on-execute will get leaked into the child. */
   if (!g_spawn_sync (NULL,  /* cwd */
                      (char **) argv,
-                     NULL,  /* env */
+                     (char **) envp,
                      (G_SPAWN_SEARCH_PATH |
                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
                      NULL, NULL,

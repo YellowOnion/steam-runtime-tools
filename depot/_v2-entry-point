@@ -13,7 +13,7 @@ is_main=yes
 suite=scout
 verbose=
 log_to_file=
-log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${here}/var"}
+log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${PRESSURE_VESSEL_VARIABLE_DIR-"${here}/var"}"}
 keep_logs=
 use_timestamp=
 

@@ -11,8 +11,16 @@ steam-runtime-tools (0.20210111.0) UNRELEASED; urgency=medium
     XDG_RUNTIME_DIR (Resolves: #51, steam-runtime#343)
   * pressure-vessel: Further refactoring towards being able to run from
     inside Flatpak
+  * runtime: Create symlinks for various distros' ld.so.cache equivalents,
+    improving ability to run on Clear Linux and Exherbo
+    (partially addresses steam-runtime#345, steam-runtime#230)
+  * Implement the container indicator from systemd's CONTAINER_INTERFACE
+    ($container and /run/host/container-manager)
+  * test-ui: Look for runtimes in PRESSURE_VESSEL_VARIABLE_DIR.
+    Future versions of SteamLinuxRuntime will use this to move the
+    non-Steampipe-managed runtimes into a var/ subdirectory.
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 11 Jan 2021 18:12:17 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 13 Jan 2021 13:54:25 +0000
 
 steam-runtime-tools (0.20210105.0) scout; urgency=medium
 

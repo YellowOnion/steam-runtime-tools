@@ -3467,7 +3467,9 @@ typedef struct
 
 static const ContainerTypeName container_types[] =
 {
-  { SRT_CONTAINER_TYPE_DOCKER, "docker" }
+  { SRT_CONTAINER_TYPE_DOCKER, "docker" },
+  { SRT_CONTAINER_TYPE_FLATPAK, "flatpak" },
+  { SRT_CONTAINER_TYPE_PRESSURE_VESSEL, "pressure-vessel" },
 };
 
 static SrtContainerType
@@ -3517,6 +3519,17 @@ ensure_container_info (SrtSystemInfo *self)
     self->container.host_directory = g_build_filename (self->sysroot,
                                                        run_host_path,
                                                        NULL);
+
+  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
+                                         "/run/host/container-manager",
+                                         &contents, NULL, NULL))
+    {
+      g_strchomp (contents);
+      self->container.type = container_type_from_name (contents);
+      g_debug ("Type %d based on /run/host/container-manager",
+               self->container.type);
+      goto out;
+    }
 
   if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
                                          "/run/systemd/container",

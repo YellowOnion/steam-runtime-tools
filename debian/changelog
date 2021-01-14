@@ -1,3 +1,13 @@
+libcapsule (0.20210114.0-0co1) upstream; urgency=medium
+
+  * ldlibs: Try loading Clear Linux ld.so cache (/var/cache/ldconfig).
+    Partially addresses ValveSoftware/steam-runtime#345
+  * tests: Silence some Perl warnings
+  * tests: Ignore symbol-versions in nm output.
+    The Debian 11 toolchain produces them like this.
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 14 Jan 2021 14:57:29 +0000
+
 libcapsule (0.20210104.0-0co1) upstream; urgency=medium
 
   * ld-libs: Try loading Exherbo architecture-specific ld.so cache

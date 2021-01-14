@@ -3469,6 +3469,7 @@ static const ContainerTypeName container_types[] =
 {
   { SRT_CONTAINER_TYPE_DOCKER, "docker" },
   { SRT_CONTAINER_TYPE_FLATPAK, "flatpak" },
+  { SRT_CONTAINER_TYPE_PODMAN, "podman" },
   { SRT_CONTAINER_TYPE_PRESSURE_VESSEL, "pressure-vessel" },
 };
 
@@ -3563,6 +3564,14 @@ ensure_container_info (SrtSystemInfo *self)
     {
       self->container.type = SRT_CONTAINER_TYPE_DOCKER;
       g_debug ("Docker based on /.dockerenv");
+      goto out;
+    }
+
+  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
+                                 "/run/.containerenv", G_FILE_TEST_EXISTS))
+    {
+      self->container.type = SRT_CONTAINER_TYPE_PODMAN;
+      g_debug ("Podman based on /run/.containerenv");
       goto out;
     }
 

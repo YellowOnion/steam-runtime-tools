@@ -972,7 +972,7 @@ static GOptionEntry options[] =
     "[Default: $PRESSURE_VESSEL_COPY_RUNTIME_INTO or empty]",
     "DIR" },
   { "env-if-host", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_env_if_host,
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
     "but not if it is run with /usr from RUNTIME.", "VAR=VAL" },
   { "filesystem", '\0',

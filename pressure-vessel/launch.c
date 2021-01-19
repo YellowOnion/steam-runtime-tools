@@ -177,7 +177,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
            * code specified neither WUNTRACED nor WIFSIGNALED, then exactly one
            * of WIFEXITED() or WIFSIGNALED() will be true.
            */
-          g_warning ("exit status %d is neither WIFEXITED() nor WIFSIGNALED()",
+          g_warning ("wait status %d is neither WIFEXITED() nor WIFSIGNALED()",
                      wait_status);
           exit_code = LAUNCH_EX_CANNOT_REPORT;
         }
@@ -333,7 +333,7 @@ name_owner_changed (G_GNUC_UNUSED GDBusConnection *connection,
                     G_GNUC_UNUSED const gchar     *interface_name,
                     G_GNUC_UNUSED const gchar     *signal_name,
                     GVariant                      *parameters,
-                    gpointer                       user_data)
+                    G_GNUC_UNUSED gpointer         user_data)
 {
   GMainLoop *loop = user_data;
   const char *name, *from, *to;

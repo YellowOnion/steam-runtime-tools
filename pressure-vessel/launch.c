@@ -2,7 +2,7 @@
  * pressure-vessel-launch — send IPC requests to create child processes
  *
  * Copyright © 2018 Red Hat, Inc.
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -53,6 +53,8 @@ typedef enum {
   FLATPAK_SPAWN_FLAGS_NO_NETWORK = 1 << 3,
   FLATPAK_SPAWN_FLAGS_WATCH_BUS = 1 << 4, /* Since 1.2 */
   FLATPAK_SPAWN_FLAGS_EXPOSE_PIDS = 1 << 5, /* Since 1.6, optional */
+  FLATPAK_SPAWN_FLAGS_NOTIFY_START = 1 << 6,
+  FLATPAK_SPAWN_FLAGS_SHARE_PIDS = 1 << 7,
 } FlatpakSpawnFlags;
 
 typedef enum {
@@ -73,6 +75,10 @@ typedef enum {
 typedef enum {
   FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS = 1 << 0,
 } FlatpakSpawnSupportFlags;
+
+/* The same flag is reused: this feature is available under the same
+ * circumstances */
+#define FLATPAK_SPAWN_SUPPORT_FLAGS_SHARE_PIDS FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS
 
 typedef struct
 {

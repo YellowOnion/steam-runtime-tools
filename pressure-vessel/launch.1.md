@@ -67,7 +67,7 @@ as a subprocess of **pressure-vessel-launcher**.
     owned by the **flatpak-portal** per-user service, and the
     *COMMAND* is launched in a Flatpak sub-sandbox, similar to
     **flatpak-spawn**(1) without the **--host** option.
-    Options that alter how the sub-sandbox is created, such as
+    Most options that alter how the sub-sandbox is created, such as
     **--sandbox-flag**, are not currently supported.
     As with **org.freedesktop.Flatpak**, the
     **--terminate** option is not allowed in this mode.
@@ -89,6 +89,15 @@ as a subprocess of **pressure-vessel-launcher**.
     from outside the container. File descriptors 0, 1 and 2
     (standard input, standard output and standard error) are always
     forwarded.
+
+**--share-pids**
+:   If used with **--bus-name=org.freedesktop.portal.Flatpak**, use the
+    same process ID namespace for the new subsandbox as for the calling
+    process. This requires Flatpak 1.10 or later, running on a host
+    operating system where **bwrap**(1) is not and does not need to be
+    setuid root.
+
+    When communicating with a different API, this option is ignored.
 
 **--terminate**
 :   Instead of running a *COMMAND*, terminate the Launcher server.

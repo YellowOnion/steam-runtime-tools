@@ -409,6 +409,72 @@ get_portal_version (void)
   return version;
 }
 
+static void
+check_portal_version (const char *option, guint32 version_needed)
+{
+  guint32 portal_version = get_portal_version ();
+  if (portal_version < version_needed)
+    {
+      g_printerr ("--%s not supported by host portal version (need version %d, has %d)\n", option, version_needed, portal_version);
+      exit (1);
+    }
+}
+
+static guint32
+get_portal_supports (void)
+{
+  static guint32 supports = 0;
+  static gboolean ran = FALSE;
+
+  g_return_val_if_fail (api != NULL, 0);
+  g_return_val_if_fail (api == &host_api || api == &subsandbox_api, 0);
+
+  if (!ran)
+    {
+      g_autoptr(GError) error = NULL;
+      g_autoptr(GVariant) reply = NULL;
+
+      ran = TRUE;
+
+      /* Support flags were added in version 3 */
+      if (get_portal_version () >= 3)
+        {
+          reply = g_dbus_connection_call_sync (bus_or_peer_connection,
+                                               api->service_bus_name,
+                                               api->service_obj_path,
+                                               "org.freedesktop.DBus.Properties",
+                                               "Get",
+                                               g_variant_new ("(ss)", api->service_iface, "supports"),
+                                               G_VARIANT_TYPE ("(v)"),
+                                               G_DBUS_CALL_FLAGS_NONE,
+                                               -1,
+                                               NULL, &error);
+          if (reply == NULL)
+            g_debug ("Failed to get supports: %s", error->message);
+          else
+            {
+              g_autoptr(GVariant) v = g_variant_get_child_value (reply, 0);
+              g_autoptr(GVariant) v2 = g_variant_get_variant (v);
+              supports = g_variant_get_uint32 (v2);
+            }
+        }
+    }
+
+  return supports;
+}
+
+static void
+check_portal_supports (const char *option, guint32 supports_needed)
+{
+  guint32 supports = get_portal_supports ();
+
+  if ((supports & supports_needed) != supports_needed)
+    {
+      g_printerr ("--%s not supported by host portal\n", option);
+      exit (1);
+    }
+}
+
 static gchar **forward_fds = NULL;
 static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
@@ -416,6 +482,7 @@ static gchar *opt_directory = NULL;
 static gchar *opt_socket = NULL;
 static GHashTable *opt_env = NULL;
 static GHashTable *opt_unsetenv = NULL;
+static gboolean opt_share_pids = FALSE;
 static gboolean opt_terminate = FALSE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
@@ -538,6 +605,9 @@ static const GOptionEntry options[] =
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Pass environment variables matching a shell-style wildcard.",
     "WILDCARD" },
+  { "share-pids", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_share_pids,
+    "Use same pid namespace as calling sandbox.", NULL },
   { "socket", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Connect to a Launcher server listening on this AF_UNIX socket.",
@@ -888,6 +958,16 @@ main (int argc,
       g_assert (api == &launcher_api);
       g_variant_builder_add (&options_builder, "{s@v}", "terminate-after",
                              g_variant_new_variant (g_variant_new_boolean (TRUE)));
+    }
+
+  /* We just ignore this option when not using a subsandbox:
+   * host_api and launcher_api always share process IDs anyway */
+  if (opt_share_pids && api == &subsandbox_api)
+    {
+      check_portal_version ("share-pids", 5);
+      check_portal_supports ("share-pids", FLATPAK_SPAWN_SUPPORT_FLAGS_SHARE_PIDS);
+
+      spawn_flags |= FLATPAK_SPAWN_FLAGS_SHARE_PIDS;
     }
 
   if (g_hash_table_size (opt_unsetenv) > 0)

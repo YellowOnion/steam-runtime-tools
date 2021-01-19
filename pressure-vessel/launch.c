@@ -373,6 +373,42 @@ connection_closed_cb (G_GNUC_UNUSED GDBusConnection *conn,
   g_main_loop_quit (loop);
 }
 
+static guint32
+get_portal_version (void)
+{
+  static guint32 version = 0;
+
+  g_return_val_if_fail (api != NULL, 0);
+  g_return_val_if_fail (api == &host_api || api == &subsandbox_api, 0);
+
+  if (version == 0)
+    {
+      g_autoptr(GError) error = NULL;
+      g_autoptr(GVariant) reply =
+        g_dbus_connection_call_sync (bus_or_peer_connection,
+                                     api->service_bus_name,
+                                     api->service_obj_path,
+                                     "org.freedesktop.DBus.Properties",
+                                     "Get",
+                                     g_variant_new ("(ss)", api->service_iface, "version"),
+                                     G_VARIANT_TYPE ("(v)"),
+                                     G_DBUS_CALL_FLAGS_NONE,
+                                     -1,
+                                     NULL, &error);
+
+      if (reply == NULL)
+        g_debug ("Failed to get version: %s", error->message);
+      else
+        {
+          g_autoptr(GVariant) v = g_variant_get_child_value (reply, 0);
+          g_autoptr(GVariant) v2 = g_variant_get_variant (v);
+          version = g_variant_get_uint32 (v2);
+        }
+    }
+
+  return version;
+}
+
 static gchar **forward_fds = NULL;
 static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
@@ -858,7 +894,11 @@ main (int argc,
     {
       g_hash_table_iter_init (&iter, opt_unsetenv);
 
-      if (api == &launcher_api)
+      /* The host portal doesn't support options, so we always have to do
+       * this the hard way. The subsandbox portal supports unset-env in
+       * versions >= 5. pressure-vessel-launcher always supports it. */
+      if (api == &launcher_api
+          || (api == &subsandbox_api && get_portal_version () >= 5))
         {
           GVariantBuilder strv_builder;
 

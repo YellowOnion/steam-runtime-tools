@@ -55,6 +55,7 @@ typedef enum {
   FLATPAK_SPAWN_FLAGS_EXPOSE_PIDS = 1 << 5, /* Since 1.6, optional */
   FLATPAK_SPAWN_FLAGS_NOTIFY_START = 1 << 6,
   FLATPAK_SPAWN_FLAGS_SHARE_PIDS = 1 << 7,
+  FLATPAK_SPAWN_FLAGS_EMPTY_APP = 1 << 8,
 } FlatpakSpawnFlags;
 
 typedef enum {
@@ -475,7 +476,84 @@ check_portal_supports (const char *option, guint32 supports_needed)
     }
 }
 
+static gint32
+path_to_handle (GUnixFDList *fd_list,
+                const char *path,
+                const char *home_realpath,
+                const char *flatpak_id,
+                GError **error)
+{
+  int path_fd = open (path, O_PATH|O_CLOEXEC|O_NOFOLLOW|O_RDONLY);
+  int saved_errno;
+  gint32 handle;
+
+  if (path_fd < 0)
+    {
+      saved_errno = errno;
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (saved_errno),
+                   "Failed to open %s to expose in sandbox: %s",
+                   path, g_strerror (saved_errno));
+      return -1;
+    }
+
+  if (home_realpath != NULL && flatpak_id != NULL)
+    {
+      g_autofree char *real = NULL;
+      const char *after = NULL;
+
+      real = realpath (path, NULL);
+
+      if (real != NULL)
+        after = pv_get_path_after (real, home_realpath);
+
+      if (after != NULL)
+        {
+          g_autofree char *var_path = NULL;
+          int var_fd = -1;
+          struct stat path_buf;
+          struct stat var_buf;
+
+          /* @after is possibly "", but that's OK: if @path is exactly $HOME,
+           * we want to check whether it's the same file as
+           * ~/.var/app/$FLATPAK_ID, with no suffix */
+          var_path = g_build_filename (home_realpath, ".var", "app", flatpak_id,
+                                       after, NULL);
+
+          var_fd = open (var_path, O_PATH|O_CLOEXEC|O_NOFOLLOW|O_RDONLY);
+
+          if (var_fd >= 0 &&
+              fstat (path_fd, &path_buf) == 0 &&
+              fstat (var_fd, &var_buf) == 0 &&
+              path_buf.st_dev == var_buf.st_dev &&
+              path_buf.st_ino == var_buf.st_ino)
+            {
+              close (path_fd);
+              path_fd = var_fd;
+              var_fd = -1;
+            }
+          else
+            {
+              close (var_fd);
+            }
+        }
+    }
+
+
+  handle = g_unix_fd_list_append (fd_list, path_fd, error);
+
+  if (handle < 0)
+    {
+      g_prefix_error (error, "Failed to add fd to list for %s: ", path);
+      return -1;
+    }
+
+  /* The GUnixFdList keeps a duplicate, so we should release the original */
+  close (path_fd);
+  return handle;
+}
+
 static gchar **forward_fds = NULL;
+static gchar *opt_app_path = NULL;
 static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
 static gchar *opt_directory = NULL;
@@ -484,6 +562,7 @@ static GHashTable *opt_env = NULL;
 static GHashTable *opt_unsetenv = NULL;
 static gboolean opt_share_pids = FALSE;
 static gboolean opt_terminate = FALSE;
+static gchar *opt_usr_path = NULL;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 
@@ -576,6 +655,11 @@ opt_env_cb (const char *option_name,
 
 static const GOptionEntry options[] =
 {
+  { "app-path", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_app_path,
+    "Use DIR as the /usr for a Flatpak sub-sandbox. "
+    "Requires '--bus-name=org.freedesktop.portal.Flatpak'.",
+    "DIR" },
   { "bus-name", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &launcher_api.service_bus_name,
     "Connect to a Launcher service with this name on the session bus.",
@@ -608,6 +692,11 @@ static const GOptionEntry options[] =
   { "share-pids", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_share_pids,
     "Use same pid namespace as calling sandbox.", NULL },
+  { "usr-path", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_usr_path,
+    "Use DIR as the /usr for a Flatpak sub-sandbox. "
+    "Requires '--bus-name=org.freedesktop.portal.Flatpak'.",
+    "DIR" },
   { "socket", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Connect to a Launcher server listening on this AF_UNIX socket.",
@@ -655,6 +744,8 @@ main (int argc,
   gsize i;
   GHashTableIter iter;
   gpointer key, value;
+  g_autofree char *home_realpath = NULL;
+  const char *flatpak_id = NULL;
 
   setlocale (LC_ALL, "");
 
@@ -718,6 +809,11 @@ main (int argc,
 
   _srt_setenv_disable_gio_modules ();
 
+  flatpak_id = g_environ_getenv (original_environ, "FLATPAK_ID");
+
+  if (flatpak_id != NULL)
+    home_realpath = realpath (g_get_home_dir (), NULL);
+
   if (launcher_api.service_bus_name != NULL && opt_socket != NULL)
     {
       glnx_throw (error, "--bus-name and --socket cannot both be used");
@@ -737,6 +833,20 @@ main (int argc,
     {
       glnx_throw (error,
                   "--terminate cannot be used with Flatpak services");
+      goto out;
+    }
+
+  if (api != &subsandbox_api && opt_app_path != NULL)
+    {
+      glnx_throw (error,
+                  "--app-path can only be used with a Flatpak subsandbox");
+      goto out;
+    }
+
+  if (api != &subsandbox_api && opt_usr_path != NULL)
+    {
+      glnx_throw (error,
+                  "--usr-path can only be used with a Flatpak subsandbox");
       goto out;
     }
 
@@ -953,6 +1063,68 @@ main (int argc,
 
   g_variant_builder_init (&options_builder, G_VARIANT_TYPE ("a{sv}"));
 
+  if (opt_app_path != NULL)
+    {
+      gint32 handle;
+
+      g_debug ("Using \"%s\" as /app instead of runtime", opt_app_path);
+
+      g_assert (api == &subsandbox_api);
+
+      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") == NULL)
+        {
+          glnx_throw (error,
+                      "--app-path requires an experimental branch of Flatpak");
+          goto out;
+        }
+
+      check_portal_version ("app-path", 6);
+
+      if (opt_app_path[0] == '\0')
+        {
+          /* Empty path is special-cased to mean an empty directory */
+          spawn_flags |= FLATPAK_SPAWN_FLAGS_EMPTY_APP;
+        }
+      else
+        {
+          handle = path_to_handle (fd_list, opt_app_path, home_realpath,
+                                   flatpak_id, error);
+
+          if (handle < 0)
+            goto out;
+
+          g_variant_builder_add (&options_builder, "{s@v}", "app-fd",
+                                 g_variant_new_variant (g_variant_new_handle (handle)));
+        }
+    }
+
+  if (opt_usr_path != NULL)
+    {
+      gint32 handle;
+
+      g_debug ("Using %s as /usr instead of runtime", opt_usr_path);
+
+      g_assert (api == &subsandbox_api);
+
+      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") == NULL)
+        {
+          glnx_throw (error,
+                      "--usr-path requires an experimental branch of Flatpak");
+          goto out;
+        }
+
+      check_portal_version ("usr-path", 6);
+
+      handle = path_to_handle (fd_list, opt_usr_path, home_realpath,
+                               flatpak_id, error);
+
+      if (handle < 0)
+        goto out;
+
+      g_variant_builder_add (&options_builder, "{s@v}", "usr-fd",
+                             g_variant_new_variant (g_variant_new_handle (handle)));
+    }
+
   if (opt_terminate)
     {
       g_assert (api == &launcher_api);
@@ -1113,10 +1285,12 @@ out:
     g_source_remove (signal_source);
 
   g_strfreev (forward_fds);
+  g_free (opt_app_path);
   g_free (opt_directory);
   g_free (opt_socket);
   g_hash_table_unref (opt_env);
   g_hash_table_unref (opt_unsetenv);
+  g_free (opt_usr_path);
   global_original_environ = NULL;
 
   g_debug ("Exiting with status %d", launch_exit_status);

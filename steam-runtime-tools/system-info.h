@@ -82,6 +82,7 @@ typedef enum
  * @SRT_CONTAINER_TYPE_PRESSURE_VESSEL: Running in a Steam Runtime container
  *  using pressure-vessel
  * @SRT_CONTAINER_TYPE_DOCKER: Running in a Docker container
+ * @SRT_CONTAINER_TYPE_PODMAN: Running in a Podman container
  *
  * A type of container.
  */
@@ -91,6 +92,7 @@ typedef enum
   SRT_CONTAINER_TYPE_FLATPAK,
   SRT_CONTAINER_TYPE_PRESSURE_VESSEL,
   SRT_CONTAINER_TYPE_DOCKER,
+  SRT_CONTAINER_TYPE_PODMAN,
   SRT_CONTAINER_TYPE_UNKNOWN = -1
 } SrtContainerType;
 

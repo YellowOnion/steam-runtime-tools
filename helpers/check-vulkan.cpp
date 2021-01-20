@@ -277,7 +277,7 @@ private:
           throw std::runtime_error("Vulkan not supported on given X window");
         }
 
-        VkXcbSurfaceCreateInfoKHR createSurfaceInfo;
+        VkXcbSurfaceCreateInfoKHR createSurfaceInfo = {};
         createSurfaceInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
         createSurfaceInfo.connection = xcb_connection;
         createSurfaceInfo.window = xcb_window;

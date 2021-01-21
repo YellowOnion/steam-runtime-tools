@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2007  OpenedHand Ltd.
  * Copyright (C) 2009  Intel Corp.
- * Copyright © 2019-2020 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -52,4 +52,10 @@ gboolean my_json_object_get_boolean_member_with_default (JsonObject *object,
 gint64 my_json_object_get_int_member_with_default (JsonObject *object,
                                                    const char *member_name,
                                                    gint64 default_value);
+#endif
+
+#if !JSON_CHECK_VERSION(1, 4, 0)
+#define json_from_string(s, e) my_json_from_string(s, e)
+JsonNode *my_json_from_string (const char  *str,
+                               GError     **error);
 #endif

@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2007  OpenedHand Ltd.
  * Copyright (C) 2009  Intel Corp.
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2021 Collabora Ltd.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -127,5 +127,53 @@ my_json_object_get_int_member_with_default (JsonObject *object,
   g_return_val_if_fail (JSON_NODE_TYPE (node) == JSON_NODE_VALUE, default_value);
 
   return json_node_get_int (node);
+}
+#endif
+
+#if !JSON_CHECK_VERSION(1, 4, 0)
+/* json_from_string() was introduced from json-glib 1.2.0, but since
+ * version 1.4.0 its handling of an empty @str changed. In 1.2.0 if you
+ * provided an empty @str, you would face an assertion error. Instead,
+ * in 1.4.0 its behaviour changed and now it simply returns an empty JsonNode
+ * without setting @error. For this reason we override our backported
+ * json_from_string() everytime the json-glib version is older than 1.4.0 */
+
+/**
+ * json_from_string:
+ * @str: a valid UTF-8 string containing JSON data
+ * @error: return location for a #GError
+ *
+ * Parses the string in @str and returns a #JsonNode representing
+ * the JSON tree. If @str is empty, this function will return %NULL.
+ *
+ * In case of parsing error, this function returns %NULL and sets
+ * @error appropriately.
+ *
+ * Returns: (transfer full) (nullable): a #JsonNode, or %NULL
+ */
+JsonNode *
+my_json_from_string (const char *str,
+                     GError **error)
+{
+  JsonParser *parser;
+  JsonNode *root;
+  JsonNode *retval = NULL;
+
+  g_return_val_if_fail (str != NULL, NULL);
+
+  parser = json_parser_new ();
+  if (!json_parser_load_from_data (parser, str, -1, error))
+    {
+      g_object_unref (parser);
+      return NULL;
+    }
+
+  root = json_parser_get_root (parser);
+  if (root != NULL)
+    retval = json_node_copy (root);
+
+  g_object_unref (parser);
+
+  return retval;
 }
 #endif

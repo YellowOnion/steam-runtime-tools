@@ -51,7 +51,7 @@ tests = [
 if get_option('bin')
   tests += [
     {'name': 'check-requirements-cli'},
-    {'name': 'system-info-cli'},
+    {'name': 'system-info-cli', 'static': true},
   ]
 endif
 

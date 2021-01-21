@@ -347,19 +347,17 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
 }
 
 /*
- * @parser: The JsonParser to process the wflinfo results from.
+ * @node: The JsonNode to process the wflinfo results from.
  * @version_string: (out) (transfer none) (not optional):
  * @renderer_string: (out) (transfer none) (not optional):
  */
 static SrtGraphicsIssues
-_srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gchar **renderer_string)
+_srt_process_wflinfo (JsonNode *node, const gchar **version_string, const gchar **renderer_string)
 {
   g_return_val_if_fail (version_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
-
-  JsonNode *node = json_parser_get_root (parser);
 
   if (node == NULL)
     {
@@ -404,18 +402,17 @@ _srt_process_wflinfo (JsonParser *parser, const gchar **version_string, const gc
 }
 
 /*
- * @parser: The JsonParser to process the vulkaninfo results from.
+ * @node: The JsonNode to process the vulkaninfo results from.
  * @new_version_string: (out) (transfer full) (not optional):
  * @renderer_string: (out) (transfer none) (not optional):
  */
 static SrtGraphicsIssues
-_srt_process_vulkaninfo (JsonParser *parser, gchar **new_version_string, const gchar **renderer_string)
+_srt_process_vulkaninfo (JsonNode *node, gchar **new_version_string, const gchar **renderer_string)
 {
   g_return_val_if_fail (new_version_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
 
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
-  JsonNode *node = json_parser_get_root (parser);
 
   if (node == NULL)
     {
@@ -1000,7 +997,7 @@ _srt_check_graphics (gchar **envp,
   int wait_status = -1;
   int exit_status = -1;
   int terminating_signal = 0;
-  JsonParser *parser = NULL;
+  g_autoptr(JsonNode) node = NULL;
   const gchar *version_string = NULL;
   gchar *new_version_string = NULL;
   const gchar *renderer_string = NULL;
@@ -1094,13 +1091,14 @@ _srt_check_graphics (gchar **envp,
       case SRT_RENDERING_INTERFACE_GL:
       case SRT_RENDERING_INTERFACE_GLESV2:
       case SRT_RENDERING_INTERFACE_VULKAN:
-        /* We can't use `json_from_string()` directly because we are targeting an
-         * older json-glib version */
-        parser = json_parser_new ();
 
-        if (!json_parser_load_from_data (parser, output, -1, &error))
+        node = json_from_string (output, &error);
+        if (node == NULL)
           {
-            g_debug ("The helper output is not a valid JSON: %s", error->message);
+            if (error == NULL)
+              g_debug ("The helper output is empty");
+            else
+              g_debug ("The helper output is not a valid JSON: %s", error->message);
             issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
 
             // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
@@ -1131,7 +1129,7 @@ _srt_check_graphics (gchar **envp,
     {
       case SRT_RENDERING_INTERFACE_GL:
       case SRT_RENDERING_INTERFACE_GLESV2:
-        issues |= _srt_process_wflinfo (parser, &version_string, &renderer_string);
+        issues |= _srt_process_wflinfo (node, &version_string, &renderer_string);
 
         if (issues != SRT_GRAPHICS_ISSUES_NONE)
           {
@@ -1195,7 +1193,7 @@ _srt_check_graphics (gchar **envp,
         break;
 
       case SRT_RENDERING_INTERFACE_VULKAN:
-        issues |= _srt_process_vulkaninfo (parser, &new_version_string, &renderer_string);
+        issues |= _srt_process_vulkaninfo (node, &new_version_string, &renderer_string);
         if (new_version_string != NULL)
           {
             version_string = new_version_string;
@@ -1263,9 +1261,6 @@ out:
                                       child_stderr,
                                       exit_status,
                                       terminating_signal);
-
-  if (parser != NULL)
-    g_object_unref (parser);
 
   g_free (new_version_string);
   g_clear_pointer (&argv, g_ptr_array_unref);

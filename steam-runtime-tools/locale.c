@@ -212,8 +212,7 @@ _srt_check_locale (gchar **envp,
 {
   GPtrArray *argv = NULL;
   gchar *output = NULL;
-  JsonParser *parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *object = NULL;
   SrtLocale *ret = NULL;
   GStrv my_environ = NULL;
@@ -286,17 +285,13 @@ _srt_check_locale (gchar **envp,
       goto out;
     }
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-
-  if (!json_parser_load_from_data (parser, output, -1, error))
+  node = json_from_string (output, error);
+  if (node == NULL)
     {
       g_debug ("-> invalid JSON");
       goto out;
     }
 
-  node = json_parser_get_root (parser);
   object = json_node_get_object (node);
 
   if (exit_status == 1)
@@ -349,7 +344,6 @@ out:
       (*error)->code = SRT_LOCALE_ERROR_INTERNAL_ERROR;
     }
 
-  g_clear_object (&parser);
   g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (output);
   g_free (filtered_preload);

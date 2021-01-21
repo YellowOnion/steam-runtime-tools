@@ -94,8 +94,7 @@ libraries_presence (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
   JsonObject *json_graphics;
@@ -123,13 +122,9 @@ libraries_presence (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
@@ -230,8 +225,7 @@ libraries_missing (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
   g_autoptr(GError) error = NULL;
@@ -258,13 +252,9 @@ libraries_missing (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
@@ -338,8 +328,7 @@ libraries_presence_verbose (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
   g_autoptr(GError) error = NULL;
@@ -369,13 +358,9 @@ libraries_presence_verbose (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
@@ -416,8 +401,7 @@ no_arguments (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
   g_autoptr(GError) error = NULL;
@@ -440,13 +424,9 @@ no_arguments (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
@@ -479,8 +459,7 @@ steam_presence (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_sub_object;
   JsonArray *array;
@@ -519,13 +498,9 @@ steam_presence (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
@@ -586,8 +561,7 @@ steam_issues (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_sub_object;
   JsonArray *array;
@@ -623,13 +597,9 @@ steam_issues (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
@@ -839,8 +809,7 @@ test_unblocks_sigchld (Fixture *f,
 {
   gboolean result;
   int exit_status = -1;
-  g_autoptr(JsonParser) parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonObject *json_arch;
   g_autoptr(GError) error = NULL;
@@ -877,11 +846,9 @@ test_unblocks_sigchld (Fixture *f,
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_nonnull (output);
 
-  parser = json_parser_new ();
-  result = json_parser_load_from_data (parser, output, -1, &error);
+  node = json_from_string (output, &error);
   g_assert_no_error (error);
-  g_assert_true (result);
-  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));

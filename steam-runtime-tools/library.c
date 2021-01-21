@@ -638,8 +638,7 @@ _srt_check_library_presence (const char *helpers_path,
   int wait_status = -1;
   int exit_status = -1;
   int terminating_signal = 0;
-  JsonParser *parser = NULL;
-  JsonNode *node = NULL;
+  g_autoptr(JsonNode) node = NULL;
   JsonObject *json;
   JsonArray *missing_array = NULL;
   JsonArray *misversioned_array = NULL;
@@ -757,18 +756,14 @@ _srt_check_library_presence (const char *helpers_path,
       exit_status = 0;
     }
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-
-  if (!json_parser_load_from_data (parser, output, -1, &error))
+  node = json_from_string (output, &error);
+  if (node == NULL)
     {
-      g_debug ("The helper output is not a valid JSON: %s", error->message);
+      g_debug ("The helper output is not a valid JSON: %s", error == NULL ? "" : error->message);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
-  node = json_parser_get_root (parser);
   json = json_node_get_object (node);
   if (!json_object_has_member (json, requested_name))
     {
@@ -839,9 +834,6 @@ out:
                                           real_soname,
                                           exit_status,
                                           terminating_signal);
-
-  if (parser != NULL)
-    g_object_unref (parser);
 
   g_strfreev (my_environ);
   g_strfreev (missing_symbols);

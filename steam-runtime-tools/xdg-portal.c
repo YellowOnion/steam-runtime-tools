@@ -508,8 +508,7 @@ _srt_check_xdg_portals (gchar **envp,
   JsonObject *object = NULL;
   JsonObject *interfaces_object = NULL;
   JsonObject *backends_object = NULL;
-  JsonNode *node = NULL;
-  g_autoptr(JsonParser) parser = NULL;
+  g_autoptr(JsonNode) node = NULL;
   g_autoptr(GList) interfaces_members = NULL;
   g_autoptr(GList) backends_members = NULL;
   g_autoptr(GPtrArray) backends = g_ptr_array_new_full (2, g_object_unref);
@@ -591,27 +590,16 @@ _srt_check_xdg_portals (gchar **envp,
       return issues;
     }
 
-  /* We can't use `json_from_string()` directly because we are targeting an
-   * older json-glib version */
-  parser = json_parser_new ();
-
-  if (!json_parser_load_from_data (parser, output, -1, &local_error))
-    {
-      g_debug ("The helper output is not a valid JSON: %s", local_error->message);
-      issues |= SRT_XDG_PORTAL_ISSUES_UNKNOWN;
-      if (details_out != NULL)
-        *details_out = _srt_xdg_portal_new (local_error->message, issues, NULL, NULL);
-      return issues;
-    }
-
-  node = json_parser_get_root (parser);
+  node = json_from_string (output, &local_error);
 
   if (node == NULL || !JSON_NODE_HOLDS_OBJECT (node))
     {
       g_debug ("The helper output is not a JSON object");
       issues |= SRT_XDG_PORTAL_ISSUES_UNKNOWN;
       if (details_out != NULL)
-        *details_out = _srt_xdg_portal_new ("Helper output is not a JSON object",
+        *details_out = _srt_xdg_portal_new (local_error == NULL ?
+                                              "Helper output is not a JSON object" :
+                                              local_error->message,
                                             issues, NULL, NULL);
       return issues;
     }

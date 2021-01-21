@@ -156,6 +156,8 @@ _srt_check_not_setuid (void)
   MULTIARCH_LIBDIR "/steam-runtime-tools-" _SRT_API_MAJOR
 #define PKGLIBEXECDIR \
   "/libexec/steam-runtime-tools-" _SRT_API_MAJOR
+#define INSTALLED_TESTS_PKGLIBEXECDIR \
+  "/libexec/installed-tests/steam-runtime-tools-" _SRT_API_MAJOR
 
 /**
  * _srt_process_timeout_wait_status:
@@ -263,6 +265,8 @@ _srt_find_myself (const char **helpers_path_out,
     dir[strlen (dir) - strlen (MULTIARCH_LIBDIR)] = '\0';
   else if (g_str_has_suffix (dir, PKGLIBEXECDIR))
     dir[strlen (dir) - strlen (PKGLIBEXECDIR)] = '\0';
+  else if (g_str_has_suffix (dir, INSTALLED_TESTS_PKGLIBEXECDIR))
+    dir[strlen (dir) - strlen (INSTALLED_TESTS_PKGLIBEXECDIR)] = '\0';
   else if (g_str_has_suffix (dir, "/libexec"))
     dir[strlen (dir) - strlen ("/libexec")] = '\0';
   else if (g_str_has_suffix (dir, "/lib64"))

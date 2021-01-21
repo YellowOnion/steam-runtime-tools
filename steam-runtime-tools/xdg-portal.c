@@ -611,7 +611,8 @@ _srt_check_xdg_portals (gchar **envp,
       g_debug ("The helper output is not a JSON object");
       issues |= SRT_XDG_PORTAL_ISSUES_UNKNOWN;
       if (details_out != NULL)
-        *details_out = _srt_xdg_portal_new (local_error->message, issues, NULL, NULL);
+        *details_out = _srt_xdg_portal_new ("Helper output is not a JSON object",
+                                            issues, NULL, NULL);
       return issues;
     }
 
@@ -622,7 +623,8 @@ _srt_check_xdg_portals (gchar **envp,
       g_debug ("The helper output JSON is malformed or incomplete");
       issues |= SRT_XDG_PORTAL_ISSUES_UNKNOWN;
       if (details_out != NULL)
-        *details_out = _srt_xdg_portal_new (local_error->message, issues, NULL, NULL);
+        *details_out = _srt_xdg_portal_new ("Helper output does not contain 'interfaces'",
+                                            issues, NULL, NULL);
       return issues;
     }
 

@@ -1372,11 +1372,20 @@ int main (int argc,
   for (i = 0; i < physical_device_count; i++)
     print_physical_device_info (physical_devices[i], stderr);
 
-  result = draw_test_triangle (vk_instance, physical_devices[0], error);
-  print_draw_test_result (0, result, local_error, stderr);
+  for (i = 0; i < physical_device_count; i++)
+    {
+      result = draw_test_triangle (vk_instance, physical_devices[i], error);
+      print_draw_test_result (i, result, local_error, stderr);
 
-  if (result)
-    ret = EXIT_SUCCESS;
+      if (local_error != NULL)
+        g_printerr ("%s", local_error->message);
+
+      g_clear_error (error);
+
+      /* Return exit success if we are able to draw with at least one device */
+      if (result)
+        ret = EXIT_SUCCESS;
+    }
 
 out:
   if (local_error != NULL)

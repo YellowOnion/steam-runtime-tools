@@ -3370,11 +3370,24 @@ ensure_driver_environment (SrtSystemInfo *self)
       gchar **env_list = self->env;
       /* This is the list of well-known driver-selection environment variables,
        * plus __GLX_FORCE_VENDOR_LIBRARY_%d that will be searched with a regex */
-      static const gchar * const drivers_env[] = {"VDPAU_DRIVER",
-                                                  "MESA_LOADER_DRIVER_OVERRIDE",
-                                                  "LIBVA_DRIVER_NAME",
-                                                  "__GLX_VENDOR_LIBRARY_NAME",
-                                                  NULL};
+      static const gchar * const drivers_env[] =
+      {
+        "DRI_PRIME",
+        "EGL_PLATFORM",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "LIBVA_DRIVER_NAME",
+        "MESA_LOADER_DRIVER_OVERRIDE",
+        "MESA_VK_DEVICE_SELECT",
+        "VDPAU_DRIVER",
+        "VK_ICD_FILENAMES",
+        "VK_LAYER_PATH",
+        "__EGL_VENDOR_LIBRARY_DIRS",
+        "__EGL_VENDOR_LIBRARY_FILENAMES",
+        "__GLX_VENDOR_LIBRARY_NAME",
+        "__NV_PRIME_RENDER_OFFLOAD",
+        NULL
+      };
 
       builder = g_ptr_array_new_with_free_func (g_free);
 

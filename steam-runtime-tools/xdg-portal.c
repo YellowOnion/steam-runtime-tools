@@ -710,7 +710,7 @@ _srt_xdg_portal_get_info_from_report (JsonObject *json_obj)
   g_autoptr(GPtrArray) backends = g_ptr_array_new_full (2, g_object_unref);
   g_autoptr(GPtrArray) interfaces = g_ptr_array_new_full (2, g_object_unref);
   SrtXdgPortalIssues issues = SRT_XDG_PORTAL_ISSUES_NONE;
-  const gchar *messages = NULL;
+  g_autofree gchar *messages = NULL;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
 
@@ -727,7 +727,7 @@ _srt_xdg_portal_get_info_from_report (JsonObject *json_obj)
                                           "issues",
                                           SRT_XDG_PORTAL_ISSUES_UNKNOWN);
 
-  messages = json_object_get_string_member_with_default (json_portals_obj, "messages", NULL);
+  messages = _srt_json_object_dup_array_of_lines_member (json_portals_obj, "messages");
 
   if (!json_object_has_member (json_portals_obj, "details"))
     return _srt_xdg_portal_new (messages, issues, NULL, NULL);

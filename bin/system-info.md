@@ -431,6 +431,9 @@ keys:
             symbol exists with an unexpected version or no version, they
             are listed here.
 
+        **messages**
+        :   Human-readable array of diagnostic messages.
+
     **graphics-details**
     :   An object representing graphics stacks. The keys are strings
         such as **glx/gl**, **egl_x11/glesv2** or **x11/vulkan**
@@ -497,6 +500,9 @@ keys:
             **cannot-draw**
             :   The test to see if drawing works for the given graphics mode
                 had an error and was unable to draw.
+
+        **messages**
+        :   Human-readable array of diagnostic messages.
 
     **dri_drivers**
     :   An array of objects describing the Mesa DRI driver modules that have been
@@ -777,7 +783,7 @@ keys:
         :   There isn't a working XDG portal implementation.
 
     **messages**
-    :   Human-readable string with error messages about the XDG portal
+    :   Human-readable array of lines with error messages about the XDG portal
         support. This element will not be printed if there aren't any error
         messages.
 

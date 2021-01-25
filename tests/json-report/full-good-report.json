@@ -61,7 +61,10 @@
       },
       "graphics-details" : {
         "x11/vulkan" : {
-          "messages" : "ERROR: [Loader Message] Code 0 : /usr/lib/amdvlk64.so: wrong ELF class: ELFCLASS64\nCannot create Vulkan instance.\n",
+          "messages" : [
+            "ERROR: [Loader Message] Code 0 : /usr/lib/amdvlk64.so: wrong ELF class: ELFCLASS64",
+            "Cannot create Vulkan instance."
+          ],
           "renderer" : null,
           "version" : null,
           "issues" : [
@@ -146,7 +149,11 @@
           "version" : null
         },
         "glx/gl" : {
-          "messages" : "libGL: Can't open configuration file /etc/drirc: No such file or directory.\n/usr/share/libdrm/amdgpu.ids version: 1.0.0\nlibGL: Using DRI3 for screen 0\n",
+          "messages" : [
+            "libGL: Can't open configuration file /etc/drirc: No such file or directory.",
+            "/usr/share/libdrm/amdgpu.ids version: 1.0.0",
+            "libGL: Using DRI3 for screen 0"
+          ],
           "renderer" : "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
           "version" : "4.6 (Compatibility Profile) Mesa 20.0.5",
           "library-vendor" : "glvnd",

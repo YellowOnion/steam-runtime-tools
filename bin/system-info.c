@@ -278,10 +278,7 @@ print_libraries_details (JsonBuilder *builder,
           messages = srt_library_get_messages (l->data);
 
           if (messages != NULL)
-            {
-              json_builder_set_member_name (builder, "messages");
-              json_builder_add_string_value (builder, messages);
-            }
+            _srt_json_builder_add_array_of_lines (builder, "messages", messages);
 
           json_builder_set_member_name (builder, "soname");
           json_builder_add_string_value (builder, soname);
@@ -348,10 +345,7 @@ print_graphics_details(JsonBuilder *builder,
       messages = srt_graphics_get_messages (g->data);
 
       if (messages != NULL)
-        {
-          json_builder_set_member_name (builder, "messages");
-          json_builder_add_string_value (builder, messages);
-        }
+        _srt_json_builder_add_array_of_lines (builder, "messages", messages);
 
       json_builder_set_member_name (builder, "renderer");
       json_builder_add_string_value (builder, srt_graphics_get_renderer_string (g->data));
@@ -1312,10 +1306,7 @@ main (int argc,
       json_builder_end_array (builder);
 
       if (xdg_portal_messages != NULL)
-        {
-          json_builder_set_member_name (builder, "messages");
-          json_builder_add_string_value (builder, xdg_portal_messages);
-        }
+        _srt_json_builder_add_array_of_lines (builder, "messages", xdg_portal_messages);
     }
   json_builder_end_object (builder);
 

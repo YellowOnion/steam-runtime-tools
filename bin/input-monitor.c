@@ -30,6 +30,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/json-glib-backports-internal.h"
+#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <stdio.h>
@@ -104,44 +105,6 @@ print_json (JsonBuilder *builder)
 
   if (fputs ("\n", original_stdout) < 0)
     g_warning ("Unable to write final newline: %s", g_strerror (errno));
-}
-
-static void
-add_uevent_member (JsonBuilder *builder,
-                   const char *name,
-                   const char *value)
-{
-  const char *start = value;
-  const char *end;
-
-  /* value is conceptually a single string, but we
-   * present it as an array of lines here, because that's
-   * a lot easier to read! */
-  json_builder_set_member_name (builder, name);
-  json_builder_begin_array (builder);
-
-  while (*start != '\0')
-    {
-      g_autofree gchar *valid = NULL;
-
-      while (*start == '\n')
-        start++;
-
-      if (*start == '\0')
-        break;
-
-      end = strchrnul (start, '\n');
-
-      valid = g_utf8_make_valid (start, end - start);
-      json_builder_add_string_value (builder, valid);
-
-      if (*end == '\0')
-        break;
-
-      start = end + 1;
-    }
-
-  json_builder_end_array (builder);
 }
 
 static void
@@ -576,7 +539,7 @@ added (SrtInputDeviceMonitor *monitor,
               g_autofree gchar *uevent = srt_input_device_dup_uevent (dev);
 
               if (uevent != NULL)
-                add_uevent_member (builder, "uevent", uevent);
+                _srt_json_builder_add_array_of_lines (builder, "uevent", uevent);
             }
 
           sys_path = srt_input_device_get_hid_sys_path (dev);
@@ -628,7 +591,7 @@ added (SrtInputDeviceMonitor *monitor,
                   json_builder_add_string_value (builder, id.phys);
 
                   if (uevent != NULL)
-                    add_uevent_member (builder, "uevent", uevent);
+                    _srt_json_builder_add_array_of_lines (builder, "uevent", uevent);
                 }
 
               json_builder_end_object (builder);
@@ -686,7 +649,7 @@ added (SrtInputDeviceMonitor *monitor,
                   json_builder_add_string_value (builder, id.phys);
 
                   if (uevent != NULL)
-                    add_uevent_member (builder, "uevent", uevent);
+                    _srt_json_builder_add_array_of_lines (builder, "uevent", uevent);
                 }
 
               json_builder_end_object (builder);
@@ -739,7 +702,7 @@ added (SrtInputDeviceMonitor *monitor,
                   g_autofree gchar *uevent = srt_input_device_dup_usb_device_uevent (dev);
 
                   if (uevent != NULL)
-                    add_uevent_member (builder, "uevent", uevent);
+                    _srt_json_builder_add_array_of_lines (builder, "uevent", uevent);
                 }
 
               json_builder_end_object (builder);

@@ -78,17 +78,15 @@ executable(
 
 executable(
   multiarch + '-check-vulkan',
-  'check-vulkan.cpp',
-  dependencies : [vulkan, xcb],
+  'check-vulkan.c',
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib, vulkan, xcb],
   include_directories : project_include_dirs,
   install : true,
-  install_dir : join_paths(
-    get_option('libexecdir'),
-    'steam-runtime-tools-' + api_major,
-  )
-  # Deliberately no RPATH/RUNPATH here: we want to determine whether
-  # a game with no special linking would be able to use libvulkan
-  # and its associated drivers successfully.
+  install_dir : pkglibexecdir,
+  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
+  # LD_LIBRARY_PATH even if set
+  build_rpath : pkglibexec_rpath,
+  install_rpath : pkglibexec_rpath,
 )
 
 foreach shader : ['frag', 'vert']

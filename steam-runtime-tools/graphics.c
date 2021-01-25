@@ -1498,7 +1498,7 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
       graphics_members = json_object_get_members (json_graphics_obj);
       for (GList *l = graphics_members; l != NULL; l = l->next)
         {
-          const gchar *messages = NULL;
+          g_autofree gchar *messages = NULL;
           const gchar *renderer = NULL;
           const gchar *version = NULL;
           int exit_status;
@@ -1545,8 +1545,7 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
               continue;
             }
 
-          messages = json_object_get_string_member_with_default (json_stack_obj, "messages",
-                                                                 NULL);
+          messages = _srt_json_object_dup_array_of_lines_member (json_stack_obj, "messages");
           renderer = json_object_get_string_member_with_default (json_stack_obj, "renderer",
                                                                  NULL);
           version = json_object_get_string_member_with_default (json_stack_obj, "version",

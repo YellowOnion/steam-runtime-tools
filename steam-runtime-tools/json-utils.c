@@ -148,8 +148,12 @@ _srt_json_object_dup_strv_member (JsonObject *json_obj,
  *
  * If @json_obj has a member named @array_member and it is an array
  * of strings, concatenate the strings (adding a trailing newline to
- * each one if not already present) and return them. Otherwise,
- * return %NULL.
+ * each one if not already present) and return them.
+ *
+ * For compatibility with the old representation of diagnostic messages,
+ * if @array_member exists but is a single string, return it.
+ *
+ * Otherwise, return %NULL.
  *
  * Returns: (transfer full) (element-type utf8) (nullable):
  *  A string, or %NULL if not found. Free with g_free().
@@ -168,7 +172,13 @@ _srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
 
   arr_node = json_object_get_member (json_obj, array_member);
 
-  if (arr_node == NULL || !JSON_NODE_HOLDS_ARRAY (arr_node))
+  if (arr_node == NULL || JSON_NODE_HOLDS_NULL (arr_node))
+    return NULL;
+
+  if (JSON_NODE_HOLDS_VALUE (arr_node))
+    return json_node_dup_string (arr_node);
+
+  if (!JSON_NODE_HOLDS_ARRAY (arr_node))
     return NULL;
 
   array = json_node_get_array (arr_node);
@@ -191,6 +201,77 @@ _srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
     }
 
   return g_string_free (g_steal_pointer (&ret), FALSE);
+}
+
+/**
+ * _srt_json_builder_add_array_of_lines:
+ * @builder: (not nullable): A JSON builder to which the provided @value
+ *  will be added
+ * @name: (not nullable): The array member name to use
+ * @value: (nullable): String to be split into an array of lines, or %NULL
+ *
+ * Write an array of lines into a JSON object.
+ *
+ * A non-%NULL @value will be split into lines, removing any trailing
+ * newlines, so
+ *
+ * |[
+ * if (g_file_get_contents ("/etc/passwd", &contents, ...))
+ *   _srt_json_builder_add_array_of_lines (builder, "/etc/passwd", contents);
+ * ]|
+ *
+ * might produce
+ *
+ * |[
+ * "/etc/passwd" : [
+ *   "root:x:0:0:root:/root:/bin/bash",
+ *   ...,
+ *   "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin",
+ * ],
+ * ]|
+ *
+ * A %NULL @value will be emitted as the special JSON constant `null`.
+ */
+void
+_srt_json_builder_add_array_of_lines (JsonBuilder *builder,
+                                      const char *name,
+                                      const char *value)
+{
+  const char *start = value;
+  const char *end;
+
+  json_builder_set_member_name (builder, name);
+
+  if (value == NULL)
+    {
+      json_builder_add_string_value (builder, NULL);
+      return;
+    }
+
+  json_builder_begin_array (builder);
+
+  while (*start != '\0')
+    {
+      g_autofree gchar *valid = NULL;
+
+      while (*start == '\n')
+        start++;
+
+      if (*start == '\0')
+        break;
+
+      end = strchrnul (start, '\n');
+
+      valid = g_utf8_make_valid (start, end - start);
+      json_builder_add_string_value (builder, valid);
+
+      if (*end == '\0')
+        break;
+
+      start = end + 1;
+    }
+
+  json_builder_end_array (builder);
 }
 
 /**

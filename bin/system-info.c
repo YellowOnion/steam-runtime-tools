@@ -25,93 +25,7 @@
 
 /*
  * Output basic information about the system on which the tool is run.
- * The output is a JSON object with the following keys:
- *
- * can-write-uinput:
- *   The values are boolean: true if we can write to `/dev/uninput`,
- *   false if we are not able to do it.
- *
- * architectures:
- *   An object. The keys are multiarch tuples like %SRT_ABI_I386,
- *   as used in Debian and the freedesktop.org SDK runtime.
- *   The values are objects with more details of the architecture:
- *
- *   can-run:
- *     The values are boolean: true if we can definitely run
- *     executables of this architecture, or false if we cannot prove
- *     that we can do so.
- *
- *   library-issues-summary:
- *     A string array listing all the libraries problems that has been found
- *     in the running system. Possible values can be: "cannot-load",
- *     "missing-symbols", "misversioned-symbols" and "internal-error".
- *     If "can-run" for this architecture is false we skip the library check
- *     and this "library-issues-summary" will not be printed at all.
- *
- *   library-details:
- *     An object. The keys are library SONAMEs, such as `libjpeg.so.62`.
- *     The values are objects with more details of the library:
- *
- *     path:
- *       The value is a string representing the full path about where the
- *       @library has been found. The value is `null` if the library is
- *       not available in the system.
- *
- *     messages:
- *       If present, the value is a string containing diagnostic messages
- *       that were encountered when attempting to load the library.
- *       This member will only be available if there were some messages.
- *
- *     issues:
- *       A string array listing all the @library problems that has been
- *       found in the running system. For possible values check
- *       `library-issues-summary`. This object will be available only if
- *       there are some issues.
- *
- *     missing-symbols:
- *       A string array listing all the symbols that were expected to be
- *       provided by @library but were not found. This object will be
- *       available only if there are sone missing symbols.
- *
- *     misversioned-symbols:
- *       A string array listing all the symbols that were expected to be
- *       provided by @library but were available with a different version.
- *       This object will be available only if there are some misversioned
- *       symbols.
- *
- * graphics:
- *   An object. The keys are multiarch tuples like %SRT_ABI_I386,
- *   as used in Debian and the freedesktop.org SDK runtime.
- *   The values are objects with more details of the graphics results:
- *
- * locale-issues:
- *  A string array listing locale-related issues.
- *
- * locales:
- *  An object. The keys are either `<default>` (representing passing
- *  the empty string to `setlocale()`), or locale names that can be
- *  requested with `setlocale()`. They will include at least `C`,
- *  `C.UTF-8`, `en_US.UTF-8` and `<default>`, and may include more
- *  in future versions of steam-runtime-tools. The values are objects
- *  containing either:
- *
- *    error:
- *      A string: The error that was encountered when trying to
- *      set this locale
- *    error-domain:
- *      A string: The GError domain
- *    error-code:
- *      An integer: The GError code
- *
- *  or:
- *
- *    resulting-name:
- *      A string: the locale name as returned by setlocale(), if
- *      different
- *    charset:
- *      A string: the character set
- *    is_utf8:
- *      A boolean: whether the character set is UTF-8
+ * See system-info.md for details.
  */
 
 #include <libglnx.h>
@@ -364,10 +278,7 @@ print_libraries_details (JsonBuilder *builder,
           messages = srt_library_get_messages (l->data);
 
           if (messages != NULL)
-            {
-              json_builder_set_member_name (builder, "messages");
-              json_builder_add_string_value (builder, messages);
-            }
+            _srt_json_builder_add_array_of_lines (builder, "messages", messages);
 
           json_builder_set_member_name (builder, "soname");
           json_builder_add_string_value (builder, soname);
@@ -434,10 +345,7 @@ print_graphics_details(JsonBuilder *builder,
       messages = srt_graphics_get_messages (g->data);
 
       if (messages != NULL)
-        {
-          json_builder_set_member_name (builder, "messages");
-          json_builder_add_string_value (builder, messages);
-        }
+        _srt_json_builder_add_array_of_lines (builder, "messages", messages);
 
       json_builder_set_member_name (builder, "renderer");
       json_builder_add_string_value (builder, srt_graphics_get_renderer_string (g->data));
@@ -1398,10 +1306,7 @@ main (int argc,
       json_builder_end_array (builder);
 
       if (xdg_portal_messages != NULL)
-        {
-          json_builder_set_member_name (builder, "messages");
-          json_builder_add_string_value (builder, xdg_portal_messages);
-        }
+        _srt_json_builder_add_array_of_lines (builder, "messages", xdg_portal_messages);
     }
   json_builder_end_object (builder);
 

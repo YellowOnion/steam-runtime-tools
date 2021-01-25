@@ -79,11 +79,11 @@ executable(
 executable(
   multiarch + '-check-vulkan',
   'check-vulkan.c',
-  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, vulkan, xcb],
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib, vulkan, xcb],
   include_directories : project_include_dirs,
   install : true,
   install_dir : pkglibexecdir,
-  # Use the adjacent libsteam-runtime-tools, ignoring
+  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
   # LD_LIBRARY_PATH even if set
   build_rpath : pkglibexec_rpath,
   install_rpath : pkglibexec_rpath,

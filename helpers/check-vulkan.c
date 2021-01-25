@@ -35,13 +35,16 @@
 
 #include <glib.h>
 #include <gio/gio.h>
+#include <json-glib/json-glib.h>
 
 #include <steam-runtime-tools/glib-backports-internal.h>
+#include <steam-runtime-tools/json-glib-backports-internal.h>
 #include <steam-runtime-tools/utils-internal.h>
 
 static const int WIDTH = 200;
 static const int HEIGHT = 200;
 
+static gboolean opt_pretty_print = FALSE;
 static gboolean opt_print_version = FALSE;
 static gboolean opt_visible = FALSE;
 
@@ -1199,8 +1202,116 @@ out:
   return ret;
 }
 
+static void
+print_json_builder (JsonBuilder *builder,
+                    FILE *original_stdout)
+{
+  g_autoptr(JsonNode) root = NULL;
+  g_autoptr(JsonGenerator) generator = NULL;
+  g_autofree gchar *json = NULL;
+
+  root = json_builder_get_root (builder);
+  generator = json_generator_new ();
+  json_generator_set_pretty (generator, opt_pretty_print);
+  json_generator_set_root (generator, root);
+  json = json_generator_to_data (generator, NULL);
+  if (fputs (json, original_stdout) < 0)
+    g_warning ("Unable to write output: %s", g_strerror (errno));
+
+  if (fputs ("\n", original_stdout) < 0)
+    g_warning ("Unable to write final newline: %s", g_strerror (errno));
+}
+
+static void
+print_physical_device_info (VkPhysicalDevice physical_device,
+                            FILE *original_stdout)
+{
+  g_autoptr(JsonBuilder) builder = NULL;
+  g_autofree gchar *api_version = NULL;
+  g_autofree gchar *driver_version = NULL;
+  g_autofree gchar *vendor_id = NULL;
+  g_autofree gchar *device_id = NULL;
+  VkPhysicalDeviceProperties device_properties;
+
+  builder = json_builder_new ();
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "device-info");
+  json_builder_begin_object (builder);
+
+  vkGetPhysicalDeviceProperties (physical_device, &device_properties);
+
+  json_builder_set_member_name (builder, "device-name");
+  json_builder_add_string_value (builder, device_properties.deviceName);
+
+  json_builder_set_member_name (builder, "device-type");
+  json_builder_add_int_value (builder, device_properties.deviceType);
+
+  json_builder_set_member_name (builder, "api-version");
+  api_version = g_strdup_printf ("%u.%u.%u",
+                                 VK_VERSION_MAJOR (device_properties.apiVersion),
+                                 VK_VERSION_MINOR (device_properties.apiVersion),
+                                 VK_VERSION_PATCH (device_properties.apiVersion));
+  json_builder_add_string_value (builder, api_version);
+
+  json_builder_set_member_name (builder, "driver-version");
+  driver_version = g_strdup_printf ("%u.%u.%u",
+                                    VK_VERSION_MAJOR (device_properties.driverVersion),
+                                    VK_VERSION_MINOR (device_properties.driverVersion),
+                                    VK_VERSION_PATCH (device_properties.driverVersion));
+  json_builder_add_string_value (builder, driver_version);
+
+  json_builder_set_member_name (builder, "vendor-id");
+  vendor_id = g_strdup_printf ("%#x", device_properties.vendorID);
+  json_builder_add_string_value (builder, vendor_id);
+
+  json_builder_set_member_name (builder, "device-id");
+  device_id = g_strdup_printf ("%#x", device_properties.deviceID);
+  json_builder_add_string_value (builder, device_id);
+
+  json_builder_end_object (builder);
+  json_builder_end_object (builder);
+
+  print_json_builder (builder, original_stdout);
+}
+
+static void
+print_draw_test_result (gsize index,
+                        gboolean result,
+                        const GError *error,
+                        FILE *original_stdout)
+{
+  g_autoptr(JsonBuilder) builder = NULL;
+
+  builder = json_builder_new ();
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "test");
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "index");
+  json_builder_add_int_value (builder, index);
+
+  json_builder_set_member_name (builder, "can-draw");
+  json_builder_add_boolean_value (builder, result);
+
+  if (error != NULL)
+    {
+      json_builder_set_member_name (builder, "error-message");
+      json_builder_add_string_value (builder, error->message);
+    }
+
+  json_builder_end_object (builder);
+  json_builder_end_object (builder);
+
+  print_json_builder (builder, original_stdout);
+}
+
 static const GOptionEntry option_entries[] =
 {
+  { "pretty-print", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
+    &opt_pretty_print, "The generated JSON will be pretty printed instead "
+    "of being one object per line", NULL },
   { "version", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_print_version,
     "Print version number and exit", NULL },
   { "visible", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_visible,
@@ -1219,6 +1330,8 @@ int main (int argc,
   uint32_t physical_device_count = 0;
   GError **error = &local_error;
   int ret = EXIT_FAILURE;
+  gboolean result;
+  gsize i;
 
   argv0 = argv[0];
 
@@ -1239,6 +1352,16 @@ int main (int argc,
       return EXIT_SUCCESS;
     }
 
+  /* stdout is reserved for machine-readable output, so avoid having
+   * things like g_debug() pollute it. */
+  original_stdout = _srt_divert_stdout_to_stderr (error);
+
+  if (original_stdout == NULL)
+    {
+      g_printerr ("Unable to divert stdout to stderr: %s", local_error->message);
+      return EXIT_FAILURE;
+    }
+
   if (!create_instance (&vk_instance, error))
     goto out;
 
@@ -1246,10 +1369,14 @@ int main (int argc,
                              error))
     goto out;
 
-  if (!draw_test_triangle (vk_instance, physical_devices[0], error))
-    goto out;
+  for (i = 0; i < physical_device_count; i++)
+    print_physical_device_info (physical_devices[i], original_stdout);
 
-  ret = EXIT_SUCCESS;
+  result = draw_test_triangle (vk_instance, physical_devices[0], error);
+  print_draw_test_result (0, result, local_error, original_stdout);
+
+  if (result)
+    ret = EXIT_SUCCESS;
 
 out:
   if (local_error != NULL)

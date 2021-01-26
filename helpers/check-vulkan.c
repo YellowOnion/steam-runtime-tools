@@ -1370,10 +1370,10 @@ int main (int argc,
     goto out;
 
   for (i = 0; i < physical_device_count; i++)
-    print_physical_device_info (physical_devices[i], original_stdout);
+    print_physical_device_info (physical_devices[i], stderr);
 
   result = draw_test_triangle (vk_instance, physical_devices[0], error);
-  print_draw_test_result (0, result, local_error, original_stdout);
+  print_draw_test_result (0, result, local_error, stderr);
 
   if (result)
     ret = EXIT_SUCCESS;

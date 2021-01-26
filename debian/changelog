@@ -7,12 +7,18 @@ steam-runtime-tools (0.20210114.1) UNRELEASED; urgency=medium
       contains the trademark symbol. (Resolves: #52, steam-runtime#349)
   * system-info: Fix a crash in some unlikely error cases
   * system-info: Refactoring
+  * check-vulkan: Avoid a possible crash
+  * check-vulkan: Convert from C++ to C
+  * check-vulkan: List all Vulkan GPUs
+  * check-vulkan: Improve error messages
 
   [ Simon McVittie ]
+  * system-info: Log more influential environment variables
   * system-info: Add support for reading /run/host/container-manager
   * system-info: Add support for detecting Podman
+  * system-info: Print diagnostic messages as arrays of lines
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 21 Jan 2021 19:22:45 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 26 Jan 2021 12:35:53 +0000
 
 steam-runtime-tools (0.20210114.0) scout; urgency=medium
 

@@ -1,4 +1,4 @@
-# Copyright © 2019 Collabora Ltd.
+# Copyright © 2019-2021 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -23,7 +23,7 @@
 
 project(
   'steam-runtime-tools', 'c', 'cpp',
-  version : '0.20210114.0',
+  version : '0.20210126.0',
   default_options: [
     'c_std=c99',
     'cpp_std=c++11',
@@ -35,7 +35,7 @@ add_languages('cpp')
 
 api_major = '0'
 abi_major = '0'
-abi_minor = '20210114.0'
+abi_minor = '20210126.0'
 
 pkg = import('pkgconfig')
 gnome = import('gnome')

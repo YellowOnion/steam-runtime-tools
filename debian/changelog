@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210114.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210126.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Fix a crash when environment variables carried over
@@ -20,7 +20,7 @@ steam-runtime-tools (0.20210114.1) UNRELEASED; urgency=medium
   * system-info: Temporarily print details of all GPUs as diagnostic
     messages, until we support printing them in a machine-readable way
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 26 Jan 2021 13:19:07 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 26 Jan 2021 13:22:50 +0000
 
 steam-runtime-tools (0.20210114.0) scout; urgency=medium
 

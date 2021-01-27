@@ -1920,6 +1920,40 @@ srt_graphics_get_devices (SrtGraphics *self)
   return g_list_reverse (ret);
 }
 
+static SrtGraphicsIssues
+_srt_get_graphics_issues_from_json_object (JsonObject *json_obj)
+{
+  JsonArray *array;
+  SrtGraphicsIssues graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
+  gsize j;
+
+  /* In graphics, a missing "issues" array means that no issues were found */
+  if (json_object_has_member (json_obj, "issues"))
+    {
+      array = json_object_get_array_member (json_obj, "issues");
+
+      /* We are expecting an array of issues here */
+      if (array == NULL)
+        {
+          g_debug ("'issues' in 'graphics-details' is not an array as expected");
+          graphics_issues |= SRT_GRAPHICS_ISSUES_UNKNOWN;
+        }
+      else
+        {
+          for (j = 0; j < json_array_get_length (array); j++)
+            {
+              const gchar *issue_string = json_array_get_string_element (array, j);
+              if (!srt_add_flag_from_nick (SRT_TYPE_GRAPHICS_ISSUES,
+                                            issue_string,
+                                            &graphics_issues,
+                                            NULL))
+                graphics_issues |= SRT_GRAPHICS_ISSUES_UNKNOWN;
+            }
+        }
+    }
+  return graphics_issues;
+}
+
 /**
  * _srt_graphics_get_from_report:
  * @json_obj: (not nullable): A JSON Object representing an ABI,
@@ -1964,6 +1998,8 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
           SrtGraphicsIssues graphics_issues = SRT_GRAPHICS_ISSUES_NONE;
           SrtWindowSystem window_system = SRT_WINDOW_SYSTEM_X11;
           SrtRenderingInterface rendering_interface = SRT_RENDERING_INTERFACE_GL;
+          g_autoptr(GPtrArray) devices = g_ptr_array_new_with_free_func (g_object_unref);
+          gsize j;
 
           gchar **stack_parts = g_strsplit (l->data, "/", 2);
           if (stack_parts[1] == NULL)
@@ -2007,30 +2043,7 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
           version = json_object_get_string_member_with_default (json_stack_obj, "version",
                                                                 NULL);
 
-          /* In graphics, a missing "issues" array means that no issues were found */
-          if (json_object_has_member (json_stack_obj, "issues"))
-            {
-              array = json_object_get_array_member (json_stack_obj, "issues");
-
-              /* We are expecting an array of issues here */
-              if (array == NULL)
-                {
-                  g_debug ("'issues' in 'graphics-details' is not an array as expected");
-                  graphics_issues |= SRT_GRAPHICS_ISSUES_UNKNOWN;
-                }
-              else
-                {
-                  for (guint j = 0; j < json_array_get_length (array); j++)
-                    {
-                      const gchar *issue_string = json_array_get_string_element (array, j);
-                      if (!srt_add_flag_from_nick (SRT_TYPE_GRAPHICS_ISSUES,
-                                                   issue_string,
-                                                   &graphics_issues,
-                                                   NULL))
-                        graphics_issues |= SRT_GRAPHICS_ISSUES_UNKNOWN;
-                    }
-                }
-            }
+          graphics_issues = _srt_get_graphics_issues_from_json_object (json_stack_obj);
 
           /* A missing exit_status means that its value is the default zero */
           exit_status = json_object_get_int_member_with_default (json_stack_obj, "exit-status", 0);
@@ -2049,13 +2062,75 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
                 library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
             }
 
+          if (json_object_has_member (json_stack_obj, "devices"))
+            {
+              array = json_object_get_array_member (json_stack_obj, "devices");
+              gsize array_size = 0;
+
+              /* We are expecting an array of devices here */
+              if (array == NULL)
+                g_debug ("'devices' in 'graphics-details' is not an array as expected");
+              else
+                array_size =  json_array_get_length (array);
+
+              for (j = 0; j < array_size; j++)
+                {
+                  SrtGraphicsDevice *device = NULL;
+                  const gchar *name;
+                  const gchar *api_version;
+                  const gchar *driver_version;
+                  const gchar *vendor_id;
+                  const gchar *device_id;
+                  g_autofree gchar *dev_messages = NULL;
+                  SrtVkPhysicalDeviceType type = SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER;
+                  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+
+                  JsonObject *device_obj = json_array_get_object_element (array, j);
+                  name = json_object_get_string_member_with_default (device_obj, "name",
+                                                                     NULL);
+                  api_version = json_object_get_string_member_with_default (device_obj,
+                                                                            "api-version",
+                                                                            NULL);
+                  driver_version = json_object_get_string_member_with_default (device_obj,
+                                                                               "driver-version",
+                                                                               NULL);
+                  vendor_id = json_object_get_string_member_with_default (device_obj,
+                                                                          "vendor-id",
+                                                                          NULL);
+                  device_id = json_object_get_string_member_with_default (device_obj,
+                                                                          "device-id",
+                                                                          NULL);
+
+                  if (json_object_has_member (device_obj, "type"))
+                    {
+                      const gchar *type_str = json_object_get_string_member (device_obj, "type");
+                      G_STATIC_ASSERT (sizeof (SrtVkPhysicalDeviceType) == sizeof (gint));
+                      if (!srt_enum_from_nick (SRT_TYPE_VK_PHYSICAL_DEVICE_TYPE,
+                                              type_str,
+                                              (gint *) &type,
+                                              NULL))
+                        type = SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER;
+                    }
+
+                  issues = _srt_get_graphics_issues_from_json_object (device_obj);
+                  dev_messages = _srt_json_object_dup_array_of_lines_member (device_obj,
+                                                                             "messages");
+
+                  device = _srt_graphics_device_new (name, api_version, driver_version,
+                                                     vendor_id, device_id, type,
+                                                     issues);
+                  _srt_graphics_device_set_messages (device, dev_messages);
+                  g_ptr_array_add (devices, device);
+                }
+            }
+
           graphics = _srt_graphics_new (multiarch_tuple,
                                         window_system,
                                         rendering_interface,
                                         library_vendor,
                                         renderer,
                                         version,
-                                        NULL,  //TODO
+                                        devices,
                                         graphics_issues,
                                         messages,
                                         exit_status,

@@ -140,7 +140,16 @@
         "x11/vulkan" : {
           "renderer" : "AMD Radeon RX 5700 XT",
           "version" : "1.2.136 (device 1002:731f) (driver 2.0.140)",
-          "devices" : []
+          "devices" : [
+            {
+              "name" : "AMD Radeon RX 5700 XT",
+              "api-version" : "1.2.136",
+              "driver-version" : "2.0.140",
+              "vendor-id" : "0x1002",
+              "device-id" : "0x731f",
+              "type" : "discrete-gpu"
+            }
+          ]
         },
         "x11/vdpau" : {
           "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",

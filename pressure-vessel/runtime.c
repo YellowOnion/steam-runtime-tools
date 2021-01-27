@@ -1686,6 +1686,11 @@ bind_runtime_base (PvRuntime *self,
     "/etc/resolv.conf",
     NULL
   };
+  static const char * const from_provider[] =
+  {
+    "/etc/amd",
+    NULL
+  };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
   gsize i, j;
   const gchar *member;
@@ -1789,6 +1794,9 @@ bind_runtime_base (PvRuntime *self,
           if (g_strv_contains (from_host, dest))
             continue;
 
+          if (g_strv_contains (from_provider, dest))
+            continue;
+
           full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],
                                    member,
@@ -1883,6 +1891,37 @@ bind_runtime_base (PvRuntime *self,
         flatpak_bwrap_add_args (bwrap,
                                 "--ro-bind", item, item,
                                 NULL);
+    }
+
+  for (i = 0; from_provider[i] != NULL; i++)
+    {
+      const char *item = from_provider[i];
+      g_autoptr(GError) local_error = NULL;
+      g_autofree char *path_in_provider = NULL;
+      glnx_autofd int fd = -1;
+
+      fd = _srt_resolve_in_sysroot (self->provider_fd, item,
+                                    SRT_RESOLVE_FLAGS_NONE,
+                                    &path_in_provider,
+                                    &local_error);
+
+      if (fd >= 0)
+        {
+          g_autofree char *host_path = NULL;
+
+          host_path = g_build_filename (self->provider_in_host_namespace,
+                                        path_in_provider, NULL);
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", host_path, item,
+                                  NULL);
+        }
+      else
+        {
+          g_debug ("Cannot resolve \"%s\" in \"%s\": %s",
+                   item, self->provider_in_current_namespace,
+                   local_error->message);
+          g_clear_error (&local_error);
+        }
     }
 
   return TRUE;

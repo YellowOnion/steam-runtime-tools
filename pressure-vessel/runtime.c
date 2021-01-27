@@ -1722,12 +1722,32 @@ bind_runtime_base (PvRuntime *self,
   if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
       || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
     {
+      g_autofree gchar *provider_etc = NULL;
+
       if (!pv_bwrap_bind_usr (bwrap,
                               self->provider_in_host_namespace,
                               self->provider_in_current_namespace,
                               self->provider_in_container_namespace,
                               error))
         return FALSE;
+
+      provider_etc = g_build_filename (self->provider_in_current_namespace,
+                                       "etc", NULL);
+
+      if (g_file_test (provider_etc, G_FILE_TEST_IS_DIR))
+        {
+          g_autofree gchar *in_host = NULL;
+          g_autofree gchar *in_container = NULL;
+
+          in_host = g_build_filename (self->provider_in_host_namespace,
+                                      "etc", NULL);
+          in_container = g_build_filename (self->provider_in_container_namespace,
+                                           "etc", NULL);
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", in_host, in_container,
+                                  NULL);
+        }
     }
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)

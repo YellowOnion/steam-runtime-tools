@@ -2195,6 +2195,7 @@ driver_environment (Fixture *f,
   gchar **envp;
   gchar **output;
   gsize i;
+  const gchar * const no_environment[] = { NULL };
   const gchar *environment[][2] = { {"LIBVA_DRIVER_NAME", "radeonsi"},
                                     {"MESA_LOADER_DRIVER_OVERRIDE", "i965"},
                                     {"VDPAU_DRIVER", "secret_2"},
@@ -2203,7 +2204,7 @@ driver_environment (Fixture *f,
                                     {"__GLX_VENDOR_LIBRARY_NAME", "my_custom_driver"},
                                     {NULL, NULL} };
 
-  envp = g_get_environ ();
+  envp = g_strdupv ((gchar **) no_environment);
 
   for (i = 0; environment[i][0] != NULL; i++)
     envp = g_environ_setenv (envp, environment[i][0], environment[i][1], TRUE);

@@ -2274,6 +2274,18 @@ test_vdpau (Fixture *f,
 
 typedef struct
 {
+  SrtGraphicsIssues issues;
+  const gchar *name;
+  const gchar *api_version;
+  const gchar *driver_version;
+  const gchar *vendor_id;
+  const gchar *device_id;
+  const gchar *messages;
+  SrtVkPhysicalDeviceType type;
+} GraphicsDeviceTest;
+
+typedef struct
+{
   const gchar *description;
   SrtWindowSystem window_system;
   SrtRenderingInterface rendering_interface;
@@ -2284,6 +2296,8 @@ typedef struct
   const gchar *renderer_string;
   const gchar *version_string;
   const gchar *messages;
+  /* Arbitrary size, increase it if necessary */
+  GraphicsDeviceTest devices[4];
   int exit_status;
   gboolean vendor_neutral;
 } GraphicsTest;
@@ -2383,6 +2397,26 @@ static const GraphicsTest graphics_test[] =
     .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
     .version_string = SRT_TEST_GOOD_VULKAN_VERSION,
     .messages = SRT_TEST_GOOD_VULKAN_MESSAGES,
+    .devices =
+    {
+      {
+        .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+      },
+      {
+        .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
+        .issues = SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING,
+      },
+    },
     .vendor_neutral = TRUE,
   },
 
@@ -2407,6 +2441,29 @@ static const GraphicsTest graphics_test[] =
     .version_string = SRT_TEST_GOOD_VULKAN_VERSION,
     .messages = SRT_TEST_GOOD_VULKAN_MESSAGES,
     .exit_status = 1,
+    .devices =
+    {
+      {
+        .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+        .messages = SRT_TEST_MIXED_VULKAN_MESSAGES_1,
+        .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+      },
+      {
+        .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
+        .messages = SRT_TEST_MIXED_VULKAN_MESSAGES_2,
+        .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW | SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING,
+      },
+    },
     .vendor_neutral = TRUE,
   },
 
@@ -2440,6 +2497,7 @@ test_check_graphics (Fixture *f,
     {
       const GraphicsTest *test = &graphics_test[i];
       g_autoptr(SrtGraphics) graphics = NULL;
+      g_autoptr(SrtObjectList) devices = NULL;
       SrtGraphicsIssues issues;
       g_autofree gchar *tuple = NULL;
       g_autofree gchar *renderer = NULL;
@@ -2449,6 +2507,8 @@ test_check_graphics (Fixture *f,
       int terminating_signal;
       gboolean vendor_neutral;
       SrtGraphicsLibraryVendor library_vendor;
+      GList *iter;
+      gsize j;
 
       g_test_message ("%s", test->description);
 
@@ -2467,6 +2527,50 @@ test_check_graphics (Fixture *f,
       g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, test->messages);
       g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, test->exit_status);
       g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
+      devices = srt_graphics_get_devices (graphics);
+      for (j = 0, iter = devices; iter != NULL; iter = iter->next, j++)
+        {
+          g_autofree gchar *name = NULL;
+          g_autofree gchar *api_version = NULL;
+          g_autofree gchar *driver_version = NULL;
+          g_autofree gchar *vendor_id = NULL;
+          g_autofree gchar *device_id = NULL;
+          SrtVkPhysicalDeviceType type;
+
+          g_assert_cmpstr (srt_graphics_device_get_name (iter->data), ==, test->devices[j].name);
+          g_assert_cmpstr (srt_graphics_device_get_api_version (iter->data), ==,
+                           test->devices[j].api_version);
+          g_assert_cmpstr (srt_graphics_device_get_driver_version (iter->data), ==,
+                           test->devices[j].driver_version);
+          g_assert_cmpstr (srt_graphics_device_get_vendor_id (iter->data), ==,
+                           test->devices[j].vendor_id);
+          g_assert_cmpstr (srt_graphics_device_get_device_id (iter->data), ==,
+                           test->devices[j].device_id);
+          g_assert_cmpint (srt_graphics_device_get_device_type (iter->data), ==,
+                           test->devices[j].type);
+          g_assert_cmpstr (srt_graphics_device_get_messages (iter->data), ==,
+                           test->devices[j].messages);
+          g_assert_cmpint (srt_graphics_device_get_issues (iter->data), ==,
+                           test->devices[j].issues);
+
+          g_object_get (iter->data,
+                        "name", &name,
+                        "api-version", &api_version,
+                        "driver-version", &driver_version,
+                        "vendor-id", &vendor_id,
+                        "device-id", &device_id,
+                        "type", &type,
+                        "issues", &issues,
+                        NULL);
+          g_assert_cmpstr (name, ==, test->devices[j].name);
+          g_assert_cmpstr (api_version, ==, test->devices[j].api_version);
+          g_assert_cmpstr (driver_version, ==, test->devices[j].driver_version);
+          g_assert_cmpstr (vendor_id, ==, test->devices[j].vendor_id);
+          g_assert_cmpstr (device_id, ==, test->devices[j].device_id);
+          g_assert_cmpint (type, ==, test->devices[j].type);
+          g_assert_cmpint (issues, ==, test->devices[j].issues);
+        }
 
       vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
       g_assert_cmpint (library_vendor, ==, test->library_vendor);

@@ -1660,18 +1660,24 @@ bind_runtime_base (PvRuntime *self,
   };
   static const char * const dont_bind[] =
   {
-    "/etc/group",
-    "/etc/passwd",
-    "/etc/host.conf",
-    "/etc/hosts",
     "/etc/localtime",
     "/etc/machine-id",
-    "/etc/resolv.conf",
     "/var/cache/ldconfig",
     "/var/lib/dbus",
     "/var/lib/dhcp",
     "/var/lib/sudo",
     "/var/lib/urandom",
+    NULL
+  };
+  static const char * const from_host[] =
+  {
+    /* TODO: Synthesize a passwd with only the user and nobody,
+     * like Flatpak does? */
+    "/etc/group",
+    "/etc/passwd",
+    "/etc/host.conf",
+    "/etc/hosts",
+    "/etc/resolv.conf",
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
@@ -1774,6 +1780,9 @@ bind_runtime_base (PvRuntime *self,
           if (g_strv_contains (dont_bind, dest))
             continue;
 
+          if (g_strv_contains (from_host, dest))
+            continue;
+
           full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],
                                    member,
@@ -1859,37 +1868,16 @@ bind_runtime_base (PvRuntime *self,
                               NULL);
     }
 
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/resolv.conf", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
-                            NULL);
+  for (i = 0; from_host[i] != NULL; i++)
+    {
+      const char *item = from_host[i];
 
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/host.conf", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/host.conf", "/etc/host.conf",
-                            NULL);
-
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/hosts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/hosts", "/etc/hosts",
-                            NULL);
-
-  /* TODO: Synthesize a passwd with only the user and nobody,
-   * like Flatpak does? */
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/passwd", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/passwd", "/etc/passwd",
-                            NULL);
-
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/group", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/group", "/etc/group",
-                            NULL);
+      if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                     item, G_FILE_TEST_EXISTS))
+        flatpak_bwrap_add_args (bwrap,
+                                "--ro-bind", item, item,
+                                NULL);
+    }
 
   return TRUE;
 }

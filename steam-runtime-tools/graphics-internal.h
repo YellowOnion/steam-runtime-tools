@@ -1,6 +1,6 @@
 /*< internal_header >*/
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -35,8 +35,9 @@
  * _srt_graphics_new:
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386,
  *  representing an ABI
- * @window_system: The window system to check,
- * @rendering_interface: The renderint interface to check,
+ * @window_system: The window system to check
+ * @rendering_interface: The rendering interface to check
+ * @graphics_devices: Array of #SrtGraphicsDevice
  * @issues: Problems found when checking @multiarch_tuple with
  *  the given @winsys and @renderer.
  * @messages: Any debug messages found when checking graphics.
@@ -54,10 +55,36 @@ static inline SrtGraphics *_srt_graphics_new (const char *multiarch_tuple,
                                               SrtGraphicsLibraryVendor library_vendor,
                                               const gchar *renderer_string,
                                               const gchar *version_string,
+                                              GPtrArray *graphics_devices,
                                               SrtGraphicsIssues issues,
                                               const gchar *messages,
                                               int exit_status,
                                               int termination_signal);
+
+/*
+ * _srt_graphics_device_new:
+ * @name: Device name, also referred as renderer name
+ * @api_version: API version used by this device
+ * @driver_version: Driver version used by this device
+ * @vendor_id: Device vendor ID
+ * @device_id: Device ID
+ * @type: The device type
+ * @issues: Problems found when checking the drawing capabilities of
+ *  the device
+ *
+ * Inline convenience function to create a new SrtGraphicsDevice.
+ * This is not part of the public API.
+ *
+ * Returns: (transfer full): A new #SrtGraphicsDevice
+ */
+static inline SrtGraphicsDevice *_srt_graphics_device_new (const gchar *name,
+                                                           const gchar *api_version,
+                                                           const gchar *driver_version,
+                                                           const gchar *vendor_id,
+                                                           const gchar *device_id,
+                                                           SrtVkPhysicalDeviceType type,
+                                                           SrtGraphicsIssues issues);
+
 
 /*
  * _srt_graphics_hash_key:
@@ -89,6 +116,7 @@ _srt_graphics_new (const char *multiarch_tuple,
                    SrtGraphicsLibraryVendor library_vendor,
                    const gchar *renderer_string,
                    const gchar *version_string,
+                   GPtrArray *graphics_devices,
                    SrtGraphicsIssues issues,
                    const gchar *messages,
                    int exit_status,
@@ -103,9 +131,30 @@ _srt_graphics_new (const char *multiarch_tuple,
                        "rendering-interface", rendering_interface,
                        "renderer-string", renderer_string,
                        "version-string", version_string,
+                       "graphics-devices", graphics_devices,
                        "messages", messages,
                        "exit-status", exit_status,
                        "terminating-signal", terminating_signal,
+                       NULL);
+}
+
+static inline SrtGraphicsDevice *
+_srt_graphics_device_new (const gchar *name,
+                          const gchar *api_version,
+                          const gchar *driver_version,
+                          const gchar *vendor_id,
+                          const gchar *device_id,
+                          SrtVkPhysicalDeviceType type,
+                          SrtGraphicsIssues issues)
+{
+  return g_object_new (SRT_TYPE_GRAPHICS_DEVICE,
+                       "name", name,
+                       "api-version", api_version,
+                       "driver-version", driver_version,
+                       "vendor-id", vendor_id,
+                       "device-id", device_id,
+                       "type", type,
+                       "issues", issues,
                        NULL);
 }
 

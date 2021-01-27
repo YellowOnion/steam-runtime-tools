@@ -125,7 +125,6 @@ install_data('generate-sysroots.py', install_dir : tests_dir)
 # These are all the same: they just exit 0.
 foreach helper : [
   'mock-good-check-gl',
-  'mock-good-check-vulkan',
   'mock-software-check-gl',
   'mock-true',
 ]
@@ -264,14 +263,14 @@ foreach helper : [
   'mock-bad-check-vdpau',
   'mock-bad-check-vulkan',
   'mock-bad-check-xdg-portal',
-  'mock-bad-vulkaninfo',
   'mock-good-check-va-api',
   'mock-good-check-vdpau',
+  'mock-good-check-vulkan',
   'mock-good-check-xdg-portal',
   'mock-good-flatpak-check-xdg-portal',
-  'mock-good-vulkaninfo',
   'mock-hanging-check-xdg-portal',
   'mock-hanging-wflinfo',
+  'mock-mixed-check-vulkan',
   'mock-sigusr-wflinfo',
 ]
   executable(
@@ -287,13 +286,6 @@ endforeach
 # the case where the preliminary check succeeds, but actually rendering
 # a window fails (hence "mixed").
 executable(
-  'mock-mixed-vulkaninfo',
-  'mock-good-vulkaninfo.c',
-  include_directories : project_include_dirs,
-  install: true,
-  install_dir: tests_dir
-)
-executable(
   'mock-mixed-wflinfo',
   'mock-good-wflinfo.c',
   include_directories : project_include_dirs,
@@ -302,20 +294,15 @@ executable(
   install_dir: tests_dir
 )
 
-# These are all essentially the same as mock-bad-check-vulkan: they
-# fail with a message on stderr.
-foreach helper : [
+# mock-bad-check-gl is essentially the same as mock-bad-check-vulkan:
+# it fails with a message on stderr.
+executable(
   'mock-bad-check-gl',
-  'mock-mixed-check-vulkan',
-]
-  executable(
-    helper,
-    'mock-bad-check-vulkan.c',
-    include_directories : project_include_dirs,
-    install: true,
-    install_dir: tests_dir
-  )
-endforeach
+  'mock-bad-check-vulkan.c',
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
 
 # Helpers with a GLib dependency and one source file of the same name
 # as the helper itself.

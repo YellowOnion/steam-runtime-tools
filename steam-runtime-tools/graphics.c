@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019-2020 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -61,6 +61,11 @@
  * This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
  *
+ * #SrtGraphicsDevice is an opaque object representing a single, physical or
+ * virtual, GPU.
+ * This is a reference-counted object: use g_object_ref() and
+ * g_object_unref() to manage its lifecycle.
+ *
  * #SrtEglIcd is an opaque object representing the metadata describing
  * an EGL ICD.
  * This is a reference-counted object: use g_object_ref() and
@@ -71,6 +76,379 @@
  * This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
  */
+
+struct _SrtGraphicsDevice
+{
+  /*< private >*/
+  GObject parent;
+  SrtGraphicsIssues issues;
+  gchar *name;
+  gchar *api_version;
+  gchar *driver_version;
+  gchar *vendor_id;
+  gchar *device_id;
+  gchar *messages;
+  SrtVkPhysicalDeviceType type;
+};
+
+struct _SrtGraphicsDeviceClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  GRAPHICS_DEVICE_PROP_0,
+  GRAPHICS_DEVICE_PROP_ISSUES,
+  GRAPHICS_DEVICE_PROP_NAME,
+  GRAPHICS_DEVICE_PROP_API_VERSION,
+  GRAPHICS_DEVICE_PROP_DRIVER_VERSION,
+  GRAPHICS_DEVICE_PROP_VENDOR_ID,
+  GRAPHICS_DEVICE_PROP_DEVICE_ID,
+  GRAPHICS_DEVICE_PROP_TYPE,
+  N_GRAPHICS_DEVICE_PROPERTIES,
+};
+
+G_DEFINE_TYPE (SrtGraphicsDevice, srt_graphics_device, G_TYPE_OBJECT)
+
+static void
+srt_graphics_device_init (SrtGraphicsDevice *self)
+{
+}
+
+static void
+srt_graphics_device_get_property (GObject *object,
+                                  guint prop_id,
+                                  GValue *value,
+                                  GParamSpec *pspec)
+{
+  SrtGraphicsDevice *self = SRT_GRAPHICS_DEVICE (object);
+
+  switch (prop_id)
+    {
+      case GRAPHICS_DEVICE_PROP_ISSUES:
+        g_value_set_flags (value, self->issues);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_NAME:
+        g_value_set_string (value, self->name);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_API_VERSION:
+        g_value_set_string (value, self->api_version);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_DRIVER_VERSION:
+        g_value_set_string (value, self->driver_version);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_VENDOR_ID:
+        g_value_set_string (value, self->vendor_id);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_DEVICE_ID:
+        g_value_set_string (value, self->device_id);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_TYPE:
+        g_value_set_enum (value, self->type);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_graphics_device_set_property (GObject *object,
+                                  guint prop_id,
+                                  const GValue *value,
+                                  GParamSpec *pspec)
+{
+  SrtGraphicsDevice *self = SRT_GRAPHICS_DEVICE (object);
+
+  switch (prop_id)
+    {
+      case GRAPHICS_DEVICE_PROP_ISSUES:
+        /* Construct-only */
+        g_return_if_fail (self->issues == 0);
+        self->issues = g_value_get_flags (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_NAME:
+        /* Construct only */
+        g_return_if_fail (self->name == NULL);
+        self->name = g_value_dup_string (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_API_VERSION:
+        /* Construct only */
+        g_return_if_fail (self->api_version == NULL);
+        self->api_version = g_value_dup_string (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_DRIVER_VERSION:
+        /* Construct only */
+        g_return_if_fail (self->driver_version == NULL);
+        self->driver_version = g_value_dup_string (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_VENDOR_ID:
+        /* Construct only */
+        g_return_if_fail (self->vendor_id == NULL);
+        self->vendor_id = g_value_dup_string (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_DEVICE_ID:
+        /* Construct only */
+        g_return_if_fail (self->device_id == NULL);
+        self->device_id = g_value_dup_string (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_TYPE:
+        /* Construct-only */
+        g_return_if_fail (self->type == 0);
+        self->type = g_value_get_enum (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_graphics_device_finalize (GObject *object)
+{
+  SrtGraphicsDevice *self = SRT_GRAPHICS_DEVICE (object);
+
+  g_free (self->name);
+  g_free (self->api_version);
+  g_free (self->driver_version);
+  g_free (self->vendor_id);
+  g_free (self->device_id);
+  g_free (self->messages);
+
+  G_OBJECT_CLASS (srt_graphics_device_parent_class)->finalize (object);
+}
+
+static GParamSpec *graphics_device_properties[N_GRAPHICS_DEVICE_PROPERTIES] = { NULL };
+
+static void
+srt_graphics_device_class_init (SrtGraphicsDeviceClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_graphics_device_get_property;
+  object_class->set_property = srt_graphics_device_set_property;
+  object_class->finalize = srt_graphics_device_finalize;
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_ISSUES] =
+    g_param_spec_flags ("issues", "Issues", "Problems with the graphics device card",
+                        SRT_TYPE_GRAPHICS_ISSUES, SRT_GRAPHICS_ISSUES_NONE,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_NAME] =
+    g_param_spec_string ("name", "Device name",
+                         "Which name the device has.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_API_VERSION] =
+    g_param_spec_string ("api-version", "API version",
+                         "Which API version is in use.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_DRIVER_VERSION] =
+    g_param_spec_string ("driver-version", "Driver version",
+                         "Which driver version is in use.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_VENDOR_ID] =
+    g_param_spec_string ("vendor-id", "Vendor ID", "The vendor ID of the device.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_DEVICE_ID] =
+    g_param_spec_string ("device-id", "Device ID", "The device ID of the device.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_TYPE] =
+    g_param_spec_enum ("type", "Type", "Which type the device is.",
+                       SRT_TYPE_VK_PHYSICAL_DEVICE_TYPE, SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER,
+                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                       G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_GRAPHICS_DEVICE_PROPERTIES,
+                                     graphics_device_properties);
+}
+
+/**
+ * srt_graphics_device_get_issues:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the problems found when testing @self.
+ *
+ * Returns: A bitfield containing problems, or %SRT_GRAPHICS_ISSUES_NONE
+ *  if no problems were found
+ */
+SrtGraphicsIssues
+srt_graphics_device_get_issues (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), SRT_GRAPHICS_ISSUES_UNKNOWN);
+  return self->issues;
+}
+
+/**
+ * srt_graphics_device_get_name:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the device name of @self, or %NULL if it's not known.
+ *
+ * Returns (nullable): A string indicating the device name.
+ */
+const char *
+srt_graphics_device_get_name (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->name;
+}
+
+/**
+ * srt_graphics_device_get_api_version:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the API version used by @self, or %NULL if it's not known.
+ *
+ * Returns (nullable): A string indicating the API version.
+ */
+const char *
+srt_graphics_device_get_api_version (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->api_version;
+}
+
+/**
+ * srt_graphics_device_get_driver_version:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the driver version used by @self, or %NULL if it's not known.
+ *
+ * Returns (nullable): A string indicating the driver version.
+ */
+const char *
+srt_graphics_device_get_driver_version (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->driver_version;
+}
+
+/**
+ * srt_graphics_device_get_vendor_id:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the vendor ID of @self, or %NULL if it's not known.
+ *
+ * Returns (nullable): A string indicating the vendor ID.
+ */
+const char *
+srt_graphics_device_get_vendor_id (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->vendor_id;
+}
+
+/**
+ * srt_graphics_device_get_device_id:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the device ID of @self, or %NULL if it's not known.
+ *
+ * Returns (nullable): A string indicating the device ID.
+ */
+const char *
+srt_graphics_device_get_device_id (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->device_id;
+}
+
+/**
+ * srt_graphics_device_get_messages:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the diagnostic messages produced while checking @self device
+ * drawing capabilities.
+ *
+ * Returns: (nullable) (transfer none): A string, which must not be freed,
+ *  or %NULL if there were no diagnostic messages.
+ */
+const char *
+srt_graphics_device_get_messages (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->messages;
+}
+
+/**
+ * srt_graphics_device_get_device_type:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the @self device type
+ *
+ * Returns: An enumeration of #SrtVkPhysicalDeviceType indicating the type
+ *  of this device.
+ */
+SrtVkPhysicalDeviceType
+srt_graphics_device_get_device_type (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self),
+                        SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER);
+  return self->type;
+}
+
+/*
+ * @self: a SrtGraphicsDevice object
+ * @can_draw: if %TRUE, this device is able to successfully draw a triangle
+ *  test
+ *
+ * @self issues is adjusted accordingly to the @can_draw value.
+ */
+static void
+_srt_graphics_device_set_can_draw (SrtGraphicsDevice *self,
+                                   gboolean can_draw)
+{
+  g_return_if_fail (SRT_IS_GRAPHICS_DEVICE (self));
+  if (can_draw)
+    self->issues &= ~SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+  else
+    self->issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
+}
+
+/*
+ * @self: a SrtGraphicsDevice object
+ * @messages (nullable): diagnostic messages
+ *
+ * Set @self diagnostic messages to the provided @messages.
+ */
+static void
+_srt_graphics_device_set_messages (SrtGraphicsDevice *self,
+                                   const gchar *messages)
+{
+  g_return_if_fail (SRT_IS_GRAPHICS_DEVICE (self));
+  g_free (self->messages);
+  self->messages = g_strdup (messages);
+}
 
 struct _SrtGraphics
 {
@@ -84,6 +462,7 @@ struct _SrtGraphics
   gchar *messages;
   gchar *renderer_string;
   gchar *version_string;
+  GPtrArray *devices;
   int exit_status;
   int terminating_signal;
 };
@@ -104,6 +483,7 @@ enum {
   PROP_RENDERING_INTERFACE,
   PROP_RENDERER_STRING,
   PROP_VERSION_STRING,
+  PROP_GRAPHICS_DEVICES,
   PROP_EXIT_STATUS,
   PROP_TERMINATING_SIGNAL,
   N_PROPERTIES
@@ -158,6 +538,10 @@ srt_graphics_get_property (GObject *object,
         g_value_set_string (value, self->version_string);
         break;
 
+      case PROP_GRAPHICS_DEVICES:
+        g_value_set_boxed (value, self->devices);
+        break;
+
       case PROP_EXIT_STATUS:
         g_value_set_int (value, self->exit_status);
         break;
@@ -173,9 +557,9 @@ srt_graphics_get_property (GObject *object,
 
 static void
 srt_graphics_set_property (GObject *object,
-                          guint prop_id,
-                          const GValue *value,
-                          GParamSpec *pspec)
+                           guint prop_id,
+                           const GValue *value,
+                           GParamSpec *pspec)
 {
   SrtGraphics *self = SRT_GRAPHICS (object);
   const char *tmp;
@@ -239,6 +623,12 @@ srt_graphics_set_property (GObject *object,
         self->version_string = g_value_dup_string (value);
         break;
 
+      case PROP_GRAPHICS_DEVICES:
+        /* Construct only */
+        g_return_if_fail (self->devices == NULL);
+        self->devices = g_value_dup_boxed (value);
+        break;
+
       case PROP_EXIT_STATUS:
         self->exit_status = g_value_get_int (value);
         break;
@@ -250,6 +640,16 @@ srt_graphics_set_property (GObject *object,
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
+}
+
+static void
+srt_graphics_dispose (GObject *object)
+{
+  SrtGraphics *self = SRT_GRAPHICS (object);
+
+  g_clear_pointer (&self->devices, g_ptr_array_unref);
+
+  G_OBJECT_CLASS (srt_graphics_parent_class)->dispose (object);
 }
 
 static void
@@ -273,6 +673,7 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
 
   object_class->get_property = srt_graphics_get_property;
   object_class->set_property = srt_graphics_set_property;
+  object_class->dispose = srt_graphics_dispose;
   object_class->finalize = srt_graphics_finalize;
 
   properties[PROP_ISSUES] =
@@ -327,6 +728,12 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
 
+  properties[PROP_GRAPHICS_DEVICES] =
+    g_param_spec_boxed ("graphics-devices", "List of graphics devices", "List of #SrtGraphicsDevice, representing the graphical cards.",
+                        G_TYPE_PTR_ARRAY,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
   properties[PROP_EXIT_STATUS] =
     g_param_spec_int ("exit-status", "Exit status", "Exit status of helper(s) executed. 0 on success, positive on unsuccessful exit(), -1 if killed by a signal or not run at all",
                       -1,
@@ -352,7 +759,9 @@ srt_graphics_class_init (SrtGraphicsClass *cls)
  * @renderer_string: (out) (transfer none) (not optional):
  */
 static SrtGraphicsIssues
-_srt_process_wflinfo (JsonNode *node, const gchar **version_string, const gchar **renderer_string)
+_srt_process_wflinfo (JsonNode *node,
+                      gchar **version_string,
+                      const gchar **renderer_string)
 {
   g_return_val_if_fail (version_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
@@ -388,7 +797,7 @@ _srt_process_wflinfo (JsonNode *node, const gchar **version_string, const gchar 
       return issues;
     }
 
-  *version_string = json_object_get_string_member (sub_object, "version string");
+  *version_string = g_strdup (json_object_get_string_member (sub_object, "version string"));
   *renderer_string = json_object_get_string_member (sub_object, "renderer string");
 
   /* Check renderer to see if we are using software rendering */
@@ -402,73 +811,59 @@ _srt_process_wflinfo (JsonNode *node, const gchar **version_string, const gchar 
 }
 
 /*
- * @node: The JsonNode to process the vulkaninfo results from.
- * @new_version_string: (out) (transfer full) (not optional):
- * @renderer_string: (out) (transfer none) (not optional):
+ * @node (not nullable):
+ * @version_string (not optional) (out):
+ * @device (not optional) (out):
  */
 static SrtGraphicsIssues
-_srt_process_vulkaninfo (JsonNode *node, gchar **new_version_string, const gchar **renderer_string)
+_srt_process_check_vulkan_info (JsonNode *node,
+                                gchar **version_string,
+                                SrtGraphicsDevice **device)
 {
-  g_return_val_if_fail (new_version_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
-  g_return_val_if_fail (renderer_string != NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
-
-  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
-
-  if (node == NULL)
-    {
-      g_debug ("The json output is empty");
-      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-      return issues;
-    }
-
-  JsonObject *object = json_node_get_object (node);
-  JsonNode *sub_node = NULL;
+  JsonObject *object = NULL;
   JsonObject *sub_object = NULL;
+  JsonNode *sub_node = NULL;
+  const gchar *device_name = NULL;
+  const gchar *api_version = NULL;
+  const gchar *driver_version = NULL;
+  const gchar *vendor_id = NULL;
+  const gchar *device_id = NULL;
+  SrtVkPhysicalDeviceType device_type;
 
-  // Parse vulkaninfo output
-  unsigned int api_version = 0;
-  unsigned int hw_vendor = 0;
-  unsigned int hw_device = 0;
-  unsigned int driver_version = 0;
+  /* Until we parse the drawing test results, we assume that we are not
+   * able to draw with this device */
+  SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
 
-  if (!json_object_has_member (object, "VkPhysicalDeviceProperties"))
-    {
-      g_debug ("The json output doesn't contain VkPhysicalDeviceProperties");
-      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-      return issues;
-    }
+  object = json_node_get_object (node);
 
-  sub_node = json_object_get_member (object, "VkPhysicalDeviceProperties");
+  /* We only parse the device information, not the drawing test result */
+  if (!json_object_has_member (object, "device-info"))
+    return issues;
+
+  sub_node = json_object_get_member (object, "device-info");
   sub_object = json_node_get_object (sub_node);
 
-  if (!json_object_has_member (sub_object, "deviceName") ||
-      !json_object_has_member (sub_object, "driverVersion") ||
-      !json_object_has_member (sub_object, "apiVersion") ||
-      !json_object_has_member (sub_object, "deviceID") ||
-      !json_object_has_member (sub_object, "vendorID"))
-    {
-      g_debug ("Json output is missing deviceName or driverVersion");
-      issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
-      return issues;
-    }
+  device_name = json_object_get_string_member_with_default (sub_object, "device-name",
+                                                            NULL);
+  device_type = json_object_get_int_member_with_default (sub_object, "device-type", 0);
+  api_version = json_object_get_string_member_with_default (sub_object, "api-version",
+                                                            NULL);
+  driver_version = json_object_get_string_member_with_default (sub_object, "driver-version",
+                                                               NULL);
+  vendor_id = json_object_get_string_member_with_default (sub_object, "vendor-id",
+                                                          NULL);
+  device_id = json_object_get_string_member_with_default (sub_object, "device-id",
+                                                          NULL);
 
-  api_version = json_object_get_int_member (sub_object, "apiVersion");
-  hw_vendor = json_object_get_int_member (sub_object, "vendorID");
-  driver_version = json_object_get_int_member (sub_object, "driverVersion");
-  hw_device = json_object_get_int_member (sub_object, "deviceID");
+  *version_string = g_strdup_printf ("%s (device %s:%s) (driver %s)",
+                                     api_version, vendor_id, device_id, driver_version);
 
-  *new_version_string = g_strdup_printf ("%u.%u.%u (device %04x:%04x) (driver %u.%u.%u)",
-                                        VK_VERSION_MAJOR (api_version),
-                                        VK_VERSION_MINOR (api_version),
-                                        VK_VERSION_PATCH (api_version),
-                                        hw_vendor,
-                                        hw_device,
-                                        VK_VERSION_MAJOR (driver_version),
-                                        VK_VERSION_MINOR (driver_version),
-                                        VK_VERSION_PATCH (driver_version));
-  *renderer_string = json_object_get_string_member (sub_object, "deviceName");
+  if (device_type == SRT_VK_PHYSICAL_DEVICE_TYPE_CPU)
+    issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
 
-  /* NOTE: No need to check for software rendering with vulkan yet */
+  *device = _srt_graphics_device_new (device_name, api_version, driver_version,
+                                      vendor_id, device_id, device_type, issues);
+
   return issues;
 }
 
@@ -586,13 +981,12 @@ _argv_for_graphics_test (const char *helpers_path,
         break;
 
       case SRT_RENDERING_INTERFACE_VULKAN:
-        argv = _srt_get_helper (helpers_path, multiarch_tuple, "vulkaninfo",
+        argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-vulkan",
                                 flags, error);
 
         if (argv == NULL)
           goto out;
 
-        g_ptr_array_add (argv, g_strdup ("-j"));
         break;
 
       case SRT_RENDERING_INTERFACE_VDPAU:
@@ -624,28 +1018,6 @@ _argv_for_graphics_test (const char *helpers_path,
 
 out:
   g_free (platformstring);
-  return argv;
-}
-
-static GPtrArray *
-_argv_for_check_vulkan (const char *helpers_path,
-                        SrtTestFlags test_flags,
-                        const char *multiarch_tuple,
-                        GError **error)
-{
-  GPtrArray *argv;
-  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
-
-  if (test_flags & SRT_TEST_FLAGS_TIME_OUT_SOONER)
-    flags |= SRT_HELPER_FLAGS_TIME_OUT_SOONER;
-
-  argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-vulkan",
-                          flags, error);
-
-  if (argv == NULL)
-    return NULL;
-
-  g_ptr_array_add (argv, NULL);
   return argv;
 }
 
@@ -998,8 +1370,7 @@ _srt_check_graphics (gchar **envp,
   int exit_status = -1;
   int terminating_signal = 0;
   g_autoptr(JsonNode) node = NULL;
-  const gchar *version_string = NULL;
-  gchar *new_version_string = NULL;
+  g_autofree gchar *version_string = NULL;
   const gchar *renderer_string = NULL;
   GError *error = NULL;
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
@@ -1008,6 +1379,9 @@ _srt_check_graphics (gchar **envp,
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
   SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
+  g_auto(GStrv) json_output = NULL;
+  g_autoptr(GPtrArray) graphics_device = g_ptr_array_new_with_free_func (g_object_unref);
+  gsize i;
 
   g_return_val_if_fail (details_out == NULL || *details_out == NULL, SRT_GRAPHICS_ISSUES_UNKNOWN);
   g_return_val_if_fail (((unsigned) window_system) < SRT_N_WINDOW_SYSTEMS, SRT_GRAPHICS_ISSUES_UNKNOWN);
@@ -1046,10 +1420,10 @@ _srt_check_graphics (gchar **envp,
     {
       case SRT_RENDERING_INTERFACE_GL:
       case SRT_RENDERING_INTERFACE_GLESV2:
-      case SRT_RENDERING_INTERFACE_VULKAN:
         non_zero_wait_status_issue = SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
         break;
 
+      case SRT_RENDERING_INTERFACE_VULKAN:
       case SRT_RENDERING_INTERFACE_VDPAU:
       case SRT_RENDERING_INTERFACE_VAAPI:
         /* The test here tries to draw an offscreen X11 window */
@@ -1070,8 +1444,13 @@ _srt_check_graphics (gchar **envp,
                              FALSE,
                              non_zero_wait_status_issue);
 
-  if (issues != SRT_GRAPHICS_ISSUES_NONE)
+  if (rendering_interface != SRT_RENDERING_INTERFACE_VULKAN
+      && issues != SRT_GRAPHICS_ISSUES_NONE)
     {
+      /* For Vulkan `LIBGL_DEBUG` has no effect. Also we try to continue even
+       * if we faced some issues because we might still have a valid JSON in
+       * output */
+
       // Issues found, so run again with LIBGL_DEBUG=verbose set in environment
       issues |= _srt_run_helper (&my_environ,
                                  &output,
@@ -1090,8 +1469,6 @@ _srt_check_graphics (gchar **envp,
     {
       case SRT_RENDERING_INTERFACE_GL:
       case SRT_RENDERING_INTERFACE_GLESV2:
-      case SRT_RENDERING_INTERFACE_VULKAN:
-
         node = json_from_string (output, &error);
         if (node == NULL)
           {
@@ -1114,21 +1491,7 @@ _srt_check_graphics (gchar **envp,
 
             goto out;
           }
-        break;
 
-      case SRT_RENDERING_INTERFACE_VDPAU:
-      case SRT_RENDERING_INTERFACE_VAAPI:
-        /* The output is in plan text, nothing to do here */
-        break;
-
-      default:
-        g_return_val_if_reached (SRT_GRAPHICS_ISSUES_UNKNOWN);
-    }
-
-  switch (rendering_interface)
-    {
-      case SRT_RENDERING_INTERFACE_GL:
-      case SRT_RENDERING_INTERFACE_GLESV2:
         issues |= _srt_process_wflinfo (node, &version_string, &renderer_string);
 
         if (issues != SRT_GRAPHICS_ISSUES_NONE)
@@ -1193,39 +1556,109 @@ _srt_check_graphics (gchar **envp,
         break;
 
       case SRT_RENDERING_INTERFACE_VULKAN:
-        issues |= _srt_process_vulkaninfo (node, &new_version_string, &renderer_string);
-        if (new_version_string != NULL)
+        if (output == NULL || output[0] == '\0')
           {
-            version_string = new_version_string;
-          }
-
-        /* Now perform *-check-vulkan drawing test */
-        g_ptr_array_unref (argv);
-        g_clear_pointer (&output, g_free);
-
-        argv = _argv_for_check_vulkan (helpers_path,
-                                       test_flags,
-                                       multiarch_tuple,
-                                       &error);
-
-        if (argv == NULL)
-          {
-            issues |= SRT_GRAPHICS_ISSUES_CANNOT_DRAW;
-            /* Put the error message in the 'messages' */
-            child_stderr2 = g_strdup (error->message);
+            g_debug ("The helper output is empty");
+            issues |= SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
             goto out;
           }
 
-        /* Now run and report exit code/messages if failure */
-        issues |= _srt_run_helper (&my_environ,
-                                   &output,
-                                   &child_stderr2,
-                                   argv,
-                                   &wait_status,
-                                   &exit_status,
-                                   &terminating_signal,
-                                   FALSE,
-                                   SRT_GRAPHICS_ISSUES_CANNOT_DRAW);
+        json_output = g_strsplit (output, "\n", -1);
+
+        for (i = 0; json_output[i] != NULL; i++)
+          {
+            g_autofree gchar *new_version_string = NULL;
+            g_autoptr(JsonNode) this_node = NULL;
+            SrtGraphicsDevice *device = NULL;
+            SrtGraphicsIssues device_issues = SRT_GRAPHICS_ISSUES_NONE;
+            this_node = json_from_string (json_output[i], &error);
+            if (this_node == NULL)
+              {
+                if (error != NULL)
+                  {
+                    g_debug ("The Vulkan helper output is not a valid JSON: %s", error->message);
+                    g_clear_error (&error);
+                  }
+                break;
+              }
+
+            device_issues |= _srt_process_check_vulkan_info (this_node, &new_version_string,
+                                                             &device);
+
+            /* If we were unable to get the device info from this node, it
+             * probably means that we already checked all the "device-info"
+             * JSON objects. There is no need to continue because drawing
+             * tests always follow the device info. */
+            if (device == NULL)
+              break;
+
+            /* If the GPU 0 is a software rendering, we propagate this info to
+             * the general Vulkan issues too. */
+            if (i == 0 && device_issues & SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING)
+              issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
+
+            /* If this is the first device that we have, store its version and
+             * renderer for the SrtGraphics object */
+            if (version_string == NULL)
+              version_string = g_strdup (new_version_string);
+
+            if (renderer_string == NULL)
+              renderer_string = srt_graphics_device_get_name (device);
+
+            g_ptr_array_add (graphics_device, device);
+          }
+
+        for (i = 0; json_output[i] != NULL; i++)
+          {
+            JsonObject *object = NULL;
+            JsonObject *sub_object = NULL;
+            JsonNode *sub_node = NULL;
+            gboolean can_draw;
+            gsize index;
+            const gchar *messages = NULL;
+            g_autoptr(JsonNode) this_node = NULL;
+            this_node = json_from_string (json_output[i], &error);
+            if (this_node == NULL)
+              {
+                if (error != NULL)
+                  {
+                    g_debug ("The Vulkan helper output is not a valid JSON: %s", error->message);
+                    g_clear_error (&error);
+                  }
+                /* Apparently we reached the final empty line */
+                break;
+              }
+
+            object = json_node_get_object (this_node);
+            /* We only parse the drawing test result */
+            if (!json_object_has_member (object, "test"))
+              continue;
+
+            sub_node = json_object_get_member (object, "test");
+            sub_object = json_node_get_object (sub_node);
+
+            if (!json_object_has_member (sub_object, "index"))
+              {
+                g_debug ("The Vulkan helper output seems to be malformed");
+                break;
+              }
+
+            index = json_object_get_int_member (sub_object, "index");
+            can_draw = json_object_get_boolean_member_with_default (sub_object, "can-draw",
+                                                                    FALSE);
+            messages = json_object_get_string_member_with_default (sub_object, "error-message",
+                                                                   NULL);
+
+            if (graphics_device->len < index + 1)
+              {
+                g_debug ("Apparently the Vulkan helper returned more test results than devices info");
+                break;
+              }
+            _srt_graphics_device_set_can_draw (g_ptr_array_index (graphics_device, index),
+                                               can_draw);
+            _srt_graphics_device_set_messages (g_ptr_array_index (graphics_device, index),
+                                               messages);
+          }
         break;
 
       case SRT_RENDERING_INTERFACE_VDPAU:
@@ -1240,8 +1673,8 @@ _srt_check_graphics (gchar **envp,
 
 out:
 
-  /* If we have stderr (or error messages) from both vulkaninfo and
-   * check-vulkan, combine them */
+  /* If we have stderr (or error messages) from both wflinfo and
+   * check-gl, combine them */
   if (child_stderr2 != NULL && child_stderr2[0] != '\0')
     {
       gchar *tmp = g_strconcat (child_stderr, child_stderr2, NULL);
@@ -1257,12 +1690,12 @@ out:
                                       library_vendor,
                                       renderer_string,
                                       version_string,
+                                      graphics_device,
                                       issues,
                                       child_stderr,
                                       exit_status,
                                       terminating_signal);
 
-  g_free (new_version_string);
   g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (output);
   g_free (child_stderr);
@@ -1465,6 +1898,29 @@ srt_graphics_get_messages (SrtGraphics *self)
 }
 
 /**
+ * srt_graphics_get_devices:
+ * @self: a graphics object
+ *
+ * Return the list of graphics devices that have been found.
+ *
+ * Returns: (transfer full) (element-type SrtGraphicsDevice): The graphics
+ *  devices. Free with `g_list_free_full (list, g_object_unref)`.
+ */
+GList *
+srt_graphics_get_devices (SrtGraphics *self)
+{
+  GList *ret = NULL;
+  guint i;
+
+  g_return_val_if_fail (SRT_IS_GRAPHICS (self), NULL);
+
+  for (i = 0; self->devices != NULL && i < self->devices->len; i++)
+    ret = g_list_prepend (ret, g_object_ref (g_ptr_array_index (self->devices, i)));
+
+  return g_list_reverse (ret);
+}
+
+/**
  * _srt_graphics_get_from_report:
  * @json_obj: (not nullable): A JSON Object representing an ABI,
  *  which is checked for a "graphics-details" member
@@ -1599,6 +2055,7 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
                                         library_vendor,
                                         renderer,
                                         version,
+                                        NULL,  //TODO
                                         graphics_issues,
                                         messages,
                                         exit_status,

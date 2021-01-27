@@ -71,7 +71,8 @@
             "cannot-load",
             "cannot-draw"
           ],
-          "exit-status" : 1
+          "exit-status" : 1,
+          "devices" : []
         },
         "x11/vdpau" : {
           "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",
@@ -138,7 +139,8 @@
       "graphics-details" : {
         "x11/vulkan" : {
           "renderer" : "AMD Radeon RX 5700 XT",
-          "version" : "1.2.136 (device 1002:731f) (driver 2.0.140)"
+          "version" : "1.2.136 (device 1002:731f) (driver 2.0.140)",
+          "devices" : []
         },
         "x11/vdpau" : {
           "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",

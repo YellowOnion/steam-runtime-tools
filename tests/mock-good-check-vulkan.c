@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019-2021 Collabora Ltd.
+ * Copyright © 2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,7 +31,30 @@ int
 main (int argc,
       char **argv)
 {
-  // Give bad output
-  fprintf (stderr, SRT_TEST_BAD_VULKAN_MESSAGES);
-  return 1;
+  // Give good output
+  fprintf (stderr, SRT_TEST_GOOD_VULKAN_MESSAGES);
+
+  printf ("{\"device-info\":{"
+          "\"device-name\":\"" SRT_TEST_GOOD_GRAPHICS_RENDERER "\","
+          "\"device-type\":2,"
+          "\"api-version\":\"" SRT_TEST_GOOD_GRAPHICS_API_VERSION "\","
+          "\"driver-version\":\"" SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION "\","
+          "\"vendor-id\":\"" SRT_TEST_GOOD_GRAPHICS_VENDOR_ID "\","
+          "\"device-id\":\"" SRT_TEST_GOOD_GRAPHICS_DEVICE_ID "\"}}\n"
+          "{\"device-info\":{"
+          "\"device-name\":\"" SRT_TEST_SOFTWARE_GRAPHICS_RENDERER "\","
+          "\"device-type\":4,"
+          "\"api-version\":\"" SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION "\","
+          "\"driver-version\":\"" SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION "\","
+          "\"vendor-id\":\"" SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID "\","
+          "\"device-id\":\"" SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID "\"}}\n"
+          "{\"test\":{"
+          "\"index\":0,"
+          "\"can-draw\":true}}\n"
+          "{\"test\":{"
+          "\"index\":1,"
+          "\"can-draw\":true}}\n");
+
+  return 0;
 }
+

@@ -504,6 +504,46 @@ keys:
         **messages**
         :   Human-readable array of diagnostic messages.
 
+        **devices**
+        :   An array of objects describing the available graphics devices.
+            It is currently printed only when the rendering interface is
+            **vulkan**. Every object has the following keys:
+
+            **name**
+            :   The name of this graphics device, or **null** if it could
+                not be determined.
+
+            **api-version**
+            :   The API version used by this graphics device, or **null**
+                if it could not be determined.
+
+            **driver-version**
+            :   The driver version used by this graphics device, or **null**
+                if it could not be determined.
+
+            **vendor-id**
+            :   The vendor ID of this graphics device, or **null** if it
+                could not be determined.
+
+            **device-id**
+            :   The device ID of this graphics device, or **null** if it
+                could not be determined.
+
+            **type**
+            :   The type of this graphics device, typically one of
+                `integrated-gpu`, `discrete-gpu`, `virtual-gpu`,
+                or `cpu` (denoting software rendering such as llvmpipe).
+
+
+            **messages**
+            :   Human-readable array of diagnostic messages.
+
+            **issues**
+            :   Problems with this graphics device, represented as an array
+                of strings. The array is empty if no problems were detected.
+                The possible values are the same as the ones in the **issues**
+                of **graphics-details**.
+
     **dri_drivers**
     :   An array of objects describing the Mesa DRI driver modules that have been
         found. These drivers are used by Mesa and by older versions of Xorg.

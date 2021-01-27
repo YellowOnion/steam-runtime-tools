@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -46,6 +46,18 @@ typedef struct _SrtGraphicsClass SrtGraphicsClass;
 
 _SRT_PUBLIC
 GType srt_graphics_get_type (void);
+
+typedef struct _SrtGraphicsDevice SrtGraphicsDevice;
+typedef struct _SrtGraphicsDeviceClass SrtGraphicsDeviceClass;
+
+#define SRT_TYPE_GRAPHICS_DEVICE (srt_graphics_device_get_type ())
+#define SRT_GRAPHICS_DEVICE(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_GRAPHICS_DEVICE, SrtGraphicsDevice))
+#define SRT_GRAPHICS_DEVICE_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_GRAPHICS_DEVICE, SrtGraphicsDeviceClass))
+#define SRT_IS_GRAPHICS_DEVICE(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_GRAPHICS_DEVICE))
+#define SRT_IS_GRAPHICS_DEVICE_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_GRAPHICS_DEVICE))
+#define SRT_GRAPHICS_DEVICE_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_GRAPHICS_DEVICE, SrtGraphicsDeviceClass)
+_SRT_PUBLIC
+GType srt_graphics_device_get_type (void);
 
 /* Backward compatibility with previous steam-runtime-tools naming */
 #define SRT_GRAPHICS_ISSUES_INTERNAL_ERROR SRT_GRAPHICS_ISSUES_UNKNOWN
@@ -133,6 +145,48 @@ typedef enum
 
 #define SRT_N_RENDERING_INTERFACES (SRT_RENDERING_INTERFACE_VAAPI + 1)
 
+/**
+ * SrtVkPhysicalDeviceType:
+ * @SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER: The GPU does not match any other available types
+ * @SRT_VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: The GPU is typically one embedded in or
+ *  tightly coupled with the host
+ * @SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: The GPU is typically a separate processor
+ *  connected to the host via an interlink.
+ * @SRT_VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: The GPU is typically a virtual node in a
+ *  virtualization environment
+ * @SRT_VK_PHYSICAL_DEVICE_TYPE_CPU: The GPU is typically running on the same processors
+ *  as the host (software rendering such as llvmpipe)
+ *
+ * These enums have been taken from the VkPhysicalDeviceType Vulkan specs.
+ * Please keep them in sync.
+ * https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkPhysicalDeviceType.html
+ */
+typedef enum
+{
+  SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER = 0,
+  SRT_VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU = 1,
+  SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU = 2,
+  SRT_VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU = 3,
+  SRT_VK_PHYSICAL_DEVICE_TYPE_CPU = 4,
+} SrtVkPhysicalDeviceType;
+
+_SRT_PUBLIC
+SrtGraphicsIssues srt_graphics_device_get_issues (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_name (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_api_version (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_driver_version (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_vendor_id (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_device_id (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_messages (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+SrtVkPhysicalDeviceType srt_graphics_device_get_device_type (SrtGraphicsDevice *self);
+
 _SRT_PUBLIC
 const char *srt_graphics_get_multiarch_tuple (SrtGraphics *self);
 _SRT_PUBLIC
@@ -150,6 +204,8 @@ _SRT_PUBLIC
 const char *srt_graphics_get_renderer_string (SrtGraphics *self);
 _SRT_PUBLIC
 const char *srt_graphics_get_messages (SrtGraphics *self);
+_SRT_PUBLIC
+GList *srt_graphics_get_devices (SrtGraphics *self);
 _SRT_PUBLIC
 gchar *srt_graphics_dup_parameters_string (SrtGraphics *self);
 _SRT_PUBLIC
@@ -340,6 +396,7 @@ const gchar *srt_glx_icd_get_library_path (SrtGlxIcd *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphics, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGraphicsDevice, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglIcd, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtDriDriver, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVaApiDriver, g_object_unref)

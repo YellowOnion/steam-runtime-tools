@@ -1,6 +1,6 @@
 /*< internal_header >*/
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -27,12 +27,35 @@
 #pragma once
 
 // Test strings for use in mock and graphics test
-#define SRT_TEST_GOOD_GRAPHICS_RENDERER "Mesa DRI Intel(R) Haswell Desktop "
+#define SRT_TEST_GOOD_GRAPHICS_RENDERER "AMD RADV NAVI10 (ACO)"
+#define SRT_TEST_GOOD_GRAPHICS_API_VERSION "1.2.145"
+#define SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION "20.3.3"
+#define SRT_TEST_GOOD_GRAPHICS_VENDOR_ID "0x1002"
+#define SRT_TEST_GOOD_GRAPHICS_DEVICE_ID "0x731f"
+
 #define SRT_TEST_SOFTWARE_GRAPHICS_RENDERER "llvmpipe (LLVM 8.0, 256 bits)"
+#define SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION "1.0.2"
+#define SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION "0.0.1"
+#define SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID "0x10005"
+#define SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID "0"
+
 #define SRT_TEST_GOOD_GRAPHICS_VERSION "3.0 Mesa 19.1.3"
 #define SRT_TEST_SOFTWARE_GRAPHICS_VERSION "3.1 Mesa 19.1.3"
-#define SRT_TEST_GOOD_VULKAN_DRIVER_VERSION "79695877"
-#define SRT_TEST_GOOD_VULKAN_VERSION "1.1.102 (device 8086:0412) (driver 19.1.5)"
+#define SRT_TEST_GOOD_VULKAN_MESSAGES "WARNING: lavapipe is not a conformant vulkan implementation, testing use only."
+#define SRT_TEST_GOOD_VULKAN_VERSION \
+SRT_TEST_GOOD_GRAPHICS_API_VERSION \
+" (device " \
+SRT_TEST_GOOD_GRAPHICS_VENDOR_ID \
+":" \
+SRT_TEST_GOOD_GRAPHICS_DEVICE_ID \
+") (driver " \
+SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION \
+")"
+
+#define SRT_TEST_MIXED_VULKAN_MESSAGES_1 "Failed to open file “./_build/helpers/shaders/vert.spv”: No such file or directory"
+#define SRT_TEST_MIXED_VULKAN_MESSAGES_2 "vkWaitForFences (dev_props->device, 1, &dev_props->in_flight_fences[dev_props->current_frame], VK_TRUE, 1) failed: TIMEOUT (2)"
+#define SRT_TEST_BAD_VULKAN_MESSAGES "failed to create window surface!\n"
+
 #define SRT_TEST_GOOD_VDPAU_RENDERER "G3DVL VDPAU Driver Shared Library version 1.0\n"
 #define SRT_TEST_BAD_VDPAU_MESSAGES "Failed to open VDPAU backend libvdpau_nvidia.so: cannot open shared object file: No such file or directory\n\
 vdp_device_create_x11 (display, screen, &device, &vdp_get_proc_address) failed: 1\n"

@@ -1631,6 +1631,8 @@ main (int argc,
       pv_bwrap_add_api_filesystems (bwrap);
 
       /* The FlatpakExports will populate /run/host for us */
+      flatpak_exports_add_host_etc_expose (exports,
+                                           FLATPAK_FILESYSTEM_MODE_READ_ONLY);
       flatpak_exports_add_host_os_expose (exports,
                                           FLATPAK_FILESYSTEM_MODE_READ_ONLY);
 

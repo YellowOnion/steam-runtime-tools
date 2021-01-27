@@ -77,6 +77,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   int mutable_parent_fd;
   int mutable_sysroot_fd;
+  int provider_fd;
   gboolean any_libc_from_provider;
   gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
@@ -974,6 +975,10 @@ pv_runtime_initable_init (GInitable *initable,
         }
     }
 
+  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE,
+                       &self->provider_fd, error))
+    return FALSE;
+
   /* Path that, when resolved in the host namespace, points to the provider */
   self->provider_in_host_namespace =
     pv_current_namespace_path_to_host_path (self->provider_in_current_namespace);
@@ -1022,6 +1027,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->mutable_parent);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
+  glnx_close_fd (&self->provider_fd);
   g_free (self->provider_in_current_namespace);
   g_free (self->provider_in_host_namespace);
   g_free (self->provider_in_container_namespace);
@@ -2382,7 +2388,6 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
                                      GError **error)
 {
   glnx_autofd int path_fd = -1;
-  glnx_autofd int provider_fd = -1;
   g_autofree gchar *ld_so_relative_to_provider = NULL;
   g_autofree gchar *ld_so_in_provider = NULL;
 
@@ -2390,10 +2395,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
 
   g_debug ("Making provider's ld.so visible in container");
 
-  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
-    return FALSE;
-
-  path_fd = _srt_resolve_in_sysroot (provider_fd,
+  path_fd = _srt_resolve_in_sysroot (self->provider_fd,
                                      arch->ld_so, SRT_RESOLVE_FLAGS_READABLE,
                                      &ld_so_relative_to_provider, error);
 

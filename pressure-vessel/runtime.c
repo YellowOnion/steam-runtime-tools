@@ -1729,8 +1729,8 @@ bind_runtime_base (PvRuntime *self,
     }
 
   flatpak_bwrap_add_args (bwrap,
-                          "--tmpfs", "/tmp",
-                          "--tmpfs", "/var",
+                          "--dir", "/tmp",
+                          "--dir", "/var",
                           "--symlink", "../run", "/var/run",
                           NULL);
 

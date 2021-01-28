@@ -386,6 +386,53 @@ print_graphics_details(JsonBuilder *builder,
             }
 
         }
+
+      if (rendering_interface == SRT_RENDERING_INTERFACE_VULKAN)
+        {
+          g_autoptr(SrtObjectList) devices = srt_graphics_get_devices (g->data);
+          const GList *iter;
+          json_builder_set_member_name (builder, "devices");
+          json_builder_begin_array (builder);
+            {
+              for (iter = devices; iter != NULL; iter = iter->next)
+                {
+                  json_builder_begin_object (builder);
+                  json_builder_set_member_name (builder, "name");
+                  json_builder_add_string_value (builder,
+                                                 srt_graphics_device_get_name (iter->data));
+                  json_builder_set_member_name (builder, "api-version");
+                  json_builder_add_string_value (builder,
+                                                 srt_graphics_device_get_api_version (iter->data));
+                  json_builder_set_member_name (builder, "driver-version");
+                  json_builder_add_string_value (builder,
+                                                 srt_graphics_device_get_driver_version (iter->data));
+                  json_builder_set_member_name (builder, "vendor-id");
+                  json_builder_add_string_value (builder,
+                                                 srt_graphics_device_get_vendor_id (iter->data));
+                  json_builder_set_member_name (builder, "device-id");
+                  json_builder_add_string_value (builder,
+                                                 srt_graphics_device_get_device_id (iter->data));
+                  json_builder_set_member_name (builder, "type");
+                  jsonify_enum (builder, SRT_TYPE_VK_PHYSICAL_DEVICE_TYPE,
+                                srt_graphics_device_get_device_type (iter->data));
+
+                  messages = srt_graphics_device_get_messages (iter->data);
+                  if (messages != NULL)
+                    _srt_json_builder_add_array_of_lines (builder, "messages", messages);
+
+                  if (srt_graphics_device_get_issues (iter->data) != SRT_GRAPHICS_ISSUES_NONE)
+                    {
+                      json_builder_set_member_name (builder, "issues");
+                      json_builder_begin_array (builder);
+                      jsonify_graphics_issues (builder, srt_graphics_device_get_issues (iter->data));
+                      json_builder_end_array (builder);
+                    }
+                  json_builder_end_object (builder);
+                }
+            }
+          json_builder_end_array (builder);
+        }
+
       json_builder_end_object (builder); // End object for parameters
       g_free (parameters);
     }

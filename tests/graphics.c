@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -205,14 +205,14 @@ static void
 test_object (Fixture *f,
              gconstpointer context)
 {
-  SrtGraphics *graphics;
+  g_autoptr(SrtGraphics) graphics = NULL;
   SrtGraphicsIssues issues;
   SrtGraphicsLibraryVendor library_vendor;
   gboolean vendor_neutral;
-  gchar *messages;
-  gchar *tuple;
-  gchar *renderer;
-  gchar *version;
+  g_autofree gchar *messages = NULL;
+  g_autofree gchar *tuple = NULL;
+  g_autofree gchar *renderer = NULL;
+  g_autofree gchar *version = NULL;
   int exit_status;
   int terminating_signal;
 
@@ -222,6 +222,7 @@ test_object (Fixture *f,
                                SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
                                SRT_TEST_GOOD_GRAPHICS_RENDERER,
                                SRT_TEST_GOOD_GRAPHICS_VERSION,
+                               NULL,
                                SRT_GRAPHICS_ISSUES_NONE,
                                "",
                                0,
@@ -258,11 +259,6 @@ test_object (Fixture *f,
   g_assert_cmpstr (version, ==, SRT_TEST_GOOD_GRAPHICS_VERSION);
   g_assert_cmpint (exit_status, ==, 0);
   g_assert_cmpint (terminating_signal, ==, 0);
-  g_free (messages);
-  g_free (tuple);
-  g_free (renderer);
-  g_free (version);
-  g_object_unref (graphics);
 }
 
 /*
@@ -331,7 +327,7 @@ test_normalize_window_system (Fixture *f,
      * are too old) */
   };
   gsize i;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
 
   srt_system_info_set_helpers_path (info, f->builddir);
 
@@ -387,8 +383,6 @@ test_normalize_window_system (Fixture *f,
       g_assert_cmpint (winsys, ==, test_vector->out.winsys);
       g_clear_object (&graphics);
     }
-
-  g_object_unref (info);
 }
 
 /*
@@ -398,13 +392,13 @@ static void
 test_sigusr (Fixture *f,
                gconstpointer context)
 {
-  SrtGraphics *graphics = NULL;
+  g_autoptr(SrtGraphics) graphics = NULL;
   SrtGraphicsIssues issues;
-  gchar *tuple;
+  g_autofree gchar *tuple = NULL;
   int exit_status;
   int terminating_signal;
 
-  SrtSystemInfo *info = srt_system_info_new (NULL);
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
 
   issues = srt_system_info_check_graphics (info,
@@ -428,10 +422,6 @@ test_sigusr (Fixture *f,
       g_assert_cmpint (exit_status, ==, 128 + SIGUSR1);
     }
   g_assert_cmpint (terminating_signal, ==, SIGUSR1);
-  g_free (tuple);
-
-  g_object_unref (graphics);
-  g_object_unref (info);
 }
 
 /*
@@ -440,12 +430,12 @@ test_sigusr (Fixture *f,
 static void
 assert_egl_icd (SrtEglIcd *icd)
 {
-  GError *error = NULL;
-  GError *error_property = NULL;
-  gchar *json_path = NULL;
-  gchar *library_path = NULL;
-  gchar *resolved = NULL;
-  gchar *resolved_property = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GError) error_property = NULL;
+  g_autofree gchar *json_path = NULL;
+  g_autofree gchar *library_path = NULL;
+  g_autofree gchar *resolved = NULL;
+  g_autofree gchar *resolved_property = NULL;
 
   g_assert_true (SRT_IS_EGL_ICD (icd));
 
@@ -497,13 +487,6 @@ assert_egl_icd (SrtEglIcd *icd)
       g_assert_cmpstr (resolved, ==, NULL);
       g_assert_cmpstr (resolved_property, ==, NULL);
     }
-
-  g_clear_error (&error);
-  g_clear_error (&error_property);
-  g_free (json_path);
-  g_free (library_path);
-  g_free (resolved);
-  g_free (resolved_property);
 }
 
 /*
@@ -555,8 +538,9 @@ test_icd_egl (Fixture *f,
               gconstpointer context)
 {
   const Config *config = context;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  GList *icds;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) icds = NULL;
+  g_autofree gchar *resolved = NULL;
   const GList *iter;
   const char * const multiarchs[] = { "mock-abi", NULL };
 
@@ -589,7 +573,6 @@ test_icd_egl (Fixture *f,
   if (config != NULL && config->icd_mode == ICD_MODE_EXPLICIT_DIRS)
     {
       SrtEglIcd *other;
-      gchar *resolved;
 
       iter = icds;
       g_assert_nonnull (iter);
@@ -637,7 +620,6 @@ test_icd_egl (Fixture *f,
                        "/opt/libEGL_myvendor.so");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "/opt/libEGL_myvendor.so");
-      g_free (resolved);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -675,7 +657,6 @@ test_icd_egl (Fixture *f,
   else if (config != NULL && config->icd_mode == ICD_MODE_RELATIVE_FILENAMES)
     {
       const char *path;
-      gchar *resolved;
 
       iter = icds;
       g_assert_nonnull (iter);
@@ -695,7 +676,6 @@ test_icd_egl (Fixture *f,
                        "libEGL_mesa.so.0");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libEGL_mesa.so.0");
-      g_free (resolved);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -735,7 +715,6 @@ test_icd_egl (Fixture *f,
   else if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     {
       SrtEglIcd *other;
-      gchar *resolved;
 
       iter = icds;
       g_assert_nonnull (iter);
@@ -747,7 +726,6 @@ test_icd_egl (Fixture *f,
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==,
                        "/usr/lib/mock-abi/GL/glvnd/egl_vendor.d/../libEGL_relative.so");
-      g_free (resolved);
 
       other = srt_egl_icd_new_replace_library_path (iter->data,
                                                     "/run/host/libEGL.so");
@@ -766,8 +744,6 @@ test_icd_egl (Fixture *f,
     }
   else
     {
-      gchar *resolved;
-
       /* EGL ICDs don't respect the XDG variables, so XDG_DIRS is the same
        * as NORMAL. */
       iter = icds;
@@ -786,13 +762,10 @@ test_icd_egl (Fixture *f,
                        "libEGL_mesa.so.0");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libEGL_mesa.so.0");
-      g_free (resolved);
 
       iter = iter->next;
       g_assert_null (iter);
     }
-
-  g_list_free_full (icds, g_object_unref);
 }
 
 /*
@@ -801,13 +774,13 @@ test_icd_egl (Fixture *f,
 static void
 assert_vulkan_icd (SrtVulkanIcd *icd)
 {
-  GError *error = NULL;
-  GError *error_property = NULL;
-  gchar *api_version = NULL;
-  gchar *json_path = NULL;
-  gchar *library_path = NULL;
-  gchar *resolved = NULL;
-  gchar *resolved_property = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GError) error_property = NULL;
+  g_autofree gchar *api_version = NULL;
+  g_autofree gchar *json_path = NULL;
+  g_autofree gchar *library_path = NULL;
+  g_autofree gchar *resolved = NULL;
+  g_autofree gchar *resolved_property = NULL;
 
   g_assert_true (SRT_IS_VULKAN_ICD (icd));
 
@@ -863,14 +836,6 @@ assert_vulkan_icd (SrtVulkanIcd *icd)
       g_assert_cmpstr (resolved, ==, NULL);
       g_assert_cmpstr (resolved_property, ==, NULL);
     }
-
-  g_clear_error (&error);
-  g_clear_error (&error_property);
-  g_free (api_version);
-  g_free (json_path);
-  g_free (library_path);
-  g_free (resolved);
-  g_free (resolved_property);
 }
 
 /*
@@ -901,9 +866,10 @@ test_icd_vulkan (Fixture *f,
                  gconstpointer context)
 {
   const Config *config = context;
-  SrtSystemInfo *info = srt_system_info_new (NULL);
-  GList *icds;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) icds = NULL;
   const GList *iter;
+  g_autofree gchar *resolved = NULL;
   const char * const multiarchs[] = { "mock-abi", NULL };
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
@@ -1042,7 +1008,6 @@ test_icd_vulkan (Fixture *f,
     }
   else if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     {
-      gchar *resolved;
       SrtVulkanIcd *other;
 
       iter = icds;
@@ -1108,7 +1073,6 @@ test_icd_vulkan (Fixture *f,
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "/usr/lib/i386-linux-gnu/libvulkan_intel.so");
-      g_free (resolved);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1131,8 +1095,6 @@ test_icd_vulkan (Fixture *f,
     }
   else if (config != NULL && config->icd_mode == ICD_MODE_XDG_DIRS)
     {
-      gchar *resolved;
-
       iter = icds;
       g_assert_nonnull (iter);
       /* We load $XDG_CONFIG_DIRS instead of /etc/xdg */
@@ -1153,7 +1115,6 @@ test_icd_vulkan (Fixture *f,
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
-      g_free (resolved);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1190,8 +1151,6 @@ test_icd_vulkan (Fixture *f,
     }
   else
     {
-      gchar *resolved;
-
       iter = icds;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
@@ -1221,7 +1180,6 @@ test_icd_vulkan (Fixture *f,
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "/usr/lib/i386-linux-gnu/libvulkan_intel.so");
-      g_free (resolved);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1242,8 +1200,6 @@ test_icd_vulkan (Fixture *f,
       iter = iter->next;
       g_assert_null (iter);
     }
-
-  g_list_free_full (icds, g_object_unref);
 }
 
 typedef struct
@@ -1677,9 +1633,9 @@ check_paths_are_absolute (const GList *list,
                           SrtGraphicsModule module)
 {
   const gchar *library_path = NULL;
-  gchar *absolute_path = NULL;
   for (const GList *iter = list; iter != NULL; iter = iter->next)
     {
+      g_autofree gchar *absolute_path = NULL;
       switch (module)
         {
           case SRT_GRAPHICS_DRI_MODULE:
@@ -1705,7 +1661,6 @@ check_paths_are_absolute (const GList *list,
       g_assert_cmpstr (library_path, ==, absolute_path);
       g_assert_nonnull (library_path);
       g_assert_cmpint (library_path[0], ==, '/');
-      g_free (absolute_path);
     }
 }
 
@@ -1714,10 +1669,10 @@ check_paths_are_relative (const GList *list,
                           SrtGraphicsModule module)
 {
   const gchar *library_path = NULL;
-  gchar *absolute_path = NULL;
   gsize i = 0;
   for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
     {
+      g_autofree gchar *absolute_path = NULL;
       switch (module)
         {
           case SRT_GRAPHICS_DRI_MODULE:
@@ -1746,7 +1701,6 @@ check_paths_are_relative (const GList *list,
       g_assert_cmpint (library_path[0], !=, '/');
       g_assert_cmpint (absolute_path[0], ==, '/');
       assert_same_file (library_path, absolute_path);
-      g_free (absolute_path);
     }
 }
 
@@ -1754,9 +1708,9 @@ static void
 test_dri_debian10 (Fixture *f,
                    gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
   GList *dri;
   GList *va_api;
   const gchar *multiarch_tuples[] = {"i386-mock-debian", "x86_64-mock-debian", NULL};
@@ -1830,19 +1784,15 @@ test_dri_debian10 (Fixture *f,
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes_x86_64, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
 test_dri_fedora (Fixture *f,
                  gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
   GList *dri;
   GList *va_api;
   const gchar *multiarch_tuples[] = {"i386-mock-fedora", "x86_64-mock-fedora", NULL};
@@ -1886,19 +1836,15 @@ test_dri_fedora (Fixture *f,
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_64, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
 test_dri_ubuntu16 (Fixture *f,
                    gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
   GList *dri;
   GList *va_api;
   const gchar *multiarch_tuples[] = {"mock-ubuntu-64-bit", NULL};
@@ -1937,27 +1883,23 @@ test_dri_ubuntu16 (Fixture *f,
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
 test_dri_with_env (Fixture *f,
                    gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
-  gchar *libgl;
-  gchar *libgl2;
-  gchar *libgl3;
-  gchar *libva;
-  gchar *libva2;
-  gchar *libva3;
-  gchar *libgl_combined;
-  gchar *libva_combined;
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
+  g_autofree gchar *libgl = NULL;
+  g_autofree gchar *libgl2 = NULL;
+  g_autofree gchar *libgl3 = NULL;
+  g_autofree gchar *libva = NULL;
+  g_autofree gchar *libva2 = NULL;
+  g_autofree gchar *libva3 = NULL;
+  g_autofree gchar *libgl_combined = NULL;
+  g_autofree gchar *libva_combined = NULL;
   GList *dri;
   GList *va_api;
   const gchar *multiarch_tuples[] = {"i386-mock-fedora", NULL};
@@ -2069,29 +2011,17 @@ test_dri_with_env (Fixture *f,
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   check_paths_are_relative (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_free (libgl_combined);
-  g_free (libva_combined);
-  g_free (libgl);
-  g_free (libgl2);
-  g_free (libgl3);
-  g_free (libva);
-  g_free (libva2);
-  g_free (libva3);
-  g_strfreev (envp);
 }
 
 static void
 test_dri_flatpak (Fixture *f,
                   gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
-  GList *dri;
-  GList *va_api;
+  g_autoptr(SrtSystemInfo) info;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
+  g_autoptr(SrtObjectList) dri = NULL;
+  g_autoptr(SrtObjectList) va_api = NULL;
   const gchar *multiarch_tuples[] = { "mock-abi", NULL };
   const gchar *dri_suffixes[] = {"/usr/lib/mock-abi/GL/lib/dri/i965_dri.so",
                                   NULL};
@@ -2113,15 +2043,9 @@ test_dri_flatpak (Fixture *f,
 
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
-  g_list_free_full (dri, g_object_unref);
 
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
-  g_list_free_full (va_api, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
 }
 
 typedef struct
@@ -2266,12 +2190,12 @@ test_vdpau (Fixture *f,
   for (gsize i = 0; i < G_N_ELEMENTS (vdpau_test); i++)
     {
       const VdpauTest *test = &vdpau_test[i];
-      SrtSystemInfo *info;
-      gchar **envp;
-      gchar *sysroot;
-      gchar *ld_library_path = NULL;
-      gchar *vdpau_path = NULL;
-      gchar *vdpau_relative_path = NULL;
+      g_autoptr(SrtSystemInfo) info = NULL;
+      g_auto(GStrv) envp = NULL;
+      g_autofree gchar *sysroot = NULL;
+      g_autofree gchar *ld_library_path = NULL;
+      g_autofree gchar *vdpau_path = NULL;
+      g_autofree gchar *vdpau_relative_path = NULL;
       GList *vdpau;
 
       g_test_message ("%s: %s", test->sysroot, test->description);
@@ -2345,15 +2269,20 @@ test_vdpau (Fixture *f,
           check_paths_are_relative (vdpau, SRT_GRAPHICS_VDPAU_MODULE);
           g_list_free_full (vdpau, g_object_unref);
         }
-
-      g_object_unref (info);
-      g_free (sysroot);
-      g_free (ld_library_path);
-      g_free (vdpau_path);
-      g_free (vdpau_relative_path);
-      g_strfreev (envp);
     }
 }
+
+typedef struct
+{
+  SrtGraphicsIssues issues;
+  const gchar *name;
+  const gchar *api_version;
+  const gchar *driver_version;
+  const gchar *vendor_id;
+  const gchar *device_id;
+  const gchar *messages;
+  SrtVkPhysicalDeviceType type;
+} GraphicsDeviceTest;
 
 typedef struct
 {
@@ -2367,6 +2296,8 @@ typedef struct
   const gchar *renderer_string;
   const gchar *version_string;
   const gchar *messages;
+  /* Arbitrary size, increase it if necessary */
+  GraphicsDeviceTest devices[4];
   int exit_status;
   gboolean vendor_neutral;
 } GraphicsTest;
@@ -2465,6 +2396,27 @@ static const GraphicsTest graphics_test[] =
     .multiarch_tuple = "mock-good",
     .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
     .version_string = SRT_TEST_GOOD_VULKAN_VERSION,
+    .messages = SRT_TEST_GOOD_VULKAN_MESSAGES,
+    .devices =
+    {
+      {
+        .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+      },
+      {
+        .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
+        .issues = SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING,
+      },
+    },
     .vendor_neutral = TRUE,
   },
 
@@ -2472,23 +2424,46 @@ static const GraphicsTest graphics_test[] =
     .description = "bad vulkan",
     .window_system = SRT_WINDOW_SYSTEM_X11,
     .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
-    .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD,
+    .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD | SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
     .multiarch_tuple = "mock-bad",
-    .messages = "/build/vulkan-tools/src/Vulkan-Tools-1.1.114/vulkaninfo/vulkaninfo.c:5884: failed with VK_ERROR_INITIALIZATION_FAILED\n",
+    .messages = SRT_TEST_BAD_VULKAN_MESSAGES,
     .exit_status = 1,
     .vendor_neutral = TRUE,
   },
 
   {
-    .description = "good vulkan driver but check-vulkan failure",
+    .description = "good vulkan driver but drawing test fails",
     .window_system = SRT_WINDOW_SYSTEM_X11,
     .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
     .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
     .multiarch_tuple = "mock-mixed",
     .renderer_string = SRT_TEST_GOOD_GRAPHICS_RENDERER,
     .version_string = SRT_TEST_GOOD_VULKAN_VERSION,
-    .messages = "failed to create window surface!\n",
+    .messages = SRT_TEST_GOOD_VULKAN_MESSAGES,
     .exit_status = 1,
+    .devices =
+    {
+      {
+        .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+        .messages = SRT_TEST_MIXED_VULKAN_MESSAGES_1,
+        .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+      },
+      {
+        .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
+        .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
+        .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
+        .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
+        .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
+        .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
+        .messages = SRT_TEST_MIXED_VULKAN_MESSAGES_2,
+        .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW | SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING,
+      },
+    },
     .vendor_neutral = TRUE,
   },
 
@@ -2521,20 +2496,23 @@ test_check_graphics (Fixture *f,
   for (gsize i = 0; i < G_N_ELEMENTS (graphics_test); i++)
     {
       const GraphicsTest *test = &graphics_test[i];
-      SrtGraphics *graphics = NULL;
+      g_autoptr(SrtGraphics) graphics = NULL;
+      g_autoptr(SrtObjectList) devices = NULL;
       SrtGraphicsIssues issues;
-      gchar *tuple;
-      gchar *renderer;
-      gchar *version;
-      gchar *messages;
+      g_autofree gchar *tuple = NULL;
+      g_autofree gchar *renderer = NULL;
+      g_autofree gchar *version = NULL;
+      g_autofree gchar *messages = NULL;
       int exit_status;
       int terminating_signal;
       gboolean vendor_neutral;
       SrtGraphicsLibraryVendor library_vendor;
+      GList *iter;
+      gsize j;
 
       g_test_message ("%s", test->description);
 
-      SrtSystemInfo *info = srt_system_info_new (NULL);
+      g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
       srt_system_info_set_helpers_path (info, f->builddir);
       srt_system_info_set_test_flags (info, test->test_flags);
 
@@ -2549,6 +2527,50 @@ test_check_graphics (Fixture *f,
       g_assert_cmpstr (srt_graphics_get_messages (graphics), ==, test->messages);
       g_assert_cmpint (srt_graphics_get_exit_status (graphics), ==, test->exit_status);
       g_assert_cmpint (srt_graphics_get_terminating_signal (graphics), ==, 0);
+
+      devices = srt_graphics_get_devices (graphics);
+      for (j = 0, iter = devices; iter != NULL; iter = iter->next, j++)
+        {
+          g_autofree gchar *name = NULL;
+          g_autofree gchar *api_version = NULL;
+          g_autofree gchar *driver_version = NULL;
+          g_autofree gchar *vendor_id = NULL;
+          g_autofree gchar *device_id = NULL;
+          SrtVkPhysicalDeviceType type;
+
+          g_assert_cmpstr (srt_graphics_device_get_name (iter->data), ==, test->devices[j].name);
+          g_assert_cmpstr (srt_graphics_device_get_api_version (iter->data), ==,
+                           test->devices[j].api_version);
+          g_assert_cmpstr (srt_graphics_device_get_driver_version (iter->data), ==,
+                           test->devices[j].driver_version);
+          g_assert_cmpstr (srt_graphics_device_get_vendor_id (iter->data), ==,
+                           test->devices[j].vendor_id);
+          g_assert_cmpstr (srt_graphics_device_get_device_id (iter->data), ==,
+                           test->devices[j].device_id);
+          g_assert_cmpint (srt_graphics_device_get_device_type (iter->data), ==,
+                           test->devices[j].type);
+          g_assert_cmpstr (srt_graphics_device_get_messages (iter->data), ==,
+                           test->devices[j].messages);
+          g_assert_cmpint (srt_graphics_device_get_issues (iter->data), ==,
+                           test->devices[j].issues);
+
+          g_object_get (iter->data,
+                        "name", &name,
+                        "api-version", &api_version,
+                        "driver-version", &driver_version,
+                        "vendor-id", &vendor_id,
+                        "device-id", &device_id,
+                        "type", &type,
+                        "issues", &issues,
+                        NULL);
+          g_assert_cmpstr (name, ==, test->devices[j].name);
+          g_assert_cmpstr (api_version, ==, test->devices[j].api_version);
+          g_assert_cmpstr (driver_version, ==, test->devices[j].driver_version);
+          g_assert_cmpstr (vendor_id, ==, test->devices[j].vendor_id);
+          g_assert_cmpstr (device_id, ==, test->devices[j].device_id);
+          g_assert_cmpint (type, ==, test->devices[j].type);
+          g_assert_cmpint (issues, ==, test->devices[j].issues);
+        }
 
       vendor_neutral = srt_graphics_library_is_vendor_neutral (graphics, &library_vendor);
       g_assert_cmpint (library_vendor, ==, test->library_vendor);
@@ -2570,13 +2592,6 @@ test_check_graphics (Fixture *f,
       g_assert_cmpstr (messages, ==, test->messages);
       g_assert_cmpint (exit_status, ==, test->exit_status);
       g_assert_cmpint (terminating_signal, ==, 0);
-      g_free (tuple);
-      g_free (renderer);
-      g_free (version);
-      g_free (messages);
-
-      g_object_unref (graphics);
-      g_object_unref (info);
     }
 }
 
@@ -2590,9 +2605,9 @@ static void
 test_glx_debian (Fixture *f,
                  gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
   GList *glx;
   const gchar *multiarch_tuples[] = {"i386-mock-debian", "x86_64-mock-debian", NULL};
   const gchar *glx_suffixes_i386[] = {"libGLX_mesa.so.0",
@@ -2630,19 +2645,15 @@ test_glx_debian (Fixture *f,
   check_list_suffixes (glx, glx_suffixes_x86_64, SRT_GRAPHICS_GLX_MODULE);
   check_list_links (glx, glx_paths_x86_64, SRT_GRAPHICS_GLX_MODULE);
   g_list_free_full (glx, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static void
 test_glx_container (Fixture *f,
                     gconstpointer context)
 {
-  SrtSystemInfo *info;
-  gchar **envp;
-  gchar *sysroot;
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_auto(GStrv) envp = NULL;
+  g_autofree gchar *sysroot = NULL;
   GList *glx;
   const gchar *multiarch_tuples[] = {"i386-mock-container", "x86_64-mock-container", NULL};
   const gchar *glx_suffixes_i386[] = {"libGLX_nvidia.so.0",
@@ -2680,10 +2691,6 @@ test_glx_container (Fixture *f,
   check_list_suffixes (glx, glx_suffixes_x86_64, SRT_GRAPHICS_GLX_MODULE);
   check_list_links (glx, glx_paths_x86_64, SRT_GRAPHICS_GLX_MODULE);
   g_list_free_full (glx, g_object_unref);
-
-  g_object_unref (info);
-  g_free (sysroot);
-  g_strfreev (envp);
 }
 
 static const Config dir_config = { ICD_MODE_EXPLICIT_DIRS };

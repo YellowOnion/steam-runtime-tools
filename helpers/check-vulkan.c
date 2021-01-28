@@ -1372,16 +1372,14 @@ int main (int argc,
     goto out;
 
   for (i = 0; i < physical_device_count; i++)
-    print_physical_device_info (physical_devices[i], stderr);
+    print_physical_device_info (physical_devices[i], original_stdout);
 
   for (i = 0; i < physical_device_count; i++)
     {
       result = draw_test_triangle (vk_instance, physical_devices[i], error);
-      print_draw_test_result (i, result, local_error, stderr);
+      print_draw_test_result (i, result, local_error, original_stdout);
 
-      if (local_error != NULL)
-        g_printerr ("%s", local_error->message);
-
+      /* The eventual error has already been included in the drawing test JSON */
       g_clear_error (error);
 
       /* Return exit success if we are able to draw with at least one device */

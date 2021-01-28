@@ -25,6 +25,7 @@
 
 #include <libglnx.h>
 
+#include "steam-runtime-tools/graphics-test-defines.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -2449,6 +2450,18 @@ typedef struct
 
 typedef struct
 {
+  SrtGraphicsIssues issues;
+  const gchar *name;
+  const gchar *api_version;
+  const gchar *driver_version;
+  const gchar *vendor_id;
+  const gchar *device_id;
+  const gchar *messages;
+  SrtVkPhysicalDeviceType type;
+} GraphicsDeviceTest;
+
+typedef struct
+{
   SrtWindowSystem window_system;
   SrtRenderingInterface rendering_interface;
   const gchar *renderer;
@@ -2456,6 +2469,7 @@ typedef struct
   SrtGraphicsLibraryVendor library_vendor;
   SrtGraphicsIssues issues;
   const gchar *messages;
+  GraphicsDeviceTest devices[4];
   int exit_status;
   int terminating_signal;
   gboolean is_available;
@@ -2721,9 +2735,28 @@ static const JsonTest json_test[] =
           {
             .window_system = SRT_WINDOW_SYSTEM_X11,
             .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
-            .renderer = "AMD Radeon RX 5700 XT",
-            .version = "1.2.136 (device 1002:731f) (driver 2.0.140)",
+            .renderer = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+            .version = SRT_TEST_GOOD_VULKAN_VERSION,
             .is_available = TRUE,
+            .devices =
+            {
+              {
+                .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+                .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+                .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+                .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
+                .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
+                .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+              },
+              {
+                .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
+                .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
+                .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
+                .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
+                .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
+                .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
+              },
+            },
           },
           {
             .window_system = SRT_WINDOW_SYSTEM_X11,
@@ -2961,6 +2994,26 @@ static const JsonTest json_test[] =
         .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
         .graphics =
         {
+          {
+            .window_system = SRT_WINDOW_SYSTEM_X11,
+            .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+            .renderer = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+            .version = SRT_TEST_GOOD_VULKAN_VERSION,
+            .is_available = TRUE,
+            .devices =
+            {
+              {
+                .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
+                .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+                .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+                .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
+                /* A trailing newline is added by
+                 * _srt_json_object_dup_array_of_lines_member() */
+                .messages = SRT_TEST_MIXED_VULKAN_MESSAGES_2 "\n",
+                .issues = SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+              },
+            },
+          },
           {
             .window_system = SRT_WINDOW_SYSTEM_X11,
             .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
@@ -3239,6 +3292,7 @@ json_parsing (Fixture *f,
       gchar **driver_environment_list;
       gsize j;
       gsize jj;
+      gsize k;
       GList *icds;
       GList *iter;
       GList *desktop_entries;
@@ -3342,6 +3396,7 @@ json_parsing (Fixture *f,
           for (jj = 0; this_arch.graphics[jj].is_available; jj++)
             {
               SrtGraphics *graphics = NULL;
+              g_autoptr(SrtObjectList) devices = NULL;
               SrtGraphicsLibraryVendor library_vendor;
               srt_system_info_check_graphics (info,
                                               multiarch_tuples[j],
@@ -3362,6 +3417,29 @@ json_parsing (Fixture *f,
                                srt_graphics_get_exit_status (graphics));
               g_assert_cmpint (this_arch.graphics[jj].terminating_signal, ==,
                                srt_graphics_get_terminating_signal (graphics));
+
+              devices = srt_graphics_get_devices (graphics);
+              for (k = 0, iter = devices; iter != NULL; iter = iter->next, k++)
+                {
+                  GraphicsDeviceTest this_device_test = this_arch.graphics[jj].devices[k];
+                  g_assert_cmpstr (srt_graphics_device_get_name (iter->data), ==,
+                                   this_device_test.name);
+                  g_assert_cmpstr (srt_graphics_device_get_api_version (iter->data), ==,
+                                   this_device_test.api_version);
+                  g_assert_cmpstr (srt_graphics_device_get_driver_version (iter->data), ==,
+                                   this_device_test.driver_version);
+                  g_assert_cmpstr (srt_graphics_device_get_vendor_id (iter->data), ==,
+                                   this_device_test.vendor_id);
+                  g_assert_cmpstr (srt_graphics_device_get_device_id (iter->data), ==,
+                                   this_device_test.device_id);
+                  g_assert_cmpint (srt_graphics_device_get_device_type (iter->data), ==,
+                                   this_device_test.type);
+                  g_assert_cmpstr (srt_graphics_device_get_messages (iter->data), ==,
+                                   this_device_test.messages);
+                  g_assert_cmpint (srt_graphics_device_get_issues (iter->data), ==,
+                                   this_device_test.issues);
+                }
+
               g_object_unref (graphics);
             }
 

@@ -77,6 +77,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   int mutable_parent_fd;
   int mutable_sysroot_fd;
+  int provider_fd;
   gboolean any_libc_from_provider;
   gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
@@ -974,6 +975,10 @@ pv_runtime_initable_init (GInitable *initable,
         }
     }
 
+  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE,
+                       &self->provider_fd, error))
+    return FALSE;
+
   /* Path that, when resolved in the host namespace, points to the provider */
   self->provider_in_host_namespace =
     pv_current_namespace_path_to_host_path (self->provider_in_current_namespace);
@@ -1022,6 +1027,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->mutable_parent);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
+  glnx_close_fd (&self->provider_fd);
   g_free (self->provider_in_current_namespace);
   g_free (self->provider_in_host_namespace);
   g_free (self->provider_in_container_namespace);
@@ -1660,18 +1666,29 @@ bind_runtime_base (PvRuntime *self,
   };
   static const char * const dont_bind[] =
   {
-    "/etc/group",
-    "/etc/passwd",
-    "/etc/host.conf",
-    "/etc/hosts",
     "/etc/localtime",
     "/etc/machine-id",
-    "/etc/resolv.conf",
     "/var/cache/ldconfig",
     "/var/lib/dbus",
     "/var/lib/dhcp",
     "/var/lib/sudo",
     "/var/lib/urandom",
+    NULL
+  };
+  static const char * const from_host[] =
+  {
+    /* TODO: Synthesize a passwd with only the user and nobody,
+     * like Flatpak does? */
+    "/etc/group",
+    "/etc/passwd",
+    "/etc/host.conf",
+    "/etc/hosts",
+    "/etc/resolv.conf",
+    NULL
+  };
+  static const char * const from_provider[] =
+  {
+    "/etc/amd",
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
@@ -1712,8 +1729,9 @@ bind_runtime_base (PvRuntime *self,
     }
 
   flatpak_bwrap_add_args (bwrap,
-                          "--tmpfs", "/tmp",
-                          "--tmpfs", "/var",
+                          "--dir", "/tmp",
+                          "--dir", "/var",
+                          "--dir", "/var/tmp",
                           "--symlink", "../run", "/var/run",
                           NULL);
 
@@ -1722,12 +1740,32 @@ bind_runtime_base (PvRuntime *self,
   if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
       || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
     {
+      g_autofree gchar *provider_etc = NULL;
+
       if (!pv_bwrap_bind_usr (bwrap,
                               self->provider_in_host_namespace,
                               self->provider_in_current_namespace,
                               self->provider_in_container_namespace,
                               error))
         return FALSE;
+
+      provider_etc = g_build_filename (self->provider_in_current_namespace,
+                                       "etc", NULL);
+
+      if (g_file_test (provider_etc, G_FILE_TEST_IS_DIR))
+        {
+          g_autofree gchar *in_host = NULL;
+          g_autofree gchar *in_container = NULL;
+
+          in_host = g_build_filename (self->provider_in_host_namespace,
+                                      "etc", NULL);
+          in_container = g_build_filename (self->provider_in_container_namespace,
+                                           "etc", NULL);
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", in_host, in_container,
+                                  NULL);
+        }
     }
 
   for (i = 0; i < G_N_ELEMENTS (bind_mutable); i++)
@@ -1752,6 +1790,12 @@ bind_runtime_base (PvRuntime *self,
           g_autofree gchar *target = NULL;
 
           if (g_strv_contains (dont_bind, dest))
+            continue;
+
+          if (g_strv_contains (from_host, dest))
+            continue;
+
+          if (g_strv_contains (from_provider, dest))
             continue;
 
           full = g_build_filename (self->runtime_files,
@@ -1839,37 +1883,47 @@ bind_runtime_base (PvRuntime *self,
                               NULL);
     }
 
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/resolv.conf", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
-                            NULL);
+  for (i = 0; from_host[i] != NULL; i++)
+    {
+      const char *item = from_host[i];
 
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/host.conf", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/host.conf", "/etc/host.conf",
-                            NULL);
+      if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+                                     item, G_FILE_TEST_EXISTS))
+        flatpak_bwrap_add_args (bwrap,
+                                "--ro-bind", item, item,
+                                NULL);
+    }
 
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/hosts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/hosts", "/etc/hosts",
-                            NULL);
+  for (i = 0; from_provider[i] != NULL; i++)
+    {
+      const char *item = from_provider[i];
+      g_autoptr(GError) local_error = NULL;
+      g_autofree char *path_in_provider = NULL;
+      glnx_autofd int fd = -1;
 
-  /* TODO: Synthesize a passwd with only the user and nobody,
-   * like Flatpak does? */
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/passwd", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/passwd", "/etc/passwd",
-                            NULL);
+      fd = _srt_resolve_in_sysroot (self->provider_fd, item,
+                                    SRT_RESOLVE_FLAGS_NONE,
+                                    &path_in_provider,
+                                    &local_error);
 
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
-                                 "/etc/group", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--ro-bind", "/etc/group", "/etc/group",
-                            NULL);
+      if (fd >= 0)
+        {
+          g_autofree char *host_path = NULL;
+
+          host_path = g_build_filename (self->provider_in_host_namespace,
+                                        path_in_provider, NULL);
+          flatpak_bwrap_add_args (bwrap,
+                                  "--ro-bind", host_path, item,
+                                  NULL);
+        }
+      else
+        {
+          g_debug ("Cannot resolve \"%s\" in \"%s\": %s",
+                   item, self->provider_in_current_namespace,
+                   local_error->message);
+          g_clear_error (&local_error);
+        }
+    }
 
   return TRUE;
 }
@@ -2374,7 +2428,6 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
                                      GError **error)
 {
   glnx_autofd int path_fd = -1;
-  glnx_autofd int provider_fd = -1;
   g_autofree gchar *ld_so_relative_to_provider = NULL;
   g_autofree gchar *ld_so_in_provider = NULL;
 
@@ -2382,10 +2435,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
 
   g_debug ("Making provider's ld.so visible in container");
 
-  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
-    return FALSE;
-
-  path_fd = _srt_resolve_in_sysroot (provider_fd,
+  path_fd = _srt_resolve_in_sysroot (self->provider_fd,
                                      arch->ld_so, SRT_RESOLVE_FLAGS_READABLE,
                                      &ld_so_relative_to_provider, error);
 

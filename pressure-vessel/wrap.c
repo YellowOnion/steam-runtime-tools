@@ -1631,6 +1631,8 @@ main (int argc,
       pv_bwrap_add_api_filesystems (bwrap);
 
       /* The FlatpakExports will populate /run/host for us */
+      flatpak_exports_add_host_etc_expose (exports,
+                                           FLATPAK_FILESYSTEM_MODE_READ_ONLY);
       flatpak_exports_add_host_os_expose (exports,
                                           FLATPAK_FILESYSTEM_MODE_READ_ONLY);
 
@@ -1758,6 +1760,11 @@ main (int argc,
           flatpak_exports_add_path_expose (exports,
                                            FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                            home);
+          /* We always export /tmp for now (see below) and it seems odd
+           * to share /tmp with the host, but not /var/tmp. */
+          flatpak_exports_add_path_expose (exports,
+                                           FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                           "/var/tmp");
 
           /* TODO: All of ~/.steam has traditionally been read/write when not
            * using a per-game home directory, but does it need to be? Maybe we

@@ -1,3 +1,37 @@
+steam-runtime-tools (0.20210128.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pressure-vessel: Make graphics stack provider's /etc/amd available
+    in the container.
+    This is needed for at least one of the AMD-maintained graphics stacks:
+    AMDVLK (open-source) and/or AMDGPU-PRO (proprietary).
+    (Resolves: steam-runtime#313)
+  * pressure-vessel: Make host's /etc available for reference in
+    /run/host/etc inside the container (also graphics stack provider's /etc
+    in /run/gfx/etc, if different)
+  * pressure-vessel: Make /var/tmp available in the container
+  * system-info: Show various environment variables that influence
+    components that we are interested in:
+    - the Steam client
+    - SDL
+    - Wine/Proton
+    - PulseAudio clients
+    - ALSA clients
+  * check-vulkan: Fix compilation on Steam Runtime 1½ 'heavy'.
+    heavy is still on Vulkan loader v1.1.73, which doesn't know
+    VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT.
+  * tests: Fix unit test failure if environment variables like DRI_PRIME
+    are set
+
+  [ Ludovico de Nittis ]
+  * system-info: Show machine-readable info for each Vulkan PhysicalDevice
+    (each GPU/driver combination, plus software rendering if available).
+    This should help us to see what is going wrong in multi-GPU scenarios.
+    (Helps: steam-runtime#312, steam-runtime#341, steam-runtime#352;
+    maybe also steam-runtime#340)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 28 Jan 2021 11:21:31 +0000
+
 steam-runtime-tools (0.20210126.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

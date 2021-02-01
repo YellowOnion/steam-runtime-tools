@@ -36,7 +36,17 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_glx_icd_get_library_path@Base 0.20200306.0
  srt_glx_icd_get_library_soname@Base 0.20200306.0
  srt_glx_icd_get_type@Base 0.20200306.0
+ srt_graphics_device_get_api_version@Base 0.20210201.0
+ srt_graphics_device_get_device_id@Base 0.20210201.0
+ srt_graphics_device_get_device_type@Base 0.20210201.0
+ srt_graphics_device_get_driver_version@Base 0.20210201.0
+ srt_graphics_device_get_issues@Base 0.20210201.0
+ srt_graphics_device_get_messages@Base 0.20210201.0
+ srt_graphics_device_get_name@Base 0.20210201.0
+ srt_graphics_device_get_type@Base 0.20210201.0
+ srt_graphics_device_get_vendor_id@Base 0.20210201.0
  srt_graphics_dup_parameters_string@Base 0.20190822.0
+ srt_graphics_get_devices@Base 0.20210201.0
  srt_graphics_get_exit_status@Base 0.20191209.0
  srt_graphics_get_issues@Base 0.20190822.0
  srt_graphics_get_messages@Base 0.20190926.0
@@ -189,6 +199,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_vdpau_driver_get_type@Base 0.20200306.0
  srt_vdpau_driver_is_extra@Base 0.20200306.0
  srt_vdpau_driver_resolve_library_path@Base 0.20200331.1
+ srt_vk_physical_device_type_get_type@Base 0.20210201.0
  srt_vulkan_icd_check_error@Base 0.20190926.0
  srt_vulkan_icd_get_api_version@Base 0.20190926.0
  srt_vulkan_icd_get_json_path@Base 0.20190926.0

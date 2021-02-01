@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210128.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210201.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Make graphics stack provider's /etc/amd available
@@ -24,13 +24,15 @@ steam-runtime-tools (0.20210128.0) UNRELEASED; urgency=medium
     are set
 
   [ Ludovico de Nittis ]
+  * pressure-vessel: Improve speed of container setup by combining multiple
+    calls to capsule-capture-libs
   * system-info: Show machine-readable info for each Vulkan PhysicalDevice
     (each GPU/driver combination, plus software rendering if available).
     This should help us to see what is going wrong in multi-GPU scenarios.
     (Helps: steam-runtime#312, steam-runtime#341, steam-runtime#352;
     maybe also steam-runtime#340)
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 28 Jan 2021 11:21:31 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 01 Feb 2021 19:03:26 +0000
 
 steam-runtime-tools (0.20210126.0) scout; urgency=medium
 

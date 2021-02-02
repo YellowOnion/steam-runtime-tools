@@ -52,7 +52,8 @@ struct _PvRuntime
   GObject parent;
 
   gchar *bubblewrap;
-  gchar *source_files;
+  gchar *deployment;
+  gchar *source_files;          /* either deployment or that + "/files" */
   gchar *tools_dir;
   PvBwrapLock *runtime_lock;
   GStrv original_environ;
@@ -93,12 +94,12 @@ struct _PvRuntimeClass
 enum {
   PROP_0,
   PROP_BUBBLEWRAP,
+  PROP_DEPLOYMENT,
   PROP_ORIGINAL_ENVIRON,
   PROP_FLAGS,
   PROP_MUTABLE_PARENT,
   PROP_PROVIDER_IN_CURRENT_NAMESPACE,
   PROP_PROVIDER_IN_CONTAINER_NAMESPACE,
-  PROP_SOURCE_FILES,
   PROP_TOOLS_DIRECTORY,
   N_PROPERTIES
 };
@@ -408,8 +409,8 @@ pv_runtime_get_property (GObject *object,
         g_value_set_string (value, self->provider_in_container_namespace);
         break;
 
-      case PROP_SOURCE_FILES:
-        g_value_set_string (value, self->source_files);
+      case PROP_DEPLOYMENT:
+        g_value_set_string (value, self->deployment);
         break;
 
       case PROP_TOOLS_DIRECTORY:
@@ -480,20 +481,20 @@ pv_runtime_set_property (GObject *object,
         self->provider_in_container_namespace = g_value_dup_string (value);
         break;
 
-      case PROP_SOURCE_FILES:
+      case PROP_DEPLOYMENT:
         /* Construct-only */
-        g_return_if_fail (self->source_files == NULL);
+        g_return_if_fail (self->deployment == NULL);
         path = g_value_get_string (value);
 
         if (path != NULL)
           {
-            self->source_files = realpath (path, NULL);
+            self->deployment = realpath (path, NULL);
 
-            if (self->source_files == NULL)
+            if (self->deployment == NULL)
               {
                 /* It doesn't exist. Keep the non-canonical path so we
                  * can warn about it later */
-                self->source_files = g_strdup (path);
+                self->deployment = g_strdup (path);
               }
           }
 
@@ -521,7 +522,7 @@ pv_runtime_constructed (GObject *object)
   g_return_if_fail (self->original_environ != NULL);
   g_return_if_fail (self->provider_in_current_namespace != NULL);
   g_return_if_fail (self->provider_in_container_namespace != NULL);
-  g_return_if_fail (self->source_files != NULL);
+  g_return_if_fail (self->deployment != NULL);
   g_return_if_fail (self->tools_dir != NULL);
 }
 
@@ -854,11 +855,28 @@ pv_runtime_initable_init (GInitable *initable,
                          self->mutable_parent);
     }
 
-  if (!g_file_test (self->source_files, G_FILE_TEST_IS_DIR))
+  if (!g_file_test (self->deployment, G_FILE_TEST_IS_DIR))
     {
       return glnx_throw (error, "\"%s\" is not a directory",
-                         self->source_files);
+                         self->deployment);
     }
+
+  /* If it contains ./files/, assume it's a Flatpak-style runtime where
+   * ./files is a merged /usr and ./metadata is an optional GKeyFile */
+  self->source_files = g_build_filename (self->deployment, "files", NULL);
+
+  if (g_file_test (self->source_files, G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Assuming %s is a Flatpak-style runtime", self->deployment);
+    }
+  else
+    {
+      g_debug ("Assuming %s is a sysroot or merged /usr", self->deployment);
+      g_clear_pointer (&self->source_files, g_free);
+      self->source_files = g_strdup (self->deployment);
+    }
+
+  g_debug ("Taking runtime files from: %s", self->source_files);
 
   if (!g_file_test (self->tools_dir, G_FILE_TEST_IS_DIR))
     {
@@ -1034,6 +1052,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->runtime_files_on_host);
   g_free (self->runtime_usr);
   g_free (self->source_files);
+  g_free (self->deployment);
   g_free (self->tools_dir);
 
   if (self->runtime_lock != NULL)
@@ -1099,8 +1118,8 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
-  properties[PROP_SOURCE_FILES] =
-    g_param_spec_string ("source-files", "Source files",
+  properties[PROP_DEPLOYMENT] =
+    g_param_spec_string ("deployment", "Deployment",
                          ("Path to read-only runtime files (merged-/usr "
                           "or sysroot) in current namespace"),
                          NULL,
@@ -1118,7 +1137,7 @@ pv_runtime_class_init (PvRuntimeClass *cls)
 }
 
 PvRuntime *
-pv_runtime_new (const char *source_files,
+pv_runtime_new (const char *deployment,
                 const char *mutable_parent,
                 const char *bubblewrap,
                 const char *tools_dir,
@@ -1128,7 +1147,7 @@ pv_runtime_new (const char *source_files,
                 PvRuntimeFlags flags,
                 GError **error)
 {
-  g_return_val_if_fail (source_files != NULL, NULL);
+  g_return_val_if_fail (deployment != NULL, NULL);
   g_return_val_if_fail (bubblewrap != NULL, NULL);
   g_return_val_if_fail (tools_dir != NULL, NULL);
   g_return_val_if_fail ((flags & ~(PV_RUNTIME_FLAGS_MASK)) == 0, NULL);
@@ -1139,7 +1158,7 @@ pv_runtime_new (const char *source_files,
                          "bubblewrap", bubblewrap,
                          "original-environ", original_environ,
                          "mutable-parent", mutable_parent,
-                         "source-files", source_files,
+                         "deployment", deployment,
                          "tools-directory", tools_dir,
                          "provider-in-current-namespace",
                            provider_in_current_namespace,

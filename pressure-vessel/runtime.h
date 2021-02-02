@@ -71,7 +71,7 @@ typedef struct _PvRuntimeClass PvRuntimeClass;
 #define PV_RUNTIME_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), PV_TYPE_RUNTIME, PvRuntimeClass)
 GType pv_runtime_get_type (void);
 
-PvRuntime *pv_runtime_new (const char *source_files,
+PvRuntime *pv_runtime_new (const char *deployment,
                            const char *mutable_parent,
                            const char *bubblewrap,
                            const char *tools_dir,

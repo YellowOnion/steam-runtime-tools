@@ -1461,45 +1461,6 @@ icd_details_free (IcdDetails *self)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 
 /*
- * @capture_libs: (not nullable): hash table where the keys are the
- *  destinations and the values are GList of patterns for capsule-capture-libs
- */
-static gboolean
-bind_icd (PvRuntime *self,
-          RuntimeArchitecture *arch,
-          GHashTable *capture_libs,
-          GError **error)
-{
-  GHashTableIter iter;
-  const gchar *dest = NULL;
-  GList *patterns = NULL;
-  const GList *l = NULL;
-
-  g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
-  g_return_val_if_fail (capture_libs != NULL, FALSE);
-
-  if (!pv_runtime_provide_container_access (self, error))
-    return FALSE;
-
-  g_hash_table_iter_init (&iter, capture_libs);
-  while (g_hash_table_iter_next (&iter, (gpointer *)&dest, (gpointer *)&patterns))
-    {
-      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-      flatpak_bwrap_add_args (temp_bwrap, "--dest", dest, NULL);
-
-      for (l = patterns; l != NULL; l = l->next)
-        flatpak_bwrap_add_arg (temp_bwrap, (gchar *)l->data);
-
-      flatpak_bwrap_finish (temp_bwrap);
-
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-        return FALSE;
-    }
-  return TRUE;
-}
-
-/*
  * @sequence_number: numbered directory to use to disambiguate between
  *  colliding files with the same basename
  * @requested_subdir: (not nullable):
@@ -1509,22 +1470,19 @@ bind_icd (PvRuntime *self,
  * @use_subdir_for_soname: if %TRUE, the @requested_subdir will be always
  *  used. If %FALSE, the @requested_subdir will not be used when the provided
  *  library is of the kind "ICD_KIND_SONAME".
- * @patterns_table: (inout) (not nullable): hash table where the keys are the
- *  destinations and the values are GList of patterns for capsule-capture-libs
  * @search_path: (nullable): Add the parent directory of the resulting
  *  ICD to this search path if necessary
  */
 static gboolean
-get_icd_to_bind (PvRuntime *self,
-                 RuntimeArchitecture *arch,
-                 gsize sequence_number,
-                 const char *requested_subdir,
-                 IcdDetails *details,
-                 gboolean *use_numbered_subdirs,
-                 gboolean use_subdir_for_kind_soname,
-                 GHashTable *patterns_table,
-                 GString *search_path,
-                 GError **error)
+bind_icd (PvRuntime *self,
+          RuntimeArchitecture *arch,
+          gsize sequence_number,
+          const char *requested_subdir,
+          IcdDetails *details,
+          gboolean *use_numbered_subdirs,
+          gboolean use_subdir_for_kind_soname,
+          GString *search_path,
+          GError **error)
 {
   static const char options[] = "if-exists:if-same-abi";
   g_autofree gchar *in_current_namespace = NULL;
@@ -1532,12 +1490,14 @@ get_icd_to_bind (PvRuntime *self,
   g_autofree gchar *dependency_pattern = NULL;
   g_autofree gchar *seq_str = NULL;
   g_autofree gchar *final_path = NULL;
-  g_autofree gchar *org_key = NULL;
   const char *base;
   const char *mode;
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize multiarch_index;
+  g_autoptr(GDir) dir = NULL;
+  gsize dir_elements_before = 0;
+  gsize dir_elements_after = 0;
   const gchar *subdir = requested_subdir;
-  GList *patterns_in_hashtable = NULL;
 
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
@@ -1549,7 +1509,6 @@ get_icd_to_bind (PvRuntime *self,
   g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
                         FALSE);
   g_return_val_if_fail (use_numbered_subdirs != NULL, FALSE);
-  g_return_val_if_fail (patterns_table != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   g_info ("Capturing loadable module: %s", details->resolved_library);
@@ -1612,32 +1571,50 @@ get_icd_to_bind (PvRuntime *self,
       return TRUE;
     }
 
+  dir = g_dir_open (in_current_namespace, 0, error);
+  if (dir == NULL)
+    return FALSE;
+
+  /* Number of elements before trying to capture the library */
+  while (g_dir_read_name (dir))
+    dir_elements_before++;
+
   pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
                              options, mode, details->resolved_library);
   dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
                                         options, mode, details->resolved_library);
 
-  /* We can't use g_hash_table_steal_extended() because we are targeting an
-   * older GLib version.
-   *
-   * Steal the key and value from the hash table, without freeing them. Then
-   * we update the list and put it back in the hash table */
-  g_hash_table_lookup_extended (patterns_table, in_current_namespace,
-                                (gpointer *)&org_key, (gpointer *)&patterns_in_hashtable);
-  g_hash_table_steal (patterns_table, in_current_namespace);
-  patterns_in_hashtable = g_list_prepend (patterns_in_hashtable, g_steal_pointer (&pattern));
-  g_hash_table_replace (patterns_table, g_steal_pointer (&in_current_namespace),
-                        patterns_in_hashtable);
-  g_free (org_key);
-  patterns_in_hashtable = NULL;
+  if (!pv_runtime_provide_container_access (self, error))
+    return FALSE;
 
-  g_hash_table_lookup_extended (patterns_table, arch->libdir_in_current_namespace,
-                                (gpointer *)&org_key, (gpointer *)&patterns_in_hashtable);
-  g_hash_table_steal (patterns_table, arch->libdir_in_current_namespace);
-  patterns_in_hashtable = g_list_prepend (patterns_in_hashtable,
-                                          g_steal_pointer (&dependency_pattern));
-  g_hash_table_replace (patterns_table, g_strdup (arch->libdir_in_current_namespace),
-                        patterns_in_hashtable);
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          "--dest", in_current_namespace,
+                          pattern,
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+  g_dir_rewind (dir);
+  while (g_dir_read_name (dir))
+    dir_elements_after++;
+
+  if (dir_elements_before == dir_elements_after)
+    {
+      /* If we have the same number of elements it means that we didn't
+       * create a symlink to the ICD itself (it must have been nonexistent
+       * or for a different ABI). When this happens we set the kinds to
+       * "NONEXISTENT" and return early without trying to capture the
+       * dependencies. */
+      details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
+      /* If the directory is empty we can also remove it */
+      g_rmdir (in_current_namespace);
+      return TRUE;
+    }
 
   /* Only add the numbered subdirectories to the search path. Their
    * parent is expected to be there already. */
@@ -1650,8 +1627,21 @@ get_icd_to_bind (PvRuntime *self,
       pv_search_path_append (search_path, in_container);
     }
 
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap,
+                          "--dest", arch->libdir_in_current_namespace,
+                          dependency_pattern,
+                          NULL);
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
   if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
     {
+      g_assert (in_current_namespace != NULL);
       details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
                                                                        subdir,
                                                                        seq_str ? seq_str : "",
@@ -2723,12 +2713,6 @@ setup_each_json_manifest (PvRuntime *self,
   return TRUE;
 }
 
-static void
-patterns_list_free (gpointer list)
-{
-  g_list_free_full (list, g_free);
-}
-
 static gboolean
 collect_vulkan_layers (PvRuntime *self,
                        const GPtrArray *layer_details,
@@ -2736,11 +2720,6 @@ collect_vulkan_layers (PvRuntime *self,
                        const gchar *dir_name,
                        GError **error)
 {
-  /* (element-type filename GList) */
-  g_autoptr(GHashTable) capture_libs = g_hash_table_new_full (g_str_hash,
-                                                              g_str_equal,
-                                                              g_free,
-                                                              patterns_list_free);
   gsize j;
 
   g_return_val_if_fail (dir_name != NULL, FALSE);
@@ -2818,14 +2797,11 @@ collect_vulkan_layers (PvRuntime *self,
             }
         }
 
-      if (!get_icd_to_bind (self, arch, j, dir_name, details,
-                            &use_numbered_subdirs, use_subdir_for_kind_soname,
-                            capture_libs, NULL, error))
+      if (!bind_icd (self, arch, j, dir_name, details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     NULL, error))
         return FALSE;
     }
-
-  if (!bind_icd (self, arch, capture_libs, error))
-    return FALSE;
 
   return TRUE;
 }
@@ -3524,11 +3500,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
           gboolean use_numbered_subdirs;
           gboolean use_subdir_for_kind_soname;
-          /* (element-type filename GList) */
-          g_autoptr(GHashTable) capture_libs = g_hash_table_new_full (g_str_hash,
-                                                                      g_str_equal,
-                                                                      g_free,
-                                                                      patterns_list_free);
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -3576,9 +3547,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               details->resolved_library = srt_egl_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!get_icd_to_bind (self, arch, j, "glvnd", details,
-                                    &use_numbered_subdirs, use_subdir_for_kind_soname,
-                                    capture_libs, NULL, error))
+              if (!bind_icd (self, arch, j, "glvnd", details,
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             NULL, error))
                 return FALSE;
             }
 
@@ -3602,9 +3573,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
               g_assert (details->resolved_library != NULL);
 
-              if (!get_icd_to_bind (self, arch, j, "vulkan", details,
-                                    &use_numbered_subdirs, use_subdir_for_kind_soname,
-                                    capture_libs, NULL, error))
+              if (!bind_icd (self, arch, j, "vulkan", details,
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             NULL, error))
                 return FALSE;
             }
 
@@ -3643,9 +3614,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                * because they can only be located in a single directory,
                * so by definition we can't have collisions. Anything that
                * ends up in a numbered subdirectory won't get used. */
-              if (!get_icd_to_bind (self, arch, j, "vdpau", details,
-                                    &use_numbered_subdirs, use_subdir_for_kind_soname,
-                                    capture_libs, NULL, error))
+              if (!bind_icd (self, arch, j, "vdpau", details,
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             NULL, error))
                 return FALSE;
             }
 
@@ -3669,9 +3640,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
 
-              if (!get_icd_to_bind (self, arch, j, "dri", details,
-                                    &use_numbered_subdirs, use_subdir_for_kind_soname,
-                                    capture_libs, dri_path, error))
+              if (!bind_icd (self, arch, j, "dri", details,
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             dri_path, error))
                 return FALSE;
             }
 
@@ -3695,14 +3666,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               g_assert (details->resolved_library != NULL);
               g_assert (g_path_is_absolute (details->resolved_library));
 
-              if (!get_icd_to_bind (self, arch, j, "dri", details,
-                                    &use_numbered_subdirs, use_subdir_for_kind_soname,
-                                    capture_libs, va_api_path, error))
+              if (!bind_icd (self, arch, j, "dri", details,
+                             &use_numbered_subdirs, use_subdir_for_kind_soname,
+                             va_api_path, error))
                 return FALSE;
             }
-
-          if (!bind_icd (self, arch, capture_libs, error))
-            return FALSE;
 
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 

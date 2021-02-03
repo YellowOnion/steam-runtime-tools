@@ -1,3 +1,13 @@
+steam-runtime-tools (0.20210203.0) scout; urgency=medium
+
+  * pressure-vessel: Revert improvements to speed of container setup.
+    This optimization caused some Vulkan layers and ICDs to appear more
+    than once in the container, which makes some games hang.
+    (Maybe resolves: steam-runtime#361, steam-runtime#362, steam-runtime#363)
+  * system-info: Log environment variables used by various Vulkan layers
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 03 Feb 2021 16:33:56 +0000
+
 steam-runtime-tools (0.20210201.0) scout; urgency=medium
 
   [ Simon McVittie ]

@@ -3842,10 +3842,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           xdg_data_dirs = g_environ_getenv (self->original_environ, "XDG_DATA_DIRS");
           override_share = g_build_filename (self->overrides_in_container, "share", NULL);
 
-          if (xdg_data_dirs != NULL)
-            prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
-          else
-            prepended_data_dirs = g_steal_pointer (&override_share);
+          /* Reference:
+           * https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+          if (xdg_data_dirs == NULL)
+            xdg_data_dirs = "/usr/local/share:/usr/share";
+
+          prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
 
           pv_environ_lock_env (container_env, "XDG_DATA_DIRS",
                                prepended_data_dirs);

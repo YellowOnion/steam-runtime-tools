@@ -29,6 +29,8 @@
 #include "libglnx/libglnx.h"
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
+
+#include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -3842,10 +3844,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           xdg_data_dirs = g_environ_getenv (self->original_environ, "XDG_DATA_DIRS");
           override_share = g_build_filename (self->overrides_in_container, "share", NULL);
 
-          if (xdg_data_dirs != NULL)
-            prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
-          else
-            prepended_data_dirs = g_steal_pointer (&override_share);
+          /* Reference:
+           * https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+          if (xdg_data_dirs == NULL)
+            xdg_data_dirs = "/usr/local/share:/usr/share";
+
+          prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
 
           pv_environ_lock_env (container_env, "XDG_DATA_DIRS",
                                prepended_data_dirs);
@@ -3950,6 +3954,48 @@ pv_runtime_bind (PvRuntime *self,
                               "/run/pressure-vessel/pv-from-host",
                               NULL);
       self->adverb_in_container = "/run/pressure-vessel/pv-from-host/bin/pressure-vessel-adverb";
+    }
+
+  if ((self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+      && exports != NULL)
+    {
+      /* We have added our imported Vulkan layers to the search path,
+       * but we can't just remove ~/.local/share, etc. from the search
+       * path without breaking unrelated users of the XDG basedirs spec,
+       * such as .desktop files and icons. Mask any remaining Vulkan
+       * layers by mounting empty directories over the top. */
+      static const char * const layer_suffixes[] =
+        {
+          _SRT_GRAPHICS_EXPLICIT_VULKAN_LAYER_SUFFIX,
+          _SRT_GRAPHICS_IMPLICIT_VULKAN_LAYER_SUFFIX,
+        };
+      gsize i;
+
+      for (i = 0; i < G_N_ELEMENTS (layer_suffixes); i++)
+        {
+          g_auto(GStrv) search_path = NULL;
+          const char *suffix = layer_suffixes[i];
+          gsize j;
+
+          search_path = _srt_graphics_get_vulkan_search_paths ("/",
+                                                               self->original_environ,
+                                                               multiarch_tuples,
+                                                               suffix);
+
+          for (j = 0; search_path != NULL && search_path[j] != NULL; j++)
+            {
+              const char *dir = search_path[j];
+
+              /* We are mounting our own runtime over /usr anyway, so
+               * ignore those */
+              if (flatpak_has_path_prefix (dir, "/usr"))
+                continue;
+
+              /* Otherwise, if the directory exists, mask it */
+              if (g_file_test (dir, G_FILE_TEST_IS_DIR))
+                flatpak_exports_add_path_tmpfs (exports, dir);
+            }
+        }
     }
 
   /* Some games detect that they have been run outside the Steam Runtime

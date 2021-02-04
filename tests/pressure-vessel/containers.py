@@ -1062,9 +1062,6 @@ class TestContainers(BaseTest):
     def test_scout_sysroot(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot')
 
-        if os.path.isdir(os.path.join(scout, 'files')):
-            scout = os.path.join(scout, 'files')
-
         with self.subTest('only-prepare'):
             self._test_scout(
                 'scout_sysroot_prep', scout,
@@ -1079,9 +1076,6 @@ class TestContainers(BaseTest):
 
     def test_scout_sysroot_usrmerge(self) -> None:
         scout = os.path.join(self.containers_dir, 'scout_sysroot_usrmerge')
-
-        if os.path.isdir(os.path.join(scout, 'files')):
-            scout = os.path.join(scout, 'files')
 
         with self.subTest('only-prepare'):
             self._test_scout(
@@ -1099,7 +1093,7 @@ class TestContainers(BaseTest):
             self._test_scout('scout_sysroot_usrmerge', scout, locales=True)
 
     def test_scout_usr(self) -> None:
-        scout = os.path.join(self.containers_dir, 'scout', 'files')
+        scout = os.path.join(self.containers_dir, 'scout')
 
         with self.subTest('only-prepare'):
             self._test_scout('scout_prep', scout, copy=True, only_prepare=True)
@@ -1112,9 +1106,6 @@ class TestContainers(BaseTest):
 
     def test_soldier_sysroot(self) -> None:
         soldier = os.path.join(self.containers_dir, 'soldier_sysroot')
-
-        if os.path.isdir(os.path.join(soldier, 'files')):
-            soldier = os.path.join(soldier, 'files')
 
         with self.subTest('only-prepare'):
             self._test_soldier(
@@ -1131,7 +1122,7 @@ class TestContainers(BaseTest):
             self._test_soldier('soldier_sysroot', soldier, locales=True)
 
     def test_soldier_usr(self) -> None:
-        soldier = os.path.join(self.containers_dir, 'soldier', 'files')
+        soldier = os.path.join(self.containers_dir, 'soldier')
 
         with self.subTest('only-prepare'):
             self._test_soldier(

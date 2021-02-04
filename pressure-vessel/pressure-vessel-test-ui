@@ -516,8 +516,7 @@ class Gui:
         elif id == '/':
             argv.append('--runtime=')
         else:
-            argv.append('--runtime')
-            argv.append(os.path.join(id, 'files'))
+            argv.append('--runtime=' + id)
 
         if self.host_graphics_check.get_active():
             if os.path.isdir('/run/host'):

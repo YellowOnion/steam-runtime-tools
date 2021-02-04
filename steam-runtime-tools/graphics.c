@@ -5588,8 +5588,6 @@ vulkan_icd_load_json_cb (const char *sysroot,
   vulkan_icd_load_json (sysroot, filename, user_data);
 }
 
-#define VULKAN_ICD_SUFFIX "vulkan/icd.d"
-
 /*
  * Return the ${sysconfdir} that we assume the Vulkan loader has.
  * See get_glvnd_sysconfdir().
@@ -5600,11 +5598,11 @@ get_vulkan_sysconfdir (void)
   return "/etc";
 }
 
-static gchar **
-get_vulkan_search_paths (const char *sysroot,
-                         gchar **envp,
-                         const char * const *multiarch_tuples,
-                         const char *suffix)
+gchar **
+_srt_graphics_get_vulkan_search_paths (const char *sysroot,
+                                       gchar **envp,
+                                       const char * const *multiarch_tuples,
+                                       const char *suffix)
 {
   GPtrArray *search_paths = g_ptr_array_new ();
   g_auto(GStrv) dirs = NULL;
@@ -5748,8 +5746,10 @@ _srt_load_vulkan_icds (const char *sysroot,
     }
   else
     {
-      g_auto(GStrv) search_paths = get_vulkan_search_paths (sysroot, envp, multiarch_tuples,
-                                                            VULKAN_ICD_SUFFIX);
+      g_auto(GStrv) search_paths = _srt_graphics_get_vulkan_search_paths (sysroot,
+                                                                          envp,
+                                                                          multiarch_tuples,
+                                                                          _SRT_GRAPHICS_VULKAN_ICD_SUFFIX);
       load_json_dirs (sysroot, search_paths, NULL, READDIR_ORDER,
                       vulkan_icd_load_json_cb, &ret);
     }
@@ -6516,9 +6516,6 @@ vulkan_layer_load_json_cb (const char *sysroot,
   vulkan_layer_load_json (sysroot, filename, user_data);
 }
 
-#define EXPLICIT_VULKAN_LAYER_SUFFIX "vulkan/explicit_layer.d"
-#define IMPLICIT_VULKAN_LAYER_SUFFIX "vulkan/implicit_layer.d"
-
 /*
  * _srt_load_vulkan_layers:
  * @sysroot: (not nullable): The root directory, usually `/`
@@ -6546,9 +6543,9 @@ _srt_load_vulkan_layers (const char *sysroot,
   g_return_val_if_fail (envp != NULL, NULL);
 
   if (explicit)
-    suffix = EXPLICIT_VULKAN_LAYER_SUFFIX;
+    suffix = _SRT_GRAPHICS_EXPLICIT_VULKAN_LAYER_SUFFIX;
   else
-    suffix = IMPLICIT_VULKAN_LAYER_SUFFIX;
+    suffix = _SRT_GRAPHICS_IMPLICIT_VULKAN_LAYER_SUFFIX;
 
   value = g_environ_getenv (envp, "VK_LAYER_PATH");
 
@@ -6564,7 +6561,8 @@ _srt_load_vulkan_layers (const char *sysroot,
     }
   else
     {
-      search_paths = get_vulkan_search_paths (sysroot, envp, NULL, suffix);
+      search_paths = _srt_graphics_get_vulkan_search_paths (sysroot, envp,
+                                                            NULL, suffix);
       g_debug ("SEARCH PATHS %s", search_paths[0]);
       load_json_dirs (sysroot, search_paths, NULL, _srt_indirect_strcmp0,
                       vulkan_layer_load_json_cb, &ret);

@@ -305,3 +305,13 @@ GList *_srt_dri_driver_get_from_report (JsonObject *json_obj);
 GList *_srt_va_api_driver_get_from_report (JsonObject *json_obj);
 GList *_srt_vdpau_driver_get_from_report (JsonObject *json_obj);
 GList *_srt_glx_icd_get_from_report (JsonObject *json_obj);
+
+G_GNUC_INTERNAL
+gchar ** _srt_graphics_get_vulkan_search_paths (const char *sysroot,
+                                                gchar **envp,
+                                                const char * const *multiarch_tuples,
+                                                const char *suffix);
+
+#define _SRT_GRAPHICS_EXPLICIT_VULKAN_LAYER_SUFFIX "vulkan/explicit_layer.d"
+#define _SRT_GRAPHICS_IMPLICIT_VULKAN_LAYER_SUFFIX "vulkan/implicit_layer.d"
+#define _SRT_GRAPHICS_VULKAN_ICD_SUFFIX "vulkan/icd.d"

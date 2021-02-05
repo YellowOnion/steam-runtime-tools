@@ -583,7 +583,7 @@ _srt_check_xdg_portals (gchar **envp,
 
   if (output == NULL || output[0] == '\0')
     {
-      g_print ("The helper exited without printing the expected JSON in output");
+      g_debug ("The helper exited without printing the expected JSON in output");
       issues |= SRT_XDG_PORTAL_ISSUES_UNKNOWN;
       if (details_out != NULL)
         *details_out = _srt_xdg_portal_new (stderr_messages, issues, NULL, NULL);

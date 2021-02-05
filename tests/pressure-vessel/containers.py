@@ -520,7 +520,9 @@ class TestContainers(BaseTest):
         test_name: str,
         runtime: str,
         *,
+        archive: str = '',
         copy: bool = False,
+        fast_path: bool = False,
         gc: bool = True,
         is_scout: bool = False,
         is_soldier: bool = False,
@@ -530,8 +532,15 @@ class TestContainers(BaseTest):
         if self.bwrap is None and not only_prepare:
             self.skipTest('Unable to run bwrap (in a container?)')
 
-        if not os.path.isdir(runtime):
-            self.skipTest('{} not found'.format(runtime))
+        if archive:
+            if not os.path.isfile(archive):
+                self.skipTest('{} not found'.format(archive))
+
+            if fast_path and not os.path.isdir(runtime):
+                self.skipTest('{} not found'.format(runtime))
+        else:
+            if not os.path.isdir(runtime):
+                self.skipTest('{} not found'.format(runtime))
 
         artifacts = os.path.join(
             self.artifacts,
@@ -543,10 +552,17 @@ class TestContainers(BaseTest):
 
         argv = [
             self.pv_wrap,
-            '--runtime', runtime,
             '--verbose',
             '--write-final-argv', final_argv_temp.name
         ]
+
+        if archive:
+            argv.extend([
+                '--runtime-archive', archive,
+                '--runtime-id', 'myruntime_0.1.2',
+            ])
+        else:
+            argv.extend(['--runtime', runtime])
 
         var = os.path.join(self.containers_dir, 'var')
         os.makedirs(var, exist_ok=True)
@@ -556,6 +572,28 @@ class TestContainers(BaseTest):
 
         with tempfile.TemporaryDirectory(prefix='test-', dir=var) as temp:
             argv.extend(['--variable-dir', temp])
+
+            if fast_path:
+                # Pretend we had already run this runtime. Rather than
+                # using the real runtime's name, for simplicity this is
+                # a fake name.
+                old_dir = os.path.join(temp, 'deploy-myruntime_0.1.2')
+
+                run_subprocess(
+                    ['cp', '-al', runtime, old_dir],
+                    check=True,
+                )
+
+                if os.path.isdir(os.path.join(old_dir, 'files')):
+                    old_dir = os.path.join(old_dir, 'files')
+
+                if os.path.isdir(os.path.join(old_dir, 'usr')):
+                    old_dir = os.path.join(old_dir, 'usr')
+
+                # Touch a flag file so we can detect that we reused the
+                # old deployment
+                with open(os.path.join(old_dir, 'OLD-DEPLOYMENT'), 'w'):
+                    pass
 
             if copy:
                 argv.append('--copy-runtime')
@@ -684,10 +722,16 @@ class TestContainers(BaseTest):
                 members.discard('tmp-keep')
                 members.discard('tmp-rlock')
                 members.discard('tmp-wlock')
+                members.discard('deploy-myruntime_0.1.2')
                 # After discarding those, there should be exactly one left:
                 # the one we just created
                 self.assertEqual(len(members), 1)
                 tree = os.path.join(temp, members.pop())
+
+                if fast_path:
+                    require_flag_file = 'OLD-DEPLOYMENT'
+                else:
+                    require_flag_file = ''
 
                 with self.subTest('mutable sysroot'):
                     self._assert_mutable_sysroot(
@@ -695,6 +739,7 @@ class TestContainers(BaseTest):
                         artifacts,
                         is_scout=is_scout,
                         is_soldier=is_soldier,
+                        require_flag_file=require_flag_file,
                     )
 
     def _assert_mutable_sysroot(
@@ -703,7 +748,8 @@ class TestContainers(BaseTest):
         artifacts: str,
         *,
         is_scout: bool = False,
-        is_soldier: bool = False
+        is_soldier: bool = False,
+        require_flag_file: str = ''
     ) -> None:
         with open(
             os.path.join(artifacts, 'contents.txt'),
@@ -723,6 +769,11 @@ class TestContainers(BaseTest):
             os.path.isdir(os.path.join(tree, 'usr', 'usr'))
         )
         self.assertTrue(os.path.isdir(os.path.join(tree, 'sbin')))
+
+        if require_flag_file:
+            self.assertTrue(
+                os.path.exists(os.path.join(tree, 'usr', require_flag_file)),
+            )
 
         target = os.readlink(os.path.join(tree, 'overrides'))
         self.assertEqual(target, 'usr/lib/pressure-vessel/overrides')
@@ -1111,6 +1162,38 @@ class TestContainers(BaseTest):
 
         with self.subTest('transient'):
             self._test_scout('scout', scout)
+
+    def test_unpack(self) -> None:
+        scout = os.path.join(
+            self.containers_dir,
+            'scout',
+        )
+        archive = os.path.join(
+            self.containers_dir,
+            ('com.valvesoftware.SteamRuntime.Platform-amd64,i386-'
+             'scout-runtime.tar.gz'),
+        )
+
+        self._test_container(
+            'scout_unpack',
+            scout,
+            archive=archive,
+            copy=True,
+            is_scout=True,
+            locales=False,
+            only_prepare=True,
+        )
+
+        self._test_container(
+            'scout_skip_unpack',
+            scout,
+            archive=archive,
+            copy=True,
+            fast_path=True,
+            is_scout=True,
+            locales=False,
+            only_prepare=True,
+        )
 
     def test_soldier_sysroot(self) -> None:
         soldier = os.path.join(self.containers_dir, 'soldier_sysroot')

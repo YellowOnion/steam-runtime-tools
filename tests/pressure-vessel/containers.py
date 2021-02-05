@@ -555,11 +555,17 @@ class TestContainers(BaseTest):
             argv.append('--no-generate-locales')
 
         with tempfile.TemporaryDirectory(prefix='test-', dir=var) as temp:
-            if copy:
-                argv.extend(['--copy-runtime-into', temp])
+            argv.extend(['--variable-dir', temp])
 
-                if not gc:
-                    argv.append('--no-gc-runtimes')
+            if copy:
+                argv.append('--copy-runtime')
+            else:
+                argv.append('--no-copy-runtime')
+
+            if gc:
+                argv.append('--gc-runtimes')
+            else:
+                argv.append('--no-gc-runtimes')
 
             if is_scout:
                 python = 'python3.5'

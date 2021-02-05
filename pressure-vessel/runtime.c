@@ -644,16 +644,10 @@ pv_runtime_garbage_collect (PvRuntime *self,
   return TRUE;
 }
 
-static gboolean pv_runtime_create_copy (PvRuntime *self,
-                                        PvBwrapLock *variable_dir_lock,
-                                        GError **error);
-
 static gboolean
-pv_runtime_init_mutable (PvRuntime *self,
-                         GError **error)
+pv_runtime_init_variable_dir (PvRuntime *self,
+                              GError **error)
 {
-  g_autoptr(PvBwrapLock) mutable_lock = NULL;
-
   /* Nothing to do in this case */
   if (self->variable_dir == NULL)
     return TRUE;
@@ -666,32 +660,28 @@ pv_runtime_init_mutable (PvRuntime *self,
                        &self->variable_dir_fd, error))
     return FALSE;
 
-  /* Lock the parent directory. Anything that directly manipulates the
-   * temporary runtimes is expected to do the same, so that
-   * it cannot be deleting temporary runtimes at the same time we're
-   * creating them.
-   *
-   * This is a read-mode lock: it's OK to create more than one temporary
-   * runtime in parallel, as long as nothing is deleting them
-   * concurrently. */
-  mutable_lock = pv_bwrap_lock_new (self->variable_dir_fd, ".ref",
-                                    PV_BWRAP_LOCK_FLAGS_CREATE,
-                                    error);
-
-  if (mutable_lock == NULL)
-    return glnx_prefix_error (error, "Unable to lock \"%s/%s\"",
-                              self->variable_dir, ".ref");
-
   /* GC old runtimes (if they have become unused) before we create a
    * new one. This means we should only ever have one temporary runtime
    * copy per game that is run concurrently. */
-  if ((self->flags & PV_RUNTIME_FLAGS_GC_RUNTIMES) != 0 &&
-      !pv_runtime_garbage_collect (self, mutable_lock, error))
-    return FALSE;
+  if (self->flags & PV_RUNTIME_FLAGS_GC_RUNTIMES)
+    {
+      g_autoptr(PvBwrapLock) mutable_lock = NULL;
+      g_autoptr(GError) local_error = NULL;
 
-  if ((self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME) != 0
-      && !pv_runtime_create_copy (self, mutable_lock, error))
-    return FALSE;
+      /* Take out an exclusive lock for GC so that we will not conflict
+       * with other concurrent processes that are halfway through
+       * deploying or unpacking a runtime. */
+      mutable_lock = pv_bwrap_lock_new (self->variable_dir_fd, ".ref",
+                                        (PV_BWRAP_LOCK_FLAGS_CREATE
+                                         | PV_BWRAP_LOCK_FLAGS_WRITE),
+                                        &local_error);
+
+      if (mutable_lock == NULL)
+        g_debug ("Unable to take an exclusive lock, skipping GC: %s",
+                 local_error->message);
+      else if (!pv_runtime_garbage_collect (self, mutable_lock, error))
+        return FALSE;
+    }
 
   return TRUE;
 }
@@ -882,6 +872,9 @@ pv_runtime_initable_init (GInitable *initable,
                          self->variable_dir);
     }
 
+  if (!pv_runtime_init_variable_dir (self, error))
+    return FALSE;
+
   if (!g_file_test (self->deployment, G_FILE_TEST_IS_DIR))
     {
       return glnx_throw (error, "\"%s\" is not a directory",
@@ -927,8 +920,29 @@ pv_runtime_initable_init (GInitable *initable,
   if (self->runtime_lock == NULL)
     return FALSE;
 
-  if (!pv_runtime_init_mutable (self, error))
-    return FALSE;
+  if (self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME)
+    {
+      g_autoptr(PvBwrapLock) mutable_lock = NULL;
+
+      if (self->variable_dir_fd < 0)
+        return glnx_throw (error,
+                           "Cannot copy runtime without variable directory");
+
+      /* This time take out a non-exclusive lock: any number of processes
+       * can safely be creating their own temporary copy at the same
+       * time. If another process is doing GC, wait for it to finish,
+       * then take our lock. */
+      mutable_lock = pv_bwrap_lock_new (self->variable_dir_fd, ".ref",
+                                        (PV_BWRAP_LOCK_FLAGS_CREATE
+                                         | PV_BWRAP_LOCK_FLAGS_WAIT),
+                                        error);
+
+      if (mutable_lock == NULL)
+        return FALSE;
+
+      if (!pv_runtime_create_copy (self, mutable_lock, error))
+        return FALSE;
+    }
 
   if (self->mutable_sysroot != NULL)
     {

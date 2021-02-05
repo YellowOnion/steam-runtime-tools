@@ -96,12 +96,16 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 
 `--runtime` *PATH*
 :   Use *PATH* to provide /usr in the container.
-    If *PATH*/usr exists, *PATH* is assumed to be a complete sysroot
+    If *PATH*/files/ is a directory, *PATH*/files/ is used as the source
+    of runtime files: this is appropriate for Flatpak-style runtimes that
+    contain *PATH*/files/ and *PATH*/metadata. Otherwise, *PATH* is used
+    directly.
+    If *PATH*/files/usr or *PATH*/usr exists, the source of runtime files
+    is assumed to be a complete sysroot
     (containing bin/sh, usr/bin/env and many other OS files).
-    Otherwise, *PATH* is assumed to be a merged-/usr environment
+    Otherwise, it is assumed to be a merged-/usr environment
     (containing bin/sh, bin/env and many other OS files).
-    For example, the `files` subdirectory of a Flatpak runtime is a
-    suitable value for *PATH*.
+    For example, a Flatpak runtime is a suitable value for *PATH*.
 
 `--runtime-base` *PATH*
 :   If `--runtime` specifies a relative path, look for it relative

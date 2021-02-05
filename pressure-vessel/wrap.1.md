@@ -115,9 +115,32 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     (containing bin/sh, bin/env and many other OS files).
     For example, a Flatpak runtime is a suitable value for *PATH*.
 
+`--runtime-archive` *ARCHIVE*
+:   Unpack *ARCHIVE* and use it to provide /usr in the container, similar
+    to `--runtime`. The `--runtime-id` option is also required.
+
+    If this option is used, then `--variable-dir`
+    (or its environment variable equivalent) is also required.
+    This option and `--runtime` cannot both be used.
+
+    The archive will be unpacked into a subdirectory of the `--variable-dir`.
+    Any other subdirectories of the `--variable-dir` that appear to be
+    different runtimes will be deleted, unless they contain a file
+    at the top level named `keep` or are currently in use.
+
+    The archive must currently be a gzipped tar file whose name ends
+    with `.tar.gz`. Other formats might be allowed in future.
+
 `--runtime-base` *PATH*
-:   If `--runtime` specifies a relative path, look for it relative
-    to *PATH*.
+:   If `--runtime` or `--runtime-archive` is specified as a relative path,
+    look for it relative to *PATH*.
+
+`--runtime-id` *ID*
+:   Use *ID* to construct a directory into which the `--runtime-archive`
+    will be unpacked. If the *ID* is the same as in a previous run of
+    pressure-vessel-wrap, the content of the `--runtime-archive` will
+    be assumed to be the same as in that previous run, resulting in
+    the previous runtime being reused.
 
 `--share-home`, `--unshare-home`
 :   If `--unshare-home` is specified, use the home directory given

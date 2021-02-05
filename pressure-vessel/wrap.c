@@ -724,8 +724,10 @@ static gboolean opt_import_vulkan_layers = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static GArray *opt_pass_fds = NULL;
-static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
+static char *opt_runtime_archive = NULL;
+static char *opt_runtime_base = NULL;
+static char *opt_runtime_id = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_share_pid = TRUE;
 static double opt_terminate_idle_timeout = 0.0;
@@ -1105,11 +1107,22 @@ static GOptionEntry options[] =
     "it with the provider's graphics stack. The empty string "
     "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
+  { "runtime-archive", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_archive,
+    "Unpack the ARCHIVE and use it as the runtime, using --runtime-id to "
+    "avoid repeatedly unpacking the same archive. "
+    "[Default: $PRESSURE_VESSEL_RUNTIME_ARCHIVE]",
+    "ARCHIVE" },
   { "runtime-base", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_base,
-    "If a --runtime is a relative path, look for it relative to BASE. "
+    "If a --runtime or --runtime-archive is a relative path, look for "
+    "it relative to BASE. "
     "[Default: $PRESSURE_VESSEL_RUNTIME_BASE or '.']",
     "BASE" },
+  { "runtime-id", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_id,
+    "Reuse a previously-unpacked --runtime-archive if its ID matched this",
+    "ID" },
   { "share-home", '\0',
     G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use the real home directory. "
@@ -1298,6 +1311,7 @@ main (int argc,
                             NULL, NULL);
   opt_copy_runtime = pv_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
                                              opt_copy_runtime);
+  opt_runtime_id = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ID"));
 
     {
       const char *value = g_getenv ("PRESSURE_VESSEL_VARIABLE_DIR");
@@ -1350,21 +1364,57 @@ main (int argc,
   if (opt_verbose)
     pv_set_up_logging (opt_verbose);
 
-  if (opt_runtime == NULL)
-    opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
+  /* Specifying either one of these mutually-exclusive options as a
+   * command-line option disables use of the environment variable for
+   * the other one */
+  if (opt_runtime == NULL && opt_runtime_archive == NULL)
+    {
+      opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
+
+      /* Normalize empty string to NULL to simplify later code */
+      if (opt_runtime != NULL && opt_runtime[0] == '\0')
+        g_clear_pointer (&opt_runtime, g_free);
+
+      opt_runtime_archive = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ARCHIVE"));
+
+      if (opt_runtime_archive != NULL && opt_runtime_archive[0] == '\0')
+        g_clear_pointer (&opt_runtime_archive, g_free);
+    }
+
+  if (opt_runtime_id != NULL)
+    {
+      const char *p;
+
+      if (opt_runtime_id[0] == '-' || opt_runtime_id[0] == '.')
+        {
+          g_warning ("--runtime-id must not start with dash or dot");
+          goto out;
+        }
+
+      for (p = opt_runtime_id; *p != '\0'; p++)
+        {
+          if (!g_ascii_isalnum (*p) && *p != '_' && *p != '-' && *p != '.')
+            {
+              g_warning ("--runtime-id may only contain "
+                         "alphanumerics, underscore, dash or dot");
+              goto out;
+            }
+        }
+    }
 
   if (opt_runtime_base == NULL)
     opt_runtime_base = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_BASE"));
 
-  if (opt_runtime != NULL
-      && opt_runtime[0] != '\0'
-      && !g_path_is_absolute (opt_runtime)
-      && opt_runtime_base != NULL
-      && opt_runtime_base[0] != '\0')
+  if (opt_runtime != NULL && opt_runtime_archive != NULL)
     {
-      g_autofree gchar *tmp = g_steal_pointer (&opt_runtime);
+      g_warning ("--runtime and --runtime-archive cannot both be used");
+      goto out;
+    }
 
-      opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
+  if (opt_runtime_archive != NULL && opt_runtime_id == NULL)
+    {
+      g_warning ("--runtime-archive requires --runtime-id");
+      goto out;
     }
 
   if (opt_graphics_provider == NULL)
@@ -1703,9 +1753,11 @@ main (int argc,
                               NULL);
     }
 
-  if (opt_runtime != NULL && opt_runtime[0] != '\0')
+  if (opt_runtime != NULL || opt_runtime_archive != NULL)
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
+      g_autofree gchar *runtime_resolved = NULL;
+      const char *runtime_path = NULL;
 
       if (opt_gc_runtimes)
         flags |= PV_RUNTIME_FLAGS_GC_RUNTIMES;
@@ -1725,7 +1777,29 @@ main (int argc,
       if (opt_copy_runtime)
         flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
 
-      g_debug ("Configuring runtime %s...", opt_runtime);
+      if (opt_runtime != NULL)
+        {
+          /* already checked for mutually exclusive options */
+          g_assert (opt_runtime_archive == NULL);
+          runtime_path = opt_runtime;
+        }
+      else
+        {
+          flags |= PV_RUNTIME_FLAGS_UNPACK_ARCHIVE;
+          g_assert (opt_runtime_id != NULL);
+          runtime_path = opt_runtime_archive;
+        }
+
+      if (!g_path_is_absolute (runtime_path)
+          && opt_runtime_base != NULL
+          && opt_runtime_base[0] != '\0')
+        {
+          runtime_resolved = g_build_filename (opt_runtime_base,
+                                               runtime_path, NULL);
+          runtime_path = runtime_resolved;
+        }
+
+      g_debug ("Configuring runtime %s...", runtime_path);
 
       if (is_flatpak_env && !opt_copy_runtime)
         {
@@ -1735,7 +1809,8 @@ main (int argc,
           goto out;
         }
 
-      runtime = pv_runtime_new (opt_runtime,
+      runtime = pv_runtime_new (runtime_path,
+                                opt_runtime_id,
                                 opt_variable_dir,
                                 bwrap_executable,
                                 tools_dir,
@@ -2601,8 +2676,10 @@ out:
   g_clear_pointer (&opt_steam_app_id, g_free);
   g_clear_pointer (&opt_home, g_free);
   g_clear_pointer (&opt_fake_home, g_free);
-  g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
+  g_clear_pointer (&opt_runtime_archive, g_free);
+  g_clear_pointer (&opt_runtime_base, g_free);
+  g_clear_pointer (&opt_runtime_id, g_free);
   g_clear_pointer (&opt_pass_fds, g_array_unref);
   g_clear_pointer (&opt_variable_dir, g_free);
 

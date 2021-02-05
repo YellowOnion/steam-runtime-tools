@@ -706,7 +706,7 @@ typedef enum
 } Tristate;
 
 static gboolean opt_batch = FALSE;
-static char *opt_copy_runtime_into = NULL;
+static gboolean opt_copy_runtime = FALSE;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char **opt_filesystems = NULL;
@@ -730,6 +730,7 @@ static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_share_pid = TRUE;
 static double opt_terminate_idle_timeout = 0.0;
 static double opt_terminate_timeout = -1.0;
+static char *opt_variable_dir = NULL;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
@@ -749,6 +750,35 @@ opt_host_ld_preload_cb (const gchar *option_name,
     opt_ld_preload = g_ptr_array_new_with_free_func (g_free);
 
   g_ptr_array_add (opt_ld_preload, g_steal_pointer (&preload));
+
+  return TRUE;
+}
+
+static gboolean
+opt_copy_runtime_into_cb (const gchar *option_name,
+                          const gchar *value,
+                          gpointer data,
+                          GError **error)
+{
+  if (value == NULL)
+    {
+      opt_copy_runtime = FALSE;
+    }
+  else if (value[0] == '\0')
+    {
+      g_warning ("%s is deprecated, disable with --no-copy-runtime instead",
+                 option_name);
+      opt_copy_runtime = FALSE;
+    }
+  else
+    {
+      g_warning ("%s is deprecated, use --copy-runtime and "
+                 "--variable-dir instead",
+                 option_name);
+      opt_copy_runtime = TRUE;
+      g_free (opt_variable_dir);
+      opt_variable_dir = g_strdup (value);
+    }
 
   return TRUE;
 }
@@ -966,11 +996,20 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_batch,
     "Disable all interactivity and redirection: ignore --shell*, "
     "--terminal, --xterm, --tty. [Default: if $PRESSURE_VESSEL_BATCH]", NULL },
+  { "copy-runtime", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_copy_runtime,
+    "If a --runtime is used, copy it into --variable-dir and edit the "
+    "copy in-place.",
+    NULL },
+  { "no-copy-runtime", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_copy_runtime,
+    "Don't behave as described for --copy-runtime. "
+    "[Default unless $PRESSURE_VESSEL_COPY_RUNTIME is 1]",
+    NULL },
   { "copy-runtime-into", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_copy_runtime_into,
-    "If a --runtime is used, copy it into DIR and edit the copy in-place. "
-    "[Default: $PRESSURE_VESSEL_COPY_RUNTIME_INTO or empty]",
-    "DIR" },
+    G_OPTION_FLAG_FILENAME|G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    &opt_copy_runtime_into_cb,
+    "Deprecated alias for --copy-runtime and --variable-dir", "DIR" },
   { "env-if-host", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
@@ -993,12 +1032,12 @@ static GOptionEntry options[] =
     "N" },
   { "gc-runtimes", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
-    "If using --copy-runtime-into, garbage-collect old temporary "
+    "If using --variable-dir, garbage-collect old temporary "
     "runtimes. [Default, unless $PRESSURE_VESSEL_GC_RUNTIMES is 0]",
     NULL },
   { "no-gc-runtimes", '\0',
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
-    "If using --copy-runtime-into, don't garbage-collect old "
+    "If using --variable-dir, don't garbage-collect old "
     "temporary runtimes.", NULL },
   { "generate-locales", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
@@ -1141,6 +1180,10 @@ static GOptionEntry options[] =
     "skip SIGTERM and use SIGKILL immediately. Implies --subreaper. "
     "[Default: -1.0, meaning don't signal].",
     "SECONDS" },
+  { "variable-dir", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_variable_dir,
+    "If a runtime needs to be unpacked or copied, put it in DIR.",
+    "DIR" },
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
@@ -1248,6 +1291,23 @@ main (int argc,
 
   /* Set defaults */
   opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+  /* Process COPY_RUNTIME_INFO first so that COPY_RUNTIME and VARIABLE_DIR
+   * can override it */
+  opt_copy_runtime_into_cb ("$PRESSURE_VESSEL_COPY_RUNTIME_INTO",
+                            g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"),
+                            NULL, NULL);
+  opt_copy_runtime = pv_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
+                                             opt_copy_runtime);
+
+    {
+      const char *value = g_getenv ("PRESSURE_VESSEL_VARIABLE_DIR");
+
+      if (value != NULL)
+        {
+          g_free (opt_variable_dir);
+          opt_variable_dir = g_strdup (value);
+        }
+    }
 
   opt_freedesktop_app_id = g_strdup (g_getenv ("PRESSURE_VESSEL_FDO_APP_ID"));
 
@@ -1306,13 +1366,6 @@ main (int argc,
 
       opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
     }
-
-  if (opt_copy_runtime_into == NULL)
-    opt_copy_runtime_into = g_strdup (g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"));
-
-  if (opt_copy_runtime_into != NULL
-      && opt_copy_runtime_into[0] == '\0')
-    opt_copy_runtime_into = NULL;
 
   if (opt_graphics_provider == NULL)
     opt_graphics_provider = g_strdup (g_getenv ("PRESSURE_VESSEL_GRAPHICS_PROVIDER"));
@@ -1493,6 +1546,12 @@ main (int argc,
         }
     }
 
+  if (opt_copy_runtime && opt_variable_dir == NULL)
+    {
+      g_warning ("--copy-runtime requires --variable-dir");
+      goto out;
+    }
+
   /* Finished parsing arguments, so any subsequent failures will make
    * us exit 1. */
   ret = 1;
@@ -1553,6 +1612,14 @@ main (int argc,
 
           g_message ("\t%" G_GSIZE_FORMAT ": %s", i, quoted);
         }
+    }
+
+  if (opt_variable_dir != NULL
+      && g_mkdir_with_parents (opt_variable_dir, 0700) != 0)
+    {
+      glnx_throw_errno_prefix (error, "Unable to create \"%s\"",
+                               opt_variable_dir);
+      goto out;
     }
 
   tools_dir = find_executable_dir (error);
@@ -1663,9 +1730,12 @@ main (int argc,
       if (opt_import_vulkan_layers)
         flags |= PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS;
 
+      if (opt_copy_runtime)
+        flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
+
       g_debug ("Configuring runtime %s...", opt_runtime);
 
-      if (is_flatpak_env && opt_copy_runtime_into == NULL)
+      if (is_flatpak_env && !opt_copy_runtime)
         {
           glnx_throw (error,
                       "Cannot set up a runtime inside Flatpak without "
@@ -1674,7 +1744,7 @@ main (int argc,
         }
 
       runtime = pv_runtime_new (opt_runtime,
-                                opt_copy_runtime_into,
+                                opt_variable_dir,
                                 bwrap_executable,
                                 tools_dir,
                                 opt_graphics_provider,
@@ -2542,6 +2612,7 @@ out:
   g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
   g_clear_pointer (&opt_pass_fds, g_array_unref);
+  g_clear_pointer (&opt_variable_dir, g_free);
 
   g_debug ("Exiting with status %d", ret);
   return ret;

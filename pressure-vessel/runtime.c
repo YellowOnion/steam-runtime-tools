@@ -61,7 +61,7 @@ struct _PvRuntime
   GStrv original_environ;
 
   gchar *libcapsule_knowledge;
-  gchar *mutable_parent;
+  gchar *variable_dir;
   gchar *mutable_sysroot;
   gchar *tmpdir;
   gchar *overrides;
@@ -78,7 +78,7 @@ struct _PvRuntime
   const gchar *host_in_current_namespace;
 
   PvRuntimeFlags flags;
-  int mutable_parent_fd;
+  int variable_dir_fd;
   int mutable_sysroot_fd;
   int provider_fd;
   gboolean any_libc_from_provider;
@@ -99,7 +99,7 @@ enum {
   PROP_DEPLOYMENT,
   PROP_ORIGINAL_ENVIRON,
   PROP_FLAGS,
-  PROP_MUTABLE_PARENT,
+  PROP_VARIABLE_DIR,
   PROP_PROVIDER_IN_CURRENT_NAMESPACE,
   PROP_PROVIDER_IN_CONTAINER_NAMESPACE,
   PROP_TOOLS_DIRECTORY,
@@ -373,7 +373,7 @@ pv_runtime_init (PvRuntime *self)
 {
   self->any_libc_from_provider = FALSE;
   self->all_libc_from_provider = FALSE;
-  self->mutable_parent_fd = -1;
+  self->variable_dir_fd = -1;
   self->mutable_sysroot_fd = -1;
 }
 
@@ -399,8 +399,8 @@ pv_runtime_get_property (GObject *object,
         g_value_set_flags (value, self->flags);
         break;
 
-      case PROP_MUTABLE_PARENT:
-        g_value_set_string (value, self->mutable_parent);
+      case PROP_VARIABLE_DIR:
+        g_value_set_string (value, self->variable_dir);
         break;
 
       case PROP_PROVIDER_IN_CURRENT_NAMESPACE:
@@ -452,20 +452,20 @@ pv_runtime_set_property (GObject *object,
         self->flags = g_value_get_flags (value);
         break;
 
-      case PROP_MUTABLE_PARENT:
+      case PROP_VARIABLE_DIR:
         /* Construct-only */
-        g_return_if_fail (self->mutable_parent == NULL);
+        g_return_if_fail (self->variable_dir == NULL);
         path = g_value_get_string (value);
 
         if (path != NULL)
           {
-            self->mutable_parent = realpath (path, NULL);
+            self->variable_dir = realpath (path, NULL);
 
-            if (self->mutable_parent == NULL)
+            if (self->variable_dir == NULL)
               {
                 /* It doesn't exist. Keep the non-canonical path so we
                  * can warn about it later */
-                self->mutable_parent = g_strdup (path);
+                self->variable_dir = g_strdup (path);
               }
           }
 
@@ -530,19 +530,19 @@ pv_runtime_constructed (GObject *object)
 
 static gboolean
 pv_runtime_garbage_collect (PvRuntime *self,
-                            PvBwrapLock *mutable_parent_lock,
+                            PvBwrapLock *variable_dir_lock,
                             GError **error)
 {
   g_auto(GLnxDirFdIterator) iter = { FALSE };
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
-  g_return_val_if_fail (self->mutable_parent != NULL, FALSE);
+  g_return_val_if_fail (self->variable_dir != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
   /* We don't actually *use* this: it just acts as an assertion that
    * we are holding the lock on the parent directory. */
-  g_return_val_if_fail (mutable_parent_lock != NULL, FALSE);
+  g_return_val_if_fail (variable_dir_lock != NULL, FALSE);
 
-  if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->mutable_parent,
+  if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->variable_dir,
                                     TRUE, &iter, error))
     return FALSE;
 
@@ -576,28 +576,28 @@ pv_runtime_garbage_collect (PvRuntime *self,
           case DT_UNKNOWN:
           default:
             g_debug ("Ignoring %s/%s: not a directory",
-                     self->mutable_parent, dent->d_name);
+                     self->variable_dir, dent->d_name);
             continue;
         }
 
       if (!g_str_has_prefix (dent->d_name, "tmp-"))
         {
           g_debug ("Ignoring %s/%s: not tmp-*",
-                   self->mutable_parent, dent->d_name);
+                   self->variable_dir, dent->d_name);
           continue;
         }
 
       g_debug ("Found temporary runtime %s/%s, considering whether to "
                "delete it...",
-               self->mutable_parent, dent->d_name);
+               self->variable_dir, dent->d_name);
 
       keep = g_build_filename (dent->d_name, "keep", NULL);
 
-      if (glnx_fstatat (self->mutable_parent_fd, keep, &ignore,
+      if (glnx_fstatat (self->variable_dir_fd, keep, &ignore,
                         AT_SYMLINK_NOFOLLOW, &local_error))
         {
           g_debug ("Not deleting \"%s/%s\": ./keep exists",
-                   self->mutable_parent, dent->d_name);
+                   self->variable_dir, dent->d_name);
           continue;
         }
       else if (!g_error_matches (local_error, G_IO_ERROR,
@@ -605,7 +605,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
         {
           /* EACCES or something? Give it the benefit of the doubt */
           g_warning ("Not deleting \"%s/%s\": unable to stat ./keep: %s",
-                   self->mutable_parent, dent->d_name, local_error->message);
+                   self->variable_dir, dent->d_name, local_error->message);
           g_clear_error (&local_error);
           continue;
         }
@@ -613,7 +613,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
       g_clear_error (&local_error);
 
       ref = g_build_filename (dent->d_name, ".ref", NULL);
-      temp_lock = pv_bwrap_lock_new (self->mutable_parent_fd, ref,
+      temp_lock = pv_bwrap_lock_new (self->variable_dir_fd, ref,
                                      (PV_BWRAP_LOCK_FLAGS_CREATE |
                                       PV_BWRAP_LOCK_FLAGS_WRITE),
                                      &local_error);
@@ -621,21 +621,21 @@ pv_runtime_garbage_collect (PvRuntime *self,
       if (temp_lock == NULL)
         {
           g_info ("Not deleting \"%s/%s\": unable to get lock: %s",
-                  self->mutable_parent, dent->d_name,
+                  self->variable_dir, dent->d_name,
                   local_error->message);
           g_clear_error (&local_error);
           continue;
         }
 
-      g_debug ("Deleting \"%s/%s\"...", self->mutable_parent, dent->d_name);
+      g_debug ("Deleting \"%s/%s\"...", self->variable_dir, dent->d_name);
 
       /* We have the lock, which would not have happened if someone was
        * still using the runtime, so we can safely delete it. */
-      if (!glnx_shutil_rm_rf_at (self->mutable_parent_fd, dent->d_name,
+      if (!glnx_shutil_rm_rf_at (self->variable_dir_fd, dent->d_name,
                                  NULL, &local_error))
         {
           g_debug ("Unable to delete %s/%s: %s",
-                   self->mutable_parent, dent->d_name, local_error->message);
+                   self->variable_dir, dent->d_name, local_error->message);
           g_clear_error (&local_error);
           continue;
         }
@@ -644,32 +644,26 @@ pv_runtime_garbage_collect (PvRuntime *self,
   return TRUE;
 }
 
+static gboolean pv_runtime_create_copy (PvRuntime *self,
+                                        PvBwrapLock *variable_dir_lock,
+                                        GError **error);
+
 static gboolean
 pv_runtime_init_mutable (PvRuntime *self,
                          GError **error)
 {
-  g_autofree gchar *dest_usr = NULL;
-  g_autofree gchar *source_usr_subdir = NULL;
-  g_autofree gchar *temp_dir = NULL;
-  g_autoptr(GDir) dir = NULL;
-  g_autoptr(PvBwrapLock) copy_lock = NULL;
   g_autoptr(PvBwrapLock) mutable_lock = NULL;
-  g_autoptr(PvBwrapLock) source_lock = NULL;
-  const char *member;
-  const char *source_usr;
-  glnx_autofd int temp_dir_fd = -1;
-  gboolean is_just_usr;
 
   /* Nothing to do in this case */
-  if (self->mutable_parent == NULL)
+  if (self->variable_dir == NULL)
     return TRUE;
 
-  if (g_mkdir_with_parents (self->mutable_parent, 0700) != 0)
+  if (g_mkdir_with_parents (self->variable_dir, 0700) != 0)
     return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                    self->mutable_parent);
+                                    self->variable_dir);
 
-  if (!glnx_opendirat (AT_FDCWD, self->mutable_parent, TRUE,
-                       &self->mutable_parent_fd, error))
+  if (!glnx_opendirat (AT_FDCWD, self->variable_dir, TRUE,
+                       &self->variable_dir_fd, error))
     return FALSE;
 
   /* Lock the parent directory. Anything that directly manipulates the
@@ -680,13 +674,13 @@ pv_runtime_init_mutable (PvRuntime *self,
    * This is a read-mode lock: it's OK to create more than one temporary
    * runtime in parallel, as long as nothing is deleting them
    * concurrently. */
-  mutable_lock = pv_bwrap_lock_new (self->mutable_parent_fd, ".ref",
+  mutable_lock = pv_bwrap_lock_new (self->variable_dir_fd, ".ref",
                                     PV_BWRAP_LOCK_FLAGS_CREATE,
                                     error);
 
   if (mutable_lock == NULL)
     return glnx_prefix_error (error, "Unable to lock \"%s/%s\"",
-                              self->mutable_parent, ".ref");
+                              self->variable_dir, ".ref");
 
   /* GC old runtimes (if they have become unused) before we create a
    * new one. This means we should only ever have one temporary runtime
@@ -695,7 +689,38 @@ pv_runtime_init_mutable (PvRuntime *self,
       !pv_runtime_garbage_collect (self, mutable_lock, error))
     return FALSE;
 
-  temp_dir = g_build_filename (self->mutable_parent, "tmp-XXXXXX", NULL);
+  if ((self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME) != 0
+      && !pv_runtime_create_copy (self, mutable_lock, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+pv_runtime_create_copy (PvRuntime *self,
+                        PvBwrapLock *variable_dir_lock,
+                        GError **error)
+{
+  g_autofree gchar *dest_usr = NULL;
+  g_autofree gchar *source_usr_subdir = NULL;
+  g_autofree gchar *temp_dir = NULL;
+  g_autoptr(GDir) dir = NULL;
+  g_autoptr(PvBwrapLock) copy_lock = NULL;
+  g_autoptr(PvBwrapLock) source_lock = NULL;
+  const char *member;
+  const char *source_usr;
+  glnx_autofd int temp_dir_fd = -1;
+  gboolean is_just_usr;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->variable_dir != NULL, FALSE);
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  /* We don't actually *use* this: it just acts as an assertion that
+   * we are holding the lock on the parent directory. */
+  g_return_val_if_fail (variable_dir_lock != NULL, FALSE);
+
+  temp_dir = g_build_filename (self->variable_dir, "tmp-XXXXXX", NULL);
 
   if (g_mkdtemp (temp_dir) == NULL)
     return glnx_throw_errno_prefix (error,
@@ -850,11 +875,11 @@ pv_runtime_initable_init (GInitable *initable,
                          self->bubblewrap);
     }
 
-  if (self->mutable_parent != NULL
-      && !g_file_test (self->mutable_parent, G_FILE_TEST_IS_DIR))
+  if (self->variable_dir != NULL
+      && !g_file_test (self->variable_dir, G_FILE_TEST_IS_DIR))
     {
       return glnx_throw (error, "\"%s\" is not a directory",
-                         self->mutable_parent);
+                         self->variable_dir);
     }
 
   if (!g_file_test (self->deployment, G_FILE_TEST_IS_DIR))
@@ -1043,8 +1068,8 @@ pv_runtime_finalize (GObject *object)
   g_free (self->bubblewrap);
   g_strfreev (self->original_environ);
   g_free (self->libcapsule_knowledge);
-  glnx_close_fd (&self->mutable_parent_fd);
-  g_free (self->mutable_parent);
+  glnx_close_fd (&self->variable_dir_fd);
+  g_free (self->variable_dir);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
   glnx_close_fd (&self->provider_fd);
@@ -1094,10 +1119,9 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS));
 
-  properties[PROP_MUTABLE_PARENT] =
-    g_param_spec_string ("mutable-parent", "Mutable parent",
-                         ("Path to a directory in which to create a "
-                          "mutable copy of source-files, or NULL"),
+  properties[PROP_VARIABLE_DIR] =
+    g_param_spec_string ("variable-dir", "Variable directory",
+                         ("Path to directory for temporary files, or NULL"),
                          NULL,
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
@@ -1140,7 +1164,7 @@ pv_runtime_class_init (PvRuntimeClass *cls)
 
 PvRuntime *
 pv_runtime_new (const char *deployment,
-                const char *mutable_parent,
+                const char *variable_dir,
                 const char *bubblewrap,
                 const char *tools_dir,
                 const char *provider_in_current_namespace,
@@ -1159,7 +1183,7 @@ pv_runtime_new (const char *deployment,
                          error,
                          "bubblewrap", bubblewrap,
                          "original-environ", original_environ,
-                         "mutable-parent", mutable_parent,
+                         "variable-dir", variable_dir,
                          "deployment", deployment,
                          "tools-directory", tools_dir,
                          "provider-in-current-namespace",

@@ -38,6 +38,7 @@
  * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
  * @PV_RUNTIME_FLAGS_VERBOSE: Be more verbose
  * @PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS: Include host Vulkan layers
+ * @PV_RUNTIME_FLAGS_COPY_RUNTIME: Copy the runtime and modify the copy
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -49,6 +50,7 @@ typedef enum
   PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_VERBOSE = (1 << 3),
   PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS = (1 << 4),
+  PV_RUNTIME_FLAGS_COPY_RUNTIME = (1 << 5),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -58,6 +60,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    | PV_RUNTIME_FLAGS_VERBOSE \
    | PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS \
+   | PV_RUNTIME_FLAGS_COPY_RUNTIME \
    )
 
 typedef struct _PvRuntime PvRuntime;
@@ -72,7 +75,7 @@ typedef struct _PvRuntimeClass PvRuntimeClass;
 GType pv_runtime_get_type (void);
 
 PvRuntime *pv_runtime_new (const char *deployment,
-                           const char *mutable_parent,
+                           const char *variable_dir,
                            const char *bubblewrap,
                            const char *tools_dir,
                            const char *provider_in_current_namespace,

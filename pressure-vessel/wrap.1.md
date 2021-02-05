@@ -28,10 +28,18 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 :   Disable all interactivity and redirection: ignore `--shell`,
     all `--shell-` options, `--terminal`, `--tty` and `--xterm`.
 
+`--copy-runtime`, `--no-copy-runtime`
+:   If a `--runtime` is active, copy it into a subdirectory of the
+    `--variable-dir`, edit the copy in-place, and mount the copy read-only
+    in the container, instead of setting up elaborate bind-mount structures.
+    This option requires the `--variable-dir` option to be used.
+
+    `--no-copy-runtime` disables this behaviour and is currently
+    the default.
+
 `--copy-runtime-into` *DIR*
-:   If a `--runtime` is active, copy it into a subdirectory of *DIR*,
-    edit the copy in-place, and mount the copy read-only in the container,
-    instead of setting up elaborate bind-mount structures.
+:   If *DIR* is an empty string, equivalent to `--no-copy-runtime`.
+    Otherwise, equivalent to `--copy-runtime --variable-dir=DIR`.
 
 `--env-if-host` *VAR=VAL*
 :   If *COMMAND* is run with `/usr` from the host system, set
@@ -46,7 +54,7 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     freedesktop.org app *ID* would use.
 
 `--gc-runtimes`, `--no-gc-runtimes`
-:   If using `--copy-runtime-into`, garbage-collect old temporary
+:   If using `--variable-dir`, garbage-collect old temporary
     runtimes that are left over from a previous **pressure-vessel-wrap**.
     This is the default. `--no-gc-runtimes` disables this behaviour.
 
@@ -81,8 +89,8 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 
 `--only-prepare`
 :   Prepare the runtime, but do not actually run *COMMAND*.
-    With `--copy-runtime-into`, the prepared runtime will appear in
-    a subdirectory of *DIR*.
+    With `--copy-runtime`, the prepared runtime will appear in
+    a subdirectory of the `--variable-dir`.
 
 `--pass-fd` *FD*
 :   Pass the file descriptor *FD* (specified as a small positive integer)
@@ -168,6 +176,10 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 :   Perform a smoke-test to determine whether **pressure-vessel-wrap**
     can work, and exit. Exit with status 0 if it can or 1 if it cannot.
 
+`--variable-dir` *PATH*
+:   Use *PATH* as a cache directory for files that are temporarily
+    unpacked or copied. It will be created automatically if necessary.
+
 `--verbose`
 :   Be more verbose.
 
@@ -211,9 +223,14 @@ The following environment variables (among others) are read by
 :   If set to `1`, equivalent to `--batch`.
     If set to `0`, no effect.
 
+`PRESSURE_VESSEL_COPY_RUNTIME` (boolean)
+:   If set to `1`, equivalent to `--copy-runtime`.
+    If set to `0`, equivalent to `--no-copy-runtime`.
+
 `PRESSURE_VESSEL_COPY_RUNTIME_INTO` (path or empty string)
-:   Equivalent to
-    `--copy-runtime-into="$PRESSURE_VESSEL_COPY_RUNTIME_INTO"`.
+:   If the string is empty, equivalent to `--no-copy-runtime`.
+    Otherwise, equivalent to
+    `--copy-runtime --variable-dir="$PRESSURE_VESSEL_COPY_RUNTIME_INTO"`.
 
 `PRESSURE_VESSEL_FILESYSTEMS_RO` (`:`-separated list of paths)
 :   Make these paths available read-only inside the container if they
@@ -280,6 +297,9 @@ The following environment variables (among others) are read by
 
 `PRESSURE_VESSEL_TERMINAL` (`none`, `auto`, `tty` or `xterm`)
 :   Equivalent to `--terminal="$PRESSURE_VESSEL_TERMINAL"`.
+
+`PRESSURE_VESSEL_VARIABLE_DIR` (path)
+:   Equivalent to `--variable-dir="$PRESSURE_VESSEL_VARIABLE_DIR"`.
 
 `PRESSURE_VESSEL_VERBOSE` (boolean)
 :   If set to `1`, equivalent to `--verbose`.

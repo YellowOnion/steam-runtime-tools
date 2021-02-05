@@ -1614,14 +1614,6 @@ main (int argc,
         }
     }
 
-  if (opt_variable_dir != NULL
-      && g_mkdir_with_parents (opt_variable_dir, 0700) != 0)
-    {
-      glnx_throw_errno_prefix (error, "Unable to create \"%s\"",
-                               opt_variable_dir);
-      goto out;
-    }
-
   tools_dir = find_executable_dir (error);
 
   if (tools_dir == NULL)

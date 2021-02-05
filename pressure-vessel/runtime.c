@@ -865,13 +865,6 @@ pv_runtime_initable_init (GInitable *initable,
                          self->bubblewrap);
     }
 
-  if (self->variable_dir != NULL
-      && !g_file_test (self->variable_dir, G_FILE_TEST_IS_DIR))
-    {
-      return glnx_throw (error, "\"%s\" is not a directory",
-                         self->variable_dir);
-    }
-
   if (!pv_runtime_init_variable_dir (self, error))
     return FALSE;
 

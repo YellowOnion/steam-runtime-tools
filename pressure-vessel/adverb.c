@@ -413,23 +413,16 @@ generate_locales (gchar **locpath_out,
   g_autofree gchar *pvlg = NULL;
   g_autofree gchar *this_path = NULL;
   g_autofree gchar *this_dir = NULL;
+  gboolean ret = FALSE;
 
-  g_return_val_if_fail (locpath_out == NULL || *locpath_out == NULL, FALSE);
+  g_return_val_if_fail (locpath_out != NULL && *locpath_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
-
-  if (temp_dir == NULL)
-    {
-      if (error != NULL)
-        glnx_prefix_error (error,
-                           "Cannot create temporary directory for locales");
-      return FALSE;
-    }
 
   this_path = g_file_read_link ("/proc/self/exe", NULL);
   this_dir = g_path_get_dirname (this_path);
   pvlg = g_build_filename (this_dir, "pressure-vessel-locale-gen", NULL);
+
+  temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
 
   const char * const locale_gen_argv[] =
   {
@@ -438,6 +431,14 @@ generate_locales (gchar **locpath_out,
     "--verbose",
     NULL
   };
+
+  if (temp_dir == NULL)
+    {
+      if (error != NULL)
+        glnx_prefix_error (error,
+                           "Cannot create temporary directory for locales");
+      goto out;
+    }
 
   if (!run_helper_sync (NULL,
                         locale_gen_argv,
@@ -449,7 +450,7 @@ generate_locales (gchar **locpath_out,
     {
       if (error != NULL)
         glnx_prefix_error (error, "Cannot run pressure-vessel-locale-gen");
-      return FALSE;
+      goto out;
     }
 
   if (child_stdout != NULL && child_stdout[0] != '\0')
@@ -468,22 +469,27 @@ generate_locales (gchar **locpath_out,
     {
       if (error != NULL)
         glnx_prefix_error (error, "Unable to generate locales");
-      return FALSE;
+      goto out;
     }
   /* else all locales were already present (exit status 0) */
 
   dir = g_dir_open (temp_dir, 0, error);
-  
+
+  ret = TRUE;
+
   if (dir == NULL || g_dir_read_name (dir) == NULL)
     {
       g_info ("No locales have been generated");
-      return TRUE;
+      goto out;
     }
 
-  if (locpath_out != NULL)
-    *locpath_out = g_steal_pointer (&temp_dir);
+  *locpath_out = g_steal_pointer (&temp_dir);
 
-  return TRUE;
+out:
+  if (*locpath_out == NULL && temp_dir != NULL)
+    _srt_rm_rf (temp_dir);
+
+  return ret;
 }
 
 /* Only do async-signal-safe things here: see signal-safety(7) */

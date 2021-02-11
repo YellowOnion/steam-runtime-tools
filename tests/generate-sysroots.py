@@ -61,6 +61,8 @@ debian10/usr/share/vulkan/implicit_layer.d
 debian10/run/systemd
 debian-unstable/etc
 fedora/custom_path
+fedora/custom_path2
+fedora/custom_path3
 fedora/usr/lib/dri
 fedora/usr/lib/vdpau
 fedora/usr/lib64/dri
@@ -68,10 +70,10 @@ fedora/usr/lib64/vdpau
 fedora/usr/share/vulkan/implicit_layer.d
 fedora/run/systemd
 flatpak-example/usr/lib/dri
-flatpak-example/usr/lib/mock-abi/GL/lib/dri
-flatpak-example/usr/lib/mock-abi/dri
-flatpak-example/usr/lib/mock-abi/dri/intel-vaapi-driver
-flatpak-example/usr/lib/mock-abi/vdpau
+flatpak-example/usr/lib/x86_64-mock-abi/GL/lib/dri
+flatpak-example/usr/lib/x86_64-mock-abi/dri
+flatpak-example/usr/lib/x86_64-mock-abi/dri/intel-vaapi-driver
+flatpak-example/usr/lib/x86_64-mock-abi/vdpau
 flatpak-example/run/host
 invalid-os-release/usr/lib
 invalid-os-release/run/host
@@ -141,6 +143,7 @@ fedora/usr/lib/libvdpau.so.1
 fedora/usr/lib/vdpau/libvdpau_nouveau.so.1
 fedora/usr/lib/vdpau/libvdpau_r600.so
 fedora/usr/lib/vdpau/libvdpau_radeonsi.so.1.0.0
+fedora/usr/lib32/libMangoHud.so
 fedora/usr/lib64/dri/i965_dri.so
 fedora/usr/lib64/dri/r600_dri.so
 fedora/usr/lib64/dri/r600_drv_video.so
@@ -154,14 +157,14 @@ fedora/usr/lib64/vdpau/libvdpau_radeonsi.so
 flatpak-example/.flatpak-info
 flatpak-example/usr/lib/dri/r300_dri.so
 flatpak-example/usr/lib/dri/r600_drv_video.so
-flatpak-example/usr/lib/mock-abi/GL/lib/dri/i965_dri.so
-flatpak-example/usr/lib/mock-abi/GL/lib/dri/r600_drv_video.so
-flatpak-example/usr/lib/mock-abi/dri/intel-vaapi-driver/i965_drv_video.so
-flatpak-example/usr/lib/mock-abi/dri/radeonsi_drv_video.so
-flatpak-example/usr/lib/mock-abi/libEGL_mesa.so.0
-flatpak-example/usr/lib/mock-abi/libva.so.2
-flatpak-example/usr/lib/mock-abi/libvdpau.so.1
-flatpak-example/usr/lib/mock-abi/vdpau/libvdpau_radeonsi.so.1
+flatpak-example/usr/lib/x86_64-mock-abi/GL/lib/dri/i965_dri.so
+flatpak-example/usr/lib/x86_64-mock-abi/GL/lib/dri/r600_drv_video.so
+flatpak-example/usr/lib/x86_64-mock-abi/dri/intel-vaapi-driver/i965_drv_video.so
+flatpak-example/usr/lib/x86_64-mock-abi/dri/radeonsi_drv_video.so
+flatpak-example/usr/lib/x86_64-mock-abi/libEGL_mesa.so.0
+flatpak-example/usr/lib/x86_64-mock-abi/libva.so.2
+flatpak-example/usr/lib/x86_64-mock-abi/libvdpau.so.1
+flatpak-example/usr/lib/x86_64-mock-abi/vdpau/libvdpau_radeonsi.so.1
 flatpak-example/run/host/.exists
 invalid-os-release/run/host/.exists
 no-os-release/another_custom_path/libvdpau_custom.so
@@ -470,6 +473,34 @@ with open('fedora/custom_path/meta_layer.json', 'w') as writer:
       "VK_LAYER_KHRONOS_validation",
       "VK_LAYER_LUNARG_api_dump"
     ]
+  }
+}''')
+
+with open('fedora/custom_path2/MangoHud.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name" : "VK_LAYER_MANGOHUD_overlay",
+    "type" : "GLOBAL",
+    "library_path" : "/usr/\\$LIB/libMangoHud.so",
+    "api_version" : "1.2.135",
+    "implementation_version" : "1",
+    "description" : "Vulkan Hud Overlay"
+  }
+}''')
+
+with open('fedora/custom_path3/MangoHud_i386.json', 'w') as writer:
+    writer.write('''\
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name" : "VK_LAYER_MANGOHUD_overlay",
+    "type" : "GLOBAL",
+    "library_path" : "/usr/lib32/libMangoHud.so",
+    "api_version" : "1.2.135",
+    "implementation_version" : "1",
+    "description" : "Vulkan Hud Overlay"
   }
 }''')
 

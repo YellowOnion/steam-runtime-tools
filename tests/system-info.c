@@ -2547,6 +2547,7 @@ typedef struct
   const gchar *json_path;
   const gchar *library_path;
   const gchar *api_version;
+  SrtLoadableIssues issues;
   const gchar *error_domain;
   const gchar *error_message;
   int error_code;
@@ -2561,6 +2562,7 @@ typedef struct
   const gchar *api_version;
   const gchar *implementation_version;
   const gchar *library_path;
+  SrtLoadableIssues issues;
   const gchar *error_domain;
   const gchar *error_message;
   int error_code;
@@ -3104,6 +3106,7 @@ static const JsonTest json_test[] =
         .api_version = "1.1.73",
         .implementation_version = "1",
         .library_path = "libVkLayer_MESA_overlay.so",
+        .issues = SRT_LOADABLE_ISSUES_DUPLICATED,
       },
       {
         .json_path = "/usr/share/vulkan/explicit_layer.d/VkLayer_new.json",
@@ -3113,6 +3116,7 @@ static const JsonTest json_test[] =
         .api_version = "1.1.73",
         .implementation_version = "1",
         .library_path = "/usr/lib/libVkLayer_MESA_overlay.so",
+        .issues = SRT_LOADABLE_ISSUES_DUPLICATED,
       },
     },
     .vulkan_implicit_layer =
@@ -3122,6 +3126,7 @@ static const JsonTest json_test[] =
         .error_domain = "g-io-error-quark", /* Default domain */
         .error_code = G_IO_ERROR_FAILED, /* Default error code */
         .error_message = "Something went wrong",
+        .issues = SRT_LOADABLE_ISSUES_CANNOT_LOAD,
       },
     },
     .xdg_portal =
@@ -3624,6 +3629,8 @@ json_parsing (Fixture *f,
           error = NULL;
           g_assert_cmpstr (t->vulkan_explicit_layer[j].json_path, ==,
                            srt_vulkan_layer_get_json_path (iter->data));
+          g_assert_cmpint (t->vulkan_explicit_layer[j].issues, ==,
+                           srt_vulkan_layer_get_issues (iter->data));
           if (srt_vulkan_layer_check_error (iter->data, &error))
             {
               g_assert_cmpstr (t->vulkan_explicit_layer[j].name, ==,
@@ -3654,6 +3661,8 @@ json_parsing (Fixture *f,
           error = NULL;
           g_assert_cmpstr (t->vulkan_implicit_layer[j].json_path, ==,
                            srt_vulkan_layer_get_json_path (iter->data));
+          g_assert_cmpint (t->vulkan_implicit_layer[j].issues, ==,
+                           srt_vulkan_layer_get_issues (iter->data));
           if (srt_vulkan_layer_check_error (iter->data, &error))
             {
               g_assert_cmpstr (t->vulkan_implicit_layer[j].name, ==,

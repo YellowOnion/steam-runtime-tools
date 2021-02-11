@@ -261,7 +261,8 @@
     "icds" : [
       {
         "json_path" : "/usr/share/glvnd/egl_vendor.d/51_mesa.json",
-        "library_path" : "libEGL_mesa.so.0"
+        "library_path" : "libEGL_mesa.so.0",
+        "issues" : []
       }
     ]
   },
@@ -270,7 +271,8 @@
       {
         "json_path" : "/usr/share/vulkan/icd.d/amd_icd64.json",
         "library_path" : "/usr/lib/amdvlk64.so",
-        "api_version" : "1.2.136"
+        "api_version" : "1.2.136",
+        "issues" : []
       }
     ],
     "explicit_layers" : [
@@ -281,7 +283,8 @@
         "type": "GLOBAL",
         "api_version" : "1.1.73",
         "implementation_version": "1",
-        "library_path" : "libVkLayer_MESA_overlay.so"
+        "library_path" : "libVkLayer_MESA_overlay.so",
+        "issues" : []
       }
     ],
     "implicit_layers" : [
@@ -292,7 +295,8 @@
         "type": "GLOBAL",
         "api_version" : "1.2.135",
         "implementation_version": "1",
-        "library_path" : "/usr/$LIB/libMangoHud.so"
+        "library_path" : "/usr/$LIB/libMangoHud.so",
+        "issues" : []
       }
     ]
   },

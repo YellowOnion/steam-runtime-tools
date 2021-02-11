@@ -145,7 +145,7 @@ SrtGraphicsIssues srt_system_info_check_graphics (SrtSystemInfo *self,
 
 _SRT_PUBLIC
 GList * srt_system_info_check_all_graphics (SrtSystemInfo *self,
-                                         const char *multiarch_tuple);
+                                            const char *multiarch_tuple);
 
 _SRT_PUBLIC
 GList *srt_system_info_list_egl_icds (SrtSystemInfo *self,

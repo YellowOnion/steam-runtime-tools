@@ -3094,6 +3094,27 @@ static const JsonTest json_test[] =
         .error_message = "Something went wrong",
       },
     },
+    .vulkan_explicit_layer =
+    {
+      {
+        .json_path = "/usr/share/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json",
+        .name = "VK_LAYER_MESA_overlay",
+        .description = "Mesa Overlay layer",
+        .type = "GLOBAL",
+        .api_version = "1.1.73",
+        .implementation_version = "1",
+        .library_path = "libVkLayer_MESA_overlay.so",
+      },
+      {
+        .json_path = "/usr/share/vulkan/explicit_layer.d/VkLayer_new.json",
+        .name = "VK_LAYER_MESA_overlay",
+        .description = "Mesa Overlay layer",
+        .type = "GLOBAL",
+        .api_version = "1.1.73",
+        .implementation_version = "1",
+        .library_path = "/usr/lib/libVkLayer_MESA_overlay.so",
+      },
+    },
     .vulkan_implicit_layer =
     {
       {

@@ -7111,7 +7111,7 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
         }
     }
 out:
-  return driver_info;
+  return g_list_reverse (driver_info);
 }
 
 /**

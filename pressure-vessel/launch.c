@@ -2,7 +2,7 @@
  * pressure-vessel-launch — send IPC requests to create child processes
  *
  * Copyright © 2018 Red Hat, Inc.
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -53,6 +53,8 @@ typedef enum {
   FLATPAK_SPAWN_FLAGS_NO_NETWORK = 1 << 3,
   FLATPAK_SPAWN_FLAGS_WATCH_BUS = 1 << 4, /* Since 1.2 */
   FLATPAK_SPAWN_FLAGS_EXPOSE_PIDS = 1 << 5, /* Since 1.6, optional */
+  FLATPAK_SPAWN_FLAGS_NOTIFY_START = 1 << 6,
+  FLATPAK_SPAWN_FLAGS_SHARE_PIDS = 1 << 7,
 } FlatpakSpawnFlags;
 
 typedef enum {
@@ -73,6 +75,10 @@ typedef enum {
 typedef enum {
   FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS = 1 << 0,
 } FlatpakSpawnSupportFlags;
+
+/* The same flag is reused: this feature is available under the same
+ * circumstances */
+#define FLATPAK_SPAWN_SUPPORT_FLAGS_SHARE_PIDS FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS
 
 typedef struct
 {
@@ -171,7 +177,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
            * code specified neither WUNTRACED nor WIFSIGNALED, then exactly one
            * of WIFEXITED() or WIFSIGNALED() will be true.
            */
-          g_warning ("exit status %d is neither WIFEXITED() nor WIFSIGNALED()",
+          g_warning ("wait status %d is neither WIFEXITED() nor WIFSIGNALED()",
                      wait_status);
           exit_code = LAUNCH_EX_CANNOT_REPORT;
         }
@@ -327,7 +333,7 @@ name_owner_changed (G_GNUC_UNUSED GDBusConnection *connection,
                     G_GNUC_UNUSED const gchar     *interface_name,
                     G_GNUC_UNUSED const gchar     *signal_name,
                     GVariant                      *parameters,
-                    gpointer                       user_data)
+                    G_GNUC_UNUSED gpointer         user_data)
 {
   GMainLoop *loop = user_data;
   const char *name, *from, *to;
@@ -367,6 +373,108 @@ connection_closed_cb (G_GNUC_UNUSED GDBusConnection *conn,
   g_main_loop_quit (loop);
 }
 
+static guint32
+get_portal_version (void)
+{
+  static guint32 version = 0;
+
+  g_return_val_if_fail (api != NULL, 0);
+  g_return_val_if_fail (api == &host_api || api == &subsandbox_api, 0);
+
+  if (version == 0)
+    {
+      g_autoptr(GError) error = NULL;
+      g_autoptr(GVariant) reply =
+        g_dbus_connection_call_sync (bus_or_peer_connection,
+                                     api->service_bus_name,
+                                     api->service_obj_path,
+                                     "org.freedesktop.DBus.Properties",
+                                     "Get",
+                                     g_variant_new ("(ss)", api->service_iface, "version"),
+                                     G_VARIANT_TYPE ("(v)"),
+                                     G_DBUS_CALL_FLAGS_NONE,
+                                     -1,
+                                     NULL, &error);
+
+      if (reply == NULL)
+        g_debug ("Failed to get version: %s", error->message);
+      else
+        {
+          g_autoptr(GVariant) v = g_variant_get_child_value (reply, 0);
+          g_autoptr(GVariant) v2 = g_variant_get_variant (v);
+          version = g_variant_get_uint32 (v2);
+        }
+    }
+
+  return version;
+}
+
+static void
+check_portal_version (const char *option, guint32 version_needed)
+{
+  guint32 portal_version = get_portal_version ();
+  if (portal_version < version_needed)
+    {
+      g_printerr ("--%s not supported by host portal version (need version %d, has %d)\n", option, version_needed, portal_version);
+      exit (1);
+    }
+}
+
+static guint32
+get_portal_supports (void)
+{
+  static guint32 supports = 0;
+  static gboolean ran = FALSE;
+
+  g_return_val_if_fail (api != NULL, 0);
+  g_return_val_if_fail (api == &host_api || api == &subsandbox_api, 0);
+
+  if (!ran)
+    {
+      g_autoptr(GError) error = NULL;
+      g_autoptr(GVariant) reply = NULL;
+
+      ran = TRUE;
+
+      /* Support flags were added in version 3 */
+      if (get_portal_version () >= 3)
+        {
+          reply = g_dbus_connection_call_sync (bus_or_peer_connection,
+                                               api->service_bus_name,
+                                               api->service_obj_path,
+                                               "org.freedesktop.DBus.Properties",
+                                               "Get",
+                                               g_variant_new ("(ss)", api->service_iface, "supports"),
+                                               G_VARIANT_TYPE ("(v)"),
+                                               G_DBUS_CALL_FLAGS_NONE,
+                                               -1,
+                                               NULL, &error);
+          if (reply == NULL)
+            g_debug ("Failed to get supports: %s", error->message);
+          else
+            {
+              g_autoptr(GVariant) v = g_variant_get_child_value (reply, 0);
+              g_autoptr(GVariant) v2 = g_variant_get_variant (v);
+              supports = g_variant_get_uint32 (v2);
+            }
+        }
+    }
+
+  return supports;
+}
+
+static void
+check_portal_supports (const char *option, guint32 supports_needed)
+{
+  guint32 supports = get_portal_supports ();
+
+  if ((supports & supports_needed) != supports_needed)
+    {
+      g_printerr ("--%s not supported by host portal\n", option);
+      exit (1);
+    }
+}
+
 static gchar **forward_fds = NULL;
 static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
@@ -374,6 +482,7 @@ static gchar *opt_directory = NULL;
 static gchar *opt_socket = NULL;
 static GHashTable *opt_env = NULL;
 static GHashTable *opt_unsetenv = NULL;
+static gboolean opt_share_pids = FALSE;
 static gboolean opt_terminate = FALSE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
@@ -496,6 +605,9 @@ static const GOptionEntry options[] =
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Pass environment variables matching a shell-style wildcard.",
     "WILDCARD" },
+  { "share-pids", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_share_pids,
+    "Use same pid namespace as calling sandbox.", NULL },
   { "socket", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Connect to a Launcher server listening on this AF_UNIX socket.",
@@ -848,11 +960,25 @@ main (int argc,
                              g_variant_new_variant (g_variant_new_boolean (TRUE)));
     }
 
+  /* We just ignore this option when not using a subsandbox:
+   * host_api and launcher_api always share process IDs anyway */
+  if (opt_share_pids && api == &subsandbox_api)
+    {
+      check_portal_version ("share-pids", 5);
+      check_portal_supports ("share-pids", FLATPAK_SPAWN_SUPPORT_FLAGS_SHARE_PIDS);
+
+      spawn_flags |= FLATPAK_SPAWN_FLAGS_SHARE_PIDS;
+    }
+
   if (g_hash_table_size (opt_unsetenv) > 0)
     {
       g_hash_table_iter_init (&iter, opt_unsetenv);
 
-      if (api == &launcher_api)
+      /* The host portal doesn't support options, so we always have to do
+       * this the hard way. The subsandbox portal supports unset-env in
+       * versions >= 5. pressure-vessel-launcher always supports it. */
+      if (api == &launcher_api
+          || (api == &subsandbox_api && get_portal_version () >= 5))
         {
           GVariantBuilder strv_builder;
 

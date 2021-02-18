@@ -856,6 +856,24 @@ pv_runtime_create_copy (PvRuntime *self,
   return TRUE;
 }
 
+static gboolean
+gstring_replace_suffix (GString *s,
+                        const char *suffix,
+                        const char *replacement)
+{
+  gsize len = strlen (suffix);
+
+  if (s->len >= len
+      && strcmp (&s->str[s->len - len], suffix) == 0)
+    {
+      g_string_truncate (s, s->len - len);
+      g_string_append (s, replacement);
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
 /*
  * mutable_lock: (out) (not optional):
  */
@@ -873,7 +891,6 @@ pv_runtime_unpack (PvRuntime *self,
   g_return_val_if_fail (*mutable_lock == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
   g_return_val_if_fail (self->source != NULL, FALSE);
-  g_return_val_if_fail (self->id != NULL, FALSE);
   g_return_val_if_fail (self->variable_dir != NULL, FALSE);
   g_return_val_if_fail (self->variable_dir_fd >= 0, FALSE);
   g_return_val_if_fail (self->deployment == NULL, FALSE);
@@ -883,6 +900,54 @@ pv_runtime_unpack (PvRuntime *self,
 
   if (!g_str_has_suffix (self->source, ".tar.gz"))
     return glnx_throw (error, "\"%s\" is not a .tar.gz file", self->source);
+
+  if (self->id == NULL)
+    {
+      g_autoptr(GString) build_id_file = g_string_new (self->source);
+      g_autofree char *id = NULL;
+      gsize len;
+      gsize i;
+
+      if (gstring_replace_suffix (build_id_file, "-runtime.tar.gz",
+                                  "-buildid.txt")
+          || gstring_replace_suffix (build_id_file, "-sysroot.tar.gz",
+                                     "-buildid.txt"))
+        {
+          if (!g_file_get_contents (build_id_file->str, &id, &len, error))
+            {
+              g_prefix_error (error, "Unable to determine build ID from \"%s\": ",
+                              build_id_file->str);
+              return FALSE;
+            }
+
+          if (len == 0)
+            return glnx_throw (error, "Build ID in \"%s\" is empty",
+                               build_id_file->str);
+
+          for (i = 0; i < len; i++)
+            {
+              /* Ignore a trailing newline */
+              if (i + 1 == len && id[i] == '\n')
+                {
+                  id[i] = '\0';
+                  break;
+                }
+
+              /* Allow dot, dash or underscore, but not at the beginning */
+              if (i > 0 && strchr (".-_", id[i]) != NULL)
+                continue;
+
+              if (!g_ascii_isalnum (id[i]))
+                return glnx_throw (error, "Build ID in \"%s\" is invalid",
+                                   build_id_file->str);
+            }
+
+          self->id = g_steal_pointer (&id);
+        }
+    }
+
+  if (self->id == NULL)
+    return glnx_throw (error, "Cannot unpack archive without unique ID");
 
   deploy_basename = g_strdup_printf ("deploy-%s", self->id);
   self->deployment = g_build_filename (self->variable_dir,
@@ -972,9 +1037,6 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (self->flags & PV_RUNTIME_FLAGS_UNPACK_ARCHIVE)
     {
-      if (self->id == NULL)
-        return glnx_throw (error, "Cannot unpack archive without unique ID");
-
       if (self->variable_dir_fd < 0)
         return glnx_throw (error,
                            "Cannot unpack archive without variable directory");

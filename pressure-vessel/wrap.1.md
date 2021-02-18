@@ -117,7 +117,10 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 
 `--runtime-archive` *ARCHIVE*
 :   Unpack *ARCHIVE* and use it to provide /usr in the container, similar
-    to `--runtime`. The `--runtime-id` option is also required.
+    to `--runtime`. The `--runtime-id` option is also required, unless
+    the filename of the *ARCHIVE* ends with a supported suffix
+    (`-runtime.tar.gz` or `-sysroot.tar.gz`) and it is accompanied by a
+    `-buildid.txt` file.
 
     If this option is used, then `--variable-dir`
     (or its environment variable equivalent) is also required.
@@ -137,10 +140,13 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 
 `--runtime-id` *ID*
 :   Use *ID* to construct a directory into which the `--runtime-archive`
-    will be unpacked. If the *ID* is the same as in a previous run of
-    pressure-vessel-wrap, the content of the `--runtime-archive` will
-    be assumed to be the same as in that previous run, resulting in
-    the previous runtime being reused.
+    will be unpacked, overriding an accompanying `-buildid.txt` file
+    if present.
+
+    If the *ID* is the same as in a previous run of pressure-vessel-wrap,
+    the content of the `--runtime-archive` will be assumed to be the
+    same as in that previous run, resulting in the previous runtime
+    being reused.
 
 `--share-home`, `--unshare-home`
 :   If `--unshare-home` is specified, use the home directory given

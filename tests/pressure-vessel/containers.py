@@ -556,10 +556,16 @@ class TestContainers(BaseTest):
             '--write-final-argv', final_argv_temp.name
         ]
 
-        if archive:
+        if archive and (fast_path or copy):
             argv.extend([
                 '--runtime-archive', archive,
+                # For simplicity, we rely on this below
                 '--runtime-id', 'myruntime_0.1.2',
+            ])
+        elif archive:
+            # Assume the archive is accompanied by a -buildid.txt file
+            argv.extend([
+                '--runtime-archive', archive,
             ])
         else:
             argv.extend(['--runtime', runtime])

@@ -1411,12 +1411,6 @@ main (int argc,
       goto out;
     }
 
-  if (opt_runtime_archive != NULL && opt_runtime_id == NULL)
-    {
-      g_warning ("--runtime-archive requires --runtime-id");
-      goto out;
-    }
-
   if (opt_graphics_provider == NULL)
     opt_graphics_provider = g_strdup (g_getenv ("PRESSURE_VESSEL_GRAPHICS_PROVIDER"));
 
@@ -1786,7 +1780,6 @@ main (int argc,
       else
         {
           flags |= PV_RUNTIME_FLAGS_UNPACK_ARCHIVE;
-          g_assert (opt_runtime_id != NULL);
           runtime_path = opt_runtime_archive;
         }
 

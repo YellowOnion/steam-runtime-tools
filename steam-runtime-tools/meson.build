@@ -93,6 +93,20 @@ install_headers(
   subdir : join_paths('steam-runtime-tools-' + api_major, 'steam-runtime-tools'),
 )
 
+conf_data = configuration_data()
+conf_data.set('project_name', meson.project_name())
+conf_data.set('api_major', api_major)
+conf_data.set('abi_major', abi_major)
+conf_data.set('multiarch', multiarch)
+
+configure_file(
+  input : 'config.h.in',
+  output : '_srt-config.h',
+  configuration : conf_data,
+)
+
+srt_c_args = ['-include', '_srt-config.h']
+
 libsteamrt_generated_headers_dep = declare_dependency(
   include_directories : project_include_dirs,
   sources : [enums[1]],
@@ -100,12 +114,7 @@ libsteamrt_generated_headers_dep = declare_dependency(
 libsteamrt_static = static_library(
   'steam-runtime-tools-internal',
   libsteamrt_sources + libsteamrt_public_headers + enums,
-  c_args : [
-    '-DG_LOG_DOMAIN="' + meson.project_name() + '"',
-    '-D_SRT_SONAME="libsteam-runtime-tools-' + api_major + '.so.' + abi_major + '"',
-    '-D_SRT_MULTIARCH="' + multiarch + '"',
-    '-D_SRT_API_MAJOR="' + api_major + '"',
-  ],
+  c_args : srt_c_args,
   include_directories : project_include_dirs,
   dependencies : [
     libdl,

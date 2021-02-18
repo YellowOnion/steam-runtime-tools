@@ -81,6 +81,151 @@ def boolean_environment(name, default):
     return default
 
 
+class ContainerRuntime:
+    def __init__(
+        self,
+        path,           # type: str
+        home,           # type: str
+    ):  # type: (...) -> None
+        self.home = home
+        self.path = path
+        self.description = ''
+
+
+class DirectoryRuntime(ContainerRuntime):
+    def __init__(
+        self,
+        path,           # type: str
+        home,           # type: str
+    ):  # type: (...) -> None
+        super().__init__(path, home=home)
+
+        self.description = self.__describe_runtime(path)
+
+    def __describe_runtime(
+        self,
+        path        # type: str
+    ):
+        # type: (...) -> str
+
+        description = path
+        files = os.path.join(path, 'files')
+        metadata = os.path.join(path, 'metadata')
+
+        if os.path.islink(files):
+            description = os.path.realpath(files)
+
+        if description.startswith(self.home + '/'):
+            description = '~' + description[len(self.home):]
+
+        name = None             # type: typing.Optional[str]
+        pretty_name = None      # type: typing.Optional[str]
+        build_id = None         # type: typing.Optional[str]
+        variant = None          # type: typing.Optional[str]
+
+        try:
+            keyfile = GLib.KeyFile.new()
+            keyfile.load_from_file(
+                metadata, GLib.KeyFileFlags.NONE)
+            try:
+                build_id = keyfile.get_string('Runtime', 'x-flatdeb-build-id')
+            except GLib.Error:
+                pass
+
+            try:
+                name = keyfile.get_string('Runtime', 'runtime')
+            except GLib.Error:
+                pass
+            else:
+                assert name is not None
+                variant = name.split('.')[-1]
+        except GLib.Error:
+            pass
+
+        try:
+            with open(
+                os.path.join(files, 'lib', 'os-release')
+            ) as reader:
+                for line in reader:
+                    if line.startswith('PRETTY_NAME='):
+                        pretty_name = line.split('=', 1)[1].strip()
+                        pretty_name = GLib.shell_unquote(pretty_name)
+                    elif line.startswith('BUILD_ID='):
+                        build_id = line.split('=', 1)[1].strip()
+                        build_id = GLib.shell_unquote(build_id)
+                    elif line.startswith('VARIANT='):
+                        variant = line.split('=', 1)[1].strip()
+                        variant = GLib.shell_unquote(variant)
+        except (GLib.Error, EnvironmentError):
+            pass
+
+        if pretty_name is None:
+            pretty_name = name
+
+        if pretty_name is None:
+            pretty_name = os.path.basename(path)
+
+        if build_id is None:
+            build_id = ''
+        else:
+            build_id = ' build {}'.format(build_id)
+
+        if variant is None:
+            variant = ''
+        else:
+            variant = ' {}'.format(variant)
+
+        description = '{}{}{}\n({})'.format(
+            pretty_name,
+            variant,
+            build_id,
+            description,
+        )
+
+        return description
+
+
+class ArchiveRuntime(ContainerRuntime):
+    def __init__(
+        self,
+        path,           # type: str
+        buildid_file,   # type: str
+        home,           # type: str
+    ):  # type: (...) -> None
+        super().__init__(path, home=home)
+
+        if path.startswith(self.home + '/'):
+            path = '~' + path[len(self.home):]
+
+        description = os.path.basename(path)
+        sdk_suffix = ''
+
+        if description.startswith('com.valvesoftware.SteamRuntime.'):
+            description = description[len('com.valvesoftware.SteamRuntime.'):]
+
+        if description.startswith('Platform-'):
+            description = description[len('Platform-'):]
+
+        if description.startswith('Sdk-'):
+            sdk_suffix = '-sdk'
+            description = description[len('Sdk-'):]
+
+        if description.startswith('amd64,i386-'):
+            description = description[len('amd64,i386-'):]
+
+        if description.endswith('.tar.gz'):
+            description = description[:-len('.tar.gz')]
+
+        if description.endswith('-runtime'):
+            description = description[:-len('-runtime')]
+
+        with open(buildid_file) as reader:
+            build = reader.read().strip()
+
+        self.deploy_id = '{}{}_{}'.format(description, sdk_suffix, build)
+        self.description = '{} build {}\n({})'.format(description, build, path)
+
+
 class Gui:
     def __init__(self):
         # type: (...) -> None
@@ -88,7 +233,8 @@ class Gui:
         self.failed = False
         self.home = GLib.get_home_dir()
 
-        self.container_runtimes = {}    # type: typing.Dict[str, str]
+        self.container_runtimes = {
+        }    # type: typing.Dict[str, ContainerRuntime]
 
         for search in (
             os.getenv('PRESSURE_VESSEL_RUNTIME_BASE'),
@@ -115,8 +261,25 @@ class Gui:
                 files = os.path.join(path, 'files')
 
                 if os.path.isdir(files):
-                    description = self._describe_runtime(path)
-                    self.container_runtimes[path] = description
+                    self.container_runtimes[path] = DirectoryRuntime(
+                        path,
+                        home=self.home,
+                    )
+                    continue
+
+                if member.endswith(('-runtime.tar.gz', '-sysroot.tar.gz')):
+                    # runtime and sysroot happen to be the same length!
+                    buildid_file = os.path.join(
+                        source_of_runtimes,
+                        member[:-len('-runtime.tar.gz')] + '-buildid.txt',
+                    )
+
+                    if os.path.exists(buildid_file):
+                        self.container_runtimes[path] = ArchiveRuntime(
+                            path,
+                            buildid_file=buildid_file,
+                            home=self.home,
+                        )
 
         self.window = Gtk.Window()
         self.window.set_default_size(600, 300)
@@ -156,8 +319,8 @@ class Gui:
             'None (use host system and traditional LD_LIBRARY_PATH runtime)'
         )
 
-        for path, description in sorted(self.container_runtimes.items()):
-            self.container_runtime_combo.append(path, description)
+        for path, runtime in sorted(self.container_runtimes.items()):
+            self.container_runtime_combo.append(path, runtime.description)
 
         if self.container_runtimes:
             self.container_runtime_combo.set_active(1)
@@ -187,6 +350,29 @@ class Gui:
             assert var_path is not None
 
         self.var_path = os.path.realpath(var_path)
+
+        self.gc_runtimes_check = Gtk.CheckButton.new_with_label(
+            'Clean up old runtimes'
+        )
+        # Deliberately ignoring PRESSURE_VESSEL_GC_RUNTIMES: a lot of the
+        # point of this test UI is the ability to switch between runtimes,
+        # but if we GC non-current runtimes, that'll be really slow.
+        self.gc_runtimes_check.set_active(False)
+        self.grid.attach(self.gc_runtimes_check, 1, row, 1, 1)
+        row += 1
+
+        label = Gtk.Label.new('')
+        label.set_markup(
+            '<small><i>'
+            'Normally this is enabled, but this test UI disables it by '
+            'default for quicker switching between multiple runtimes.'
+            '</i></small>'
+        )
+        label.set_halign(Gtk.Align.START)
+        label.set_line_wrap(True)
+        self.grid.attach(label, 1, row, 1, 1)
+        row += 1
+
         self.copy_runtime_check = Gtk.CheckButton.new_with_label(
             'Create temporary runtime copy on disk'
         )
@@ -415,92 +601,12 @@ class Gui:
     def _container_runtime_changed(self, combo):
         if combo.get_active_id() == '/':
             self.copy_runtime_check.set_sensitive(False)
+            self.gc_runtimes_check.set_sensitive(False)
             self.host_graphics_check.set_sensitive(False)
         else:
             self.copy_runtime_check.set_sensitive(True)
+            self.gc_runtimes_check.set_sensitive(True)
             self.host_graphics_check.set_sensitive(True)
-
-    def _describe_runtime(
-        self,
-        path        # type: str
-    ):
-        # type: (...) -> str
-
-        description = path
-        files = os.path.join(path, 'files')
-        metadata = os.path.join(path, 'metadata')
-
-        if os.path.islink(files):
-            description = os.path.realpath(files)
-
-        if description.startswith(self.home + '/'):
-            description = '~' + description[len(self.home):]
-
-        name = None             # type: typing.Optional[str]
-        pretty_name = None      # type: typing.Optional[str]
-        build_id = None         # type: typing.Optional[str]
-        variant = None          # type: typing.Optional[str]
-
-        try:
-            keyfile = GLib.KeyFile.new()
-            keyfile.load_from_file(
-                metadata, GLib.KeyFileFlags.NONE)
-            try:
-                build_id = keyfile.get_string('Runtime', 'x-flatdeb-build-id')
-            except GLib.Error:
-                pass
-
-            try:
-                name = keyfile.get_string('Runtime', 'runtime')
-            except GLib.Error:
-                pass
-            else:
-                assert name is not None
-                variant = name.split('.')[-1]
-        except GLib.Error:
-            pass
-
-        try:
-            with open(
-                os.path.join(files, 'lib', 'os-release')
-            ) as reader:
-                for line in reader:
-                    if line.startswith('PRETTY_NAME='):
-                        pretty_name = line.split('=', 1)[1].strip()
-                        pretty_name = GLib.shell_unquote(pretty_name)
-                    elif line.startswith('BUILD_ID='):
-                        build_id = line.split('=', 1)[1].strip()
-                        build_id = GLib.shell_unquote(build_id)
-                    elif line.startswith('VARIANT='):
-                        variant = line.split('=', 1)[1].strip()
-                        variant = GLib.shell_unquote(variant)
-        except (GLib.Error, EnvironmentError):
-            pass
-
-        if pretty_name is None:
-            pretty_name = name
-
-        if pretty_name is None:
-            pretty_name = os.path.basename(path)
-
-        if build_id is None:
-            build_id = ''
-        else:
-            build_id = ' build {}'.format(build_id)
-
-        if variant is None:
-            variant = ''
-        else:
-            variant = ' {}'.format(variant)
-
-        description = '{}{}{}\n({})'.format(
-            pretty_name,
-            variant,
-            build_id,
-            description,
-        )
-
-        return description
 
     def run_cb(self, _ignored=None):
         # type: (typing.Any) -> None
@@ -519,7 +625,13 @@ class Gui:
         elif id == '/':
             argv.append('--runtime=')
         else:
-            argv.append('--runtime=' + id)
+            runtime = self.container_runtimes[id]
+
+            if isinstance(runtime, ArchiveRuntime):
+                argv.append('--runtime-archive=' + id)
+                argv.append('--runtime-id=' + runtime.deploy_id)
+            else:
+                argv.append('--runtime=' + id)
 
         if self.host_graphics_check.get_active():
             if os.path.isdir('/run/host'):
@@ -535,6 +647,11 @@ class Gui:
             argv.append('--variable-dir=' + self.var_path)
         else:
             argv.append('--no-copy-runtime')
+
+        if self.gc_runtimes_check.get_active():
+            argv.append('--gc-runtimes')
+        else:
+            argv.append('--no-gc-runtimes')
 
         if self.unshare_home_check.get_active():
             argv.append('--unshare-home')

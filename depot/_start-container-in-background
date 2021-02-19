@@ -12,7 +12,7 @@ deploy=
 force=
 info=
 rendezvous=
-suite=scout
+suite=
 use_timestamp=
 verbose=
 
@@ -64,10 +64,10 @@ usage () {
     echo "Must be run while holding a lock."
     echo
     echo "Options"
-    echo "--deploy=DIR      Deploy to this directory [default=SUITE]."
+    echo "--deploy=DIR      Ignored for backwards compatibility."
     echo "--force           Try even if an earlier attempt failed."
     echo "--session=PATH    Directory representing a session."
-    echo "--suite=SUITE     Run in this runtime [default=scout]."
+    echo "--suite=SUITE     Run in this runtime [default=choose automatically]."
     echo "--use-timestamp   Prepend the timestamp to the log entries."
     echo "--verbose         Be more verbose."
 
@@ -94,7 +94,6 @@ while [ "$#" -gt 0 ]; do
             ;;
 
         (--deploy)
-            deploy="$2"
             shift 2
             ;;
 
@@ -142,12 +141,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-run_in_steamrt="${here}/run-in-steamrt"
 pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
-
-if [ -z "$deploy" ]; then
-    deploy="$suite"
-fi
 
 if [ -z "$rendezvous" ]; then
     log "A session path is required"
@@ -168,14 +162,14 @@ fi
 rm -f "$rendezvous/fifo"
 mkfifo "$rendezvous/fifo"
 
+if [ -z "${suite}" ]; then
+    run=run
+else
+    run="run-in-${suite}"
+fi
+
 info "Starting pressure-vessel-launcher in background"
-"${run_in_steamrt}" \
-    --arch=amd64,i386 \
-    --deploy \
-    --runtime=com.valvesoftware.SteamRuntime.Platform \
-    --suite="${suite}" \
-    "${deploy}" \
-    -- \
+"${here}/${run}" \
     --filesystem="$pressure_vessel" \
     --filesystem="$rendezvous" \
     --launcher \

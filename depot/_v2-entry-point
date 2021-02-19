@@ -8,9 +8,8 @@ me="${me##*/}"
 # This is a prototype and will probably not survive in its current form.
 # Don't rely on it.
 
-deploy=
 is_main=yes
-suite=scout
+suite=
 verbose=
 log_to_file=
 log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${PRESSURE_VESSEL_VARIABLE_DIR-"${here}/var"}"}
@@ -71,10 +70,10 @@ usage () {
     echo "COMMAND [ARGS...] Run this."
     echo
     echo "Options"
-    echo "--deploy=DIR      Deploy to this directory [default=SUITE]."
+    echo "--deploy=DIR      Ignored for backwards compatibility."
     echo "--keep-logs       Do not remove the older logs of this same app id."
     echo "--log-to-file     Log to a file instead of the default stderr."
-    echo "--suite=SUITE     Run in this runtime [default=scout]."
+    echo "--suite=SUITE     Run in this runtime [default=choose automatically]."
     echo "--use-timestamp   Prepend the timestamp to the log entries [default with --log-to-file]."
     echo "--verb=%verb%     Mode to operate in [default=waitforexitandrun]."
     echo "--verbose         Be more verbose."
@@ -103,7 +102,6 @@ while [ "$#" -gt 0 ]; do
             ;;
 
         (--deploy)
-            deploy="$2"
             shift 2
             ;;
 
@@ -163,10 +161,6 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
-
-if [ -z "$deploy" ]; then
-    deploy="$suite"
-fi
 
 if [ -n "$log_to_file" ]; then
     app=
@@ -295,15 +289,15 @@ pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
 # Arguments for pressure-vessel-wrap, currently none
 declare -a container_args=()
 
+if [ -z "${suite}" ]; then
+    run=run
+else
+    run="run-in-${suite}"
+fi
+
 exec_container () {
     # Run as a single command
-    exec "$here/run-in-steamrt" \
-        --arch=amd64,i386 \
-        --deploy \
-        --runtime=com.valvesoftware.SteamRuntime.Platform \
-        --suite="${suite}" \
-        "${deploy}" \
-        -- \
+    exec "${here}/${run}" \
         ${container_args[0]+"${container_args[@]}"} \
         -- \
         "$@" \

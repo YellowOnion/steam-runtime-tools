@@ -673,29 +673,6 @@ pv_runtime_init_variable_dir (PvRuntime *self,
                        &self->variable_dir_fd, error))
     return FALSE;
 
-  /* GC old runtimes (if they have become unused) before we create a
-   * new one. This means we should only ever have one temporary runtime
-   * copy per game that is run concurrently. */
-  if (self->flags & PV_RUNTIME_FLAGS_GC_RUNTIMES)
-    {
-      g_autoptr(PvBwrapLock) mutable_lock = NULL;
-      g_autoptr(GError) local_error = NULL;
-
-      /* Take out an exclusive lock for GC so that we will not conflict
-       * with other concurrent processes that are halfway through
-       * deploying or unpacking a runtime. */
-      mutable_lock = pv_bwrap_lock_new (self->variable_dir_fd, ".ref",
-                                        (PV_BWRAP_LOCK_FLAGS_CREATE
-                                         | PV_BWRAP_LOCK_FLAGS_WRITE),
-                                        &local_error);
-
-      if (mutable_lock == NULL)
-        g_debug ("Unable to take an exclusive lock, skipping GC: %s",
-                 local_error->message);
-      else if (!pv_runtime_garbage_collect (self, mutable_lock, error))
-        return FALSE;
-    }
-
   return TRUE;
 }
 
@@ -1101,6 +1078,30 @@ pv_runtime_initable_init (GInitable *initable,
   /* If the runtime is being deleted, ... don't use it, I suppose? */
   if (self->runtime_lock == NULL)
     return FALSE;
+
+  /* GC old runtimes (if they have become unused) before we create a
+   * new one. This means we should only ever have one temporary runtime
+   * copy per game that is run concurrently. */
+  if (self->variable_dir_fd >= 0
+      && (self->flags & PV_RUNTIME_FLAGS_GC_RUNTIMES))
+    {
+      g_autoptr(GError) local_error = NULL;
+
+      /* Take out an exclusive lock for GC so that we will not conflict
+       * with other concurrent processes that are halfway through
+       * deploying or unpacking a runtime. */
+      if (mutable_lock == NULL)
+        mutable_lock = pv_bwrap_lock_new (self->variable_dir_fd, ".ref",
+                                          (PV_BWRAP_LOCK_FLAGS_CREATE
+                                           | PV_BWRAP_LOCK_FLAGS_WRITE),
+                                          &local_error);
+
+      if (mutable_lock == NULL)
+        g_debug ("Unable to take an exclusive lock, skipping GC: %s",
+                 local_error->message);
+      else if (!pv_runtime_garbage_collect (self, mutable_lock, error))
+        return FALSE;
+    }
 
   if (self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME)
     {

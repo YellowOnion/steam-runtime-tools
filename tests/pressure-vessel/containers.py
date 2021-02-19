@@ -645,7 +645,7 @@ class TestContainers(BaseTest):
             os.makedirs(os.path.join(temp, 'tmp-deleteme'), exist_ok=True)
             # Delete, and assert that it is recursive
             os.makedirs(
-                os.path.join(temp, 'tmp-deleteme2', 'usr', 'lib'),
+                os.path.join(temp, 'deploy-deleteme', 'usr', 'lib'),
                 exist_ok=True,
             )
             # Do not delete because it has ./keep
@@ -709,25 +709,31 @@ class TestContainers(BaseTest):
                 members = set(os.listdir(temp))
 
                 self.assertIn('.ref', members)
+
+                if fast_path:
+                    self.assertIn('deploy-myruntime_0.1.2', members)
+
                 self.assertIn('donotdelete', members)
                 self.assertIn('tmp-keep', members)
                 self.assertIn('tmp-rlock', members)
                 self.assertIn('tmp-wlock', members)
                 if gc:
+                    if archive:
+                        self.assertNotIn('deploy-deleteme', members)
+
                     self.assertNotIn('tmp-deleteme', members)
-                    self.assertNotIn('tmp-deleteme2', members)
                 else:
                     # These would have been deleted if not for --no-gc-runtimes
+                    self.assertIn('deploy-deleteme', members)
                     self.assertIn('tmp-deleteme', members)
-                    self.assertIn('tmp-deleteme2', members)
 
                 members.discard('.ref')
                 members.discard('donotdelete')
                 members.discard('tmp-deleteme')
-                members.discard('tmp-deleteme2')
                 members.discard('tmp-keep')
                 members.discard('tmp-rlock')
                 members.discard('tmp-wlock')
+                members.discard('deploy-deleteme')
                 members.discard('deploy-myruntime_0.1.2')
                 # After discarding those, there should be exactly one left:
                 # the one we just created

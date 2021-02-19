@@ -109,9 +109,9 @@ struct _SrtSystemInfo
   /* Path to find helper executables, or %NULL to use $SRT_HELPERS_PATH
    * or the installed helpers */
   gchar *helpers_path;
-  /* Multiarch tuple to use for helper executables in cases where it
-   * shouldn't matter, or %NULL to use the compiled-in default */
-  GQuark primary_multiarch_tuple;
+  /* Multiarch tuples that are used for helper executables in cases where it
+   * shouldn't matter. The first element is considered the primary multiarch. */
+  GArray *multiarch_tuples;
   /* If %TRUE, #SrtSystemInfo cannot be changed anymore */
   gboolean immutable_values;
   GHashTable *cached_hidden_deps;
@@ -343,6 +343,16 @@ abi_free (gpointer self)
 static void
 srt_system_info_init (SrtSystemInfo *self)
 {
+  GQuark primary;
+  if (strcmp (_SRT_MULTIARCH, "") == 0)
+    /* This won't *work* but at least it's non-empty... */
+    primary = g_quark_from_static_string ("UNKNOWN");
+  else
+    primary = g_quark_from_static_string (_SRT_MULTIARCH);
+
+  self->multiarch_tuples = g_array_sized_new (TRUE, TRUE, sizeof (GQuark), 1);
+  g_array_prepend_val (self->multiarch_tuples, primary);
+
   self->can_write_uinput = TRI_MAYBE;
   self->sysroot_fd = -1;
 
@@ -2752,28 +2762,27 @@ srt_system_info_get_primary_multiarch_tuple (SrtSystemInfo *self)
 {
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
-  if (self->primary_multiarch_tuple != 0)
-    return g_quark_to_string (self->primary_multiarch_tuple);
-
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    /* This won't *work* but at least it's non-empty... */
-    return "UNKNOWN";
-
-  return _SRT_MULTIARCH;
+  return g_quark_to_string (g_array_index (self->multiarch_tuples, GQuark, 0));
 }
 
 /**
  * srt_system_info_set_primary_multiarch_tuple:
  * @self: The #SrtSystemInfo
  * @tuple: (nullable) (type filename) (transfer none): A Debian-style
- *  multiarch tuple
+ *  multiarch tuple such as %SRT_ABI_X86_64
  *
- * Use helper executables prefixed with the given string in situations
- * where the architecture does not matter, such as checking locales.
- * This is mostly useful as a way to substitute a mock implementation
- * during regression tests.
+ * Set the primary architecture that is used to find helper
+ * executables where the architecture does not matter, such as
+ * checking locales.
+ * The primary architecture is the first element from the list of
+ * ABIs, editable by `srt_system_info_set_multiarch_tuples()`.
+ * If the list was not %NULL, the previous primary multiarch
+ * tuple will be demoted to be foreign and the new primary
+ * multiarch tuple will be moved/added to the top of the list.
  *
- * If @path is %NULL, go back to using the compiled-in default.
+ * If @tuple is %NULL, revert to the default behaviour, which
+ * is that the primary architecture is the architecture of the
+ * steam-runtime-tools library.
  *
  * This method is not valid to call on a #SrtSystemInfo that was
  * constructed with srt_system_info_new_from_json().
@@ -2782,11 +2791,133 @@ void
 srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
                                              const gchar *tuple)
 {
+  GQuark primary;
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
   forget_locales (self);
-  self->primary_multiarch_tuple = g_quark_from_string (tuple);
+
+  if (tuple)
+    primary = g_quark_from_string (tuple);
+  else if (strcmp (_SRT_MULTIARCH, "") == 0)
+    primary = g_quark_from_static_string ("UNKNOWN");
+  else
+    primary = g_quark_from_static_string (_SRT_MULTIARCH);
+
+  for (gsize i = 0; i < self->multiarch_tuples->len; i++)
+    {
+      GQuark stored_tuple = g_array_index (self->multiarch_tuples, GQuark, i);
+      if (stored_tuple == primary)
+        {
+          g_array_remove_index (self->multiarch_tuples, i);
+          break;
+        }
+    }
+
+  g_array_prepend_val (self->multiarch_tuples, primary);
+}
+
+/**
+ * srt_system_info_set_multiarch_tuples:
+ * @self: The #SrtSystemInfo
+ * @tuples: (nullable) (array zero-terminated=1) (element-type filename) (transfer none):
+ *  An array of Debian-style multiarch tuples such as %SRT_ABI_X86_64 terminated by a
+ *  %NULL entry, or %NULL
+ *
+ * Set the list of ABIs that will be checked by default in contexts
+ * where multiple ABIs are inspected at the same time, such as
+ * `srt_system_info_list_dri_drivers()`. The first one listed is
+ * assumed to be the primary architecture, and is used to find helper
+ * executables where the architecture does not matter, such as
+ * checking locales. The second and subsequent (if any) are assumed
+ * to be "foreign" architectures.
+ *
+ * If @tuples is %NULL or empty, revert to the default behaviour,
+ * which is that the primary architecture is the architecture of the
+ * steam-runtime-tools library, and there are no foreign architectures.
+ *
+ * For example, to check the x86_64 and i386 ABIs on an x86 platform
+ * or the native ABI otherwise, you might use code like this:
+ *
+ * |[
+ * #ifdef __x86_64__
+ * const char
+ * const tuples[] = { SRT_ABI_X86_64, SRT_ABI_I386, NULL };
+ * #elif defined(__i386__)
+ * const char
+ * const tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
+ * #else
+ * const char
+ * const tuples[] = { NULL };
+ * #endif
+ *
+ * srt_system_info_set_multiarch_tuples (info, tuples);
+ * ]|
+ *
+ * This method is not valid to call on a #SrtSystemInfo that was
+ * constructed with srt_system_info_new_from_json().
+ */
+void
+srt_system_info_set_multiarch_tuples (SrtSystemInfo *self,
+                                      const gchar * const *tuples)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  g_return_if_fail (!self->immutable_values);
+
+  forget_locales (self);
+
+  g_array_set_size (self->multiarch_tuples, 0);
+
+  if (tuples == NULL || *tuples == NULL)
+    {
+      GQuark primary;
+      if (strcmp (_SRT_MULTIARCH, "") == 0)
+        primary = g_quark_from_static_string ("UNKNOWN");
+      else
+        primary = g_quark_from_static_string (_SRT_MULTIARCH);
+
+      g_array_prepend_val (self->multiarch_tuples, primary);
+    }
+
+  for (const gchar * const *tuples_iter = tuples;
+       tuples_iter != NULL && *tuples_iter != NULL;
+       tuples_iter++)
+    {
+      GQuark tuple = g_quark_from_string (*tuples_iter);
+      g_array_append_val (self->multiarch_tuples, tuple);
+    }
+}
+
+/**
+ * srt_system_info_dup_multiarch_tuples:
+ * @self: the system information object
+ *
+ * Return the ABIs for which this object will carry out checks,
+ * in the form of multiarch tuples as printed by
+ * `gcc -print-multiarch` in the Steam Runtime (in practice
+ * this means %SRT_ABI_I386 or %SRT_ABI_X86_64).
+ *
+ * The ABIs that are to be checked can be set with
+ * srt_system_info_set_multiarch_tuples().
+ *
+ * Returns: (array zero-terminated=1) (transfer full): The
+ * ABIs used for various checks. Free with g_strfreev().
+ */
+GStrv srt_system_info_dup_multiarch_tuples (SrtSystemInfo *self)
+{
+  GStrv ret;
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  ret = g_new0 (gchar *, self->multiarch_tuples->len + 1);
+
+  for (gsize i = 0; i < self->multiarch_tuples->len; i++)
+    {
+      GQuark tuple = g_array_index (self->multiarch_tuples, GQuark, i);
+      ret[i] = g_strdup (g_quark_to_string (tuple));
+    }
+
+  ret[self->multiarch_tuples->len] = NULL;
+  return ret;
 }
 
 /**

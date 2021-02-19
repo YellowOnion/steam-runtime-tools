@@ -541,6 +541,69 @@ pv_runtime_constructed (GObject *object)
   g_return_if_fail (self->tools_dir != NULL);
 }
 
+static void
+pv_runtime_maybe_garbage_collect_subdir (const char *description,
+                                         const char *parent,
+                                         int parent_fd,
+                                         const char *member)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(PvBwrapLock) temp_lock = NULL;
+  g_autofree gchar *keep = NULL;
+  g_autofree gchar *ref = NULL;
+  struct stat ignore;
+
+  g_return_if_fail (parent != NULL);
+  g_return_if_fail (parent_fd >= 0);
+  g_return_if_fail (member != NULL);
+
+  g_debug ("Found %s %s/%s, considering whether to delete it...",
+           description, parent, member);
+
+  keep = g_build_filename (member, "keep", NULL);
+
+  if (glnx_fstatat (parent_fd, keep, &ignore,
+                    AT_SYMLINK_NOFOLLOW, &local_error))
+    {
+      g_debug ("Not deleting \"%s/%s\": ./keep exists",
+               parent, member);
+      return;
+    }
+  else if (!g_error_matches (local_error, G_IO_ERROR,
+                             G_IO_ERROR_NOT_FOUND))
+    {
+      /* EACCES or something? Give it the benefit of the doubt */
+      g_warning ("Not deleting \"%s/%s\": unable to stat ./keep: %s",
+               parent, member, local_error->message);
+      return;
+    }
+
+  g_clear_error (&local_error);
+
+  ref = g_build_filename (member, ".ref", NULL);
+  temp_lock = pv_bwrap_lock_new (parent_fd, ref,
+                                 (PV_BWRAP_LOCK_FLAGS_CREATE |
+                                  PV_BWRAP_LOCK_FLAGS_WRITE),
+                                 &local_error);
+
+  if (temp_lock == NULL)
+    {
+      g_info ("Not deleting \"%s/%s\": unable to get lock: %s",
+              parent, member, local_error->message);
+      return;
+    }
+
+  g_debug ("Deleting \"%s/%s\"...", parent, member);
+
+  /* We have the lock, which would not have happened if someone was
+   * still using the runtime, so we can safely delete it. */
+  if (!glnx_shutil_rm_rf_at (parent_fd, member, NULL, &local_error))
+    {
+      g_debug ("Unable to delete %s/%s: %s",
+               parent, member, local_error->message);
+    }
+}
+
 static gboolean
 pv_runtime_garbage_collect (PvRuntime *self,
                             PvBwrapLock *variable_dir_lock,
@@ -561,12 +624,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
 
   while (TRUE)
     {
-      g_autoptr(GError) local_error = NULL;
-      g_autoptr(PvBwrapLock) temp_lock = NULL;
-      g_autofree gchar *keep = NULL;
-      g_autofree gchar *ref = NULL;
       struct dirent *dent;
-      struct stat ignore;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent,
                                                        NULL, error))
@@ -619,58 +677,10 @@ pv_runtime_garbage_collect (PvRuntime *self,
           continue;
         }
 
-      g_debug ("Found temporary runtime %s/%s, considering whether to "
-               "delete it...",
-               self->variable_dir, dent->d_name);
-
-      keep = g_build_filename (dent->d_name, "keep", NULL);
-
-      if (glnx_fstatat (self->variable_dir_fd, keep, &ignore,
-                        AT_SYMLINK_NOFOLLOW, &local_error))
-        {
-          g_debug ("Not deleting \"%s/%s\": ./keep exists",
-                   self->variable_dir, dent->d_name);
-          continue;
-        }
-      else if (!g_error_matches (local_error, G_IO_ERROR,
-                                 G_IO_ERROR_NOT_FOUND))
-        {
-          /* EACCES or something? Give it the benefit of the doubt */
-          g_warning ("Not deleting \"%s/%s\": unable to stat ./keep: %s",
-                   self->variable_dir, dent->d_name, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_clear_error (&local_error);
-
-      ref = g_build_filename (dent->d_name, ".ref", NULL);
-      temp_lock = pv_bwrap_lock_new (self->variable_dir_fd, ref,
-                                     (PV_BWRAP_LOCK_FLAGS_CREATE |
-                                      PV_BWRAP_LOCK_FLAGS_WRITE),
-                                     &local_error);
-
-      if (temp_lock == NULL)
-        {
-          g_info ("Not deleting \"%s/%s\": unable to get lock: %s",
-                  self->variable_dir, dent->d_name,
-                  local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_debug ("Deleting \"%s/%s\"...", self->variable_dir, dent->d_name);
-
-      /* We have the lock, which would not have happened if someone was
-       * still using the runtime, so we can safely delete it. */
-      if (!glnx_shutil_rm_rf_at (self->variable_dir_fd, dent->d_name,
-                                 NULL, &local_error))
-        {
-          g_debug ("Unable to delete %s/%s: %s",
-                   self->variable_dir, dent->d_name, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
+      pv_runtime_maybe_garbage_collect_subdir ("temporary runtime",
+                                               self->variable_dir,
+                                               self->variable_dir_fd,
+                                               dent->d_name);
     }
 
   return TRUE;

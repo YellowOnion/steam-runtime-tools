@@ -189,6 +189,11 @@ _SRT_PUBLIC
 void srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
                                                   const gchar *tuple);
 _SRT_PUBLIC
+void srt_system_info_set_multiarch_tuples (SrtSystemInfo *self,
+                                           const gchar * const *tuples);
+_SRT_PUBLIC
+GStrv srt_system_info_dup_multiarch_tuples (SrtSystemInfo *self);
+_SRT_PUBLIC
 void srt_system_info_set_test_flags (SrtSystemInfo *self,
                                      SrtTestFlags flags);
 

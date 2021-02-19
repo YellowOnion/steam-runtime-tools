@@ -735,6 +735,40 @@ wrong_expectations (Fixture *f,
 }
 
 static void
+multiarch_tuples_handling (Fixture *f,
+                           gconstpointer context)
+{
+  GStrv tuples_list;
+  SrtSystemInfo *info;
+  const gchar *multiarches[] = {"foo8000", "bar9000", NULL};
+
+  info = srt_system_info_new (NULL);
+
+  tuples_list = srt_system_info_dup_multiarch_tuples (info);
+
+  g_assert_cmpstr (srt_system_info_get_primary_multiarch_tuple (info), ==, tuples_list[0]);
+
+  if (strcmp (_SRT_MULTIARCH, "") == 0)
+    g_assert_cmpstr (tuples_list[0], ==, "UNKNOWN");
+  else
+    g_assert_cmpstr (tuples_list[0], ==, _SRT_MULTIARCH);
+
+  g_assert_cmpstr (tuples_list[1], ==, NULL);
+
+  g_strfreev (tuples_list);
+
+  srt_system_info_set_multiarch_tuples (info, multiarches);
+  tuples_list = srt_system_info_dup_multiarch_tuples (info);
+  g_assert_cmpstr (tuples_list[0], ==, multiarches[0]);
+  g_assert_cmpstr (tuples_list[1], ==, multiarches[1]);
+  g_assert_cmpstr (tuples_list[2], ==, multiarches[2]);
+  g_assert_cmpstr (srt_system_info_get_primary_multiarch_tuple (info), ==, multiarches[0]);
+
+  g_object_unref (info);
+  g_strfreev (tuples_list);
+}
+
+static void
 steam_runtime (Fixture *f,
                gconstpointer context)
 {
@@ -3824,6 +3858,8 @@ main (int argc,
               setup, library_missing, teardown);
   g_test_add ("/system-info/wrong_expectations", Fixture, NULL,
               setup, wrong_expectations, teardown);
+  g_test_add ("/system-info/multiarch_tuples_handling", Fixture, NULL,
+              setup, multiarch_tuples_handling, teardown);
 
   g_test_add ("/system-info/steam_runtime", Fixture, NULL,
               setup, steam_runtime, teardown);

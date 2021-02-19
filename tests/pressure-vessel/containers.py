@@ -570,13 +570,13 @@ class TestContainers(BaseTest):
         else:
             argv.extend(['--runtime', runtime])
 
-        var = os.path.join(self.containers_dir, 'var')
-        os.makedirs(var, exist_ok=True)
+        var_dir = os.path.join(self.containers_dir, 'var')
+        os.makedirs(var_dir, exist_ok=True)
 
         if not locales:
             argv.append('--no-generate-locales')
 
-        with tempfile.TemporaryDirectory(prefix='test-', dir=var) as temp:
+        with tempfile.TemporaryDirectory(prefix='test-', dir=var_dir) as temp:
             argv.extend(['--variable-dir', temp])
 
             if fast_path:

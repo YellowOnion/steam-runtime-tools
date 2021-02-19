@@ -1007,7 +1007,7 @@ static GOptionEntry options[] =
   { "no-copy-runtime", '\0',
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_copy_runtime,
     "Don't behave as described for --copy-runtime. "
-    "[Default unless $PRESSURE_VESSEL_COPY_RUNTIME is 1]",
+    "[Default unless $PRESSURE_VESSEL_COPY_RUNTIME is 1 or running in Flatpak]",
     NULL },
   { "copy-runtime-into", '\0',
     G_OPTION_FLAG_FILENAME|G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
@@ -1311,6 +1311,9 @@ main (int argc,
     }
 
   original_environ = g_get_environ ();
+
+  if (is_flatpak_env)
+    opt_copy_runtime = TRUE;
 
   /* Set defaults */
   opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);

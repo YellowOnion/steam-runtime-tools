@@ -97,4 +97,8 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           GError **error);
 void pv_runtime_cleanup (PvRuntime *self);
 
+gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,
+                                            const char *runtime_base,
+                                            GError **error);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvRuntime, g_object_unref)

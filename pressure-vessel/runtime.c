@@ -605,6 +605,137 @@ pv_runtime_maybe_garbage_collect_subdir (const char *description,
 }
 
 static gboolean
+is_old_runtime_deployment (const char *name)
+{
+  if (g_str_has_prefix (name, "scout_before_"))
+    return TRUE;
+
+  if (g_str_has_prefix (name, "soldier_before_"))
+    return TRUE;
+
+  if (g_str_has_prefix (name, "scout_0."))
+    return TRUE;
+
+  if (g_str_has_prefix (name, "soldier_0."))
+    return TRUE;
+
+  if (g_str_has_prefix (name, ".scout_")
+      && g_str_has_suffix (name, "_unpack-temp"))
+    return TRUE;
+
+  if (g_str_has_prefix (name, ".soldier_")
+      && g_str_has_suffix (name, "_unpack-temp"))
+    return TRUE;
+
+  return FALSE;
+}
+
+gboolean
+pv_runtime_garbage_collect_legacy (const char *variable_dir,
+                                   const char *runtime_base,
+                                   GError **error)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(PvBwrapLock) variable_lock = NULL;
+  g_autoptr(PvBwrapLock) base_lock = NULL;
+  g_auto(GLnxDirFdIterator) variable_dir_iter = { FALSE };
+  g_auto(GLnxDirFdIterator) runtime_base_iter = { FALSE };
+  glnx_autofd int variable_dir_fd = -1;
+  glnx_autofd int runtime_base_fd = -1;
+  struct
+  {
+    const char *path;
+    GLnxDirFdIterator *iter;
+  } iters[] = {
+    { variable_dir, &variable_dir_iter },
+    { runtime_base, &runtime_base_iter },
+  };
+  gsize i;
+
+  g_return_val_if_fail (variable_dir != NULL, FALSE);
+  g_return_val_if_fail (runtime_base != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (!glnx_opendirat (AT_FDCWD, variable_dir, TRUE,
+                       &variable_dir_fd, error))
+    return FALSE;
+
+  if (!glnx_opendirat (AT_FDCWD, runtime_base, TRUE,
+                       &runtime_base_fd, error))
+    return FALSE;
+
+  variable_lock = pv_bwrap_lock_new (variable_dir_fd, ".ref",
+                                     (PV_BWRAP_LOCK_FLAGS_CREATE
+                                      | PV_BWRAP_LOCK_FLAGS_WRITE),
+                                     &local_error);
+
+  /* If we can't take the lock immediately, just don't do GC */
+  if (variable_lock == NULL)
+    return TRUE;
+
+  /* We take out locks on both the variable directory and the base
+   * directory, because historically in the shell scripts we only
+   * locked the base directory, and we later moved to locking only the
+   * variable directory. Now that we're in C code it seems safest to
+   * lock both. */
+  base_lock = pv_bwrap_lock_new (runtime_base_fd, ".ref",
+                                 (PV_BWRAP_LOCK_FLAGS_CREATE
+                                  | PV_BWRAP_LOCK_FLAGS_WRITE),
+                                 &local_error);
+
+  /* Same here */
+  if (base_lock == NULL)
+    return TRUE;
+
+  for (i = 0; i < G_N_ELEMENTS (iters); i++)
+    {
+      if (!glnx_dirfd_iterator_init_at (AT_FDCWD, iters[i].path,
+                                        TRUE, iters[i].iter, error))
+        return FALSE;
+
+      while (TRUE)
+        {
+          struct dirent *dent;
+
+          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (iters[i].iter,
+                                                           &dent, NULL, error))
+            return FALSE;
+
+          if (dent == NULL)
+            break;
+
+          switch (dent->d_type)
+            {
+              case DT_DIR:
+                break;
+
+              case DT_BLK:
+              case DT_CHR:
+              case DT_FIFO:
+              case DT_LNK:
+              case DT_REG:
+              case DT_SOCK:
+              case DT_UNKNOWN:
+              default:
+                g_debug ("Ignoring %s/%s: not a directory",
+                         iters[i].path, dent->d_name);
+                continue;
+            }
+
+          if (!is_old_runtime_deployment (dent->d_name))
+            continue;
+
+          pv_runtime_maybe_garbage_collect_subdir ("legacy runtime",
+                                                   iters[i].path,
+                                                   iters[i].iter->fd,
+                                                   dent->d_name);
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_garbage_collect (PvRuntime *self,
                             PvBwrapLock *variable_dir_lock,
                             GError **error)

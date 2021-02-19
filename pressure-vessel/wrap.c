@@ -712,6 +712,7 @@ static char *opt_fake_home = NULL;
 static char **opt_filesystems = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
+static gboolean opt_gc_legacy_runtimes = FALSE;
 static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
@@ -1032,6 +1033,15 @@ static GOptionEntry options[] =
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $STEAM_COMPAT_APP_ID or $SteamAppId]",
     "N" },
+  { "gc-legacy-runtimes", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_legacy_runtimes,
+    "Garbage-collect old unpacked runtimes in $PRESSURE_VESSEL_RUNTIME_BASE.",
+    NULL },
+  { "no-gc-legacy-runtimes", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_gc_legacy_runtimes,
+    "Don't garbage-collect old unpacked runtimes in "
+    "$PRESSURE_VESSEL_RUNTIME_BASE [default].",
+    NULL },
   { "gc-runtimes", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
     "If using --variable-dir, garbage-collect old temporary "
@@ -1339,6 +1349,7 @@ main (int argc,
                                                      TRUE);
 
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
+  opt_gc_legacy_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_LEGACY_RUNTIMES", FALSE);
   opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
 
@@ -1745,6 +1756,21 @@ main (int argc,
                               "--dir",
                               "/run/pressure-vessel",
                               NULL);
+    }
+
+  if (opt_gc_legacy_runtimes
+      && opt_runtime_base != NULL
+      && opt_runtime_base[0] != '\0'
+      && opt_variable_dir != NULL)
+    {
+      if (!pv_runtime_garbage_collect_legacy (opt_variable_dir,
+                                              opt_runtime_base,
+                                              &local_error))
+        {
+          g_warning ("Unable to clean up old runtimes: %s",
+                     local_error->message);
+          g_clear_error (&local_error);
+        }
     }
 
   if (opt_runtime != NULL || opt_runtime_archive != NULL)

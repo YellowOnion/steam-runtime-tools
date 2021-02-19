@@ -1,6 +1,6 @@
 /*
  * Cut-down version of common/flatpak-run.c from Flatpak
- * Last updated: Flatpak 1.9.x, commit 1.8.0-138-g132b0560
+ * Last updated: Flatpak commit 1.10.1-20-gc7bb35d3
  *
  * Copyright © 2017-2019 Collabora Ltd.
  * Copyright © 2014-2019 Red Hat, Inc
@@ -105,7 +105,24 @@ xauth_entry_should_propagate (Xauth *xa,
 
   /* ensure entry is for this machine */
   if (xa->family == FamilyLocal && !auth_streq (hostname, xa->address, xa->address_length))
-    return FALSE;
+    {
+      /* OpenSUSE inherits the hostname value from DHCP without updating
+       * its X11 authentication cookie. The old hostname value can still
+       * be found in the environment variable XAUTHLOCALHOSTNAME.
+       * For reference:
+       * https://bugzilla.opensuse.org/show_bug.cgi?id=262309
+       * For this reason if we have a cookie whose address is equal to the
+       * variable XAUTHLOCALHOSTNAME, we still need to propagate it, but
+       * we also need to change its address to `unames.nodename`.
+       */
+      const char *xauth_local_hostname;
+      xauth_local_hostname = g_getenv ("XAUTHLOCALHOSTNAME");
+      if (xauth_local_hostname == NULL)
+        return FALSE;
+
+      if (!auth_streq ((char *) xauth_local_hostname, xa->address, xa->address_length))
+        return FALSE;
+    }
 
   /* ensure entry is for this session */
   if (xa->number != NULL && !auth_streq (number, xa->number, xa->number_length))
@@ -145,6 +162,17 @@ write_xauth (char *number, FILE *output)
             {
               local_xa.number = (char *) "99";
               local_xa.number_length = 2;
+            }
+
+          if (local_xa.family == FamilyLocal &&
+              !auth_streq (unames.nodename, local_xa.address, local_xa.address_length))
+            {
+              /* If we decided to propagate this cookie, but its address
+               * doesn't match `unames.nodename`, we need to change it or
+               * inside the container it will not work.
+               */
+              local_xa.address = unames.nodename;
+              local_xa.address_length = strlen (local_xa.address);
             }
 
           if (!XauWriteAuth (output, &local_xa))
@@ -701,6 +729,15 @@ flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap)
 
 #if 0
 static void
+flatpak_run_add_resolved_args (FlatpakBwrap *bwrap)
+{
+  const char *resolved_socket = "/run/systemd/resolve/io.systemd.Resolve";
+
+  if (g_file_test (resolved_socket, G_FILE_TEST_EXISTS))
+    flatpak_bwrap_add_args (bwrap, "--bind", resolved_socket, resolved_socket, NULL);
+}
+
+static void
 flatpak_run_add_journal_args (FlatpakBwrap *bwrap)
 {
   g_autofree char *journal_socket_socket = g_strdup ("/run/systemd/journal/socket");
@@ -974,9 +1011,7 @@ start_dbus_proxy (FlatpakBwrap *app_bwrap,
   g_autoptr(FlatpakBwrap) proxy_bwrap = NULL;
   int sync_fds[2] = {-1, -1};
   int proxy_start_index;
-  g_auto(GStrv) minimal_envp = NULL;
 
-  minimal_envp = flatpak_run_get_minimal_env (FALSE, FALSE);
   proxy_bwrap = flatpak_bwrap_new (NULL);
 
   if (!add_bwrap_wrapper (proxy_bwrap, app_info_path, error))
@@ -1050,17 +1085,15 @@ flatpak_extension_compare_by_path (gconstpointer _a,
 }
 
 gboolean
-flatpak_run_add_extension_args (FlatpakBwrap *bwrap,
-                                GKeyFile     *metakey,
-                                const char   *full_ref,
-                                gboolean      use_ld_so_cache,
-                                char        **extensions_out,
-                                GCancellable *cancellable,
-                                GError      **error)
+flatpak_run_add_extension_args (FlatpakBwrap      *bwrap,
+                                GKeyFile          *metakey,
+                                FlatpakDecomposed *ref,
+                                gboolean           use_ld_so_cache,
+                                char             **extensions_out,
+                                GCancellable      *cancellable,
+                                GError           **error)
 {
-  g_auto(GStrv) parts = NULL;
   g_autoptr(GString) used_extensions = g_string_new ("");
-  gboolean is_app;
   GList *extensions, *path_sorted_extensions, *l;
   g_autoptr(GString) ld_library_path = g_string_new ("");
   int count = 0;
@@ -1068,15 +1101,11 @@ flatpak_run_add_extension_args (FlatpakBwrap *bwrap,
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   g_autoptr(GHashTable) created_symlink =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autofree char *arch = flatpak_decomposed_dup_arch (ref);
+  const char *branch = flatpak_decomposed_get_branch (ref);
+  gboolean is_app = flatpak_decomposed_is_app (ref);
 
-  parts = g_strsplit (full_ref, "/", 0);
-  if (g_strv_length (parts) != 4)
-    return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_REF, _("Failed to determine parts from ref: %s"), full_ref);
-
-  is_app = strcmp (parts[0], "app") == 0;
-
-  extensions = flatpak_list_extensions (metakey,
-                                        parts[2], parts[3]);
+  extensions = flatpak_list_extensions (metakey, arch, branch);
 
   /* First we apply all the bindings, they are sorted alphabetically in order for parent directory
      to be mounted before child directories */
@@ -1088,7 +1117,7 @@ flatpak_run_add_extension_args (FlatpakBwrap *bwrap,
       FlatpakExtension *ext = l->data;
       g_autofree char *directory = g_build_filename (is_app ? "/app" : "/usr", ext->directory, NULL);
       g_autofree char *full_directory = g_build_filename (directory, ext->subdir_suffix, NULL);
-      g_autofree char *ref = g_build_filename (full_directory, ".ref", NULL);
+      g_autofree char *ref_file = g_build_filename (full_directory, ".ref", NULL);
       g_autofree char *real_ref = g_build_filename (ext->files_path, ext->directory, ".ref", NULL);
 
       if (ext->needs_tmpfs)
@@ -1110,7 +1139,7 @@ flatpak_run_add_extension_args (FlatpakBwrap *bwrap,
 
       if (g_file_test (real_ref, G_FILE_TEST_EXISTS))
         flatpak_bwrap_add_args (bwrap,
-                                "--lock-file", ref,
+                                "--lock-file", ref_file,
                                 NULL);
     }
 
@@ -1142,7 +1171,7 @@ flatpak_run_add_extension_args (FlatpakBwrap *bwrap,
             {
               g_autofree char *contents = g_strconcat (ld_path, "\n", NULL);
               /* We prepend app or runtime and a counter in order to get the include order correct for the conf files */
-              g_autofree char *ld_so_conf_file = g_strdup_printf ("%s-%03d-%s.conf", parts[0], ++count, ext->installed_id);
+              g_autofree char *ld_so_conf_file = g_strdup_printf ("%s-%03d-%s.conf", flatpak_decomposed_get_kind_str (ref), ++count, ext->installed_id);
               g_autofree char *ld_so_conf_file_path = g_build_filename ("/run/flatpak/ld.so.conf.d", ld_so_conf_file, NULL);
 
               if (!flatpak_bwrap_add_args_data (bwrap, "ld-so-conf",
@@ -1376,24 +1405,6 @@ flatpak_run_add_environment_args (FlatpakBwrap    *bwrap,
   flatpak_run_add_system_dbus_args (bwrap, proxy_arg_bwrap, context, flags);
   flatpak_run_add_a11y_dbus_args (bwrap, proxy_arg_bwrap, context, flags);
 
-  if (g_environ_getenv (bwrap->envp, "LD_LIBRARY_PATH") != NULL)
-    {
-      /* LD_LIBRARY_PATH is overridden for setuid helper, so pass it as cmdline arg */
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "LD_LIBRARY_PATH", g_environ_getenv (bwrap->envp, "LD_LIBRARY_PATH"),
-                              NULL);
-      flatpak_bwrap_unset_env (bwrap, "LD_LIBRARY_PATH");
-    }
-
-  if (g_environ_getenv (bwrap->envp, "TMPDIR") != NULL)
-    {
-      /* TMPDIR is overridden for setuid helper, so pass it as cmdline arg */
-      flatpak_bwrap_add_args (bwrap,
-                              "--setenv", "TMPDIR", g_environ_getenv (bwrap->envp, "TMPDIR"),
-                              NULL);
-      flatpak_bwrap_unset_env (bwrap, "TMPDIR");
-    }
-
   /* Must run this before spawning the dbus proxy, to ensure it
      ends up in the app cgroup */
   if (!flatpak_run_in_transient_unit (app_id, &my_error))
@@ -1613,7 +1624,7 @@ flatpak_run_apply_env_vars (FlatpakBwrap *bwrap, FlatpakContext *context)
       const char *var = key;
       const char *val = value;
 
-      if (val && val[0] != 0)
+      if (val)
         flatpak_bwrap_set_env (bwrap, var, val, TRUE);
       else
         flatpak_bwrap_unset_env (bwrap, var);
@@ -2234,26 +2245,26 @@ flatpak_run_add_dconf_args (FlatpakBwrap *bwrap,
 }
 
 gboolean
-flatpak_run_add_app_info_args (FlatpakBwrap   *bwrap,
-                               GFile          *app_files,
-                               GBytes         *app_deploy_data,
-                               const char     *app_extensions,
-                               GFile          *runtime_files,
-                               GBytes         *runtime_deploy_data,
-                               const char     *runtime_extensions,
-                               const char     *app_id,
-                               const char     *app_branch,
-                               const char     *runtime_ref,
-                               GFile          *app_id_dir,
-                               FlatpakContext *final_app_context,
-                               FlatpakContext *cmdline_context,
-                               gboolean        sandbox,
-                               gboolean        build,
-                               gboolean        devel,
-                               char          **app_info_path_out,
-                               int             instance_id_fd,
-                               char          **instance_id_host_dir_out,
-                               GError        **error)
+flatpak_run_add_app_info_args (FlatpakBwrap       *bwrap,
+                               GFile              *app_files,
+                               GBytes             *app_deploy_data,
+                               const char         *app_extensions,
+                               GFile              *runtime_files,
+                               GBytes             *runtime_deploy_data,
+                               const char         *runtime_extensions,
+                               const char         *app_id,
+                               const char         *app_branch,
+                               FlatpakDecomposed  *runtime_ref,
+                               GFile              *app_id_dir,
+                               FlatpakContext     *final_app_context,
+                               FlatpakContext     *cmdline_context,
+                               gboolean            sandbox,
+                               gboolean            build,
+                               gboolean            devel,
+                               char              **app_info_path_out,
+                               int                 instance_id_fd,
+                               char              **instance_id_host_dir_out,
+                               GError             **error)
 {
   g_autofree char *info_path = NULL;
   g_autofree char *bwrapinfo_path = NULL;
@@ -2261,7 +2272,6 @@ flatpak_run_add_app_info_args (FlatpakBwrap   *bwrap,
   g_autoptr(GKeyFile) keyfile = NULL;
   g_autofree char *runtime_path = NULL;
   g_autofree char *old_dest = g_strdup_printf ("/run/user/%d/flatpak-info", getuid ());
-  g_auto(GStrv) runtime_ref_parts = g_strsplit (runtime_ref, "/", 0);
   const char *group;
   g_autofree char *instance_id = NULL;
   glnx_autofd int lock_fd = -1;
@@ -2269,6 +2279,7 @@ flatpak_run_add_app_info_args (FlatpakBwrap   *bwrap,
   g_autofree char *instance_id_sandbox_dir = NULL;
   g_autofree char *instance_id_lock_file = NULL;
   g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
+  g_autofree char *arch = flatpak_decomposed_dup_arch (runtime_ref);
 
   instance_id = flatpak_run_allocate_id (&lock_fd);
   if (instance_id == NULL)
@@ -2299,7 +2310,7 @@ flatpak_run_add_app_info_args (FlatpakBwrap   *bwrap,
 
   g_key_file_set_string (keyfile, group, FLATPAK_METADATA_KEY_NAME, app_id);
   g_key_file_set_string (keyfile, group, FLATPAK_METADATA_KEY_RUNTIME,
-                         runtime_ref);
+                         flatpak_decomposed_get_ref (runtime_ref));
 
   g_key_file_set_string (keyfile, FLATPAK_METADATA_GROUP_INSTANCE,
                          FLATPAK_METADATA_KEY_INSTANCE_ID, instance_id);
@@ -2335,7 +2346,7 @@ flatpak_run_add_app_info_args (FlatpakBwrap   *bwrap,
     g_key_file_set_string (keyfile, FLATPAK_METADATA_GROUP_INSTANCE,
                            FLATPAK_METADATA_KEY_BRANCH, app_branch);
   g_key_file_set_string (keyfile, FLATPAK_METADATA_GROUP_INSTANCE,
-                         FLATPAK_METADATA_KEY_ARCH, runtime_ref_parts[2]);
+                         FLATPAK_METADATA_KEY_ARCH, arch);
 
   g_key_file_set_string (keyfile, FLATPAK_METADATA_GROUP_INSTANCE,
                          FLATPAK_METADATA_KEY_FLATPAK_VERSION, PACKAGE_VERSION);
@@ -2973,8 +2984,10 @@ flatpak_run_setup_base_argv (FlatpakBwrap   *bwrap,
                             "--proc", "/proc",
                             NULL);
 
+  if (!(flags & FLATPAK_RUN_FLAG_PARENT_SHARE_PIDS))
+    flatpak_bwrap_add_arg (bwrap, "--unshare-pid");
+
   flatpak_bwrap_add_args (bwrap,
-                          "--unshare-pid",
                           "--dir", "/tmp",
                           "--dir", "/var/tmp",
                           "--dir", "/run/host",
@@ -3378,6 +3391,7 @@ regenerate_ld_cache (GPtrArray    *base_argv_array,
                           "--dev", "/dev",
                           "--bind", flatpak_file_get_path_cached (ld_so_dir), "/run/ld-so-cache-dir",
                           NULL);
+  flatpak_bwrap_envp_to_args (bwrap);
 
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     return -1;
@@ -3448,24 +3462,18 @@ regenerate_ld_cache (GPtrArray    *base_argv_array,
 /* Check that this user is actually allowed to run this app. When running
  * from the gnome-initial-setup session, an app filter might not be available. */
 static gboolean
-check_parental_controls (const char     *app_ref,
-                         FlatpakDeploy  *deploy,
-                         GCancellable   *cancellable,
-                         GError        **error)
+check_parental_controls (FlatpakDecomposed *app_ref,
+                         FlatpakDeploy     *deploy,
+                         GCancellable      *cancellable,
+                         GError           **error)
 {
 #ifdef HAVE_LIBMALCONTENT
-  g_auto(GStrv) app_ref_parts = NULL;
   g_autoptr(MctManager) manager = NULL;
   g_autoptr(MctAppFilter) app_filter = NULL;
-  g_autoptr(GAsyncResult) app_filter_result = NULL;
   g_autoptr(GDBusConnection) system_bus = NULL;
   g_autoptr(GError) local_error = NULL;
   g_autoptr(GDesktopAppInfo) app_info = NULL;
   gboolean allowed = FALSE;
-
-  app_ref_parts = flatpak_decompose_ref (app_ref, error);
-  if (app_ref_parts == NULL)
-    return FALSE;
 
   system_bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, error);
   if (system_bus == NULL)
@@ -3478,7 +3486,14 @@ check_parental_controls (const char     *app_ref,
   if (g_error_matches (local_error, MCT_APP_FILTER_ERROR, MCT_APP_FILTER_ERROR_DISABLED))
     {
       g_debug ("Skipping parental controls check for %s since parental "
-               "controls are disabled globally", app_ref);
+               "controls are disabled globally", flatpak_decomposed_get_ref (app_ref));
+      return TRUE;
+    }
+  else if (g_error_matches (local_error, G_DBUS_ERROR, G_DBUS_ERROR_SERVICE_UNKNOWN) ||
+           g_error_matches (local_error, G_DBUS_ERROR, G_DBUS_ERROR_NAME_HAS_NO_OWNER))
+    {
+      g_debug ("Skipping parental controls check for %s since a required "
+               "service was not found", flatpak_decomposed_get_ref (app_ref));
       return TRUE;
     }
   else if (local_error != NULL)
@@ -3493,7 +3508,7 @@ check_parental_controls (const char     *app_ref,
    * multiple .desktop files, we use the main one. The app ID check is
    * always done, as the binary executed by `flatpak run` isn’t necessarily
    * extracted from a .desktop file. */
-  allowed = mct_app_filter_is_flatpak_ref_allowed (app_filter, app_ref);
+  allowed = mct_app_filter_is_flatpak_ref_allowed (app_filter, flatpak_decomposed_get_ref (app_ref));
 
   /* Look up the app’s main .desktop file. */
   if (deploy != NULL && allowed)
@@ -3502,11 +3517,12 @@ check_parental_controls (const char     *app_ref,
       const char *deploy_path;
       g_autofree char *desktop_file_name = NULL;
       g_autofree char *desktop_file_path = NULL;
+      g_autofree char *app_id = flatpak_decomposed_dup_id (app_ref);
 
       deploy_dir = flatpak_deploy_get_dir (deploy);
       deploy_path = flatpak_file_get_path_cached (deploy_dir);
 
-      desktop_file_name = g_strconcat (app_ref_parts[1], ".desktop", NULL);
+      desktop_file_name = g_strconcat (app_id, ".desktop", NULL);
       desktop_file_path = g_build_path (G_DIR_SEPARATOR_S,
                                         deploy_path,
                                         "export",
@@ -3525,7 +3541,7 @@ check_parental_controls (const char     *app_ref,
     return flatpak_fail_error (error, FLATPAK_ERROR_PERMISSION_DENIED,
                                /* Translators: The placeholder is for an app ref. */
                                _("Running %s is not allowed by the policy set by your administrator"),
-                               app_ref);
+                               flatpak_decomposed_get_ref (app_ref));
 #endif  /* HAVE_LIBMALCONTENT */
 
   return TRUE;
@@ -3574,22 +3590,22 @@ check_sudo (GError **error)
 }
 
 gboolean
-flatpak_run_app (const char     *app_ref,
-                 FlatpakDeploy  *app_deploy,
-                 FlatpakContext *extra_context,
-                 const char     *custom_runtime,
-                 const char     *custom_runtime_version,
-                 const char     *custom_runtime_commit,
-                 int             parent_pid,
-                 FlatpakRunFlags flags,
-                 const char     *cwd,
-                 const char     *custom_command,
-                 char           *args[],
-                 int             n_args,
-                 int             instance_id_fd,
-                 char          **instance_dir_out,
-                 GCancellable   *cancellable,
-                 GError        **error)
+flatpak_run_app (FlatpakDecomposed *app_ref,
+                 FlatpakDeploy     *app_deploy,
+                 FlatpakContext    *extra_context,
+                 const char        *custom_runtime,
+                 const char        *custom_runtime_version,
+                 const char        *custom_runtime_commit,
+                 int                parent_pid,
+                 FlatpakRunFlags    flags,
+                 const char        *cwd,
+                 const char        *custom_command,
+                 char              *args[],
+                 int                n_args,
+                 int                instance_id_fd,
+                 char             **instance_dir_out,
+                 GCancellable      *cancellable,
+                 GError           **error)
 {
   g_autoptr(FlatpakDeploy) runtime_deploy = NULL;
   g_autoptr(GBytes) runtime_deploy_data = NULL;
@@ -3599,23 +3615,24 @@ flatpak_run_app (const char     *app_ref,
   g_autoptr(GFile) bin_ldconfig = NULL;
   g_autoptr(GFile) app_id_dir = NULL;
   g_autoptr(GFile) real_app_id_dir = NULL;
-  g_autofree char *default_runtime = NULL;
+  g_autofree char *default_runtime_pref = NULL;
+  g_autoptr(FlatpakDecomposed) default_runtime = NULL;
   g_autofree char *default_command = NULL;
-  g_autofree char *runtime_ref = NULL;
   g_autoptr(GKeyFile) metakey = NULL;
   g_autoptr(GKeyFile) runtime_metakey = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   const char *command = "/bin/sh";
   g_autoptr(GError) my_error = NULL;
-  g_auto(GStrv) runtime_parts = NULL;
+  g_autoptr(FlatpakDecomposed) runtime_ref = NULL;
   int i;
   g_autoptr(GPtrArray) previous_app_id_dirs = NULL;
+  g_autofree char *app_id = NULL;
+  g_autofree char *app_arch = NULL;
   g_autofree char *app_info_path = NULL;
   g_autofree char *instance_id_host_dir = NULL;
   g_autoptr(FlatpakContext) app_context = NULL;
   g_autoptr(FlatpakContext) overrides = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
-  g_auto(GStrv) app_ref_parts = NULL;
   g_autofree char *commandline = NULL;
   g_autofree char *doc_mount_path = NULL;
   g_autofree char *app_extensions = NULL;
@@ -3627,15 +3644,14 @@ flatpak_run_app (const char     *app_ref,
   gboolean use_ld_so_cache = TRUE;
   gboolean sandboxed = (flags & FLATPAK_RUN_FLAG_SANDBOX) != 0;
   gboolean parent_expose_pids = (flags & FLATPAK_RUN_FLAG_PARENT_EXPOSE_PIDS) != 0;
-
+  gboolean parent_share_pids = (flags & FLATPAK_RUN_FLAG_PARENT_SHARE_PIDS) != 0;
   struct stat s;
 
   if (!check_sudo (error))
     return FALSE;
 
-  app_ref_parts = flatpak_decompose_ref (app_ref, error);
-  if (app_ref_parts == NULL)
-    return FALSE;
+  app_id = flatpak_decomposed_dup_id (app_ref);
+  app_arch = flatpak_decomposed_dup_arch (app_ref);
 
   /* Check the user is allowed to run this flatpak. */
   if (!check_parental_controls (app_ref, app_deploy, cancellable, error))
@@ -3647,8 +3663,8 @@ flatpak_run_app (const char     *app_ref,
 
   if (app_deploy == NULL)
     {
-      g_assert (g_str_has_prefix (app_ref, "runtime/"));
-      default_runtime = g_strdup (app_ref + strlen ("runtime/"));
+      g_assert (flatpak_decomposed_is_runtime (app_ref));
+      default_runtime_pref = flatpak_decomposed_dup_pref (app_ref);
     }
   else
     {
@@ -3664,9 +3680,9 @@ flatpak_run_app (const char     *app_ref,
         key = FLATPAK_METADATA_KEY_RUNTIME;
 
       metakey = flatpak_deploy_get_metadata (app_deploy);
-      default_runtime = g_key_file_get_string (metakey,
-                                               FLATPAK_METADATA_GROUP_APPLICATION,
-                                               key, &my_error);
+      default_runtime_pref = g_key_file_get_string (metakey,
+                                                    FLATPAK_METADATA_GROUP_APPLICATION,
+                                                    key, &my_error);
       if (my_error)
         {
           g_propagate_error (error, g_steal_pointer (&my_error));
@@ -3674,39 +3690,47 @@ flatpak_run_app (const char     *app_ref,
         }
     }
 
-  runtime_parts = g_strsplit (default_runtime, "/", 0);
-  if (g_strv_length (runtime_parts) != 3)
-    return flatpak_fail_error (error, FLATPAK_ERROR_INVALID_REF, _("Wrong number of components in runtime %s"), default_runtime);
-
-  if (custom_runtime)
-    {
-      g_auto(GStrv) custom_runtime_parts = g_strsplit (custom_runtime, "/", 0);
-
-      for (i = 0; i < 3 && custom_runtime_parts[i] != NULL; i++)
-        {
-          if (strlen (custom_runtime_parts[i]) > 0)
-            {
-              g_free (runtime_parts[i]);
-              runtime_parts[i] = g_steal_pointer (&custom_runtime_parts[i]);
-            }
-        }
-    }
-
-  if (custom_runtime_version)
-    {
-      g_free (runtime_parts[2]);
-      runtime_parts[2] = g_strdup (custom_runtime_version);
-    }
-
-  runtime_ref = flatpak_compose_ref (FALSE,
-                                     runtime_parts[0],
-                                     runtime_parts[2],
-                                     runtime_parts[1],
-                                     error);
-  if (runtime_ref == NULL)
+  default_runtime = flatpak_decomposed_new_from_pref (FLATPAK_KINDS_RUNTIME, default_runtime_pref, error);
+  if (default_runtime == NULL)
     return FALSE;
 
-  runtime_deploy = flatpak_find_deploy_for_ref (runtime_ref, custom_runtime_commit, cancellable, error);
+  if (custom_runtime != NULL || custom_runtime_version != NULL)
+    {
+      g_auto(GStrv) custom_runtime_parts = NULL;
+      const char *custom_runtime_id = NULL;
+      const char *custom_runtime_arch = NULL;
+
+      if (custom_runtime)
+        {
+          custom_runtime_parts = g_strsplit (custom_runtime, "/", 0);
+          for (i = 0; i < 3 && custom_runtime_parts[i] != NULL; i++)
+            {
+              if (strlen (custom_runtime_parts[i]) > 0)
+                {
+                  if (i == 0)
+                    custom_runtime_id = custom_runtime_parts[i];
+                  if (i == 1)
+                    custom_runtime_arch = custom_runtime_parts[i];
+
+                  if (i == 2 && custom_runtime_version == NULL)
+                    custom_runtime_version = custom_runtime_parts[i];
+                }
+            }
+        }
+
+      runtime_ref = flatpak_decomposed_new_from_decomposed (default_runtime,
+                                                            FLATPAK_KINDS_RUNTIME,
+                                                            custom_runtime_id,
+                                                            custom_runtime_arch,
+                                                            custom_runtime_version,
+                                                            error);
+      if (runtime_ref == NULL)
+        return FALSE;
+    }
+  else
+    runtime_ref = flatpak_decomposed_ref (default_runtime);
+
+  runtime_deploy = flatpak_find_deploy_for_ref (flatpak_decomposed_get_ref (runtime_ref), custom_runtime_commit, NULL, cancellable, error);
   if (runtime_deploy == NULL)
     return FALSE;
 
@@ -3743,7 +3767,7 @@ flatpak_run_app (const char     *app_ref,
       gsize len = 0;
       gboolean do_migrate;
 
-      real_app_id_dir = flatpak_get_data_dir (app_ref_parts[1]);
+      real_app_id_dir = flatpak_get_data_dir (app_id);
       app_files = flatpak_deploy_get_files (app_deploy);
 
       previous_app_id_dirs = g_ptr_array_new_with_free_func (g_object_unref);
@@ -3799,13 +3823,13 @@ flatpak_run_app (const char     *app_ref,
               if (!flatpak_file_rename (previous_app_id_dir, real_app_id_dir, cancellable, &local_error))
                 {
                   g_warning (_("Failed to migrate old app data directory %s to new name %s: %s"),
-                             flatpak_file_get_path_cached (previous_app_id_dir), app_ref_parts[1],
+                             flatpak_file_get_path_cached (previous_app_id_dir), app_id,
                              local_error->message);
                 }
               else
                 {
                   /* Leave a symlink in place of the old data dir */
-                  if (!g_file_make_symbolic_link (previous_app_id_dir, app_ref_parts[1], cancellable, &local_error))
+                  if (!g_file_make_symbolic_link (previous_app_id_dir, app_id, cancellable, &local_error))
                     {
                       g_warning (_("Failed to create symlink while migrating %s: %s"),
                                  flatpak_file_get_path_cached (previous_app_id_dir),
@@ -3827,7 +3851,7 @@ flatpak_run_app (const char     *app_ref,
 
   flatpak_run_apply_env_default (bwrap, use_ld_so_cache);
   flatpak_run_apply_env_vars (bwrap, app_context);
-  flatpak_run_apply_env_prompt (bwrap, app_ref_parts[1]);
+  flatpak_run_apply_env_prompt (bwrap, app_id);
 
   if (real_app_id_dir)
     {
@@ -3881,7 +3905,7 @@ flatpak_run_app (const char     *app_ref,
 
   flags |= flatpak_context_get_run_flags (app_context);
 
-  if (!flatpak_run_setup_base_argv (bwrap, runtime_files, app_id_dir, app_ref_parts[2], flags, error))
+  if (!flatpak_run_setup_base_argv (bwrap, runtime_files, app_id_dir, app_arch, flags, error))
     return FALSE;
 
   if (generate_ld_so_conf)
@@ -3901,23 +3925,26 @@ flatpak_run_app (const char     *app_ref,
   if (!flatpak_run_add_app_info_args (bwrap,
                                       app_files, app_deploy_data, app_extensions,
                                       runtime_files, runtime_deploy_data, runtime_extensions,
-                                      app_ref_parts[1], app_ref_parts[3],
+                                      app_id, flatpak_decomposed_get_branch (app_ref),
                                       runtime_ref, app_id_dir, app_context, extra_context,
                                       sandboxed, FALSE, flags & FLATPAK_RUN_FLAG_DEVEL,
                                       &app_info_path, instance_id_fd, &instance_id_host_dir,
                                       error))
     return FALSE;
 
-  if (!flatpak_run_add_dconf_args (bwrap, app_ref_parts[1], metakey, error))
+  if (!flatpak_run_add_dconf_args (bwrap, app_id, metakey, error))
     return FALSE;
 
   if (!sandboxed && !(flags & FLATPAK_RUN_FLAG_NO_DOCUMENTS_PORTAL))
-    add_document_portal_args (bwrap, app_ref_parts[1], &doc_mount_path);
+    add_document_portal_args (bwrap, app_id, &doc_mount_path);
 
   if (!flatpak_run_add_environment_args (bwrap, app_info_path, flags,
-                                         app_ref_parts[1], app_context, app_id_dir, previous_app_id_dirs,
+                                         app_id, app_context, app_id_dir, previous_app_id_dirs,
                                          &exports, cancellable, error))
     return FALSE;
+
+  if ((app_context->shares & FLATPAK_CONTEXT_SHARED_NETWORK) != 0)
+    flatpak_run_add_resolved_args (bwrap);
 
   flatpak_run_add_journal_args (bwrap);
   add_font_path_args (bwrap);
@@ -3932,7 +3959,7 @@ flatpak_run_app (const char     *app_ref,
   if (cwd)
     flatpak_bwrap_add_args (bwrap, "--chdir", cwd, NULL);
 
-  if (parent_expose_pids)
+  if (parent_expose_pids || parent_share_pids)
     {
       g_autofree char *userns_path = NULL;
       g_autofree char *pidns_path = NULL;
@@ -3979,12 +4006,14 @@ flatpak_run_app (const char     *app_ref,
       command = default_command;
     }
 
+  flatpak_bwrap_envp_to_args (bwrap);
+
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
     return FALSE;
 
   flatpak_bwrap_add_arg (bwrap, command);
 
-  if (!add_rest_args (bwrap, app_ref_parts[1],
+  if (!add_rest_args (bwrap, app_id,
                       exports, (flags & FLATPAK_RUN_FLAG_FILE_FORWARDING) != 0,
                       doc_mount_path,
                       args, n_args, error))
@@ -4008,6 +4037,12 @@ flatpak_run_app (const char     *app_ref,
 
       /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see flatpak_close_fds_workaround */
       spawn_flags |= G_SPAWN_LEAVE_DESCRIPTORS_OPEN;
+
+      /* flatpak_bwrap_envp_to_args() moved the environment variables to
+       * be set into --setenv instructions in argv, so the environment
+       * in which the bwrap command runs must be empty. */
+      g_assert (bwrap->envp != NULL);
+      g_assert (bwrap->envp[0] == NULL);
 
       if (!g_spawn_async (NULL,
                           (char **) bwrap->argv->pdata,
@@ -4035,6 +4070,12 @@ flatpak_run_app (const char     *app_ref,
        * Note that this does not close fds that are not already marked O_CLOEXEC, because
        * we do want to allow inheriting fds into flatpak run. */
       flatpak_bwrap_child_setup (bwrap->fds, FALSE);
+
+      /* flatpak_bwrap_envp_to_args() moved the environment variables to
+       * be set into --setenv instructions in argv, so the environment
+       * in which the bwrap command runs must be empty. */
+      g_assert (bwrap->envp != NULL);
+      g_assert (bwrap->envp[0] == NULL);
 
       if (execvpe (flatpak_get_bwrap (), (char **) bwrap->argv->pdata, bwrap->envp) == -1)
         {

@@ -2466,9 +2466,11 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
                                      &ld_so_relative_to_provider, error);
 
   if (path_fd < 0)
-    return glnx_throw_errno_prefix (error,
-                                    "Unable to determine provider path to %s",
-                                    arch->ld_so);
+    {
+      g_prefix_error (error, "Unable to determine provider path to %s: ",
+                      arch->ld_so);
+      return FALSE;
+    }
 
   ld_so_in_provider = g_build_filename (self->provider_in_host_namespace,
                                         ld_so_relative_to_provider, NULL);

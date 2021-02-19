@@ -482,6 +482,7 @@ class TestContainers(BaseTest):
         *,
         copy: bool = False,
         gc: bool = True,
+        gc_legacy: bool = True,
         locales: bool = False,
         only_prepare: bool = False
     ) -> None:
@@ -490,6 +491,7 @@ class TestContainers(BaseTest):
             runtime,
             copy=copy,
             gc=gc,
+            gc_legacy=gc_legacy,
             is_scout=True,
             locales=locales,
             only_prepare=only_prepare,
@@ -502,6 +504,7 @@ class TestContainers(BaseTest):
         *,
         copy: bool = False,
         gc: bool = True,
+        gc_legacy: bool = True,
         locales: bool = False,
         only_prepare: bool = False
     ) -> None:
@@ -510,6 +513,7 @@ class TestContainers(BaseTest):
             runtime,
             copy=copy,
             gc=gc,
+            gc_legacy=gc_legacy,
             is_soldier=True,
             locales=locales,
             only_prepare=only_prepare,
@@ -524,6 +528,7 @@ class TestContainers(BaseTest):
         copy: bool = False,
         fast_path: bool = False,
         gc: bool = True,
+        gc_legacy: bool = True,
         is_scout: bool = False,
         is_soldier: bool = False,
         locales: bool = False,
@@ -576,7 +581,12 @@ class TestContainers(BaseTest):
         if not locales:
             argv.append('--no-generate-locales')
 
-        with tempfile.TemporaryDirectory(prefix='test-', dir=var_dir) as temp:
+        with tempfile.TemporaryDirectory(
+            prefix='test-', dir=var_dir
+        ) as temp, tempfile.TemporaryDirectory(
+            prefix='test-mock-base-', dir=var_dir
+        ) as mock_base:
+            argv.extend(['--runtime-base', mock_base])
             argv.extend(['--variable-dir', temp])
 
             if fast_path:
@@ -610,6 +620,11 @@ class TestContainers(BaseTest):
                 argv.append('--gc-runtimes')
             else:
                 argv.append('--no-gc-runtimes')
+
+            if gc_legacy:
+                argv.append('--gc-legacy-runtimes')
+            else:
+                argv.append('--no-gc-legacy-runtimes')
 
             if is_scout:
                 python = 'python3.5'
@@ -654,6 +669,32 @@ class TestContainers(BaseTest):
             os.makedirs(os.path.join(temp, 'tmp-rlock'), exist_ok=True)
             # Do not delete because we will write-lock .ref
             os.makedirs(os.path.join(temp, 'tmp-wlock'), exist_ok=True)
+
+            for d in [mock_base, temp]:
+                os.makedirs(
+                    os.path.join(d, 'scout_before_0.20200101.0'),
+                    exist_ok=True,
+                )
+                os.makedirs(
+                    os.path.join(d, 'soldier_0.20200101.0'),
+                    exist_ok=True,
+                )
+                os.makedirs(
+                    os.path.join(d, '.scout_0.20200202.0_unpack-temp'),
+                    exist_ok=True,
+                )
+                os.makedirs(
+                    os.path.join(d, '.soldier_dontdelete'),
+                    exist_ok=True,
+                )
+                os.makedirs(
+                    os.path.join(d, 'scout_dontdelete'),
+                    exist_ok=True,
+                )
+                os.makedirs(
+                    os.path.join(d, 'soldier_0.20200101.0_keep', 'keep'),
+                    exist_ok=True,
+                )
 
             with open(
                 os.path.join(temp, 'tmp-rlock', '.ref'), 'w+'
@@ -705,6 +746,24 @@ class TestContainers(BaseTest):
 
             final_argv_temp.close()
 
+            for d in [mock_base, temp]:
+                members = set(os.listdir(d))
+
+                if gc_legacy:
+                    self.assertNotIn('scout_before_0.20200101.0', members)
+                    self.assertNotIn('soldier_0.20200101.0', members)
+                    self.assertNotIn(
+                        '.scout_0.20200202.0_unpack-temp', members,
+                    )
+                else:
+                    self.assertIn('scout_before_0.20200101.0', members)
+                    self.assertIn('soldier_0.20200101.0', members)
+                    self.assertIn('.scout_0.20200202.0_unpack-temp', members)
+
+                self.assertIn('.soldier_dontdelete', members)
+                self.assertIn('scout_dontdelete', members)
+                self.assertIn('soldier_0.20200101.0_keep', members)
+
             if copy:
                 members = set(os.listdir(temp))
 
@@ -728,7 +787,13 @@ class TestContainers(BaseTest):
                     self.assertIn('tmp-deleteme', members)
 
                 members.discard('.ref')
+                members.discard('.scout_0.20200202.0_unpack-temp')
+                members.discard('.soldier_dontdelete')
                 members.discard('donotdelete')
+                members.discard('scout_before_0.20200101.0')
+                members.discard('scout_dontdelete')
+                members.discard('soldier_0.20200101.0')
+                members.discard('soldier_0.20200101.0_keep')
                 members.discard('tmp-deleteme')
                 members.discard('tmp-keep')
                 members.discard('tmp-rlock')
@@ -1157,7 +1222,7 @@ class TestContainers(BaseTest):
         with self.subTest('copy'):
             self._test_scout(
                 'scout_sysroot_copy_usrmerge', scout,
-                copy=True, gc=False,
+                copy=True, gc=False, gc_legacy=False,
             )
 
         with self.subTest('transient'):

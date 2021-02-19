@@ -1,3 +1,28 @@
+steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pressure-vessel: Never set XDG_DATA_DIRS to just our override directory.
+    Default to /usr/local/share:/usr/share as per the specification.
+  * pressure-vessel: Mask Vulkan layers in home directory or other non-/usr
+    paths. This avoids the Steam fossilize and overlay layers being
+    duplicated in the container's search path. (Resolves: T26160)
+  * pressure-vessel: Accept runtime with or without ./files at top level
+  * pv-launch: Sync minor improvements from flatpak-xdg-utils
+  * pv-launch: Use unset-env option for subsandbox API >= v5.
+    This was added in Flatpak 1.10.0.
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Update flatpak-run to the latest upstream version.
+    This includes a fix to propagate the X11 cookies that have an address
+    equal to XAUTHLOCALHOSTNAME, fixing X11 authentication on some openSUSE
+    systems (Resolves: steam-runtime-tools#53)
+  * pv-adverb: Remove unused locales temporary directories
+    (Resolves: steam-runtime-tools#56)
+  * system-info: Add ability to store multiarch tuples
+  * build: Refactoring
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 19 Feb 2021 10:53:12 +0000
+
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 
   * pressure-vessel: Revert improvements to speed of container setup.

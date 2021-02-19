@@ -2095,7 +2095,12 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                                  SRT_RESOLVE_FLAGS_READABLE,
                                                  NULL, error);
               if (file_fd < 0)
-                return FALSE;
+                {
+                  g_prefix_error (error,
+                                  "Unable to make \"%s\" available in container: ",
+                                  source_in_provider);
+                  return FALSE;
+                }
 
               if (fstat (file_fd, &stat_buf) != 0)
                 {

@@ -370,6 +370,7 @@ class TestContainers(BaseTest):
         cls.host_srsi = host_srsi
 
         if host_srsi is not None:
+            logger.info("We have the host srsi %s", host_srsi)
             with open(
                 os.path.join(cls.artifacts, 'host-srsi.json'),
                 'w',
@@ -397,6 +398,7 @@ class TestContainers(BaseTest):
             ) as reader:
                 cls.host_srsi_parsed = json.load(reader)
         else:
+            logger.info("The host srsi is missing")
             os.environ.pop('HOST_STEAM_RUNTIME_SYSTEM_INFO_JSON', None)
             cls.host_srsi_parsed = {}
 

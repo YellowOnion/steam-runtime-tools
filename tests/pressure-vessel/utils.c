@@ -38,7 +38,7 @@
 
 typedef struct
 {
-  int unused;
+  TestsOpenFdSet old_fds;
 } Fixture;
 
 typedef struct
@@ -51,6 +51,8 @@ setup (Fixture *f,
        gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  f->old_fds = tests_check_fd_leaks_enter ();
 }
 
 static void
@@ -58,6 +60,8 @@ teardown (Fixture *f,
           gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  tests_check_fd_leaks_leave (f->old_fds);
 }
 
 static void

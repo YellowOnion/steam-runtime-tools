@@ -313,12 +313,20 @@ _srt_resolve_in_sysroot (int sysroot,
       if (flags & SRT_RESOLVE_FLAGS_DIRECTORY)
         {
           if (!glnx_opendirat (-1, proc_fd_name, TRUE, &fd, error))
-            return -1;
+            {
+              g_prefix_error (error, "Unable to open \"%s\" as directory: ",
+                              current_path->str);
+              return -1;
+            }
         }
       else
         {
           if (!glnx_openat_rdonly (-1, proc_fd_name, TRUE, &fd, error))
-            return -1;
+            {
+              g_prefix_error (error, "Unable to open \"%s\": ",
+                              current_path->str);
+              return -1;
+            }
         }
 
       if (real_path_out != NULL)

@@ -2084,8 +2084,8 @@ pv_runtime_take_from_provider (PvRuntime *self,
           if (flags & TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK)
             {
               glnx_autofd int file_fd = -1;
+              glnx_autofd int dest_fd = -1;
               glnx_autofd int sysroot_fd = -1;
-              struct stat stat_buf;
 
               if (!glnx_opendirat (-1, self->provider_in_current_namespace,
                                    FALSE, &sysroot_fd, error))
@@ -2095,22 +2095,36 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                                  SRT_RESOLVE_FLAGS_READABLE,
                                                  NULL, error);
               if (file_fd < 0)
-                return FALSE;
-
-              if (fstat (file_fd, &stat_buf) != 0)
                 {
-                  return glnx_throw_errno_prefix (error,
-                                                  "An error occurred using fstat for %s",
-                                                  source_in_provider);
+                  g_prefix_error (error,
+                                  "Unable to make \"%s\" available in container: ",
+                                  source_in_provider);
+                  return FALSE;
                 }
 
-              g_autofree gchar *proc_fd = g_strdup_printf ("/proc/self/fd/%d", file_fd);
+              /* We already deleted ${parent_dirfd}/${base}, and we don't
+               * care about atomicity or durability here, so we can just
+               * write in-place. The permissions are uninteresting because
+               * we're not expecting other users to read this temporary
+               * sysroot anyway, so use 0600 just in case the source file
+               * has restrictive permissions. */
+              dest_fd = TEMP_FAILURE_RETRY (openat (parent_dirfd, base,
+                                                    O_WRONLY|O_CLOEXEC|O_NOCTTY|O_CREAT|O_EXCL,
+                                                    0600));
 
+              if (dest_fd < 0)
+                return glnx_throw_errno_prefix (error,
+                                                "Unable to open \"%s\" for writing",
+                                                dest_in_container);
 
-              return glnx_file_copy_at (AT_FDCWD, proc_fd, &stat_buf,
-                                        parent_dirfd, base,
-                                        GLNX_FILE_COPY_OVERWRITE,
-                                        NULL, error);
+              if (glnx_regfile_copy_bytes (file_fd, dest_fd, (off_t) -1) < 0)
+                return glnx_throw_errno_prefix (error,
+                                                "Unable to copy contents of \"%s/%s\" to \"%s\"",
+                                                self->provider_in_current_namespace,
+                                                source_in_provider,
+                                                dest_in_container);
+
+              return TRUE;
             }
           else
             {
@@ -2461,9 +2475,11 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
                                      &ld_so_relative_to_provider, error);
 
   if (path_fd < 0)
-    return glnx_throw_errno_prefix (error,
-                                    "Unable to determine provider path to %s",
-                                    arch->ld_so);
+    {
+      g_prefix_error (error, "Unable to determine provider path to %s: ",
+                      arch->ld_so);
+      return FALSE;
+    }
 
   ld_so_in_provider = g_build_filename (self->provider_in_host_namespace,
                                         ld_so_relative_to_provider, NULL);

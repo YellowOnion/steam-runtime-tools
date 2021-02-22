@@ -120,6 +120,7 @@ test_resolve_in_sysroot (Fixture *f,
     { "a/b/symlink_to_c", "c" },
     { "a/b/symlink_to_b2", "../b2" },
     { "a/b/symlink_to_c2", "../../a/b2/c2" },
+    { "a/b/symlink_to_itself", "." },
     { "a/b/abs_symlink_to_run", "/run" },
     { "a/b/long_symlink_to_dev", "../../../../../../../../../../../dev" },
     { "x", "create_me" },
@@ -178,6 +179,15 @@ test_resolve_in_sysroot (Fixture *f,
     { { "a/b/symlink_to_b2" }, { "a/b2" } },
     { { "a/b/symlink_to_c2" }, { "a/b2/c2" } },
     { { "a/b/abs_symlink_to_run" }, { NULL, G_IO_ERROR_NOT_FOUND } },
+    {
+      { "a/b/symlink_to_itself", SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK },
+      { "a/b/symlink_to_itself" },
+    },
+    {
+      { "a/b/symlink_to_itself",
+        SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK|SRT_RESOLVE_FLAGS_READABLE },
+      { NULL, G_IO_ERROR_TOO_MANY_LINKS },
+    },
     {
       { "a/b/abs_symlink_to_run", SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK },
       { "a/b/abs_symlink_to_run" }
@@ -282,6 +292,7 @@ test_resolve_in_sysroot (Fixture *f,
       else
         {
           g_assert_error (error, G_IO_ERROR, it->expect.code);
+          g_test_message ("Got error as expected: %s", error->message);
           g_assert_cmpint (fd, ==, -1);
 
           if (out_path != NULL)

@@ -1032,7 +1032,7 @@ pv_runtime_unpack (PvRuntime *self,
                    PvBwrapLock **mutable_lock,
                    GError **error)
 {
-  g_autoptr(FlatpakBwrap) tar = NULL;
+  g_autoptr(GString) debug_tarball = NULL;
   g_autofree gchar *deploy_basename = NULL;
   g_autofree gchar *unpack_dir = NULL;
 
@@ -1132,19 +1132,49 @@ pv_runtime_unpack (PvRuntime *self,
 
   g_info ("Unpacking \"%s\" into \"%s\"...", self->source, unpack_dir);
 
-  tar = flatpak_bwrap_new (NULL);
-  flatpak_bwrap_add_args (tar,
-                          "tar",
-                          "--force-local",
-                          "-C", unpack_dir,
-                          "-xf", self->source,
-                          NULL);
-  flatpak_bwrap_finish (tar);
-
-  if (!pv_bwrap_run_sync (tar, NULL, error))
     {
-      glnx_shutil_rm_rf_at (-1, unpack_dir, NULL, NULL);
-      return FALSE;
+      g_autoptr(FlatpakBwrap) tar = flatpak_bwrap_new (NULL);
+
+      flatpak_bwrap_add_args (tar,
+                              "tar",
+                              "--force-local",
+                              "-C", unpack_dir,
+                              "-xf", self->source,
+                              NULL);
+      flatpak_bwrap_finish (tar);
+
+      if (!pv_bwrap_run_sync (tar, NULL, error))
+        {
+          glnx_shutil_rm_rf_at (-1, unpack_dir, NULL, NULL);
+          return FALSE;
+        }
+    }
+
+  debug_tarball = g_string_new (self->source);
+
+  if (gstring_replace_suffix (debug_tarball, "-runtime.tar.gz",
+                              "-debug.tar.gz")
+      && g_file_test (debug_tarball->str, G_FILE_TEST_EXISTS))
+    {
+      g_autoptr(FlatpakBwrap) tar = flatpak_bwrap_new (NULL);
+      g_autoptr(GError) local_error = NULL;
+      g_autofree char *files_lib_debug = NULL;
+
+      files_lib_debug = g_build_filename (unpack_dir, "files", "lib",
+                                          "debug", NULL);
+
+      flatpak_bwrap_add_args (tar,
+                              "tar",
+                              "--force-local",
+                              "-C", files_lib_debug,
+                              "-xf", debug_tarball->str,
+                              "files/",
+                              NULL);
+      flatpak_bwrap_finish (tar);
+
+      if (!pv_bwrap_run_sync (tar, NULL, &local_error))
+        g_debug ("Ignoring error unpacking detached debug symbols: %s",
+                 local_error->message);
     }
 
   g_info ("Renaming \"%s\" to \"%s\"...", unpack_dir, deploy_basename);

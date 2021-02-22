@@ -1139,6 +1139,12 @@ pv_runtime_unpack (PvRuntime *self,
                               "tar",
                               "--force-local",
                               "-C", unpack_dir,
+                              NULL);
+
+      if (self->flags & PV_RUNTIME_FLAGS_VERBOSE)
+        flatpak_bwrap_add_arg (tar, "-v");
+
+      flatpak_bwrap_add_args (tar,
                               "-xf", self->source,
                               NULL);
       flatpak_bwrap_finish (tar);
@@ -1167,6 +1173,12 @@ pv_runtime_unpack (PvRuntime *self,
                               "tar",
                               "--force-local",
                               "-C", files_lib_debug,
+                              NULL);
+
+      if (self->flags & PV_RUNTIME_FLAGS_VERBOSE)
+        flatpak_bwrap_add_arg (tar, "-v");
+
+      flatpak_bwrap_add_args (tar,
                               "-xf", debug_tarball->str,
                               "files/",
                               NULL);

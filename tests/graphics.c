@@ -91,7 +91,15 @@ setup (Fixture *f,
 
   f->fake_icds_envp = g_get_environ ();
 
-  if (config == NULL || config->icd_mode != ICD_MODE_RELATIVE_FILENAMES)
+  if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
+    {
+      f->sysroot = g_build_filename (f->srcdir, "fake-icds-flatpak", NULL);
+      /* Some of the mock helper programs rely on this, so we set it
+       * even though SrtSystemInfo doesn't use it any more */
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "SRT_TEST_SYSROOT", f->sysroot, TRUE);
+    }
+  else if (config == NULL || config->icd_mode != ICD_MODE_RELATIVE_FILENAMES)
     {
       f->sysroot = g_build_filename (f->srcdir, "fake-icds", NULL);
       /* Some of the mock helper programs rely on this, so we set it
@@ -432,6 +440,7 @@ assert_egl_icd (SrtEglIcd *icd)
 {
   g_autoptr(GError) error = NULL;
   g_autoptr(GError) error_property = NULL;
+  SrtLoadableIssues issues;
   g_autofree gchar *json_path = NULL;
   g_autofree gchar *library_path = NULL;
   g_autofree gchar *resolved = NULL;
@@ -441,6 +450,7 @@ assert_egl_icd (SrtEglIcd *icd)
 
   g_object_get (icd,
                 "error", &error_property,
+                "issues", &issues,
                 "json-path", &json_path,
                 "library-path", &library_path,
                 "resolved-library-path", &resolved_property,
@@ -454,6 +464,7 @@ assert_egl_icd (SrtEglIcd *icd)
   /* These are invariants, even if they're NULL */
   g_assert_cmpstr (library_path, ==, srt_egl_icd_get_library_path (icd));
   g_assert_cmpstr (resolved_property, ==, resolved);
+  g_assert_cmpint (issues, ==, srt_egl_icd_get_issues (icd));
 
   if (error_property == NULL)
     {
@@ -542,15 +553,13 @@ test_icd_egl (Fixture *f,
   g_autoptr(SrtObjectList) icds = NULL;
   g_autofree gchar *resolved = NULL;
   const GList *iter;
-  const char * const multiarchs[] = { "mock-abi", NULL };
+  const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
   srt_system_info_set_sysroot (info, f->sysroot);
+  srt_system_info_set_helpers_path (info, f->builddir);
 
-  if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
-    icds = srt_system_info_list_egl_icds (info, multiarchs);
-  else
-    icds = srt_system_info_list_egl_icds (info, NULL);
+  icds = srt_system_info_list_egl_icds (info, multiarchs);
 
   for (iter = icds; iter != NULL; iter = iter->next)
     {
@@ -591,24 +600,40 @@ test_icd_egl (Fixture *f,
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
                        "/egl1/BBB.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
                        "/egl1/a.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
                        "/egl1/b.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
+                       "/egl1/soname_zlib_dup.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_DUPLICATED);
+      assert_egl_icd_no_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
                        "/egl1/z.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
@@ -620,6 +645,16 @@ test_icd_egl (Fixture *f,
                        "/opt/libEGL_myvendor.so");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "/opt/libEGL_myvendor.so");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
+                       "/egl2/soname_zlib.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_DUPLICATED);
+      assert_egl_icd_no_error (iter->data);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -629,26 +664,36 @@ test_icd_egl (Fixture *f,
       iter = icds;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==, "/not-a-file");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==, "/null.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==, "/false.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==, "/str.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==, "/no-library.json");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
@@ -664,6 +709,8 @@ test_icd_egl (Fixture *f,
       g_assert_true (g_str_has_suffix (path, "/fake-icds/not-a-file"));
       g_assert_true (g_path_is_absolute (path));
       assert_egl_icd_has_error (iter->data);
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -676,6 +723,8 @@ test_icd_egl (Fixture *f,
                        "libEGL_mesa.so.0");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libEGL_mesa.so.0");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -684,6 +733,8 @@ test_icd_egl (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/null.json", path);
       assert_egl_icd_has_error (iter->data);
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -692,6 +743,8 @@ test_icd_egl (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/false.json", path);
       assert_egl_icd_has_error (iter->data);
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -700,6 +753,8 @@ test_icd_egl (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/str.json", path);
       assert_egl_icd_has_error (iter->data);
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -708,24 +763,28 @@ test_icd_egl (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/no-library.json", path);
       assert_egl_icd_has_error (iter->data);
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_null (iter);
     }
   else if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     {
-      SrtEglIcd *other;
+      g_autoptr(SrtEglIcd) other = NULL;
 
       iter = icds;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
-                       "/usr/lib/mock-abi/GL/glvnd/egl_vendor.d/relative.json");
+                       "/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json");
       assert_egl_icd_no_error (iter->data);
       g_assert_cmpstr (srt_egl_icd_get_library_path (iter->data), ==,
                        "../libEGL_relative.so");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==,
-                       "/usr/lib/mock-abi/GL/glvnd/egl_vendor.d/../libEGL_relative.so");
+                       "/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/../libEGL_relative.so");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       other = srt_egl_icd_new_replace_library_path (iter->data,
                                                     "/run/host/libEGL.so");
@@ -737,7 +796,8 @@ test_icd_egl (Fixture *f,
                      srt_egl_icd_get_json_path (iter->data));
       g_assert_cmpstr (srt_egl_icd_get_library_path (other), ==,
                        "/run/host/libEGL.so");
-      g_object_unref (other);
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -751,6 +811,8 @@ test_icd_egl (Fixture *f,
       g_assert_cmpstr (srt_egl_icd_get_json_path (iter->data), ==,
                        "/etc/glvnd/egl_vendor.d/invalid.json");
       /* This one is invalid. */
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_egl_icd_has_error (iter->data);
 
       iter = iter->next;
@@ -762,6 +824,8 @@ test_icd_egl (Fixture *f,
                        "libEGL_mesa.so.0");
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libEGL_mesa.so.0");
+      g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -776,6 +840,7 @@ assert_vulkan_icd (SrtVulkanIcd *icd)
 {
   g_autoptr(GError) error = NULL;
   g_autoptr(GError) error_property = NULL;
+  SrtLoadableIssues issues;
   g_autofree gchar *api_version = NULL;
   g_autofree gchar *json_path = NULL;
   g_autofree gchar *library_path = NULL;
@@ -787,6 +852,7 @@ assert_vulkan_icd (SrtVulkanIcd *icd)
   g_object_get (icd,
                 "api-version", &api_version,
                 "error", &error_property,
+                "issues", &issues,
                 "json-path", &json_path,
                 "library-path", &library_path,
                 "resolved-library-path", &resolved_property,
@@ -801,6 +867,7 @@ assert_vulkan_icd (SrtVulkanIcd *icd)
   g_assert_cmpstr (api_version, ==, srt_vulkan_icd_get_api_version (icd));
   g_assert_cmpstr (library_path, ==, srt_vulkan_icd_get_library_path (icd));
   g_assert_cmpstr (resolved_property, ==, resolved);
+  g_assert_cmpint (issues, ==, srt_vulkan_icd_get_issues (icd));
 
   if (error_property == NULL)
     {
@@ -870,15 +937,13 @@ test_icd_vulkan (Fixture *f,
   g_autoptr(SrtObjectList) icds = NULL;
   const GList *iter;
   g_autofree gchar *resolved = NULL;
-  const char * const multiarchs[] = { "mock-abi", NULL };
+  const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
   srt_system_info_set_sysroot (info, f->sysroot);
+  srt_system_info_set_helpers_path (info, f->builddir);
 
-  if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
-    icds = srt_system_info_list_vulkan_icds (info, multiarchs);
-  else
-    icds = srt_system_info_list_vulkan_icds (info, NULL);
+  icds = srt_system_info_list_vulkan_icds (info, multiarchs);
 
   for (iter = icds; iter != NULL; iter = iter->next)
     {
@@ -905,37 +970,51 @@ test_icd_vulkan (Fixture *f,
       iter = icds;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/not-a-file");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
 
       other = srt_vulkan_icd_new_replace_library_path (iter->data,
                                                        "/run/host/vulkan_icd.so");
       /* Copying an invalid ICD yields another invalid ICD. */
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
       g_object_unref (other);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/null.json");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/false.json");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/str.json");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/no-library.json");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/no-api-version.json");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
 
       iter = iter->next;
@@ -951,6 +1030,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_true (g_str_has_suffix (path, "/fake-icds/not-a-file"));
       g_assert_true (g_path_is_absolute (path));
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -960,8 +1041,10 @@ test_icd_vulkan (Fixture *f,
       assert_same_file ("fake-icds/usr/share/vulkan/icd.d/intel_icd.x86_64.json", path);
       assert_vulkan_icd_no_error (iter->data);
       g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/x86_64-linux-gnu/libvulkan_intel.so");
+                       "/usr/lib/x86_64-mock-abi/libvulkan_intel.so");
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -970,6 +1053,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/null.json", path);
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -978,6 +1063,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/false.json", path);
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -986,6 +1073,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/str.json", path);
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -994,6 +1083,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/no-library.json", path);
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1002,6 +1093,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_true (g_path_is_absolute (path));
       assert_same_file ("fake-icds/no-api-version.json", path);
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -1027,23 +1120,27 @@ test_icd_vulkan (Fixture *f,
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
       g_free (resolved);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/usr/lib/mock-abi/GL/vulkan/icd.d/invalid.json");
+                       "/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json");
       /* This has a JSON array, not an object, so loading it fails */
       assert_vulkan_icd_has_error (iter->data);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/usr/lib/mock-abi/vulkan/icd.d/relative.json");
+                       "/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json");
       assert_vulkan_icd_no_error (iter->data);
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==,
-                       "/usr/lib/mock-abi/vulkan/icd.d/../libvulkan_relative.so");
+                       "/usr/lib/x86_64-mock-abi/vulkan/icd.d/../libvulkan_relative.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_DUPLICATED);
       g_free (resolved);
 
       other = srt_vulkan_icd_new_replace_library_path (iter->data,
@@ -1061,6 +1158,9 @@ test_icd_vulkan (Fixture *f,
                      srt_vulkan_icd_get_api_version (iter->data));
       g_assert_cmpstr (srt_vulkan_icd_get_library_path (other), ==,
                        "/run/host/vulkan_icd.so");
+      /* The %SRT_LOADABLE_ISSUES_DUPLICATED issues flag is preserved */
+      g_assert_cmpint (srt_vulkan_icd_get_issues (other), ==,
+                       SRT_LOADABLE_ISSUES_DUPLICATED);
       g_object_unref (other);
 
       iter = iter->next;
@@ -1069,10 +1169,12 @@ test_icd_vulkan (Fixture *f,
                        "/usr/local/share/vulkan/icd.d/intel_icd.i686.json");
       assert_vulkan_icd_no_error (iter->data);
       g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/i386-linux-gnu/libvulkan_intel.so");
+                       "/usr/lib/i386-mock-abi/libvulkan_intel.so");
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
-      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-linux-gnu/libvulkan_intel.so");
+      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-mock-abi/libvulkan_intel.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1080,15 +1182,20 @@ test_icd_vulkan (Fixture *f,
                        "/usr/share/vulkan/icd.d/intel_icd.x86_64.json");
       assert_vulkan_icd_no_error (iter->data);
       g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/x86_64-linux-gnu/libvulkan_intel.so");
+                       "/usr/lib/x86_64-mock-abi/libvulkan_intel.so");
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/home/.local/share/vulkan/icd.d/invalid.json");
-      /* This one lacks the required format version */
-      assert_vulkan_icd_has_error (iter->data);
+                       "/home/.local/share/vulkan/icd.d/relative_new.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "/usr/lib/x86_64-mock-abi/vulkan/icd.d/../libvulkan_relative.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_DUPLICATED);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -1103,6 +1210,8 @@ test_icd_vulkan (Fixture *f,
       /* Not format 1.0.x, so we can't be confident that we're reading
        * it correctly */
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1115,6 +1224,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1125,6 +1236,8 @@ test_icd_vulkan (Fixture *f,
       /* Not format 1.0.x, so we can't be confident that we're reading
        * it correctly */
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1135,6 +1248,8 @@ test_icd_vulkan (Fixture *f,
                        "/datahome/vulkan/icd.d/invalid.json");
       /* Missing API version */
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1145,6 +1260,8 @@ test_icd_vulkan (Fixture *f,
                        "/home/.local/share/vulkan/icd.d/invalid.json");
       /* This one lacks the required format version */
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -1157,6 +1274,8 @@ test_icd_vulkan (Fixture *f,
                        "/etc/xdg/vulkan/icd.d/invalid.json");
       /* This is not valid JSON (it's an empty file) so loading it fails */
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1168,6 +1287,8 @@ test_icd_vulkan (Fixture *f,
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
       g_free (resolved);
 
       iter = iter->next;
@@ -1176,10 +1297,12 @@ test_icd_vulkan (Fixture *f,
                        "/usr/local/share/vulkan/icd.d/intel_icd.i686.json");
       assert_vulkan_icd_no_error (iter->data);
       g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/i386-linux-gnu/libvulkan_intel.so");
+                       "/usr/lib/i386-mock-abi/libvulkan_intel.so");
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
-      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-linux-gnu/libvulkan_intel.so");
+      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-mock-abi/libvulkan_intel.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1187,8 +1310,10 @@ test_icd_vulkan (Fixture *f,
                        "/usr/share/vulkan/icd.d/intel_icd.x86_64.json");
       assert_vulkan_icd_no_error (iter->data);
       g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/x86_64-linux-gnu/libvulkan_intel.so");
+                       "/usr/lib/x86_64-mock-abi/libvulkan_intel.so");
       g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_nonnull (iter);
@@ -1196,6 +1321,8 @@ test_icd_vulkan (Fixture *f,
                        "/home/.local/share/vulkan/icd.d/invalid.json");
       /* This one lacks the required format version */
       assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -1213,6 +1340,7 @@ typedef struct
    * JSON with multiple layers, we write it to the filesystem as separated JSON
    * files. So the output is not always exactly the same as the input JSON */
   const gchar *json_to_compare;
+  SrtLoadableIssues issues;
   const gchar *error_message_suffix;
   const gchar *error_domain;
   gint error_code;
@@ -1321,12 +1449,14 @@ static const VulkanLayersTest vulkan_layers_test[] =
     {
       // incomplete_layer.json
       {
+        .issues = SRT_LOADABLE_ISSUES_CANNOT_LOAD,
         .error_message_suffix = "cannot be parsed because it is missing a required field",
         .error_domain = "g-io-error-quark",
         .error_code = G_IO_ERROR_FAILED,
       },
       // newer_layer.json
       {
+        .issues = SRT_LOADABLE_ISSUES_UNSUPPORTED,
         .error_message_suffix = "is not supported",
         .error_domain = "g-io-error-quark",
         .error_code = G_IO_ERROR_FAILED,
@@ -1337,7 +1467,7 @@ static const VulkanLayersTest vulkan_layers_test[] =
   {
     .description = "Meta layer",
     .sysroot = "fedora",
-    .vk_layer_path = "/custom_path",
+    .vk_layer_path = "/custom_path:/custom_path2:/custom_path3",
     .explicit_layers =
     {
       {
@@ -1350,6 +1480,39 @@ static const VulkanLayersTest vulkan_layers_test[] =
           "VK_LAYER_LUNARG_api_dump",
         },
         .json_to_compare = "custom_path/meta_layer.json",
+      },
+      {
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .library_path = "/usr/$LIB/libMangoHud.so",
+        .api_version = "1.2.135",
+        .json_to_compare = "custom_path2/MangoHud.json",
+        .issues = SRT_LOADABLE_ISSUES_DUPLICATED,
+      },
+      {
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .library_path = "/usr/lib32/libMangoHud.so",
+        .api_version = "1.2.135",
+        .json_to_compare = "custom_path3/MangoHud_i386.json",
+        .issues = SRT_LOADABLE_ISSUES_DUPLICATED,
+      },
+    },
+    .implicit_layers =
+    {
+      // incomplete_layer.json
+      {
+        .issues = SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+        .error_message_suffix = "cannot be parsed because it is missing a required field",
+        .error_domain = "g-io-error-quark",
+        .error_code = G_IO_ERROR_FAILED,
+      },
+      // newer_layer.json
+      {
+        .issues = SRT_LOADABLE_ISSUES_UNSUPPORTED,
+        .error_message_suffix = "is not supported",
+        .error_domain = "g-io-error-quark",
+        .error_code = G_IO_ERROR_FAILED,
       },
     },
   },
@@ -1381,6 +1544,7 @@ _test_layer_values (SrtVulkanLayer *layer,
                     srt_vulkan_layer_get_library_path (layer));
   g_assert_cmpstr (test->api_version, ==,
                     srt_vulkan_layer_get_api_version (layer));
+  g_assert_cmpint (test->issues, ==, srt_vulkan_layer_get_issues (layer));
 
   layer_dup = srt_vulkan_layer_new_replace_library_path (layer,
                                                          "/run/host/vulkan_layer.json");
@@ -1390,6 +1554,7 @@ _test_layer_values (SrtVulkanLayer *layer,
                     srt_vulkan_layer_get_description (layer_dup));
   g_assert_cmpstr (test->api_version, ==,
                     srt_vulkan_layer_get_api_version (layer_dup));
+  g_assert_cmpint (test->issues, ==, srt_vulkan_layer_get_issues (layer_dup));
 
   /* If library_path was NULL, this means we have a meta-layer. So even
    * after calling the replace function we still expect to have a
@@ -1440,6 +1605,7 @@ test_layer_vulkan (Fixture *f,
   g_autofree gchar *tmp_dir = NULL;
   g_autoptr(GError) error = NULL;
   gsize i;
+  const char * const multiarchs[] = { "x86_64-mock-abi", "i386-mock-abi", NULL };
 
   tmp_dir = g_dir_make_tmp ("layers-test-XXXXXX", &error);
   g_assert_no_error (error);
@@ -1463,6 +1629,9 @@ test_layer_vulkan (Fixture *f,
       g_mkdir (this_test_dir, 0755);
 
       sysroot = g_build_filename (f->sysroots, test->sysroot, NULL);
+
+      vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp, "SRT_TEST_SYSROOT",
+                                            sysroot, TRUE);
 
       if (test->vk_layer_path == NULL)
         vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "VK_LAYER_PATH");
@@ -1493,6 +1662,8 @@ test_layer_vulkan (Fixture *f,
       g_assert_nonnull (info);
       srt_system_info_set_environ (info, vulkan_layer_envp);
       srt_system_info_set_sysroot (info, sysroot);
+      srt_system_info_set_multiarch_tuples (info, multiarchs);
+      srt_system_info_set_helpers_path (info, f->builddir);
 
       explicit_layers = srt_system_info_list_explicit_vulkan_layers (info);
 
@@ -2022,12 +2193,12 @@ test_dri_flatpak (Fixture *f,
   g_autofree gchar *sysroot = NULL;
   g_autoptr(SrtObjectList) dri = NULL;
   g_autoptr(SrtObjectList) va_api = NULL;
-  const gchar *multiarch_tuples[] = { "mock-abi", NULL };
-  const gchar *dri_suffixes[] = {"/usr/lib/mock-abi/GL/lib/dri/i965_dri.so",
+  const gchar *multiarch_tuples[] = { "x86_64-mock-abi", NULL };
+  const gchar *dri_suffixes[] = {"/usr/lib/x86_64-mock-abi/GL/lib/dri/i965_dri.so",
                                   NULL};
-  const gchar *va_api_suffixes[] = {"/usr/lib/mock-abi/dri/radeonsi_drv_video.so",
-                                    "/usr/lib/mock-abi/dri/intel-vaapi-driver/i965_drv_video.so",
-                                    "/usr/lib/mock-abi/GL/lib/dri/r600_drv_video.so",
+  const gchar *va_api_suffixes[] = {"/usr/lib/x86_64-mock-abi/dri/radeonsi_drv_video.so",
+                                    "/usr/lib/x86_64-mock-abi/dri/intel-vaapi-driver/i965_drv_video.so",
+                                    "/usr/lib/x86_64-mock-abi/GL/lib/dri/r600_drv_video.so",
                                     NULL};
 
   sysroot = g_build_filename (f->sysroots, "flatpak-example", NULL);
@@ -2173,11 +2344,11 @@ static const VdpauTest vdpau_test[] =
 
   {
     .description = "flatpak",
-    .multiarch_tuple = "mock-abi",
+    .multiarch_tuple = "x86_64-mock-abi",
     .sysroot = "flatpak-example",
     .vdpau_suffixes =
     {
-      "/usr/lib/mock-abi/vdpau/libvdpau_radeonsi.so.1",
+      "/usr/lib/x86_64-mock-abi/vdpau/libvdpau_radeonsi.so.1",
       NULL
     },
   },

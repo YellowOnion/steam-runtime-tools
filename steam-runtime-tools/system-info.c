@@ -2740,6 +2740,7 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
   forget_graphics_modules (self);
   forget_libraries (self);
   forget_graphics_results (self);
+  forget_layers (self);
   forget_locales (self);
   free (self->helpers_path);
   self->helpers_path = g_strdup (path);
@@ -2795,6 +2796,7 @@ srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
+  forget_layers (self);
   forget_locales (self);
 
   if (tuple)
@@ -3097,9 +3099,11 @@ srt_system_info_set_test_flags (SrtSystemInfo *self,
  * srt_system_info_list_egl_icds:
  * @self: The #SrtSystemInfo object
  * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
- *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL
- *  to not look in any ABI-specific locations. This is currently only used if
- *  running in a Flatpak environment.
+ *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL.
+ *  If not %NULL, and we are running in a Flatpak environment, look for ICDs in
+ *  the ABI-specific locations. Also if not %NULL, duplicated Vulkan ICDs are
+ *  searched by their absolute path, obtained using "inspect-library" in the
+ *  provided multiarch tuples instead of just their resolved library path.
  *
  * List the available EGL ICDs, using the same search paths as GLVND.
  *
@@ -3136,8 +3140,8 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
   if (!self->icds.have_egl && !self->immutable_values)
     {
       g_assert (self->icds.egl == NULL);
-      self->icds.egl = _srt_load_egl_icds (self->sysroot, self->env,
-                                           multiarch_tuples);
+      self->icds.egl = _srt_load_egl_icds (self->helpers_path, self->sysroot,
+                                           self->env, multiarch_tuples);
       self->icds.have_egl = TRUE;
     }
 
@@ -3151,9 +3155,11 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
  * srt_system_info_list_vulkan_icds:
  * @self: The #SrtSystemInfo object
  * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
- *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL
- *  to not look in any ABI-specific locations. This is currently only used if
- *  running in a Flatpak environment.
+ *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL.
+ *  If not %NULL, and we are running in a Flatpak environment, look for ICDs in
+ *  the ABI-specific locations. Also if not %NULL, duplicated Vulkan ICDs are
+ *  searched by their absolute path, obtained using "inspect-library" in the
+ *  provided multiarch tuples instead of just their resolved library path.
  *
  * List the available Vulkan ICDs, using the same search paths as the
  * reference vulkan-loader.
@@ -3192,8 +3198,8 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
   if (!self->icds.have_vulkan && !self->immutable_values)
     {
       g_assert (self->icds.vulkan == NULL);
-      self->icds.vulkan = _srt_load_vulkan_icds (self->sysroot, self->env,
-                                                 multiarch_tuples);
+      self->icds.vulkan = _srt_load_vulkan_icds (self->helpers_path, self->sysroot,
+                                                 self->env, multiarch_tuples);
       self->icds.have_vulkan = TRUE;
     }
 
@@ -3222,6 +3228,10 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
  * or absolute path to a specific library, which will only be usable for
  * the architecture for which it was compiled.
  *
+ * Duplicated Vulkan layers are searched by their absolute path, obtained
+ * using "inspect-library" in the multiarch tuples set using
+ * "srt_system_info_set_multiarch_tuples()".
+ *
  * Returns: (transfer full) (element-type SrtVulkanLayer): A list of
  *  opaque #SrtVulkanLayer objects. Free with
  *  `g_list_free_full(layers, g_object_unref)`.
@@ -3236,8 +3246,13 @@ srt_system_info_list_explicit_vulkan_layers (SrtSystemInfo *self)
 
   if (!self->layers.have_vulkan_explicit && !self->immutable_values)
     {
+      g_auto(GStrv) multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
       g_assert (self->layers.vulkan_explicit == NULL);
-      self->layers.vulkan_explicit = _srt_load_vulkan_layers (self->sysroot, self->env, TRUE);
+      self->layers.vulkan_explicit = _srt_load_vulkan_layers_extended (self->helpers_path,
+                                                                       self->sysroot,
+                                                                       self->env,
+                                                                       (const char * const *) multiarch_tuples,
+                                                                       TRUE);
       self->layers.have_vulkan_explicit = TRUE;
     }
 
@@ -3266,6 +3281,10 @@ srt_system_info_list_explicit_vulkan_layers (SrtSystemInfo *self)
  * or absolute path to a specific library, which will only be usable for
  * the architecture for which it was compiled.
  *
+ * Duplicated Vulkan layers are searched by their absolute path, obtained
+ * using "inspect-library" in the multiarch tuples set using
+ * "srt_system_info_set_multiarch_tuples()".
+ *
  * Returns: (transfer full) (element-type SrtVulkanLayer): A list of
  *  opaque #SrtVulkanLayer objects. Free with
  *  `g_list_free_full(layers, g_object_unref)`.
@@ -3280,8 +3299,13 @@ srt_system_info_list_implicit_vulkan_layers (SrtSystemInfo *self)
 
   if (!self->layers.have_vulkan_implicit && !self->immutable_values)
     {
+      g_auto(GStrv) multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
       g_assert (self->layers.vulkan_implicit == NULL);
-      self->layers.vulkan_implicit = _srt_load_vulkan_layers (self->sysroot, self->env, FALSE);
+      self->layers.vulkan_implicit = _srt_load_vulkan_layers_extended (self->helpers_path,
+                                                                       self->sysroot,
+                                                                       self->env,
+                                                                       (const char * const *) multiarch_tuples,
+                                                                       FALSE);
       self->layers.have_vulkan_implicit = TRUE;
     }
 

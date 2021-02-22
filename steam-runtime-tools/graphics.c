@@ -2167,6 +2167,7 @@ typedef struct
 typedef struct
 {
   GError *error;
+  SrtLoadableIssues issues;
   gchar *api_version;   /* Always NULL when found in a SrtEglIcd */
   gchar *json_path;
   gchar *library_path;
@@ -2673,6 +2674,8 @@ load_json_dirs (const char *sysroot,
  *  API version for %SRT_TYPE_VULKAN_ICD
  * @library_path_out: (out) (type utf8) (transfer full): Used to return
  *  shared library path
+ * @issues_out: (out) (optional): Used to return problems with this ICD.
+ *  Note that this is set even if this function fails.
  * @error: Used to raise an error on failure
  *
  * Try to load an EGL or Vulkan ICD from a JSON file.
@@ -2684,6 +2687,7 @@ load_json (GType type,
            const char *path,
            gchar **api_version_out,
            gchar **library_path_out,
+           SrtLoadableIssues *issues_out,
            GError **error)
 {
   JsonParser *parser = NULL;
@@ -2696,6 +2700,7 @@ load_json (GType type,
   const char *file_format_version;
   const char *api_version = NULL;
   const char *library_path;
+  SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
 
   g_return_val_if_fail (type == SRT_TYPE_VULKAN_ICD
                         || type == SRT_TYPE_EGL_ICD,
@@ -2712,7 +2717,10 @@ load_json (GType type,
   parser = json_parser_new ();
 
   if (!json_parser_load_from_file (parser, path, error))
-    goto out;
+    {
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
+      goto out;
+    }
 
   node = json_parser_get_root (parser);
 
@@ -2720,6 +2728,7 @@ load_json (GType type,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Expected to find a JSON object in \"%s\"", path);
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
@@ -2733,6 +2742,7 @@ load_json (GType type,
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "file_format_version in \"%s\" missing or not a value",
                    path);
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
@@ -2742,6 +2752,7 @@ load_json (GType type,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "file_format_version in \"%s\" not a string", path);
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
@@ -2763,6 +2774,7 @@ load_json (GType type,
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Vulkan file_format_version in \"%s\" is not 1.0.x",
                        path);
+          issues |= SRT_LOADABLE_ISSUES_UNSUPPORTED;
           goto out;
         }
     }
@@ -2779,6 +2791,7 @@ load_json (GType type,
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "EGL file_format_version in \"%s\" is not 1.0.x",
                        path);
+          issues |= SRT_LOADABLE_ISSUES_UNSUPPORTED;
           goto out;
         }
     }
@@ -2790,6 +2803,7 @@ load_json (GType type,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "No \"ICD\" object in \"%s\"", path);
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
@@ -2805,6 +2819,7 @@ load_json (GType type,
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "ICD.api_version in \"%s\" missing or not a value",
                        path);
+          issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
           goto out;
         }
 
@@ -2814,6 +2829,7 @@ load_json (GType type,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "ICD.api_version in \"%s\" not a string", path);
+          issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
           goto out;
         }
     }
@@ -2826,6 +2842,7 @@ load_json (GType type,
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "ICD.library_path in \"%s\" missing or not a value",
                    path);
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
@@ -2835,6 +2852,7 @@ load_json (GType type,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "ICD.library_path in \"%s\" not a string", path);
+      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
@@ -2848,6 +2866,10 @@ load_json (GType type,
 
 out:
   g_clear_object (&parser);
+
+  if (issues_out != NULL)
+    *issues_out = issues;
+
   return ret;
 }
 
@@ -2874,6 +2896,7 @@ enum
 {
   EGL_ICD_PROP_0,
   EGL_ICD_PROP_ERROR,
+  EGL_ICD_PROP_ISSUES,
   EGL_ICD_PROP_JSON_PATH,
   EGL_ICD_PROP_LIBRARY_PATH,
   EGL_ICD_PROP_RESOLVED_LIBRARY_PATH,
@@ -2899,6 +2922,10 @@ srt_egl_icd_get_property (GObject *object,
     {
       case EGL_ICD_PROP_ERROR:
         g_value_set_boxed (value, self->icd.error);
+        break;
+
+      case EGL_ICD_PROP_ISSUES:
+        g_value_set_flags (value, self->icd.issues);
         break;
 
       case EGL_ICD_PROP_JSON_PATH:
@@ -2932,6 +2959,11 @@ srt_egl_icd_set_property (GObject *object,
       case EGL_ICD_PROP_ERROR:
         g_return_if_fail (self->icd.error == NULL);
         self->icd.error = g_value_dup_boxed (value);
+        break;
+
+      case EGL_ICD_PROP_ISSUES:
+        g_return_if_fail (self->icd.issues == 0);
+        self->icd.issues = g_value_get_flags (value);
         break;
 
       case EGL_ICD_PROP_JSON_PATH:
@@ -2994,6 +3026,12 @@ srt_egl_icd_class_init (SrtEglIcdClass *cls)
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
 
+  egl_icd_properties[EGL_ICD_PROP_ISSUES] =
+    g_param_spec_flags ("issues", "Issues", "Problems with this ICD",
+                        SRT_TYPE_LOADABLE_ISSUES, SRT_LOADABLE_ISSUES_NONE,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
   egl_icd_properties[EGL_ICD_PROP_JSON_PATH] =
     g_param_spec_string ("json-path", "JSON path",
                          "Absolute path to JSON file describing this ICD. "
@@ -3034,12 +3072,14 @@ srt_egl_icd_class_init (SrtEglIcdClass *cls)
  * srt_egl_icd_new:
  * @json_path: (transfer none): the absolute path to the JSON file
  * @library_path: (transfer none): the path to the library
+ * @issues: problems with this ICD
  *
  * Returns: (transfer full): a new ICD
  */
 static SrtEglIcd *
 srt_egl_icd_new (const gchar *json_path,
-                 const gchar *library_path)
+                 const gchar *library_path,
+                 SrtLoadableIssues issues)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
   g_return_val_if_fail (library_path != NULL, NULL);
@@ -3047,17 +3087,20 @@ srt_egl_icd_new (const gchar *json_path,
   return g_object_new (SRT_TYPE_EGL_ICD,
                        "json-path", json_path,
                        "library-path", library_path,
+                       "issues", issues,
                        NULL);
 }
 
 /**
  * srt_egl_icd_new_error:
+ * @issues: problems with this ICD
  * @error: (transfer none): Error that occurred when loading the ICD
  *
  * Returns: (transfer full): a new ICD
  */
 static SrtEglIcd *
 srt_egl_icd_new_error (const gchar *json_path,
+                       SrtLoadableIssues issues,
                        const GError *error)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
@@ -3066,6 +3109,7 @@ srt_egl_icd_new_error (const gchar *json_path,
   return g_object_new (SRT_TYPE_EGL_ICD,
                        "error", error,
                        "json-path", json_path,
+                       "issues", issues,
                        NULL);
 }
 
@@ -3125,6 +3169,39 @@ srt_egl_icd_get_library_path (SrtEglIcd *self)
   return self->icd.library_path;
 }
 
+/**
+ * srt_egl_icd_get_issues:
+ * @self: The ICD
+ *
+ * Return the problems found when parsing and loading @self.
+ *
+ * Returns: A bitfield containing problems, or %SRT_LOADABLE_ISSUES_NONE
+ *  if no problems were found
+ */
+SrtLoadableIssues
+srt_egl_icd_get_issues (SrtEglIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_EGL_ICD (self), SRT_LOADABLE_ISSUES_UNKNOWN);
+  return self->icd.issues;
+}
+
+/*
+ * @self: The ICD
+ * @is_duplicated: if %TRUE, this ICD is a duplicated of another ICD
+ *
+ * @self issues is adjusted accordingly to the @is_duplicated value.
+ */
+static void
+_srt_egl_icd_set_is_duplicated (SrtEglIcd *self,
+                                gboolean is_duplicated)
+{
+  g_return_if_fail (SRT_IS_EGL_ICD (self));
+  if (is_duplicated)
+    self->icd.issues |= SRT_LOADABLE_ISSUES_DUPLICATED;
+  else
+    self->icd.issues &= ~SRT_LOADABLE_ISSUES_DUPLICATED;
+}
+
 /*
  * egl_icd_load_json:
  * @sysroot: (not nullable): The root directory, usually `/`
@@ -3143,6 +3220,7 @@ egl_icd_load_json (const char *sysroot,
   g_autofree gchar *canon = NULL;
   g_autofree gchar *in_sysroot = NULL;
   g_autofree gchar *library_path = NULL;
+  SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
 
   g_return_if_fail (sysroot != NULL);
   g_return_if_fail (list != NULL);
@@ -3156,19 +3234,19 @@ egl_icd_load_json (const char *sysroot,
   in_sysroot = g_build_filename (sysroot, filename, NULL);
 
   if (load_json (SRT_TYPE_EGL_ICD, in_sysroot,
-                 NULL, &library_path, &error))
+                 NULL, &library_path, &issues, &error))
     {
       g_assert (library_path != NULL);
       g_assert (error == NULL);
       *list = g_list_prepend (*list,
-                              srt_egl_icd_new (filename, library_path));
+                              srt_egl_icd_new (filename, library_path, issues));
     }
   else
     {
       g_assert (library_path == NULL);
       g_assert (error != NULL);
       *list = g_list_prepend (*list,
-                              srt_egl_icd_new_error (filename, error));
+                              srt_egl_icd_new_error (filename, issues, error));
     }
 }
 
@@ -3224,7 +3302,7 @@ srt_egl_icd_new_replace_library_path (SrtEglIcd *self,
   if (self->icd.error != NULL)
     return g_object_ref (self);
 
-  return srt_egl_icd_new (self->icd.json_path, path);
+  return srt_egl_icd_new (self->icd.json_path, path, self->icd.issues);
 }
 
 /**
@@ -3281,14 +3359,215 @@ get_glvnd_datadir (void)
   return "/usr/share";
 }
 
+static void _srt_vulkan_icd_set_is_duplicated (SrtVulkanIcd *self,
+                                               gboolean is_duplicated);
+static void _srt_vulkan_layer_set_is_duplicated (SrtVulkanLayer *self,
+                                                 gboolean is_duplicated);
+
+static void
+_update_duplicated_value (GType which,
+                          GHashTable *loadable_seen,
+                          const gchar *key,
+                          void *loadable_to_check)
+{
+  if (key == NULL)
+    return;
+
+  if (g_hash_table_contains (loadable_seen, key))
+    {
+      if (which == SRT_TYPE_VULKAN_ICD)
+        {
+          SrtVulkanIcd *vulkan_icd = g_hash_table_lookup (loadable_seen, key);
+          _srt_vulkan_icd_set_is_duplicated (vulkan_icd, TRUE);
+          _srt_vulkan_icd_set_is_duplicated (loadable_to_check, TRUE);
+        }
+      else if (which == SRT_TYPE_EGL_ICD)
+        {
+          SrtEglIcd *egl_icd = g_hash_table_lookup (loadable_seen, key);
+          _srt_egl_icd_set_is_duplicated (egl_icd, TRUE);
+          _srt_egl_icd_set_is_duplicated (loadable_to_check, TRUE);
+        }
+      else if (which == SRT_TYPE_VULKAN_LAYER)
+        {
+          SrtVulkanLayer *vulkan_layer = g_hash_table_lookup (loadable_seen, key);
+          _srt_vulkan_layer_set_is_duplicated (vulkan_layer, TRUE);
+          _srt_vulkan_layer_set_is_duplicated (loadable_to_check, TRUE);
+        }
+      else
+        {
+          g_return_if_reached ();
+        }
+    }
+  else
+    {
+      g_hash_table_replace (loadable_seen,
+                            g_strdup (key),
+                            loadable_to_check);
+    }
+}
+
+/*
+ * Use 'inspect-library' to get the absolute path of @library_path,
+ * resolving also its eventual symbolic links.
+ */
+static gchar *
+_get_library_canonical_path (gchar **envp,
+                             const char *helpers_path,
+                             const char *multiarch,
+                             const gchar *library_path)
+{
+  g_autoptr(SrtLibrary) library = NULL;
+  _srt_check_library_presence (helpers_path, library_path, multiarch, NULL,
+                               NULL, envp,
+                               SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, &library);
+
+  /* Use realpath() because the path might still be a symbolic link or it can
+   * contains ./ or ../
+   * The absolute path is gathered using 'inspect-library', so we don't have
+   * to worry about still having special tokens, like ${LIB}, in the path. */
+  return realpath (srt_library_get_absolute_path (library), NULL);
+}
+
+/*
+ * @helpers_path: (nullable): An optional path to find "inspect-library"
+ *  helper, PATH is used if %NULL
+ * @loadable: (inout) (element-type SrtVulkanLayer):
+ *
+ * Iterate the provided @loadable list and update their "issues" property
+ * to include the SRT_LOADABLE_ISSUES_DUPLICATED bit if they are duplicated.
+ * Two ICDs are considered to be duplicated if they have the same absolute
+ * library path.
+ * Two Vulkan layers are considered to be duplicated if they have the same
+ * name and absolute library path.
+ */
+static void
+_srt_loadable_flag_duplicates (GType which,
+                               gchar **envp,
+                               const char *helpers_path,
+                               const char * const *multiarch_tuples,
+                               GList *loadable)
+{
+  g_autoptr(GHashTable) loadable_seen = NULL;
+  gsize i;
+  GList *l;
+
+  g_return_if_fail (which == SRT_TYPE_VULKAN_ICD
+                    || which == SRT_TYPE_EGL_ICD
+                    || which == SRT_TYPE_VULKAN_LAYER);
+
+  loadable_seen = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  for (l = loadable; l != NULL; l = l->next)
+    {
+      g_autofree gchar *resolved_path = NULL;
+      const gchar *name = NULL;
+
+      if (which == SRT_TYPE_VULKAN_ICD || which == SRT_TYPE_EGL_ICD)
+        {
+          if (which == SRT_TYPE_VULKAN_ICD)
+            resolved_path = srt_vulkan_icd_resolve_library_path (l->data);
+          else
+            resolved_path = srt_egl_icd_resolve_library_path (l->data);
+
+          if (resolved_path == NULL)
+            continue;
+
+          if (multiarch_tuples == NULL)
+            {
+              /* If we don't have the multiarch_tuples just use the
+               * resolved_path as is */
+              _update_duplicated_value (which, loadable_seen, resolved_path, l->data);
+            }
+          else
+            {
+              for (i = 0; multiarch_tuples[i] != NULL; i++)
+                {
+                  g_autofree gchar *canonical_path = NULL;
+                  canonical_path = _get_library_canonical_path (envp, helpers_path,
+                                                                multiarch_tuples[i],
+                                                                resolved_path);
+
+                  if (canonical_path == NULL)
+                    {
+                      /* Either the library is of a different ELF class or it is missing */
+                      g_debug ("Unable to get the absolute path of \"%s\" via inspect-library",
+                               resolved_path);
+                      continue;
+                    }
+
+                  _update_duplicated_value (which, loadable_seen, canonical_path, l->data);
+                }
+            }
+        }
+      else if (which == SRT_TYPE_VULKAN_LAYER)
+        {
+          resolved_path = srt_vulkan_layer_resolve_library_path (l->data);
+          name = srt_vulkan_layer_get_name (l->data);
+
+          if (resolved_path == NULL && name == NULL)
+            continue;
+
+          if (multiarch_tuples == NULL || resolved_path == NULL)
+            {
+              g_autofree gchar *hash_key = NULL;
+              /* We need a key for the hashtable that includes the name and
+               * the path in it. We use '//' as a separator between the two
+               * values, because we don't expect to have '//' in the
+               * path, nor in the name. In the very unlikely event where
+               * a collision happens, we will just consider two layers
+               * as duplicated when in reality they weren't. */
+              hash_key = g_strdup_printf ("%s//%s", name, resolved_path);
+              _update_duplicated_value (which, loadable_seen, hash_key, l->data);
+            }
+          else
+            {
+              for (i = 0; multiarch_tuples[i] != NULL; i++)
+                {
+                  g_autofree gchar *canonical_path = NULL;
+                  g_autofree gchar *hash_key = NULL;
+                  canonical_path = _get_library_canonical_path (envp, helpers_path,
+                                                                multiarch_tuples[i],
+                                                                resolved_path);
+
+                  if (canonical_path == NULL)
+                    {
+                      /* Either the library is of a different ELF class or it is missing */
+                      g_debug ("Unable to get the absolute path of \"%s\" via inspect-library",
+                               resolved_path);
+                      continue;
+                    }
+
+                  /* We need a key for the hashtable that includes the name and
+                   * the canonical path in it. We use '//' as a separator
+                   * between the two values, because we don't expect to have
+                   * '//' in the path, nor in the name. In the very unlikely
+                   * event where a collision happens, we will just consider
+                   * two layers as duplicated when in reality they weren't. */
+                  hash_key = g_strdup_printf ("%s//%s", name, canonical_path);
+                  _update_duplicated_value (which, loadable_seen, hash_key, l->data);
+                }
+            }
+        }
+      else
+        {
+          g_return_if_reached ();
+        }
+    }
+}
+
 /*
  * _srt_load_egl_icds:
+ * @helpers_path: (nullable): An optional path to find "inspect-library"
+ *  helper, PATH is used if %NULL
  * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
  *  was this array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
  *  is detected, assume a freedesktop-sdk-based runtime and look for
- *  GL extensions for these multiarch tuples
+ *  GL extensions for these multiarch tuples. Also if not %NULL, duplicated
+ *  EGL ICDs are searched by their absolute path, obtained using
+ *  "inspect-library" in the provided multiarch tuples, instead of just their
+ *  resolved library path.
  *
  * Implementation of srt_system_info_list_egl_icds().
  *
@@ -3296,7 +3575,8 @@ get_glvnd_datadir (void)
  *  most-important first
  */
 GList *
-_srt_load_egl_icds (const char *sysroot,
+_srt_load_egl_icds (const char *helpers_path,
+                    const char *sysroot,
                     gchar **envp,
                     const char * const *multiarch_tuples)
 {
@@ -3368,6 +3648,9 @@ _srt_load_egl_icds (const char *sysroot,
 
       g_free (flatpak_info);
     }
+
+  _srt_loadable_flag_duplicates (SRT_TYPE_EGL_ICD, envp, helpers_path,
+                                 multiarch_tuples, ret);
 
   return g_list_reverse (ret);
 }
@@ -5160,6 +5443,7 @@ enum
   VULKAN_ICD_PROP_0,
   VULKAN_ICD_PROP_API_VERSION,
   VULKAN_ICD_PROP_ERROR,
+  VULKAN_ICD_PROP_ISSUES,
   VULKAN_ICD_PROP_JSON_PATH,
   VULKAN_ICD_PROP_LIBRARY_PATH,
   VULKAN_ICD_PROP_RESOLVED_LIBRARY_PATH,
@@ -5189,6 +5473,10 @@ srt_vulkan_icd_get_property (GObject *object,
 
       case VULKAN_ICD_PROP_ERROR:
         g_value_set_boxed (value, self->icd.error);
+        break;
+
+      case VULKAN_ICD_PROP_ISSUES:
+        g_value_set_flags (value, self->icd.issues);
         break;
 
       case VULKAN_ICD_PROP_JSON_PATH:
@@ -5227,6 +5515,11 @@ srt_vulkan_icd_set_property (GObject *object,
       case VULKAN_ICD_PROP_ERROR:
         g_return_if_fail (self->icd.error == NULL);
         self->icd.error = g_value_dup_boxed (value);
+        break;
+
+      case VULKAN_ICD_PROP_ISSUES:
+        g_return_if_fail (self->icd.issues == 0);
+        self->icd.issues = g_value_get_flags (value);
         break;
 
       case VULKAN_ICD_PROP_JSON_PATH:
@@ -5301,6 +5594,12 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
 
+  vulkan_icd_properties[VULKAN_ICD_PROP_ISSUES] =
+    g_param_spec_flags ("issues", "Issues", "Problems with this ICD",
+                        SRT_TYPE_LOADABLE_ISSUES, SRT_LOADABLE_ISSUES_NONE,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
   vulkan_icd_properties[VULKAN_ICD_PROP_JSON_PATH] =
     g_param_spec_string ("json-path", "JSON path",
                          "Absolute path to JSON file describing this ICD. "
@@ -5342,13 +5641,15 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
  * @json_path: (transfer none): the absolute path to the JSON file
  * @api_version: (transfer none): the API version
  * @library_path: (transfer none): the path to the library
+ * @issues: problems with this ICD
  *
  * Returns: (transfer full): a new ICD
  */
 static SrtVulkanIcd *
 srt_vulkan_icd_new (const gchar *json_path,
                     const gchar *api_version,
-                    const gchar *library_path)
+                    const gchar *library_path,
+                    SrtLoadableIssues issues)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
   g_return_val_if_fail (api_version != NULL, NULL);
@@ -5358,17 +5659,20 @@ srt_vulkan_icd_new (const gchar *json_path,
                        "api-version", api_version,
                        "json-path", json_path,
                        "library-path", library_path,
+                       "issues", issues,
                        NULL);
 }
 
 /**
  * srt_vulkan_icd_new_error:
+ * @issues: problems with this ICD
  * @error: (transfer none): Error that occurred when loading the ICD
  *
  * Returns: (transfer full): a new ICD
  */
 static SrtVulkanIcd *
 srt_vulkan_icd_new_error (const gchar *json_path,
+                          SrtLoadableIssues issues,
                           const GError *error)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
@@ -5377,6 +5681,7 @@ srt_vulkan_icd_new_error (const gchar *json_path,
   return g_object_new (SRT_TYPE_VULKAN_ICD,
                        "error", error,
                        "json-path", json_path,
+                       "issues", issues,
                        NULL);
 }
 
@@ -5454,6 +5759,39 @@ srt_vulkan_icd_get_library_path (SrtVulkanIcd *self)
 }
 
 /**
+ * srt_vulkan_icd_get_issues:
+ * @self: The ICD
+ *
+ * Return the problems found when parsing and loading @self.
+ *
+ * Returns: A bitfield containing problems, or %SRT_LOADABLE_ISSUES_NONE
+ *  if no problems were found
+ */
+SrtLoadableIssues
+srt_vulkan_icd_get_issues (SrtVulkanIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_ICD (self), SRT_LOADABLE_ISSUES_UNKNOWN);
+  return self->icd.issues;
+}
+
+/*
+ * @self: The ICD
+ * @is_duplicated: if %TRUE, this ICD is a duplicated of another ICD
+ *
+ * @self issues is adjusted accordingly to the @is_duplicated value.
+ */
+static void
+_srt_vulkan_icd_set_is_duplicated (SrtVulkanIcd *self,
+                                   gboolean is_duplicated)
+{
+  g_return_if_fail (SRT_IS_VULKAN_ICD (self));
+  if (is_duplicated)
+    self->icd.issues |= SRT_LOADABLE_ISSUES_DUPLICATED;
+  else
+    self->icd.issues &= ~SRT_LOADABLE_ISSUES_DUPLICATED;
+}
+
+/**
  * srt_vulkan_icd_resolve_library_path:
  * @self: An ICD
  *
@@ -5512,6 +5850,9 @@ srt_vulkan_icd_write_to_file (SrtVulkanIcd *self,
  *
  * If @self is in an error state, this returns a new reference to @self.
  *
+ * Note that @self issues are copied to the new #SrtVulkanIcd copy, including
+ * the eventual %SRT_LOADABLE_ISSUES_DUPLICATED.
+ *
  * Returns: (transfer full): A new reference to a #SrtVulkanIcd. Free with
  *  g_object_unref().
  */
@@ -5526,7 +5867,8 @@ srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
 
   return srt_vulkan_icd_new (self->icd.json_path,
                              self->icd.api_version,
-                             path);
+                             path,
+                             self->icd.issues);
 }
 
 /*
@@ -5548,6 +5890,7 @@ vulkan_icd_load_json (const char *sysroot,
   g_autofree gchar *in_sysroot = NULL;
   g_autofree gchar *api_version = NULL;
   g_autofree gchar *library_path = NULL;
+  SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
 
   g_return_if_fail (list != NULL);
 
@@ -5560,7 +5903,7 @@ vulkan_icd_load_json (const char *sysroot,
   in_sysroot = g_build_filename (sysroot, filename, NULL);
 
   if (load_json (SRT_TYPE_VULKAN_ICD, in_sysroot,
-                 &api_version, &library_path, &error))
+                 &api_version, &library_path, &issues, &error))
     {
       g_assert (api_version != NULL);
       g_assert (library_path != NULL);
@@ -5568,7 +5911,8 @@ vulkan_icd_load_json (const char *sysroot,
       *list = g_list_prepend (*list,
                               srt_vulkan_icd_new (filename,
                                                   api_version,
-                                                  library_path));
+                                                  library_path,
+                                                  issues));
     }
   else
     {
@@ -5576,7 +5920,7 @@ vulkan_icd_load_json (const char *sysroot,
       g_assert (library_path == NULL);
       g_assert (error != NULL);
       *list = g_list_prepend (*list,
-                              srt_vulkan_icd_new_error (filename, error));
+                              srt_vulkan_icd_new_error (filename, issues, error));
     }
 }
 
@@ -5701,12 +6045,20 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
 
 /*
  * _srt_load_vulkan_icds:
+ * @helpers_path: (nullable): An optional path to find "inspect-library"
+ *  helper, PATH is used if %NULL
  * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ` was this
  *  array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
  *  is detected, assume a freedesktop-sdk-based runtime and look for
  *  GL extensions for these multiarch tuples
+ * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
+ *  is detected, assume a freedesktop-sdk-based runtime and look for
+ *  GL extensions for these multiarch tuples. Also if not %NULL, duplicated
+ *  Vulkan ICDs are searched by their absolute path, obtained using
+ *  "inspect-library" in the provided multiarch tuples, instead of just their
+ *  resolved library path.
  *
  * Implementation of srt_system_info_list_vulkan_icds().
  *
@@ -5714,7 +6066,8 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
  *  most-important first
  */
 GList *
-_srt_load_vulkan_icds (const char *sysroot,
+_srt_load_vulkan_icds (const char *helpers_path,
+                       const char *sysroot,
                        gchar **envp,
                        const char * const *multiarch_tuples)
 {
@@ -5753,6 +6106,9 @@ _srt_load_vulkan_icds (const char *sysroot,
       load_json_dirs (sysroot, search_paths, NULL, READDIR_ORDER,
                       vulkan_icd_load_json_cb, &ret);
     }
+
+  _srt_loadable_flag_duplicates (SRT_TYPE_VULKAN_ICD, envp, helpers_path,
+                                 multiarch_tuples, ret);
 
   return g_list_reverse (ret);
 }
@@ -5793,6 +6149,7 @@ enum
 {
   VULKAN_LAYER_PROP_0,
   VULKAN_LAYER_PROP_ERROR,
+  VULKAN_LAYER_PROP_ISSUES,
   VULKAN_LAYER_PROP_JSON_PATH,
   VULKAN_LAYER_PROP_NAME,
   VULKAN_LAYER_PROP_TYPE,
@@ -5823,6 +6180,10 @@ srt_vulkan_layer_get_property (GObject *object,
     {
       case VULKAN_LAYER_PROP_ERROR:
         g_value_set_boxed (value, self->layer.error);
+        break;
+
+      case VULKAN_LAYER_PROP_ISSUES:
+        g_value_set_flags (value, self->layer.issues);
         break;
 
       case VULKAN_LAYER_PROP_JSON_PATH:
@@ -5876,6 +6237,11 @@ srt_vulkan_layer_set_property (GObject *object,
       case VULKAN_LAYER_PROP_ERROR:
         g_return_if_fail (self->layer.error == NULL);
         self->layer.error = g_value_dup_boxed (value);
+        break;
+
+      case VULKAN_LAYER_PROP_ISSUES:
+        g_return_if_fail (self->layer.issues == 0);
+        self->layer.issues = g_value_get_flags (value);
         break;
 
       case VULKAN_LAYER_PROP_JSON_PATH:
@@ -5988,6 +6354,12 @@ srt_vulkan_layer_class_init (SrtVulkanLayerClass *cls)
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
 
+  vulkan_layer_properties[VULKAN_LAYER_PROP_ISSUES] =
+    g_param_spec_flags ("issues", "Issues", "Problems with this layer",
+                        SRT_TYPE_LOADABLE_ISSUES, SRT_LOADABLE_ISSUES_NONE,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+
   vulkan_layer_properties[VULKAN_LAYER_PROP_JSON_PATH] =
     g_param_spec_string ("json-path", "JSON path",
                          "Absolute path to JSON file describing this layer. "
@@ -6071,6 +6443,7 @@ srt_vulkan_layer_class_init (SrtVulkanLayerClass *cls)
  * @description: (transfer none): the description of the layer
  * @component_layers: (transfer none): the component layer names part of a
  *  meta-layer
+ * @issues: problems with this layer
  *
  * @component_layers must be %NULL if @library_path has been defined.
  * @library_path must be %NULL if @component_layers has been defined.
@@ -6085,7 +6458,8 @@ srt_vulkan_layer_new (const gchar *json_path,
                       const gchar *api_version,
                       const gchar *implementation_version,
                       const gchar *description,
-                      GStrv component_layers)
+                      GStrv component_layers,
+                      SrtLoadableIssues issues)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
   g_return_val_if_fail (name != NULL, NULL);
@@ -6109,18 +6483,21 @@ srt_vulkan_layer_new (const gchar *json_path,
                        "implementation-version", implementation_version,
                        "description", description,
                        "component-layers", component_layers,
+                       "issues", issues,
                        NULL);
 }
 
 /**
- * srt_vulkan_layer_new:
+ * srt_vulkan_layer_new_error:
  * @json_path: (transfer none): the absolute path to the JSON file
+ * @issues: problems with this layer
  * @error: (transfer none): Error that occurred when loading the layer
  *
  * Returns: (transfer full): a new SrtVulkanLayer
  */
 static SrtVulkanLayer *
 srt_vulkan_layer_new_error (const gchar *json_path,
+                            SrtLoadableIssues issues,
                             const GError *error)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
@@ -6129,6 +6506,7 @@ srt_vulkan_layer_new_error (const gchar *json_path,
   return g_object_new (SRT_TYPE_VULKAN_LAYER,
                        "error", error,
                        "json-path", json_path,
+                       "issues", issues,
                        NULL);
 }
 
@@ -6203,6 +6581,7 @@ vulkan_layer_parse_json (const gchar *path,
   g_return_val_if_fail (json_layer != NULL, NULL);
 
   name = json_object_get_string_member_with_default (json_layer, "name", NULL);
+
   type = json_object_get_string_member_with_default (json_layer, "type", NULL);
   library_path = json_object_get_string_member_with_default (json_layer, "library_path", NULL);
   api_version = json_object_get_string_member_with_default (json_layer, "api_version", NULL);
@@ -6225,7 +6604,7 @@ vulkan_layer_parse_json (const gchar *path,
                    "Vulkan layer in \"%s\" cannot be parsed because it is not allowed to list "
                    "both 'library_path' and 'component_layers' fields",
                    path);
-      return srt_vulkan_layer_new_error (path, error);
+      return srt_vulkan_layer_new_error (path, SRT_LOADABLE_ISSUES_CANNOT_LOAD, error);
     }
 
   if (name == NULL ||
@@ -6239,11 +6618,12 @@ vulkan_layer_parse_json (const gchar *path,
       g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Vulkan layer in \"%s\" cannot be parsed because it is missing a required field",
                    path);
-      return srt_vulkan_layer_new_error (path, error);
+      return srt_vulkan_layer_new_error (path, SRT_LOADABLE_ISSUES_CANNOT_LOAD, error);
     }
 
   vulkan_layer = srt_vulkan_layer_new (path, name, type, library_path, api_version,
-                                       implementation_version, description, component_layers);
+                                       implementation_version, description, component_layers,
+                                       SRT_LOADABLE_ISSUES_NONE);
 
   vulkan_layer->layer.file_format_version = g_strdup (file_format_version);
 
@@ -6403,7 +6783,10 @@ load_vulkan_layer_json (const gchar *sysroot,
   if (!json_parser_load_from_file (parser, in_sysroot, &error))
     {
       g_debug ("error %s", error->message);
-      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+      return g_list_prepend (ret_list,
+                             srt_vulkan_layer_new_error (path,
+                                                         SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                         error));
     }
 
   node = json_parser_get_root (parser);
@@ -6412,7 +6795,10 @@ load_vulkan_layer_json (const gchar *sysroot,
     {
       g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Expected to find a JSON object in \"%s\"", path);
-      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+      return g_list_prepend (ret_list,
+                             srt_vulkan_layer_new_error (path,
+                                                         SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                         error));
     }
 
   object = json_node_get_object (node);
@@ -6425,7 +6811,10 @@ load_vulkan_layer_json (const gchar *sysroot,
     {
       g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "file_format_version in \"%s\" is missing or not a string", path);
-      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+      return g_list_prepend (ret_list,
+                             srt_vulkan_layer_new_error (path,
+                                                         SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                         error));
     }
 
   /* At the time of writing the latest layer manifest file version is the
@@ -6443,7 +6832,10 @@ load_vulkan_layer_json (const gchar *sysroot,
       g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Vulkan layer file_format_version \"%s\" in \"%s\" is not supported",
                    file_format_version, path);
-      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+      return g_list_prepend (ret_list,
+                             srt_vulkan_layer_new_error (path,
+                                                         SRT_LOADABLE_ISSUES_UNSUPPORTED,
+                                                         error));
     }
   if (json_object_has_member (object, "layers"))
     {
@@ -6455,7 +6847,10 @@ load_vulkan_layer_json (const gchar *sysroot,
         {
           g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "\"layers\" in \"%s\" is not an array as expected", path);
-          return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+          return g_list_prepend (ret_list,
+                                 srt_vulkan_layer_new_error (path,
+                                                             SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                             error));
         }
       length = json_array_get_length (json_layers);
       for (i = 0; i < length; i++)
@@ -6466,7 +6861,10 @@ load_vulkan_layer_json (const gchar *sysroot,
               /* Try to continue parsing */
               g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "the layer in \"%s\" is not an object as expected", path);
-              ret_list = g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+              ret_list = g_list_prepend (ret_list,
+                                         srt_vulkan_layer_new_error (path,
+                                                                     SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                                     error));
               g_clear_error (&error);
               continue;
             }
@@ -6481,7 +6879,10 @@ load_vulkan_layer_json (const gchar *sysroot,
         {
           g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "\"layer\" in \"%s\" is not an object as expected", path);
-          return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+          return g_list_prepend (ret_list,
+                                 srt_vulkan_layer_new_error (path,
+                                                             SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                             error));
         }
       ret_list = g_list_prepend (ret_list, vulkan_layer_parse_json (path, file_format_version,
                                                                     json_layer));
@@ -6491,7 +6892,10 @@ load_vulkan_layer_json (const gchar *sysroot,
       g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "The layer definitions in \"%s\" is missing both the \"layer\" and \"layers\" fields",
                    path);
-      return g_list_prepend (ret_list, srt_vulkan_layer_new_error (path, error));
+          return g_list_prepend (ret_list,
+                                 srt_vulkan_layer_new_error (path,
+                                                             SRT_LOADABLE_ISSUES_CANNOT_LOAD,
+                                                             error));
     }
   return ret_list;
 }
@@ -6517,10 +6921,16 @@ vulkan_layer_load_json_cb (const char *sysroot,
 }
 
 /*
- * _srt_load_vulkan_layers:
+ * _srt_load_vulkan_layers_extended:
+ * @helpers_path: (nullable): An optional path to find "inspect-library"
+ *  helper, PATH is used if %NULL
  * @sysroot: (not nullable): The root directory, usually `/`
  * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
  *  was this array
+ * @multiarch_tuples: (nullable): If not %NULL, duplicated
+ *  Vulkan layers are searched by their absolute path, obtained using
+ *  'inspect-library' in the provided multiarch tuples, instead of just their
+ *  resolved library path.
  * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
  *
  * Implementation of srt_system_info_list_explicit_vulkan_layers() and
@@ -6530,9 +6940,11 @@ vulkan_layer_load_json_cb (const char *sysroot,
  *  layers, most-important first
  */
 GList *
-_srt_load_vulkan_layers (const char *sysroot,
-                         gchar **envp,
-                         gboolean explicit)
+_srt_load_vulkan_layers_extended (const char *helpers_path,
+                                  const char *sysroot,
+                                  gchar **envp,
+                                  const char * const *multiarch_tuples,
+                                  gboolean explicit)
 {
   GList *ret = NULL;
   g_auto(GStrv) search_paths = NULL;
@@ -6568,7 +6980,31 @@ _srt_load_vulkan_layers (const char *sysroot,
                       vulkan_layer_load_json_cb, &ret);
     }
 
+  _srt_loadable_flag_duplicates (SRT_TYPE_VULKAN_LAYER, envp, helpers_path,
+                                 multiarch_tuples, ret);
+
   return g_list_reverse (ret);
+}
+
+/*
+ * _srt_load_vulkan_layers:
+ * @sysroot: (not nullable): The root directory, usually `/`
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
+ *  was this array
+ * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
+ *
+ * This function has been deprecated, use _srt_load_vulkan_layers_extended()
+ * instead
+ *
+ * Returns: (transfer full) (element-type SrtVulkanLayer): A list of Vulkan
+ *  layers, most-important first
+ */
+GList *
+_srt_load_vulkan_layers (const char *sysroot,
+                         gchar **envp,
+                         gboolean explicit)
+{
+  return _srt_load_vulkan_layers_extended (NULL, sysroot, envp, NULL, explicit);
 }
 
 static SrtVulkanLayer *
@@ -6586,7 +7022,8 @@ vulkan_layer_dup (SrtVulkanLayer *self)
                                               self->layer.api_version,
                                               self->layer.implementation_version,
                                               self->layer.description,
-                                              self->layer.component_layers);
+                                              self->layer.component_layers,
+                                              self->layer.issues);
 
   ret->layer.file_format_version = g_strdup (self->layer.file_format_version);
 
@@ -6845,6 +7282,39 @@ srt_vulkan_layer_get_component_layers (SrtVulkanLayer *self)
 }
 
 /**
+ * srt_vulkan_layer_get_issues:
+ * @self: The Vulkan layer
+ *
+ * Return the problems found when parsing and loading @self.
+ *
+ * Returns: A bitfield containing problems, or %SRT_LOADABLE_ISSUES_NONE
+ *  if no problems were found
+ */
+SrtLoadableIssues
+srt_vulkan_layer_get_issues (SrtVulkanLayer *self)
+{
+  g_return_val_if_fail (SRT_IS_VULKAN_LAYER (self), SRT_LOADABLE_ISSUES_UNKNOWN);
+  return self->layer.issues;
+}
+
+/*
+ * @self: The Vulkan layer
+ * @is_duplicated: if %TRUE, this layer is a duplicated of another layer
+ *
+ * @self issues is adjusted accordingly to the @is_duplicated value.
+ */
+static void
+_srt_vulkan_layer_set_is_duplicated (SrtVulkanLayer *self,
+                                     gboolean is_duplicated)
+{
+  g_return_if_fail (SRT_IS_VULKAN_LAYER (self));
+  if (is_duplicated)
+    self->layer.issues |= SRT_LOADABLE_ISSUES_DUPLICATED;
+  else
+    self->layer.issues &= ~SRT_LOADABLE_ISSUES_DUPLICATED;
+}
+
+/**
  * srt_vulkan_layer_resolve_library_path:
  * @self: A Vulkan layer
  *
@@ -7004,6 +7474,7 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
               const gchar *implementation_version = NULL;
               g_auto(GStrv) component_layers = NULL;
               SrtVulkanLayer *layer = NULL;
+              SrtLoadableIssues issues;
               GQuark error_domain;
               gint error_code;
               const gchar *error_message;
@@ -7046,6 +7517,10 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
               api_version = json_object_get_string_member_with_default (json_elem_obj,
                                                                         "api_version",
                                                                         NULL);
+              issues = srt_get_flags_from_json_array (SRT_TYPE_LOADABLE_ISSUES,
+                                                      json_elem_obj,
+                                                      "issues",
+                                                      SRT_LOADABLE_ISSUES_UNKNOWN);
               error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_elem_obj,
                                                                                               "error-domain",
                                                                                               NULL));
@@ -7066,7 +7541,8 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                   layer = srt_vulkan_layer_new (json_path, name, type,
                                                 library_path, api_version,
                                                 implementation_version,
-                                                description, component_layers);
+                                                description, component_layers,
+                                                issues);
                   driver_info = g_list_prepend (driver_info, layer);
                 }
               else if ((which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD) &&
@@ -7074,11 +7550,13 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                 {
                   if (which == SRT_TYPE_EGL_ICD)
                     driver_info = g_list_prepend (driver_info, srt_egl_icd_new (json_path,
-                                                                                library_path));
+                                                                                library_path,
+                                                                                issues));
                   else if (which == SRT_TYPE_VULKAN_ICD)
                     driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new (json_path,
                                                                                    api_version,
-                                                                                   library_path));
+                                                                                   library_path,
+                                                                                   issues));
                   else
                     g_return_val_if_reached (NULL);
                 }
@@ -7095,12 +7573,15 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                                        error_message);
                   if (which == SRT_TYPE_EGL_ICD)
                     driver_info = g_list_prepend (driver_info, srt_egl_icd_new_error (json_path,
+                                                                                      issues,
                                                                                       error));
                   else if (which == SRT_TYPE_VULKAN_ICD)
                     driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new_error (json_path,
+                                                                                         issues,
                                                                                          error));
                   else if (which == SRT_TYPE_VULKAN_LAYER)
                     driver_info = g_list_prepend (driver_info, srt_vulkan_layer_new_error (json_path,
+                                                                                           issues,
                                                                                            error));
                   else
                     g_return_val_if_reached (NULL);
@@ -7111,7 +7592,7 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
         }
     }
 out:
-  return driver_info;
+  return g_list_reverse (driver_info);
 }
 
 /**

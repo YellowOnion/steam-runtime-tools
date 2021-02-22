@@ -116,6 +116,7 @@ install_subdir('expectations_with_missings', install_dir : tests_dir)
 # than one *.json file in any directory that we are going to scan for
 # Vulkan *.json files. (The order of EGL *.json files is well-defined.)
 install_subdir('fake-icds', install_dir : tests_dir)
+install_subdir('fake-icds-flatpak', install_dir : tests_dir)
 install_subdir('fake-steam-runtime', install_dir : tests_dir)
 install_subdir('input-monitor-outputs', install_dir : tests_dir)
 install_subdir('json-report', install_dir : tests_dir)
@@ -307,7 +308,6 @@ executable(
 # Helpers with a GLib dependency and one source file of the same name
 # as the helper itself.
 foreach helper : [
-  'mock-abi-inspect-library',
   'mock-bad-wflinfo',
   'x86_64-mock-debian-inspect-library',
   'i386-mock-debian-inspect-library',
@@ -335,6 +335,7 @@ foreach arch : [
   'x86_64',
 ]
   foreach helper : [
+    'mock-abi-inspect-library',
     'mock-container-capsule-capture-libs',
     'mock-debian-capsule-capture-libs',
     'mock-fedora-capsule-capture-libs',

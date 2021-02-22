@@ -278,11 +278,13 @@ typedef enum
 } SrtGraphicsModule;
 
 G_GNUC_INTERNAL
-GList *_srt_load_egl_icds (const char *sysroot,
+GList *_srt_load_egl_icds (const char *helpers_path,
+                           const char *sysroot,
                            gchar **envp,
                            const char * const *multiarch_tuples);
 G_GNUC_INTERNAL
-GList *_srt_load_vulkan_icds (const char *sysroot,
+GList *_srt_load_vulkan_icds (const char *helpers_path,
+                              const char *sysroot,
                               gchar **envp,
                               const char * const *multiarch_tuples);
 
@@ -292,6 +294,13 @@ GList *_srt_list_graphics_modules (const gchar *sysroot,
                                    const char *helpers_path,
                                    const char *multiarch_tuple,
                                    SrtGraphicsModule which);
+
+G_GNUC_INTERNAL
+GList *_srt_load_vulkan_layers_extended (const char *helpers_path,
+                                         const char *sysroot,
+                                         gchar **envp,
+                                         const char * const *multiarch_tuples,
+                                         gboolean explicit);
 
 void _srt_graphics_get_from_report (JsonObject *json_obj,
                                     const gchar *multiarch_tuple,

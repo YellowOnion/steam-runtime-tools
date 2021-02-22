@@ -1,6 +1,6 @@
 {
     "ICD": {
-        "library_path": "/usr/lib/x86_64-linux-gnu/libvulkan_intel.so"
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
     },
     "file_format_version": "1.0.0"
 }

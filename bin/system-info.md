@@ -687,11 +687,30 @@ keys:
 **egl**
 :   An object describing EGL support. Currently the only key is
     **icds**. Its value is an array of objects describing ICDs,
-    with the following keys and values if the metadata was loaded
-    successfully:
+    with the following keys and values:
 
     **json_path**
     :   Absolute path to the JSON file describing the ICD
+
+    **issues**
+    :   An array of strings representing problems with the ICD.
+        If empty, no problems were found.
+
+        **unknown**
+        :   There was an unknown, or internal, error while checking the ICD.
+
+        **unsupported**
+        :   The API version of the ICD is not supported yet.
+
+        **cannot-load**
+        :   Unable to correctly load the ICD.
+
+        **duplicated**
+        :   This ICD, and another one, have a **library_path** that points to
+            the same library.
+
+    and additionally the following keys and values if the metadata was
+    loaded successfully:
 
     **library_path**
     :   The library as described in the JSON file: either an absolute
@@ -708,9 +727,6 @@ keys:
         of **json_path** to **library_path**.
 
     or the following keys and values if the metadata failed to load:
-
-    **json_path**
-    :   Absolute path to the JSON file describing the ICD
 
     **error-domain**
     :   A machine-readable string indicating a category of errors.
@@ -736,8 +752,10 @@ keys:
     array of objects, where the former describes external Vulkan layers and
     the latter describes internal Vulkan layers. They have the same keys and
     values as for Vulkan ICDs, with the differences that **library_path**
-    might be omitted, if it is not present, and they have the following extra
-    keys:
+    might be omitted, if it is not present, and the **duplicated** issues
+    signals that two layers not only have a **library_path** that points to
+    the same library, but also that their **name** is the same.
+    And finally they also have the following extra keys:
 
     **name**
     :   The name that uniquely identify this layer to applications

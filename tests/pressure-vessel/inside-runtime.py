@@ -251,6 +251,17 @@ class TestInsideRuntime(BaseTest):
             cache, Path('/etc/ld-i686-pc-linux-gnu.cache').resolve()
         )
 
+    def is_loadable_duplicated(self, srsi_parsed, key, sub_key) -> bool:
+        if srsi_parsed is None:
+            return False
+
+        if key in srsi_parsed and sub_key in srsi_parsed[key]:
+            for loadable in srsi_parsed[key][sub_key]:
+                if "duplicated" in loadable.get('issues', ''):
+                    return True
+
+        return False
+
     def test_srsi(self) -> None:
         overrides = Path('/overrides').resolve()
 
@@ -400,6 +411,30 @@ class TestInsideRuntime(BaseTest):
                     self.assertEqual(details.get('error'), None)
 
         self.assertIn('architectures', parsed)
+
+        if host_parsed:
+            # If we have an ICD or Layer flagged as duplicated in the
+            # container, we expect that the same thing to happen in the
+            # host too.
+            self.assertEqual(
+                self.is_loadable_duplicated(parsed, 'egl', 'icds'),
+                self.is_loadable_duplicated(host_parsed, 'egl', 'icds'),
+            )
+
+            self.assertEqual(
+                self.is_loadable_duplicated(parsed, 'vulkan', 'icds'),
+                self.is_loadable_duplicated(host_parsed, 'vulkan', 'icds'),
+            )
+
+            self.assertEqual(
+                self.is_loadable_duplicated(parsed, 'vulkan', 'explicit_layers'),
+                self.is_loadable_duplicated(host_parsed, 'vulkan', 'explicit_layers'),
+            )
+
+            self.assertEqual(
+                self.is_loadable_duplicated(parsed, 'vulkan', 'implicit_layers'),
+                self.is_loadable_duplicated(host_parsed, 'vulkan', 'implicit_layers'),
+            )
 
         for multiarch in parsed['architectures']:
             if not (Path('/usr/lib') / multiarch).is_dir():

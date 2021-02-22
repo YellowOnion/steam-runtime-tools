@@ -198,6 +198,13 @@ jsonify_graphics_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_loadable_issues (JsonBuilder *builder,
+                         SrtLoadableIssues issues)
+{
+  jsonify_flags (builder, SRT_TYPE_LOADABLE_ISSUES, issues);
+}
+
+static void
 jsonify_enum (JsonBuilder *builder,
               GType type,
               int value)
@@ -710,6 +717,7 @@ print_layer_details (JsonBuilder *builder,
   const gchar *member_name;
   const gchar *library_path;
   const gchar *const *component_layers;
+  SrtLoadableIssues loadable_issues = SRT_LOADABLE_ISSUES_NONE;
 
   if (explicit)
     member_name = "explicit_layers";
@@ -773,6 +781,11 @@ print_layer_details (JsonBuilder *builder,
             json_builder_set_member_name (builder, "error");
             json_builder_add_string_value (builder, error->message);
           }
+        json_builder_set_member_name (builder, "issues");
+        json_builder_begin_array (builder);
+        loadable_issues = srt_vulkan_layer_get_issues (iter->data);
+        jsonify_loadable_issues (builder, loadable_issues);
+        json_builder_end_array (builder);
         json_builder_end_object (builder);
       }
     }
@@ -798,6 +811,7 @@ main (int argc,
   SrtSteamIssues steam_issues = SRT_STEAM_ISSUES_NONE;
   SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
   SrtLocaleIssues locale_issues = SRT_LOCALE_ISSUES_NONE;
+  SrtLoadableIssues loadable_issues = SRT_LOADABLE_ISSUES_NONE;
   SrtXdgPortalIssues xdg_portal_issues = SRT_XDG_PORTAL_ISSUES_NONE;
   SrtX86FeatureFlags x86_features = SRT_X86_FEATURE_NONE;
   SrtX86FeatureFlags known_x86_features = SRT_X86_FEATURE_NONE;
@@ -1198,6 +1212,12 @@ main (int argc,
           g_clear_error (&error);
         }
 
+      json_builder_set_member_name (builder, "issues");
+      json_builder_begin_array (builder);
+      loadable_issues = srt_egl_icd_get_issues (icd_iter->data);
+      jsonify_loadable_issues (builder, loadable_issues);
+      json_builder_end_array (builder);
+
       json_builder_end_object (builder);
     }
 
@@ -1245,6 +1265,12 @@ main (int argc,
           _srt_json_builder_add_error_members (builder, error);
           g_clear_error (&error);
         }
+
+      json_builder_set_member_name (builder, "issues");
+      json_builder_begin_array (builder);
+      loadable_issues = srt_vulkan_icd_get_issues (icd_iter->data);
+      jsonify_loadable_issues (builder, loadable_issues);
+      json_builder_end_array (builder);
 
       json_builder_end_object (builder);
     }

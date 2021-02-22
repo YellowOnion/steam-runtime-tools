@@ -111,6 +111,34 @@ typedef enum
 } SrtGraphicsLibraryVendor;
 
 /**
+ * SrtLoadableIssues:
+ * @SRT_LOADABLE_ISSUES_NONE: There are no problems
+ * @SRT_LOADABLE_ISSUES_UNKNOWN: An internal error occurred while checking the
+ *  loadable, or an unknown issue flag was encountered while reading a report
+ * @SRT_LOADABLE_ISSUES_UNSUPPORTED: The API version of the JSON file is not
+ *  supported yet
+ * @SRT_LOADABLE_ISSUES_CANNOT_LOAD: Unable to parse the JSON file describing
+ *  the loadable or unable to load the library
+ * @SRT_LOADABLE_ISSUES_DUPLICATED: This loadable, and another one, have a
+ *  library path that points to the same library, and, if available, also the
+ *  same name
+ *
+ * A bitfield with flags representing problems with the loadables, or
+ * %SRT_LOADABLE_ISSUES_NONE (which is numerically zero) if no problems
+ * were detected.
+ *
+ * In general, more bits set means more problems.
+ */
+typedef enum
+{
+  SRT_LOADABLE_ISSUES_NONE = 0,
+  SRT_LOADABLE_ISSUES_UNKNOWN = (1 << 0),
+  SRT_LOADABLE_ISSUES_UNSUPPORTED = (1 << 1),
+  SRT_LOADABLE_ISSUES_CANNOT_LOAD = (1 << 2),
+  SRT_LOADABLE_ISSUES_DUPLICATED = (1 << 3),
+} SrtLoadableIssues;
+
+/**
  * SrtWindowSystem:
  * @SRT_WINDOW_SYSTEM_X11: X11 window system, with GL: equivalent to GLX; with GLES: equivalent to EGL_X11; with Vulkan: use X11
  * @SRT_WINDOW_SYSTEM_GLX: GLX window system, only possible with GL
@@ -233,6 +261,8 @@ const gchar *srt_egl_icd_get_json_path (SrtEglIcd *self);
 _SRT_PUBLIC
 const gchar *srt_egl_icd_get_library_path (SrtEglIcd *self);
 _SRT_PUBLIC
+SrtLoadableIssues srt_egl_icd_get_issues (SrtEglIcd *self);
+_SRT_PUBLIC
 gchar *srt_egl_icd_resolve_library_path (SrtEglIcd *self);
 _SRT_PUBLIC
 SrtEglIcd *srt_egl_icd_new_replace_library_path (SrtEglIcd *self,
@@ -323,6 +353,8 @@ const gchar *srt_vulkan_icd_get_json_path (SrtVulkanIcd *self);
 _SRT_PUBLIC
 const gchar *srt_vulkan_icd_get_library_path (SrtVulkanIcd *self);
 _SRT_PUBLIC
+SrtLoadableIssues srt_vulkan_icd_get_issues (SrtVulkanIcd *self);
+_SRT_PUBLIC
 gchar *srt_vulkan_icd_resolve_library_path (SrtVulkanIcd *self);
 _SRT_PUBLIC
 SrtVulkanIcd *srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
@@ -366,9 +398,12 @@ const gchar *srt_vulkan_layer_get_implementation_version (SrtVulkanLayer *self);
 _SRT_PUBLIC
 const char * const *srt_vulkan_layer_get_component_layers (SrtVulkanLayer *self);
 _SRT_PUBLIC
+SrtLoadableIssues srt_vulkan_layer_get_issues (SrtVulkanLayer *self);
+_SRT_PUBLIC
 SrtVulkanLayer *srt_vulkan_layer_new_replace_library_path (SrtVulkanLayer *self,
                                                            const char *path);
-_SRT_PUBLIC
+_SRT_PUBLIC G_DEPRECATED_FOR (srt_system_info_list_explicit_vulkan_layers or
+srt_system_info_list_implicit_vulkan_layers)
 GList *_srt_load_vulkan_layers (const char *sysroot,
                                 gchar **envp,
                                 gboolean explicit);

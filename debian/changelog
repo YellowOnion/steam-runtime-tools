@@ -1,6 +1,9 @@
 steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
+  * pressure-vessel: Fix processing of Vulkan ICDs/layers outside /usr
+    where the library_path in the JSON manifest is just a SONAME
+    (Resolves: steam-runtime#366)
   * pressure-vessel: Never set XDG_DATA_DIRS to just our override directory.
     Default to /usr/local/share:/usr/share as per the specification.
   * pressure-vessel: Mask Vulkan layers in home directory or other non-/usr
@@ -10,6 +13,7 @@ steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
   * pv-launch: Sync minor improvements from flatpak-xdg-utils
   * pv-launch: Use unset-env option for subsandbox API >= v5.
     This was added in Flatpak 1.10.0.
+  * pressure-vessel: Improve diagnostics for various error conditions
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Update flatpak-run to the latest upstream version.
@@ -18,10 +22,15 @@ steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
     systems (Resolves: steam-runtime-tools#53)
   * pv-adverb: Remove unused locales temporary directories
     (Resolves: steam-runtime-tools#56)
+  * system-info: Report duplicate Vulkan ICDs/layers as an issue.
+    This helps us to detect misconfigured host systems, and also helps to
+    detect regressions where we duplicate ICDs/layers in the pressure-vessel
+    container that were not duplicates on the host. (Resolves: T26156)
   * system-info: Add ability to store multiarch tuples
+  * system-info: Parse Vulkan layers from a report in the right order
   * build: Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 19 Feb 2021 10:53:12 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 22 Feb 2021 13:34:14 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

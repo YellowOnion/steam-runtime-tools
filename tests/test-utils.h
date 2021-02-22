@@ -56,6 +56,11 @@
 #define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
 #endif
 
+#ifndef g_assert_no_errno
+#define g_assert_no_errno(expr) \
+  g_assert_cmpstr ((expr) >= 0 ? NULL : g_strerror (errno), ==, NULL)
+#endif
+
 /*
  * Other assorted test helpers.
  */

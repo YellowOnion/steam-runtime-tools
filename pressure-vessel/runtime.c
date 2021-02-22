@@ -689,9 +689,15 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
 
   for (i = 0; i < G_N_ELEMENTS (iters); i++)
     {
+      const char * const symlinks[] = { "scout", "soldier" };
+      gsize j;
+
       if (!glnx_dirfd_iterator_init_at (AT_FDCWD, iters[i].path,
                                         TRUE, iters[i].iter, error))
         return FALSE;
+
+      g_debug ("Cleaning up old subdirectories in %s...",
+               iters[i].path);
 
       while (TRUE)
         {
@@ -730,6 +736,13 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
                                                    iters[i].iter->fd,
                                                    dent->d_name);
         }
+
+      g_debug ("Cleaning up old symlinks in %s...",
+               iters[i].path);
+
+      for (j = 0; j < G_N_ELEMENTS (symlinks); j++)
+        pv_delete_dangling_symlink (iters[i].iter->fd, iters[i].path,
+                                    symlinks[j]);
     }
 
   return TRUE;

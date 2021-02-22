@@ -695,6 +695,8 @@ class TestContainers(BaseTest):
                     os.path.join(d, 'soldier_0.20200101.0_keep', 'keep'),
                     exist_ok=True,
                 )
+                os.symlink('soldier_0.20200101.0', os.path.join(d, 'soldier'))
+                os.symlink('scout_dontdelete', os.path.join(d, 'scout'))
 
             with open(
                 os.path.join(temp, 'tmp-rlock', '.ref'), 'w+'
@@ -751,16 +753,19 @@ class TestContainers(BaseTest):
 
                 if gc_legacy:
                     self.assertNotIn('scout_before_0.20200101.0', members)
+                    self.assertNotIn('soldier', members)
                     self.assertNotIn('soldier_0.20200101.0', members)
                     self.assertNotIn(
                         '.scout_0.20200202.0_unpack-temp', members,
                     )
                 else:
-                    self.assertIn('scout_before_0.20200101.0', members)
-                    self.assertIn('soldier_0.20200101.0', members)
                     self.assertIn('.scout_0.20200202.0_unpack-temp', members)
+                    self.assertIn('scout_before_0.20200101.0', members)
+                    self.assertIn('soldier', members)
+                    self.assertIn('soldier_0.20200101.0', members)
 
                 self.assertIn('.soldier_dontdelete', members)
+                self.assertIn('scout', members)
                 self.assertIn('scout_dontdelete', members)
                 self.assertIn('soldier_0.20200101.0_keep', members)
 
@@ -790,8 +795,10 @@ class TestContainers(BaseTest):
                 members.discard('.scout_0.20200202.0_unpack-temp')
                 members.discard('.soldier_dontdelete')
                 members.discard('donotdelete')
+                members.discard('scout')
                 members.discard('scout_before_0.20200101.0')
                 members.discard('scout_dontdelete')
+                members.discard('soldier')
                 members.discard('soldier_0.20200101.0')
                 members.discard('soldier_0.20200101.0_keep')
                 members.discard('tmp-deleteme')

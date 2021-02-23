@@ -4584,6 +4584,7 @@ pv_runtime_set_search_paths (PvRuntime *self,
                              PvEnviron *container_env)
 {
   g_autoptr(GString) ld_library_path = g_string_new ("");
+  g_autofree char *terminfo_path = NULL;
   gsize i;
 
   /* TODO: Adapt the use_ld_so_cache code from Flatpak instead
@@ -4601,6 +4602,14 @@ pv_runtime_set_search_paths (PvRuntime *self,
 
       pv_search_path_append (ld_library_path, ld_path);
     }
+
+  /* If the runtime is Debian-based, make sure we search where ncurses-base
+   * puts terminfo, even if we're using a non-Debian-based libtinfo.so.6. */
+  terminfo_path = g_build_filename (self->source_files, "lib", "terminfo",
+                                    NULL);
+
+  if (g_file_test (terminfo_path, G_FILE_TEST_IS_DIR))
+    pv_environ_lock_env (container_env, "TERMINFO_DIRS", "/lib/terminfo");
 
   /* The PATH from outside the container doesn't really make sense inside the
    * container: in principle the layout could be totally different. */

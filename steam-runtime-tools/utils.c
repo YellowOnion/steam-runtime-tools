@@ -889,8 +889,8 @@ _srt_file_test_in_sysroot (const char *sysroot,
     {
       if (!glnx_opendirat (-1, sysroot, FALSE, &local_sysroot_fd, &error))
         {
-          g_debug ("An error occurred trying to open %s: %s", sysroot,
-                   error->message);
+          g_debug ("An error occurred trying to open sysroot \"%s\": %s",
+                   sysroot, error->message);
           return FALSE;
         }
 
@@ -903,8 +903,8 @@ _srt_file_test_in_sysroot (const char *sysroot,
 
   if (file_fd < 0)
     {
-      g_debug ("An error occurred trying to resolve %s in sysroot: %s",
-               filename, error->message);
+      g_debug ("An error occurred trying to resolve \"%s\" in sysroot \"%s\": %s",
+               filename, sysroot, error->message);
       return FALSE;
     }
 

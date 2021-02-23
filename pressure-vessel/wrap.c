@@ -1899,6 +1899,9 @@ main (int argc,
       if (opt_copy_runtime)
         flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
 
+      if (flatpak_subsandbox != NULL)
+        flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
+
       if (opt_runtime != NULL)
         {
           /* already checked for mutually exclusive options */

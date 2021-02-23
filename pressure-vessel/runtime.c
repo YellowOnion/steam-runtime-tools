@@ -4509,6 +4509,17 @@ pv_runtime_bind (PvRuntime *self,
   g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  if (self->flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+    {
+      g_return_val_if_fail (exports == NULL, FALSE);
+      g_return_val_if_fail (bwrap == NULL, FALSE);
+    }
+  else
+    {
+      g_return_val_if_fail (exports != NULL, FALSE);
+      g_return_val_if_fail (bwrap != NULL, FALSE);
+    }
+
   if (bwrap != NULL
       && !bind_runtime_base (self, bwrap, container_env, error))
     return FALSE;

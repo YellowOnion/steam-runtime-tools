@@ -128,10 +128,16 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
  * that /etc/ld.so.cache, etc., are not shared.
  */
 static gboolean
-path_visible_in_provider_namespace (const char *path)
+path_visible_in_provider_namespace (PvRuntimeFlags flags,
+                                    const char *path)
 {
   while (path[0] == '/')
     path++;
+
+  if ((flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+      && g_str_has_prefix (path, "app")
+      && (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
 
   if (g_str_has_prefix (path, "usr") &&
       (path[3] == '\0' || path[3] == '/'))
@@ -2581,7 +2587,7 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
       /* If it isn't in /usr, /lib, etc., then the symlink will be
        * dangling and this probably isn't going to work. */
-      if (!path_visible_in_provider_namespace (source_in_provider))
+      if (!path_visible_in_provider_namespace (self->flags, source_in_provider))
         {
           if (flags & TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK)
             {

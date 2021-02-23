@@ -126,7 +126,8 @@ pv_bwrap_execve (FlatpakBwrap *bwrap,
   g_return_val_if_fail (pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  g_debug ("Replacing self with bwrap...");
+  g_debug ("Replacing self with %s...",
+           glnx_basename (g_ptr_array_index (bwrap->argv, 0)));
 
   if (bwrap->fds != NULL && bwrap->fds->len > 0)
     flatpak_bwrap_child_setup_cb (bwrap->fds);

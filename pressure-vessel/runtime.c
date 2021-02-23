@@ -4592,15 +4592,15 @@ pv_runtime_set_search_paths (PvRuntime *self,
    * got from the environment */
   g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
 
-    for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
-      {
-        g_autofree gchar *ld_path = NULL;
+  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+    {
+      g_autofree gchar *ld_path = NULL;
 
-        ld_path = g_build_filename (self->overrides_in_container, "lib",
-                                    multiarch_tuples[i], NULL);
+      ld_path = g_build_filename (self->overrides_in_container, "lib",
+                                  multiarch_tuples[i], NULL);
 
-        pv_search_path_append (ld_library_path, ld_path);
-      }
+      pv_search_path_append (ld_library_path, ld_path);
+    }
 
   /* The PATH from outside the container doesn't really make sense inside the
    * container: in principle the layout could be totally different. */

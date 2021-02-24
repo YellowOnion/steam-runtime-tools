@@ -723,7 +723,6 @@ static gboolean opt_only_prepare = FALSE;
 static gboolean opt_remove_game_overlay = FALSE;
 static gboolean opt_import_vulkan_layers = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
-static GPtrArray *opt_ld_preload = NULL;
 static GArray *opt_pass_fds = NULL;
 static char *opt_runtime = NULL;
 static char *opt_runtime_archive = NULL;
@@ -741,20 +740,67 @@ static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 static char *opt_write_final_argv = NULL;
 
+typedef struct
+{
+  const char *variable;
+  GPtrArray *values;
+} PreloadModule;
+
+static PreloadModule opt_preload_modules[] =
+{
+  { "LD_AUDIT", NULL },
+  { "LD_PRELOAD", NULL },
+};
+
+static gboolean
+append_preload_module (const char *variable,
+                       const char *value,
+                       GError **error)
+{
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+    {
+      if (strcmp (variable, opt_preload_modules[i].variable) == 0)
+        break;
+    }
+
+  g_return_val_if_fail (i < G_N_ELEMENTS (opt_preload_modules), FALSE);
+
+  if (opt_preload_modules[i].values == NULL)
+    opt_preload_modules[i].values = g_ptr_array_new_with_free_func (g_free);
+
+  g_ptr_array_add (opt_preload_modules[i].values, g_strdup (value));
+  return TRUE;
+}
+
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
                         const gchar *value,
                         gpointer data,
                         GError **error)
 {
-  gchar *preload = g_strdup_printf ("host:%s", value);
+  g_warning ("%s is deprecated, use --ld-preload=%s instead",
+             option_name, value);
+  return append_preload_module ("LD_PRELOAD", value, error);
+}
 
-  if (opt_ld_preload == NULL)
-    opt_ld_preload = g_ptr_array_new_with_free_func (g_free);
+static gboolean
+opt_ld_audit_cb (const gchar *option_name,
+                 const gchar *value,
+                 gpointer data,
+                 GError **error)
+{
+  return append_preload_module ("LD_AUDIT", value, error);
+}
 
-  g_ptr_array_add (opt_ld_preload, g_steal_pointer (&preload));
-
-  return TRUE;
+static gboolean
+opt_ld_preload_cb (const gchar *option_name,
+                   const gchar *value,
+                   gpointer data,
+                   GError **error)
+{
+  return append_preload_module ("LD_PRELOAD", value, error);
 }
 
 static gboolean
@@ -1065,8 +1111,9 @@ static GOptionEntry options[] =
     "Use HOME as home directory. Implies --unshare-home. "
     "[Default: $PRESSURE_VESSEL_HOME if set]", "HOME" },
   { "host-ld-preload", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
-    "Add MODULE from the host system to LD_PRELOAD when executing COMMAND.",
+    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
+    "Deprecated alias for --ld-preload=MODULE, which despite its name "
+    "does not necessarily take the module from the host system",
     "MODULE" },
   { "graphics-provider", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_graphics_provider,
@@ -1084,6 +1131,16 @@ static GOptionEntry options[] =
     "edited by pressure-vessel, or that are known to be wrong in the new "
     "container, or that needs to inherit the value from the host system, "
     "will be locked. This option implies --batch.", NULL },
+  { "ld-audit", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_audit_cb,
+    "Add MODULE from current execution environment to LD_AUDIT when "
+    "executing COMMAND.",
+    "MODULE" },
+  { "ld-preload", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
+    "Add MODULE from current execution environment to LD_PRELOAD when "
+    "executing COMMAND.",
+    "MODULE" },
   { "pass-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_pass_fd_cb,
     "Let the launched process inherit the given fd.",
@@ -1276,7 +1333,6 @@ main (int argc,
   g_autoptr(FlatpakExports) exports = NULL;
   g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
-  g_autoptr(GString) adjusted_ld_preload = g_string_new ("");
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
@@ -1968,31 +2024,40 @@ main (int argc,
                                    FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                    "/tmp");
 
-  g_debug ("Adjusting LD_PRELOAD...");
-
   /* We need the LD_PRELOADs from Steam visible at the paths that were
    * used for them, which might be their physical rather than logical
-   * locations. */
-  if (opt_ld_preload != NULL)
+   * locations. Steam doesn't generally use LD_AUDIT, but the Steam app
+   * on Flathub does, and it needs similar handling. */
+  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
     {
-      for (i = 0; i < opt_ld_preload->len; i++)
+      const char *variable = opt_preload_modules[i].variable;
+      const GPtrArray *values = opt_preload_modules[i].values;
+      g_autoptr(GString) adjusted = NULL;
+      gsize len;
+      gsize j;
+
+      adjusted = g_string_new ("");
+
+      g_debug ("Adjusting %s...", variable);
+
+      if (values == NULL)
+        len = 0;
+      else
+        len = values->len;
+
+      for (j = 0; j < len; j++)
         {
-          const char *preload = g_ptr_array_index (opt_ld_preload, i);
+          const char *preload = g_ptr_array_index (values, j);
 
           g_assert (preload != NULL);
 
           if (*preload == '\0')
             continue;
 
-          /* We have the beginnings of infrastructure to set a LD_PRELOAD
-           * from inside the container, but currently the only thing we
-           * support is it coming from the host. */
-          g_assert (g_str_has_prefix (preload, "host:"));
-          preload = preload + 5;
-
           if (strstr (preload, "gtk3-nocsd") != NULL)
             {
-              g_warning ("Disabling gtk3-nocsd LD_PRELOAD: it is known to cause crashes.");
+              g_warning ("Disabling gtk3-nocsd %s: it is known to cause crashes.",
+                         variable);
               continue;
             }
 
@@ -2009,14 +2074,14 @@ main (int argc,
                   && (g_str_has_prefix (preload, "/usr/")
                       || g_str_has_prefix (preload, "/lib")))
                 {
-                  g_autofree gchar *in_run_host = g_build_filename ("/run/host",
-                                                                    preload,
-                                                                    NULL);
+                  g_autofree gchar *adjusted_path = NULL;
+
+                  adjusted_path = g_build_filename ("/run/host", preload, NULL);
 
                   /* When using a runtime we can't write to /usr/ or /libQUAL/,
                    * so redirect this preloaded module to the corresponding
                    * location in /run/host. */
-                  pv_search_path_append (adjusted_ld_preload, in_run_host);
+                  pv_search_path_append (adjusted, adjusted_path);
                 }
               else
                 {
@@ -2036,25 +2101,25 @@ main (int argc,
                                                        preload);
                     }
 
-                  pv_search_path_append (adjusted_ld_preload, preload);
+                  pv_search_path_append (adjusted, preload);
                 }
             }
           else
             {
-              g_info ("LD_PRELOAD module '%s' does not exist", preload);
+              g_info ("%s module '%s' does not exist", variable, preload);
             }
         }
-    }
 
-  /* If we adjusted the LD_PRELOAD entries, from the one provided by the host,
-   * to something that is valid in the container, we shouldn't add them to
-   * the bwrap envp. Otherwise when we call "pv_bwrap_execve()" we will
-   * create an environment that tries to preload libraries that are not
-   * available, until it actually executes "bwrap".
-   * This can be avoided by using the bwrap option "--setenv" instead. */
-  if (adjusted_ld_preload->len != 0)
-    flatpak_bwrap_add_args (bwrap, "--setenv", "LD_PRELOAD",
-                            adjusted_ld_preload->str, NULL);
+      /* If we adjusted the module paths from the one provided by the host
+       * to something that is valid in the container, we shouldn't add them to
+       * the bwrap envp. Otherwise when we call "pv_bwrap_execve()" we will
+       * create an environment that tries to preload libraries that are not
+       * available, until it actually executes "bwrap".
+       * This can be avoided by using the bwrap option "--setenv" instead. */
+      if (adjusted->len != 0)
+        flatpak_bwrap_add_args (bwrap, "--setenv", variable,
+                                adjusted->str, NULL);
+    }
 
   /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
   if (1)
@@ -2706,7 +2771,9 @@ out:
   if (local_error != NULL)
     g_warning ("%s", local_error->message);
 
-  g_clear_pointer (&opt_ld_preload, g_ptr_array_unref);
+  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+    g_clear_pointer (&opt_preload_modules[i].values, g_ptr_array_unref);
+
   g_clear_pointer (&opt_env_if_host, g_strfreev);
   g_clear_pointer (&opt_freedesktop_app_id, g_free);
   g_clear_pointer (&opt_steam_app_id, g_free);

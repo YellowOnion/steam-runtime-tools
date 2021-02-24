@@ -1931,11 +1931,11 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
  * @patterns: (not nullable): array of patterns for capsule-capture-libs
  */
 static gboolean
-bind_icd_from_ptr_array (PvRuntime *self,
-                         RuntimeArchitecture *arch,
-                         const gchar *destination,
-                         GPtrArray *patterns,
-                         GError **error)
+pv_runtime_capture_libraries (PvRuntime *self,
+                              RuntimeArchitecture *arch,
+                              const gchar *destination,
+                              GPtrArray *patterns,
+                              GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize i;
@@ -4188,8 +4188,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          if (!bind_icd_from_ptr_array (self, arch, arch->libdir_in_current_namespace,
-                                        patterns, error))
+          if (!pv_runtime_capture_libraries (self, arch,
+                                             arch->libdir_in_current_namespace,
+                                             patterns, error))
             return FALSE;
 
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);

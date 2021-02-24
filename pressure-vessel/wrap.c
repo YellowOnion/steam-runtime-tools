@@ -970,7 +970,8 @@ opt_with_host_graphics_cb (const gchar *option_name,
   /* This is the old way to get the graphics from the host system */
   if (g_strcmp0 (option_name, "--with-host-graphics") == 0)
     {
-      if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+      if (g_file_test ("/run/host/usr", G_FILE_TEST_IS_DIR)
+          && g_file_test ("/run/host/etc", G_FILE_TEST_IS_DIR))
         opt_graphics_provider = g_strdup ("/run/host");
       else
         opt_graphics_provider = g_strdup ("/");
@@ -1444,7 +1445,8 @@ main (int argc,
 
           if (value == TRISTATE_NO)
             opt_graphics_provider = g_strdup ("");
-          else if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+          else if (g_file_test ("/run/host/usr", G_FILE_TEST_IS_DIR)
+                   && g_file_test ("/run/host/etc", G_FILE_TEST_IS_DIR))
             opt_graphics_provider = g_strdup ("/run/host");
           else
             opt_graphics_provider = g_strdup ("/");

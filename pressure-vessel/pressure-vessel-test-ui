@@ -634,7 +634,10 @@ class Gui:
                 argv.append('--runtime=' + id)
 
         if self.host_graphics_check.get_active():
-            if os.path.isdir('/run/host'):
+            if (
+                os.path.isdir('/run/host/etc')
+                and os.path.isdir('/run/host/usr')
+            ):
                 argv.append('--graphics-provider=/run/host')
             else:
                 argv.append('--graphics-provider=/')

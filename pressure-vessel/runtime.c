@@ -1789,6 +1789,7 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                                      RuntimeArchitecture *arch)
 {
   const gchar *ld_library_path;
+  g_autofree gchar *remap_app = NULL;
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
   FlatpakBwrap *ret;
@@ -1803,6 +1804,11 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   if (ld_library_path != NULL)
     flatpak_bwrap_set_env (ret, "LD_LIBRARY_PATH", ld_library_path, TRUE);
 
+  /* Every symlink that starts with exactly /app/ (for Flatpak) */
+  remap_app = g_strjoin (NULL, "/app/", "=",
+                         self->provider_in_container_namespace,
+                         "/app/", NULL);
+
   /* Every symlink that starts with exactly /usr/ */
   remap_usr = g_strjoin (NULL, "/usr/", "=",
                          self->provider_in_container_namespace,
@@ -1816,6 +1822,7 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,
                           "--container", self->container_access,
+                          "--remap-link-prefix", remap_app,
                           "--remap-link-prefix", remap_usr,
                           "--remap-link-prefix", remap_lib,
                           "--provider",
@@ -4660,4 +4667,12 @@ pv_runtime_initable_iface_init (GInitableIface *iface,
                                 gpointer unused G_GNUC_UNUSED)
 {
   iface->init = pv_runtime_initable_init;
+}
+
+const char *
+pv_runtime_get_modified_usr (PvRuntime *self)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
+  return self->runtime_usr;
 }

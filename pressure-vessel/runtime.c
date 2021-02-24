@@ -1927,17 +1927,57 @@ icd_details_free (IcdDetails *self)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 
 /*
+ * @destination: (not nullable): where to capture the libraries
+ * @patterns: (not nullable): array of patterns for capsule-capture-libs
+ */
+static gboolean
+bind_icd_from_ptr_array (PvRuntime *self,
+                         RuntimeArchitecture *arch,
+                         const gchar *destination,
+                         GPtrArray *patterns,
+                         GError **error)
+{
+  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  gsize i;
+
+  g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
+  g_return_val_if_fail (destination != NULL, FALSE);
+  g_return_val_if_fail (patterns != NULL, FALSE);
+
+  if (!pv_runtime_provide_container_access (self, error))
+    return FALSE;
+
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  flatpak_bwrap_add_args (temp_bwrap, "--dest", destination, NULL);
+
+  for (i = 0; i < patterns->len; i++)
+    flatpak_bwrap_add_arg (temp_bwrap, (gchar *)g_ptr_array_index (patterns, i));
+
+  flatpak_bwrap_finish (temp_bwrap);
+
+  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+/*
  * @sequence_number: numbered directory to use to disambiguate between
  *  colliding files with the same basename
  * @requested_subdir: (not nullable):
  * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
  *  numbered subdirectory per ICD, for the rare case where not all
  *  drivers have a unique basename or where order matters
- * @use_subdir_for_soname: if %TRUE, the @requested_subdir will be always
+ * @use_subdir_for_kind_soname: if %TRUE, the @requested_subdir will be always
  *  used. If %FALSE, the @requested_subdir will not be used when the provided
  *  library is of the kind "ICD_KIND_SONAME".
+ * @dependency_patterns: (inout) (not nullable): array of patterns for
+ *  capsule-capture-libs
  * @search_path: (nullable): Add the parent directory of the resulting
  *  ICD to this search path if necessary
+ *
+ * Bind the provided @details ICD without its dependencies, and update
+ * @dependency_patterns with @details dependency pattern.
  */
 static gboolean
 bind_icd (PvRuntime *self,
@@ -1947,6 +1987,7 @@ bind_icd (PvRuntime *self,
           IcdDetails *details,
           gboolean *use_numbered_subdirs,
           gboolean use_subdir_for_kind_soname,
+          GPtrArray *dependency_patterns,
           GString *search_path,
           GError **error)
 {
@@ -1975,6 +2016,7 @@ bind_icd (PvRuntime *self,
   g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
                         FALSE);
   g_return_val_if_fail (use_numbered_subdirs != NULL, FALSE);
+  g_return_val_if_fail (dependency_patterns != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   g_info ("Capturing loadable module: %s", details->resolved_library);
@@ -2093,17 +2135,7 @@ bind_icd (PvRuntime *self,
       pv_search_path_append (search_path, in_container);
     }
 
-  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-  flatpak_bwrap_add_args (temp_bwrap,
-                          "--dest", arch->libdir_in_current_namespace,
-                          dependency_pattern,
-                          NULL);
-  flatpak_bwrap_finish (temp_bwrap);
-
-  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-    return FALSE;
-
-  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+  g_ptr_array_add (dependency_patterns, g_steal_pointer (&dependency_pattern));
 
   if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
     {
@@ -3198,12 +3230,14 @@ setup_each_json_manifest (PvRuntime *self,
 static gboolean
 collect_vulkan_layers (PvRuntime *self,
                        const GPtrArray *layer_details,
+                       GPtrArray *dependency_patterns,
                        RuntimeArchitecture *arch,
                        const gchar *dir_name,
                        GError **error)
 {
   gsize j;
 
+  g_return_val_if_fail (dependency_patterns != NULL, FALSE);
   g_return_val_if_fail (dir_name != NULL, FALSE);
 
   for (j = 0; j < layer_details->len; j++)
@@ -3279,9 +3313,8 @@ collect_vulkan_layers (PvRuntime *self,
             }
         }
 
-      if (!bind_icd (self, arch, j, dir_name, details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     NULL, error))
+      if (!bind_icd (self, arch, j, dir_name, details, &use_numbered_subdirs,
+                     use_subdir_for_kind_soname, dependency_patterns, NULL, error))
         return FALSE;
     }
 
@@ -3382,70 +3415,68 @@ pv_runtime_get_ld_so (PvRuntime *self,
   return TRUE;
 }
 
-static gboolean
-pv_runtime_collect_graphics_libraries (PvRuntime *self,
-                                       RuntimeArchitecture *arch,
-                                       GError **error)
+/*
+ * @patterns: (inout) (not nullable):
+ */
+static void
+collect_graphics_libraries_patterns (GPtrArray *patterns)
 {
-  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  g_return_if_fail (patterns != NULL);
 
-  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-  flatpak_bwrap_add_args (temp_bwrap,
-                          "--dest", arch->libdir_in_current_namespace,
-                          /* Mesa GLX, etc. */
-                          "gl:",
-                          /* Vulkan */
-                          "if-exists:if-same-abi:soname:libvulkan.so.1",
-                          /* VDPAU */
-                          "if-exists:if-same-abi:soname:libvdpau.so.1",
-                          /* VA-API */
-                          "if-exists:if-same-abi:soname:libva.so.1",
-                          "if-exists:if-same-abi:soname:libva-drm.so.1",
-                          "if-exists:if-same-abi:soname:libva-glx.so.1",
-                          "if-exists:if-same-abi:soname:libva-x11.so.1",
-                          "if-exists:if-same-abi:soname:libva.so.2",
-                          "if-exists:if-same-abi:soname:libva-drm.so.2",
-                          "if-exists:if-same-abi:soname:libva-glx.so.2",
-                          "if-exists:if-same-abi:soname:libva-x11.so.2",
-                          /* NVIDIA proprietary stack */
-                          "if-exists:even-if-older:soname-match:libEGL.so.*",
-                          "if-exists:even-if-older:soname-match:libEGL_nvidia.so.*",
-                          "if-exists:even-if-older:soname-match:libGL.so.*",
-                          "if-exists:even-if-older:soname-match:libGLESv1_CM.so.*",
-                          "if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*",
-                          "if-exists:even-if-older:soname-match:libGLESv2.so.*",
-                          "if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*",
-                          "if-exists:even-if-older:soname-match:libGLX.so.*",
-                          "if-exists:even-if-older:soname-match:libGLX_nvidia.so.*",
-                          "if-exists:even-if-older:soname-match:libGLX_indirect.so.*",
-                          "if-exists:even-if-older:soname-match:libGLdispatch.so.*",
-                          "if-exists:even-if-older:soname-match:libOpenGL.so.*",
-                          "if-exists:even-if-older:soname-match:libcuda.so.*",
-                          "if-exists:even-if-older:soname-match:libglx.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-cbl.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-cfg.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-compiler.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-encode.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-fbc.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-glcore.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-glsi.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-ifr.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-ml.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-opencl.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*",
-                          "if-exists:even-if-older:soname-match:libnvidia-tls.so.*",
-                          "if-exists:even-if-older:soname-match:libOpenCL.so.*",
-                          "if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*",
-                          NULL);
-  flatpak_bwrap_finish (temp_bwrap);
+  /* Mesa GLX, etc. */
+  g_ptr_array_add (patterns, g_strdup ("gl:"));
 
-  return pv_bwrap_run_sync (temp_bwrap, NULL, error);
+  /* Vulkan */
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libvulkan.so.1"));
+
+  /* VDPAU */
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libvdpau.so.1"));
+
+  /* VA-API */
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva.so.1"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-drm.so.1"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-glx.so.1"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-x11.so.1"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva.so.2"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-drm.so.2"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-glx.so.2"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-x11.so.2"));
+
+  /* NVIDIA proprietary stack */
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libEGL.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libEGL_nvidia.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGL.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv1_CM.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv2.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLX.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLX_nvidia.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLX_indirect.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLdispatch.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libOpenGL.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libcuda.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libglx.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-cbl.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-cfg.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-compiler.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-encode.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-fbc.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-glcore.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-glsi.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-ifr.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-ml.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-opencl.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-tls.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libOpenCL.so.*"));
+  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*"));
 }
 
 static gboolean
@@ -3982,6 +4013,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
           gboolean use_numbered_subdirs;
           gboolean use_subdir_for_kind_soname;
+          g_autoptr(GPtrArray) patterns = NULL;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -3994,6 +4026,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               continue;
             }
 
+          /* Reserve a size of 128 to avoid frequent reallocation due to the
+           * expected high number of patterns that will be added to the array. */
+          patterns = g_ptr_array_new_full (128, g_free);
+
           any_architecture_works = TRUE;
           g_debug ("Container path: %s -> %s",
                    arch->ld_so, ld_so_in_runtime);
@@ -4003,11 +4039,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
 
-
           g_debug ("Collecting graphics drivers from provider system...");
 
-          if (!pv_runtime_collect_graphics_libraries (self, arch, error))
-            return FALSE;
+          collect_graphics_libraries_patterns (patterns);
 
           g_debug ("Collecting %s EGL drivers from host system...",
                    arch->details->tuple);
@@ -4031,7 +4065,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
               if (!bind_icd (self, arch, j, "glvnd", details,
                              &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             NULL, error))
+                             patterns, NULL, error))
                 return FALSE;
             }
 
@@ -4057,20 +4091,20 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
               if (!bind_icd (self, arch, j, "vulkan", details,
                              &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             NULL, error))
+                             patterns, NULL, error))
                 return FALSE;
             }
 
           if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
             {
               g_debug ("Collecting Vulkan explicit layers from host system...");
-              if (!collect_vulkan_layers (self, vulkan_exp_layer_details, arch,
-                                          "vulkan_exp_layer", error))
+              if (!collect_vulkan_layers (self, vulkan_exp_layer_details,
+                                          patterns, arch, "vulkan_exp_layer", error))
                 return FALSE;
 
               g_debug ("Collecting Vulkan implicit layers from host system...");
-              if (!collect_vulkan_layers (self, vulkan_imp_layer_details, arch,
-                                          "vulkan_imp_layer", error))
+              if (!collect_vulkan_layers (self, vulkan_imp_layer_details,
+                                          patterns, arch, "vulkan_imp_layer", error))
                 return FALSE;
             }
 
@@ -4098,7 +4132,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                * ends up in a numbered subdirectory won't get used. */
               if (!bind_icd (self, arch, j, "vdpau", details,
                              &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             NULL, error))
+                             patterns, NULL, error))
                 return FALSE;
             }
 
@@ -4124,7 +4158,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
               if (!bind_icd (self, arch, j, "dri", details,
                              &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             dri_path, error))
+                             patterns, dri_path, error))
                 return FALSE;
             }
 
@@ -4150,9 +4184,13 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
               if (!bind_icd (self, arch, j, "dri", details,
                              &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             va_api_path, error))
+                             patterns, va_api_path, error))
                 return FALSE;
             }
+
+          if (!bind_icd_from_ptr_array (self, arch, arch->libdir_in_current_namespace,
+                                        patterns, error))
+            return FALSE;
 
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 

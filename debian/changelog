@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210224.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix processing of Vulkan ICDs/layers outside /usr
@@ -14,12 +14,19 @@ steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
   * pv-launch: Use unset-env option for subsandbox API >= v5.
     This was added in Flatpak 1.10.0.
   * pressure-vessel: Improve diagnostics for various error conditions
+  * pressure-vessel: Generalize --copy-runtime-into into --variable-dir
+  * pressure-vessel: Fix locking behaviour in variable directory
+  * pressure-vessel: Add support for unpacking runtimes from an archive.
+    This previously had to be done by the SteamLinuxRuntime shell scripts.
+  * pressure-vessel: Automatically enable --copy-runtime if running
+    under Flatpak
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Update flatpak-run to the latest upstream version.
     This includes a fix to propagate the X11 cookies that have an address
     equal to XAUTHLOCALHOSTNAME, fixing X11 authentication on some openSUSE
     systems (Resolves: steam-runtime-tools#53)
+  * pressure-vessel: Improve library binding speed
   * pv-adverb: Remove unused locales temporary directories
     (Resolves: steam-runtime-tools#56)
   * system-info: Report duplicate Vulkan ICDs/layers as an issue.
@@ -30,7 +37,7 @@ steam-runtime-tools (0.20210219.0) UNRELEASED; urgency=medium
   * system-info: Parse Vulkan layers from a report in the right order
   * build: Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 22 Feb 2021 13:34:14 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 24 Feb 2021 15:57:08 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

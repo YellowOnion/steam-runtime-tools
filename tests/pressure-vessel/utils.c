@@ -38,7 +38,7 @@
 
 typedef struct
 {
-  int unused;
+  TestsOpenFdSet old_fds;
 } Fixture;
 
 typedef struct
@@ -51,6 +51,8 @@ setup (Fixture *f,
        gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  f->old_fds = tests_check_fd_leaks_enter ();
 }
 
 static void
@@ -58,6 +60,8 @@ teardown (Fixture *f,
           gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  tests_check_fd_leaks_leave (f->old_fds);
 }
 
 static void
@@ -160,6 +164,68 @@ test_capture_output (Fixture *f,
   g_assert_no_error (error);
   g_assert_cmpstr (output, ==, "unset");
   g_clear_pointer (&output, g_free);
+}
+
+static void
+test_delete_dangling_symlink (Fixture *f,
+                              gconstpointer context)
+{
+  g_autoptr(GError) error = NULL;
+  g_auto(GLnxTmpDir) tmpdir = { FALSE };
+  struct stat stat_buf;
+
+  glnx_mkdtemp ("test-XXXXXX", 0700, &tmpdir, &error);
+  g_assert_no_error (error);
+
+  glnx_file_replace_contents_at (tmpdir.fd, "exists", (const guint8 *) "",
+                                 0, 0, NULL, &error);
+  g_assert_no_error (error);
+
+  g_assert_no_errno (mkdirat (tmpdir.fd, "subdir", 0755));
+  g_assert_no_errno (symlinkat ("exists", tmpdir.fd, "target-exists"));
+  g_assert_no_errno (symlinkat ("does-not-exist", tmpdir.fd,
+                                "target-does-not-exist"));
+  g_assert_no_errno (symlinkat ("/etc/ssl/private/nope", tmpdir.fd,
+                                "cannot-stat-target"));
+
+  pv_delete_dangling_symlink (tmpdir.fd, tmpdir.path, "cannot-stat-target");
+  pv_delete_dangling_symlink (tmpdir.fd, tmpdir.path, "does-not-exist");
+  pv_delete_dangling_symlink (tmpdir.fd, tmpdir.path, "exists");
+  pv_delete_dangling_symlink (tmpdir.fd, tmpdir.path, "subdir");
+  pv_delete_dangling_symlink (tmpdir.fd, tmpdir.path, "target-does-not-exist");
+  pv_delete_dangling_symlink (tmpdir.fd, tmpdir.path, "target-exists");
+
+  /* We cannot tell whether ./cannot-stat-target is dangling or not
+   * (assuming we're not root) so we give it the benefit of the doubt
+   * and do not delete it */
+  if (G_LIKELY (stat ("/etc/ssl/private/nope", &stat_buf) < 0
+      && errno == EACCES))
+    {
+      g_assert_no_errno (fstatat (tmpdir.fd, "cannot-stat-target", &stat_buf,
+                                  AT_SYMLINK_NOFOLLOW));
+    }
+
+  /* ./does-not-exist never existed */
+  g_assert_cmpint (fstatat (tmpdir.fd, "does-not-exist", &stat_buf,
+                            AT_SYMLINK_NOFOLLOW) == 0 ? 0 : errno,
+                   ==, ENOENT);
+
+  /* ./exists is not a symlink and so was not deleted */
+  g_assert_no_errno (fstatat (tmpdir.fd, "exists", &stat_buf,
+                              AT_SYMLINK_NOFOLLOW));
+
+  /* ./subdir is not a symlink and so was not deleted */
+  g_assert_no_errno (fstatat (tmpdir.fd, "subdir", &stat_buf,
+                              AT_SYMLINK_NOFOLLOW));
+
+  /* ./target-does-not-exist is a dangling symlink and so was deleted */
+  g_assert_cmpint (fstatat (tmpdir.fd, "target-does-not-exist", &stat_buf,
+                            AT_SYMLINK_NOFOLLOW) == 0 ? 0 : errno,
+                   ==, ENOENT);
+
+  /* ./target-exists is a non-dangling symlink and so was not deleted */
+  g_assert_no_errno (fstatat (tmpdir.fd, "target-exists", &stat_buf,
+                              AT_SYMLINK_NOFOLLOW));
 }
 
 static void
@@ -307,6 +373,8 @@ main (int argc,
               setup, test_arbitrary_key, teardown);
   g_test_add ("/capture-output", Fixture, NULL,
               setup, test_capture_output, teardown);
+  g_test_add ("/delete-dangling-symlink", Fixture, NULL,
+              setup, test_delete_dangling_symlink, teardown);
   g_test_add ("/envp-cmp", Fixture, NULL, setup, test_envp_cmp, teardown);
   g_test_add ("/get-path-after", Fixture, NULL,
               setup, test_get_path_after, teardown);

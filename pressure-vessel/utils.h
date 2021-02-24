@@ -76,3 +76,7 @@ const char *pv_get_path_after (const char *str,
                                const char *prefix);
 
 void pv_set_up_logging (gboolean opt_verbose);
+
+void pv_delete_dangling_symlink (int dirfd,
+                                 const char *debug_path,
+                                 const char *name);

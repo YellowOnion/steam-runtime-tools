@@ -706,12 +706,13 @@ typedef enum
 } Tristate;
 
 static gboolean opt_batch = FALSE;
-static char *opt_copy_runtime_into = NULL;
+static gboolean opt_copy_runtime = FALSE;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char **opt_filesystems = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
+static gboolean opt_gc_legacy_runtimes = FALSE;
 static gboolean opt_gc_runtimes = TRUE;
 static gboolean opt_generate_locales = TRUE;
 static char *opt_home = NULL;
@@ -724,12 +725,15 @@ static gboolean opt_import_vulkan_layers = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GPtrArray *opt_ld_preload = NULL;
 static GArray *opt_pass_fds = NULL;
-static char *opt_runtime_base = NULL;
 static char *opt_runtime = NULL;
+static char *opt_runtime_archive = NULL;
+static char *opt_runtime_base = NULL;
+static char *opt_runtime_id = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_share_pid = TRUE;
 static double opt_terminate_idle_timeout = 0.0;
 static double opt_terminate_timeout = -1.0;
+static char *opt_variable_dir = NULL;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 static gboolean opt_version_only = FALSE;
@@ -749,6 +753,35 @@ opt_host_ld_preload_cb (const gchar *option_name,
     opt_ld_preload = g_ptr_array_new_with_free_func (g_free);
 
   g_ptr_array_add (opt_ld_preload, g_steal_pointer (&preload));
+
+  return TRUE;
+}
+
+static gboolean
+opt_copy_runtime_into_cb (const gchar *option_name,
+                          const gchar *value,
+                          gpointer data,
+                          GError **error)
+{
+  if (value == NULL)
+    {
+      opt_copy_runtime = FALSE;
+    }
+  else if (value[0] == '\0')
+    {
+      g_warning ("%s is deprecated, disable with --no-copy-runtime instead",
+                 option_name);
+      opt_copy_runtime = FALSE;
+    }
+  else
+    {
+      g_warning ("%s is deprecated, use --copy-runtime and "
+                 "--variable-dir instead",
+                 option_name);
+      opt_copy_runtime = TRUE;
+      g_free (opt_variable_dir);
+      opt_variable_dir = g_strdup (value);
+    }
 
   return TRUE;
 }
@@ -966,11 +999,20 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_batch,
     "Disable all interactivity and redirection: ignore --shell*, "
     "--terminal, --xterm, --tty. [Default: if $PRESSURE_VESSEL_BATCH]", NULL },
+  { "copy-runtime", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_copy_runtime,
+    "If a --runtime is used, copy it into --variable-dir and edit the "
+    "copy in-place.",
+    NULL },
+  { "no-copy-runtime", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_copy_runtime,
+    "Don't behave as described for --copy-runtime. "
+    "[Default unless $PRESSURE_VESSEL_COPY_RUNTIME is 1 or running in Flatpak]",
+    NULL },
   { "copy-runtime-into", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_copy_runtime_into,
-    "If a --runtime is used, copy it into DIR and edit the copy in-place. "
-    "[Default: $PRESSURE_VESSEL_COPY_RUNTIME_INTO or empty]",
-    "DIR" },
+    G_OPTION_FLAG_FILENAME|G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    &opt_copy_runtime_into_cb,
+    "Deprecated alias for --copy-runtime and --variable-dir", "DIR" },
   { "env-if-host", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
@@ -991,14 +1033,23 @@ static GOptionEntry options[] =
     "Make --unshare-home use ~/.var/app/com.steampowered.AppN "
     "as home directory. [Default: $STEAM_COMPAT_APP_ID or $SteamAppId]",
     "N" },
+  { "gc-legacy-runtimes", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_legacy_runtimes,
+    "Garbage-collect old unpacked runtimes in $PRESSURE_VESSEL_RUNTIME_BASE.",
+    NULL },
+  { "no-gc-legacy-runtimes", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_gc_legacy_runtimes,
+    "Don't garbage-collect old unpacked runtimes in "
+    "$PRESSURE_VESSEL_RUNTIME_BASE [default].",
+    NULL },
   { "gc-runtimes", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
-    "If using --copy-runtime-into, garbage-collect old temporary "
+    "If using --variable-dir, garbage-collect old temporary "
     "runtimes. [Default, unless $PRESSURE_VESSEL_GC_RUNTIMES is 0]",
     NULL },
   { "no-gc-runtimes", '\0',
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_gc_runtimes,
-    "If using --copy-runtime-into, don't garbage-collect old "
+    "If using --variable-dir, don't garbage-collect old "
     "temporary runtimes.", NULL },
   { "generate-locales", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_generate_locales,
@@ -1066,11 +1117,22 @@ static GOptionEntry options[] =
     "it with the provider's graphics stack. The empty string "
     "means don't use a runtime. [Default: $PRESSURE_VESSEL_RUNTIME or '']",
     "RUNTIME" },
+  { "runtime-archive", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_archive,
+    "Unpack the ARCHIVE and use it as the runtime, using --runtime-id to "
+    "avoid repeatedly unpacking the same archive. "
+    "[Default: $PRESSURE_VESSEL_RUNTIME_ARCHIVE]",
+    "ARCHIVE" },
   { "runtime-base", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_base,
-    "If a --runtime is a relative path, look for it relative to BASE. "
+    "If a --runtime or --runtime-archive is a relative path, look for "
+    "it relative to BASE. "
     "[Default: $PRESSURE_VESSEL_RUNTIME_BASE or '.']",
     "BASE" },
+  { "runtime-id", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_runtime_id,
+    "Reuse a previously-unpacked --runtime-archive if its ID matched this",
+    "ID" },
   { "share-home", '\0',
     G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_share_home_cb,
     "Use the real home directory. "
@@ -1141,6 +1203,10 @@ static GOptionEntry options[] =
     "skip SIGTERM and use SIGKILL immediately. Implies --subreaper. "
     "[Default: -1.0, meaning don't signal].",
     "SECONDS" },
+  { "variable-dir", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_variable_dir,
+    "If a runtime needs to be unpacked or copied, put it in DIR.",
+    "DIR" },
   { "verbose", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose.", NULL },
@@ -1246,8 +1312,29 @@ main (int argc,
 
   original_environ = g_get_environ ();
 
+  if (is_flatpak_env)
+    opt_copy_runtime = TRUE;
+
   /* Set defaults */
   opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+  /* Process COPY_RUNTIME_INFO first so that COPY_RUNTIME and VARIABLE_DIR
+   * can override it */
+  opt_copy_runtime_into_cb ("$PRESSURE_VESSEL_COPY_RUNTIME_INTO",
+                            g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"),
+                            NULL, NULL);
+  opt_copy_runtime = pv_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
+                                             opt_copy_runtime);
+  opt_runtime_id = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ID"));
+
+    {
+      const char *value = g_getenv ("PRESSURE_VESSEL_VARIABLE_DIR");
+
+      if (value != NULL)
+        {
+          g_free (opt_variable_dir);
+          opt_variable_dir = g_strdup (value);
+        }
+    }
 
   opt_freedesktop_app_id = g_strdup (g_getenv ("PRESSURE_VESSEL_FDO_APP_ID"));
 
@@ -1265,6 +1352,7 @@ main (int argc,
                                                      TRUE);
 
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
+  opt_gc_legacy_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_LEGACY_RUNTIMES", FALSE);
   opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
   opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
 
@@ -1290,29 +1378,52 @@ main (int argc,
   if (opt_verbose)
     pv_set_up_logging (opt_verbose);
 
-  if (opt_runtime == NULL)
-    opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
+  /* Specifying either one of these mutually-exclusive options as a
+   * command-line option disables use of the environment variable for
+   * the other one */
+  if (opt_runtime == NULL && opt_runtime_archive == NULL)
+    {
+      opt_runtime = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME"));
+
+      /* Normalize empty string to NULL to simplify later code */
+      if (opt_runtime != NULL && opt_runtime[0] == '\0')
+        g_clear_pointer (&opt_runtime, g_free);
+
+      opt_runtime_archive = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ARCHIVE"));
+
+      if (opt_runtime_archive != NULL && opt_runtime_archive[0] == '\0')
+        g_clear_pointer (&opt_runtime_archive, g_free);
+    }
+
+  if (opt_runtime_id != NULL)
+    {
+      const char *p;
+
+      if (opt_runtime_id[0] == '-' || opt_runtime_id[0] == '.')
+        {
+          g_warning ("--runtime-id must not start with dash or dot");
+          goto out;
+        }
+
+      for (p = opt_runtime_id; *p != '\0'; p++)
+        {
+          if (!g_ascii_isalnum (*p) && *p != '_' && *p != '-' && *p != '.')
+            {
+              g_warning ("--runtime-id may only contain "
+                         "alphanumerics, underscore, dash or dot");
+              goto out;
+            }
+        }
+    }
 
   if (opt_runtime_base == NULL)
     opt_runtime_base = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_BASE"));
 
-  if (opt_runtime != NULL
-      && opt_runtime[0] != '\0'
-      && !g_path_is_absolute (opt_runtime)
-      && opt_runtime_base != NULL
-      && opt_runtime_base[0] != '\0')
+  if (opt_runtime != NULL && opt_runtime_archive != NULL)
     {
-      g_autofree gchar *tmp = g_steal_pointer (&opt_runtime);
-
-      opt_runtime = g_build_filename (opt_runtime_base, tmp, NULL);
+      g_warning ("--runtime and --runtime-archive cannot both be used");
+      goto out;
     }
-
-  if (opt_copy_runtime_into == NULL)
-    opt_copy_runtime_into = g_strdup (g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"));
-
-  if (opt_copy_runtime_into != NULL
-      && opt_copy_runtime_into[0] == '\0')
-    opt_copy_runtime_into = NULL;
 
   if (opt_graphics_provider == NULL)
     opt_graphics_provider = g_strdup (g_getenv ("PRESSURE_VESSEL_GRAPHICS_PROVIDER"));
@@ -1493,6 +1604,12 @@ main (int argc,
         }
     }
 
+  if (opt_copy_runtime && opt_variable_dir == NULL)
+    {
+      g_warning ("--copy-runtime requires --variable-dir");
+      goto out;
+    }
+
   /* Finished parsing arguments, so any subsequent failures will make
    * us exit 1. */
   ret = 1;
@@ -1644,9 +1761,26 @@ main (int argc,
                               NULL);
     }
 
-  if (opt_runtime != NULL && opt_runtime[0] != '\0')
+  if (opt_gc_legacy_runtimes
+      && opt_runtime_base != NULL
+      && opt_runtime_base[0] != '\0'
+      && opt_variable_dir != NULL)
+    {
+      if (!pv_runtime_garbage_collect_legacy (opt_variable_dir,
+                                              opt_runtime_base,
+                                              &local_error))
+        {
+          g_warning ("Unable to clean up old runtimes: %s",
+                     local_error->message);
+          g_clear_error (&local_error);
+        }
+    }
+
+  if (opt_runtime != NULL || opt_runtime_archive != NULL)
     {
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
+      g_autofree gchar *runtime_resolved = NULL;
+      const char *runtime_path = NULL;
 
       if (opt_gc_runtimes)
         flags |= PV_RUNTIME_FLAGS_GC_RUNTIMES;
@@ -1663,9 +1797,33 @@ main (int argc,
       if (opt_import_vulkan_layers)
         flags |= PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS;
 
-      g_debug ("Configuring runtime %s...", opt_runtime);
+      if (opt_copy_runtime)
+        flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
 
-      if (is_flatpak_env && opt_copy_runtime_into == NULL)
+      if (opt_runtime != NULL)
+        {
+          /* already checked for mutually exclusive options */
+          g_assert (opt_runtime_archive == NULL);
+          runtime_path = opt_runtime;
+        }
+      else
+        {
+          flags |= PV_RUNTIME_FLAGS_UNPACK_ARCHIVE;
+          runtime_path = opt_runtime_archive;
+        }
+
+      if (!g_path_is_absolute (runtime_path)
+          && opt_runtime_base != NULL
+          && opt_runtime_base[0] != '\0')
+        {
+          runtime_resolved = g_build_filename (opt_runtime_base,
+                                               runtime_path, NULL);
+          runtime_path = runtime_resolved;
+        }
+
+      g_debug ("Configuring runtime %s...", runtime_path);
+
+      if (is_flatpak_env && !opt_copy_runtime)
         {
           glnx_throw (error,
                       "Cannot set up a runtime inside Flatpak without "
@@ -1673,8 +1831,9 @@ main (int argc,
           goto out;
         }
 
-      runtime = pv_runtime_new (opt_runtime,
-                                opt_copy_runtime_into,
+      runtime = pv_runtime_new (runtime_path,
+                                opt_runtime_id,
+                                opt_variable_dir,
                                 bwrap_executable,
                                 tools_dir,
                                 opt_graphics_provider,
@@ -2539,9 +2698,12 @@ out:
   g_clear_pointer (&opt_steam_app_id, g_free);
   g_clear_pointer (&opt_home, g_free);
   g_clear_pointer (&opt_fake_home, g_free);
-  g_clear_pointer (&opt_runtime_base, g_free);
   g_clear_pointer (&opt_runtime, g_free);
+  g_clear_pointer (&opt_runtime_archive, g_free);
+  g_clear_pointer (&opt_runtime_base, g_free);
+  g_clear_pointer (&opt_runtime_id, g_free);
   g_clear_pointer (&opt_pass_fds, g_array_unref);
+  g_clear_pointer (&opt_variable_dir, g_free);
 
   g_debug ("Exiting with status %d", ret);
   return ret;

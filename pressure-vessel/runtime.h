@@ -38,6 +38,8 @@
  * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
  * @PV_RUNTIME_FLAGS_VERBOSE: Be more verbose
  * @PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS: Include host Vulkan layers
+ * @PV_RUNTIME_FLAGS_COPY_RUNTIME: Copy the runtime and modify the copy
+ * @PV_RUNTIME_FLAGS_UNPACK_ARCHIVE: Source is an archive, not a deployment
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -49,6 +51,8 @@ typedef enum
   PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_VERBOSE = (1 << 3),
   PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS = (1 << 4),
+  PV_RUNTIME_FLAGS_COPY_RUNTIME = (1 << 5),
+  PV_RUNTIME_FLAGS_UNPACK_ARCHIVE = (1 << 6),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -58,6 +62,8 @@ typedef enum
    | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    | PV_RUNTIME_FLAGS_VERBOSE \
    | PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS \
+   | PV_RUNTIME_FLAGS_COPY_RUNTIME \
+   | PV_RUNTIME_FLAGS_UNPACK_ARCHIVE \
    )
 
 typedef struct _PvRuntime PvRuntime;
@@ -71,8 +77,9 @@ typedef struct _PvRuntimeClass PvRuntimeClass;
 #define PV_RUNTIME_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), PV_TYPE_RUNTIME, PvRuntimeClass)
 GType pv_runtime_get_type (void);
 
-PvRuntime *pv_runtime_new (const char *deployment,
-                           const char *mutable_parent,
+PvRuntime *pv_runtime_new (const char *source,
+                           const char *id,
+                           const char *variable_dir,
                            const char *bubblewrap,
                            const char *tools_dir,
                            const char *provider_in_current_namespace,
@@ -89,5 +96,9 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           PvEnviron *container_env,
                           GError **error);
 void pv_runtime_cleanup (PvRuntime *self);
+
+gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,
+                                            const char *runtime_base,
+                                            GError **error);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvRuntime, g_object_unref)

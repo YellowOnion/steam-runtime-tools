@@ -977,3 +977,72 @@ pv_set_up_logging (gboolean opt_verbose)
                      opt_timestamp ? pv_log_to_stderr_with_timestamp : pv_log_to_stderr,
                      NULL);
 }
+
+/**
+ * pv_delete_dangling_symlink:
+ * @dirfd: An open file descriptor for a directory
+ * @debug_path: Path to directory represented by @dirfd, used in debug messages
+ * @name: A filename in @dirfd that is thought to be a symbolic link
+ *
+ * If @name exists in @dirfd and is a symbolic link whose target does not
+ * exist, delete it.
+ */
+void
+pv_delete_dangling_symlink (int dirfd,
+                            const char *debug_path,
+                            const char *name)
+{
+  struct stat stat_buf, lstat_buf;
+
+  g_return_if_fail (dirfd >= 0);
+  g_return_if_fail (name != NULL);
+  g_return_if_fail (strcmp (name, "") != 0);
+  g_return_if_fail (strcmp (name, ".") != 0);
+  g_return_if_fail (strcmp (name, "..") != 0);
+
+  if (fstatat (dirfd, name, &lstat_buf, AT_SYMLINK_NOFOLLOW) == 0)
+    {
+      if (!S_ISLNK (lstat_buf.st_mode))
+        {
+          g_debug ("Ignoring %s/%s: not a symlink",
+                   debug_path, name);
+        }
+      else if (fstatat (dirfd, name, &stat_buf, 0) == 0)
+        {
+          g_debug ("Ignoring %s/%s: symlink target still exists",
+                   debug_path, name);
+        }
+      else if (errno != ENOENT)
+        {
+          int saved_errno = errno;
+
+          g_debug ("Ignoring %s/%s: fstatat(!NOFOLLOW): %s",
+                   debug_path, name, g_strerror (saved_errno));
+        }
+      else
+        {
+          g_debug ("Target of %s/%s no longer exists, deleting it",
+                   debug_path, name);
+
+          if (unlinkat (dirfd, name, 0) != 0)
+            {
+              int saved_errno = errno;
+
+              g_debug ("Could not delete %s/%s: unlinkat: %s",
+                       debug_path, name, g_strerror (saved_errno));
+            }
+        }
+    }
+  else if (errno == ENOENT)
+    {
+      /* Silently ignore: symlink doesn't exist so we don't need to
+       * delete it */
+    }
+  else
+    {
+      int saved_errno = errno;
+
+      g_debug ("Ignoring %s/%s: fstatat(NOFOLLOW): %s",
+               debug_path, name, g_strerror (saved_errno));
+    }
+}

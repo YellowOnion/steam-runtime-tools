@@ -1074,7 +1074,7 @@ static GOptionEntry options[] =
     "and will be adjusted for use on the host system if pressure-vessel "
     "is run in a container. The empty string means use the graphics "
     "stack from container."
-    "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/run/host' or '/']", "PATH" },
+    "[Default: $PRESSURE_VESSEL_GRAPHICS_PROVIDER or '/']", "PATH" },
   { "launcher", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_launcher,
     "Instead of specifying a command with its arguments to execute, all the "
@@ -1431,12 +1431,24 @@ main (int argc,
   if (opt_graphics_provider == NULL)
     {
       /* Also check the deprecated 'PRESSURE_VESSEL_HOST_GRAPHICS' */
-      if (!pv_boolean_environment ("PRESSURE_VESSEL_HOST_GRAPHICS", TRUE))
-        opt_graphics_provider = g_strdup ("");
-      else if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
-        opt_graphics_provider = g_strdup ("/run/host");
+      Tristate value = tristate_environment ("PRESSURE_VESSEL_HOST_GRAPHICS");
+
+      if (value == TRISTATE_MAYBE)
+        {
+          opt_graphics_provider = g_strdup ("/");
+        }
       else
-        opt_graphics_provider = g_strdup ("/");
+        {
+          g_warning ("$PRESSURE_VESSEL_HOST_GRAPHICS is deprecated, "
+                     "please use PRESSURE_VESSEL_GRAPHICS_PROVIDER instead");
+
+          if (value == TRISTATE_NO)
+            opt_graphics_provider = g_strdup ("");
+          else if (g_file_test ("/run/host", G_FILE_TEST_IS_DIR))
+            opt_graphics_provider = g_strdup ("/run/host");
+          else
+            opt_graphics_provider = g_strdup ("/");
+        }
     }
 
   g_assert (opt_graphics_provider != NULL);

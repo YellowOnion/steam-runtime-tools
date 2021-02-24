@@ -1931,11 +1931,11 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
  * @patterns: (not nullable): array of patterns for capsule-capture-libs
  */
 static gboolean
-bind_icd_from_ptr_array (PvRuntime *self,
-                         RuntimeArchitecture *arch,
-                         const gchar *destination,
-                         GPtrArray *patterns,
-                         GError **error)
+pv_runtime_capture_libraries (PvRuntime *self,
+                              RuntimeArchitecture *arch,
+                              const gchar *destination,
+                              GPtrArray *patterns,
+                              GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize i;
@@ -3421,62 +3421,78 @@ pv_runtime_get_ld_so (PvRuntime *self,
 static void
 collect_graphics_libraries_patterns (GPtrArray *patterns)
 {
+  static const char * const sonames[] =
+  {
+    /* Vulkan */
+    "libvulkan.so.1",
+
+    /* VDPAU */
+    "libvdpau.so.1",
+
+    /* VA-API */
+    "libva.so.1",
+    "libva-drm.so.1",
+    "libva-glx.so.1",
+    "libva-x11.so.1",
+    "libva.so.2",
+    "libva-drm.so.2",
+    "libva-glx.so.2",
+    "libva-x11.so.2",
+  };
+  static const char * const soname_globs[] =
+  {
+    /* NVIDIA proprietary stack */
+    "libEGL.so.*",
+    "libEGL_nvidia.so.*",
+    "libGL.so.*",
+    "libGLESv1_CM.so.*",
+    "libGLESv1_CM_nvidia.so.*",
+    "libGLESv2.so.*",
+    "libGLESv2_nvidia.so.*",
+    "libGLX.so.*",
+    "libGLX_nvidia.so.*",
+    "libGLX_indirect.so.*",
+    "libGLdispatch.so.*",
+    "libOpenGL.so.*",
+    "libcuda.so.*",
+    "libglx.so.*",
+    "libnvidia-cbl.so.*",
+    "libnvidia-cfg.so.*",
+    "libnvidia-compiler.so.*",
+    "libnvidia-egl-wayland.so.*",
+    "libnvidia-eglcore.so.*",
+    "libnvidia-encode.so.*",
+    "libnvidia-fatbinaryloader.so.*",
+    "libnvidia-fbc.so.*",
+    "libnvidia-glcore.so.*",
+    "libnvidia-glsi.so.*",
+    "libnvidia-glvkspirv.so.*",
+    "libnvidia-ifr.so.*",
+    "libnvidia-ml.so.*",
+    "libnvidia-opencl.so.*",
+    "libnvidia-opticalflow.so.*",
+    "libnvidia-ptxjitcompiler.so.*",
+    "libnvidia-rtcore.so.*",
+    "libnvidia-tls.so.*",
+    "libOpenCL.so.*",
+    "libvdpau_nvidia.so.*",
+  };
+  gsize i;
+
   g_return_if_fail (patterns != NULL);
 
   /* Mesa GLX, etc. */
   g_ptr_array_add (patterns, g_strdup ("gl:"));
 
-  /* Vulkan */
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libvulkan.so.1"));
+  for (i = 0; i < G_N_ELEMENTS (sonames); i++)
+    g_ptr_array_add (patterns,
+                     g_strdup_printf ("if-exists:if-same-abi:soname:%s",
+                                      sonames[i]));
 
-  /* VDPAU */
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libvdpau.so.1"));
-
-  /* VA-API */
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva.so.1"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-drm.so.1"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-glx.so.1"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-x11.so.1"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva.so.2"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-drm.so.2"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-glx.so.2"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:if-same-abi:soname:libva-x11.so.2"));
-
-  /* NVIDIA proprietary stack */
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libEGL.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libEGL_nvidia.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGL.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv1_CM.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv1_CM_nvidia.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv2.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLESv2_nvidia.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLX.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLX_nvidia.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLX_indirect.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libGLdispatch.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libOpenGL.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libcuda.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libglx.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-cbl.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-cfg.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-compiler.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-egl-wayland.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-eglcore.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-encode.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-fatbinaryloader.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-fbc.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-glcore.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-glsi.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-glvkspirv.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-ifr.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-ml.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-opencl.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-opticalflow.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-ptxjitcompiler.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-rtcore.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libnvidia-tls.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libOpenCL.so.*"));
-  g_ptr_array_add (patterns, g_strdup ("if-exists:even-if-older:soname-match:libvdpau_nvidia.so.*"));
+  for (i = 0; i < G_N_ELEMENTS (soname_globs); i++)
+    g_ptr_array_add (patterns,
+                     g_strdup_printf ("if-exists:even-if-older:soname-match:%s",
+                                      soname_globs[i]));
 }
 
 static gboolean
@@ -4188,8 +4204,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          if (!bind_icd_from_ptr_array (self, arch, arch->libdir_in_current_namespace,
-                                        patterns, error))
+          if (!pv_runtime_capture_libraries (self, arch,
+                                             arch->libdir_in_current_namespace,
+                                             patterns, error))
             return FALSE;
 
           libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);

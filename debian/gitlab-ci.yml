@@ -336,10 +336,6 @@ test:ubuntu-20.04:
             python3 tests/pressure-vessel/containers.py
 
 test:archlinux:
-    # Temporarily not a blocker because our Docker's seccomp profiles
-    # don't know about faccess2() yet, and new Arch glibc relies on that
-    allow_failure: true
-
     extends: .test_template
     image: archlinux:latest
     # Do not use the global before_script because it is only for Debian based

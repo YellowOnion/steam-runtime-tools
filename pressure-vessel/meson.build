@@ -205,6 +205,8 @@ executable(
     'runtime.c',
     'runtime.h',
     'wrap.c',
+    'wrap-setup.c',
+    'wrap-setup.h',
   ] + enums,
   c_args : pv_c_args,
   dependencies : [

@@ -256,100 +256,6 @@ check_launch_on_host (const char *launch_executable,
   return TRUE;
 }
 
-/*
- * Export most root directories, but not the ones that
- * "flatpak run --filesystem=host" would skip.
- * (See flatpak_context_export(), which might replace this function
- * later on.)
- *
- * If we are running inside Flatpak, we assume that any directory
- * that is made available in the root, and is not in dont_mount_in_root,
- * came in via --filesystem=host or similar and matches its equivalent
- * on the real root filesystem.
- */
-static gboolean
-export_root_dirs_like_filesystem_host (FlatpakExports *exports,
-                                       FlatpakFilesystemMode mode,
-                                       GError **error)
-{
-  g_autoptr(GDir) dir = NULL;
-  const char *member = NULL;
-
-  g_return_val_if_fail (exports != NULL, FALSE);
-  g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  dir = g_dir_open ("/", 0, error);
-
-  if (dir == NULL)
-    return FALSE;
-
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
-    {
-      g_autofree gchar *path = NULL;
-
-      if (g_strv_contains (dont_mount_in_root, member))
-        continue;
-
-      path = g_build_filename ("/", member, NULL);
-      flatpak_exports_add_path_expose (exports, mode, path);
-    }
-
-  /* For parity with Flatpak's handling of --filesystem=host */
-  flatpak_exports_add_path_expose (exports, mode, "/run/media");
-
-  return TRUE;
-}
-
-/*
- * This function assumes that /run on the host is the same as in the
- * current namespace, so it won't work in Flatpak.
- */
-static gboolean
-export_contents_of_run (FlatpakBwrap *bwrap,
-                        GError **error)
-{
-  static const char *ignore[] =
-  {
-    "gfx",              /* can be created by pressure-vessel */
-    "host",             /* created by pressure-vessel */
-    "media",            /* see export_root_dirs_like_filesystem_host() */
-    "pressure-vessel",  /* created by pressure-vessel */
-    NULL
-  };
-  g_autoptr(GDir) dir = NULL;
-  const char *member = NULL;
-
-  g_return_val_if_fail (bwrap != NULL, FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-  g_return_val_if_fail (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR),
-                        FALSE);
-
-  dir = g_dir_open ("/run", 0, error);
-
-  if (dir == NULL)
-    return FALSE;
-
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
-    {
-      g_autofree gchar *path = NULL;
-
-      if (g_strv_contains (ignore, member))
-        continue;
-
-      path = g_build_filename ("/run", member, NULL);
-      flatpak_bwrap_add_args (bwrap,
-                              "--bind", path, path,
-                              NULL);
-    }
-
-  return TRUE;
-}
-
 /* Nvidia Vulkan ray-tracing requires to load the `nvidia_uvm.ko` kernel
  * module, and this is usually done in `libcuda.so.1` by running the setuid
  * binary `nvidia-modprobe`. But when we are inside a container we don't bind
@@ -1960,44 +1866,9 @@ main (int argc,
     }
   else
     {
-      static const char * const export_os_mutable[] = { "/etc", "/tmp", "/var" };
-
       g_assert (!is_flatpak_env);
 
-      if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
-        goto out;
-
-      for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
-        {
-          const char *dir = export_os_mutable[i];
-
-          if (g_file_test (dir, G_FILE_TEST_EXISTS))
-            flatpak_bwrap_add_args (bwrap, "--bind", dir, dir, NULL);
-        }
-
-      /* We do each subdirectory of /run separately, so that we can
-       * always create /run/host and /run/pressure-vessel. */
-      if (!export_contents_of_run (bwrap, error))
-        goto out;
-
-      /* This handles everything except:
-       *
-       * /app (should be unnecessary)
-       * /boot (should be unnecessary)
-       * /dev (handled by pv_bwrap_add_api_filesystems() above)
-       * /etc (handled by export_os_mutable)
-       * /proc (handled by pv_bwrap_add_api_filesystems() above)
-       * /root (should be unnecessary)
-       * /run (handled by export_contents_of_run())
-       * /sys (handled by pv_bwrap_add_api_filesystems() above)
-       * /tmp (handled by export_os_mutable)
-       * /usr, /lib, /lib32, /lib64, /bin, /sbin
-       *  (all handled by pv_bwrap_bind_usr() above)
-       * /var (handled by export_os_mutable)
-       */
-      if (!export_root_dirs_like_filesystem_host (exports,
-                                                  FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                                  error))
+      if (!pv_wrap_use_host_os (exports, bwrap, error))
         goto out;
     }
 

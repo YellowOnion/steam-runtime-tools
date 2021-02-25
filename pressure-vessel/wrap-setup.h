@@ -25,8 +25,13 @@
 #include "environ.h"
 
 #include "flatpak-bwrap-private.h"
+#include "flatpak-exports-private.h"
 
 void pv_wrap_share_sockets (FlatpakBwrap *bwrap,
                             PvEnviron *container_env,
                             gboolean using_a_runtime,
                             gboolean is_flatpak_env);
+
+gboolean pv_wrap_use_host_os (FlatpakExports *exports,
+                              FlatpakBwrap *bwrap,
+                              GError **error);

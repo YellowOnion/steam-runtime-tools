@@ -168,10 +168,12 @@ pv_search_path_append (GString *search_path,
   g_string_append (search_path, item);
 }
 
-gchar *
-pv_capture_output (const char * const * argv,
-                   const char * const * envp,
-                   GError **error)
+gboolean
+pv_run_sync (const char * const * argv,
+             const char * const * envp,
+             int *exit_status_out,
+             char **output_out,
+             GError **error)
 {
   gsize len;
   gint wait_status;
@@ -180,9 +182,13 @@ pv_capture_output (const char * const * argv,
   gsize i;
   g_autoptr(GString) command = g_string_new ("");
 
-  g_return_val_if_fail (argv != NULL, NULL);
-  g_return_val_if_fail (argv[0] != NULL, NULL);
+  g_return_val_if_fail (argv != NULL, FALSE);
+  g_return_val_if_fail (argv[0] != NULL, FALSE);
+  g_return_val_if_fail (output_out == NULL || *output_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (exit_status_out != NULL)
+    *exit_status_out = -1;
 
   for (i = 0; argv[i] != NULL; i++)
     {
@@ -208,12 +214,15 @@ pv_capture_output (const char * const * argv,
                      &errors,
                      &wait_status,
                      error))
-    return NULL;
+    return FALSE;
 
   g_printerr ("%s", errors);
 
-  if (!g_spawn_check_exit_status (wait_status, error))
-    return NULL;
+  if (exit_status_out != NULL)
+    {
+      if (WIFEXITED (wait_status))
+        *exit_status_out = WEXITSTATUS (wait_status);
+    }
 
   len = strlen (output);
 
@@ -223,7 +232,13 @@ pv_capture_output (const char * const * argv,
 
   g_debug ("-> %s", output);
 
-  return g_steal_pointer (&output);
+  if (!g_spawn_check_exit_status (wait_status, error))
+    return FALSE;
+
+  if (output_out != NULL)
+    *output_out = g_steal_pointer (&output);
+
+  return TRUE;
 }
 
 /*

@@ -22,6 +22,7 @@
 #include <gio/gio.h>
 
 #include "bwrap.h"
+#include "utils.h"
 
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 
@@ -42,65 +43,14 @@ pv_bwrap_run_sync (FlatpakBwrap *bwrap,
                    int *exit_status_out,
                    GError **error)
 {
-  gint exit_status;
-  g_autofree gchar *output = NULL;
-  g_autofree gchar *errors = NULL;
-  guint i;
-  g_autoptr(GString) command = g_string_new ("");
-
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (bwrap->argv->len >= 2, FALSE);
   g_return_val_if_fail (pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (exit_status_out != NULL)
-    *exit_status_out = -1;
-
-  for (i = 0; i < bwrap->argv->len; i++)
-    {
-      g_autofree gchar *quoted = NULL;
-      char *unquoted = g_ptr_array_index (bwrap->argv, i);
-
-      if (unquoted == NULL)
-        break;
-
-      quoted = g_shell_quote (unquoted);
-      g_string_append_printf (command, " %s", quoted);
-    }
-
-  g_debug ("run:%s", command->str);
-
-  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-   * and to avoid wasting a lot of time closing fds if the rlimit for
-   * maximum open file descriptors is high. Because we're waiting for the
-   * subprocess to finish anyway, it doesn't really matter that any fds
-   * that are not close-on-execute will get leaked into the child. */
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (char **) bwrap->argv->pdata,
-                     bwrap->envp,
-                     (G_SPAWN_SEARCH_PATH |
-                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
-                     NULL,
-                     NULL,
-                     &output,
-                     &errors,
-                     &exit_status,
-                     error))
-    return FALSE;
-
-  g_print ("%s", output);
-  g_printerr ("%s", errors);
-
-  if (exit_status_out != NULL)
-    {
-      if (WIFEXITED (exit_status))
-        *exit_status_out = WEXITSTATUS (exit_status);
-    }
-
-  if (!g_spawn_check_exit_status (exit_status, error))
-    return FALSE;
-
-  return TRUE;
+  return pv_run_sync ((const char * const *) bwrap->argv->pdata,
+                      (const char * const *) bwrap->envp,
+                      exit_status_out, NULL, error);
 }
 
 /**

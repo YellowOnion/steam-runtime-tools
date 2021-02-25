@@ -325,7 +325,7 @@ runtime_architecture_init (RuntimeArchitecture *self,
    * assume that this is the same as whether we can run them
    * on the host, if different. */
   argv[0] = self->capsule_capture_libs;
-  self->ld_so = pv_capture_output (argv, NULL, NULL);
+  pv_run_sync (argv, NULL, NULL, &self->ld_so, NULL);
 
   if (self->ld_so == NULL)
     {
@@ -3432,9 +3432,9 @@ pv_runtime_get_ld_so (PvRuntime *self,
                               NULL);
       flatpak_bwrap_finish (temp_bwrap);
 
-      *ld_so_in_runtime = pv_capture_output (
-          (const char * const *) temp_bwrap->argv->pdata,
-          (const char * const *) temp_bwrap->envp, NULL);
+      pv_run_sync ((const char * const *) temp_bwrap->argv->pdata,
+                   (const char * const *) temp_bwrap->envp, NULL,
+                   ld_so_in_runtime, NULL);
     }
 
   return TRUE;

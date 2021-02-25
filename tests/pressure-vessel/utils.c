@@ -86,8 +86,8 @@ test_arbitrary_key (Fixture *f,
 }
 
 static void
-test_capture_output (Fixture *f,
-                     gconstpointer context)
+test_run_sync (Fixture *f,
+               gconstpointer context)
 {
   const gchar * argv[] =
   {
@@ -96,20 +96,27 @@ test_capture_output (Fixture *f,
   g_autofree gchar *output = NULL;
   g_autoptr(GError) error = NULL;
   g_auto(GStrv) envp = g_get_environ ();
+  int exit_status = -1;
 
-  output = pv_capture_output (argv, NULL, &error);
+  pv_run_sync (argv, NULL, NULL, &output, &error);
   g_assert_cmpstr (output, ==, "hello");
   g_assert_no_error (error);
   g_clear_pointer (&output, g_free);
 
+  pv_run_sync (argv, NULL, &exit_status, NULL, &error);
+  g_assert_cmpint (exit_status, ==, 0);
+  g_assert_no_error (error);
+
   argv[1] = "hello\\nworld";    /* deliberately no trailing newline */
-  output = pv_capture_output (argv, NULL, &error);
+  pv_run_sync (argv, NULL, &exit_status, &output, &error);
+  g_assert_cmpint (exit_status, ==, 0);
   g_assert_no_error (error);
   g_assert_cmpstr (output, ==, "hello\nworld");
   g_clear_pointer (&output, g_free);
 
   argv[0] = "/nonexistent/doesnotexist";
-  output = pv_capture_output (argv, NULL, &error);
+  pv_run_sync (argv, NULL, &exit_status, &output, &error);
+  g_assert_cmpint (exit_status, ==, -1);
   g_assert_nonnull (error);
 
   if (error->domain == G_SPAWN_ERROR
@@ -134,7 +141,8 @@ test_capture_output (Fixture *f,
 
   argv[0] = "false";
   argv[1] = NULL;
-  output = pv_capture_output (argv, NULL, &error);
+  pv_run_sync (argv, NULL, &exit_status, &output, &error);
+  g_assert_cmpint (exit_status, ==, 1);
   g_assert_error (error, G_SPAWN_EXIT_ERROR, 1);
   g_assert_cmpstr (output, ==, NULL);
   g_clear_error (&error);
@@ -142,7 +150,8 @@ test_capture_output (Fixture *f,
   argv[0] = "sh";
   argv[1] = "-euc";
   argv[2] = "echo \"$PATH\"";
-  output = pv_capture_output (argv, NULL, &error);
+  pv_run_sync (argv, NULL, &exit_status, &output, &error);
+  g_assert_cmpint (exit_status, ==, 0);
   g_assert_no_error (error);
   g_assert_cmpstr (output, ==, g_getenv ("PATH"));
   g_clear_pointer (&output, g_free);
@@ -151,7 +160,8 @@ test_capture_output (Fixture *f,
   argv[0] = "sh";
   argv[1] = "-euc";
   argv[2] = "echo \"${FOO-unset}\"";
-  output = pv_capture_output (argv, (const char * const *) envp, &error);
+  pv_run_sync (argv, (const char * const *) envp, &exit_status, &output, &error);
+  g_assert_cmpint (exit_status, ==, 0);
   g_assert_no_error (error);
   g_assert_cmpstr (output, ==, "bar");
   g_clear_pointer (&output, g_free);
@@ -160,7 +170,8 @@ test_capture_output (Fixture *f,
   argv[0] = "sh";
   argv[1] = "-euc";
   argv[2] = "echo \"${FOO-unset}\"";
-  output = pv_capture_output (argv, (const char * const *) envp, &error);
+  pv_run_sync (argv, (const char * const *) envp, &exit_status, &output, &error);
+  g_assert_cmpint (exit_status, ==, 0);
   g_assert_no_error (error);
   g_assert_cmpstr (output, ==, "unset");
   g_clear_pointer (&output, g_free);
@@ -371,8 +382,8 @@ main (int argc,
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/arbitrary-key", Fixture, NULL,
               setup, test_arbitrary_key, teardown);
-  g_test_add ("/capture-output", Fixture, NULL,
-              setup, test_capture_output, teardown);
+  g_test_add ("/run-sync", Fixture, NULL,
+              setup, test_run_sync, teardown);
   g_test_add ("/delete-dangling-symlink", Fixture, NULL,
               setup, test_delete_dangling_symlink, teardown);
   g_test_add ("/envp-cmp", Fixture, NULL, setup, test_envp_cmp, teardown);

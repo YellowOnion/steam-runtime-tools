@@ -929,21 +929,12 @@ assert_vulkan_icd_no_error (SrtVulkanIcd *icd)
 }
 
 static void
-test_icd_vulkan (Fixture *f,
-                 gconstpointer context)
+assert_vulkan_icds (const SrtObjectList *icds,
+                    gconstpointer context)
 {
   const Config *config = context;
-  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
-  g_autoptr(SrtObjectList) icds = NULL;
   const GList *iter;
   g_autofree gchar *resolved = NULL;
-  const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
-
-  srt_system_info_set_environ (info, f->fake_icds_envp);
-  srt_system_info_set_sysroot (info, f->sysroot);
-  srt_system_info_set_helpers_path (info, f->builddir);
-
-  icds = srt_system_info_list_vulkan_icds (info, multiarchs);
 
   for (iter = icds; iter != NULL; iter = iter->next)
     {
@@ -1327,6 +1318,41 @@ test_icd_vulkan (Fixture *f,
       iter = iter->next;
       g_assert_null (iter);
     }
+}
+
+static void
+test_icd_vulkan_explicit_multiarch (Fixture *f,
+                                    gconstpointer context)
+{
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) icds = NULL;
+  const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  srt_system_info_set_environ (info, f->fake_icds_envp);
+  srt_system_info_set_sysroot (info, f->sysroot);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  icds = srt_system_info_list_vulkan_icds (info, multiarchs);
+
+  assert_vulkan_icds (icds, context);
+}
+
+static void
+test_icd_vulkan_implicit_multiarch (Fixture *f,
+                                   gconstpointer context)
+{
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) icds = NULL;
+  const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  srt_system_info_set_environ (info, f->fake_icds_envp);
+  srt_system_info_set_sysroot (info, f->sysroot);
+  srt_system_info_set_helpers_path (info, f->builddir);
+  srt_system_info_set_multiarch_tuples (info, multiarchs);
+
+  icds = srt_system_info_list_vulkan_icds (info, NULL);
+
+  assert_vulkan_icds (icds, context);
 }
 
 typedef struct
@@ -2899,16 +2925,26 @@ main (int argc,
               setup, test_icd_egl, teardown);
   g_test_add ("/graphics/icd/egl/xdg", Fixture, &xdg_config,
               setup, test_icd_egl, teardown);
-  g_test_add ("/graphics/icd/vulkan/basic", Fixture, NULL,
-              setup, test_icd_vulkan, teardown);
-  g_test_add ("/graphics/icd/vulkan/filenames", Fixture, &filename_config,
-              setup, test_icd_vulkan, teardown);
-  g_test_add ("/graphics/icd/vulkan/flatpak", Fixture, &flatpak_config,
-              setup, test_icd_vulkan, teardown);
-  g_test_add ("/graphics/icd/vulkan/relative", Fixture, &relative_config,
-              setup, test_icd_vulkan, teardown);
-  g_test_add ("/graphics/icd/vulkan/xdg", Fixture, &xdg_config,
-              setup, test_icd_vulkan, teardown);
+  g_test_add ("/graphics/icd/vulkan_exp/basic", Fixture, NULL,
+              setup, test_icd_vulkan_explicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_exp/filenames", Fixture, &filename_config,
+              setup, test_icd_vulkan_explicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_exp/flatpak", Fixture, &flatpak_config,
+              setup, test_icd_vulkan_explicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_exp/relative", Fixture, &relative_config,
+              setup, test_icd_vulkan_explicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_exp/xdg", Fixture, &xdg_config,
+              setup, test_icd_vulkan_explicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_imp/basic", Fixture, NULL,
+              setup, test_icd_vulkan_implicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_imp/filenames", Fixture, &filename_config,
+              setup, test_icd_vulkan_implicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_imp/flatpak", Fixture, &flatpak_config,
+              setup, test_icd_vulkan_implicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_imp/relative", Fixture, &relative_config,
+              setup, test_icd_vulkan_implicit_multiarch, teardown);
+  g_test_add ("/graphics/icd/vulkan_imp/xdg", Fixture, &xdg_config,
+              setup, test_icd_vulkan_implicit_multiarch, teardown);
 
   g_test_add ("/graphics/layers/vulkan/xdg", Fixture, NULL,
               setup, test_layer_vulkan, teardown);

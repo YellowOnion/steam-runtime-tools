@@ -2796,6 +2796,7 @@ srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
+  forget_icds (self);
   forget_layers (self);
   forget_locales (self);
 
@@ -2866,6 +2867,8 @@ srt_system_info_set_multiarch_tuples (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
+  forget_icds (self);
+  forget_layers (self);
   forget_locales (self);
 
   g_array_set_size (self->multiarch_tuples, 0);
@@ -3099,11 +3102,9 @@ srt_system_info_set_test_flags (SrtSystemInfo *self,
  * srt_system_info_list_egl_icds:
  * @self: The #SrtSystemInfo object
  * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
- *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL.
- *  If not %NULL, and we are running in a Flatpak environment, look for ICDs in
- *  the ABI-specific locations. Also if not %NULL, duplicated Vulkan ICDs are
- *  searched by their absolute path, obtained using "inspect-library" in the
- *  provided multiarch tuples instead of just their resolved library path.
+ *  Force the usage of the provided multiarch tuples like %SRT_ABI_I386,
+ *  representing ABIs. If %NULL, the multiarch list stored in @self will
+ *  be used instead.
  *
  * List the available EGL ICDs, using the same search paths as GLVND.
  *
@@ -3120,8 +3121,11 @@ srt_system_info_set_test_flags (SrtSystemInfo *self,
  * specific library, which will only be usable for the architecture for
  * which it was compiled.
  *
- * @multiarch_tuples is used if running in a Flatpak environment, to
- * match the search paths used by the freedesktop.org runtime's patched
+ * Duplicated EGL ICDs are searched by their absolute path, obtained
+ * using "inspect-library" in @multiarch_tuples, or
+ * `srt_system_info_dup_multiarch_tuples()` if %NULL.
+ * Also, if running in a Flatpak environment, the multiarch tuples are used
+ * to march the search paths used by the freedesktop.org runtime's patched
  * GLVND.
  *
  * Returns: (transfer full) (element-type SrtEglIcd): A list of
@@ -3140,8 +3144,16 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
   if (!self->icds.have_egl && !self->immutable_values)
     {
       g_assert (self->icds.egl == NULL);
+      g_auto(GStrv) stored_multiarch_tuples = NULL;
+
+      if (multiarch_tuples == NULL)
+        stored_multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
+
       self->icds.egl = _srt_load_egl_icds (self->helpers_path, self->sysroot,
-                                           self->env, multiarch_tuples);
+                                           self->env,
+                                           multiarch_tuples == NULL ?
+                                             (const char * const *) stored_multiarch_tuples :
+                                             multiarch_tuples);
       self->icds.have_egl = TRUE;
     }
 
@@ -3155,11 +3167,9 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
  * srt_system_info_list_vulkan_icds:
  * @self: The #SrtSystemInfo object
  * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
- *  A list of multiarch tuples like %SRT_ABI_I386, representing ABIs, or %NULL.
- *  If not %NULL, and we are running in a Flatpak environment, look for ICDs in
- *  the ABI-specific locations. Also if not %NULL, duplicated Vulkan ICDs are
- *  searched by their absolute path, obtained using "inspect-library" in the
- *  provided multiarch tuples instead of just their resolved library path.
+ *  Force the usage of the provided multiarch tuples like %SRT_ABI_I386,
+ *  representing ABIs. If %NULL, the multiarch list stored in @self will
+ *  be used instead.
  *
  * List the available Vulkan ICDs, using the same search paths as the
  * reference vulkan-loader.
@@ -3178,8 +3188,11 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
  * will only be usable for the architecture for which it was compiled
  * (for example, this approach is used in Mesa).
  *
- * @multiarch_tuples is used if running in a Flatpak environment, to
- * match the search paths used by the freedesktop.org runtime's patched
+ * Duplicated Vulkan ICDs are searched by their absolute path, obtained
+ * using "inspect-library" in @multiarch_tuples, or
+ * `srt_system_info_dup_multiarch_tuples()` if %NULL.
+ * Also, if running in a Flatpak environment, the multiarch tuples are used
+ * to march the search paths used by the freedesktop.org runtime's patched
  * vulkan-loader.
  *
  * Returns: (transfer full) (element-type SrtVulkanIcd): A list of
@@ -3198,8 +3211,16 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
   if (!self->icds.have_vulkan && !self->immutable_values)
     {
       g_assert (self->icds.vulkan == NULL);
+      g_auto(GStrv) stored_multiarch_tuples = NULL;
+
+      if (multiarch_tuples == NULL)
+        stored_multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
+
       self->icds.vulkan = _srt_load_vulkan_icds (self->helpers_path, self->sysroot,
-                                                 self->env, multiarch_tuples);
+                                                 self->env,
+                                                 multiarch_tuples == NULL ?
+                                                   (const char * const *) stored_multiarch_tuples :
+                                                   multiarch_tuples);
       self->icds.have_vulkan = TRUE;
     }
 

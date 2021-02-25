@@ -1431,13 +1431,16 @@ pv_runtime_initable_init (GInitable *initable,
         }
     }
 
-  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE,
-                       &self->provider_fd, error))
-    return FALSE;
+  if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
+    {
+      if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE,
+                           &self->provider_fd, error))
+        return FALSE;
 
-  /* Path that, when resolved in the host namespace, points to the provider */
-  self->provider_in_host_namespace =
-    pv_current_namespace_path_to_host_path (self->provider_in_current_namespace);
+      /* Path that, when resolved in the host namespace, points to the provider */
+      self->provider_in_host_namespace =
+        pv_current_namespace_path_to_host_path (self->provider_in_current_namespace);
+    }
 
   /* If we are in a Flatpak environment we expect to have the host system
    * mounted in `/run/host`. Otherwise we assume that the host system, in the
@@ -1788,7 +1791,11 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   const gchar *ld_library_path;
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
-  FlatpakBwrap *ret = pv_bwrap_copy (self->container_access_adverb);
+  FlatpakBwrap *ret;
+
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, NULL);
+
+  ret = pv_bwrap_copy (self->container_access_adverb);
 
   /* If we have a custom "LD_LIBRARY_PATH", we want to preserve
    * it when calling capsule-capture-libs */
@@ -1834,6 +1841,8 @@ collect_s2tc (PvRuntime *self,
                                                   self->provider_in_current_namespace,
                                                   s2tc,
                                                   NULL);
+
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
 
   if (g_file_test (s2tc_in_current_namespace, G_FILE_TEST_EXISTS))
     {
@@ -1940,6 +1949,7 @@ pv_runtime_capture_libraries (PvRuntime *self,
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize i;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (destination != NULL, FALSE);
   g_return_val_if_fail (patterns != NULL, FALSE);
@@ -2006,6 +2016,7 @@ bind_icd (PvRuntime *self,
   gsize dir_elements_after = 0;
   const gchar *subdir = requested_subdir;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
   g_return_val_if_fail (details != NULL, FALSE);
@@ -2235,8 +2246,9 @@ bind_runtime_base (PvRuntime *self,
 
   pv_environ_lock_env (container_env, "XDG_RUNTIME_DIR", xrd);
 
-  if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
-      || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0)
+  if ((self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
+      && (g_strcmp0 (self->provider_in_host_namespace, "/") != 0
+          || g_strcmp0 (self->provider_in_container_namespace, "/run/host") != 0))
     {
       g_autofree gchar *provider_etc = NULL;
 
@@ -2293,7 +2305,8 @@ bind_runtime_base (PvRuntime *self,
           if (g_strv_contains (from_host, dest))
             continue;
 
-          if (g_strv_contains (from_provider, dest))
+          if ((self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
+              && g_strv_contains (from_provider, dest))
             continue;
 
           full = g_build_filename (self->runtime_files,
@@ -2392,34 +2405,37 @@ bind_runtime_base (PvRuntime *self,
                                 NULL);
     }
 
-  for (i = 0; from_provider[i] != NULL; i++)
+  if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
     {
-      const char *item = from_provider[i];
-      g_autoptr(GError) local_error = NULL;
-      g_autofree char *path_in_provider = NULL;
-      glnx_autofd int fd = -1;
-
-      fd = _srt_resolve_in_sysroot (self->provider_fd, item,
-                                    SRT_RESOLVE_FLAGS_NONE,
-                                    &path_in_provider,
-                                    &local_error);
-
-      if (fd >= 0)
+      for (i = 0; from_provider[i] != NULL; i++)
         {
-          g_autofree char *host_path = NULL;
+          const char *item = from_provider[i];
+          g_autoptr(GError) local_error = NULL;
+          g_autofree char *path_in_provider = NULL;
+          glnx_autofd int fd = -1;
 
-          host_path = g_build_filename (self->provider_in_host_namespace,
-                                        path_in_provider, NULL);
-          flatpak_bwrap_add_args (bwrap,
-                                  "--ro-bind", host_path, item,
-                                  NULL);
-        }
-      else
-        {
-          g_debug ("Cannot resolve \"%s\" in \"%s\": %s",
-                   item, self->provider_in_current_namespace,
-                   local_error->message);
-          g_clear_error (&local_error);
+          fd = _srt_resolve_in_sysroot (self->provider_fd, item,
+                                        SRT_RESOLVE_FLAGS_NONE,
+                                        &path_in_provider,
+                                        &local_error);
+
+          if (fd >= 0)
+            {
+              g_autofree char *host_path = NULL;
+
+              host_path = g_build_filename (self->provider_in_host_namespace,
+                                            path_in_provider, NULL);
+              flatpak_bwrap_add_args (bwrap,
+                                      "--ro-bind", host_path, item,
+                                      NULL);
+            }
+          else
+            {
+              g_debug ("Cannot resolve \"%s\" in \"%s\": %s",
+                       item, self->provider_in_current_namespace,
+                       local_error->message);
+              g_clear_error (&local_error);
+            }
         }
     }
 
@@ -2513,6 +2529,7 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                GError **error)
 {
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -2943,6 +2960,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
   g_autofree gchar *ld_so_relative_to_provider = NULL;
   g_autofree gchar *ld_so_in_provider = NULL;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   g_debug ("Making provider's ld.so visible in container");
@@ -3061,6 +3079,7 @@ setup_json_manifest (PvRuntime *self,
   gboolean need_provider_json = FALSE;
   gsize i;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   if (SRT_IS_VULKAN_LAYER (details->icd))
@@ -3205,6 +3224,7 @@ setup_each_json_manifest (PvRuntime *self,
   gsize j;
   g_autofree gchar *write_to_dir = NULL;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   write_to_dir = g_build_filename (self->overrides,
@@ -3237,6 +3257,7 @@ collect_vulkan_layers (PvRuntime *self,
 {
   gsize j;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (dependency_patterns != NULL, FALSE);
   g_return_val_if_fail (dir_name != NULL, FALSE);
 
@@ -3358,8 +3379,6 @@ pv_runtime_get_ld_so (PvRuntime *self,
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *etc = NULL;
-      g_autofree gchar *provider_etc = NULL;
-      g_autofree gchar *provider_etc_dest = NULL;
 
       /* Do it the hard way, by asking a process running in the
        * container (or at least a container resembling the one we
@@ -3384,22 +3403,28 @@ pv_runtime_get_ld_so (PvRuntime *self,
                               "/etc",
                               NULL);
 
-      if (!pv_bwrap_bind_usr (temp_bwrap,
-                              self->provider_in_host_namespace,
-                              self->provider_in_current_namespace,
-                              self->provider_in_container_namespace,
-                              error))
-        return FALSE;
+      if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
+        {
+          g_autofree gchar *provider_etc = NULL;
+          g_autofree gchar *provider_etc_dest = NULL;
 
-      provider_etc = g_build_filename (self->provider_in_host_namespace,
-                                       "etc", NULL);
-      provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
-                                            "etc", NULL);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              "--ro-bind",
-                              provider_etc,
-                              provider_etc_dest,
-                              NULL);
+          if (!pv_bwrap_bind_usr (temp_bwrap,
+                                  self->provider_in_host_namespace,
+                                  self->provider_in_current_namespace,
+                                  self->provider_in_container_namespace,
+                                  error))
+            return FALSE;
+
+          provider_etc = g_build_filename (self->provider_in_host_namespace,
+                                           "etc", NULL);
+          provider_etc_dest = g_build_filename (self->provider_in_container_namespace,
+                                                "etc", NULL);
+          flatpak_bwrap_add_args (temp_bwrap,
+                                  "--ro-bind",
+                                  provider_etc,
+                                  provider_etc_dest,
+                                  NULL);
+        }
 
       flatpak_bwrap_set_env (temp_bwrap, "PATH", "/usr/bin:/bin", TRUE);
       flatpak_bwrap_add_args (temp_bwrap,
@@ -3508,6 +3533,7 @@ pv_runtime_collect_libc_family (PvRuntime *self,
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   g_autofree char *libc_target = NULL;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   if (!pv_runtime_take_ld_so_from_provider (self, arch,
@@ -3621,6 +3647,8 @@ pv_runtime_collect_libdrm_data (PvRuntime *self,
   g_autofree char *target = NULL;
   target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
 
+  g_return_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK);
+
   if (target != NULL)
     {
       g_autofree gchar *dir = NULL;
@@ -3672,6 +3700,7 @@ pv_runtime_finish_libdrm_data (PvRuntime *self,
 {
   g_autofree gchar *best_libdrm_data_in_provider = NULL;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
@@ -3725,6 +3754,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
   GHashTableIter iter;
   const gchar *gconv_path;
 
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
   if (self->any_libc_from_provider && !self->all_libc_from_provider)
@@ -3871,6 +3901,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_strdup_printf ("%s/", self->provider_in_container_namespace);
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
   g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
   g_return_val_if_fail (container_env != NULL, FALSE);

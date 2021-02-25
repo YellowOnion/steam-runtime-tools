@@ -395,18 +395,47 @@ class Gui:
         self.grid.attach(label, 1, row, 1, 1)
         row += 1
 
-        self.host_graphics_check = Gtk.CheckButton.new_with_label(
-            'Use host-system graphics stack'
-        )
-        value = boolean_environment('PRESSURE_VESSEL_HOST_GRAPHICS', True)
-        self.host_graphics_check.set_active(value)
-        self.grid.attach(self.host_graphics_check, 1, row, 1, 1)
+        label = Gtk.Label.new('Graphics stack')
+        self.grid.attach(label, 0, row, 1, 1)
+
+        self.graphics_provider_combo = Gtk.ComboBoxText.new()
+
+        env = os.getenv('PRESSURE_VESSEL_GRAPHICS_PROVIDER')
+
+        if env is not None:
+            self.graphics_provider_combo.append(
+                env, '$PRESSURE_VESSEL_GRAPHICS_PROVIDER ({})'.format(
+                    env or 'empty'
+                ),
+            )
+
+        if env is None or env != '/':
+            self.graphics_provider_combo.append(
+                '/', 'Current execution environment',
+            )
+
+        if (
+            (env is None or env != '/run/host')
+            and os.path.isdir('/run/host/etc')
+            and os.path.isdir('/run/host/usr')
+        ):
+            self.graphics_provider_combo.append(
+                '/run/host', 'Host system',
+            )
+
+        if env is None or env != '':
+            self.graphics_provider_combo.append(
+                '', "Container's own libraries (probably won't work)",
+            )
+
+        self.graphics_provider_combo.set_active(0)
+        self.grid.attach(self.graphics_provider_combo, 1, row, 1, 1)
         row += 1
 
         label = Gtk.Label.new('')
         label.set_markup(
             '<small><i>'
-            "Most games and GPUs won't work when this is disabled."
+            "Most games and GPUs won't work if this is changed."
             '</i></small>'
         )
         label.set_halign(Gtk.Align.START)
@@ -602,11 +631,11 @@ class Gui:
         if combo.get_active_id() == '/':
             self.copy_runtime_check.set_sensitive(False)
             self.gc_runtimes_check.set_sensitive(False)
-            self.host_graphics_check.set_sensitive(False)
+            self.graphics_provider_combo.set_sensitive(False)
         else:
             self.copy_runtime_check.set_sensitive(True)
             self.gc_runtimes_check.set_sensitive(True)
-            self.host_graphics_check.set_sensitive(True)
+            self.graphics_provider_combo.set_sensitive(True)
 
     def run_cb(self, _ignored=None):
         # type: (typing.Any) -> None
@@ -633,13 +662,10 @@ class Gui:
             else:
                 argv.append('--runtime=' + id)
 
-        if self.host_graphics_check.get_active():
-            if os.path.isdir('/run/host'):
-                argv.append('--graphics-provider=/run/host')
-            else:
-                argv.append('--graphics-provider=/')
-        else:
-            argv.append('--graphics-provider=')
+            argv.append(
+                '--graphics-provider='
+                + self.graphics_provider_combo.get_active_id()
+            )
 
         if self.copy_runtime_check.get_active():
             os.makedirs(self.var_path, mode=0o755, exist_ok=True)

@@ -44,6 +44,7 @@
 #include "runtime.h"
 #include "utils.h"
 #include "wrap-interactive.h"
+#include "wrap-setup.h"
 
 /* List of variables that are stripped down from the environment when
  * using the secure-execution mode.
@@ -2254,96 +2255,10 @@ main (int argc,
       flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
     }
 
-  /* Use code borrowed from Flatpak to share various other bits of the
-   * execution environment with the host system */
-    {
-      g_autoptr(FlatpakBwrap) sharing_bwrap =
-        flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      g_auto(GStrv) envp = NULL;
-
-      /* If these are set by flatpak_run_add_x11_args(), etc., we'll
-       * change them from locked-and-unset to locked-and-set later.
-       * Every variable that is unset with flatpak_bwrap_unset_env() in
-       * the functions we borrow from Flatpak (below) should be listed
-       * here. */
-      pv_environ_lock_env (container_env, "DISPLAY", NULL);
-      pv_environ_lock_env (container_env, "PULSE_SERVER", NULL);
-      pv_environ_lock_env (container_env, "XAUTHORITY", NULL);
-
-      flatpak_run_add_font_path_args (sharing_bwrap);
-
-      /* We need to set up IPC rendezvous points relatively late, so that
-       * even if we are sharing /tmp via --filesystem=/tmp, we'll still
-       * mount our own /tmp/.X11-unix over the top of the OS's. */
-      if (runtime != NULL)
-        {
-          flatpak_run_add_wayland_args (sharing_bwrap);
-
-          /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
-           * but it might be different on the host system. As a workaround we simply
-           * bind the whole "/tmp/.X11-unix" directory and later unset the container
-           * "DISPLAY" env.
-           */
-          if (is_flatpak_env)
-            {
-              flatpak_bwrap_add_args (sharing_bwrap,
-                                      "--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix",
-                                      NULL);
-            }
-          else
-            {
-              flatpak_run_add_x11_args (sharing_bwrap, TRUE);
-            }
-
-          flatpak_run_add_pulseaudio_args (sharing_bwrap);
-          flatpak_run_add_session_dbus_args (sharing_bwrap);
-          flatpak_run_add_system_dbus_args (sharing_bwrap);
-        }
-
-      envp = pv_bwrap_steal_envp (sharing_bwrap);
-
-      for (i = 0; envp[i] != NULL; i++)
-        {
-          static const char * const known_vars[] =
-          {
-            "DBUS_SESSION_BUS_ADDRESS",
-            "DBUS_SYSTEM_BUS_ADDRESS",
-            "DISPLAY",
-            "PULSE_CLIENTCONFIG",
-            "PULSE_SERVER",
-            "XAUTHORITY",
-          };
-          char *equals = strchr (envp[i], '=');
-          const char *var = envp[i];
-          const char *val = NULL;
-          gsize j;
-
-          if (equals != NULL)
-            {
-              *equals = '\0';
-              val = equals + 1;
-            }
-
-          for (j = 0; j < G_N_ELEMENTS (known_vars); j++)
-            {
-              if (strcmp (var, known_vars[j]) == 0)
-                break;
-            }
-
-          /* If this warning is reached, we might need to add this
-           * variable to the block of
-           * pv_environ_lock_env (container_env, ., NULL) calls above */
-          if (j >= G_N_ELEMENTS (known_vars))
-            g_warning ("Extra environment variable %s set during container "
-                       "setup but not in known_vars; check logic",
-                       var);
-
-          pv_environ_lock_env (container_env, var, val);
-        }
-
-      g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
-      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
-    }
+  if (bwrap != NULL)
+    pv_wrap_share_sockets (bwrap, container_env,
+                           (runtime != NULL),
+                           is_flatpak_env);
 
   if (is_flatpak_env)
     {

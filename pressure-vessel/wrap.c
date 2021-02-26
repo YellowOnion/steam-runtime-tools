@@ -156,7 +156,7 @@ check_bwrap (const char *tools_dir,
 
   if (bwrap_executable == NULL)
     {
-      g_warning ("Cannot find bwrap");
+      pv_log_failure ("Cannot find bwrap");
     }
   else if (only_prepare)
     {
@@ -186,18 +186,18 @@ check_bwrap (const char *tools_dir,
                          &wait_status,
                          error))
         {
-          g_warning ("Cannot run bwrap: %s", local_error->message);
+          pv_log_failure ("Cannot run bwrap: %s", local_error->message);
           g_clear_error (&local_error);
         }
       else if (wait_status != 0)
         {
-          g_warning ("Cannot run bwrap: wait status %d", wait_status);
+          pv_log_failure ("Cannot run bwrap: wait status %d", wait_status);
 
           if (child_stdout != NULL && child_stdout[0] != '\0')
-            g_warning ("Output:\n%s", child_stdout);
+            pv_log_failure ("Output:\n%s", child_stdout);
 
           if (child_stderr != NULL && child_stderr[0] != '\0')
-            g_warning ("Diagnostic output:\n%s", child_stderr);
+            pv_log_failure ("Diagnostic output:\n%s", child_stderr);
         }
       else
         {
@@ -241,14 +241,14 @@ check_launch_on_host (const char *launch_executable,
 
   if (wait_status != 0)
     {
-      g_warning ("Cannot run commands on host system: wait status %d",
+      pv_log_failure ("Cannot run commands on host system: wait status %d",
                  wait_status);
 
       if (child_stdout != NULL && child_stdout[0] != '\0')
-        g_warning ("Output:\n%s", child_stdout);
+        pv_log_failure ("Output:\n%s", child_stdout);
 
       if (child_stderr != NULL && child_stderr[0] != '\0')
-        g_warning ("Diagnostic output:\n%s", child_stderr);
+        pv_log_failure ("Diagnostic output:\n%s", child_stderr);
 
       return glnx_throw (error, "Unable to run a command on the host system");
     }
@@ -1248,6 +1248,8 @@ tristate_environment (const gchar *name)
   return TRISTATE_MAYBE;
 }
 
+#define usage_error(...) pv_log_failure (__VA_ARGS__)
+
 int
 main (int argc,
       char *argv[])
@@ -1296,8 +1298,8 @@ main (int argc,
 
   if (g_getenv ("STEAM_RUNTIME") != NULL)
     {
-      g_warning ("This program should not be run in the Steam Runtime. "
-                 "Use pressure-vessel-unruntime instead.");
+      usage_error ("This program should not be run in the Steam Runtime. "
+                   "Use pressure-vessel-unruntime instead.");
       ret = 2;
       goto out;
     }
@@ -1393,7 +1395,7 @@ main (int argc,
 
       if (opt_runtime_id[0] == '-' || opt_runtime_id[0] == '.')
         {
-          g_warning ("--runtime-id must not start with dash or dot");
+          usage_error ("--runtime-id must not start with dash or dot");
           goto out;
         }
 
@@ -1401,8 +1403,8 @@ main (int argc,
         {
           if (!g_ascii_isalnum (*p) && *p != '_' && *p != '-' && *p != '.')
             {
-              g_warning ("--runtime-id may only contain "
-                         "alphanumerics, underscore, dash or dot");
+              usage_error ("--runtime-id may only contain "
+                           "alphanumerics, underscore, dash or dot");
               goto out;
             }
         }
@@ -1413,7 +1415,7 @@ main (int argc,
 
   if (opt_runtime != NULL && opt_runtime_archive != NULL)
     {
-      g_warning ("--runtime and --runtime-archive cannot both be used");
+      usage_error ("--runtime and --runtime-archive cannot both be used");
       goto out;
     }
 
@@ -1447,8 +1449,8 @@ main (int argc,
   g_assert (opt_graphics_provider != NULL);
   if (opt_graphics_provider[0] != '\0' && opt_graphics_provider[0] != '/')
     {
-      g_warning ("--graphics-provider path must be absolute, not \"%s\"",
-                 opt_graphics_provider);
+      usage_error ("--graphics-provider path must be absolute, not \"%s\"",
+                   opt_graphics_provider);
       goto out;
     }
 
@@ -1486,7 +1488,7 @@ main (int argc,
 
   if (argc < 2 && !opt_test && !opt_only_prepare)
     {
-      g_warning ("An executable to run is required");
+      usage_error ("An executable to run is required");
       goto out;
     }
 
@@ -1500,7 +1502,7 @@ main (int argc,
 
   if (opt_terminal == PV_TERMINAL_NONE && opt_shell != PV_SHELL_NONE)
     {
-      g_warning ("--terminal=none is incompatible with --shell");
+      usage_error ("--terminal=none is incompatible with --shell");
       goto out;
     }
 
@@ -1563,8 +1565,8 @@ main (int argc,
     }
   else
     {
-      g_warning ("Either --home, --freedesktop-app-id, --steam-app-id "
-                 "or $SteamAppId is required");
+      usage_error ("Either --home, --freedesktop-app-id, --steam-app-id "
+                   "or $SteamAppId is required");
       goto out;
     }
 
@@ -1576,8 +1578,8 @@ main (int argc,
 
           if (equals == NULL)
             {
-              g_warning ("--env-if-host argument must be of the form "
-                         "NAME=VALUE, not \"%s\"", opt_env_if_host[i]);
+              usage_error ("--env-if-host argument must be of the form "
+                           "NAME=VALUE, not \"%s\"", opt_env_if_host[i]);
               goto out;
             }
         }
@@ -1585,7 +1587,7 @@ main (int argc,
 
   if (opt_only_prepare && opt_test)
     {
-      g_warning ("--only-prepare and --test are mutually exclusive");
+      usage_error ("--only-prepare and --test are mutually exclusive");
       goto out;
     }
 
@@ -1596,14 +1598,14 @@ main (int argc,
           if (strchr (opt_filesystems[i], ':') != NULL ||
               strchr (opt_filesystems[i], '\\') != NULL)
             {
-              g_warning ("':' and '\\' in --filesystem argument "
-                         "not handled yet");
+              usage_error ("':' and '\\' in --filesystem argument "
+                           "not handled yet");
               goto out;
             }
           else if (!g_path_is_absolute (opt_filesystems[i]))
             {
-              g_warning ("--filesystem argument must be an absolute "
-                         "path, not \"%s\"", opt_filesystems[i]);
+              usage_error ("--filesystem argument must be an absolute "
+                           "path, not \"%s\"", opt_filesystems[i]);
               goto out;
             }
         }
@@ -1611,7 +1613,7 @@ main (int argc,
 
   if (opt_copy_runtime && opt_variable_dir == NULL)
     {
-      g_warning ("--copy-runtime requires --variable-dir");
+      usage_error ("--copy-runtime requires --variable-dir");
       goto out;
     }
 
@@ -2592,7 +2594,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    g_warning ("%s", local_error->message);
+    pv_log_failure ("%s", local_error->message);
 
   for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
     g_clear_pointer (&opt_preload_modules[i].values, g_ptr_array_unref);

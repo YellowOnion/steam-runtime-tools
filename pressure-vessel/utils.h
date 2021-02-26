@@ -39,6 +39,11 @@
 #define PR_SET_CHILD_SUBREAPER 36
 #endif
 
+#define PV_LOG_LEVEL_FAILURE (1 << G_LOG_LEVEL_USER_SHIFT)
+
+#define pv_log_failure(...) \
+  g_log (G_LOG_DOMAIN, PV_LOG_LEVEL_FAILURE, __VA_ARGS__)
+
 int pv_envp_cmp (const void *p1,
                  const void *p2);
 

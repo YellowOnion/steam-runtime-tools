@@ -585,6 +585,8 @@ adjust_exports (FlatpakBwrap *bwrap,
 {
   gsize i = 0;
 
+  g_debug ("Exported directories:");
+
   while (i < bwrap->argv->len)
     {
       const char *opt = bwrap->argv->pdata[i];
@@ -596,6 +598,10 @@ adjust_exports (FlatpakBwrap *bwrap,
           g_assert (i + 3 <= bwrap->argv->len);
           /* pdata[i + 1] is the target: unchanged. */
           /* pdata[i + 2] is a path in the final container: unchanged. */
+          g_debug ("%s %s %s",
+                   opt,
+                   (const char *) bwrap->argv->pdata[i + 1],
+                   (const char *) bwrap->argv->pdata[i + 2]);
           i += 3;
         }
       else if (g_str_equal (opt, "--dir") ||
@@ -603,6 +609,9 @@ adjust_exports (FlatpakBwrap *bwrap,
         {
           g_assert (i + 2 <= bwrap->argv->len);
           /* pdata[i + 1] is a path in the final container: unchanged. */
+          g_debug ("%s %s",
+                   opt,
+                   (const char *) bwrap->argv->pdata[i + 1]);
           i += 2;
         }
       else if (g_str_equal (opt, "--ro-bind") ||
@@ -624,6 +633,10 @@ adjust_exports (FlatpakBwrap *bwrap,
           else
             bwrap->argv->pdata[i + 1] = g_steal_pointer (&src);
 
+          g_debug ("%s %s %s",
+                   opt,
+                   (const char *) bwrap->argv->pdata[i + 1],
+                   (const char *) bwrap->argv->pdata[i + 2]);
           i += 3;
         }
       else
@@ -1265,6 +1278,7 @@ main (int argc,
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
+  g_autoptr(FlatpakBwrap) bwrap_filesystem_arguments = NULL;
   g_autoptr(FlatpakBwrap) argv_in_container = NULL;
   g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
@@ -1723,6 +1737,7 @@ main (int argc,
       /* Start with an empty environment and populate it later */
       bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       flatpak_bwrap_add_arg (bwrap, bwrap_executable);
+      bwrap_filesystem_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       exports = flatpak_exports_new ();
     }
 
@@ -1752,7 +1767,7 @@ main (int argc,
 
       /* Start with just the root tmpfs (which appears automatically)
        * and the standard API filesystems */
-      pv_bwrap_add_api_filesystems (bwrap);
+      pv_bwrap_add_api_filesystems (bwrap_filesystem_arguments);
 
       /* The FlatpakExports will populate /run/host for us */
       flatpak_exports_add_host_etc_expose (exports,
@@ -1762,7 +1777,7 @@ main (int argc,
 
       /* steam-runtime-system-info uses this to detect pressure-vessel, so we
        * need to create it even if it will be empty */
-      flatpak_bwrap_add_args (bwrap,
+      flatpak_bwrap_add_args (bwrap_filesystem_arguments,
                               "--dir",
                               "/run/pressure-vessel",
                               NULL);
@@ -1854,7 +1869,7 @@ main (int argc,
 
       if (!pv_runtime_bind (runtime,
                             exports,
-                            bwrap,
+                            bwrap_filesystem_arguments,
                             container_env,
                             error))
         goto out;
@@ -1870,16 +1885,17 @@ main (int argc,
     {
       g_assert (!is_flatpak_env);
 
-      if (!pv_wrap_use_host_os (exports, bwrap, error))
+      if (!pv_wrap_use_host_os (exports, bwrap_filesystem_arguments, error))
         goto out;
     }
 
   /* Protect other users' homes (but guard against the unlikely
-   * situation that they don't exist) */
+   * situation that they don't exist). We use the FlatpakExports for this
+   * so that it can be overridden by --filesystem=/home, and so that it
+   * is sorted correctly with respect to all the other
+   * home-directory-related exports. */
   if (g_file_test ("/home", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--tmpfs", "/home",
-                            NULL);
+    flatpak_exports_add_path_tmpfs (exports, "/home");
 
   g_debug ("Making home directory available...");
 
@@ -1907,7 +1923,8 @@ main (int argc,
         }
       else
         {
-          if (!use_fake_home (exports, bwrap, container_env, opt_fake_home,
+          if (!use_fake_home (exports, bwrap_filesystem_arguments,
+                              container_env, opt_fake_home,
                               error))
             goto out;
         }
@@ -2126,6 +2143,13 @@ main (int argc,
       adjust_exports (exports_bwrap, home);
       g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
       flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+
+      /* The other filesystem arguments have to come after the exports
+       * so that if the exports set up symlinks, the other filesystem
+       * arguments like --dir work with the symlinks' targets. */
+      g_warn_if_fail (g_strv_length (bwrap_filesystem_arguments->envp) == 0);
+      flatpak_bwrap_append_bwrap (bwrap, bwrap_filesystem_arguments);
+      g_clear_pointer (&bwrap_filesystem_arguments, flatpak_bwrap_free);
     }
 
   if (bwrap != NULL)

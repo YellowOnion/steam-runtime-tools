@@ -2198,6 +2198,7 @@ bind_runtime_base (PvRuntime *self,
   static const char * const from_provider[] =
   {
     "/etc/amd",
+    "/etc/drirc",
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
@@ -3895,7 +3896,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   guint n_egl_icds;
   guint n_vulkan_icds;
   const GList *icd_iter;
+  gboolean all_libglx_from_provider = TRUE;
   gboolean all_libdrm_from_provider = TRUE;
+  g_autoptr(GHashTable) drirc_data_in_provider = g_hash_table_new_full (g_str_hash,
+                                                                        g_str_equal,
+                                                                        g_free, NULL);
   g_autoptr(GHashTable) libdrm_data_in_provider = g_hash_table_new_full (g_str_hash,
                                                                          g_str_equal,
                                                                          g_free, NULL);
@@ -4064,6 +4069,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
+          g_autofree gchar *libglx_mesa = NULL;
           g_autoptr(SrtObjectList) dri_drivers = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
           g_autoptr(SrtObjectList) va_api_drivers = NULL;
@@ -4286,6 +4292,23 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libdrm_from_provider = FALSE;
             }
 
+          libglx_mesa = g_build_filename (arch->libdir_in_current_namespace, "libGLX_mesa.so.0", NULL);
+
+          /* If we have libGLX_mesa.so.0 in overrides we also want to mount
+           * ${prefix}/share/drirc.d from the host. ${prefix} is derived from
+           * the absolute path of libGLX_mesa.so.0 */
+          if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
+            {
+              pv_runtime_collect_lib_data (self, arch, "drirc.d", libglx_mesa,
+                                           provider_in_container_namespace_guarded,
+                                           drirc_data_in_provider);
+            }
+          else
+            {
+              /* For at least a single architecture, libGLX_mesa is newer in the container */
+              all_libglx_from_provider = FALSE;
+            }
+
           dirs = multiarch_details_get_libdirs (arch->details,
                                                 MULTIARCH_LIBDIRS_FLAGS_NONE);
 
@@ -4358,6 +4381,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (!pv_runtime_finish_lib_data (self, bwrap, "libdrm", "libdrm.so.2",
                                    all_libdrm_from_provider,
                                    libdrm_data_in_provider, error))
+    return FALSE;
+
+  if (!pv_runtime_finish_lib_data (self, bwrap, "drirc.d", "libGLX_mesa.so.0",
+                                   all_libglx_from_provider,
+                                   drirc_data_in_provider, error))
     return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");

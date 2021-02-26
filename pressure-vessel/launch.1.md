@@ -72,6 +72,15 @@ as a subprocess of **pressure-vessel-launcher**.
     As with **org.freedesktop.Flatpak**, the
     **--terminate** option is not allowed in this mode.
 
+**--app-path** *PATH*, **--app-path=**
+:   When creating a Flatpak subsandbox, mount *PATH* as the `/app` in
+    the new subsandbox. If *PATH* is specified as the empty string,
+    place an empty directory at `/app`.
+
+    This experimental option is only valid when used with
+    **--bus-name=org.freedesktop.portal.Flatpak**, and requires a
+    Flatpak branch that has not yet been merged.
+
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment
     variables set by **--env** and similar options.
@@ -101,6 +110,14 @@ as a subprocess of **pressure-vessel-launcher**.
 
 **--terminate**
 :   Instead of running a *COMMAND*, terminate the Launcher server.
+
+**--usr-path** *PATH*
+:   When creating a Flatpak subsandbox, mount *PATH* as the `/usr` in
+    the new subsandbox.
+
+    This experimental option is only valid when used with
+    **--bus-name=org.freedesktop.portal.Flatpak**, and requires a
+    Flatpak branch that has not yet been merged.
 
 **--verbose**
 :   Be more verbose.

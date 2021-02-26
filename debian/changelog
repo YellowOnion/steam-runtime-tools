@@ -8,14 +8,13 @@ steam-runtime-tools (0.20210225.0) UNRELEASED; urgency=medium
   * pressure-vessel: Default to using graphics drivers from the current
     execution environment, not necessarily the host
     (Resolves: steam-runtime#367)
+  * pressure-vessel: Cope with /var/tmp (or /var) being a symlink
+    (Resolves: steam-runtime#368)
   * pressure-vessel: Never set XDG_DATA_DIRS to just our override directory.
     Default to /usr/local/share:/usr/share as per the specification.
   * pressure-vessel: Mask Vulkan layers in home directory or other non-/usr
     paths. This avoids the Steam fossilize and overlay layers being
     duplicated in the container's search path. (Resolves: T26160)
-  * pressure-vessel: Run nvidia-modprobe -u before entering the container
-    if needed, to load nvidia_uvm.ko for Vulkan ray-tracing support
-    (Resolves: #59)
   * pressure-vessel: Accept runtime with or without ./files at top level
   * pv-launch: Sync minor improvements from flatpak-xdg-utils
   * pv-launch: Use unset-env option for subsandbox API >= v5.
@@ -32,13 +31,18 @@ steam-runtime-tools (0.20210225.0) UNRELEASED; urgency=medium
     behaviour when not running on a Debian derivative
   * pressure-vessel: Treat LD_AUDIT the same as LD_PRELOAD, as another step
     towards Flatpak support
+  * pressure-vessel: Put apt-style severity prefixes on messages
   * Refactoring
 
   [ Ludovico de Nittis ]
+  * pressure-vessel: Run nvidia-modprobe -u before entering the container
+    if needed, to load nvidia_uvm.ko for Vulkan ray-tracing support
+    (Resolves: #59)
   * pressure-vessel: Update flatpak-run to the latest upstream version.
     This includes a fix to propagate the X11 cookies that have an address
     equal to XAUTHLOCALHOSTNAME, fixing X11 authentication on some openSUSE
     systems (Resolves: steam-runtime-tools#53)
+  * runtime: Bind the drirc settings from the provider (Resolves: #60)
   * pressure-vessel: Improve library binding speed
   * pv-adverb: Remove unused locales temporary directories
     (Resolves: steam-runtime-tools#56)
@@ -51,7 +55,7 @@ steam-runtime-tools (0.20210225.0) UNRELEASED; urgency=medium
   * system-info: Parse Vulkan layers from a report in the right order
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 25 Feb 2021 15:14:18 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 26 Feb 2021 19:03:11 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

@@ -585,6 +585,8 @@ adjust_exports (FlatpakBwrap *bwrap,
 {
   gsize i = 0;
 
+  g_debug ("Exported directories:");
+
   while (i < bwrap->argv->len)
     {
       const char *opt = bwrap->argv->pdata[i];
@@ -596,6 +598,10 @@ adjust_exports (FlatpakBwrap *bwrap,
           g_assert (i + 3 <= bwrap->argv->len);
           /* pdata[i + 1] is the target: unchanged. */
           /* pdata[i + 2] is a path in the final container: unchanged. */
+          g_debug ("%s %s %s",
+                   opt,
+                   (const char *) bwrap->argv->pdata[i + 1],
+                   (const char *) bwrap->argv->pdata[i + 2]);
           i += 3;
         }
       else if (g_str_equal (opt, "--dir") ||
@@ -603,6 +609,9 @@ adjust_exports (FlatpakBwrap *bwrap,
         {
           g_assert (i + 2 <= bwrap->argv->len);
           /* pdata[i + 1] is a path in the final container: unchanged. */
+          g_debug ("%s %s",
+                   opt,
+                   (const char *) bwrap->argv->pdata[i + 1]);
           i += 2;
         }
       else if (g_str_equal (opt, "--ro-bind") ||
@@ -624,6 +633,10 @@ adjust_exports (FlatpakBwrap *bwrap,
           else
             bwrap->argv->pdata[i + 1] = g_steal_pointer (&src);
 
+          g_debug ("%s %s %s",
+                   opt,
+                   (const char *) bwrap->argv->pdata[i + 1],
+                   (const char *) bwrap->argv->pdata[i + 2]);
           i += 3;
         }
       else

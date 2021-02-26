@@ -927,6 +927,33 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
   return path_on_host;
 }
 
+static const char *
+get_level_prefix (GLogLevelFlags log_level)
+{
+  if (log_level & (G_LOG_FLAG_RECURSION
+                   | G_LOG_FLAG_FATAL
+                   | G_LOG_LEVEL_ERROR
+                   | G_LOG_LEVEL_CRITICAL))
+    return "Internal error";
+
+  if (log_level & PV_LOG_LEVEL_FAILURE)
+    return "E";
+
+  if (log_level & G_LOG_LEVEL_WARNING)
+    return "W";
+
+  if (log_level & G_LOG_LEVEL_MESSAGE)
+    return "N";   /* consistent with apt, which calls this a "notice" */
+
+  if (log_level & G_LOG_LEVEL_INFO)
+    return "I";
+
+  if (log_level & G_LOG_LEVEL_DEBUG)
+    return "D";
+
+  return "?!";
+}
+
 /**
  * log_handler_with_timestamp:
  * @log_domain: the log domain of the message
@@ -946,9 +973,14 @@ pv_log_to_stderr_with_timestamp (const gchar *log_domain,
    * was introduced in GLib 2.66 and we are targeting an older version */
   g_autofree gchar *timestamp = g_date_time_format (date_time, "%T");
 
-  g_printerr ("%s.%06i: %s[%d]: %s\n", timestamp,
+  g_printerr ("%s.%06i: %s[%d]: %s: %s\n", timestamp,
               g_date_time_get_microsecond (date_time),
-              my_prgname, my_pid, message);
+              my_prgname, my_pid, get_level_prefix (log_level), message);
+
+  if (log_level & (G_LOG_FLAG_RECURSION
+                   | G_LOG_FLAG_FATAL
+                   | G_LOG_LEVEL_ERROR))
+    G_BREAKPOINT ();
 }
 
 /**
@@ -964,7 +996,13 @@ pv_log_to_stderr (const gchar *log_domain,
                   const gchar *message,
                   gpointer user_data)
 {
-  g_printerr ("%s[%d]: %s\n", my_prgname, my_pid, message);
+  g_printerr ("%s[%d]: %s: %s\n",
+              my_prgname, my_pid, get_level_prefix (log_level), message);
+
+  if (log_level & (G_LOG_FLAG_RECURSION
+                   | G_LOG_FLAG_FATAL
+                   | G_LOG_LEVEL_ERROR))
+    G_BREAKPOINT ();
 }
 
 /**
@@ -974,7 +1012,11 @@ pv_log_to_stderr (const gchar *log_domain,
 void
 pv_set_up_logging (gboolean opt_verbose)
 {
-  GLogLevelFlags log_levels = G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE;
+  GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
+                               | G_LOG_LEVEL_CRITICAL
+                               | PV_LOG_LEVEL_FAILURE
+                               | G_LOG_LEVEL_WARNING
+                               | G_LOG_LEVEL_MESSAGE);
   gboolean opt_timestamp = pv_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
                                                    FALSE);
   gboolean opt_info = pv_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);

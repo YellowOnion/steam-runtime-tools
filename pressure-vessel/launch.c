@@ -1107,7 +1107,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    g_warning ("%s", local_error->message);
+    pv_log_failure ("%s", local_error->message);
 
   if (signal_source > 0)
     g_source_remove (signal_source);

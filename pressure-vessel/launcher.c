@@ -586,7 +586,7 @@ on_bus_acquired (PvPortalListener *listener,
 
   if (!export_launcher (connection, &error))
     {
-      g_warning ("Unable to export object: %s", error->message);
+      pv_log_failure ("Unable to export object: %s", error->message);
       *ret = EX_SOFTWARE;
       g_main_loop_quit (main_loop);
     }
@@ -703,7 +703,7 @@ connect_to_signals (void)
 
   if (sfd < 0)
     {
-      g_warning ("Unable to watch signals: %s", g_strerror (errno));
+      pv_log_failure ("Unable to watch signals: %s", g_strerror (errno));
       return 0;
     }
 
@@ -1042,7 +1042,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    g_warning ("%s", local_error->message);
+    pv_log_failure ("%s", local_error->message);
 
   if (exit_on_readable_id > 0)
     g_source_remove (exit_on_readable_id);

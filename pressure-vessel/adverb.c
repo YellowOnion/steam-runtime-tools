@@ -965,7 +965,7 @@ out:
     _srt_rm_rf (locales_temp_dir);
 
   if (local_error != NULL)
-    g_warning ("%s", local_error->message);
+    pv_log_failure ("%s", local_error->message);
 
   global_original_environ = NULL;
   g_debug ("Exiting with status %d", ret);

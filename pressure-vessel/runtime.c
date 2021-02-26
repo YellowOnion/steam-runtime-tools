@@ -3638,14 +3638,15 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 }
 
 static void
-pv_runtime_collect_libdrm_data (PvRuntime *self,
-                                RuntimeArchitecture *arch,
-                                const char *libdrm,
-                                const char *provider_in_container_namespace_guarded,
-                                GHashTable *libdrm_data_in_provider)
+pv_runtime_collect_lib_data (PvRuntime *self,
+                             RuntimeArchitecture *arch,
+                             const char *dir_basename,
+                             const char *lib_path,
+                             const char *provider_in_container_namespace_guarded,
+                             GHashTable *data_in_provider)
 {
   g_autofree char *target = NULL;
-  target = glnx_readlinkat_malloc (-1, libdrm, NULL, NULL);
+  target = glnx_readlinkat_malloc (-1, lib_path, NULL, NULL);
 
   g_return_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK);
 
@@ -3653,7 +3654,7 @@ pv_runtime_collect_libdrm_data (PvRuntime *self,
     {
       g_autofree gchar *dir = NULL;
       g_autofree gchar *lib_multiarch = NULL;
-      g_autofree gchar *libdrm_dir_in_provider = NULL;
+      g_autofree gchar *dir_in_provider = NULL;
 
       dir = g_path_get_dirname (target);
 
@@ -3672,67 +3673,75 @@ pv_runtime_collect_libdrm_data (PvRuntime *self,
                  dir + strlen (self->provider_in_container_namespace),
                  strlen (dir) - strlen (self->provider_in_container_namespace) + 1);
 
-      libdrm_dir_in_provider = g_build_filename (dir, "share", "libdrm", NULL);
+      dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
 
       if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
                                      -1,
-                                     libdrm_dir_in_provider,
+                                     dir_in_provider,
                                      G_FILE_TEST_IS_DIR))
         {
-          g_hash_table_add (libdrm_data_in_provider,
-                            g_steal_pointer (&libdrm_dir_in_provider));
+          g_hash_table_add (data_in_provider,
+                            g_steal_pointer (&dir_in_provider));
         }
       else
         {
-          g_info ("We were expecting the libdrm directory in the provider to "
-                  "be located in \"%s/share/libdrm\", but instead it is "
-                  "missing", dir);
+          g_info ("We were expecting the %s directory in the provider to "
+                  "be located in \"%s/share/%s\", but instead it is "
+                  "missing", dir_basename, dir, dir_basename);
         }
     }
 }
 
 static gboolean
-pv_runtime_finish_libdrm_data (PvRuntime *self,
-                               FlatpakBwrap *bwrap,
-                               gboolean all_libdrm_from_provider,
-                               GHashTable *libdrm_data_in_provider,
-                               GError **error)
+pv_runtime_finish_lib_data (PvRuntime *self,
+                            FlatpakBwrap *bwrap,
+                            const gchar *dir_basename,
+                            const gchar *lib_name,
+                            gboolean all_from_provider,
+                            GHashTable *data_in_provider,
+                            GError **error)
 {
-  g_autofree gchar *best_libdrm_data_in_provider = NULL;
+  g_autofree gchar *best_data_in_provider = NULL;
+  g_autofree gchar *canonical_path = NULL;
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+  g_return_val_if_fail (dir_basename != NULL, FALSE);
 
-  if (g_hash_table_size (libdrm_data_in_provider) > 0 && !all_libdrm_from_provider)
+  canonical_path = g_build_filename ("/usr", "share", dir_basename, NULL);
+
+  if (g_hash_table_size (data_in_provider) > 0 && !all_from_provider)
     {
       /* See the explanation in the similar
        * "any_libc_from_provider && !all_libc_from_provider" case, above */
-      g_warning ("Using libdrm.so.2 from provider system for some but not all "
-                 "architectures! Will take /usr/share/libdrm from provider.");
+      g_warning ("Using %s from provider system for some but not all "
+                 "architectures! Will take /usr/share/%s from provider.",
+                 lib_name, dir_basename);
     }
 
-  if (g_hash_table_size (libdrm_data_in_provider) == 1)
+  if (g_hash_table_size (data_in_provider) == 1)
     {
-      best_libdrm_data_in_provider = g_strdup (
-        pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
+      best_data_in_provider = g_strdup (
+        pv_hash_table_get_arbitrary_key (data_in_provider));
     }
-  else if (g_hash_table_size (libdrm_data_in_provider) > 1)
+  else if (g_hash_table_size (data_in_provider) > 1)
     {
-      g_warning ("Found more than one possible libdrm data directory from provider");
-      /* Prioritize "/usr/share/libdrm" if available. Otherwise randomly pick
+      g_warning ("Found more than one possible %s data directory from provider",
+                 dir_basename);
+      /* Prioritize "/usr/share/{dir_basename}" if available. Otherwise randomly pick
        * the first directory in the hash table */
-      if (g_hash_table_contains (libdrm_data_in_provider, "/usr/share/libdrm"))
-        best_libdrm_data_in_provider = g_strdup ("/usr/share/libdrm");
+      if (g_hash_table_contains (data_in_provider, canonical_path))
+        best_data_in_provider = g_strdup (canonical_path);
       else
-        best_libdrm_data_in_provider = g_strdup (
-          pv_hash_table_get_arbitrary_key (libdrm_data_in_provider));
+        best_data_in_provider = g_strdup (
+          pv_hash_table_get_arbitrary_key (data_in_provider));
     }
 
-  if (best_libdrm_data_in_provider != NULL)
+  if (best_data_in_provider != NULL)
     {
       return pv_runtime_take_from_provider (self, bwrap,
-                                            best_libdrm_data_in_provider,
-                                            "/usr/share/libdrm",
+                                            best_data_in_provider,
+                                            canonical_path,
                                             TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
                                             error);
     }
@@ -4267,9 +4276,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * the absolute path of libdrm.so.2 */
           if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
             {
-              pv_runtime_collect_libdrm_data (self, arch, libdrm,
-                                              provider_in_container_namespace_guarded,
-                                              libdrm_data_in_provider);
+              pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
+                                           provider_in_container_namespace_guarded,
+                                           libdrm_data_in_provider);
             }
           else
             {
@@ -4346,8 +4355,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (!pv_runtime_finish_libc_family (self, bwrap, gconv_in_provider, error))
     return FALSE;
 
-  if (!pv_runtime_finish_libdrm_data (self, bwrap, all_libdrm_from_provider,
-                                      libdrm_data_in_provider, error))
+  if (!pv_runtime_finish_lib_data (self, bwrap, "libdrm", "libdrm.so.2",
+                                   all_libdrm_from_provider,
+                                   libdrm_data_in_provider, error))
     return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");

@@ -128,10 +128,16 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
  * that /etc/ld.so.cache, etc., are not shared.
  */
 static gboolean
-path_visible_in_provider_namespace (const char *path)
+path_visible_in_provider_namespace (PvRuntimeFlags flags,
+                                    const char *path)
 {
   while (path[0] == '/')
     path++;
+
+  if ((flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+      && g_str_has_prefix (path, "app")
+      && (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
 
   if (g_str_has_prefix (path, "usr") &&
       (path[3] == '\0' || path[3] == '/'))
@@ -1789,6 +1795,7 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                                      RuntimeArchitecture *arch)
 {
   const gchar *ld_library_path;
+  g_autofree gchar *remap_app = NULL;
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
   FlatpakBwrap *ret;
@@ -1803,6 +1810,11 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   if (ld_library_path != NULL)
     flatpak_bwrap_set_env (ret, "LD_LIBRARY_PATH", ld_library_path, TRUE);
 
+  /* Every symlink that starts with exactly /app/ (for Flatpak) */
+  remap_app = g_strjoin (NULL, "/app/", "=",
+                         self->provider_in_container_namespace,
+                         "/app/", NULL);
+
   /* Every symlink that starts with exactly /usr/ */
   remap_usr = g_strjoin (NULL, "/usr/", "=",
                          self->provider_in_container_namespace,
@@ -1816,6 +1828,7 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,
                           "--container", self->container_access,
+                          "--remap-link-prefix", remap_app,
                           "--remap-link-prefix", remap_usr,
                           "--remap-link-prefix", remap_lib,
                           "--provider",
@@ -2574,7 +2587,7 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
       /* If it isn't in /usr, /lib, etc., then the symlink will be
        * dangling and this probably isn't going to work. */
-      if (!path_visible_in_provider_namespace (source_in_provider))
+      if (!path_visible_in_provider_namespace (self->flags, source_in_provider))
         {
           if (flags & TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK)
             {
@@ -4496,6 +4509,17 @@ pv_runtime_bind (PvRuntime *self,
   g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  if (self->flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+    {
+      g_return_val_if_fail (exports == NULL, FALSE);
+      g_return_val_if_fail (bwrap == NULL, FALSE);
+    }
+  else
+    {
+      g_return_val_if_fail (exports != NULL, FALSE);
+      g_return_val_if_fail (bwrap != NULL, FALSE);
+    }
+
   if (bwrap != NULL
       && !bind_runtime_base (self, bwrap, container_env, error))
     return FALSE;
@@ -4660,4 +4684,12 @@ pv_runtime_initable_iface_init (GInitableIface *iface,
                                 gpointer unused G_GNUC_UNUSED)
 {
   iface->init = pv_runtime_initable_init;
+}
+
+const char *
+pv_runtime_get_modified_usr (PvRuntime *self)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
+  return self->runtime_usr;
 }

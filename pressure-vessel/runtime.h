@@ -40,6 +40,8 @@
  * @PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS: Include host Vulkan layers
  * @PV_RUNTIME_FLAGS_COPY_RUNTIME: Copy the runtime and modify the copy
  * @PV_RUNTIME_FLAGS_UNPACK_ARCHIVE: Source is an archive, not a deployment
+ * @PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX: The runtime will be used in a
+ *  Flatpak subsandbox
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -53,6 +55,7 @@ typedef enum
   PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS = (1 << 4),
   PV_RUNTIME_FLAGS_COPY_RUNTIME = (1 << 5),
   PV_RUNTIME_FLAGS_UNPACK_ARCHIVE = (1 << 6),
+  PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX = (1 << 7),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -64,6 +67,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS \
    | PV_RUNTIME_FLAGS_COPY_RUNTIME \
    | PV_RUNTIME_FLAGS_UNPACK_ARCHIVE \
+   | PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX \
    )
 
 typedef struct _PvRuntime PvRuntime;
@@ -95,6 +99,7 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakBwrap *bwrap,
                           PvEnviron *container_env,
                           GError **error);
+const char *pv_runtime_get_modified_usr (PvRuntime *self);
 void pv_runtime_cleanup (PvRuntime *self);
 
 gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,

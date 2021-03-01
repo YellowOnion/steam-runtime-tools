@@ -1276,6 +1276,8 @@ main (int argc,
   g_auto(GStrv) original_environ = NULL;
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
+  g_autoptr(FlatpakBwrap) flatpak_subsandbox = NULL;
+  g_autoptr(FlatpakBwrap) flatpak_run_on_host = NULL;
   g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakBwrap) bwrap_filesystem_arguments = NULL;
@@ -1467,11 +1469,6 @@ main (int argc,
                    opt_graphics_provider);
       goto out;
     }
-
-  if (g_strcmp0 (opt_graphics_provider, "/") == 0)
-    graphics_provider_mount_point = g_strdup ("/run/host");
-  else
-    graphics_provider_mount_point = g_strdup ("/run/gfx");
 
   if (opt_version_only)
     {
@@ -1703,15 +1700,55 @@ main (int argc,
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
     {
+
       launch_executable = g_build_filename (tools_dir,
                                             "pressure-vessel-launch",
                                             NULL);
       /* Assume "bwrap" to exist in the host system and to be in its PATH */
       bwrap_executable = g_strdup ("bwrap");
 
-      /* If we can't launch a command on the host, just fail. */
-      if (!check_launch_on_host (launch_executable, error))
-        goto out;
+      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") != NULL)
+        {
+          g_warning ("Assuming your version of Flatpak contains unmerged "
+                     "changes (#4018, #4125, #4126, #4093)");
+
+          /* Use a sub-sandbox */
+          flatpak_subsandbox = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+          flatpak_bwrap_add_arg (flatpak_subsandbox,
+                                 launch_executable);
+          /* Tell pressure-vessel-launch to send its whole environment
+           * to the subsandbox, except for the parts that we edit later.
+           * This effectively matches bwrap's behaviour. */
+          flatpak_bwrap_add_arg (flatpak_subsandbox, "--pass-env-matching=*");
+          flatpak_bwrap_add_arg (flatpak_subsandbox,
+                                 "--bus-name=org.freedesktop.portal.Flatpak");
+        }
+      else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE") != NULL)
+        {
+          g_warning ("Assuming permissions have been set to allow Steam "
+                     "to escape from the Flatpak sandbox");
+
+          /* If we have permission to escape from the sandbox, we'll do that,
+           * and launch bwrap that way */
+          flatpak_run_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+          flatpak_bwrap_add_arg (flatpak_run_on_host,
+                                 launch_executable);
+          flatpak_bwrap_add_arg (flatpak_run_on_host,
+                                 "--bus-name=org.freedesktop.Flatpak");
+
+          /* If we can't launch a command on the host, just fail. */
+          if (!check_launch_on_host (launch_executable, error))
+            goto out;
+        }
+      else
+        {
+          glnx_throw (error,
+                      "pressure-vessel (SteamLinuxRuntime) cannot be run "
+                      "in a Flatpak environment. For Proton 5.13+, "
+                      "unofficial community builds that do not use "
+                      "pressure-vessel are available.");
+          goto out;
+        }
     }
   else
     {
@@ -1732,7 +1769,13 @@ main (int argc,
       goto out;
     }
 
-  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+  /* Invariant: we are in exactly one of these three modes */
+  g_assert (((flatpak_subsandbox != NULL)
+             + (flatpak_run_on_host != NULL)
+             + (!is_flatpak_env))
+            == 1);
+
+  if (flatpak_subsandbox == NULL)
     {
       /* Start with an empty environment and populate it later */
       bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
@@ -1741,10 +1784,22 @@ main (int argc,
       exports = flatpak_exports_new ();
     }
 
+  /* Invariant: we have bwrap or exports iff we also have the other */
+  g_assert ((bwrap != NULL) == (exports != NULL));
+  g_assert ((bwrap != NULL) == (bwrap_filesystem_arguments != NULL));
+
   container_env = pv_environ_new ();
 
-  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+  if (bwrap != NULL)
     {
+      g_assert (exports != NULL);
+      g_assert (bwrap_filesystem_arguments != NULL);
+
+      if (g_strcmp0 (opt_graphics_provider, "/") == 0)
+        graphics_provider_mount_point = g_strdup ("/run/host");
+      else
+        graphics_provider_mount_point = g_strdup ("/run/gfx");
+
       if (is_flatpak_env)
         {
           glnx_autofd int fd = TEMP_FAILURE_RETRY (open ("/run/host",
@@ -1781,6 +1836,28 @@ main (int argc,
                               "--dir",
                               "/run/pressure-vessel",
                               NULL);
+    }
+  else
+    {
+      g_assert (flatpak_subsandbox != NULL);
+
+      if (g_strcmp0 (opt_graphics_provider, "/") == 0)
+        {
+          graphics_provider_mount_point = g_strdup ("/run/parent");
+        }
+      else if (g_strcmp0 (opt_graphics_provider, "/run/host") == 0)
+        {
+          g_warning ("Using host graphics drivers in a Flatpak subsandbox "
+                     "probably won't work");
+          graphics_provider_mount_point = g_strdup ("/run/host");
+        }
+      else
+        {
+          glnx_throw (error,
+                      "Flatpak subsandboxing can only use / or /run/host "
+                      "to provide graphics drivers");
+          goto out;
+        }
     }
 
   if (opt_gc_legacy_runtimes
@@ -1821,6 +1898,9 @@ main (int argc,
 
       if (opt_copy_runtime)
         flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
+
+      if (flatpak_subsandbox != NULL)
+        flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
 
       if (opt_runtime != NULL)
         {
@@ -1873,17 +1953,37 @@ main (int argc,
                             container_env,
                             error))
         goto out;
+
+      if (flatpak_subsandbox != NULL)
+        {
+          const char *usr = pv_runtime_get_modified_usr (runtime);
+
+          flatpak_bwrap_add_args (flatpak_subsandbox,
+                                  "--app-path=",
+                                  "--share-pids",
+                                  "--usr-path", usr,
+                                  NULL);
+        }
     }
-  else if (is_flatpak_env)
+  else if (flatpak_subsandbox != NULL)
+    {
+      /* Nothing special to do here: we'll just create the subsandbox
+       * without changing the runtime, which means we inherit the
+       * Flatpak's normal runtime. */
+    }
+  else if (flatpak_run_on_host != NULL)
     {
       glnx_throw (error,
-                  "Cannot operate without a runtime from inside a "
-                  "Flatpak app");
+                  "Cannot operate without a runtime when escaping from "
+                  "a Flatpak app");
       goto out;
     }
   else
     {
       g_assert (!is_flatpak_env);
+      g_assert (bwrap != NULL);
+      g_assert (bwrap_filesystem_arguments != NULL);
+      g_assert (exports != NULL);
 
       if (!pv_wrap_use_host_os (exports, bwrap_filesystem_arguments, error))
         goto out;
@@ -1894,14 +1994,35 @@ main (int argc,
    * so that it can be overridden by --filesystem=/home, and so that it
    * is sorted correctly with respect to all the other
    * home-directory-related exports. */
-  if (g_file_test ("/home", G_FILE_TEST_EXISTS))
+  if (exports != NULL
+      && g_file_test ("/home", G_FILE_TEST_EXISTS))
     flatpak_exports_add_path_tmpfs (exports, "/home");
 
   g_debug ("Making home directory available...");
 
-  /* TODO: In future we will do something different when using Flatpak
-   * sub-sandboxing */
+  if (flatpak_subsandbox != NULL)
     {
+      if (opt_fake_home == NULL)
+        {
+          /* Nothing special to do here: we'll use the same home directory
+           * and exports that the parent Flatpak sandbox used. */
+        }
+      else if (flatpak_subsandbox != NULL)
+        {
+          /* Not yet supported */
+          glnx_throw (error,
+                      "Cannot use a game-specific home directory in a "
+                      "Flatpak subsandbox");
+          goto out;
+        }
+    }
+  else
+    {
+      g_assert (flatpak_run_on_host != NULL || !is_flatpak_env);
+      g_assert (bwrap != NULL);
+      g_assert (bwrap_filesystem_arguments != NULL);
+      g_assert (exports != NULL);
+
       if (opt_fake_home == NULL)
         {
           flatpak_exports_add_path_expose (exports,
@@ -1932,16 +2053,27 @@ main (int argc,
 
   if (!opt_share_pid)
     {
-      g_warning ("Unsharing process ID namespace. This is not expected "
-                 "to work...");
-      flatpak_bwrap_add_arg (bwrap, "--unshare-pid");
+      if (bwrap != NULL)
+        {
+          g_warning ("Unsharing process ID namespace. This is not expected "
+                     "to work...");
+          flatpak_bwrap_add_arg (bwrap, "--unshare-pid");
+        }
+      else
+        {
+          g_assert (flatpak_subsandbox != NULL);
+          /* pressure-vessel-launch currently hard-codes this */
+          g_warning ("Process ID namespace is always shared when using a "
+                     "Flatpak subsandbox");
+        }
     }
 
-  /* Always export /tmp for now. SteamVR uses this as a rendezvous
-   * directory for IPC. */
-  flatpak_exports_add_path_expose (exports,
-                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                   "/tmp");
+  if (exports != NULL)
+    /* Always export /tmp for now. SteamVR uses this as a rendezvous
+     * directory for IPC. */
+    flatpak_exports_add_path_expose (exports,
+                                     FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                     "/tmp");
 
   /* We need the LD_PRELOADs from Steam visible at the paths that were
    * used for them, which might be their physical rather than logical
@@ -1987,6 +2119,34 @@ main (int argc,
               continue;
             }
 
+          /* A subsandbox will just have the same LD_PRELOAD as the
+           * Flatpak itself, except that we have to redirect /usr and /app
+           * into /run/parent. */
+          if (flatpak_subsandbox != NULL)
+            {
+              if (runtime != NULL
+                  && (g_str_has_prefix (preload, "/usr/")
+                      || g_str_has_prefix (preload, "/app/")
+                      || g_str_has_prefix (preload, "/lib")))
+                {
+                  g_autofree gchar *adjusted_path = NULL;
+
+                  adjusted_path = g_build_filename ("/run/parent", preload, NULL);
+                  g_debug ("%s -> %s", preload, adjusted_path);
+                  pv_search_path_append (adjusted, adjusted_path);
+                }
+              else
+                {
+                  g_debug ("%s -> unmodified", preload);
+                  pv_search_path_append (adjusted, preload);
+                }
+
+              /* No FlatpakExports here: any file not in /usr or /app that
+               * is visible to our "parent" Flatpak app is also visible
+               * to us. */
+              continue;
+            }
+
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
               if (runtime != NULL
@@ -1996,7 +2156,7 @@ main (int argc,
                   g_autofree gchar *adjusted_path = NULL;
 
                   adjusted_path = g_build_filename ("/run/host", preload, NULL);
-
+                  g_debug ("%s -> %s", preload, adjusted_path);
                   /* When using a runtime we can't write to /usr/ or /libQUAL/,
                    * so redirect this preloaded module to the corresponding
                    * location in /run/host. */
@@ -2015,6 +2175,7 @@ main (int argc,
                     }
                   else
                     {
+                      g_debug ("%s -> unmodified, but added to exports", preload);
                       flatpak_exports_add_path_expose (exports,
                                                        FLATPAK_FILESYSTEM_MODE_READ_ONLY,
                                                        preload);
@@ -2029,20 +2190,33 @@ main (int argc,
             }
         }
 
-      /* If we adjusted the module paths from the one provided by the host
-       * to something that is valid in the container, we shouldn't add them to
-       * the bwrap envp. Otherwise when we call "pv_bwrap_execve()" we will
-       * create an environment that tries to preload libraries that are not
-       * available, until it actually executes "bwrap".
-       * This can be avoided by using the bwrap option "--setenv" instead. */
-      if (adjusted->len != 0)
-        flatpak_bwrap_add_args (bwrap, "--setenv", variable,
-                                adjusted->str, NULL);
+      if (bwrap != NULL)
+        {
+          /* If we adjusted the module paths from the one provided by the host
+           * to something that is valid in the container, we shouldn't add them to
+           * the bwrap envp. Otherwise when we call "pv_bwrap_execve()" we will
+           * create an environment that tries to preload libraries that are not
+           * available, until it actually executes "bwrap".
+           * This can be avoided by using the bwrap option "--setenv" instead. */
+          if (adjusted->len != 0)
+            flatpak_bwrap_add_args (bwrap, "--setenv", variable,
+                                    adjusted->str, NULL);
+        }
+      else
+        {
+          if (adjusted->len != 0)
+            pv_environ_lock_env (container_env, variable, adjusted->str);
+          else
+            pv_environ_lock_env (container_env, variable, NULL);
+        }
     }
 
-  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
-  if (1)
+  if (flatpak_subsandbox == NULL)
     {
+      g_assert (bwrap != NULL);
+      g_assert (bwrap_filesystem_arguments != NULL);
+      g_assert (exports != NULL);
+
       g_debug ("Making Steam environment variables available if required...");
 
       for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
@@ -2100,6 +2274,17 @@ main (int argc,
                               "--chdir", cwd_p_host,
                               NULL);
     }
+  else
+    {
+      for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
+        pv_environ_lock_env (container_env,
+                             known_required_env[i].name,
+                             g_getenv (known_required_env[i].name));
+
+      flatpak_bwrap_add_args (flatpak_subsandbox,
+                              "--directory", cwd_p,
+                              NULL);
+    }
 
   pv_environ_lock_env (container_env, "PWD", NULL);
 
@@ -2119,7 +2304,8 @@ main (int argc,
 
               g_assert (equals != NULL);
 
-              if (g_str_has_prefix (opt_env_if_host[i], "STEAM_RUNTIME=/"))
+              if (exports != NULL
+                  && g_str_has_prefix (opt_env_if_host[i], "STEAM_RUNTIME=/"))
                 flatpak_exports_add_path_expose (exports,
                                                  FLATPAK_FILESYSTEM_MODE_READ_ONLY,
                                                  equals + 1);
@@ -2135,9 +2321,13 @@ main (int argc,
     }
 
   /* Convert the exported directories into extra bubblewrap arguments */
+  if (exports != NULL)
     {
       g_autoptr(FlatpakBwrap) exports_bwrap =
         flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
+      g_assert (bwrap != NULL);
+      g_assert (bwrap_filesystem_arguments != NULL);
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
       adjust_exports (exports_bwrap, home);
@@ -2162,16 +2352,26 @@ main (int argc,
       g_autoptr(GList) vars = NULL;
       const GList *iter;
 
-      /* These are the environment variables that will be wrong, or useless,
-       * in the new container that will be created by escaping from the
-       * sandbox. Force them to be unset. */
-      pv_environ_lock_env (container_env, "FLATPAK_ID", NULL);
-      pv_environ_lock_env (container_env, "FLATPAK_SANDBOX_DIR", NULL);
-      pv_environ_lock_env (container_env, "LD_AUDIT", NULL);
+      if (flatpak_run_on_host != NULL)
+        {
+          /* These are the environment variables that will be wrong, or useless,
+           * in the new container that will be created by escaping from the
+           * sandbox. Force them to be unset. */
+          pv_environ_lock_env (container_env, "FLATPAK_ID", NULL);
+          pv_environ_lock_env (container_env, "FLATPAK_SANDBOX_DIR", NULL);
+        }
+      else
+        {
+          /* Let these inherit from the sub-sandbox environment */
+          pv_environ_lock_inherit_env (container_env, "FLATPAK_ID");
+          pv_environ_lock_inherit_env (container_env, "FLATPAK_SANDBOX_DIR");
+        }
 
       /* These are the environment variables that might differ in the host
        * system. However from inside a container we are not able to know the
-       * host's value. So we allow them to inherit the value from the host. */
+       * host's value. So we allow them to inherit the value from the host.
+       * Similarly, if we're starting a sub-sandbox, they should take the
+       * sub-sandbox's value if different. */
       pv_environ_lock_inherit_env (container_env, "DBUS_SESSION_BUS_ADDRESS");
       pv_environ_lock_inherit_env (container_env, "DBUS_SYSTEM_BUS_ADDRESS");
       pv_environ_lock_inherit_env (container_env, "DISPLAY");
@@ -2189,8 +2389,18 @@ main (int argc,
           const char *var = iter->data;
           const char *val = pv_environ_getenv (container_env, var);
 
-          /* TODO: In future we will behave differently here when
-           * using Flatpak sub-sandboxing */
+          if (flatpak_subsandbox != NULL)
+            {
+              if (val != NULL)
+                flatpak_bwrap_add_arg_printf (flatpak_subsandbox,
+                                              "--env=%s=%s",
+                                              var, val);
+              else
+                flatpak_bwrap_add_args (flatpak_subsandbox,
+                                        "--unset-env", var,
+                                        NULL);
+            }
+          else
             {
               g_assert (bwrap != NULL);
 
@@ -2273,7 +2483,7 @@ main (int argc,
       lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
     }
 
-  if (is_flatpak_env)
+  if (flatpak_run_on_host != NULL)
     {
       int userns_fd, userns2_fd, pidns_fd;
 
@@ -2316,7 +2526,7 @@ main (int argc,
         }
     }
 
-  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+  if (bwrap != NULL)
     {
       /* Tell the application that it's running under a container manager
        * in a generic way (based on https://systemd.io/CONTAINER_INTERFACE/,
@@ -2506,40 +2716,51 @@ main (int argc,
       flatpak_bwrap_append_argsv (argv_in_container, &argv[1], argc - 1);
     }
 
-  if (is_flatpak_env)
+  if (flatpak_subsandbox != NULL)
     {
-      /* Use pv-launch to launch bwrap on the host. */
-      g_autoptr(FlatpakBwrap) launch_on_host =
-        flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      flatpak_bwrap_add_arg (launch_on_host, launch_executable);
-      flatpak_bwrap_add_arg (launch_on_host, "--bus-name=org.freedesktop.Flatpak");
+      for (i = 0; i < argv_in_container->fds->len; i++)
+        {
+          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
+                                                     g_array_index (argv_in_container->fds, int, i));
+          flatpak_bwrap_add_arg (flatpak_subsandbox, fd_str);
+        }
+
+      flatpak_bwrap_add_arg (flatpak_subsandbox, "--");
+
+      g_warn_if_fail (g_strv_length (flatpak_subsandbox->envp) == 0);
+      flatpak_bwrap_append_bwrap (final_argv, flatpak_subsandbox);
+    }
+
+  if (flatpak_run_on_host != NULL)
+    {
+      g_assert (bwrap != NULL);
 
       for (i = 0; i < bwrap->fds->len; i++)
         {
           g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
                                                      g_array_index (bwrap->fds, int, i));
-          flatpak_bwrap_add_arg (launch_on_host, fd_str);
+          flatpak_bwrap_add_arg (flatpak_run_on_host, fd_str);
         }
 
       for (i = 0; i < argv_in_container->fds->len; i++)
         {
           g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
                                                      g_array_index (argv_in_container->fds, int, i));
-          flatpak_bwrap_add_arg (launch_on_host, fd_str);
+          flatpak_bwrap_add_arg (flatpak_run_on_host, fd_str);
         }
 
       /* Change the current working directory where pv-launch will run bwrap.
        * Bwrap will then set its directory by itself. For this reason here
        * we just need a directory that it's known to exist. */
-      flatpak_bwrap_add_arg (launch_on_host, "--directory=/");
+      flatpak_bwrap_add_arg (flatpak_run_on_host, "--directory=/");
 
-      flatpak_bwrap_add_arg (launch_on_host, "--");
+      flatpak_bwrap_add_arg (flatpak_run_on_host, "--");
 
-      g_warn_if_fail (g_strv_length (launch_on_host->envp) == 0);
-      flatpak_bwrap_append_bwrap (final_argv, launch_on_host);
+      g_warn_if_fail (g_strv_length (flatpak_run_on_host->envp) == 0);
+      flatpak_bwrap_append_bwrap (final_argv, flatpak_run_on_host);
     }
 
-  /* TODO: In future we will not do this when using Flatpak sub-sandboxing */
+  if (flatpak_subsandbox == NULL)
     {
       g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
       flatpak_bwrap_append_bwrap (final_argv, bwrap);

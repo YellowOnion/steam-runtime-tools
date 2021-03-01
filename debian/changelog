@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210225.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210301.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix processing of Vulkan ICDs/layers outside /usr
@@ -32,6 +32,10 @@ steam-runtime-tools (0.20210225.0) UNRELEASED; urgency=medium
   * pressure-vessel: Treat LD_AUDIT the same as LD_PRELOAD, as another step
     towards Flatpak support
   * pressure-vessel: Put apt-style severity prefixes on messages
+  * pressure-vessel: Add experimental code path for Flatpak sub-sandboxing.
+    This requires branches of Flatpak that have not yet been reviewed or
+    merged, so it isn't expected to work yet. Only pressure-vessel or
+    Flatpak developers should enable this.
   * Refactoring
 
   [ Ludovico de Nittis ]
@@ -55,7 +59,7 @@ steam-runtime-tools (0.20210225.0) UNRELEASED; urgency=medium
   * system-info: Parse Vulkan layers from a report in the right order
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 26 Feb 2021 19:03:11 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 01 Mar 2021 13:58:18 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

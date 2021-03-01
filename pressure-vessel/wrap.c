@@ -1707,6 +1707,10 @@ main (int argc,
       /* Assume "bwrap" to exist in the host system and to be in its PATH */
       bwrap_executable = g_strdup ("bwrap");
 
+      /* Deliberately not documented: only people who are in a position
+       * to run their own modified versions of Flatpak and pressure-vessel
+       * should be using this, and those people can find this in the
+       * source code */
       if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") != NULL)
         {
           g_warning ("Assuming your version of Flatpak contains unmerged "
@@ -1723,6 +1727,7 @@ main (int argc,
           flatpak_bwrap_add_arg (flatpak_subsandbox,
                                  "--bus-name=org.freedesktop.portal.Flatpak");
         }
+      /* Also deliberately not documented */
       else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE") != NULL)
         {
           g_warning ("Assuming permissions have been set to allow Steam "

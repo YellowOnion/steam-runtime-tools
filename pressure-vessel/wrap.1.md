@@ -53,29 +53,46 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     directory. This is the same home directory that a Flatpak app for
     freedesktop.org app *ID* would use.
 
+`--gc-legacy-runtimes`, `--no-gc-legacy-runtimes`
+:   Garbage-collect old temporary runtimes in the `--runtime-base` that
+    appear to be left over from older versions of the **SteamLinuxRuntime**
+    launcher scripts. `--no-gc-legacy-runtimes` disables this behaviour,
+    and is the default.
+
 `--gc-runtimes`, `--no-gc-runtimes`
 :   If using `--variable-dir`, garbage-collect old temporary
     runtimes that are left over from a previous **pressure-vessel-wrap**.
     This is the default. `--no-gc-runtimes` disables this behaviour.
 
 `--generate-locales`, `--no-generate-locales`
-:   Passed to **pressure-vessel-wrap**(1).
+:   Passed to **pressure-vessel-adverb**(1).
     The default is `--generate-locales`, overriding the default
-    behaviour of **pressure-vessel-wrap**(1).
+    behaviour of **pressure-vessel-adverb**(1).
+
+`--graphics-provider` *DIR*
+:   If using a `--runtime`, use *DIR* to provide graphics drivers.
+
+    If *DIR* is the empty string, take the graphics drivers from the
+    runtime. This will often lead to software rendering, poor performance,
+    incompatibility with recent GPUs or a crash, and is only intended to
+    be done for development or debugging.
+
+    Otherwise, *DIR* must be the absolute path to a directory that is
+    the root of an operating system installation (a "sysroot"). The
+    default is `/`.
 
 `--home` *DIR*
 :   Use *DIR* as the home directory. This implies `--unshare-home`.
 
 `--host-ld-preload` *MODULE*
-:   Add *MODULE* from the host system to `LD_PRELOAD` when executing
-    *COMMAND*. If *COMMAND* is run in a container, the path of the
-    *MODULE* will be adjusted appropriately.
+:   Deprecated equivalent of `--ld-preload`. Despite its name, the
+    *MODULE* has always been interpreted as relative to the current
+    execution environment, even if **pressure-vessel-wrap** is running
+    in a container.
 
 `--import-vulkan-layers`, `--no-import-vulkan-layers`
 :   If `--no-import-vulkan-layers` is specified, the Vulkan layers will
-    not be imported from the host system. Please note that some layers might
-    still be reachable from inside the container. E.g. layers located in
-    `~/.local/share/vulkan` if used in combination with `--share-home`.
+    not be imported from the host system.
     The default is `--import-vulkan-layers`.
 
 `--keep-game-overlay`, `--remove-game-overlay`
@@ -86,6 +103,20 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 :   Instead of specifying a command with its arguments to execute, all the
     elements after `--` will be used as arguments for
     `pressure-vessel-launcher`. This option implies `--batch`.
+
+`--ld-audit` *MODULE*
+:   Add *MODULE* from the current execution environment to `LD_AUDIT`
+    when executing *COMMAND*. If *COMMAND* is run in a container, or if
+    **pressure-vessel-wrap** is run in a Flatpak sandbox and *COMMAND*
+    will be run in a different container or on the host system, then the
+    path of the *MODULE* will be adjusted as necessary.
+
+`--ld-preload` *MODULE*
+:   Add *MODULE* from the current execution environment to `LD_PRELOAD`
+    when executing *COMMAND*. If *COMMAND* is run in a container, or if
+    **pressure-vessel-wrap** is run in a Flatpak sandbox and *COMMAND*
+    will be run in a different container or on the host system, then the
+    path of the *MODULE* will be adjusted as necessary.
 
 `--only-prepare`
 :   Prepare the runtime, but do not actually run *COMMAND*.
@@ -141,7 +172,11 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 `--runtime-id` *ID*
 :   Use *ID* to construct a directory into which the `--runtime-archive`
     will be unpacked, overriding an accompanying `-buildid.txt` file
-    if present.
+    if present. The *ID* must match the regular expression
+    `^[A-Za-z0-9_][-A-Za-z0-9_.]*$` (a non-empty sequence of ASCII
+    letters, digits, underscores, dots and dashes, starting with a
+    letter, digit or underscore). It will typically be in a format
+    similar to `0.20210301.0` or `soldier_0.20210301.0`.
 
     If the *ID* is the same as in a previous run of pressure-vessel-wrap,
     the content of the `--runtime-archive` will be assumed to be the
@@ -196,7 +231,7 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     the `--shell` options.
 
 `--terminal=xterm`, `--xterm`
-:   Start an `xterm`(1) inside the container.
+:   Start an **xterm**(1) inside the container.
 
 `--terminate-timeout` *SECONDS*, `--terminate-idle-timeout` *SECONDS*
 :   Passed to **pressure-vessel-wrap**(1).
@@ -216,9 +251,11 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 :   Print the version number and exit.
 
 `--with-host-graphics`, `--without-host-graphics`
-:   If using a `--runtime`, either import the host system's
-    graphics stack into it (default), or use the runtime's graphics
-    stack if any (likely to result in slow rendering or a crash).
+:   Deprecated form of `--graphics-provider`.
+    `--with-host-graphics` is equivalent to either
+    `--graphics-provider=/run/host` if it looks suitable, or
+    `--graphics-provider=/` if not.
+    `--without-host-graphics` is equivalent to `--graphics-provider=""`.
 
 # ENVIRONMENT
 
@@ -227,7 +264,7 @@ The following environment variables (among others) are read by
 
 `__EGL_VENDOR_LIBRARY_DIRS`, `__EGL_VENDOR_LIBRARY_FILENAMES`
 :   Used to locate EGL ICDs to be made available in the container
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `BWRAP` (path)
 :   Absolute path to **bwrap**(1).
@@ -240,13 +277,17 @@ The following environment variables (among others) are read by
 `DISPLAY`
 :   Used to locate the X11 display to make available in the container.
 
+`FLATPAK_ID`
+:   Used to locate the app-specific data directory when running in a
+    Flatpak environment.
+
 `LIBGL_DRIVERS_PATH`
 :   Used to locate Mesa DRI drivers to be made available in the container
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `LIBVA_DRIVERS_PATH`
 :   Used to locate VA-API drivers to be made available in the container
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `PRESSURE_VESSEL_BATCH` (boolean)
 :   If set to `1`, equivalent to `--batch`.
@@ -257,8 +298,8 @@ The following environment variables (among others) are read by
     If set to `0`, equivalent to `--no-copy-runtime`.
 
 `PRESSURE_VESSEL_COPY_RUNTIME_INTO` (path or empty string)
-:   If the string is empty, equivalent to `--no-copy-runtime`.
-    Otherwise, equivalent to
+:   If the string is empty, it is a deprecated equivalent of
+    `--no-copy-runtime`. Otherwise, it is a deprecated equivalent of
     `--copy-runtime --variable-dir="$PRESSURE_VESSEL_COPY_RUNTIME_INTO"`.
 
 `PRESSURE_VESSEL_FILESYSTEMS_RO` (`:`-separated list of paths)
@@ -284,12 +325,18 @@ The following environment variables (among others) are read by
 :   If set to `1`, equivalent to `--generate-locales`.
     If set to `0`, equivalent to `--no-generate-locales`.
 
+`PRESSURE_VESSEL_GRAPHICS_PROVIDER` (absolute path or empty string)
+:   Equivalent to `--graphics-provider="$PRESSURE_VESSEL_GRAPHICS_PROVIDER"`.
+
 `PRESSURE_VESSEL_HOME` (path)
 :   Equivalent to `--home="$PRESSURE_VESSEL_HOME"`.
 
 `PRESSURE_VESSEL_HOST_GRAPHICS` (boolean)
-:   If set to `1`, equivalent to `--with-host-graphics`.
-    If set to `0`, equivalent to `--without-host-graphics`.
+:   Deprecated form of `$PRESSURE_VESSEL_GRAPHICS_PROVIDER`.
+    If set to `1`, equivalent to either
+    `--graphics-provider=/run/host` if it looks suitable, or
+    `--graphics-provider=/` if not.
+    If set to `0`, equivalent to `--graphics-provider=""`.
 
 `PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS` (boolean)
 :   If set to `1`, equivalent to `--import-vulkan-layers`.
@@ -310,8 +357,14 @@ The following environment variables (among others) are read by
 `PRESSURE_VESSEL_RUNTIME` (path, filename or empty string)
 :   Equivalent to `--runtime="$PRESSURE_VESSEL_RUNTIME"`.
 
+`PRESSURE_VESSEL_RUNTIME_ARCHIVE` (path, filename or empty string)
+:   Equivalent to `--runtime-archive="$PRESSURE_VESSEL_RUNTIME_ARCHIVE"`.
+
 `PRESSURE_VESSEL_RUNTIME_BASE` (path, filename or empty string)
 :   Equivalent to `--runtime-base="$PRESSURE_VESSEL_RUNTIME_BASE"`.
+
+`PRESSURE_VESSEL_RUNTIME_ID` (string matching `^[A-Za-z0-9_][-A-Za-z0-9_.]*$`)
+:   Equivalent to `--runtime-id="$PRESSURE_VESSEL_RUNTIME_ID"`.
 
 `PRESSURE_VESSEL_SHARE_HOME` (boolean)
 :   If set to `1`, equivalent to `--share-home`.
@@ -400,33 +453,42 @@ The following environment variables (among others) are read by
 
 `STEAM_RUNTIME` (path)
 :   **pressure-vessel-wrap** refuses to run if this environment variable
-    is set. Use `pressure-vessel-unruntime`(1) instead.
+    is set. Use **pressure-vessel-unruntime**(1) instead.
 
 `SteamAppId` (integer)
 :   Equivalent to `--steam-app-id="$SteamAppId"`.
     Must only be set for the main processes that are running a game, not
     for any setup/installation steps that happen first.
+    `STEAM_COMPAT_APP_ID` is used with a higher priority.
 
 `VDPAU_DRIVER_PATH`
 :   Used to locate VDPAU drivers to be made available in the container
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `VK_ICD_FILENAMES`
 :   Used to locate Vulkan ICDs to be made available in the container
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
+
+`VK_LAYER_PATH`
+:   Used to locate Vulkan explicit layers
+    if `--runtime` and `--graphics-provider` are active.
 
 `WAYLAND_DISPLAY`
 :   Used to locate the Wayland display to make available in the container.
 
+`XDG_DATA_DIRS`
+:   Used to locate Vulkan ICDs and layers
+    if `--runtime` and `--graphics-provider` are active.
+
 The following environment variables are set by **pressure-vessel-wrap**(1).
 
 `__EGL_VENDOR_LIBRARY_DIRS`
-:   Unset if `--runtime` and `--with-host-graphics` are active,
+:   Unset if `--runtime` and `--graphics-provider` are active,
     to make sure `__EGL_VENDOR_LIBRARY_FILENAMES` will be used instead.
 
 `__EGL_VENDOR_LIBRARY_FILENAMES`
 :   Set to a search path for EGL ICDs
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `DBUS_SESSION_BUS_ADDRESS`, `DBUS_SYSTEM_BUS_ADDRESS`
 :   Set to paths in the container's private `/run` where the well-known
@@ -436,20 +498,23 @@ The following environment variables are set by **pressure-vessel-wrap**(1).
 :   Set to a value corresponding to the socket in the container's
     `/tmp/.X11-unix`.
 
+`LD_AUDIT`
+:   Set according to `--ld-audit`.
+
 `LD_LIBRARY_PATH`
 :   Set to a search path for shared libraries if `--runtime` is active.
 
 `LD_PRELOAD`
-:   Set according to `--host-ld-preload`, `--keep-game-overlay`,
+:   Set according to `--ld-preload`, `--keep-game-overlay`,
     `--remove-game-overlay`.
 
 `LIBGL_DRIVERS_PATH`
 :   Set to a search path for Mesa DRI drivers
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `LIBVA_DRIVERS_PATH`
 :   Set to a search path for VA-API drivers
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `PATH`
 :   Reset to a reasonable value if `--runtime` is active.
@@ -463,13 +528,23 @@ The following environment variables are set by **pressure-vessel-wrap**(1).
 `PWD`
 :   Set to the current working directory inside the container.
 
+`STEAM_RUNTIME`
+:   Set to `/` if using the Steam Runtime 1 'scout' runtime.
+
+`TERMINFO_DIRS`
+:   Set to the required search path for **terminfo**(5) files if
+    the `--runtime` appears to be Debian-based.
+
 `VDPAU_DRIVER_PATH`
 :   Set to a search path for VDPAU drivers
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
 
 `VK_ICD_FILENAMES`
 :   Set to a search path for Vulkan ICDs
-    if `--runtime` and `--with-host-graphics` are active.
+    if `--runtime` and `--graphics-provider` are active.
+
+`VK_LAYER_PATH`
+:   Unset if `--runtime` and `--graphics-provider` are active.
 
 `XAUTHORITY`
 :   Set to a value corresponding to a file in the container's
@@ -486,6 +561,10 @@ The following environment variables are set by **pressure-vessel-wrap**(1).
 `XDG_DATA_HOME`
 :   Set to `$HOME/.local/share` (in the private home directory)
     if `--unshare-home` is active.
+
+`XDG_DATA_DIRS`
+:   Set to include a search path for Vulkan layers
+    if `--runtime` and `--graphics-provider` are active.
 
 `XDG_RUNTIME_DIR`
 :   Set to a new directory in the container's private `/run`
@@ -539,20 +618,19 @@ or significant Steam integration.
 
     $ steam steam://install/1070560     # Steam Linux Runtime 'scout'
     $ steam steam://install/302380      # Floating Point, a small free game
-    $ rm -fr ~/tmp/scout
-    $ mkdir -p ~/tmp/scout
-    $ tar \
-        -C ~/tmp/scout \
-        -xzvf ~/.steam/steamapps/common/SteamLinuxRuntime/com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
+    $ rm -fr ~/tmp/pressure-vessel-var
+    $ mkdir -p ~/tmp/pressure-vessel-var
+    $ archive=com.valvesoftware.SteamRuntime.Platform-amd64,i386-scout-runtime.tar.gz
     $ cd ~/.steam/steam/steamapps/common/"Floating Point"
     $ /path/to/pressure-vessel/bin/pressure-vessel-wrap \
-        --runtime ~/tmp/scout/files \
+        --runtime-archive ~/.steam/steamapps/common/SteamLinuxRuntime/"$archive" \
+        --variable-dir ~/tmp/pressure-vessel-var \
         --shell=instead \
         -- \
         "./Floating Point.x86"
 
-In the resulting `xterm`(1), you can explore the container interactively,
-then type `"$@"` to run the game itself.
+In the resulting **xterm**(1), you can explore the container interactively,
+then type `"$@"` (including the double quotes) to run the game itself.
 
 For more joined-up integration with Steam, install the Steam Linux Runtime
 (`steam://install/1070560`), and configure a native Linux game in Steam

@@ -1656,20 +1656,20 @@ main (int argc,
     {
       g_auto(GStrv) env = g_strdupv (original_environ);
 
-      g_message ("Original argv:");
+      g_debug ("Original argv:");
 
       for (i = 0; i < original_argc; i++)
         {
           g_autofree gchar *quoted = g_shell_quote (original_argv[i]);
 
-          g_message ("\t%" G_GSIZE_FORMAT ": %s", i, quoted);
+          g_debug ("\t%" G_GSIZE_FORMAT ": %s", i, quoted);
         }
 
-      g_message ("Current working directory:");
-      g_message ("\tPhysical: %s", cwd_p);
-      g_message ("\tLogical: %s", cwd_l);
+      g_debug ("Current working directory:");
+      g_debug ("\tPhysical: %s", cwd_p);
+      g_debug ("\tLogical: %s", cwd_l);
 
-      g_message ("Environment variables:");
+      g_debug ("Environment variables:");
 
       qsort (env, g_strv_length (env), sizeof (char *), pv_envp_cmp);
 
@@ -1677,19 +1677,19 @@ main (int argc,
         {
           g_autofree gchar *quoted = g_shell_quote (env[i]);
 
-          g_message ("\t%s", quoted);
+          g_debug ("\t%s", quoted);
         }
 
       if (opt_launcher)
-        g_message ("Arguments for pv-launcher:");
+        g_debug ("Arguments for pv-launcher:");
       else
-        g_message ("Wrapped command:");
+        g_debug ("Wrapped command:");
 
       for (i = 1; i < argc; i++)
         {
           g_autofree gchar *quoted = g_shell_quote (argv[i]);
 
-          g_message ("\t%" G_GSIZE_FORMAT ": %s", i, quoted);
+          g_debug ("\t%" G_GSIZE_FORMAT ": %s", i, quoted);
         }
     }
 
@@ -2336,14 +2336,14 @@ main (int argc,
 
       if (opt_verbose)
         {
-          g_message ("%s options before bundling:", bwrap_executable);
+          g_debug ("%s options before bundling:", bwrap_executable);
 
           for (i = 0; i < bwrap->argv->len; i++)
             {
               g_autofree gchar *quoted = NULL;
 
               quoted = g_shell_quote (g_ptr_array_index (bwrap->argv, i));
-              g_message ("\t%s", quoted);
+              g_debug ("\t%s", quoted);
             }
         }
 
@@ -2556,24 +2556,24 @@ main (int argc,
 
   if (opt_verbose)
     {
-      g_message ("Final command to execute:");
+      g_debug ("Final command to execute:");
 
       for (i = 0; i < final_argv->argv->len; i++)
         {
           g_autofree gchar *quoted = NULL;
 
           quoted = g_shell_quote (g_ptr_array_index (final_argv->argv, i));
-          g_message ("\t%s", quoted);
+          g_debug ("\t%s", quoted);
         }
 
-      g_message ("Final environment:");
+      g_debug ("Final environment:");
 
       for (i = 0; final_argv->envp != NULL && final_argv->envp[i] != NULL; i++)
         {
           g_autofree gchar *quoted = NULL;
 
           quoted = g_shell_quote (final_argv->envp[i]);
-          g_message ("\t%s", quoted);
+          g_debug ("\t%s", quoted);
         }
     }
 

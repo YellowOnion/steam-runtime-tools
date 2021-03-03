@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210301.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210303.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix processing of Vulkan ICDs/layers outside /usr
@@ -10,6 +10,8 @@ steam-runtime-tools (0.20210301.0) UNRELEASED; urgency=medium
     (Resolves: steam-runtime#367)
   * pressure-vessel: Cope with /var/tmp (or /var) being a symlink
     (Resolves: steam-runtime#368)
+  * pv-wrap: Make PROTON_LOG_DIR available in the container
+    (Resolves: steam-runtime#369)
   * pressure-vessel: Never set XDG_DATA_DIRS to just our override directory.
     Default to /usr/local/share:/usr/share as per the specification.
   * pressure-vessel: Mask Vulkan layers in home directory or other non-/usr
@@ -39,14 +41,19 @@ steam-runtime-tools (0.20210301.0) UNRELEASED; urgency=medium
   * Refactoring
 
   [ Ludovico de Nittis ]
+  * pressure-vessel: Respect search-cwd flag in STEAM_COMPAT_FLAGS.
+    This should fix games like Shadowrun Returns that assume their
+    installation directory is in the LD_LIBRARY_PATH.
+    (Resolves: steam-runtime#371, steam-runtime-tools#46)
   * pressure-vessel: Run nvidia-modprobe -u before entering the container
     if needed, to load nvidia_uvm.ko for Vulkan ray-tracing support
-    (Resolves: #59)
+    (Resolves: steam-runtime-tools#59)
   * pressure-vessel: Update flatpak-run to the latest upstream version.
     This includes a fix to propagate the X11 cookies that have an address
     equal to XAUTHLOCALHOSTNAME, fixing X11 authentication on some openSUSE
     systems (Resolves: steam-runtime-tools#53)
-  * runtime: Bind the drirc settings from the provider (Resolves: #60)
+  * runtime: Bind the drirc settings from the provider
+    (Resolves: steam-runtime-tools#60)
   * pressure-vessel: Improve library binding speed
   * pv-adverb: Remove unused locales temporary directories
     (Resolves: steam-runtime-tools#56)
@@ -55,11 +62,13 @@ steam-runtime-tools (0.20210301.0) UNRELEASED; urgency=medium
     detect regressions where we duplicate ICDs/layers in the pressure-vessel
     container that were not duplicates on the host. (Resolves: T26156)
   * system-info: Add ability to set multiarch tuples to inspect
-    (Resolves: #58)
+    (Resolves: steam-runtime-tools#58)
+  * pressure-vessel: Mount systemd-resolved varlink socket if available
+    (Resolves: steam-runtime-tools#61)
   * system-info: Parse Vulkan layers from a report in the right order
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 01 Mar 2021 13:58:18 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 03 Mar 2021 14:18:02 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

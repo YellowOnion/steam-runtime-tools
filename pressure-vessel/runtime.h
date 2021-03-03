@@ -42,6 +42,7 @@
  * @PV_RUNTIME_FLAGS_UNPACK_ARCHIVE: Source is an archive, not a deployment
  * @PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX: The runtime will be used in a
  *  Flatpak subsandbox
+ * @PV_RUNTIME_FLAGS_SEARCH_CWD: Append the game install path to LD_LIBRARY_PATH
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -56,6 +57,7 @@ typedef enum
   PV_RUNTIME_FLAGS_COPY_RUNTIME = (1 << 5),
   PV_RUNTIME_FLAGS_UNPACK_ARCHIVE = (1 << 6),
   PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX = (1 << 7),
+  PV_RUNTIME_FLAGS_SEARCH_CWD = (1 << 8),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -68,6 +70,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_COPY_RUNTIME \
    | PV_RUNTIME_FLAGS_UNPACK_ARCHIVE \
    | PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX \
+   | PV_RUNTIME_FLAGS_SEARCH_CWD \
    )
 
 typedef struct _PvRuntime PvRuntime;

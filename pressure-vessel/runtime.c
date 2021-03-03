@@ -4665,6 +4665,17 @@ pv_runtime_set_search_paths (PvRuntime *self,
       pv_search_path_append (ld_library_path, ld_path);
     }
 
+  if (self->flags & PV_RUNTIME_FLAGS_SEARCH_CWD)
+    {
+      const gchar *install_path = g_environ_getenv (self->original_environ,
+                                                    "STEAM_COMPAT_INSTALL_PATH");
+      if (install_path != NULL)
+        pv_search_path_append (ld_library_path, install_path);
+      else
+        g_debug ("The environment variable \"STEAM_COMPAT_INSTALL_PATH\" is not set, "
+                 "we can't append the game install path to LD_LIBRARY_PATH.");
+    }
+
   /* If the runtime is Debian-based, make sure we search where ncurses-base
    * puts terminfo, even if we're using a non-Debian-based libtinfo.so.6. */
   terminfo_path = g_build_filename (self->source_files, "lib", "terminfo",

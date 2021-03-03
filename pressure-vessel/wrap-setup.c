@@ -57,6 +57,8 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   pv_environ_lock_env (container_env, "PULSE_SERVER", NULL);
   pv_environ_lock_env (container_env, "XAUTHORITY", NULL);
 
+  flatpak_run_add_resolved_args (sharing_bwrap);
+
   flatpak_run_add_font_path_args (sharing_bwrap);
 
   /* We need to set up IPC rendezvous points relatively late, so that

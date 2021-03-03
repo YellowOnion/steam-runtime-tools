@@ -727,8 +727,7 @@ flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap)
     flatpak_bwrap_add_args (bwrap, "--dev-bind", "/dev/snd", "/dev/snd", NULL);
 }
 
-#if 0
-static void
+void
 flatpak_run_add_resolved_args (FlatpakBwrap *bwrap)
 {
   const char *resolved_socket = "/run/systemd/resolve/io.systemd.Resolve";
@@ -737,6 +736,7 @@ flatpak_run_add_resolved_args (FlatpakBwrap *bwrap)
     flatpak_bwrap_add_args (bwrap, "--bind", resolved_socket, resolved_socket, NULL);
 }
 
+#if 0
 static void
 flatpak_run_add_journal_args (FlatpakBwrap *bwrap)
 {

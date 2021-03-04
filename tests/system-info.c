@@ -362,7 +362,7 @@ auto_expectations (Fixture *f,
     }
 
   env = g_get_environ ();
-  steam_runtime = g_build_filename (f->srcdir, "fake-steam-runtime", NULL);
+  steam_runtime = g_build_filename (f->sysroots, "fake-steam-runtime", NULL);
   env = g_environ_setenv (env, "STEAM_RUNTIME", steam_runtime, TRUE);
 
   info = srt_system_info_new (NULL);

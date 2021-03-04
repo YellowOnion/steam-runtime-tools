@@ -60,6 +60,36 @@ debian10/usr/local/etc/vulkan/explicit_layer.d
 debian10/usr/share/vulkan/implicit_layer.d
 debian10/run/systemd
 debian-unstable/etc
+fake-icds/home/.local/share/vulkan/icd.d
+fake-icds/egl2
+fake-icds/confdir/vulkan/icd.d
+fake-icds/etc/glvnd/egl_vendor.d
+fake-icds/etc/vulkan/icd.d
+fake-icds/etc/xdg/vulkan/icd.d
+fake-icds/datadir/vulkan/icd.d
+fake-icds/egl1
+fake-icds/opt
+fake-icds/datahome/vulkan/icd.d
+fake-icds/usr/lib/i386-mock-abi
+fake-icds/usr/lib/x86_64-mock-abi/vulkan/icd.d
+fake-icds/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d
+fake-icds/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d
+fake-icds/usr/local/share/vulkan/icd.d
+fake-icds/usr/share/glvnd/egl_vendor.d
+fake-icds/usr/share/vulkan/icd.d
+fake-icds-flatpak/etc/glvnd/egl_vendor.d
+fake-icds-flatpak/etc/vulkan/icd.d
+fake-icds-flatpak/etc/xdg/vulkan/icd.d
+fake-icds-flatpak/home/.local/share/vulkan/icd.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d
+fake-icds-flatpak/usr/lib/i386-mock-abi
+fake-icds-flatpak/usr/local/share/vulkan/icd.d
+fake-icds-flatpak/usr/share/glvnd/egl_vendor.d
+fake-icds-flatpak/usr/share/vulkan/icd.d
+fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu
+fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu
 fedora/custom_path
 fedora/custom_path2
 fedora/custom_path3
@@ -132,6 +162,28 @@ debian10/usr/lib/x86_64-linux-gnu/libvdpau.so.1
 debian10/usr/lib/x86_64-linux-gnu/vdpau/libvdpau_r600.so.1.0.0
 debian10/usr/lib/x86_64-linux-gnu/vdpau/libvdpau_radeonsi.so.1.0.0
 debian-unstable/.dockerenv
+fake-icds/egl1/a.json
+fake-icds/egl1/b.json
+fake-icds/egl1/BBB.json
+fake-icds/etc/glvnd/egl_vendor.d/invalid.json
+fake-icds/etc/xdg/vulkan/icd.d/invalid.json
+fake-icds/etc/xdg/vulkan/icd.d/invalid.txt
+fake-icds/opt/libEGL_myvendor.so
+fake-icds/usr/lib/i386-mock-abi/libvulkan_intel.so
+fake-icds/usr/lib/x86_64-mock-abi/libEGL_mesa.so.0
+fake-icds/usr/lib/x86_64-mock-abi/libvulkan_basename.so
+fake-icds/usr/lib/x86_64-mock-abi/libvulkan_intel.so
+fake-icds/usr/lib/x86_64-mock-abi/libz.so.1
+
+
+fake-icds-flatpak/etc/glvnd/egl_vendor.d/invalid.json
+fake-icds-flatpak/etc/xdg/vulkan/icd.d/invalid.json
+fake-icds-flatpak/etc/xdg/vulkan/icd.d/invalid.txt
+fake-icds-flatpak/usr/lib/i386-mock-abi/libvulkan_intel.so
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/libvulkan_relative.so
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/libEGL_relative.so
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/libvulkan_intel.so
+fake-icds-flatpak/.flatpak-info
 fedora/usr/lib/dri/i965_dri.so
 fedora/usr/lib/dri/r300_dri.so
 fedora/usr/lib/dri/r600_drv_video.so
@@ -435,6 +487,349 @@ with open('debian10/home/debian/.local/share/vulkan/implicit_layer.d/steamoverla
       "DISABLE_VK_LAYER_VALVE_steam_overlay_1" : "1"
     }
   }
+}''')
+
+with open('fake-icds/false.json', 'w') as writer:
+    writer.write('''false''')
+
+with open('fake-icds/no-api-version.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "library_path": "libfoo.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/no-library.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/null.json', 'w') as writer:
+    writer.write('''null''')
+
+with open('fake-icds/str.json', 'w') as writer:
+    writer.write('''"hello, world!"''')
+
+with open('fake-icds/confdir/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.1.0"
+}''')
+
+with open('fake-icds/datadir/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "2.0.0"
+}''')
+
+with open('fake-icds/datahome/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/home/.local/share/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''{ }''')
+
+with open('fake-icds/egl2/absolute.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "1.0.0",
+    "ICD" : {
+        "library_path" : "/opt/libEGL_myvendor.so"
+    }
+}''')
+
+with open('fake-icds/egl1/AAA.json', 'w') as writer:
+    writer.write('''hello world!''')
+
+with open('fake-icds/egl1/soname_zlib_dup.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "1.0.0",
+    "ICD" : {
+        "library_path" : "libz.so.1"
+    }
+}''')
+
+with open('fake-icds/egl1/z.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "9000.0.0"
+}''')
+
+with open('fake-icds/egl2/soname_zlib.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "1.0.0",
+    "ICD" : {
+        "library_path" : "libz.so.1"
+    }
+}''')
+
+with open('fake-icds/etc/vulkan/icd.d/basename.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.2.3",
+        "library_path": "libvulkan_basename.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.1",
+        "library_path": "../libvulkan_relative.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "library_path": "../libEGL_relative.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''[]''')
+
+with open('fake-icds/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/i386-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "1.0.0",
+    "ICD" : {
+        "library_path" : "libEGL_mesa.so.0"
+    }
+}''')
+
+with open('fake-icds/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds-flatpak/home/.local/share/vulkan/icd.d/relative_new.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.2",
+        "library_path": "/usr/lib/x86_64-mock-abi/vulkan/icd.d/../libvulkan_relative.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds-flatpak/etc/vulkan/icd.d/basename.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.2.3",
+        "library_path": "libvulkan_basename.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds-flatpak/false.json', 'w') as writer:
+    writer.write('''false''')
+
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.1",
+        "library_path": "../libvulkan_relative.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "library_path": "../libEGL_relative.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''[]''')
+
+with open('fake-icds-flatpak/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/i386-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds-flatpak/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "1.0.0",
+    "ICD" : {
+        "library_path" : "libEGL_mesa.so.0"
+    }
+}''')
+
+with open('fake-icds-flatpak/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu/libglib2.0-0.symbols', 'w') as writer:
+    writer.write('''\
+# Cut-down version of libglib2.0-0:amd64.symbols, to illustrate what we expect
+# to find here
+libgio-2.0.so.0 libglib2.0-0 #MINVER#
+* Build-Depends-Package: libglib2.0-dev
+ g_action_activate@Base 2.28.0
+ g_action_change_state@Base 2.30.0
+libglib-2.0.so.0 libglib2.0-0 #MINVER#
+* Build-Depends-Package: libglib2.0-dev
+ g_access@Base 2.12.0
+ g_allocator_free@Base 2.12.0
+ g_allocator_new@Base 2.12.0
+''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu/libtheora0.symbols', 'w') as writer:
+    writer.write('''\
+# Cut-down version of libtheora0:amd64.symbols, to illustrate what we expect
+# to find here
+libtheoraenc.so.1 libtheora0 #MINVER#
+# No symbols listed here yet
+''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu/zlib1g.symbols', 'w') as writer:
+    writer.write('''\
+# Cut-down version of zlib1g:amd64.symbols, to illustrate what we expect
+# to find here
+libz.so.1 zlib1g #MINVER#
+ adler32@Base 1:1.1.4
+''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu/libglib2.0-0.symbols', 'w') as writer:
+    writer.write('''\
+# Cut-down version of libglib2.0-0:amd64.symbols, to illustrate what we expect
+# to find here
+libgio-2.0.so.0 libglib2.0-0 #MINVER#
+* Build-Depends-Package: libglib2.0-dev
+ g_action_activate@Base 2.28.0
+ g_action_change_state@Base 2.30.0
+libglib-2.0.so.0 libglib2.0-0 #MINVER#
+* Build-Depends-Package: libglib2.0-dev
+ g_access@Base 2.12.0
+ g_allocator_free@Base 2.12.0
+ g_allocator_new@Base 2.12.0
+''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu/libtheora0.symbols', 'w') as writer:
+    writer.write('''\
+# Cut-down version of libtheora0:i386.symbols, to illustrate what we expect
+# to find here
+libtheoraenc.so.1 libtheora0 #MINVER#
+# No symbols listed here yet
+''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu/zlib1g.symbols', 'w') as writer:
+    writer.write('''\
+# Cut-down version of zlib1g:amd64.symbols, to illustrate what we expect
+# to find here
+libz.so.1 zlib1g #MINVER#
+ adler32@Base 1:1.1.4
+''')
+
+with open('fake-steam-runtime/usr/lib/steamrt/steam-runtime-abi.json', 'w') as writer:
+    writer.write('''\
+{
+ "architectures": {
+  "i386-linux-gnu": {
+   "dpkg_name": "i386"
+  },
+  "x86_64-linux-gnu": {
+   "dpkg_name": "amd64"
+  }
+ },
+ "extra_debs": {
+  "libs": [
+   "dconf-gsettings-backend",
+   "gtk2-engines"
+  ]
+ },
+ "private_libraries": [
+  {
+   "libVkLayer_*.so": {
+    "deb": "libvulkan1"
+   }
+  }
+ ],
+ "shared_libraries": [
+  {
+   "libglut.so.3": {
+    "deb": "freeglut3"
+   }
+  },
+  "libacl.so.1",
+  {
+   "libtheoraenc.so.1": {
+    "deb": "libtheora0",
+    "hidden_dependencies": [
+     "libtheoradec.so.1"
+    ]
+   }
+  },
+  {
+   "libtWithHiddens.so.1": {
+    "deb": "libtWithHiddens0",
+    "hidden_dependencies": [
+     "firstHidden.so.0",
+     "secondHidden.so.3"
+    ]
+   }
+  }
+ ]
 }''')
 
 with open('fedora/usr/share/vulkan/implicit_layer.d/incomplete_layer.json', 'w') as writer:

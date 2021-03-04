@@ -75,25 +75,21 @@ setup (Fixture *f,
 {
   const Config *config = context;
 
-  f->srcdir = g_strdup (g_getenv ("G_TEST_SRCDIR"));
   f->builddir = g_strdup (g_getenv ("G_TEST_BUILDDIR"));
-
-  if (f->srcdir == NULL)
-    f->srcdir = g_path_get_dirname (argv0);
 
   if (f->builddir == NULL)
     f->builddir = g_path_get_dirname (argv0);
 
   f->sysroots = global_sysroots;
 
-  if (g_chdir (f->srcdir) != 0)
-    g_error ("chdir %s: %s", f->srcdir, g_strerror (errno));
+  if (g_chdir (f->sysroots) != 0)
+    g_error ("chdir %s: %s", f->sysroots, g_strerror (errno));
 
   f->fake_icds_envp = g_get_environ ();
 
   if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     {
-      f->sysroot = g_build_filename (f->srcdir, "fake-icds-flatpak", NULL);
+      f->sysroot = g_build_filename (f->sysroots, "fake-icds-flatpak", NULL);
       /* Some of the mock helper programs rely on this, so we set it
        * even though SrtSystemInfo doesn't use it any more */
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
@@ -101,7 +97,7 @@ setup (Fixture *f,
     }
   else if (config == NULL || config->icd_mode != ICD_MODE_RELATIVE_FILENAMES)
     {
-      f->sysroot = g_build_filename (f->srcdir, "fake-icds", NULL);
+      f->sysroot = g_build_filename (f->sysroots, "fake-icds", NULL);
       /* Some of the mock helper programs rely on this, so we set it
        * even though SrtSystemInfo doesn't use it any more */
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
@@ -200,7 +196,6 @@ teardown (Fixture *f,
 {
   G_GNUC_UNUSED const Config *config = context;
 
-  g_free (f->srcdir);
   g_free (f->builddir);
   g_free (f->sysroot);
   g_strfreev (f->fake_icds_envp);

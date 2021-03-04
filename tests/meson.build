@@ -116,8 +116,6 @@ install_subdir('expectations_with_missings', install_dir : tests_dir)
 # than one *.json file in any directory that we are going to scan for
 # Vulkan *.json files. (The order of EGL *.json files is well-defined.)
 install_subdir('fake-icds', install_dir : tests_dir)
-install_subdir('fake-icds-flatpak', install_dir : tests_dir)
-install_subdir('fake-steam-runtime', install_dir : tests_dir)
 install_subdir('input-monitor-outputs', install_dir : tests_dir)
 install_subdir('json-report', install_dir : tests_dir)
 

@@ -364,6 +364,15 @@ def main():
                     ),
                 )
 
+            for shader in glob.glob(os.path.join(path, 'shaders', '*.spv')):
+                install(
+                    shader,
+                    os.path.join(
+                        installation, 'libexec', 'steam-runtime-tools-0',
+                        'shaders', os.path.basename(shader),
+                    )
+                )
+
         primary_architecture = subprocess.check_output([
             'dpkg', '--print-architecture',
         ]).decode('utf-8').strip()

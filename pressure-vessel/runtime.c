@@ -2212,6 +2212,7 @@ bind_runtime_base (PvRuntime *self,
   {
     "/etc/amd",
     "/etc/drirc",
+    "/run/bumblebee.socket",
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());

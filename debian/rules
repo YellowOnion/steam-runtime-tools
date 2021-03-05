@@ -126,14 +126,27 @@ override_dh_link:
 	# Make the links in $(pkglibdir) relative. This is contrary
 	# to Debian policy, but is what we need for the LD_LIBRARY_PATH
 	# Steam Runtime, where GLib is in /lib.
-	set -e; for link in $(relocatable_pkglibdir)/lib*; do \
+	# Also make them point to the SONAME if possible.
+	set -e; \
+	cd $(relocatable_pkglibdir); \
+	for link in lib*; do \
 		target="$$(readlink -v "$$link")"; \
 		echo "before: $$link -> $$target"; \
+		by_soname="$${target%/*}/$$link"; \
+		if ! [ -e "$$by_soname" ]; then \
+			echo "$$by_soname does not exist"; \
+		elif ! command test "$$target" -ef "$$by_soname"; then \
+			echo "$$target is not the same file as $$by_soname"; \
+		else \
+			target="$$by_soname"; \
+		fi; \
 		case "$$target" in \
 			(/*) \
-				ln -fnsv "../../../..$${target}" "$${link}"; \
+				target="../../../..$${target}"; \
 				;; \
 		esac; \
+		echo "after:  $$link -> $$target"; \
+		ln -fnsv "$${target}" "$${link}"; \
 	done
 
 override_dh_missing:

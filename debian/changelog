@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210303.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210305.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix processing of Vulkan ICDs/layers outside /usr
@@ -38,6 +38,14 @@ steam-runtime-tools (0.20210303.0) UNRELEASED; urgency=medium
     This requires branches of Flatpak that have not yet been reviewed or
     merged, so it isn't expected to work yet. Only pressure-vessel or
     Flatpak developers should enable this.
+  * pressure-vessel: Make /run/bumblebee.socket visible in container.
+    This is sometimes helpful for Primus/Bumblebee setups, although we
+    recommend PRIME render offloading (DRI_PRIME=1 for Mesa or
+    __NV_PRIME_RENDER_OFFLOAD=1 for NVIDIA) as a more reliable way to manage
+    multiple GPUs. (Helps: steam-runtime#372)
+  * debian: Make symlinks in RPATH point to libraries by SONAME.
+    This makes the steam-runtime-system-info in the LD_LIBRARY_PATH
+    Steam Runtime work more reliably across GLib upgrades.
   * Refactoring
 
   [ Ludovico de Nittis ]
@@ -65,10 +73,14 @@ steam-runtime-tools (0.20210303.0) UNRELEASED; urgency=medium
     (Resolves: steam-runtime-tools#58)
   * pressure-vessel: Mount systemd-resolved varlink socket if available
     (Resolves: steam-runtime-tools#61)
+  * pressure-vessel: Include Vulkan shaders required by the included
+    diagnostic tool (Resolves: steam-runtime-tools#62)
   * system-info: Parse Vulkan layers from a report in the right order
+  * tests: Programmatically generate more mock sysroots instead of including
+    them in the source release (Resolves: T26709)
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 03 Mar 2021 14:18:02 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 05 Mar 2021 11:02:44 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

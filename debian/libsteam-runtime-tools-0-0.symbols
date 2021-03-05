@@ -24,6 +24,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_dri_driver_resolve_library_path@Base 0.20200331.1
  srt_driver_flags_get_type@Base 0.20200109.0
  srt_egl_icd_check_error@Base 0.20190926.0
+ srt_egl_icd_get_issues@Base 0.20210305.0
  srt_egl_icd_get_json_path@Base 0.20190926.0
  srt_egl_icd_get_library_path@Base 0.20190926.0
  srt_egl_icd_get_type@Base 0.20190926.0
@@ -112,6 +113,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_library_get_type@Base 0.20190801.0
  srt_library_issues_get_type@Base 0.20190801.0
  srt_library_symbols_format_get_type@Base 0.20190801.0
+ srt_loadable_issues_get_type@Base 0.20210305.0
  srt_locale_error_get_type@Base 0.20190909.0
  srt_locale_error_quark@Base 0.20190909.0
  srt_locale_get_charset@Base 0.20190909.0
@@ -140,6 +142,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_check_runtime_linker@Base 0.20201124.0
  srt_system_info_dup_container_host_directory@Base 0.20200306.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
+ srt_system_info_dup_multiarch_tuples@Base 0.20210305.0
  srt_system_info_dup_os_build_id@Base 0.20190926.1
  srt_system_info_dup_os_id@Base 0.20190926.1
  srt_system_info_dup_os_id_like@Base 0.20190926.1
@@ -186,6 +189,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_set_environ@Base 0.20190816.0
  srt_system_info_set_expected_runtime_version@Base 0.20190816.0
  srt_system_info_set_helpers_path@Base 0.20190816.0
+ srt_system_info_set_multiarch_tuples@Base 0.20210305.0
  srt_system_info_set_primary_multiarch_tuple@Base 0.20190909.0
  srt_system_info_set_sysroot@Base 0.20200306.0
  srt_system_info_set_test_flags@Base 0.20190909.0
@@ -202,6 +206,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_vk_physical_device_type_get_type@Base 0.20210201.0
  srt_vulkan_icd_check_error@Base 0.20190926.0
  srt_vulkan_icd_get_api_version@Base 0.20190926.0
+ srt_vulkan_icd_get_issues@Base 0.20210305.0
  srt_vulkan_icd_get_json_path@Base 0.20190926.0
  srt_vulkan_icd_get_library_path@Base 0.20190926.0
  srt_vulkan_icd_get_type@Base 0.20190926.0
@@ -213,6 +218,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_vulkan_layer_get_component_layers@Base 0.20201124.0
  srt_vulkan_layer_get_description@Base 0.20201124.0
  srt_vulkan_layer_get_implementation_version@Base 0.20201124.0
+ srt_vulkan_layer_get_issues@Base 0.20210305.0
  srt_vulkan_layer_get_json_path@Base 0.20201124.0
  srt_vulkan_layer_get_library_path@Base 0.20201124.0
  srt_vulkan_layer_get_name@Base 0.20201124.0

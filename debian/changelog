@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210305.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210305.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix processing of Vulkan ICDs/layers outside /usr
@@ -80,7 +80,7 @@ steam-runtime-tools (0.20210305.0) UNRELEASED; urgency=medium
     them in the source release (Resolves: T26709)
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 05 Mar 2021 11:02:44 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 05 Mar 2021 11:08:01 +0000
 
 steam-runtime-tools (0.20210203.0) scout; urgency=medium
 

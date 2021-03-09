@@ -270,14 +270,19 @@ me="$(readlink -f "$0")"
 here="${{me%/*}}"
 me="${{me##*/}}"
 
-exec "$here/run-in-steamrt" \\
-    --arch={escaped_arch} \\
-    --deploy \\
-    --runtime={escaped_runtime} \\
-    --suite={escaped_suite} \\
-    {escaped_name} \\
-    -- \\
-    "$@"
+archive={escaped_runtime}-{escaped_arch}-{escaped_suite}-runtime.tar.gz
+pressure_vessel="${{PRESSURE_VESSEL_PREFIX:-"${{here}}/pressure-vessel"}}"
+
+export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
+unset PRESSURE_VESSEL_RUNTIME
+export PRESSURE_VESSEL_RUNTIME_ARCHIVE="${{archive}}"
+export PRESSURE_VESSEL_RUNTIME_BASE="${{here}}"
+
+if [ -z "${{PRESSURE_VESSEL_VARIABLE_DIR-}}" ]; then
+    export PRESSURE_VESSEL_VARIABLE_DIR="${{here}}/var"
+fi
+
+exec "${{pressure_vessel}}/bin/pressure-vessel-unruntime" "$@"
 '''
 
 
@@ -661,8 +666,6 @@ class Main:
                 writer.write('// Generated file, do not edit\n')
                 words = [
                     '/_v2-entry-point',
-                    '--deploy=' + shlex.quote(runtime.name),
-                    '--suite=' + shlex.quote(runtime.suite),
                     '--verb=%verb%',
                     '--',
                 ]

@@ -475,8 +475,18 @@ use_fake_home (FlatpakExports *exports,
                                         data2);
     }
 
+  /* If the logical path to real_home has a symlink among its ancestors
+   * (e.g. /home/user when /home -> var/home exists), make sure the
+   * symlink structure gets mirrored in the container */
+  flatpak_exports_add_path_dir (exports, g_get_home_dir ());
+
+  /* Mount the fake home directory onto the physical path to real_home,
+   * so that it will not conflict with symlinks created by the exports.
+   * See also https://github.com/flatpak/flatpak/issues/1278 and
+   * Flatpak commit f1df5cb1 */
+  flatpak_bwrap_add_bind_arg (bwrap, "--bind", fake_home, real_home);
+
   flatpak_bwrap_add_args (bwrap,
-                          "--bind", fake_home, real_home,
                           "--bind", tmp, "/var/tmp",
                           NULL);
 
@@ -1296,6 +1306,7 @@ main (int argc,
   g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakBwrap) bwrap_filesystem_arguments = NULL;
+  g_autoptr(FlatpakBwrap) bwrap_home_arguments = NULL;
   g_autoptr(FlatpakBwrap) argv_in_container = NULL;
   g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
@@ -2090,7 +2101,9 @@ main (int argc,
         }
       else
         {
-          if (!use_fake_home (exports, bwrap_filesystem_arguments,
+          bwrap_home_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
+          if (!use_fake_home (exports, bwrap_home_arguments,
                               container_env, opt_fake_home,
                               error))
             goto out;
@@ -2374,6 +2387,17 @@ main (int argc,
 
       g_assert (bwrap != NULL);
       g_assert (bwrap_filesystem_arguments != NULL);
+
+      if (bwrap_home_arguments != NULL)
+        {
+          /* The filesystem arguments to set up a fake $HOME (if any) have
+           * to come before the exports, as they do in Flatpak, so that
+           * mounting the fake $HOME will not mask the exports used for
+           * ~/.steam, etc. */
+          g_warn_if_fail (g_strv_length (bwrap_home_arguments->envp) == 0);
+          flatpak_bwrap_append_bwrap (bwrap, bwrap_home_arguments);
+          g_clear_pointer (&bwrap_home_arguments, flatpak_bwrap_free);
+        }
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
       adjust_exports (exports_bwrap, home);

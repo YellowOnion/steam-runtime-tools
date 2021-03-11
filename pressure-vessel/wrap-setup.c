@@ -57,8 +57,6 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   pv_environ_lock_env (container_env, "PULSE_SERVER", NULL);
   pv_environ_lock_env (container_env, "XAUTHORITY", NULL);
 
-  flatpak_run_add_resolved_args (sharing_bwrap);
-
   flatpak_run_add_font_path_args (sharing_bwrap);
 
   /* We need to set up IPC rendezvous points relatively late, so that
@@ -87,6 +85,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
       flatpak_run_add_pulseaudio_args (sharing_bwrap);
       flatpak_run_add_session_dbus_args (sharing_bwrap);
       flatpak_run_add_system_dbus_args (sharing_bwrap);
+      flatpak_run_add_resolved_args (sharing_bwrap);
     }
 
   envp = pv_bwrap_steal_envp (sharing_bwrap);

@@ -52,12 +52,16 @@ from debian.deb822 import (
     Sources,
 )
 
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
 # git remote add --no-tags python-vdf https://github.com/ValvePython/vdf
 # Update with:
 # git subtree merge -P subprojects/python-vdf python-vdf/master
 sys.path[:0] = [
     os.path.join(
-        os.path.dirname(__file__),
+        HERE,
         'subprojects',
         'python-vdf'
     ),
@@ -330,6 +334,7 @@ class Main:
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
+        source_dir: str = HERE,
         ssh_host: str = '',
         ssh_path: str = '',
         suite: str = '',
@@ -392,6 +397,7 @@ class Main:
         self.images_uri = images_uri
         self.pressure_vessel = pressure_vessel
         self.runtimes = []      # type: List[Runtime]
+        self.source_dir = source_dir
         self.ssh_host = ssh_host
         self.ssh_path = ssh_path
         self.toolmanifest = toolmanifest
@@ -438,8 +444,39 @@ class Main:
             ssh_path=self.ssh_path,
         )
 
+    def merge_dir_into_depot(
+        self,
+        source_root: str,
+    ):
+        for (dirpath, dirnames, filenames) in os.walk(source_root):
+            relative_path = os.path.relpath(dirpath, source_root)
+
+            for member in dirnames:
+                os.makedirs(
+                    os.path.join(self.depot, relative_path, member),
+                    exist_ok=True,
+                )
+
+            for member in filenames:
+                source = os.path.join(dirpath, member)
+                merged = os.path.join(self.depot, relative_path, member)
+
+                with suppress(FileNotFoundError):
+                    os.unlink(merged)
+
+                os.makedirs(os.path.dirname(merged), exist_ok=True)
+                shutil.copy(source, merged)
+
     def run(self) -> None:
         pv_version = ComponentVersion('pressure-vessel')
+
+        self.merge_dir_into_depot(os.path.join(self.source_dir, 'common'))
+
+        for runtime in self.runtimes:
+            root = os.path.join(self.source_dir, runtime.name)
+
+            if os.path.exists(root):
+                self.merge_dir_into_depot(root)
 
         for runtime in self.runtimes:
             if runtime.name == self.pressure_vessel:
@@ -1045,6 +1082,12 @@ def main() -> None:
     parser.add_argument(
         '--include-sdk', default=False, action='store_true',
         help='Include a corresponding SDK',
+    )
+    parser.add_argument(
+        '--source-dir', default=HERE,
+        help=(
+            'Source directory for files to include in the depot'
+        )
     )
     parser.add_argument(
         '--toolmanifest', default=False, action='store_true',

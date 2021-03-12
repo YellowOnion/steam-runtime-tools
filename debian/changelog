@@ -1,3 +1,13 @@
+steam-runtime-tools (0.20210312.0) scout; urgency=medium
+
+  * pressure-vessel: Fix a regression when using a game-specific home
+    directory. Mount points appeared in the wrong order, resulting in
+    the game-specific home covering up directories that should have been
+    shared, such as ~/.steam (Resolves: #63)
+  * pressure-vessel: Fix a regression when not using any runtime
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 12 Mar 2021 19:19:42 +0000
+
 steam-runtime-tools (0.20210305.0) scout; urgency=medium
 
   [ Simon McVittie ]

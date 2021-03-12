@@ -8,7 +8,7 @@ Properties dialog.
 Its behaviour can be changed by running the Steam client with environment
 variables set:
 
-* `PRESSURE_VESSEL_WRAP_GUI=1` or `STEAM_RUNTIME_CONTAINER_TEST=1` will
+* `PRESSURE_VESSEL_WRAP_GUI=1` will
     spawn a 'test mode' dialog allowing you to select a different runtime
     and set various options. This developer tool requires Python 3, PyGI,
     GTK 3 and the GTK 3 GObject-Introspection bindings
@@ -36,6 +36,5 @@ The Steam Runtime contains many third-party software packages under
 various open-source licenses.
 
 For full source code, please see the version-numbered subdirectories of
-<https://repo.steampowered.com/steamrt-images-scout/snapshots/> and
-<https://repo.steampowered.com/steamrt-images-soldier/snapshots/>
+<https://repo.steampowered.com/steamrt-images-scout/snapshots/>
 corresponding to the version numbers listed in VERSIONS.txt.

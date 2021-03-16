@@ -481,6 +481,7 @@ class TestContainers(BaseTest):
         runtime: str,
         *,
         copy: bool = False,
+        fake_home: bool = False,
         gc: bool = True,
         gc_legacy: bool = True,
         locales: bool = False,
@@ -490,6 +491,7 @@ class TestContainers(BaseTest):
             test_name,
             runtime,
             copy=copy,
+            fake_home=fake_home,
             gc=gc,
             gc_legacy=gc_legacy,
             is_scout=True,
@@ -503,6 +505,7 @@ class TestContainers(BaseTest):
         runtime: str,
         *,
         copy: bool = False,
+        fake_home: bool = False,
         gc: bool = True,
         gc_legacy: bool = True,
         locales: bool = False,
@@ -526,6 +529,7 @@ class TestContainers(BaseTest):
         *,
         archive: str = '',
         copy: bool = False,
+        fake_home: bool = False,
         fast_path: bool = False,
         gc: bool = True,
         gc_legacy: bool = True,
@@ -585,7 +589,9 @@ class TestContainers(BaseTest):
             prefix='test-', dir=var_dir
         ) as temp, tempfile.TemporaryDirectory(
             prefix='test-mock-base-', dir=var_dir
-        ) as mock_base:
+        ) as mock_base, tempfile.TemporaryDirectory(
+            prefix='test-fake-home-', dir=var_dir
+        ) as fake_home_temp:
             argv.extend(['--runtime-base', mock_base])
             argv.extend(['--variable-dir', temp])
 
@@ -626,6 +632,11 @@ class TestContainers(BaseTest):
             else:
                 argv.append('--no-gc-legacy-runtimes')
 
+            if fake_home:
+                argv.append('--home=' + fake_home_temp)
+            else:
+                argv.append('--share-home')
+
             if is_scout:
                 python = 'python3.5'
             else:
@@ -639,6 +650,9 @@ class TestContainers(BaseTest):
                     'env',
                     'TEST_INSIDE_RUNTIME_ARTIFACTS=' + artifacts,
                     'TEST_INSIDE_RUNTIME_IS_COPY=' + ('1' if copy else ''),
+                    'TEST_INSIDE_RUNTIME_IS_HOME_UNSHARED=' + (
+                        '1' if fake_home else ''
+                    ),
                     'TEST_INSIDE_RUNTIME_IS_SCOUT=' + (
                         '1' if is_scout else ''
                     ),
@@ -768,6 +782,13 @@ class TestContainers(BaseTest):
                 self.assertIn('scout', members)
                 self.assertIn('scout_dontdelete', members)
                 self.assertIn('soldier_0.20200101.0_keep', members)
+
+            if fake_home:
+                members = set(os.listdir(fake_home_temp))
+
+                self.assertIn('.cache', members)
+                self.assertIn('.config', members)
+                self.assertIn('.local', members)
 
             if copy:
                 members = set(os.listdir(temp))
@@ -1214,6 +1235,11 @@ class TestContainers(BaseTest):
         with self.subTest('copy'):
             self._test_scout('scout_sysroot_copy', scout, copy=True, gc=False)
 
+        with self.subTest('fake-home'):
+            self._test_scout(
+                'scout_sysroot_fake_home', scout, copy=True, fake_home=True,
+            )
+
         with self.subTest('transient'):
             self._test_scout('scout_sysroot', scout, locales=True)
 
@@ -1232,6 +1258,11 @@ class TestContainers(BaseTest):
                 copy=True, gc=False, gc_legacy=False,
             )
 
+        with self.subTest('fake-home'):
+            self._test_scout(
+                'scout_sysroot_fake_home', scout, copy=True, fake_home=True,
+            )
+
         with self.subTest('transient'):
             self._test_scout('scout_sysroot_usrmerge', scout, locales=True)
 
@@ -1243,6 +1274,9 @@ class TestContainers(BaseTest):
 
         with self.subTest('copy'):
             self._test_scout('scout_copy', scout, copy=True, locales=True)
+
+        with self.subTest('fake-home'):
+            self._test_scout('scout_fake_home', scout, copy=True, fake_home=True)
 
         with self.subTest('transient'):
             self._test_scout('scout', scout)
@@ -1293,6 +1327,11 @@ class TestContainers(BaseTest):
                 'soldier_sysroot_copy', soldier, copy=True, gc=False,
             )
 
+        with self.subTest('fake-home'):
+            self._test_soldier(
+                'soldier_sysroot_fake_home', soldier, copy=True, fake_home=True,
+            )
+
         with self.subTest('transient'):
             self._test_soldier('soldier_sysroot', soldier, locales=True)
 
@@ -1307,6 +1346,11 @@ class TestContainers(BaseTest):
         with self.subTest('copy'):
             self._test_soldier(
                 'soldier_copy', soldier, copy=True, locales=True,
+            )
+
+        with self.subTest('fake-home'):
+            self._test_soldier(
+                'soldier_fake_home', soldier, copy=True, fake_home=True,
             )
 
         with self.subTest('transient'):

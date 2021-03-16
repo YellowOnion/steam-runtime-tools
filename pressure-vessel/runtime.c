@@ -26,6 +26,7 @@
 /* Include these before steam-runtime-tools.h so that their backport of
  * G_DEFINE_AUTOPTR_CLEANUP_FUNC will be visible to it */
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
@@ -63,6 +64,7 @@ struct _PvRuntime
   GStrv original_environ;
 
   gchar *libcapsule_knowledge;
+  gchar *runtime_abi_json;
   gchar *variable_dir;
   gchar *mutable_sysroot;
   gchar *tmpdir;
@@ -291,6 +293,7 @@ typedef struct
 {
   gsize multiarch_index;
   const MultiarchDetails *details;
+  gchar *aliases_in_current_namespace;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
   gchar *libdir_in_current_namespace;
@@ -326,6 +329,9 @@ runtime_architecture_init (RuntimeArchitecture *self,
   self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
                                                 "lib", self->details->tuple, NULL);
 
+  self->aliases_in_current_namespace = g_build_filename (self->libdir_in_current_namespace,
+                                                         "aliases", NULL);
+
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the current environment. We
    * assume that this is the same as whether we can run them
@@ -351,6 +357,7 @@ runtime_architecture_check_valid (RuntimeArchitecture *self)
   g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
+  g_return_val_if_fail (self->aliases_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->ld_so != NULL, FALSE);
   return TRUE;
 }
@@ -364,6 +371,7 @@ runtime_architecture_clear (RuntimeArchitecture *self)
   g_clear_pointer (&self->capsule_capture_libs, g_free);
   g_clear_pointer (&self->libdir_in_current_namespace, g_free);
   g_clear_pointer (&self->libdir_in_container, g_free);
+  g_clear_pointer (&self->aliases_in_current_namespace, g_free);
   g_clear_pointer (&self->ld_so, g_free);
 }
 
@@ -1400,6 +1408,12 @@ pv_runtime_initable_init (GInitable *initable,
   if (!g_file_test (self->libcapsule_knowledge, G_FILE_TEST_EXISTS))
     g_clear_pointer (&self->libcapsule_knowledge, g_free);
 
+  self->runtime_abi_json = g_build_filename (self->runtime_usr, "lib", "steamrt",
+                                             "steam-runtime-abi.json", NULL);
+
+  if (!g_file_test (self->runtime_abi_json, G_FILE_TEST_EXISTS))
+    g_clear_pointer (&self->runtime_abi_json, g_free);
+
   os_release = g_build_filename (self->runtime_usr, "lib", "os-release", NULL);
 
   /* TODO: Teach SrtSystemInfo to be able to load lib/os-release from
@@ -1488,6 +1502,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->bubblewrap);
   g_strfreev (self->original_environ);
   g_free (self->libcapsule_knowledge);
+  g_free (self->runtime_abi_json);
   glnx_close_fd (&self->variable_dir_fd);
   g_free (self->variable_dir);
   glnx_close_fd (&self->mutable_sysroot_fd);
@@ -3883,6 +3898,104 @@ pv_runtime_finish_libc_family (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_create_aliases (PvRuntime *self,
+                           RuntimeArchitecture *arch,
+                           GError **error)
+{
+  g_autoptr(JsonParser) parser = NULL;
+  JsonNode *node = NULL;
+  JsonArray *libraries_array = NULL;
+  JsonArray *aliases_array = NULL;
+  JsonObject *object;
+
+  if (self->runtime_abi_json == NULL)
+    {
+      g_info ("Runtime ABI JSON not present, not creating library aliases");
+      return TRUE;
+    }
+
+  parser = json_parser_new ();
+  if (!json_parser_load_from_file (parser, self->runtime_abi_json, error))
+    return glnx_prefix_error (error, "Error parsing the expected JSON object in \"%s\"",
+                              self->runtime_abi_json);
+
+  node = json_parser_get_root (parser);
+  object = json_node_get_object (node);
+
+  if (!json_object_has_member (object, "shared_libraries"))
+    return glnx_throw (error, "No \"shared_libraries\" in the JSON object \"%s\"",
+                       self->runtime_abi_json);
+
+  libraries_array = json_object_get_array_member (object, "shared_libraries");
+  if (libraries_array == NULL || json_array_get_length (libraries_array) == 0)
+    return TRUE;
+
+  for (guint i = 0; i < json_array_get_length (libraries_array); i++)
+    {
+      const gchar *soname = NULL;
+      g_autofree gchar *soname_in_runtime = NULL;
+      g_autofree gchar *soname_in_runtime_usr = NULL;
+      g_autofree gchar *soname_in_overrides = NULL;
+      g_autofree gchar *target = NULL;
+      g_autoptr(GList) members = NULL;
+
+      node = json_array_get_element (libraries_array, i);
+      if (!JSON_NODE_HOLDS_OBJECT (node))
+        continue;
+
+      object = json_node_get_object (node);
+
+      members = json_object_get_members (object);
+      if (members == NULL)
+        continue;
+
+      soname = members->data;
+
+      object = json_object_get_object_member (object, soname);
+      if (!json_object_has_member (object, "aliases"))
+        continue;
+
+      aliases_array = json_object_get_array_member (object, "aliases");
+      if (aliases_array == NULL || json_array_get_length (aliases_array) == 0)
+        continue;
+
+      soname_in_overrides = g_build_filename (arch->libdir_in_current_namespace,
+                                              soname, NULL);
+      soname_in_runtime_usr = g_build_filename (self->runtime_usr, "lib",
+                                                arch->details->tuple, soname, NULL);
+      /* We are not always in a merged-/usr runtime, e.g. if we are using a
+       * "sysroot" runtime. */
+      soname_in_runtime = g_build_filename (self->runtime_files, "lib",
+                                            arch->details->tuple, soname, NULL);
+
+      if (g_file_test (soname_in_overrides,
+                       (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))
+        target = g_build_filename (arch->libdir_in_container, soname, NULL);
+      else if (g_file_test (soname_in_runtime_usr,
+                            (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))
+        target = g_build_filename ("/usr/lib", arch->details->tuple, soname, NULL);
+      else if (g_file_test (soname_in_runtime,
+                            (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))
+        target = g_build_filename ("/lib", arch->details->tuple, soname, NULL);
+      else
+        return glnx_throw (error, "The expected library %s is missing from both the runtime "
+                           "and the \"overrides\" directory", soname);
+
+      for (guint j = 0; j < json_array_get_length (aliases_array); j++)
+        {
+          g_autofree gchar *dest = g_build_filename (arch->aliases_in_current_namespace,
+                                                     json_array_get_string_element (aliases_array, j),
+                                                     NULL);
+          if (symlink (target, dest) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink %s -> %s",
+                                            dest, target);
+        }
+    }
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         PvEnviron *container_env,
@@ -4069,6 +4182,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
+      g_autoptr(GError) local_error = NULL;
       g_auto (RuntimeArchitecture) arch_on_stack = { i };
       RuntimeArchitecture *arch = &arch_on_stack;
 
@@ -4114,6 +4228,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           pv_search_path_append (va_api_path, this_dri_path_in_container);
 
           g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
+          g_mkdir_with_parents (arch->aliases_in_current_namespace, 0755);
 
           g_debug ("Collecting graphics drivers from provider system...");
 
@@ -4357,6 +4472,15 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return glnx_throw_errno_prefix (error,
                                                 "Unable to create symlink %s -> %s",
                                                 platform_link, arch->details->tuple);
+            }
+
+          if (!pv_runtime_create_aliases (self, arch, &local_error))
+            {
+              /* This is not a critical error, try to continue */
+              g_warning ("Unable to create library aliases: %s",
+                         local_error->message);
+              g_clear_error (&local_error);
+              continue;
             }
 
           /* Make sure we do this last, so that we have really copied
@@ -4659,11 +4783,16 @@ pv_runtime_set_search_paths (PvRuntime *self,
   for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
     {
       g_autofree gchar *ld_path = NULL;
+      g_autofree gchar *aliases = NULL;
 
       ld_path = g_build_filename (self->overrides_in_container, "lib",
                                   multiarch_tuples[i], NULL);
 
+      aliases = g_build_filename (self->overrides_in_container, "lib",
+                                  multiarch_tuples[i], "aliases", NULL);
+
       pv_search_path_append (ld_library_path, ld_path);
+      pv_search_path_append (ld_library_path, aliases);
     }
 
   if (self->flags & PV_RUNTIME_FLAGS_SEARCH_CWD)

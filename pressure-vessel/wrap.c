@@ -2659,14 +2659,22 @@ main (int argc,
 
       if (opt_terminate_timeout >= 0.0)
         {
+          char idle_buf[G_ASCII_DTOSTR_BUF_SIZE] = {};
+          char timeout_buf[G_ASCII_DTOSTR_BUF_SIZE] = {};
+
+          g_ascii_dtostr (idle_buf, sizeof (idle_buf),
+                          opt_terminate_idle_timeout);
+          g_ascii_dtostr (timeout_buf, sizeof (timeout_buf),
+                          opt_terminate_timeout);
+
           if (opt_terminate_idle_timeout > 0.0)
             flatpak_bwrap_add_arg_printf (adverb_argv,
-                                          "--terminate-idle-timeout=%f",
-                                          opt_terminate_idle_timeout);
+                                          "--terminate-idle-timeout=%s",
+                                          idle_buf);
 
           flatpak_bwrap_add_arg_printf (adverb_argv,
-                                        "--terminate-timeout=%f",
-                                        opt_terminate_timeout);
+                                        "--terminate-timeout=%s",
+                                        timeout_buf);
         }
 
       flatpak_bwrap_add_args (adverb_argv,

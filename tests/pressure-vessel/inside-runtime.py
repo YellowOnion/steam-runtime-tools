@@ -262,6 +262,17 @@ class TestInsideRuntime(BaseTest):
 
         return False
 
+    def test_home_directory(self) -> None:
+        if os.environ.get('TEST_INSIDE_RUNTIME_IS_HOME_UNSHARED'):
+            # If we unshared the real home there are a few directories that
+            # we always expect to have
+            home_path = os.environ.get('HOME')
+            members = set(os.listdir(home_path))
+
+            self.assertIn('.cache', members)
+            self.assertIn('.config', members)
+            self.assertIn('.local', members)
+
     def test_srsi(self) -> None:
         overrides = Path('/overrides').resolve()
 
@@ -321,6 +332,40 @@ class TestInsideRuntime(BaseTest):
         else:
             logger.info('Host OS is not Debian-derived')
             host_is_debian_derived = False
+
+        if host_parsed:
+            # If the Steam installation on the host system is sane, we expect
+            # the same in the container too.
+
+            self.assertIn('steam-installation', host_parsed)
+            self.assertIn('steam-installation', parsed)
+            host_issues = host_parsed['steam-installation'].get('issues', [])
+            issues = parsed['steam-installation'].get('issues', [])
+
+            self.assertEqual(
+                'cannot-find' in host_issues,
+                'cannot-find' in issues,
+            )
+            self.assertEqual(
+                'dot-steam-steam-not-symlink' in host_issues,
+                'dot-steam-steam-not-symlink' in issues,
+            )
+            self.assertEqual(
+                'cannot-find-data' in host_issues,
+                'cannot-find-data' in issues,
+            )
+            self.assertEqual(
+                'dot-steam-steam-not-directory' in host_issues,
+                'dot-steam-steam-not-directory' in issues,
+            )
+            self.assertEqual(
+                'dot-steam-root-not-symlink' in host_issues,
+                'dot-steam-root-not-symlink' in issues,
+            )
+            self.assertEqual(
+                'dot-steam-root-not-directory' in host_issues,
+                'dot-steam-root-not-directory' in issues,
+            )
 
         with self.catch(
             'runtime information',

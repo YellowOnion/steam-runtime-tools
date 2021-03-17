@@ -90,6 +90,7 @@ struct _PvRuntime
   gboolean runtime_is_just_usr;
   gboolean is_steamrt;
   gboolean is_scout;
+  gboolean is_flatpak_env;
 };
 
 struct _PvRuntimeClass
@@ -392,6 +393,8 @@ pv_runtime_init (PvRuntime *self)
   self->all_libc_from_provider = FALSE;
   self->variable_dir_fd = -1;
   self->mutable_sysroot_fd = -1;
+  self->is_flatpak_env = g_file_test ("/.flatpak-info",
+                                      G_FILE_TEST_IS_REGULAR);
 }
 
 static void
@@ -2207,6 +2210,7 @@ bind_runtime_base (PvRuntime *self,
   };
   static const char * const dont_bind[] =
   {
+    "/etc/asound.conf",
     "/etc/localtime",
     "/etc/machine-id",
     "/var/cache/ldconfig",
@@ -4864,6 +4868,51 @@ pv_runtime_set_search_paths (PvRuntime *self,
    * container: in principle the layout could be totally different. */
   pv_environ_lock_env (container_env, "PATH", "/usr/bin:/bin");
   pv_environ_lock_env (container_env, "LD_LIBRARY_PATH", ld_library_path->str);
+}
+
+gboolean
+pv_runtime_use_shared_sockets (PvRuntime *self,
+                               FlatpakBwrap *bwrap,
+                               PvEnviron *container_env,
+                               GError **error)
+{
+  if (pv_environ_is_locked (container_env, "PULSE_SERVER")
+      || self->is_flatpak_env)
+    {
+      /* Make the PulseAudio driver the default.
+       * We do this unconditionally when we are under Flatpak for parity
+       * with the freedesktop.org Platform. */
+      const gchar *alsa_config = "pcm.!default pulse\n"
+                                 "ctl.!default pulse\n";
+
+      if (bwrap != NULL)
+        {
+          flatpak_bwrap_add_args_data (bwrap, "asound.conf",
+                                       alsa_config, -1,
+                                       "/etc/asound.conf",
+                                       NULL);
+        }
+      else if (self->mutable_sysroot_fd >= 0)
+        {
+          /* In a Flatpak sub-sandbox, we can rely on the fact that
+           * Flatpak will mount each item in our copy of the runtime's
+           * usr/etc/ into /etc, including some that we would normally
+           * skip. */
+          if (!glnx_file_replace_contents_at (self->mutable_sysroot_fd,
+                                              "usr/etc/asound.conf",
+                                              (const guint8 *) alsa_config,
+                                              strlen (alsa_config),
+                                              GLNX_FILE_REPLACE_NODATASYNC,
+                                              NULL, error))
+            return FALSE;
+        }
+      else
+        {
+          g_warning ("Unable to configure libasound.so.2 to use PulseAudio");
+        }
+    }
+
+  return TRUE;
 }
 
 static void

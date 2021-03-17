@@ -109,4 +109,9 @@ gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,
                                             const char *runtime_base,
                                             GError **error);
 
+gboolean pv_runtime_use_shared_sockets (PvRuntime *self,
+                                        FlatpakBwrap *bwrap,
+                                        PvEnviron *container_env,
+                                        GError **error);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvRuntime, g_object_unref)

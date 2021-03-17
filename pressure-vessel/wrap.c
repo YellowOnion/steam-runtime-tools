@@ -2417,22 +2417,8 @@ main (int argc,
                            (runtime != NULL),
                            is_flatpak_env);
 
-  if (runtime != NULL
-      && (pv_environ_is_locked(container_env, "PULSE_SERVER")
-          || is_flatpak_env)
-      && bwrap != NULL)
-    {
-      /* Make the PulseAudio driver the default.
-       * We do this unconditionally when we are under Flatpak for parity
-       * with the freedesktop.org Platform. */
-      const gchar *alsa_config = "pcm.!default pulse\n"
-                                 "ctl.!default pulse\n";
-
-      flatpak_bwrap_add_args_data (bwrap, "asound.conf",
-                                   alsa_config, -1,
-                                   "/etc/asound.conf",
-                                   NULL);
-    }
+  if (runtime != NULL)
+    pv_runtime_use_shared_sockets (runtime, bwrap, container_env);
 
   if (is_flatpak_env)
     {

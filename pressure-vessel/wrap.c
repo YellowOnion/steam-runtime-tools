@@ -782,7 +782,7 @@ opt_copy_runtime_into_cb (const gchar *option_name,
 {
   if (value == NULL)
     {
-      opt_copy_runtime = FALSE;
+      /* Do nothing, keep previous setting */
     }
   else if (value[0] == '\0')
     {
@@ -1349,13 +1349,11 @@ main (int argc,
 
   original_environ = g_get_environ ();
 
-  if (is_flatpak_env)
-    opt_copy_runtime = TRUE;
-
   is_main_program = check_main_program (argc, argv);
 
   /* Set defaults */
   opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+  opt_copy_runtime = is_flatpak_env;
   /* Process COPY_RUNTIME_INFO first so that COPY_RUNTIME and VARIABLE_DIR
    * can override it */
   opt_copy_runtime_into_cb ("$PRESSURE_VESSEL_COPY_RUNTIME_INTO",

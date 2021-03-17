@@ -670,6 +670,10 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
   g_return_val_if_fail (runtime_base != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  if (g_mkdir_with_parents (variable_dir, 0700) != 0)
+    return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                    variable_dir);
+
   if (!glnx_opendirat (AT_FDCWD, variable_dir, TRUE,
                        &variable_dir_fd, error))
     return FALSE;

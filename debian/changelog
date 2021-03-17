@@ -6,13 +6,20 @@ steam-runtime-tools (0.20210317.0) UNRELEASED; urgency=medium
     (Resolves: T26816; helps: steam-runtime#246)
   * pressure-vessel: Set PulseAudio as the default ALSA driver if available.
     (Resolves: steam-runtime-tools#65; helps: steam-runtime#371)
+  * pv-runtime: Use "/usr/share" as a fallback library data directory,
+    for better support for e.g. Exherbo (Resolves: steam-runtime-tools#68)
+  * pv-runtime: Try Exherbo's locale dirs as a fallback
+    (partially addresses: steam-runtime-tools#67)
   * tests: Test ability to unshare the home directory
 
   [ Simon McVittie ]
   * pressure-vessel: Fix Proton setup commands in locales that use a
     decimal comma, such as de_DE (helps: steam-runtime#381)
+  * pv-runtime: Avoid a spurious warning on first use
+  * pv-wrap: Fix a regression in the experimental Flatpak sub-sandboxing
+    code path with newer SteamLinuxRuntime wrapper scripts
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 17 Mar 2021 11:47:22 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 17 Mar 2021 19:12:50 +0000
 
 steam-runtime-tools (0.20210312.0) scout; urgency=medium
 

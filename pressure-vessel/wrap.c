@@ -2417,8 +2417,9 @@ main (int argc,
                            (runtime != NULL),
                            is_flatpak_env);
 
-  if (pv_environ_is_locked(container_env, "PULSE_SERVER")
-      || is_flatpak_env)
+  if (runtime != NULL
+      && (pv_environ_is_locked(container_env, "PULSE_SERVER")
+          || is_flatpak_env))
     {
       /* Make the PulseAudio driver the default.
        * We do this unconditionally when we are under Flatpak for parity

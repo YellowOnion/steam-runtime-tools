@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210317.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210317.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Create symlinks for non-canonical SONAMES
@@ -19,7 +19,7 @@ steam-runtime-tools (0.20210317.0) UNRELEASED; urgency=medium
   * pv-wrap: Fix a regression in the experimental Flatpak sub-sandboxing
     code path with newer SteamLinuxRuntime wrapper scripts
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 17 Mar 2021 19:12:50 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 17 Mar 2021 19:17:08 +0000
 
 steam-runtime-tools (0.20210312.0) scout; urgency=medium
 

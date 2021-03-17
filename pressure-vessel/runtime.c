@@ -4844,10 +4844,11 @@ pv_runtime_set_search_paths (PvRuntime *self,
   pv_environ_lock_env (container_env, "LD_LIBRARY_PATH", ld_library_path->str);
 }
 
-void
+gboolean
 pv_runtime_use_shared_sockets (PvRuntime *self,
                                FlatpakBwrap *bwrap,
-                               PvEnviron *container_env)
+                               PvEnviron *container_env,
+                               GError **error)
 {
   if (pv_environ_is_locked (container_env, "PULSE_SERVER")
       || self->is_flatpak_env)
@@ -4865,7 +4866,27 @@ pv_runtime_use_shared_sockets (PvRuntime *self,
                                        "/etc/asound.conf",
                                        NULL);
         }
+      else if (self->mutable_sysroot_fd >= 0)
+        {
+          /* In a Flatpak sub-sandbox, we can rely on the fact that
+           * Flatpak will mount each item in our copy of the runtime's
+           * usr/etc/ into /etc, including some that we would normally
+           * skip. */
+          if (!glnx_file_replace_contents_at (self->mutable_sysroot_fd,
+                                              "usr/etc/asound.conf",
+                                              (const guint8 *) alsa_config,
+                                              strlen (alsa_config),
+                                              GLNX_FILE_REPLACE_NODATASYNC,
+                                              NULL, error))
+            return FALSE;
+        }
+      else
+        {
+          g_warning ("Unable to configure libasound.so.2 to use PulseAudio");
+        }
     }
+
+  return TRUE;
 }
 
 static void

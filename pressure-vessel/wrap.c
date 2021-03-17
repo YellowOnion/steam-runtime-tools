@@ -2418,7 +2418,11 @@ main (int argc,
                            is_flatpak_env);
 
   if (runtime != NULL)
-    pv_runtime_use_shared_sockets (runtime, bwrap, container_env);
+    {
+      if (!pv_runtime_use_shared_sockets (runtime, bwrap, container_env,
+                                          error))
+        goto out;
+    }
 
   if (is_flatpak_env)
     {

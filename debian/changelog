@@ -1,3 +1,19 @@
+steam-runtime-tools (0.20210317.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Create symlinks for non-canonical SONAMES
+    such as libbz2.so.1
+    (Resolves: T26816; helps: steam-runtime#246)
+  * pressure-vessel: Set PulseAudio as the default ALSA driver if available.
+    (Resolves: steam-runtime-tools#65; helps: steam-runtime#371)
+  * tests: Test ability to unshare the home directory
+
+  [ Simon McVittie ]
+  * pressure-vessel: Fix Proton setup commands in locales that use a
+    decimal comma, such as de_DE (helps: steam-runtime#381)
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 17 Mar 2021 11:47:22 +0000
+
 steam-runtime-tools (0.20210312.0) scout; urgency=medium
 
   * pressure-vessel: Fix a regression when using a game-specific home

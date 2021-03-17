@@ -2428,9 +2428,9 @@ main (int argc,
       const gchar *alsa_config = "pcm.!default pulse\n"
                                  "ctl.!default pulse\n";
 
-      flatpak_bwrap_add_args_data (bwrap, "99-pulseaudio-default.conf",
+      flatpak_bwrap_add_args_data (bwrap, "asound.conf",
                                    alsa_config, -1,
-                                   "/etc/alsa/conf.d/99-pulseaudio-default.conf",
+                                   "/etc/asound.conf",
                                    NULL);
     }
 

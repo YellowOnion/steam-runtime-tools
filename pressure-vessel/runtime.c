@@ -2203,6 +2203,7 @@ bind_runtime_base (PvRuntime *self,
   };
   static const char * const dont_bind[] =
   {
+    "/etc/asound.conf",
     "/etc/localtime",
     "/etc/machine-id",
     "/var/cache/ldconfig",

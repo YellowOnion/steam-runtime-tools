@@ -3685,6 +3685,13 @@ pv_runtime_collect_lib_data (PvRuntime *self,
       g_autofree gchar *dir = NULL;
       g_autofree gchar *lib_multiarch = NULL;
       g_autofree gchar *dir_in_provider = NULL;
+      g_autofree gchar *dir_in_provider_fallback = NULL;
+
+      /* If we are unable to find the lib data in the provider, we try as
+       * a last resort `/usr/share`. This should help for example Exherbo
+       * that uses the unusual `/usr/${gnu_tuple}/lib` path for shared
+       * libraries. */
+      dir_in_provider_fallback = g_build_filename ("/usr", "share", dir_basename, NULL);
 
       dir = g_path_get_dirname (target);
 
@@ -3713,11 +3720,24 @@ pv_runtime_collect_lib_data (PvRuntime *self,
           g_hash_table_add (data_in_provider,
                             g_steal_pointer (&dir_in_provider));
         }
+      else if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
+                                          -1,
+                                          dir_in_provider_fallback,
+                                          G_FILE_TEST_IS_DIR))
+        {
+          g_hash_table_add (data_in_provider,
+                            g_steal_pointer (&dir_in_provider_fallback));
+        }
       else
         {
-          g_info ("We were expecting the %s directory in the provider to "
-                  "be located in \"%s/share/%s\", but instead it is "
-                  "missing", dir_basename, dir, dir_basename);
+          if (g_strcmp0 (dir_in_provider, dir_in_provider_fallback) == 0)
+            g_info ("We were expecting the %s directory in the provider to "
+                    "be located in \"%s\", but instead it is missing",
+                    dir_basename, dir_in_provider);
+          else
+            g_info ("We were expecting the %s directory in the provider to "
+                    "be located in \"%s\" or \"%s\", but instead it is missing",
+                    dir_basename, dir_in_provider, dir_in_provider_fallback);
         }
     }
 }

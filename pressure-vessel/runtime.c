@@ -3816,6 +3816,19 @@ pv_runtime_finish_libc_family (PvRuntime *self,
   g_autofree gchar *locale = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
+  gsize i;
+  /* List of paths where we expect to find "locale", sorted by the most
+   * preferred to the least preferred.
+   * If the canonical "/usr/lib/locale" is missing, we try the Exherbo's
+   * "/usr/${gnu_tuple}/lib/locale" too, before giving up.
+   * The locale directory is actually architecture-independent, so we just
+   * arbitrarily prefer to use "x86_64-pc-linux-gnu" over the 32-bit couterpart */
+  const gchar *lib_locale_path[] = {
+    "/usr/lib/locale",
+    "/usr/x86_64-pc-linux-gnu/lib/locale",
+    "/usr/i686-pc-linux-gnu/lib/locale",
+    NULL
+  };
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
@@ -3842,12 +3855,21 @@ pv_runtime_finish_libc_family (PvRuntime *self,
     {
       g_debug ("Making provider locale data visible in container");
 
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          "/usr/lib/locale",
-                                          "/usr/lib/locale",
-                                          TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
-                                          error))
-        return FALSE;
+      for (i = 0; i < G_N_ELEMENTS (lib_locale_path) - 1; i++)
+        {
+          if (_srt_file_test_in_sysroot (self->provider_in_current_namespace, -1,
+                                         lib_locale_path[i], G_FILE_TEST_EXISTS))
+            {
+              if (!pv_runtime_take_from_provider (self, bwrap,
+                                                  lib_locale_path[i],
+                                                  "/usr/lib/locale",
+                                                  TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
+                                                  error))
+                return FALSE;
+
+              break;
+            }
+        }
 
       if (!pv_runtime_take_from_provider (self, bwrap,
                                           "/usr/share/i18n",

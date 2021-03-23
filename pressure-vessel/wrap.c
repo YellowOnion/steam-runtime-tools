@@ -412,9 +412,62 @@ static const char * const steam_api_subdirs[] =
 
 static gboolean expose_steam (FlatpakExports *exports,
                               FlatpakFilesystemMode mode,
+                              gboolean is_home_shared,
                               const char *real_home,
                               const char *fake_home,
                               GError **error);
+
+static gboolean
+use_tmpfs_home (FlatpakExports *exports,
+                FlatpakBwrap *bwrap,
+                PvEnviron *container_env,
+                GError **error)
+{
+  const gchar *home = g_get_home_dir ();
+  g_autofree char *real_home = realpath (home, NULL);
+  g_autofree gchar *cache = g_build_filename (real_home, ".cache", NULL);
+  g_autofree gchar *cache2 = g_build_filename (real_home, "cache", NULL);
+  g_autofree gchar *tmp = g_build_filename (cache, "tmp", NULL);
+  g_autofree gchar *config = g_build_filename (real_home, ".config", NULL);
+  g_autofree gchar *config2 = g_build_filename (real_home, "config", NULL);
+  g_autofree gchar *local = g_build_filename (real_home, ".local", NULL);
+  g_autofree gchar *data = g_build_filename (local, "share", NULL);
+  g_autofree gchar *data2 = g_build_filename (real_home, "data", NULL);
+
+  g_return_val_if_fail (bwrap != NULL, FALSE);
+  g_return_val_if_fail (exports != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* If the logical path to the home dir has a symlink among its ancestors
+   * (e.g. /home/user when /home -> var/home exists), make sure the
+   * symlink structure gets mirrored in the container */
+  flatpak_exports_add_path_dir (exports, home);
+
+  /* Mount the tmpfs home directory onto the physical path to real_home,
+   * so that it will not conflict with symlinks created by the exports.
+   * See also https://github.com/flatpak/flatpak/issues/1278 and
+   * Flatpak commit f1df5cb1 */
+  flatpak_bwrap_add_args (bwrap, "--tmpfs", real_home, NULL);
+
+  flatpak_bwrap_add_args (bwrap,
+                          "--dir", cache,
+                          "--dir", tmp,
+                          "--dir", config,
+                          "--dir", local,
+                          "--dir", data,
+                          "--symlink", ".cache", cache2,
+                          "--symlink", ".config", config2,
+                          "--symlink", ".local/share", data2,
+                          "--symlink", tmp, "/var/tmp",
+                          NULL);
+
+  pv_environ_lock_env (container_env, "XDG_CACHE_HOME", cache);
+  pv_environ_lock_env (container_env, "XDG_CONFIG_HOME", config);
+  pv_environ_lock_env (container_env, "XDG_DATA_HOME", data);
+
+  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY, FALSE,
+                       real_home, NULL, error);
+}
 
 static gboolean
 use_fake_home (FlatpakExports *exports,
@@ -498,13 +551,14 @@ use_fake_home (FlatpakExports *exports,
                                    FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                    fake_home);
 
-  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY, FALSE,
                        real_home, fake_home, error);
 }
 
 static gboolean
 expose_steam (FlatpakExports *exports,
               FlatpakFilesystemMode mode,
+              gboolean is_home_shared,
               const char *real_home,
               const char *fake_home,
               GError **error)
@@ -520,7 +574,7 @@ expose_steam (FlatpakExports *exports,
   /* We need ~/.steam to be visible in the container, even if it's a
    * symlink to somewhere outside $HOME. (It's better not to do this; use
    * a separate Steam library instead, or use bind-mounts.) */
-  if (fake_home != NULL)
+  if (!is_home_shared)
     {
       flatpak_exports_add_path_expose (exports, mode, dot_steam);
     }
@@ -1300,6 +1354,7 @@ main (int argc,
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
   gboolean is_main_program;
+  gboolean is_home_shared = TRUE;
   gboolean search_cwd = FALSE;
   g_autoptr(FlatpakBwrap) flatpak_subsandbox = NULL;
   g_autoptr(FlatpakBwrap) flatpak_run_on_host = NULL;
@@ -1565,23 +1620,26 @@ main (int argc,
 
   if (opt_share_home == TRISTATE_YES)
     {
-      opt_fake_home = NULL;
+      is_home_shared = TRUE;
     }
   else if (opt_home)
     {
+      is_home_shared = FALSE;
       opt_fake_home = g_strdup (opt_home);
     }
   else if (opt_share_home == TRISTATE_MAYBE)
     {
-      opt_fake_home = NULL;
+      is_home_shared = TRUE;
     }
   else if (opt_freedesktop_app_id)
     {
+      is_home_shared = FALSE;
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
     }
   else if (opt_steam_app_id)
     {
+      is_home_shared = FALSE;
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 opt_steam_app_id);
       opt_fake_home = g_build_filename (home, ".var", "app",
@@ -1589,6 +1647,7 @@ main (int argc,
     }
   else if (g_getenv ("STEAM_COMPAT_APP_ID") != NULL)
     {
+      is_home_shared = FALSE;
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 g_getenv ("STEAM_COMPAT_APP_ID"));
       opt_fake_home = g_build_filename (home, ".var", "app",
@@ -1596,10 +1655,18 @@ main (int argc,
     }
   else if (g_getenv ("SteamAppId") != NULL)
     {
+      is_home_shared = FALSE;
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 g_getenv ("SteamAppId"));
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
+    }
+  else if (opt_batch)
+    {
+      is_home_shared = FALSE;
+      opt_fake_home = NULL;
+      g_info ("Unsharing the home directory without choosing a valid "
+              "candidate, using tmpfs as a fallback");
     }
   else
     {
@@ -2057,7 +2124,7 @@ main (int argc,
 
   if (flatpak_subsandbox != NULL)
     {
-      if (opt_fake_home == NULL)
+      if (is_home_shared)
         {
           /* Nothing special to do here: we'll use the same home directory
            * and exports that the parent Flatpak sandbox used. */
@@ -2078,7 +2145,7 @@ main (int argc,
       g_assert (bwrap_filesystem_arguments != NULL);
       g_assert (exports != NULL);
 
-      if (opt_fake_home == NULL)
+      if (is_home_shared)
         {
           flatpak_exports_add_path_expose (exports,
                                            FLATPAK_FILESYSTEM_MODE_READ_WRITE,
@@ -2094,17 +2161,26 @@ main (int argc,
            * should have a future "compat level" in which it's read-only,
            * like it already is when using a per-game home directory. */
           if (!expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                             home, NULL, error))
+                             TRUE, home, NULL, error))
             goto out;
         }
       else
         {
           bwrap_home_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-          if (!use_fake_home (exports, bwrap_home_arguments,
-                              container_env, opt_fake_home,
-                              error))
-            goto out;
+          if (opt_fake_home == NULL)
+            {
+              if (!use_tmpfs_home (exports, bwrap_home_arguments,
+                                   container_env, error))
+                goto out;
+            }
+          else
+            {
+              if (!use_fake_home (exports, bwrap_home_arguments,
+                                  container_env, opt_fake_home,
+                                  error))
+                goto out;
+            }
         }
     }
 

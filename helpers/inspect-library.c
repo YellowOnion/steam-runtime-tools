@@ -114,6 +114,7 @@ enum
   OPTION_HELP = 1,
   OPTION_DEB_SYMBOLS,
   OPTION_HIDDEN_DEPENDENCY,
+  OPTION_LINE_BASED,
   OPTION_VERSION,
 };
 
@@ -122,6 +123,7 @@ struct option long_options[] =
     { "hidden-dependency", required_argument, NULL, OPTION_HIDDEN_DEPENDENCY },
     { "deb-symbols", no_argument, NULL, OPTION_DEB_SYMBOLS },
     { "help", no_argument, NULL, OPTION_HELP },
+    { "line-based", no_argument, NULL, OPTION_LINE_BASED },
     { "version", no_argument, NULL, OPTION_VERSION },
     { NULL, 0, NULL, 0 }
 };
@@ -181,6 +183,24 @@ find_tag_value (const ElfW(Dyn) *dyn,
   return (size_t) -1;
 }
 
+/*
+ * Print a bytestring to stdout, escaping backslashes and control
+ * characters in octal. The result can be parsed with g_strcompress().
+ */
+static void
+print_strescape (const char *bytestring)
+{
+  const unsigned char *p;
+
+  for (p = (const unsigned char *) bytestring; *p != '\0'; p++)
+    {
+      if (*p < ' ' || *p >= 0x7f || *p == '\\')
+        printf ("\\%03o", *p);
+      else
+        putc (*p, stdout);
+    }
+}
+
 int
 main (int argc,
       char **argv)
@@ -206,6 +226,7 @@ main (int argc,
   autofree char *hidden_deps = NULL;
   size_t hidden_deps_len = 0;
   const char *hidden_dep;
+  bool line_based = false;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
@@ -221,6 +242,10 @@ main (int argc,
 
           case OPTION_HELP:
             usage (0);
+            break;
+
+          case OPTION_LINE_BASED:
+            line_based = true;
             break;
 
           case OPTION_VERSION:
@@ -246,10 +271,20 @@ main (int argc,
     }
 
   soname = argv[optind];
-  printf ("{\n");
-  printf ("  \"");
-  print_json_string_content (soname);
-  printf ("\": {");
+
+  if (line_based)
+    {
+      fputs ("requested=", stdout);
+      print_strescape (soname);
+      putc ('\n', stdout);
+    }
+  else
+    {
+      printf ("{\n");
+      printf ("  \"");
+      print_json_string_content (soname);
+      printf ("\": {");
+    }
 
   for (hidden_dep = argz_next (hidden_deps, hidden_deps_len, NULL);
        hidden_dep != NULL;
@@ -284,9 +319,18 @@ main (int argc,
   size_t soname_val = find_tag_value (dyn_start, DT_SONAME);
   if (strtab != NULL && soname_val != (size_t) -1)
     {
-      printf ("\n    \"SONAME\": \"");
-      print_json_string_content (&strtab[soname_val]);
-      printf("\",");
+      if (line_based)
+        {
+          fputs ("soname=", stdout);
+          print_strescape (&strtab[soname_val]);
+          putc ('\n', stdout);
+        }
+      else
+        {
+          printf ("\n    \"SONAME\": \"");
+          print_json_string_content (&strtab[soname_val]);
+          printf("\",");
+        }
     }
   else
     {
@@ -295,9 +339,18 @@ main (int argc,
                soname);
     }
 
-  printf ("\n    \"path\": \"");
-  print_json_string_content (the_library->l_name);
-  printf ("\"");
+  if (line_based)
+    {
+      fputs ("path=", stdout);
+      print_strescape (the_library->l_name);
+      putc ('\n', stdout);
+    }
+  else
+    {
+      printf ("\n    \"path\": \"");
+      print_json_string_content (the_library->l_name);
+      printf ("\"");
+    }
 
   if (argc >= optind + 2)
     {
@@ -420,35 +473,63 @@ main (int argc,
 
       first = true;
       entry = 0;
-      printf (",\n    \"missing_symbols\": [");
+
+      if (!line_based)
+        printf (",\n    \"missing_symbols\": [");
+
       while ((entry = argz_next (missing_symbols, missing_n, entry)))
         {
           if (first)
             first = false;
-          else
+          else if (!line_based)
             printf (",");
 
-          printf ("\n      \"");
-          print_json_string_content (entry);
-          printf ("\"");
+          if (line_based)
+            {
+              fputs ("missing_symbol=", stdout);
+              print_strescape (entry);
+              putc ('\n', stdout);
+            }
+          else
+            {
+              printf ("\n      \"");
+              print_json_string_content (entry);
+              printf ("\"");
+            }
         }
-      printf ("\n    ]");
+
+      if (!line_based)
+        printf ("\n    ]");
 
       first = true;
       entry = 0;
-      printf (",\n    \"misversioned_symbols\": [");
+
+      if (!line_based)
+        printf (",\n    \"misversioned_symbols\": [");
+
       while ((entry = argz_next (misversioned_symbols, misversioned_n, entry)))
         {
           if (first)
             first = false;
-          else
+          else if (!line_based)
             printf (",");
 
-          printf ("\n      \"");
-          print_json_string_content (entry);
-          printf ("\"");
+          if (line_based)
+            {
+              fputs ("misversioned_symbol=", stdout);
+              print_strescape (entry);
+              putc ('\n', stdout);
+            }
+          else
+            {
+              printf ("\n      \"");
+              print_json_string_content (entry);
+              printf ("\"");
+            }
         }
-      printf ("\n    ]");
+
+      if (!line_based)
+        printf ("\n    ]");
     }
   dep_map = the_library;
 
@@ -457,7 +538,9 @@ main (int argc,
   while (dep_map != NULL && dep_map->l_prev != NULL)
     dep_map = dep_map->l_prev;
 
-  printf (",\n    \"dependencies\": [");
+  if (!line_based)
+    printf (",\n    \"dependencies\": [");
+
   first = true;
   for (; dep_map != NULL; dep_map = dep_map->l_next)
     {
@@ -466,18 +549,34 @@ main (int argc,
 
       if (first)
         {
-          printf ("\n      \"");
+          if (!line_based)
+            printf ("\n      \"");
+
           first = false;
         }
-      else
-        printf (",\n      \"");
+      else if (!line_based)
+        {
+          printf (",\n      \"");
+        }
 
-      print_json_string_content (dep_map->l_name);
-      printf ("\"");
+      if (line_based)
+        {
+          fputs ("dependency=", stdout);
+          print_strescape (dep_map->l_name);
+          putc ('\n', stdout);
+        }
+      else
+        {
+          print_json_string_content (dep_map->l_name);
+          printf ("\"");
+        }
     }
 
-  printf ("\n    ]\n  }");
-  printf ("\n}\n");
+  if (!line_based)
+    {
+      printf ("\n    ]\n  }");
+      printf ("\n}\n");
+    }
 
   return 0;
 }

@@ -287,11 +287,9 @@ print_libraries_details (JsonBuilder *builder,
           if (messages != NULL)
             _srt_json_builder_add_array_of_lines (builder, "messages", messages);
 
-          json_builder_set_member_name (builder, "soname");
-          json_builder_add_string_value (builder, soname);
-
-          json_builder_set_member_name (builder, "path");
-          json_builder_add_string_value (builder, srt_library_get_absolute_path (l->data));
+          _srt_json_builder_add_string_force_utf8 (builder, "soname", soname);
+          _srt_json_builder_add_string_force_utf8 (builder, "path",
+                                                   srt_library_get_absolute_path (l->data));
 
           if (srt_library_get_issues (l->data) != SRT_LIBRARY_ISSUES_NONE)
             {

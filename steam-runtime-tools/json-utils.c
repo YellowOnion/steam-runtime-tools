@@ -322,3 +322,18 @@ _srt_json_builder_add_error_members (JsonBuilder *builder,
   json_builder_set_member_name (builder, "error");
   json_builder_add_string_value (builder, error->message);
 }
+
+void
+_srt_json_builder_add_string_force_utf8 (JsonBuilder *builder,
+                                         const char *key,
+                                         const char *value)
+{
+  g_autofree gchar *valid = NULL;
+
+  json_builder_set_member_name (builder, key);
+
+  if (value != NULL)
+    valid = g_utf8_make_valid (value, -1);
+
+  json_builder_add_string_value (builder, valid);
+}

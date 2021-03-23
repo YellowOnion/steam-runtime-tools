@@ -485,11 +485,11 @@ main (int argc,
 static void
 print_json_string_content (const char *s)
 {
-  const char *p;
+  const unsigned char *p;
 
-  for (p = s; *p != '\0'; p++)
+  for (p = (const unsigned char *) s; *p != '\0'; p++)
     {
-      if (*p == '"' || *p == '\\' || *p <= 0x1F)
+      if (*p == '"' || *p == '\\' || *p <= 0x1F || *p >= 0x80)
         printf ("\\u%04x", *p);
       else
         printf ("%c", *p);

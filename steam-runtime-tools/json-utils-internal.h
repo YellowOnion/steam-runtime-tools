@@ -57,3 +57,7 @@ void _srt_json_builder_add_strv_value (JsonBuilder *builder,
 
 void _srt_json_builder_add_error_members (JsonBuilder *builder,
                                           const GError *error);
+
+void _srt_json_builder_add_string_force_utf8 (JsonBuilder *builder,
+                                              const char *key,
+                                              const char *value);

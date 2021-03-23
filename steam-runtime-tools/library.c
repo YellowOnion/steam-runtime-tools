@@ -196,7 +196,8 @@ srt_library_set_property (GObject *object,
         if (tmp != NULL && tmp[0] == '\0')
           tmp = NULL;
 
-        self->messages = g_strdup (tmp);
+        if (tmp != NULL)
+          self->messages = g_utf8_make_valid (tmp, -1);
         break;
 
       case PROP_MISSING_SYMBOLS:
@@ -380,7 +381,8 @@ srt_library_class_init (SrtLibraryClass *cls)
  *
  * Return the absolute path of @self.
  *
- * Returns: A string like `/usr/lib/libz.so.1`, which is valid as long as
+ * Returns: (type filename) (transfer none): A string
+ *  like `/usr/lib/libz.so.1`, which is valid as long as
  *  @self is not destroyed.
  */
 const char *
@@ -397,8 +399,8 @@ srt_library_get_absolute_path (SrtLibrary *self)
  * Return the diagnostic messages produced while checking this library,
  * if any.
  *
- * Returns: (nullable) (transfer none): A string, which must not be freed,
- *  or %NULL if there were no diagnostic messages.
+ * Returns: (nullable) (transfer none) (type utf8): A string, which must
+ *  not be freed, or %NULL if there were no diagnostic messages.
  */
 const char *
 srt_library_get_messages (SrtLibrary *self)
@@ -413,8 +415,8 @@ srt_library_get_messages (SrtLibrary *self)
  *
  * Return the name that was requested to be loaded when checking @self.
  *
- * Returns: A string like `libz.so.1`, which is valid as long as @self
- *  is not destroyed.
+ * Returns: (type filename) (transfer none): A string like `libz.so.1`,
+ *  which is valid as long as @self is not destroyed.
  */
 const char *
 srt_library_get_requested_name (SrtLibrary *self)
@@ -431,8 +433,8 @@ srt_library_get_requested_name (SrtLibrary *self)
  * See also srt_library_get_real_soname(), which might be what you
  * thought this did.
  *
- * Returns: A string like `libz.so.1`, which is valid as long as @self
- *  is not destroyed.
+ * Returns: (type filename) (transfer none): A string like `libz.so.1`,
+ *  which is valid as long as @self is not destroyed.
  */
 const char *
 srt_library_get_soname (SrtLibrary *self)
@@ -448,7 +450,8 @@ srt_library_get_soname (SrtLibrary *self)
  * This is often the same as srt_library_get_requested_name(),
  * but can differ when compatibility aliases are involved.
  *
- * Returns: A string like `libz.so.1`, which is valid as long as @self
+ * Returns: (type filename) (transfer none): A string like `libz.so.1`,
+ *  which is valid as long as @self
  *  is not destroyed, or %NULL if the SONAME could not be determined.
  */
 const char *
@@ -545,7 +548,7 @@ int srt_library_get_terminating_signal (SrtLibrary *self)
  * Return the symbols that were expected to be provided by @self but
  * were not found.
  *
- * Returns: (array zero-terminated=1) (element-type utf8): The symbols
+ * Returns: (array zero-terminated=1) (element-type filename): The symbols
  *  that were missing from @self, as a %NULL-terminated array. The
  *  pointer remains valid until @self is destroyed.
  */
@@ -568,7 +571,7 @@ srt_library_get_missing_symbols (SrtLibrary *self)
  * `curl_getenv@CURL_OPENSSL_4` (as seen in Debian 10) or an unversioned
  * curl_getenv, then this list would contain `curl_getenv@CURL_OPENSSL_3`
  *
- * Returns: (array zero-terminated=1) (element-type utf8): The symbols
+ * Returns: (array zero-terminated=1) (element-type filename): The symbols
  *  were available with a different version from @self, as a %NULL-terminated
  *  array. The pointer remains valid until @self is destroyed.
  */
@@ -638,21 +641,20 @@ _srt_check_library_presence (const char *helpers_path,
   int wait_status = -1;
   int exit_status = -1;
   int terminating_signal = 0;
-  g_autoptr(JsonNode) node = NULL;
-  JsonObject *json;
-  JsonArray *missing_array = NULL;
-  JsonArray *misversioned_array = NULL;
-  JsonArray *dependencies_array = NULL;
   GError *error = NULL;
-  GStrv missing_symbols = NULL;
-  GStrv misversioned_symbols = NULL;
-  GStrv dependencies = NULL;
+  g_autoptr(GPtrArray) missing_symbols = NULL;
+  g_autoptr(GPtrArray) misversioned_symbols = NULL;
+  g_autoptr(GPtrArray) dependencies = NULL;
   SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
   GStrv my_environ = NULL;
   const gchar *ld_preload;
   gchar *filtered_preload = NULL;
   SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
   GString *log_args = NULL;
+  gchar *next_line;
+  const char * const *missing_symbols_strv = NULL;
+  const char * const *misversioned_symbols_strv = NULL;
+  const char * const *dependencies_strv = NULL;
 
   g_return_val_if_fail (requested_name != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
   g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
@@ -675,6 +677,8 @@ _srt_check_library_presence (const char *helpers_path,
       child_stderr = g_strdup (error->message);
       goto out;
     }
+
+  g_ptr_array_add (argv, g_strdup ("--line-based"));
 
   log_args = g_string_new ("");
 
@@ -756,89 +760,116 @@ _srt_check_library_presence (const char *helpers_path,
       exit_status = 0;
     }
 
-  node = json_from_string (output, &error);
-  if (node == NULL)
-    {
-      g_debug ("The helper output is not a valid JSON: %s", error == NULL ? "" : error->message);
-      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
-      goto out;
-    }
+  missing_symbols = g_ptr_array_new_with_free_func (g_free);
+  misversioned_symbols = g_ptr_array_new_with_free_func (g_free);
+  dependencies = g_ptr_array_new_with_free_func (g_free);
 
-  json = json_node_get_object (node);
-  if (!json_object_has_member (json, requested_name))
-    {
-      g_debug ("The helper output is missing the expected SONAME %s",
-               requested_name);
-      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
-      goto out;
-    }
-  json = json_object_get_object_member (json, requested_name);
+  next_line = output;
 
-  absolute_path = g_strdup (json_object_get_string_member_with_default (json, "path", NULL));
-  real_soname = g_strdup (json_object_get_string_member_with_default (json, "SONAME", NULL));
-
-  if (json_object_has_member (json, "missing_symbols"))
-    missing_array = json_object_get_array_member (json, "missing_symbols");
-  if (missing_array != NULL)
+  while (next_line != NULL)
     {
-      if (json_array_get_length (missing_array) > 0)
+      char *line = next_line;
+      char *equals;
+      g_autofree gchar *decoded = NULL;
+
+      if (*next_line == '\0')
+        break;
+
+      next_line = strchr (line, '\n');
+
+      if (next_line != NULL)
         {
-          issues |= SRT_LIBRARY_ISSUES_MISSING_SYMBOLS;
-          missing_symbols = g_new0 (gchar *, json_array_get_length (missing_array) + 1);
-          for (guint i = 0; i < json_array_get_length (missing_array); i++)
+          *next_line = '\0';
+          next_line++;
+        }
+
+      equals = strchr (line, '=');
+
+      if (equals == NULL)
+        {
+          g_warning ("Unexpected line in inspect-library output: %s", line);
+          continue;
+        }
+
+      decoded = g_strcompress (equals + 1);
+
+      if (g_str_has_prefix (line, "requested="))
+        {
+          if (strcmp (requested_name, decoded) != 0)
             {
-              missing_symbols[i] = g_strdup (json_array_get_string_element (missing_array, i));
+              g_warning ("Unexpected inspect-library output: "
+                         "asked for \"%s\", but got \"%s\"?",
+                         requested_name, decoded);
+              /* might as well continue to process it, though... */
             }
-          missing_symbols[json_array_get_length (missing_array)] = NULL;
         }
-    }
-
-  if (json_object_has_member (json, "misversioned_symbols"))
-    misversioned_array = json_object_get_array_member (json, "misversioned_symbols");
-  if (misversioned_array != NULL)
-    {
-      if (json_array_get_length (misversioned_array) > 0)
+      else if (g_str_has_prefix (line, "soname="))
         {
-          issues |= SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS;
-          misversioned_symbols = g_new0 (gchar *, json_array_get_length (misversioned_array) + 1);
-          for (guint i = 0; i < json_array_get_length (misversioned_array); i++)
-            {
-              misversioned_symbols[i] = g_strdup (json_array_get_string_element (misversioned_array, i));
-            }
-          misversioned_symbols[json_array_get_length (misversioned_array)] = NULL;
+          if (real_soname == NULL)
+            real_soname = g_steal_pointer (&decoded);
+          else
+            g_warning ("More than one SONAME in inspect-library output");
         }
-    }
-
-  if (json_object_has_member (json, "dependencies"))
-    dependencies_array = json_object_get_array_member (json, "dependencies");
-  if (dependencies_array != NULL)
-    {
-      dependencies = g_new0 (gchar *, json_array_get_length (dependencies_array) + 1);
-      for (guint i = 0; i < json_array_get_length (dependencies_array); i++)
+      else if (g_str_has_prefix (line, "path="))
         {
-          dependencies[i] = g_strdup (json_array_get_string_element (dependencies_array, i));
+          if (absolute_path == NULL)
+            absolute_path = g_steal_pointer (&decoded);
+          else
+            g_warning ("More than one path in inspect-library output");
         }
-      dependencies[json_array_get_length (dependencies_array)] = NULL;
+      else if (g_str_has_prefix (line, "missing_symbol="))
+        {
+          g_ptr_array_add (missing_symbols, g_steal_pointer (&decoded));
+        }
+      else if (g_str_has_prefix (line, "misversioned_symbol="))
+        {
+          g_ptr_array_add (misversioned_symbols, g_steal_pointer (&decoded));
+        }
+      else if (g_str_has_prefix (line, "dependency="))
+        {
+          g_ptr_array_add (dependencies, g_steal_pointer (&decoded));
+        }
+      else
+        {
+          g_debug ("Unknown line in inspect-library output: %s", line);
+        }
     }
 
 out:
+  if (missing_symbols != NULL && missing_symbols->len > 0)
+    {
+      issues |= SRT_LIBRARY_ISSUES_MISSING_SYMBOLS;
+      g_ptr_array_add (missing_symbols, NULL);
+      missing_symbols_strv = (const char * const *) missing_symbols->pdata;
+    }
+
+  if (misversioned_symbols != NULL && misversioned_symbols->len > 0)
+    {
+      issues |= SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS;
+      g_ptr_array_add (misversioned_symbols, NULL);
+      misversioned_symbols_strv = (const char * const *) misversioned_symbols->pdata;
+    }
+
+  if (dependencies != NULL && dependencies->len > 0)
+    {
+      g_ptr_array_add (dependencies, NULL);
+      dependencies_strv = (const char * const *) dependencies->pdata;
+    }
+
   if (more_details_out != NULL)
     *more_details_out = _srt_library_new (multiarch,
                                           absolute_path,
                                           requested_name,
                                           issues,
                                           child_stderr,
-                                          (const char **) missing_symbols,
-                                          (const char **) misversioned_symbols,
-                                          (const char **) dependencies,
+                                          missing_symbols_strv,
+                                          misversioned_symbols_strv,
+                                          dependencies_strv,
                                           real_soname,
                                           exit_status,
                                           terminating_signal);
 
   g_strfreev (my_environ);
-  g_strfreev (missing_symbols);
-  g_strfreev (misversioned_symbols);
-  g_strfreev (dependencies);
   g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (absolute_path);
   g_free (child_stderr);

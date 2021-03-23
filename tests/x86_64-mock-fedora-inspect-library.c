@@ -25,22 +25,23 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <glib.h>
 
 int
 main (int argc,
       char **argv)
 {
-  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
+  g_return_val_if_fail (argc == 3, EXIT_FAILURE);
+  g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
 
   gchar **envp = g_get_environ ();
-  gchar *path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib64", argv[1], NULL);
+  gchar *path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib64", argv[2], NULL);
 
-  /* Return a JSON like if we found the given soname in a canonical Fedora style, 64bit lib folder */
-  printf ("{\n\t\"%s\": {\n"
-          "\t\t\"path\": \"%s\"\n"
-          "\t}\n"
-          "}\n", argv[1], path);
+  /* Return as though we found the given soname in a canonical Fedora style,
+   * x86_64 lib directory */
+  printf ("requested=%s\n", argv[2]);
+  printf ("path=%s\n", path);
   g_free (path);
   g_strfreev (envp);
   return 0;

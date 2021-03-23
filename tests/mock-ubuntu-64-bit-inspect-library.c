@@ -25,31 +25,31 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <glib.h>
 
 int
 main (int argc,
       char **argv)
 {
-  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
+  g_return_val_if_fail (argc == 3, EXIT_FAILURE);
+  g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
 
   gchar **envp = g_get_environ ();
   gchar *path = NULL;
 
   /* If we need to locate "libGL.so.1" we return a canonical Ubuntu 16.04 style 64 bit folder, under
    * the "mesa" subfolder */
-  if (g_strcmp0 (argv[1], "libGL.so.1") == 0)
+  if (g_strcmp0 (argv[2], "libGL.so.1") == 0)
     path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib",
-                             "mock-ubuntu-64-bit", "mesa", argv[1], NULL);
+                             "mock-ubuntu-64-bit", "mesa", argv[2], NULL);
   else
     path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib",
-                             "mock-ubuntu-64-bit", argv[1], NULL);
+                             "mock-ubuntu-64-bit", argv[2], NULL);
 
-  /* Return a JSON like if we found the given soname */
-  printf ("{\n\t\"%s\": {\n"
-          "\t\t\"path\": \"%s\"\n"
-          "\t}\n"
-          "}\n", argv[1], path);
+  /* Return as if we found the given SONAME */
+  printf ("requested=%s\n", argv[2]);
+  printf ("path=%s\n", path);
   g_free (path);
   g_strfreev (envp);
   return 0;

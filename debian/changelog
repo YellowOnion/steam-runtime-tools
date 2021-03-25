@@ -1,3 +1,20 @@
+steam-runtime-tools (0.20210325.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * Fix handling of libraries with non-ASCII paths
+    - pressure-vessel: Fix a crash if a Vulkan ICD or layer is in a
+      directory with a non-ASCII name
+    - system-info: Show details of libraries in non-ASCII locations
+      correctly
+    (Resolves: steam-runtime#385, steam-runtime-tools#69)
+  * system-info: Force environment variables into UTF-8
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Use a tmpfs home directory when unsharing the home
+    directory and running non-interactively. (Resolves: steam-runtime#66)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 25 Mar 2021 10:48:04 +0000
+
 steam-runtime-tools (0.20210317.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

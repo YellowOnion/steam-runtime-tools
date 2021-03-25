@@ -33,8 +33,8 @@ Build-Depends-Indep:
 Build-Conflicts:
  libsteam-runtime-tools-0-helpers (<< 0.20191204.0~),
  libsteam-runtime-tools-0-relocatable-libs,
-Vcs-Git: https://gitlab.steamos.cloud/steam/steam-runtime-tools.git
-Vcs-Browser: https://gitlab.steamos.cloud/steam/steam-runtime-tools
+Vcs-Git: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools.git
+Vcs-Browser: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools
 
 Package: libsteam-runtime-tools-0-0
 Architecture: any

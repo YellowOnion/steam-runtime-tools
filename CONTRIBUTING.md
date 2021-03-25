@@ -1,6 +1,30 @@
 # Contributing to steam-runtime-tools
 
-(TODO: more general information here)
+## Issue tracking
+
+Our main bug tracking system for the whole Steam Runtime is
+<https://github.com/ValveSoftware/steam-runtime/issues>. Before reporting
+an issue, please take a look at the
+[bug reporting information](https://github.com/ValveSoftware/steam-runtime/blob/master/doc/reporting-steamlinuxruntime-bugs.md)
+to make sure your issue report contains all the information we need.
+
+The issue tracker on our Gitlab installation, `gitlab.steamos.cloud`, is
+primarily used by steam-runtime-tools developers to track issues for
+which we already know the technical details of what is happening.
+
+## Contributing code
+
+At the moment our Gitlab installation, `gitlab.steamos.cloud`, is not
+set up to receive merge requests from third-party contributors. However,
+git is a distributed version control system, so it is possible to push a
+clone of the steam-runtime-tools git repository to some other git hosting
+platform (such as Github or `gitlab.com`) and send a link to a proposed
+branch via an issue report.
+
+If you want to contribute code to steam-runtime-tools, please include a
+`Signed-off-by` message in your commits to indicate acceptance of the
+[Developer's Certificate of Origin](https://developercertificate.org/)
+terms.
 
 ## Doing test-builds
 
@@ -34,7 +58,7 @@ via `ssh build-vm`. If the dependencies and chroot are available on your
 development system, use `localhost`, which will make `deb-build-snapshot`
 do the build locally instead of using ssh.
 
-[Gitlab-CI]: https://gitlab.steamos.cloud/steam/steam-runtime-tools/pipelines
+[Gitlab-CI]: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/pipelines
 
 ## Design notes
 

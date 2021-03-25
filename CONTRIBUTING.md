@@ -58,7 +58,7 @@ via `ssh build-vm`. If the dependencies and chroot are available on your
 development system, use `localhost`, which will make `deb-build-snapshot`
 do the build locally instead of using ssh.
 
-[Gitlab-CI]: https://gitlab.steamos.cloud/steam/steam-runtime-tools/pipelines
+[Gitlab-CI]: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/pipelines
 
 ## Design notes
 

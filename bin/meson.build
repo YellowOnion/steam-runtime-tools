@@ -51,10 +51,21 @@ executable(
   install_rpath : bin_rpath,
 )
 
+executable(
+  'steam-runtime-steam-remote',
+  'steam-remote.c',
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep],
+  install : true,
+  # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
 if get_option('man')
   foreach bin_name : [
     'check-requirements',
     'input-monitor',
+    'steam-remote',
     'system-info',
   ]
     custom_target(

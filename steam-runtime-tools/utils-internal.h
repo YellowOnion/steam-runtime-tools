@@ -109,6 +109,10 @@ G_GNUC_INTERNAL gboolean _srt_str_is_integer (const char *str);
 gboolean _srt_fstatat_is_same_file (int afd, const char *a,
                                     int bfd, const char *b);
 
+G_GNUC_INTERNAL gboolean _srt_steam_command_via_pipe (const char * const *arguments,
+                                                      gssize n_arguments,
+                                                      GError **error);
+
 /*
  * _srt_is_same_stat:
  * @a: a stat buffer

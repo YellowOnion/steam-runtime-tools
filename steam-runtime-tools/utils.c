@@ -1022,3 +1022,78 @@ _srt_fstatat_is_same_file (int afd,
           && fstatat (bfd, b, &b_buffer, AT_EMPTY_PATH) == 0
           && _srt_is_same_stat (&a_buffer, &b_buffer));
 }
+
+/*
+ * _srt_steam_command_via_pipe:
+ * @arguments: (not nullable) (element-type utf8) (transfer none): An array
+ *  of command-line arguments that need to be passed to the Steam pipe
+ * @n_arguments: Number of elements of @arguments to use, or negative if
+ *  @arguments is %NULL-terminated
+ * @error: Used to raise an error on failure
+ *
+ * If @n_arguments is positive it's the caller's responsibility to ensure that
+ * @arguments has at least @n_arguments elements.
+ * If @n_arguments is negative, @arguments must be %NULL-terminated.
+ *
+ * Returns: %TRUE if the provided @arguments were successfully passed to the
+ *  running Steam client instance
+ */
+gboolean
+_srt_steam_command_via_pipe (const char * const *arguments,
+                             gssize n_arguments,
+                             GError **error)
+{
+  glnx_autofd int fd = -1;
+  int ofd_flags;
+  g_autofree gchar *steampipe = NULL;
+  g_autoptr(GString) args_string = g_string_new ("");
+  gsize length;
+  gsize i;
+
+  g_return_val_if_fail (arguments != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (n_arguments >= 0)
+    length = n_arguments;
+  else
+    length = g_strv_length ((gchar **) arguments);
+
+  steampipe = g_build_filename (g_get_home_dir (), ".steam", "steam.pipe", NULL);
+
+  fd = open (steampipe, O_WRONLY | O_NONBLOCK | O_CLOEXEC | O_NOCTTY);
+
+  if (fd < 0 && (errno == ENOENT || errno == ENXIO))
+    return glnx_throw_errno_prefix (error, "Steam is not running");
+  else if (fd < 0)
+    return glnx_throw_errno_prefix (error, "An error occurred trying to open the Steam pipe");
+
+  ofd_flags = fcntl (fd, F_GETFL, 0);
+
+  /* Remove O_NONBLOCK to block if we write more than the pipe-buffer space */
+  if (fcntl (fd, F_SETFL, ofd_flags & ~O_NONBLOCK) != 0)
+    return glnx_throw_errno_prefix (error, "Unable to set flags on the steam pipe fd");
+
+  /* We hardcode the canonical steam installation path, instead of actually
+   * searching where Steam has been installed, because apparently this
+   * information is not used for anything in particular and Steam just
+   * discards it */
+  g_string_append (args_string, "'~/.steam/root/ubuntu12_32/steam'");
+
+  for (i = 0; i < length; i++)
+    {
+      g_autofree gchar *quoted = NULL;
+
+      quoted = g_shell_quote (arguments[i]);
+
+      g_string_append (args_string, " ");
+      g_string_append (args_string, quoted);
+    }
+
+  g_string_append (args_string, "\n");
+
+  if (glnx_loop_write (fd, args_string->str, args_string->len) < 0)
+    return glnx_throw_errno_prefix (error,
+                                    "An error occurred trying to write to the Steam pipe");
+
+  return TRUE;
+}

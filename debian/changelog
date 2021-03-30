@@ -12,8 +12,12 @@ steam-runtime-tools (0.20210325.0) UNRELEASED; urgency=medium
   [ Ludovico de Nittis ]
   * pressure-vessel: Use a tmpfs home directory when unsharing the home
     directory and running non-interactively. (Resolves: steam-runtime#66)
+  * steam-runtime-steam-remote: Add a stub steam executable.
+    This tries to communicate with the running Steam client and pass
+    command-line options to it, and is suitable for placing in a container's
+    PATH as 'steam'. (Helps: T27035)
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 25 Mar 2021 10:48:04 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 30 Mar 2021 18:36:29 +0100
 
 steam-runtime-tools (0.20210317.0) scout; urgency=medium
 

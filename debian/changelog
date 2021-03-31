@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210331.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210331.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * Fix handling of libraries with non-ASCII paths
@@ -23,7 +23,7 @@ steam-runtime-tools (0.20210331.0) UNRELEASED; urgency=medium
     and makes it possible to open http and https URLs via Steam if
     xdg-desktop-portal is not available. (Helps: T27036)
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 31 Mar 2021 15:05:48 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 31 Mar 2021 16:59:04 +0100
 
 steam-runtime-tools (0.20210317.0) scout; urgency=medium
 

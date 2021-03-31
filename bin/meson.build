@@ -61,12 +61,23 @@ executable(
   install_rpath : bin_rpath,
 )
 
+executable(
+  'steam-runtime-urlopen',
+  'urlopen.c',
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep],
+  install : true,
+  # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
 if get_option('man')
   foreach bin_name : [
     'check-requirements',
     'input-monitor',
     'steam-remote',
     'system-info',
+    'urlopen',
   ]
     custom_target(
       'steam-runtime-' + bin_name + '.1',

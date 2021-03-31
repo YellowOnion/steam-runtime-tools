@@ -1,5 +1,2 @@
-usr/bin/steam-runtime-check-requirements
-usr/bin/steam-runtime-input-monitor
-usr/bin/steam-runtime-steam-remote
-usr/bin/steam-runtime-system-info
+usr/bin/steam-runtime-*
 usr/share/man/man1/steam-runtime-*

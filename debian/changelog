@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210325.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210331.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * Fix handling of libraries with non-ASCII paths
@@ -16,8 +16,14 @@ steam-runtime-tools (0.20210325.0) UNRELEASED; urgency=medium
     This tries to communicate with the running Steam client and pass
     command-line options to it, and is suitable for placing in a container's
     PATH as 'steam'. (Helps: T27035)
+  * steam-runtime-urlopen: Add a more Steam-centric URL-opening helper,
+    command-line-compatible with xdg-open.
+    This handles steam: and steamlink: URLs by passing them to the running
+    Steam client, even if it is not the default handler for those URLs,
+    and makes it possible to open http and https URLs via Steam if
+    xdg-desktop-portal is not available. (Helps: T27036)
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 30 Mar 2021 18:36:29 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 31 Mar 2021 15:05:48 +0100
 
 steam-runtime-tools (0.20210317.0) scout; urgency=medium
 

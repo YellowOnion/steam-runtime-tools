@@ -126,3 +126,25 @@ gchar *my_g_utf8_make_valid (const gchar *str,
                                G_LOG_LEVEL_INFO,     \
                                __VA_ARGS__)
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 64, 0)
+#if defined(G_HAVE_ISO_VARARGS) && (!defined(G_ANALYZER_ANALYZING) || !G_ANALYZER_ANALYZING)
+#define g_warning_once(...) \
+  G_STMT_START { \
+    static int G_PASTE (_GWarningOnceBoolean, __LINE__) = 0;  /* (atomic) */ \
+    if (g_atomic_int_compare_and_exchange (&G_PASTE (_GWarningOnceBoolean, __LINE__), \
+                                           0, 1)) \
+      g_warning (__VA_ARGS__); \
+  } G_STMT_END
+#elif defined(G_HAVE_GNUC_VARARGS) && (!defined(G_ANALYZER_ANALYZING) || !G_ANALYZER_ANALYZING)
+#define g_warning_once(format...) \
+  G_STMT_START { \
+    static int G_PASTE (_GWarningOnceBoolean, __LINE__) = 0;  /* (atomic) */ \
+    if (g_atomic_int_compare_and_exchange (&G_PASTE (_GWarningOnceBoolean, __LINE__), \
+                                           0, 1)) \
+      g_warning (format); \
+  } G_STMT_END
+#else
+#define g_warning_once g_warning
+#endif
+#endif

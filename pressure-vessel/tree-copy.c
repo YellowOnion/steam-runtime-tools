@@ -274,7 +274,7 @@ copy_tree_helper (const char *fpath,
          * fails too. */
         if (!glnx_file_copy_at (AT_FDCWD, fpath, sb,
                                 AT_FDCWD, dest,
-                                GLNX_FILE_COPY_OVERWRITE,
+                                GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOCHOWN,
                                 NULL, error))
           {
             glnx_prefix_error (error, "Unable to copy \"%s\" to \"%s\"",

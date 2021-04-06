@@ -381,6 +381,9 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
       canon = g_canonicalize_filename (values[i], NULL);
       value_host = pv_current_namespace_path_to_host_path (canon);
 
+      if (flatpak_has_path_prefix (canon, "/usr"))
+        g_warning_once ("Binding directories that are located under \"/usr/\" is not supported!");
+
       g_info ("Bind-mounting %s=\"%s%s%s\" from the current env as %s=\"%s%s%s\" in the host",
               variable, before, values[i], after,
               variable, before, value_host, after);
@@ -2374,6 +2377,9 @@ main (int argc,
               g_assert (g_path_is_absolute (opt_filesystems[i]));
 
               g_info ("Bind-mounting \"%s\"", opt_filesystems[i]);
+              if (flatpak_has_path_prefix (opt_filesystems[i], "/usr"))
+                g_warning_once ("Binding directories that are located under \"/usr/\" "
+                                "is not supported!");
               flatpak_exports_add_path_expose (exports,
                                                FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                                opt_filesystems[i]);

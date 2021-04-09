@@ -3620,7 +3620,12 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       if (g_str_has_prefix (dir, "/usr/"))
         memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
 
-      gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+      /* If it starts with "/app/" we don't prepend "/usr/" because we don't
+       * expect "/usr/app/" to be available */
+      if (g_str_has_prefix (dir, "/app/"))
+        gconv_dir_in_provider = g_build_filename (dir, "gconv", NULL);
+      else
+        gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
       if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
                                      -1,
@@ -3652,7 +3657,10 @@ pv_runtime_collect_libc_family (PvRuntime *self,
             }
 
           g_clear_pointer (&gconv_dir_in_provider, g_free);
-          gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+          if (g_str_has_prefix (dir, "/app/"))
+            gconv_dir_in_provider = g_build_filename (dir, "gconv", NULL);
+          else
+            gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
           if (_srt_file_test_in_sysroot (self->provider_in_current_namespace,
                                          -1,

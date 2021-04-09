@@ -3065,7 +3065,7 @@ pv_runtime_search_in_path_and_bin (PvRuntime *self,
     NULL
   };
 
-  if (g_strcmp0 (self->host_in_current_namespace, "/") == 0)
+  if (g_strcmp0 (self->provider_in_current_namespace, "/") == 0)
     {
       gchar *found_path = g_find_program_in_path (program_name);
       if (found_path != NULL)
@@ -3077,7 +3077,7 @@ pv_runtime_search_in_path_and_bin (PvRuntime *self,
       g_autofree gchar *test_path = g_build_filename (common_bin_dirs[i],
                                                       program_name,
                                                       NULL);
-      if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+      if (_srt_file_test_in_sysroot (self->provider_in_current_namespace, -1,
                                      test_path, G_FILE_TEST_IS_EXECUTABLE))
         return g_steal_pointer (&test_path);
     }

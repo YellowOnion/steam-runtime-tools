@@ -657,7 +657,7 @@ static const GOptionEntry options[] =
 {
   { "app-path", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_app_path,
-    "Use DIR as the /usr for a Flatpak sub-sandbox. "
+    "Use DIR as the /app for a Flatpak sub-sandbox. "
     "Requires '--bus-name=org.freedesktop.portal.Flatpak'.",
     "DIR" },
   { "bus-name", '\0',

@@ -74,6 +74,7 @@ struct _PvRuntime
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
   gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
+  gchar *runtime_app;           /* runtime_files + "/app" */
   gchar *runtime_files_on_host;
   const gchar *adverb_in_container;
   gchar *provider_in_current_namespace;
@@ -1393,6 +1394,7 @@ pv_runtime_initable_init (GInitable *initable,
 
   g_mkdir (self->overrides, 0700);
 
+  self->runtime_app = g_build_filename (self->runtime_files, "app", NULL);
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
 
   if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
@@ -1519,6 +1521,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->provider_in_host_namespace);
   g_free (self->provider_in_container_namespace);
   g_free (self->runtime_files_on_host);
+  g_free (self->runtime_app);
   g_free (self->runtime_usr);
   g_free (self->source);
   g_free (self->source_files);
@@ -4936,4 +4939,16 @@ pv_runtime_get_modified_usr (PvRuntime *self)
   g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
   g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
   return self->runtime_usr;
+}
+
+const char *
+pv_runtime_get_modified_app (PvRuntime *self)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
+
+  if (g_file_test (self->runtime_app, G_FILE_TEST_IS_DIR))
+    return self->runtime_app;
+  else
+    return NULL;
 }

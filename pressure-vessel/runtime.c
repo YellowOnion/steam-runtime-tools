@@ -4303,6 +4303,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
+          g_autofree gchar *libdrm_amdgpu = NULL;
           g_autofree gchar *libglx_mesa = NULL;
           g_autoptr(SrtObjectList) dri_drivers = NULL;
           g_autoptr(SrtObjectList) vdpau_drivers = NULL;
@@ -4510,12 +4511,27 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               self->all_libc_from_provider = FALSE;
             }
 
-          libdrm = g_build_filename (arch->libdir_in_current_namespace, "libdrm.so.2", NULL);
+          libdrm = g_build_filename (arch->libdir_in_current_namespace,
+                                     "libdrm.so.2", NULL);
+          libdrm_amdgpu = g_build_filename (arch->libdir_in_current_namespace,
+                                            "libdrm_amdgpu.so.1", NULL);
 
-          /* If we have libdrm.so.2 in overrides we also want to mount
+          /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
            * ${prefix}/share/libdrm from the host. ${prefix} is derived from
-           * the absolute path of libdrm.so.2 */
-          if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
+           * the absolute path of libdrm_amdgpu.so.1 */
+          if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
+            {
+              pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm_amdgpu,
+                                           provider_in_container_namespace_guarded,
+                                           libdrm_data_in_provider);
+            }
+          /* As a fallback we also try libdrm.so.2 because libdrm_amdgpu.so.1
+           * might not be available in all host systems.
+           * It's important to check for libdrm_amdgpu.so.1 first, because
+           * the freedesktop.org GL runtime doesn't provide libdrm.so.2, and if
+           * we check for it first we would end up looking for the "libdrm"
+           * directory in the wrong path */
+          else if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
                                            provider_in_container_namespace_guarded,
@@ -4622,7 +4638,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (!pv_runtime_finish_libc_family (self, bwrap, gconv_in_provider, error))
     return FALSE;
 
-  if (!pv_runtime_finish_lib_data (self, bwrap, "libdrm", "libdrm.so.2",
+  if (!pv_runtime_finish_lib_data (self, bwrap, "libdrm", "libdrm",
                                    all_libdrm_from_provider,
                                    libdrm_data_in_provider, error))
     return FALSE;

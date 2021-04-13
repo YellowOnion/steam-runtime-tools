@@ -103,6 +103,7 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           PvEnviron *container_env,
                           GError **error);
 const char *pv_runtime_get_modified_usr (PvRuntime *self);
+const char *pv_runtime_get_modified_app (PvRuntime *self);
 void pv_runtime_cleanup (PvRuntime *self);
 
 gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,

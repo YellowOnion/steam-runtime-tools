@@ -74,6 +74,7 @@ struct _PvRuntime
   FlatpakBwrap *container_access_adverb;
   const gchar *runtime_files;   /* either source_files or mutable_sysroot */
   gchar *runtime_usr;           /* either runtime_files or that + "/usr" */
+  gchar *runtime_app;           /* runtime_files + "/app" */
   gchar *runtime_files_on_host;
   const gchar *adverb_in_container;
   gchar *provider_in_current_namespace;
@@ -1393,6 +1394,7 @@ pv_runtime_initable_init (GInitable *initable,
 
   g_mkdir (self->overrides, 0700);
 
+  self->runtime_app = g_build_filename (self->runtime_files, "app", NULL);
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
 
   if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
@@ -1519,6 +1521,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->provider_in_host_namespace);
   g_free (self->provider_in_container_namespace);
   g_free (self->runtime_files_on_host);
+  g_free (self->runtime_app);
   g_free (self->runtime_usr);
   g_free (self->source);
   g_free (self->source_files);
@@ -3785,6 +3788,51 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                  lib_name, dir_basename);
     }
 
+  if (self->is_flatpak_env)
+    {
+      /* In a Flatpak environment is normal to have more than one data
+       * directory from provider, e.g. one for every multiarch */
+      GHashTableIter iter;
+      const gchar *data_path = NULL;
+
+      g_hash_table_iter_init (&iter, data_in_provider);
+      while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
+        {
+          /* If we are in a Flatpak environment we bind the lib data in the
+           * same path as the one in the provider because
+           * /usr/share/${dir_basename} is not expected to be in the library
+           * search path. */
+          if (!pv_runtime_take_from_provider (self, bwrap,
+                                              data_path, data_path,
+                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                              error))
+            return FALSE;
+
+          if (g_str_has_prefix (data_path, "/app/lib/"))
+            {
+              /* In a freedesktop.org runtime, for some multiarch, there is
+               * a symlink /usr/lib/${arch} that points to /app/lib/${arch}
+               * https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/blob/70cb5835/elements/multiarch/multiarch-platform.bst#L24
+               * If we have a path in /app/lib/ here, we also try to
+               * replicate the symlink in /usr/lib/ */
+              g_autofree gchar *path_in_usr = NULL;
+              path_in_usr = g_build_filename ("/usr",
+                                              data_path + strlen ("/app"),
+                                              NULL);
+              if (_srt_fstatat_is_same_file (-1, data_path, -1, path_in_usr))
+                {
+                  if (!pv_runtime_take_from_provider (self, bwrap,
+                                                      data_path, path_in_usr,
+                                                      TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                                      error))
+                    return FALSE;
+                }
+            }
+        }
+
+      return TRUE;
+    }
+
   if (g_hash_table_size (data_in_provider) == 1)
     {
       best_data_in_provider = g_strdup (
@@ -4936,4 +4984,16 @@ pv_runtime_get_modified_usr (PvRuntime *self)
   g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
   g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
   return self->runtime_usr;
+}
+
+const char *
+pv_runtime_get_modified_app (PvRuntime *self)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
+
+  if (g_file_test (self->runtime_app, G_FILE_TEST_IS_DIR))
+    return self->runtime_app;
+  else
+    return NULL;
 }

@@ -2081,10 +2081,11 @@ main (int argc,
 
       if (flatpak_subsandbox != NULL)
         {
+          const char *app = pv_runtime_get_modified_app (runtime);
           const char *usr = pv_runtime_get_modified_usr (runtime);
 
           flatpak_bwrap_add_args (flatpak_subsandbox,
-                                  "--app-path=",
+                                  "--app-path", app == NULL ? "" : app,
                                   "--share-pids",
                                   "--usr-path", usr,
                                   NULL);

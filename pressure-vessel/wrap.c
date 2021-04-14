@@ -43,6 +43,7 @@
 #include "flatpak-utils-private.h"
 #include "runtime.h"
 #include "utils.h"
+#include "wrap-flatpak.h"
 #include "wrap-interactive.h"
 #include "wrap-setup.h"
 
@@ -206,54 +207,6 @@ check_bwrap (const char *tools_dir,
     }
 
   return NULL;
-}
-
-static gboolean
-check_launch_on_host (const char *launch_executable,
-                      GError **error)
-{
-  g_autofree gchar *child_stdout = NULL;
-  g_autofree gchar *child_stderr = NULL;
-  int wait_status;
-  const char *test_argv[] =
-  {
-    NULL,
-    "--bus-name=org.freedesktop.Flatpak",
-    "--",
-    "true",
-    NULL
-  };
-
-  test_argv[0] = launch_executable;
-
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (gchar **) test_argv,
-                     NULL,  /* environ */
-                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                     NULL, NULL,    /* child setup */
-                     &child_stdout,
-                     &child_stderr,
-                     &wait_status,
-                     error))
-    {
-      return FALSE;
-    }
-
-  if (wait_status != 0)
-    {
-      pv_log_failure ("Cannot run commands on host system: wait status %d",
-                 wait_status);
-
-      if (child_stdout != NULL && child_stdout[0] != '\0')
-        pv_log_failure ("Output:\n%s", child_stdout);
-
-      if (child_stderr != NULL && child_stderr[0] != '\0')
-        pv_log_failure ("Diagnostic output:\n%s", child_stderr);
-
-      return glnx_throw (error, "Unable to run a command on the host system");
-    }
-
-  return TRUE;
 }
 
 /* Nvidia Vulkan ray-tracing requires to load the `nvidia_uvm.ko` kernel
@@ -1368,7 +1321,6 @@ main (int argc,
   g_autoptr(FlatpakBwrap) argv_in_container = NULL;
   g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
-  g_autofree gchar *launch_executable = NULL;
   g_autofree gchar *bwrap_executable = NULL;
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
@@ -1797,60 +1749,14 @@ main (int argc,
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
     {
+      if (!pv_wrap_check_flatpak (tools_dir,
+                                  &flatpak_subsandbox,
+                                  &flatpak_run_on_host,
+                                  error))
+        goto out;
 
-      launch_executable = g_build_filename (tools_dir,
-                                            "pressure-vessel-launch",
-                                            NULL);
       /* Assume "bwrap" to exist in the host system and to be in its PATH */
       bwrap_executable = g_strdup ("bwrap");
-
-      /* Deliberately not documented: only people who are in a position
-       * to run their own modified versions of Flatpak and pressure-vessel
-       * should be using this, and those people can find this in the
-       * source code */
-      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") != NULL)
-        {
-          g_warning ("Assuming your version of Flatpak contains unmerged "
-                     "changes (#4018, #4125, #4126, #4093)");
-
-          /* Use a sub-sandbox */
-          flatpak_subsandbox = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-          flatpak_bwrap_add_arg (flatpak_subsandbox,
-                                 launch_executable);
-          /* Tell pressure-vessel-launch to send its whole environment
-           * to the subsandbox, except for the parts that we edit later.
-           * This effectively matches bwrap's behaviour. */
-          flatpak_bwrap_add_arg (flatpak_subsandbox, "--pass-env-matching=*");
-          flatpak_bwrap_add_arg (flatpak_subsandbox,
-                                 "--bus-name=org.freedesktop.portal.Flatpak");
-        }
-      /* Also deliberately not documented */
-      else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE") != NULL)
-        {
-          g_warning ("Assuming permissions have been set to allow Steam "
-                     "to escape from the Flatpak sandbox");
-
-          /* If we have permission to escape from the sandbox, we'll do that,
-           * and launch bwrap that way */
-          flatpak_run_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-          flatpak_bwrap_add_arg (flatpak_run_on_host,
-                                 launch_executable);
-          flatpak_bwrap_add_arg (flatpak_run_on_host,
-                                 "--bus-name=org.freedesktop.Flatpak");
-
-          /* If we can't launch a command on the host, just fail. */
-          if (!check_launch_on_host (launch_executable, error))
-            goto out;
-        }
-      else
-        {
-          glnx_throw (error,
-                      "pressure-vessel (SteamLinuxRuntime) cannot be run "
-                      "in a Flatpak environment. For Proton 5.13+, "
-                      "unofficial community builds that do not use "
-                      "pressure-vessel are available.");
-          goto out;
-        }
     }
   else
     {

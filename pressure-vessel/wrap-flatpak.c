@@ -24,6 +24,9 @@
 #include "flatpak-run-private.h"
 #include "utils.h"
 
+#define FLATPAK_PORTAL_BUS_NAME "org.freedesktop.portal.Flatpak"
+#define FLATPAK_SESSION_HELPER_BUS_NAME "org.freedesktop.Flatpak"
+
 static gboolean
 check_launch_on_host (const char *launch_executable,
                       GError **error)
@@ -34,7 +37,7 @@ check_launch_on_host (const char *launch_executable,
   const char *test_argv[] =
   {
     NULL,
-    "--bus-name=org.freedesktop.Flatpak",
+    "--bus-name=" FLATPAK_SESSION_HELPER_BUS_NAME,
     "--",
     "true",
     NULL
@@ -70,6 +73,21 @@ check_launch_on_host (const char *launch_executable,
     }
 
   return TRUE;
+}
+
+static FlatpakBwrap *
+get_subsandbox_adverb (const char *launch_executable)
+{
+  FlatpakBwrap *ret = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+
+  flatpak_bwrap_add_arg (ret, launch_executable);
+  /* Tell pressure-vessel-launch to send its whole environment
+   * to the subsandbox, except for the parts that we edit later.
+   * This effectively matches bwrap's behaviour. */
+  flatpak_bwrap_add_arg (ret, "--pass-env-matching=*");
+  flatpak_bwrap_add_arg (ret, "--bus-name=" FLATPAK_PORTAL_BUS_NAME);
+
+  return ret;
 }
 
 /*
@@ -139,15 +157,7 @@ pv_wrap_check_flatpak (const char *tools_dir,
     {
       g_warning ("Assuming your version of Flatpak contains unmerged "
                  "changes (#4018, #4125, #4126, #4093)");
-      /* Use a sub-sandbox */
-      subsandbox = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      flatpak_bwrap_add_arg (subsandbox, launch_executable);
-      /* Tell pressure-vessel-launch to send its whole environment
-       * to the subsandbox, except for the parts that we edit later.
-       * This effectively matches bwrap's behaviour. */
-      flatpak_bwrap_add_arg (subsandbox, "--pass-env-matching=*");
-      flatpak_bwrap_add_arg (subsandbox,
-                             "--bus-name=org.freedesktop.portal.Flatpak");
+      subsandbox = get_subsandbox_adverb (launch_executable);
     }
   /* Also deliberately not documented */
   else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE") != NULL)

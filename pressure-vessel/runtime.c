@@ -4948,7 +4948,7 @@ pv_runtime_use_shared_sockets (PvRuntime *self,
                                PvEnviron *container_env,
                                GError **error)
 {
-  if (pv_environ_is_locked (container_env, "PULSE_SERVER")
+  if (pv_environ_getenv (container_env, "PULSE_SERVER") != NULL
       || self->is_flatpak_env)
     {
       /* Make the PulseAudio driver the default.

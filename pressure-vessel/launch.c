@@ -1078,14 +1078,6 @@ main (int argc,
       g_debug ("Using \"%s\" as /app instead of runtime", opt_app_path);
 
       g_assert (api == &subsandbox_api);
-
-      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") == NULL)
-        {
-          glnx_throw (error,
-                      "--app-path requires an experimental branch of Flatpak");
-          goto out;
-        }
-
       check_portal_version ("app-path", 6);
 
       if (opt_app_path[0] == '\0')
@@ -1113,14 +1105,6 @@ main (int argc,
       g_debug ("Using %s as /usr instead of runtime", opt_usr_path);
 
       g_assert (api == &subsandbox_api);
-
-      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") == NULL)
-        {
-          glnx_throw (error,
-                      "--usr-path requires an experimental branch of Flatpak");
-          goto out;
-        }
-
       check_portal_version ("usr-path", 6);
 
       handle = path_to_handle (fd_list, opt_usr_path, home_realpath,

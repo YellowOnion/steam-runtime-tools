@@ -149,11 +149,18 @@ pv_wrap_check_flatpak (const char *tools_dir,
                                         "pressure-vessel-launch",
                                         NULL);
 
+  if (flatpak_version != NULL && strverscmp (flatpak_version, "1.11.0") >= 0)
+    {
+      g_warning ("Using experimental Flatpak sub-sandboxing "
+                 "(requires Flatpak 1.11.x commit 1.10.1-65-g3ebf371f "
+                 "or later)");
+      subsandbox = get_subsandbox_adverb (launch_executable);
+    }
   /* Deliberately not documented: only people who are in a position
    * to run their own modified versions of Flatpak and pressure-vessel
    * should be using this, and those people can find this in the
    * source code */
-  if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") != NULL)
+  else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") != NULL)
     {
       g_warning ("Assuming your version of Flatpak contains unmerged "
                  "changes (#4018, #4125, #4126, #4093)");

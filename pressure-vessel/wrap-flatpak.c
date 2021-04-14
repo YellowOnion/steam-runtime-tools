@@ -169,8 +169,21 @@ pv_wrap_check_flatpak (const char *tools_dir,
   /* Also deliberately not documented */
   else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE") != NULL)
     {
-      g_warning ("Assuming permissions have been set to allow Steam "
-                 "to escape from the Flatpak sandbox");
+      g_autofree gchar *policy = NULL;
+
+      policy = g_key_file_get_string (info,
+                                      FLATPAK_METADATA_GROUP_SESSION_BUS_POLICY,
+                                      FLATPAK_SESSION_HELPER_BUS_NAME,
+                                      NULL);
+
+      if (g_strcmp0 (policy, "talk") != 0)
+        return glnx_throw (error,
+                           "PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE can "
+                           "only be used if the Flatpak app has been "
+                           "configured to allow escape from the sandbox");
+
+      g_warning ("Running bwrap command on host via %s (experimental)",
+                 FLATPAK_SESSION_HELPER_BUS_NAME);
 
       /* If we have permission to escape from the sandbox, we'll do that,
        * and launch bwrap that way */
@@ -178,7 +191,7 @@ pv_wrap_check_flatpak (const char *tools_dir,
       flatpak_bwrap_add_arg (run_on_host,
                              launch_executable);
       flatpak_bwrap_add_arg (run_on_host,
-                             "--bus-name=org.freedesktop.Flatpak");
+                             "--bus-name=" FLATPAK_SESSION_HELPER_BUS_NAME);
 
       /* If we can't launch a command on the host, just fail. */
       if (!check_launch_on_host (launch_executable, error))

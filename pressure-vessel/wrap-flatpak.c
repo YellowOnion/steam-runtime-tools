@@ -151,10 +151,64 @@ pv_wrap_check_flatpak (const char *tools_dir,
 
   if (flatpak_version != NULL && strverscmp (flatpak_version, "1.11.0") >= 0)
     {
+      g_auto(GStrv) devices = NULL;
+      g_auto(GStrv) features = NULL;
+      g_auto(GStrv) filesystems = NULL;
+
       g_warning ("Using experimental Flatpak sub-sandboxing "
                  "(requires Flatpak 1.11.x commit 1.10.1-65-g3ebf371f "
                  "or later)");
       subsandbox = get_subsandbox_adverb (launch_executable);
+
+      devices = g_key_file_get_string_list (info,
+                                            FLATPAK_METADATA_GROUP_CONTEXT,
+                                            FLATPAK_METADATA_KEY_DEVICES,
+                                            NULL, NULL);
+      features = g_key_file_get_string_list (info,
+                                             FLATPAK_METADATA_GROUP_CONTEXT,
+                                             FLATPAK_METADATA_KEY_FEATURES,
+                                             NULL, NULL);
+      filesystems = g_key_file_get_string_list (info,
+                                                FLATPAK_METADATA_GROUP_CONTEXT,
+                                                FLATPAK_METADATA_KEY_FILESYSTEMS,
+                                                NULL, NULL);
+
+      if (devices != NULL
+          && g_strv_contains ((const char * const *) devices, "shm"))
+        {
+          g_debug ("OK: /dev/shm shared with host");
+        }
+      else if (features != NULL
+               && g_strv_contains ((const char * const *) features,
+                                   "per-app-dev-shm"))
+        {
+          g_debug ("OK: per-app-ID /dev/shm (flatpak#4214)");
+        }
+      else
+        {
+          g_warning ("/dev/shm not shared between app instances "
+                     "(flatpak#4214). "
+                     "The Steam Overlay will not work.");
+        }
+
+      if (filesystems != NULL
+          && g_strv_contains ((const char * const *) filesystems, "/tmp"))
+        {
+          g_debug ("OK: /tmp shared with host");
+        }
+      else if (features != NULL
+               && g_strv_contains ((const char * const *) features,
+                                   "per-app-dev-shm"))
+        {
+          g_debug ("OK: assuming that per-app-ID /dev/shm (flatpak#4214) "
+                   "implies per-app-ID /tmp (flatpak#4093)");
+        }
+      else
+        {
+          g_warning ("Cannot tell whether /tmp is shared between app "
+                     "instances (flatpak#4093). "
+                     "The Steam Overlay browser might not work.");
+        }
     }
   /* Deliberately not documented: only people who are in a position
    * to run their own modified versions of Flatpak and pressure-vessel

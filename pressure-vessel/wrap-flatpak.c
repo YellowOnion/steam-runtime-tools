@@ -21,6 +21,7 @@
 
 #include "libglnx/libglnx.h"
 
+#include "flatpak-run-private.h"
 #include "utils.h"
 
 static gboolean
@@ -94,6 +95,9 @@ pv_wrap_check_flatpak (const char *tools_dir,
 {
   g_autoptr(FlatpakBwrap) subsandbox = NULL;
   g_autoptr(FlatpakBwrap) run_on_host = NULL;
+  g_autoptr(GKeyFile) info = NULL;
+  g_autoptr(GError) local_error = NULL;
+  g_autofree gchar *flatpak_version = NULL;
   g_autofree gchar *launch_executable = NULL;
 
   g_return_val_if_fail (tools_dir != NULL, FALSE);
@@ -102,6 +106,26 @@ pv_wrap_check_flatpak (const char *tools_dir,
   g_return_val_if_fail (run_on_host_out != NULL, FALSE);
   g_return_val_if_fail (*run_on_host_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  info = g_key_file_new ();
+
+  if (!g_key_file_load_from_file (info, "/.flatpak-info", G_KEY_FILE_NONE,
+                                  &local_error))
+    {
+      g_warning ("Unable to load Flatpak instance info: %s",
+                 local_error->message);
+      g_clear_error (&local_error);
+    }
+
+  flatpak_version = g_key_file_get_string (info,
+                                           FLATPAK_METADATA_GROUP_INSTANCE,
+                                           FLATPAK_METADATA_KEY_FLATPAK_VERSION,
+                                           NULL);
+
+  if (flatpak_version == NULL)
+    g_warning ("Running under Flatpak, unknown version");
+  else
+    g_info ("Running under Flatpak, version %s", flatpak_version);
 
   launch_executable = g_build_filename (tools_dir,
                                         "pressure-vessel-launch",

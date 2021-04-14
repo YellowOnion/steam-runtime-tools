@@ -1,19 +1,20 @@
-steam-runtime-tools (0.20210412.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210414.0) UNRELEASED; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Show a warning when attempting to bind /usr/* dirs
     (Helps: #30)
-  * pv-runtime: Search gconv in the correct dir when it starts with /app.
-    (Fixes: T27437)
-  * pv-runtime: Search for executables using the provider instead of the host
-    (Fixes: T27438)
+  * pv-runtime: Improve experimental Flatpak sub-sandboxing support
+    (Fixes: T27437, T27438, T27442, T27443)
   * pv-launch: Fix typo in --help
 
   [ Simon McVittie ]
+  * pv-runtime: Don't set PulseAudio as default if it was not found,
+    fixing a regression in 0.20210317.0 on systems that use plain ALSA
+    (Helps: steam-runtime#344, steam-runtime#384)
   * Update libglnx
   * pressure-vessel: Don't try to change file ownership when copying a tree
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 12 Apr 2021 18:08:24 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 14 Apr 2021 10:57:40 +0100
 
 steam-runtime-tools (0.20210331.0) scout; urgency=medium
 

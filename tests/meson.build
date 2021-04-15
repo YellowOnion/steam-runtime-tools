@@ -51,7 +51,7 @@ tests = [
 if get_option('bin')
   tests += [
     {'name': 'check-requirements-cli'},
-    {'name': 'system-info-cli', 'static': true},
+    {'name': 'system-info-cli', 'static': true, 'slow': true},
   ]
 endif
 
@@ -154,6 +154,12 @@ foreach test_info : tests
     deps = [libsteamrt_dep, test_utils_dep]
   endif
 
+  if test_info.get('slow', false)
+    timeout = 60
+  else
+    timeout = 30
+  endif
+
   sources = test_info.get('sources', files(test_name + '.c'))
 
   exe = executable(
@@ -181,9 +187,9 @@ foreach test_info : tests
   endif
 
   if glib_tap_support.found()
-    test(test_name, exe, args : ['--tap'], env : test_env)
+    test(test_name, exe, args : ['--tap'], env : test_env, timeout : timeout)
   else
-    test(test_name, exe, env : test_env)
+    test(test_name, exe, env : test_env, timeout : timeout)
   endif
 endforeach
 

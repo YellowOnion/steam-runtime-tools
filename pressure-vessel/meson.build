@@ -205,6 +205,8 @@ executable(
     'runtime.c',
     'runtime.h',
     'wrap.c',
+    'wrap-flatpak.c',
+    'wrap-flatpak.h',
     'wrap-setup.c',
     'wrap-setup.h',
   ] + enums,

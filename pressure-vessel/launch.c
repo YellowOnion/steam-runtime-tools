@@ -46,6 +46,14 @@
 #include "launcher.h"
 #include "utils.h"
 
+#define FLATPAK_SESSION_HELPER_BUS_NAME "org.freedesktop.Flatpak"
+#define FLATPAK_SESSION_HELPER_PATH_DEVELOPMENT "/org/freedesktop/Flatpak/Development"
+#define FLATPAK_SESSION_HELPER_INTERFACE_DEVELOPMENT "org.freedesktop.Flatpak.Development"
+
+#define FLATPAK_PORTAL_BUS_NAME "org.freedesktop.portal.Flatpak"
+#define FLATPAK_PORTAL_PATH "/org/freedesktop/portal/Flatpak"
+#define FLATPAK_PORTAL_INTERFACE FLATPAK_PORTAL_BUS_NAME
+
 typedef enum {
   FLATPAK_SPAWN_FLAGS_CLEAR_ENV = 1 << 0,
   FLATPAK_SPAWN_FLAGS_LATEST_VERSION = 1 << 1,
@@ -105,9 +113,9 @@ static Api launcher_api =
 
 static const Api host_api =
 {
-  .service_iface = "org.freedesktop.Flatpak.Development",
-  .service_obj_path = "/org/freedesktop/Flatpak/Development",
-  .service_bus_name = "org.freedesktop.Flatpak",
+  .service_iface = FLATPAK_SESSION_HELPER_INTERFACE_DEVELOPMENT,
+  .service_obj_path = FLATPAK_SESSION_HELPER_PATH_DEVELOPMENT,
+  .service_bus_name = FLATPAK_SESSION_HELPER_BUS_NAME,
   .send_signal_method = "HostCommandSignal",
   .exit_signal = "HostCommandExited",
   .launch_method = "HostCommand",
@@ -116,9 +124,9 @@ static const Api host_api =
 
 static const Api subsandbox_api =
 {
-  .service_iface = "org.freedesktop.portal.Flatpak",
-  .service_obj_path = "/org/freedesktop/portal/Flatpak",
-  .service_bus_name = "org.freedesktop.portal.Flatpak",
+  .service_iface = FLATPAK_PORTAL_INTERFACE,
+  .service_obj_path = FLATPAK_PORTAL_PATH,
+  .service_bus_name = FLATPAK_PORTAL_BUS_NAME,
   .send_signal_method = "SpawnSignal",
   .exit_signal = "SpawnExited",
   .launch_method = "Spawn",
@@ -1070,14 +1078,6 @@ main (int argc,
       g_debug ("Using \"%s\" as /app instead of runtime", opt_app_path);
 
       g_assert (api == &subsandbox_api);
-
-      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") == NULL)
-        {
-          glnx_throw (error,
-                      "--app-path requires an experimental branch of Flatpak");
-          goto out;
-        }
-
       check_portal_version ("app-path", 6);
 
       if (opt_app_path[0] == '\0')
@@ -1105,14 +1105,6 @@ main (int argc,
       g_debug ("Using %s as /usr instead of runtime", opt_usr_path);
 
       g_assert (api == &subsandbox_api);
-
-      if (g_getenv ("PRESSURE_VESSEL_FLATPAK_PR4018") == NULL)
-        {
-          glnx_throw (error,
-                      "--usr-path requires an experimental branch of Flatpak");
-          goto out;
-        }
-
       check_portal_version ("usr-path", 6);
 
       handle = path_to_handle (fd_list, opt_usr_path, home_realpath,

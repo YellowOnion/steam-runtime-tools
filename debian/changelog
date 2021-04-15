@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210414.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210415.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Show a warning when attempting to bind /usr/* dirs
@@ -11,10 +11,11 @@ steam-runtime-tools (0.20210414.0) UNRELEASED; urgency=medium
   * pv-runtime: Don't set PulseAudio as default if it was not found,
     fixing a regression in 0.20210317.0 on systems that use plain ALSA
     (Helps: steam-runtime#344, steam-runtime#384)
+  * pv-runtime: Improve experimental Flatpak sub-sandboxing support
   * Update libglnx
   * pressure-vessel: Don't try to change file ownership when copying a tree
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 14 Apr 2021 10:57:40 +0100
+ -- Simon McVittie <smcv@collabora.com>  Thu, 15 Apr 2021 20:25:04 +0100
 
 steam-runtime-tools (0.20210331.0) scout; urgency=medium
 

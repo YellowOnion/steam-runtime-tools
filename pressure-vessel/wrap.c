@@ -1313,7 +1313,6 @@ main (int argc,
   gboolean is_home_shared = TRUE;
   gboolean search_cwd = FALSE;
   g_autoptr(FlatpakBwrap) flatpak_subsandbox = NULL;
-  g_autoptr(FlatpakBwrap) flatpak_run_on_host = NULL;
   g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
   g_autoptr(FlatpakBwrap) bwrap_filesystem_arguments = NULL;
@@ -1749,14 +1748,8 @@ main (int argc,
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
     {
-      if (!pv_wrap_check_flatpak (tools_dir,
-                                  &flatpak_subsandbox,
-                                  &flatpak_run_on_host,
-                                  error))
+      if (!pv_wrap_check_flatpak (tools_dir, &flatpak_subsandbox, error))
         goto out;
-
-      /* Assume "bwrap" to exist in the host system and to be in its PATH */
-      bwrap_executable = g_strdup ("bwrap");
     }
   else
     {
@@ -1777,9 +1770,8 @@ main (int argc,
       goto out;
     }
 
-  /* Invariant: we are in exactly one of these three modes */
+  /* Invariant: we are in exactly one of these two modes */
   g_assert (((flatpak_subsandbox != NULL)
-             + (flatpak_run_on_host != NULL)
              + (!is_flatpak_env))
             == 1);
 
@@ -1787,6 +1779,7 @@ main (int argc,
     {
       /* Start with an empty environment and populate it later */
       bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+      g_assert (bwrap_executable != NULL);
       flatpak_bwrap_add_arg (bwrap, bwrap_executable);
       bwrap_filesystem_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       exports = flatpak_exports_new ();
@@ -1795,6 +1788,7 @@ main (int argc,
   /* Invariant: we have bwrap or exports iff we also have the other */
   g_assert ((bwrap != NULL) == (exports != NULL));
   g_assert ((bwrap != NULL) == (bwrap_filesystem_arguments != NULL));
+  g_assert ((bwrap != NULL) == (bwrap_executable != NULL));
 
   container_env = pv_environ_new ();
 
@@ -1807,20 +1801,6 @@ main (int argc,
         graphics_provider_mount_point = g_strdup ("/run/host");
       else
         graphics_provider_mount_point = g_strdup ("/run/gfx");
-
-      if (is_flatpak_env)
-        {
-          glnx_autofd int fd = TEMP_FAILURE_RETRY (open ("/run/host",
-                                                         O_CLOEXEC | O_PATH));
-
-          if (fd < 0)
-            {
-              glnx_throw_errno_prefix (error, "Unable to open /run/host");
-              goto out;
-            }
-
-          flatpak_exports_take_host_fd (exports, glnx_steal_fd (&fd));
-        }
 
       /* Protect the controlling terminal from the app/game, unless we are
        * running an interactive shell in which case that would break its
@@ -2003,13 +1983,6 @@ main (int argc,
        * without changing the runtime, which means we inherit the
        * Flatpak's normal runtime. */
     }
-  else if (flatpak_run_on_host != NULL)
-    {
-      glnx_throw (error,
-                  "Cannot operate without a runtime when escaping from "
-                  "a Flatpak app");
-      goto out;
-    }
   else
     {
       g_assert (!is_flatpak_env);
@@ -2050,7 +2023,7 @@ main (int argc,
     }
   else
     {
-      g_assert (flatpak_run_on_host != NULL || !is_flatpak_env);
+      g_assert (!is_flatpak_env);
       g_assert (bwrap != NULL);
       g_assert (bwrap_filesystem_arguments != NULL);
       g_assert (exports != NULL);
@@ -2416,26 +2389,9 @@ main (int argc,
       g_autoptr(GList) vars = NULL;
       const GList *iter;
 
-      if (flatpak_run_on_host != NULL)
-        {
-          /* These are the environment variables that will be wrong, or useless,
-           * in the new container that will be created by escaping from the
-           * sandbox. Force them to be unset. */
-          pv_environ_lock_env (container_env, "FLATPAK_ID", NULL);
-          pv_environ_lock_env (container_env, "FLATPAK_SANDBOX_DIR", NULL);
-        }
-      else
-        {
-          /* Let these inherit from the sub-sandbox environment */
-          pv_environ_lock_inherit_env (container_env, "FLATPAK_ID");
-          pv_environ_lock_inherit_env (container_env, "FLATPAK_SANDBOX_DIR");
-        }
-
-      /* These are the environment variables that might differ in the host
-       * system. However from inside a container we are not able to know the
-       * host's value. So we allow them to inherit the value from the host.
-       * Similarly, if we're starting a sub-sandbox, they should take the
-       * sub-sandbox's value if different. */
+      /* Let these inherit from the sub-sandbox environment */
+      pv_environ_lock_inherit_env (container_env, "FLATPAK_ID");
+      pv_environ_lock_inherit_env (container_env, "FLATPAK_SANDBOX_DIR");
       pv_environ_lock_inherit_env (container_env, "DBUS_SESSION_BUS_ADDRESS");
       pv_environ_lock_inherit_env (container_env, "DBUS_SYSTEM_BUS_ADDRESS");
       pv_environ_lock_inherit_env (container_env, "DISPLAY");
@@ -2545,49 +2501,6 @@ main (int argc,
         goto out;
 
       lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
-    }
-
-  if (flatpak_run_on_host != NULL)
-    {
-      int userns_fd, userns2_fd, pidns_fd;
-
-      /* Tell the bwrap instance on the host to join the same user and pid
-       * namespaces as Steam in Flatpak. Otherwise, pid-based IPC between
-       * the Steam client and the game will fail.
-       *
-       * This is not expected to work if bwrap on the host is setuid,
-       * so it will not work for users of Debian, Arch linux-hardened, etc.,
-       * but it's better than nothing. */
-      userns_fd = open ("/run/.userns", O_RDONLY | O_CLOEXEC);
-
-      if (userns_fd >= 0)
-        {
-          g_array_append_val (pass_fds_through_adverb, userns_fd);
-          flatpak_bwrap_add_args_data_fd (bwrap, "--userns",
-                                          glnx_steal_fd (&userns_fd),
-                                          NULL);
-
-          userns2_fd = open_namespace_fd_if_needed ("/proc/self/ns/user",
-                                                    "/run/.userns");
-
-          if (userns2_fd >= 0)
-            {
-              g_array_append_val (pass_fds_through_adverb, userns2_fd);
-              flatpak_bwrap_add_args_data_fd (bwrap, "--userns2",
-                                              glnx_steal_fd (&userns2_fd),
-                                              NULL);
-            }
-        }
-
-      pidns_fd = open ("/proc/self/ns/pid", O_RDONLY | O_CLOEXEC);
-
-      if (pidns_fd >= 0)
-        {
-          g_array_append_val (pass_fds_through_adverb, pidns_fd);
-          flatpak_bwrap_add_args_data_fd (bwrap, "--pidns",
-                                          glnx_steal_fd (&pidns_fd),
-                                          NULL);
-        }
     }
 
   if (bwrap != NULL)
@@ -2802,38 +2715,9 @@ main (int argc,
       g_warn_if_fail (g_strv_length (flatpak_subsandbox->envp) == 0);
       flatpak_bwrap_append_bwrap (final_argv, flatpak_subsandbox);
     }
-
-  if (flatpak_run_on_host != NULL)
+  else
     {
       g_assert (bwrap != NULL);
-
-      for (i = 0; i < bwrap->fds->len; i++)
-        {
-          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
-                                                     g_array_index (bwrap->fds, int, i));
-          flatpak_bwrap_add_arg (flatpak_run_on_host, fd_str);
-        }
-
-      for (i = 0; i < argv_in_container->fds->len; i++)
-        {
-          g_autofree char *fd_str = g_strdup_printf ("--forward-fd=%d",
-                                                     g_array_index (argv_in_container->fds, int, i));
-          flatpak_bwrap_add_arg (flatpak_run_on_host, fd_str);
-        }
-
-      /* Change the current working directory where pv-launch will run bwrap.
-       * Bwrap will then set its directory by itself. For this reason here
-       * we just need a directory that it's known to exist. */
-      flatpak_bwrap_add_arg (flatpak_run_on_host, "--directory=/");
-
-      flatpak_bwrap_add_arg (flatpak_run_on_host, "--");
-
-      g_warn_if_fail (g_strv_length (flatpak_run_on_host->envp) == 0);
-      flatpak_bwrap_append_bwrap (final_argv, flatpak_run_on_host);
-    }
-
-  if (flatpak_subsandbox == NULL)
-    {
       g_warn_if_fail (g_strv_length (bwrap->envp) == 0);
       flatpak_bwrap_append_bwrap (final_argv, bwrap);
     }

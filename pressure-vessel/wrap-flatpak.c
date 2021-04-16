@@ -25,55 +25,6 @@
 #include "utils.h"
 
 #define FLATPAK_PORTAL_BUS_NAME "org.freedesktop.portal.Flatpak"
-#define FLATPAK_SESSION_HELPER_BUS_NAME "org.freedesktop.Flatpak"
-
-static gboolean
-check_launch_on_host (const char *launch_executable,
-                      GError **error)
-{
-  g_autofree gchar *child_stdout = NULL;
-  g_autofree gchar *child_stderr = NULL;
-  int wait_status;
-  const char *test_argv[] =
-  {
-    NULL,
-    "--bus-name=" FLATPAK_SESSION_HELPER_BUS_NAME,
-    "--",
-    "true",
-    NULL
-  };
-
-  test_argv[0] = launch_executable;
-
-  if (!g_spawn_sync (NULL,  /* cwd */
-                     (gchar **) test_argv,
-                     NULL,  /* environ */
-                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                     NULL, NULL,    /* child setup */
-                     &child_stdout,
-                     &child_stderr,
-                     &wait_status,
-                     error))
-    {
-      return FALSE;
-    }
-
-  if (wait_status != 0)
-    {
-      pv_log_failure ("Cannot run commands on host system: wait status %d",
-                 wait_status);
-
-      if (child_stdout != NULL && child_stdout[0] != '\0')
-        pv_log_failure ("Output:\n%s", child_stdout);
-
-      if (child_stderr != NULL && child_stderr[0] != '\0')
-        pv_log_failure ("Diagnostic output:\n%s", child_stderr);
-
-      return glnx_throw (error, "Unable to run a command on the host system");
-    }
-
-  return TRUE;
-}
 
 static FlatpakBwrap *
 get_subsandbox_adverb (const char *launch_executable)
@@ -93,26 +44,19 @@ get_subsandbox_adverb (const char *launch_executable)
 /*
  * pv_wrap_check_flatpak:
  * @tools_dir: Path to .../pressure-vessel/bin/
- * @subsandbox_out: (out) (not optional) (nullable): Used to return
- *  an adverb command that will launch its arguments in a sub-sandbox,
- *  or %NULL if not using sub-sandboxing
- * @run_on_host_out: (out) (not optional) (nullable): Used to return
- *  an adverb command that will launch its arguments on the host system,
- *  or %NULL if not using sandbox escape
+ * @subsandbox_out: (out) (not optional) (not nullable): Used to return
+ *  an adverb command that will launch its arguments in a sub-sandbox
  *
  * Check that we are running under Flatpak and can launch the game somehow.
- * On success, exactly one of the `(out)` parameters will be set to non-%NULL.
  *
  * Returns: %TRUE on success
  */
 gboolean
 pv_wrap_check_flatpak (const char *tools_dir,
                        FlatpakBwrap **subsandbox_out,
-                       FlatpakBwrap **run_on_host_out,
                        GError **error)
 {
   g_autoptr(FlatpakBwrap) subsandbox = NULL;
-  g_autoptr(FlatpakBwrap) run_on_host = NULL;
   g_autoptr(GKeyFile) info = NULL;
   g_autoptr(GError) local_error = NULL;
   g_autofree gchar *flatpak_version = NULL;
@@ -121,8 +65,6 @@ pv_wrap_check_flatpak (const char *tools_dir,
   g_return_val_if_fail (tools_dir != NULL, FALSE);
   g_return_val_if_fail (subsandbox_out != NULL, FALSE);
   g_return_val_if_fail (*subsandbox_out == NULL, FALSE);
-  g_return_val_if_fail (run_on_host_out != NULL, FALSE);
-  g_return_val_if_fail (*run_on_host_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   info = g_key_file_new ();
@@ -194,40 +136,6 @@ pv_wrap_check_flatpak (const char *tools_dir,
                   "com.valvesoftware.Steam");
         }
     }
-  /* Deliberately not documented: only people who are in a position
-   * to run their own modified versions of Flatpak and pressure-vessel
-   * should be using this, and those people can find this in the
-   * source code */
-  else if (g_getenv ("PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE") != NULL)
-    {
-      g_autofree gchar *policy = NULL;
-
-      policy = g_key_file_get_string (info,
-                                      FLATPAK_METADATA_GROUP_SESSION_BUS_POLICY,
-                                      FLATPAK_SESSION_HELPER_BUS_NAME,
-                                      NULL);
-
-      if (g_strcmp0 (policy, "talk") != 0)
-        return glnx_throw (error,
-                           "PRESSURE_VESSEL_FLATPAK_SANDBOX_ESCAPE can "
-                           "only be used if the Flatpak app has been "
-                           "configured to allow escape from the sandbox");
-
-      g_warning ("Running bwrap command on host via %s (experimental)",
-                 FLATPAK_SESSION_HELPER_BUS_NAME);
-
-      /* If we have permission to escape from the sandbox, we'll do that,
-       * and launch bwrap that way */
-      run_on_host = flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      flatpak_bwrap_add_arg (run_on_host,
-                             launch_executable);
-      flatpak_bwrap_add_arg (run_on_host,
-                             "--bus-name=" FLATPAK_SESSION_HELPER_BUS_NAME);
-
-      /* If we can't launch a command on the host, just fail. */
-      if (!check_launch_on_host (launch_executable, error))
-        return FALSE;
-    }
   else
     {
       return glnx_throw (error,
@@ -237,10 +145,8 @@ pv_wrap_check_flatpak (const char *tools_dir,
                          "pressure-vessel are available.");
     }
 
-  /* Exactly one of them is non-NULL on success */
-  g_assert ((subsandbox != NULL) + (run_on_host != NULL) == 1);
+  g_assert (subsandbox != NULL);
 
   *subsandbox_out = g_steal_pointer (&subsandbox);
-  *run_on_host_out = g_steal_pointer (&run_on_host);
   return TRUE;
 }

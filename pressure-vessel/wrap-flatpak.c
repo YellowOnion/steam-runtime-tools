@@ -189,6 +189,9 @@ pv_wrap_check_flatpak (const char *tools_dir,
           g_warning ("/dev/shm not shared between app instances "
                      "(flatpak#4214). "
                      "The Steam Overlay will not work.");
+          g_info ("Try this: "
+                  "flatpak override --user --allow=per-app-dev-shm "
+                  "com.valvesoftware.Steam");
         }
     }
   /* Deliberately not documented: only people who are in a position

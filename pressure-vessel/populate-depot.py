@@ -46,19 +46,22 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
 )
 
 from debian.deb822 import (
     Sources,
 )
 
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
 # git remote add --no-tags python-vdf https://github.com/ValvePython/vdf
 # Update with:
 # git subtree merge -P subprojects/python-vdf python-vdf/master
 sys.path[:0] = [
     os.path.join(
-        os.path.dirname(__file__),
+        HERE,
         'subprojects',
         'python-vdf'
     ),
@@ -271,15 +274,52 @@ me="$(readlink -f "$0")"
 here="${{me%/*}}"
 me="${{me##*/}}"
 
-exec "$here/run-in-steamrt" \\
-    --arch={escaped_arch} \\
-    --deploy \\
-    --runtime={escaped_runtime} \\
-    --suite={escaped_suite} \\
-    {escaped_name} \\
-    -- \\
-    "$@"
+archive={escaped_runtime}-{escaped_arch}-{escaped_suite}-runtime.tar.gz
+pressure_vessel="${{PRESSURE_VESSEL_PREFIX:-"${{here}}/pressure-vessel"}}"
+
+export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
+unset PRESSURE_VESSEL_RUNTIME
+export PRESSURE_VESSEL_RUNTIME_ARCHIVE="${{archive}}"
+export PRESSURE_VESSEL_RUNTIME_BASE="${{here}}"
+
+if [ -z "${{PRESSURE_VESSEL_VARIABLE_DIR-}}" ]; then
+    export PRESSURE_VESSEL_VARIABLE_DIR="${{here}}/var"
+fi
+
+exec "${{pressure_vessel}}/bin/pressure-vessel-unruntime" "$@"
 '''
+
+
+class ComponentVersion:
+    def __init__(self, name: str = '') -> None:
+        self.name = name
+        self.version = ''
+        self.runtime = ''
+        self.runtime_version = ''
+        self.comment = ''
+
+    def __str__(self) -> str:
+        ret = '{} version {!r}'.format(self.name, self.version)
+
+        if self.runtime or self.runtime_version:
+            ret = ret + ' (from {} version {})'.format(
+                self.runtime or '(unknown runtime)',
+                self.runtime_version or '(unknown)',
+            )
+
+        return ret
+
+    def to_tsv(self) -> str:
+        if self.comment:
+            comment = '# ' + self.comment
+        else:
+            comment = ''
+
+        return '\t'.join((
+            self.name, self.version,
+            self.runtime, self.runtime_version,
+            comment,
+        )) + '\n'
 
 
 class Main:
@@ -294,6 +334,7 @@ class Main:
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
+        source_dir: str = HERE,
         ssh_host: str = '',
         ssh_path: str = '',
         suite: str = '',
@@ -356,6 +397,7 @@ class Main:
         self.images_uri = images_uri
         self.pressure_vessel = pressure_vessel
         self.runtimes = []      # type: List[Runtime]
+        self.source_dir = source_dir
         self.ssh_host = ssh_host
         self.ssh_path = ssh_path
         self.toolmanifest = toolmanifest
@@ -382,40 +424,81 @@ class Main:
 
             self.runtimes.append(self.new_runtime(name, details))
 
-        self.versions = []      # type: List[Tuple[str, str, str]]
+        self.versions = []      # type: List[ComponentVersion]
 
-    def new_runtime(self, name: str, details: Dict[str, Any]) -> Runtime:
+    def new_runtime(
+        self,
+        name: str,
+        details: Dict[str, Any],
+        default_suite: str = '',
+    ) -> Runtime:
         return Runtime.from_details(
             name,
             details,
             default_architecture=self.default_architecture,
             default_include_sdk=self.default_include_sdk,
-            default_suite=self.default_suite,
+            default_suite=default_suite or self.default_suite,
             default_version=self.default_version,
             images_uri=self.images_uri,
             ssh_host=self.ssh_host,
             ssh_path=self.ssh_path,
         )
 
+    def merge_dir_into_depot(
+        self,
+        source_root: str,
+    ):
+        for (dirpath, dirnames, filenames) in os.walk(source_root):
+            relative_path = os.path.relpath(dirpath, source_root)
+
+            for member in dirnames:
+                os.makedirs(
+                    os.path.join(self.depot, relative_path, member),
+                    exist_ok=True,
+                )
+
+            for member in filenames:
+                source = os.path.join(dirpath, member)
+                merged = os.path.join(self.depot, relative_path, member)
+
+                with suppress(FileNotFoundError):
+                    os.unlink(merged)
+
+                os.makedirs(os.path.dirname(merged), exist_ok=True)
+                shutil.copy(source, merged)
+
     def run(self) -> None:
-        comment = ''
+        pv_version = ComponentVersion('pressure-vessel')
+
+        self.merge_dir_into_depot(os.path.join(self.source_dir, 'common'))
+
+        for runtime in self.runtimes:
+            root = os.path.join(self.source_dir, runtime.name)
+
+            if os.path.exists(root):
+                self.merge_dir_into_depot(root)
 
         for runtime in self.runtimes:
             if runtime.name == self.pressure_vessel:
                 logger.info(
                     'Downloading pressure-vessel from %s', runtime.name)
                 pressure_vessel_runtime = runtime
-                self.download_pressure_vessel(pressure_vessel_runtime)
-                comment = f'from {runtime.name}'
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
                 break
         else:
             if self.pressure_vessel.startswith('{'):
                 logger.info(
                     'Downloading pressure-vessel using JSON from command-line')
                 pressure_vessel_runtime = self.new_runtime(
-                    'scout', json.loads(self.pressure_vessel),
+                    'scout',
+                    json.loads(self.pressure_vessel),
+                    default_suite='scout',
                 )
-                self.download_pressure_vessel(pressure_vessel_runtime)
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
             elif (
                 os.path.isdir(self.pressure_vessel)
                 or (
@@ -430,40 +513,48 @@ class Main:
                 self.use_local_pressure_vessel(self.pressure_vessel)
                 pressure_vessel_runtime = self.new_runtime(
                     'scout', {'path': self.pressure_vessel},
+                    default_suite='local',
                 )
-                comment = 'from local file'
+                pv_version.comment = 'from local file'
             elif os.path.isfile(self.pressure_vessel):
                 logger.info(
                     'Downloading pressure-vessel using JSON from %r',
                     self.pressure_vessel)
                 with open(self.pressure_vessel, 'rb') as reader:
                     details = json.load(reader)
-                pressure_vessel_runtime = self.new_runtime('scout', details)
-                self.download_pressure_vessel(pressure_vessel_runtime)
+                pressure_vessel_runtime = self.new_runtime(
+                    'scout',
+                    details,
+                    default_suite='scout',
+                )
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
             else:
                 logger.info(
                     'Assuming %r is a suite containing pressure-vessel',
                     self.pressure_vessel)
                 pressure_vessel_runtime = self.new_runtime(
                     self.pressure_vessel, {},
+                    default_suite=self.pressure_vessel,
                 )
-                self.download_pressure_vessel(pressure_vessel_runtime)
-                comment = 'from {self.pressure_vessel}'
-
-        if pressure_vessel_runtime.pinned_version is not None:
-            comment += f' version {pressure_vessel_runtime.pinned_version}'
-
-        version = 'unknown'
+                pv_version.comment = self.download_pressure_vessel(
+                    pressure_vessel_runtime
+                )
 
         for path in ('metadata/VERSION.txt', 'sources/VERSION.txt'):
             full = os.path.join(self.depot, 'pressure-vessel', path)
             if os.path.exists(full):
-                with open(full) as reader:
-                    version = reader.read().rstrip('\n')
+                with open(full) as text_reader:
+                    pv_version.version = text_reader.read().rstrip('\n')
 
                 break
 
-        self.versions.append(('pressure-vessel', version, comment))
+        pv_version.runtime = pressure_vessel_runtime.suite or ''
+        pv_version.runtime_version = (
+            pressure_vessel_runtime.pinned_version or ''
+        )
+        self.versions.append(pv_version)
 
         if self.unpack_ld_library_path:
             logger.info(
@@ -496,6 +587,8 @@ class Main:
                     runtime)
                 self.download_runtime(runtime)
 
+            component_version = ComponentVersion(runtime.name)
+
             version = runtime.pinned_version
             comment = ', '.join(sorted(runtime.runtime_files))
 
@@ -503,7 +596,11 @@ class Main:
                 version = runtime.version
                 comment += ' (from local build)'
 
-            self.versions.append((runtime.name, version, comment))
+            component_version.version = version
+            component_version.runtime = runtime.suite
+            component_version.runtime_version = version
+            component_version.comment = comment
+            self.versions.append(component_version)
 
             if self.unpack_runtimes:
                 dest = os.path.join(self.depot, runtime.name)
@@ -606,8 +703,6 @@ class Main:
                 writer.write('// Generated file, do not edit\n')
                 words = [
                     '/_v2-entry-point',
-                    '--deploy=' + shlex.quote(runtime.name),
-                    '--suite=' + shlex.quote(runtime.suite),
                     '--verb=%verb%',
                     '--',
                 ]
@@ -615,6 +710,7 @@ class Main:
                     manifest=dict(
                         commandline=' '.join(words),
                         version='2',
+                        use_tool_subprocess_reaper='1',
                     )
                 )       # type: Dict[str, Any]
                 if runtime.suite == 'soldier':
@@ -655,29 +751,27 @@ class Main:
                 stdout=subprocess.PIPE,
                 universal_newlines=True,
             ) as describe:
-                version = describe.stdout.read().strip()
+                stdout = describe.stdout
+                assert stdout is not None
+                version = stdout.read().strip()
                 # Deliberately ignoring exit status:
                 # if git is missing or old we'll use 'unknown'
         except (OSError, subprocess.SubprocessError):
             version = 'unknown'
 
-        self.versions.append(
-            ('SteamLinuxRuntime', version, 'Entry point scripts, etc.')
-        )
+        component_version = ComponentVersion('SteamLinuxRuntime')
+        component_version.version = version
+        component_version.comment = 'Entry point scripts, etc.'
+        self.versions.append(component_version)
 
         with open(os.path.join(self.depot, 'VERSIONS.txt'), 'w') as writer:
-            writer.write('#Name\tVersion\tComment\n')
+            writer.write(
+                '#Name\tVersion\t\tRuntime\tRuntime_Version\tComment\n'
+            )
 
-            for triple in sorted(self.versions):
-                name, version, comment = triple
-
-                if comment:
-                    comment = '# ' + comment
-
-                logger.info(
-                    'Component version: %s version %s',
-                    name, version)
-                writer.write(f'{name}\t{version}\t{comment}\n')
+            for entry in sorted(self.versions, key=lambda v: v.to_tsv()):
+                logger.info('Component version: %s', entry)
+                writer.write(entry.to_tsv())
 
     def use_local_pressure_vessel(self, path: str = '.') -> None:
         pv_dir = os.path.join(self.depot, 'pressure-vessel')
@@ -692,7 +786,7 @@ class Main:
         logger.info('%r', argv)
         subprocess.run(argv, check=True)
 
-    def download_pressure_vessel(self, runtime: Runtime) -> None:
+    def download_pressure_vessel(self, runtime: Runtime) -> str:
         filename = 'pressure-vessel-bin.tar.gz'
         runtime.pin_version(self.opener)
 
@@ -711,6 +805,8 @@ class Main:
                 ],
                 check=True,
             )
+
+        return filename
 
     def use_local_runtime(self, runtime: Runtime) -> None:
         assert runtime.path
@@ -986,6 +1082,12 @@ def main() -> None:
     parser.add_argument(
         '--include-sdk', default=False, action='store_true',
         help='Include a corresponding SDK',
+    )
+    parser.add_argument(
+        '--source-dir', default=HERE,
+        help=(
+            'Source directory for files to include in the depot'
+        )
     )
     parser.add_argument(
         '--toolmanifest', default=False, action='store_true',

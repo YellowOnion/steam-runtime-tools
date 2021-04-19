@@ -551,7 +551,6 @@ pv_runtime_constructed (GObject *object)
 
   G_OBJECT_CLASS (pv_runtime_parent_class)->constructed (object);
 
-  g_return_if_fail (self->bubblewrap != NULL);
   g_return_if_fail (self->original_environ != NULL);
   g_return_if_fail (self->provider_in_current_namespace != NULL);
   g_return_if_fail (self->provider_in_container_namespace != NULL);
@@ -1239,7 +1238,7 @@ pv_runtime_initable_init (GInitable *initable,
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   /* If we are in Flatpak container we don't expect to have a working bwrap */
-  if (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR)
+  if (self->bubblewrap != NULL
       && !g_file_test (self->bubblewrap, G_FILE_TEST_IS_EXECUTABLE))
     {
       return glnx_throw (error, "\"%s\" is not executable",
@@ -1628,7 +1627,6 @@ pv_runtime_new (const char *source,
                 GError **error)
 {
   g_return_val_if_fail (source != NULL, NULL);
-  g_return_val_if_fail (bubblewrap != NULL, NULL);
   g_return_val_if_fail (tools_dir != NULL, NULL);
   g_return_val_if_fail ((flags & ~(PV_RUNTIME_FLAGS_MASK)) == 0, NULL);
 
@@ -1773,6 +1771,10 @@ pv_runtime_provide_container_access (PvRuntime *self,
     {
       g_autofree gchar *etc = NULL;
       g_autofree gchar *etc_dest = NULL;
+
+      if (self->bubblewrap == NULL)
+        return glnx_throw (error,
+                           "Cannot run bubblewrap to set up runtime");
 
       /* Otherwise, will we need to use bwrap to build a directory hierarchy
        * that is the same shape as the final system. */
@@ -3420,6 +3422,10 @@ pv_runtime_get_ld_so (PvRuntime *self,
     {
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *etc = NULL;
+
+      if (self->bubblewrap == NULL)
+        return glnx_throw (error,
+                           "Cannot run bubblewrap to set up runtime");
 
       /* Do it the hard way, by asking a process running in the
        * container (or at least a container resembling the one we

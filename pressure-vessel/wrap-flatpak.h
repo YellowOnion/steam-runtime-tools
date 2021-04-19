@@ -27,5 +27,4 @@
 
 gboolean pv_wrap_check_flatpak (const char *tools_dir,
                                 FlatpakBwrap **flatpak_subsandbox,
-                                FlatpakBwrap **flatpak_run_on_host,
                                 GError **error);

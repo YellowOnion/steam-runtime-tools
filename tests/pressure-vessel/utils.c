@@ -34,6 +34,7 @@
 #include "libglnx/libglnx.h"
 
 #include "tests/test-utils.h"
+#include "mtree.h"
 #include "utils.h"
 
 typedef struct
@@ -345,6 +346,125 @@ test_get_path_after (Fixture *f,
 }
 
 static void
+test_mtree_entry_parse (Fixture *f,
+                        gconstpointer context)
+{
+  static const struct
+  {
+    const char *line;
+    const char *name;
+    PvMtreeEntry expected;
+    gboolean error;
+    const char *link;
+    const char *sha256;
+  } tests[] =
+  {
+    { "#mtree",
+      NULL,
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_UNKNOWN },
+    },
+    { "",
+      NULL,
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_UNKNOWN },
+    },
+    { ". type=dir",
+      ".",
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_DIR },
+    },
+    { "./foo type=file sha256=ffff mode=0640 size=42 time=1597415889.5",
+      "./foo",
+      { .size = 42,
+        .mtime_usec = 1597415889 * G_TIME_SPAN_SECOND + (G_TIME_SPAN_SECOND / 2),
+        .mode = 0640,
+        .kind = PV_MTREE_ENTRY_KIND_FILE },
+      .sha256 = "ffff",
+    },
+    { "./foo type=file sha256digest=ffff mode=4755",
+      "./foo",
+      { .size = -1, .mtime_usec = -1, .mode = 04755,
+        .kind = PV_MTREE_ENTRY_KIND_FILE },
+      .sha256 = "ffff",
+    },
+    { "./foo type=file sha256=ffff sha256digest=ffff",
+      "./foo",
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_FILE },
+      .sha256 = "ffff",
+    },
+    { "./symlink type=link link=/dev/null",
+      "./symlink",
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_LINK },
+      .link = "/dev/null",
+    },
+    { "./silly-name/\\001\\123\\n\\r type=link link=\\\"\\\\\\b",
+      "./silly-name/\001\123\n\r",
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_LINK },
+      .link = "\"\\\b",
+    },
+    { ("./ignore cksum=123 device=456 contents=./ignore flags=123 gid=123 "
+       "gname=users ignore=1 inode=123 md5=ffff md5digest=ffff nlink=1 "
+       "nochange=1 optional=1 resdevice=123 "
+       "ripemd160digest=ffff rmd160=ffff rmd160digest=ffff "
+       "sha1=ffff sha1digest=ffff "
+       "sha384=ffff sha384digest=ffff "
+       "sha512=ffff sha512digest=ffff "
+       "uid=0 uname=root type=dir"),
+      "./ignore",
+      { .size = -1, .mtime_usec = -1, .mode = -1,
+        .kind = PV_MTREE_ENTRY_KIND_DIR },
+    },
+    { "./foo type=file sha256=ffff sha256digest=eeee", .error = TRUE },
+    { "./foo type=file mode=1a", .error = TRUE },
+    { "/set type=dir", .error = TRUE },
+    { "../escape type=dir", .error = TRUE },
+    { "relative type=dir", .error = TRUE },
+    { "./foo link", .error = TRUE },
+    { "./foo type=bar", .error = TRUE },
+    { "./continuation type=dir \\", .error = TRUE },
+    { "./alert type=link link=\\a", .error = TRUE },
+    { "./hex type=link link=\\x12", .error = TRUE },
+    { "./symlink type=file link=/dev/null", .error = TRUE },
+    { "./symlink type=link", .error = TRUE },
+    { "      ", .error = TRUE },
+  };
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    {
+      const char *line = tests[i].line;
+      PvMtreeEntry expected = tests[i].expected;
+      g_auto(PvMtreeEntry) got = PV_MTREE_ENTRY_BLANK;
+      g_autoptr(GError) error = NULL;
+
+      g_test_message ("%s", line);
+      pv_mtree_entry_parse (line, &got, "test.mtree", 1, &error);
+
+      if (tests[i].error)
+        {
+          g_assert_nonnull (error);
+          g_test_message ("-> %s", error->message);
+        }
+      else
+        {
+          g_assert_no_error (error);
+          g_test_message ("-> OK");
+          g_assert_cmpstr (got.name, ==, tests[i].name);
+          g_assert_cmpstr (got.link, ==, tests[i].link);
+          g_assert_cmpstr (got.sha256, ==, tests[i].sha256);
+          g_assert_cmpint (got.size, ==, expected.size);
+          g_assert_cmpint (got.mtime_usec, ==, expected.mtime_usec);
+          g_assert_cmpint (got.mode, ==, expected.mode);
+          g_assert_cmpint (got.kind, ==, expected.kind);
+        }
+    }
+}
+
+static void
 test_search_path_append (Fixture *f,
                          gconstpointer context)
 {
@@ -389,6 +509,8 @@ main (int argc,
   g_test_add ("/envp-cmp", Fixture, NULL, setup, test_envp_cmp, teardown);
   g_test_add ("/get-path-after", Fixture, NULL,
               setup, test_get_path_after, teardown);
+  g_test_add ("/mtree-entry-parse", Fixture, NULL,
+              setup, test_mtree_entry_parse, teardown);
   g_test_add ("/search-path-append", Fixture, NULL,
               setup, test_search_path_append, teardown);
 

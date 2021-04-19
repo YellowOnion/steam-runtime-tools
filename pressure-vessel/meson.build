@@ -57,6 +57,7 @@ endforeach
 
 # Headers to scan for enum/flags types.
 headers = [
+  'mtree.h',
   'runtime.h',
 ]
 
@@ -83,11 +84,13 @@ pressure_vessel_utils = static_library(
     'flatpak-utils-base-private.h',
     'flatpak-utils.c',
     'flatpak-utils-private.h',
+    'mtree.c',
+    'mtree.h',
     'tree-copy.c',
     'tree-copy.h',
     'utils.c',
     'utils.h',
-  ],
+  ] + enums,
   c_args : pv_c_args,
   dependencies : [
     threads,
@@ -208,7 +211,7 @@ executable(
     'wrap-flatpak.h',
     'wrap-setup.c',
     'wrap-setup.h',
-  ] + enums,
+  ],
   c_args : pv_c_args,
   dependencies : [
     pressure_vessel_utils_dep,

@@ -1376,8 +1376,6 @@ _srt_check_graphics (gchar **envp,
   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
   SrtGraphicsIssues non_zero_wait_status_issue = SRT_GRAPHICS_ISSUES_CANNOT_LOAD;
   GStrv my_environ = NULL;
-  const gchar *ld_preload;
-  gchar *filtered_preload = NULL;
   SrtGraphicsLibraryVendor library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_UNKNOWN;
   g_auto(GStrv) json_output = NULL;
   g_autoptr(GPtrArray) graphics_device = g_ptr_array_new_with_free_func (g_object_unref);
@@ -1404,13 +1402,7 @@ _srt_check_graphics (gchar **envp,
       goto out;
     }
 
-  my_environ = g_strdupv (envp);
-  ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
-  if (ld_preload != NULL)
-    {
-      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
-      my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
-    }
+  my_environ = _srt_filter_gameoverlayrenderer_from_envp (envp);
 
   library_vendor = _srt_check_library_vendor (envp, multiarch_tuple,
                                               window_system,
@@ -1701,7 +1693,6 @@ out:
   g_free (child_stderr);
   g_free (child_stderr2);
   g_clear_error (&error);
-  g_free (filtered_preload);
   g_strfreev (my_environ);
   return issues;
 }

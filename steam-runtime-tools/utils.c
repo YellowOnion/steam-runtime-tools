@@ -444,6 +444,38 @@ _srt_filter_gameoverlayrenderer (const gchar *input)
 }
 
 /**
+ * _srt_filter_gameoverlayrenderer_from_envp:
+ * @envp: (array zero-terminated=1) (not nullable):
+ *
+ * Filter every path containing `gameoverlayrenderer.so` from the environment
+ * variable `LD_PRELOAD` in the provided @envp.
+ *
+ * Returns (array zero-terminated=1) (transfer full): A newly-allocated array of
+ *  strings containing all the values from @envp, but with
+ *  `gameoverlayrenderer.so` filtered out. Free with g_strfreev().
+ */
+gchar **
+_srt_filter_gameoverlayrenderer_from_envp (gchar **envp)
+{
+  GStrv filtered_environ = NULL;
+  const gchar *ld_preload;
+  g_autofree gchar *filtered_preload = NULL;
+
+  g_return_val_if_fail (envp != NULL, NULL);
+
+  filtered_environ = g_strdupv (envp);
+  ld_preload = g_environ_getenv (filtered_environ, "LD_PRELOAD");
+  if (ld_preload != NULL)
+    {
+      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
+      filtered_environ = g_environ_setenv (filtered_environ, "LD_PRELOAD",
+                                           filtered_preload, TRUE);
+    }
+
+  return filtered_environ;
+}
+
+/**
  * srt_enum_value_to_nick
  * @enum_type: The type of the enumeration.
  * @value: The enumeration value to stringify.

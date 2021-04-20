@@ -647,8 +647,6 @@ _srt_check_library_presence (const char *helpers_path,
   g_autoptr(GPtrArray) dependencies = NULL;
   SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
   GStrv my_environ = NULL;
-  const gchar *ld_preload;
-  gchar *filtered_preload = NULL;
   SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
   GString *log_args = NULL;
   gchar *next_line;
@@ -721,13 +719,7 @@ _srt_check_library_presence (const char *helpers_path,
   /* NULL terminate the array */
   g_ptr_array_add (argv, NULL);
 
-  my_environ = g_strdupv (envp);
-  ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
-  if (ld_preload != NULL)
-    {
-      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
-      my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
-    }
+  my_environ = _srt_filter_gameoverlayrenderer_from_envp (envp);
 
   if (!g_spawn_sync (NULL,       /* working directory */
                      (gchar **) argv->pdata,
@@ -875,7 +867,6 @@ out:
   g_free (child_stderr);
   g_free (output);
   g_free (real_soname);
-  g_free (filtered_preload);
   g_clear_error (&error);
   return issues;
 }

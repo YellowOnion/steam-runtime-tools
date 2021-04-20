@@ -87,8 +87,6 @@ _srt_architecture_can_run (gchar **envp,
   GError *error = NULL;
   gboolean ret = FALSE;
   GStrv my_environ = NULL;
-  const gchar *ld_preload;
-  gchar *filtered_preload = NULL;
 
   g_return_val_if_fail (envp != NULL, FALSE);
   g_return_val_if_fail (multiarch != NULL, FALSE);
@@ -107,13 +105,7 @@ _srt_architecture_can_run (gchar **envp,
   g_debug ("Testing architecture %s with %s",
            multiarch, (const char *) g_ptr_array_index (argv, 0));
 
-  my_environ = g_strdupv (envp);
-  ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
-  if (ld_preload != NULL)
-    {
-      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
-      my_environ = g_environ_setenv (my_environ, "LD_PRELOAD", filtered_preload, TRUE);
-    }
+  my_environ = _srt_filter_gameoverlayrenderer_from_envp (envp);
 
   if (!g_spawn_sync (NULL,       /* working directory */
                      (gchar **) argv->pdata,
@@ -141,7 +133,6 @@ _srt_architecture_can_run (gchar **envp,
 out:
   g_strfreev (my_environ);
   g_free (helper);
-  g_free (filtered_preload);
   g_clear_error (&error);
   g_clear_pointer (&argv, g_ptr_array_unref);
   return ret;

@@ -50,6 +50,7 @@ G_GNUC_INTERNAL GPtrArray *_srt_get_helper (const char *helpers_path,
                                             SrtHelperFlags flags,
                                             GError **error);
 G_GNUC_INTERNAL gchar *_srt_filter_gameoverlayrenderer (const gchar *input);
+G_GNUC_INTERNAL gchar **_srt_filter_gameoverlayrenderer_from_envp (gchar **envp);
 G_GNUC_INTERNAL const char *_srt_find_myself (const char **helpers_path_out,
                                               GError **error);
 

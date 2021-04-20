@@ -216,8 +216,6 @@ _srt_check_locale (gchar **envp,
   JsonObject *object = NULL;
   SrtLocale *ret = NULL;
   GStrv my_environ = NULL;
-  const gchar *ld_preload;
-  gchar *filtered_preload = NULL;
   int exit_status;
 
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
@@ -234,14 +232,7 @@ _srt_check_locale (gchar **envp,
   if (argv == NULL)
     goto out;
 
-  my_environ = g_strdupv (envp);
-  ld_preload = g_environ_getenv (my_environ, "LD_PRELOAD");
-  if (ld_preload != NULL)
-    {
-      filtered_preload = _srt_filter_gameoverlayrenderer (ld_preload);
-      my_environ = g_environ_setenv (my_environ, "LD_PRELOAD",
-                                     filtered_preload, TRUE);
-    }
+  my_environ = _srt_filter_gameoverlayrenderer_from_envp (envp);
 
   g_ptr_array_add (argv, g_strdup (requested_name));
 
@@ -346,7 +337,6 @@ out:
 
   g_clear_pointer (&argv, g_ptr_array_unref);
   g_free (output);
-  g_free (filtered_preload);
   g_strfreev (my_environ);
   return ret;
 }

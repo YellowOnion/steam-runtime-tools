@@ -27,6 +27,7 @@
 #pragma once
 
 #include "steam-runtime-tools/steam-runtime-tools.h"
+#include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include <json-glib/json-glib.h>
@@ -281,12 +282,14 @@ G_GNUC_INTERNAL
 GList *_srt_load_egl_icds (const char *helpers_path,
                            const char *sysroot,
                            gchar **envp,
-                           const char * const *multiarch_tuples);
+                           const char * const *multiarch_tuples,
+                           SrtCheckFlags check_flags);
 G_GNUC_INTERNAL
 GList *_srt_load_vulkan_icds (const char *helpers_path,
                               const char *sysroot,
                               gchar **envp,
-                              const char * const *multiarch_tuples);
+                              const char * const *multiarch_tuples,
+                              SrtCheckFlags check_flags);
 
 G_GNUC_INTERNAL
 GList *_srt_list_graphics_modules (const gchar *sysroot,
@@ -300,7 +303,8 @@ GList *_srt_load_vulkan_layers_extended (const char *helpers_path,
                                          const char *sysroot,
                                          gchar **envp,
                                          const char * const *multiarch_tuples,
-                                         gboolean explicit);
+                                         gboolean explicit,
+                                         SrtCheckFlags check_flags);
 
 void _srt_graphics_get_from_report (JsonObject *json_obj,
                                     const gchar *multiarch_tuple,

@@ -43,6 +43,7 @@
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/runtime-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
+#include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "steam-runtime-tools/xdg-portal-internal.h"
 
@@ -178,6 +179,7 @@ struct _SrtSystemInfo
     SrtX86FeatureFlags x86_known;
   } cpu_features;
   SrtOsRelease os_release;
+  SrtCheckFlags check_flags;
   SrtTestFlags test_flags;
   Tristate can_write_uinput;
   /* cached_driver_environment != NULL indicates we have already checked the
@@ -3080,6 +3082,25 @@ srt_system_info_check_locale (SrtSystemInfo *self,
     }
 }
 
+/*
+ * _srt_system_info_set_check_flags:
+ * @self: The #SrtSystemInfo
+ * @flags: Flags altering behaviour
+ *
+ * Alter the behaviour of the #SrtSystemInfo to avoid expensive checks.
+ */
+void
+_srt_system_info_set_check_flags (SrtSystemInfo *self,
+                                  SrtCheckFlags flags)
+{
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+  self->check_flags = flags;
+
+  /* SKIP_SLOW_CHECKS affects Vulkan and EGL modules */
+  forget_icds (self);
+  forget_layers (self);
+}
+
 /**
  * srt_system_info_set_test_flags:
  * @self: The #SrtSystemInfo
@@ -3153,7 +3174,8 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
                                            self->env,
                                            multiarch_tuples == NULL ?
                                              (const char * const *) stored_multiarch_tuples :
-                                             multiarch_tuples);
+                                             multiarch_tuples,
+                                           self->check_flags);
       self->icds.have_egl = TRUE;
     }
 
@@ -3220,7 +3242,8 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
                                                  self->env,
                                                  multiarch_tuples == NULL ?
                                                    (const char * const *) stored_multiarch_tuples :
-                                                   multiarch_tuples);
+                                                   multiarch_tuples,
+                                                 self->check_flags);
       self->icds.have_vulkan = TRUE;
     }
 
@@ -3273,7 +3296,8 @@ srt_system_info_list_explicit_vulkan_layers (SrtSystemInfo *self)
                                                                        self->sysroot,
                                                                        self->env,
                                                                        (const char * const *) multiarch_tuples,
-                                                                       TRUE);
+                                                                       TRUE,
+                                                                       self->check_flags);
       self->layers.have_vulkan_explicit = TRUE;
     }
 
@@ -3326,7 +3350,8 @@ srt_system_info_list_implicit_vulkan_layers (SrtSystemInfo *self)
                                                                        self->sysroot,
                                                                        self->env,
                                                                        (const char * const *) multiarch_tuples,
-                                                                       FALSE);
+                                                                       FALSE,
+                                                                       self->check_flags);
       self->layers.have_vulkan_implicit = TRUE;
     }
 

@@ -33,6 +33,7 @@
 
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include "bwrap.h"
@@ -4164,6 +4165,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     return FALSE;
 
   srt_system_info_set_sysroot (system_info, self->provider_in_current_namespace);
+  _srt_system_info_set_check_flags (system_info, SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS);
 
   g_debug ("Enumerating EGL ICDs on provider system...");
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);

@@ -29,14 +29,17 @@ from just-built files or by downloading a previous build.
 """
 
 import argparse
+import gzip
 import hashlib
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.parse
 import urllib.request
@@ -47,6 +50,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Set,
 )
 
 from debian.deb822 import (
@@ -676,6 +680,10 @@ class Main:
                 ]
                 logger.info('%r', argv)
                 subprocess.run(argv, check=True)
+                self.write_lookaside(
+                    os.path.join(self.depot, runtime.tarball),
+                    dest,
+                )
 
                 if runtime.include_sdk:
                     dest = os.path.join(self.depot, runtime.name + '_sdk')
@@ -697,6 +705,10 @@ class Main:
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
+                    self.write_lookaside(
+                        os.path.join(self.depot, runtime.sdk_tarball),
+                        dest,
+                    )
 
                     argv = [
                         'tar',
@@ -1029,6 +1041,96 @@ class Main:
             ],
             check=True,
         )
+
+    def octal_escape_char(self, match: 're.Match') -> str:
+        ret = []    # type: List[str]
+
+        for byte in match.group(0).encode('utf-8', 'surrogateescape'):
+            ret.append('\\%03o' % byte)
+
+        return ''.join(ret)
+
+    _NEEDS_OCTAL_ESCAPE = re.compile(r'[^-A-Za-z0-9+,./:@_]')
+
+    def octal_escape(self, s: str) -> str:
+        return self._NEEDS_OCTAL_ESCAPE.sub(self.octal_escape_char, s)
+
+    def write_lookaside(self, archive: str, dest: str) -> None:
+        with tarfile.open(
+            archive, mode='r'
+        ) as unarchiver, gzip.open(
+            os.path.join(dest, 'usr-mtree.txt.gz'), 'wt'
+        ) as writer:
+            sha256 = {}                     # type: Dict[str, str]
+            sizes = {}                      # type: Dict[str, int]
+
+            writer.write('#mtree\n')
+            writer.write('. type=dir\n')
+
+            for member in unarchiver:
+                name = member.name
+
+                if name.startswith('./'):
+                    name = name[len('./'):]
+
+                if not name.startswith('files/'):
+                    continue
+
+                name = name[len('files/'):]
+
+                fields = ['./' + self.octal_escape(name)]
+
+                if member.isfile() or member.islnk():
+                    fields.append('type=file')
+                    fields.append('mode=%o' % member.mode)
+                    fields.append('time=%d' % member.mtime)
+
+                    if member.islnk():
+                        writer.write(
+                            '# hard link to {}\n'.format(
+                                self.octal_escape(member.linkname),
+                            ),
+                        )
+                        assert member.linkname in sizes
+                        fields.append('size=%d' % sizes[member.linkname])
+
+                        if sizes[member.linkname] > 0:
+                            assert member.linkname in sha256
+                            fields.append('sha256=' + sha256[member.linkname])
+                    else:
+                        fields.append('size=%d' % member.size)
+                        sizes[member.name] = member.size
+
+                        if member.size > 0:
+                            hasher = hashlib.sha256()
+                            extract = unarchiver.extractfile(member)
+                            assert extract is not None
+                            with extract:
+                                while True:
+                                    blob = extract.read(4096)
+
+                                    if not blob:
+                                        break
+
+                                    hasher.update(blob)
+
+                            fields.append('sha256=' + hasher.hexdigest())
+                            sha256[member.name] = hasher.hexdigest()
+
+                elif member.issym():
+                    fields.append('type=link')
+                    fields.append('link=' + self.octal_escape(member.linkname))
+                elif member.isdir():
+                    fields.append('type=dir')
+                else:
+                    writer.write(
+                        '# unknown file type: {}\n'.format(
+                            self.octal_escape(member.name),
+                        ),
+                    )
+                    continue
+
+                writer.write(' '.join(fields) + '\n')
 
 
 def main() -> None:

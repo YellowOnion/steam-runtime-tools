@@ -4349,7 +4349,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           collect_graphics_libraries_patterns (patterns);
 
-          g_debug ("Collecting %s EGL drivers from host system...",
+          g_debug ("Collecting %s EGL drivers from provider...",
                    arch->details->tuple);
           /* As with Vulkan layers, the order of the manifests matters
            * but the order of the actual libraries does not. */
@@ -4375,7 +4375,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          g_debug ("Collecting %s Vulkan drivers from host system...",
+          g_debug ("Collecting %s Vulkan drivers from provider...",
                    arch->details->tuple);
           /* As with Vulkan layers, the order of the manifests matters
            * but the order of the actual libraries does not. */
@@ -4403,18 +4403,18 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
             {
-              g_debug ("Collecting Vulkan explicit layers from host system...");
+              g_debug ("Collecting Vulkan explicit layers from provider...");
               if (!collect_vulkan_layers (self, vulkan_exp_layer_details,
                                           patterns, arch, "vulkan_exp_layer", error))
                 return FALSE;
 
-              g_debug ("Collecting Vulkan implicit layers from host system...");
+              g_debug ("Collecting Vulkan implicit layers from provider...");
               if (!collect_vulkan_layers (self, vulkan_imp_layer_details,
                                           patterns, arch, "vulkan_imp_layer", error))
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->details->tuple);
+          g_debug ("Enumerating %s VDPAU ICDs on provider...", arch->details->tuple);
           vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
                                                               arch->details->tuple,
                                                               SRT_DRIVER_FLAGS_NONE);
@@ -4442,7 +4442,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s DRI drivers on host system...",
+          g_debug ("Enumerating %s DRI drivers on provider...",
                    arch->details->tuple);
           dri_drivers = srt_system_info_list_dri_drivers (system_info,
                                                           arch->details->tuple,
@@ -4468,7 +4468,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VA-API drivers on host system...",
+          g_debug ("Enumerating %s VA-API drivers on provider...",
                    arch->details->tuple);
           va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
                                                                 arch->details->tuple,
@@ -4525,7 +4525,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                             "libdrm_amdgpu.so.1", NULL);
 
           /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
-           * ${prefix}/share/libdrm from the host. ${prefix} is derived from
+           * ${prefix}/share/libdrm from the provider. ${prefix} is derived from
            * the absolute path of libdrm_amdgpu.so.1 */
           if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
             {
@@ -4534,7 +4534,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                            libdrm_data_in_provider);
             }
           /* As a fallback we also try libdrm.so.2 because libdrm_amdgpu.so.1
-           * might not be available in all host systems.
+           * might not be available in all providers.
            * It's important to check for libdrm_amdgpu.so.1 first, because
            * the freedesktop.org GL runtime doesn't provide libdrm.so.2, and if
            * we check for it first we would end up looking for the "libdrm"
@@ -4554,7 +4554,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           libglx_mesa = g_build_filename (arch->libdir_in_current_namespace, "libGLX_mesa.so.0", NULL);
 
           /* If we have libGLX_mesa.so.0 in overrides we also want to mount
-           * ${prefix}/share/drirc.d from the host. ${prefix} is derived from
+           * ${prefix}/share/drirc.d from the provider. ${prefix} is derived from
            * the absolute path of libGLX_mesa.so.0 */
           if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
             {
@@ -4614,7 +4614,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             }
 
           /* Make sure we do this last, so that we have really copied
-           * everything from the host that we are going to */
+           * everything from the provider that we are going to */
           if (self->mutable_sysroot != NULL &&
               !pv_runtime_remove_overridden_libraries (self, arch, error))
             return FALSE;
@@ -4637,7 +4637,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "None of the supported CPU architectures are common to "
-                   "the host system and the container (tried: %s)",
+                   "the graphics provider and the container (tried: %s)",
                    archs->str);
       g_string_free (archs, TRUE);
       return FALSE;

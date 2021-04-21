@@ -36,6 +36,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -808,6 +809,9 @@ main (int argc,
 
   if (opt_generate_locales)
     {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) profiling =
+        _srt_profiling_start ("Making sure locales are available");
+
       g_debug ("Making sure locales are available");
 
       /* If this fails, it is not fatal - carry on anyway */

@@ -32,6 +32,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -656,6 +657,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
   g_autoptr(GError) local_error = NULL;
   g_autoptr(PvBwrapLock) variable_lock = NULL;
   g_autoptr(PvBwrapLock) base_lock = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   g_auto(GLnxDirFdIterator) variable_dir_iter = { FALSE };
   g_auto(GLnxDirFdIterator) runtime_base_iter = { FALSE };
   glnx_autofd int variable_dir_fd = -1;
@@ -673,6 +675,9 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
   g_return_val_if_fail (variable_dir != NULL, FALSE);
   g_return_val_if_fail (runtime_base != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  timer = _srt_profiling_start ("Cleaning up legacy runtimes in %s and %s",
+                                variable_dir, runtime_base);
 
   if (g_mkdir_with_parents (variable_dir, 0700) != 0)
     return glnx_throw_errno_prefix (error, "Unable to create %s",
@@ -776,6 +781,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
                             GError **error)
 {
   g_auto(GLnxDirFdIterator) iter = { FALSE };
+  g_autoptr(SrtProfilingTimer) timer = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->variable_dir != NULL, FALSE);
@@ -783,6 +789,9 @@ pv_runtime_garbage_collect (PvRuntime *self,
   /* We don't actually *use* this: it just acts as an assertion that
    * we are holding the lock on the parent directory. */
   g_return_val_if_fail (variable_dir_lock != NULL, FALSE);
+
+  timer = _srt_profiling_start ("Cleaning up temporary runtimes in %s",
+                                self->variable_dir);
 
   if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->variable_dir,
                                     TRUE, &iter, error))
@@ -882,6 +891,7 @@ pv_runtime_create_copy (PvRuntime *self,
   g_autoptr(GDir) dir = NULL;
   g_autoptr(PvBwrapLock) copy_lock = NULL;
   g_autoptr(PvBwrapLock) source_lock = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   const char *member;
   const char *source_usr;
   glnx_autofd int temp_dir_fd = -1;
@@ -894,6 +904,8 @@ pv_runtime_create_copy (PvRuntime *self,
   /* We don't actually *use* this: it just acts as an assertion that
    * we are holding the lock on the parent directory. */
   g_return_val_if_fail (variable_dir_lock != NULL, FALSE);
+
+  timer = _srt_profiling_start ("Temporary runtime copy");
 
   temp_dir = g_build_filename (self->variable_dir, "tmp-XXXXXX", NULL);
 
@@ -1055,6 +1067,7 @@ pv_runtime_unpack (PvRuntime *self,
                    GError **error)
 {
   g_autoptr(GString) debug_tarball = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autofree gchar *deploy_basename = NULL;
   g_autofree gchar *unpack_dir = NULL;
 
@@ -1145,6 +1158,7 @@ pv_runtime_unpack (PvRuntime *self,
     return FALSE;
 
   /* Slow path: we need to do this the hard way. */
+  timer = _srt_profiling_start ("Unpacking %s", self->source);
   unpack_dir = g_build_filename (self->variable_dir, "tmp-XXXXXX", NULL);
 
   if (g_mkdtemp (unpack_dir) == NULL)
@@ -1988,6 +2002,8 @@ pv_runtime_capture_libraries (PvRuntime *self,
                               GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) libc_timer =
+    _srt_profiling_start ("Main capsule-capture-libs call");
   gsize i;
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
@@ -2736,6 +2752,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                                         GError **error)
 {
   g_autoptr(GPtrArray) dirs = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   GHashTable **delete = NULL;
   GLnxDirFdIterator *iters = NULL;
   gboolean ret = FALSE;
@@ -2748,6 +2765,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
   /* Not applicable/possible if we don't have a mutable sysroot */
   g_return_val_if_fail (self->mutable_sysroot != NULL, FALSE);
+
+  timer = _srt_profiling_start ("Removing overridden %s libraries",
+                                arch->details->tuple);
 
   dirs = multiarch_details_get_libdirs (arch->details,
                                         MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
@@ -3300,6 +3320,8 @@ collect_vulkan_layers (PvRuntime *self,
                        GError **error)
 {
   gsize j;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting Vulkan %s layers", dir_name);
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (dependency_patterns != NULL, FALSE);
@@ -3579,6 +3601,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                 GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) libc_timer =
+    _srt_profiling_start ("glibc");
   g_autofree char *libc_target = NULL;
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
@@ -4016,6 +4040,8 @@ pv_runtime_create_aliases (PvRuntime *self,
                            GError **error)
 {
   g_autoptr(JsonParser) parser = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Creating library aliases");
   JsonNode *node = NULL;
   JsonArray *libraries_array = NULL;
   JsonArray *aliases_array = NULL;
@@ -4119,6 +4145,8 @@ collect_egl_drivers (PvRuntime *self,
                      GPtrArray *patterns,
                      GError **error)
 {
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting EGL drivers");
   gsize j;
   /* As with Vulkan layers, the order of the manifests matters
    * but the order of the actual libraries does not. */
@@ -4161,6 +4189,8 @@ collect_vulkan_icds (PvRuntime *self,
                      GPtrArray *patterns,
                      GError **error)
 {
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting Vulkan ICDs");
   gsize j;
   /* As with Vulkan layers, the order of the manifests matters
    * but the order of the actual libraries does not. */
@@ -4202,6 +4232,8 @@ collect_vdpau_drivers (PvRuntime *self,
                        GPtrArray *patterns,
                        GError **error)
 {
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting VDPAU drivers");
   g_autoptr(SrtObjectList) vdpau_drivers = NULL;
   /* The VDPAU loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
@@ -4213,9 +4245,14 @@ collect_vdpau_drivers (PvRuntime *self,
   gsize j;
 
   g_debug ("Enumerating %s VDPAU ICDs on provider...", arch->details->tuple);
-  vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
-                                                      arch->details->tuple,
-                                                      SRT_DRIVER_FLAGS_NONE);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating VDPAU drivers");
+
+      vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
+                                                          arch->details->tuple,
+                                                          SRT_DRIVER_FLAGS_NONE);
+    }
 
   for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
@@ -4248,6 +4285,8 @@ collect_dri_drivers (PvRuntime *self,
                      GString *dri_path,
                      GError **error)
 {
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting DRI drivers");
   g_autoptr(SrtObjectList) dri_drivers = NULL;
   /* The DRI loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
@@ -4260,9 +4299,14 @@ collect_dri_drivers (PvRuntime *self,
 
   g_debug ("Enumerating %s DRI drivers on provider...",
            arch->details->tuple);
-  dri_drivers = srt_system_info_list_dri_drivers (system_info,
-                                                  arch->details->tuple,
-                                                  SRT_DRIVER_FLAGS_NONE);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating DRI drivers");
+
+      dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                      arch->details->tuple,
+                                                      SRT_DRIVER_FLAGS_NONE);
+    }
 
   for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
@@ -4292,6 +4336,8 @@ collect_va_api_drivers (PvRuntime *self,
                         GString *va_api_path,
                         GError **error)
 {
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting VA-API drivers");
   g_autoptr(SrtObjectList) va_api_drivers = NULL;
   /* The VA-API loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
@@ -4304,9 +4350,14 @@ collect_va_api_drivers (PvRuntime *self,
 
   g_debug ("Enumerating %s VA-API drivers on provider...",
            arch->details->tuple);
-  va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
-                                                        arch->details->tuple,
-                                                        SRT_DRIVER_FLAGS_NONE);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating VA-API drivers");
+
+      va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                            arch->details->tuple,
+                                                            SRT_DRIVER_FLAGS_NONE);
+    }
 
   for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
@@ -4350,6 +4401,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtProfilingTimer) part_timer = NULL;
   guint n_egl_icds;
   guint n_vulkan_icds;
   const GList *icd_iter;
@@ -4378,12 +4431,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  timer = _srt_profiling_start ("Using graphics stack from %s",
+                                self->provider_in_current_namespace);
+
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
   srt_system_info_set_sysroot (system_info, self->provider_in_current_namespace);
   _srt_system_info_set_check_flags (system_info, SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS);
 
+  part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
   g_debug ("Enumerating EGL ICDs on provider system...");
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
   n_egl_icds = g_list_length (egl_icds);
@@ -4413,6 +4470,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_ptr_array_add (egl_icd_details, icd_details_new (icd));
     }
 
+  g_clear_pointer (&part_timer, _srt_profiling_end);
+
+  part_timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
   g_debug ("Enumerating Vulkan ICDs on provider system...");
   vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
                                                   multiarch_tuples);
@@ -4443,8 +4503,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
     }
 
+  g_clear_pointer (&part_timer, _srt_profiling_end);
+
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
+      part_timer = _srt_profiling_start ("Enumerating Vulkan layers");
       g_debug ("Enumerating Vulkan explicit layers on provider system...");
       vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
 
@@ -4503,6 +4566,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
         }
+
+      g_clear_pointer (&part_timer, _srt_profiling_end);
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -4517,6 +4582,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_auto (RuntimeArchitecture) arch_on_stack = { i };
       RuntimeArchitecture *arch = &arch_on_stack;
 
+      part_timer = _srt_profiling_start ("%s libraries", multiarch_tuples[i]);
       g_debug ("Checking for %s libraries...", multiarch_tuples[i]);
 
       if (runtime_architecture_init (arch, self))
@@ -4718,7 +4784,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               !pv_runtime_remove_overridden_libraries (self, arch, error))
             return FALSE;
         }
+
+      g_clear_pointer (&part_timer, _srt_profiling_end);
     }
+
+  part_timer = _srt_profiling_start ("Finishing graphics stack capture");
 
   if (!any_architecture_works)
     {

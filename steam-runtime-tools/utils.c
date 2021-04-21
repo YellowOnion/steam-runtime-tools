@@ -392,7 +392,7 @@ _srt_get_helper (const char *helpers_path,
     }
 
   /* For helpers that are not part of steam-runtime-tools, such as
-   * *-wflinfo and *-vulkaninfo, we fall back to searching $PATH */
+   * *-wflinfo, we fall back to searching $PATH */
   g_free (path);
 
   if (multiarch == NULL)

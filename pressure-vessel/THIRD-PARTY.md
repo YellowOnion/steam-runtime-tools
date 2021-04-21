@@ -58,8 +58,6 @@ programs and libraries:
 - libjson-glib-1.0.so.0 from json-glib: [LGPL-2.0-or-later][]. See
   json-glib.txt.
 
-- vulkaninfo from Vulkan-Tools: [Apache-2.0][]. See vulkan-tools.txt.
-
 - wflinfo from waffle: [BSD-2-clause][]. See waffle.txt.
 
 Complete source code can be obtained from the same place as

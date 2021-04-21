@@ -1046,6 +1046,10 @@ main (int argc,
       GList *va_api_list = NULL;
       GList *vdpau_list = NULL;
       GList *glx_list = NULL;
+      g_autofree gchar *libdl_lib = NULL;
+      g_autofree gchar *libdl_platform = NULL;
+      g_autoptr(GError) libdl_lib_error = NULL;
+      g_autoptr(GError) libdl_platform_error = NULL;
       const char *ld_so;
 
       json_builder_set_member_name (builder, multiarch_tuples[i]);
@@ -1053,6 +1057,35 @@ main (int argc,
       json_builder_set_member_name (builder, "can-run");
       can_run = srt_system_info_can_run (info, multiarch_tuples[i]);
       json_builder_add_boolean_value (builder, can_run);
+
+      json_builder_set_member_name (builder, "libdl-LIB");
+      libdl_lib = srt_system_info_dup_libdl_lib (info, multiarch_tuples[i],
+                                                 &libdl_lib_error);
+      if (libdl_lib != NULL)
+        {
+          json_builder_add_string_value (builder, libdl_lib);
+        }
+      else
+        {
+          json_builder_begin_object (builder);
+          _srt_json_builder_add_error_members (builder, libdl_lib_error);
+          json_builder_end_object (builder);
+        }
+
+      json_builder_set_member_name (builder, "libdl-PLATFORM");
+      libdl_platform = srt_system_info_dup_libdl_platform (info,
+                                                           multiarch_tuples[i],
+                                                           &libdl_platform_error);
+      if (libdl_platform != NULL)
+        {
+          json_builder_add_string_value (builder, libdl_platform);
+        }
+      else
+        {
+          json_builder_begin_object (builder);
+          _srt_json_builder_add_error_members (builder, libdl_platform_error);
+          json_builder_end_object (builder);
+        }
 
       ld_so = srt_architecture_get_expected_runtime_linker (multiarch_tuples[i]);
 

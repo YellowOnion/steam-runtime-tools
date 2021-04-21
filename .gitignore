@@ -4,6 +4,7 @@
 /_build/
 /build/
 /builddir/
+/helpers/_generated_*/
 /libcapsule/
 /libcapsule_*.dsc
 /libcapsule_*.tar.[gx]z

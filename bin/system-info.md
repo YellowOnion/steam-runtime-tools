@@ -354,6 +354,27 @@ keys:
     :   A boolean value indicating whether a simple executable for this
         architecture was run successfully.
 
+    **libdl-LIB**
+    :   A string containing the dynamic linker expansion of the literal token
+        `$LIB`/`${LIB}`. See `ld.so(8)` section "Dynamic string tokens" for
+        more details. However if an error occurred while trying to determine
+        the expansion value, **libdl-LIB** will instead contain an object with
+        the following details of the error:
+
+        **error-domain**
+        :   A machine-readable string indicating a category of errors.
+
+        **error-code**
+        :   A small integer indicating a specific error. Its meaning depends
+            on the **error-domain**.
+
+        **error**
+        :   A human-readable error message.
+
+    **libdl-PLATFORM**
+    :   The same as the **libdl-LIB** described above, but describing the
+        literal token `$PLATFORM`/`${PLATFORM}`.
+
     **runtime-linker**
     :   If the multiarch tuple is a known one, an object with the
         following keys and values describing the runtime linker **ld.so**(8):

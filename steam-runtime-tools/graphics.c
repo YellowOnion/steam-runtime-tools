@@ -3559,6 +3559,7 @@ _srt_loadable_flag_duplicates (GType which,
  *  EGL ICDs are searched by their absolute path, obtained using
  *  "inspect-library" in the provided multiarch tuples, instead of just their
  *  resolved library path.
+ * @check_flags: Whether to check for problems
  *
  * Implementation of srt_system_info_list_egl_icds().
  *
@@ -3569,7 +3570,8 @@ GList *
 _srt_load_egl_icds (const char *helpers_path,
                     const char *sysroot,
                     gchar **envp,
-                    const char * const *multiarch_tuples)
+                    const char * const *multiarch_tuples,
+                    SrtCheckFlags check_flags)
 {
   const gchar *value;
   gsize i;
@@ -3640,8 +3642,9 @@ _srt_load_egl_icds (const char *helpers_path,
       g_free (flatpak_info);
     }
 
-  _srt_loadable_flag_duplicates (SRT_TYPE_EGL_ICD, envp, helpers_path,
-                                 multiarch_tuples, ret);
+  if (!(check_flags & SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS))
+    _srt_loadable_flag_duplicates (SRT_TYPE_EGL_ICD, envp, helpers_path,
+                                   multiarch_tuples, ret);
 
   return g_list_reverse (ret);
 }
@@ -6050,6 +6053,7 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
  *  Vulkan ICDs are searched by their absolute path, obtained using
  *  "inspect-library" in the provided multiarch tuples, instead of just their
  *  resolved library path.
+ * @check_flags: Whether to check for problems
  *
  * Implementation of srt_system_info_list_vulkan_icds().
  *
@@ -6060,7 +6064,8 @@ GList *
 _srt_load_vulkan_icds (const char *helpers_path,
                        const char *sysroot,
                        gchar **envp,
-                       const char * const *multiarch_tuples)
+                       const char * const *multiarch_tuples,
+                       SrtCheckFlags check_flags)
 {
   const gchar *value;
   gsize i;
@@ -6098,8 +6103,9 @@ _srt_load_vulkan_icds (const char *helpers_path,
                       vulkan_icd_load_json_cb, &ret);
     }
 
-  _srt_loadable_flag_duplicates (SRT_TYPE_VULKAN_ICD, envp, helpers_path,
-                                 multiarch_tuples, ret);
+  if (!(check_flags & SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS))
+    _srt_loadable_flag_duplicates (SRT_TYPE_VULKAN_ICD, envp, helpers_path,
+                                   multiarch_tuples, ret);
 
   return g_list_reverse (ret);
 }
@@ -6923,6 +6929,7 @@ vulkan_layer_load_json_cb (const char *sysroot,
  *  'inspect-library' in the provided multiarch tuples, instead of just their
  *  resolved library path.
  * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
+ * @check_flags: Whether to check for problems
  *
  * Implementation of srt_system_info_list_explicit_vulkan_layers() and
  * srt_system_info_list_implicit_vulkan_layers().
@@ -6935,7 +6942,8 @@ _srt_load_vulkan_layers_extended (const char *helpers_path,
                                   const char *sysroot,
                                   gchar **envp,
                                   const char * const *multiarch_tuples,
-                                  gboolean explicit)
+                                  gboolean explicit,
+                                  SrtCheckFlags check_flags)
 {
   GList *ret = NULL;
   g_auto(GStrv) search_paths = NULL;
@@ -6971,8 +6979,9 @@ _srt_load_vulkan_layers_extended (const char *helpers_path,
                       vulkan_layer_load_json_cb, &ret);
     }
 
-  _srt_loadable_flag_duplicates (SRT_TYPE_VULKAN_LAYER, envp, helpers_path,
-                                 multiarch_tuples, ret);
+  if (!(check_flags & SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS))
+    _srt_loadable_flag_duplicates (SRT_TYPE_VULKAN_LAYER, envp, helpers_path,
+                                   multiarch_tuples, ret);
 
   return g_list_reverse (ret);
 }
@@ -6995,7 +7004,8 @@ _srt_load_vulkan_layers (const char *sysroot,
                          gchar **envp,
                          gboolean explicit)
 {
-  return _srt_load_vulkan_layers_extended (NULL, sysroot, envp, NULL, explicit);
+  return _srt_load_vulkan_layers_extended (NULL, sysroot, envp, NULL, explicit,
+                                           SRT_CHECK_FLAGS_NONE);
 }
 
 static SrtVulkanLayer *

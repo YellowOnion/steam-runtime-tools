@@ -79,7 +79,6 @@ ARCHS = [
 DEPENDENCIES = {
     'libcapsule-tools-relocatable': 'libcapsule',
     'libelf1': 'elfutils',
-    'vulkan-tools-multiarch': 'vulkan-tools',
     'waffle-utils-multiarch': 'waffle',
     'zlib1g': 'zlib',
 }
@@ -100,7 +99,6 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libxau6': 'libxau',
 }
 HELPERS = {
-    'vulkaninfo': 'vulkan-tools-multiarch',
     'wflinfo': 'waffle-utils-multiarch',
 }
 SCRIPTS = [

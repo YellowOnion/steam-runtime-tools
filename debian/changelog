@@ -1,3 +1,28 @@
+steam-runtime-tools (0.20210421.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pressure-vessel: Speed up startup with cold cache by skipping
+    unnecessary checks
+  * pressure-vessel: Remove unnecessary bundled copies of vainfo and
+    vulkaninfo
+  * pv-wrap: Assume that Flatpak 1.11.x is at least 1.10.1-80-gcb47d83b
+  * pv-wrap: Suggest an appropriate `flatpak override` command.
+    The Steam Flatpak app can't have --allow=per-app-dev-shm set by
+    default until the Flatpak version used to build apps on Flathub's
+    buildbot supports it, but we need it (either that or --device=shm,
+    but --device=shm weakens the sandbox).
+  * pv-wrap: Remove support for escaping from a Flatpak container.
+    We did this as a very early prototype, but it never fully worked, and
+    required configuring Flatpak specially to allow Steam to escape from the
+    sandbox (which obviously undermines Flatpak's intended sandboxing).
+  * tests: Update populate-depot.py from SteamLinuxRuntime.
+    Adjust invocation as required.
+
+  [ Ludovico de Nittis ]
+  * Refactoring
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 21 Apr 2021 14:22:04 +0100
+
 steam-runtime-tools (0.20210415.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

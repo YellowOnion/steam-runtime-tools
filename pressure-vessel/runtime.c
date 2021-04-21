@@ -39,7 +39,6 @@
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
-#include "elf-utils.h"
 #include "enumtypes.h"
 #include "exports.h"
 #include "flatpak-run-private.h"
@@ -2837,11 +2836,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
       while (TRUE)
         {
-          g_autoptr(Elf) elf = NULL;
-          g_autoptr(GError) local_error = NULL;
-          glnx_autofd int libfd = -1;
           g_autofree gchar *path = NULL;
-          g_autofree gchar *soname = NULL;
           g_autofree gchar *target = NULL;
           const char *target_base;
 
@@ -3015,49 +3010,6 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                   g_hash_table_replace (delete[i],
                                         g_strdup (dent->d_name),
                                         g_steal_pointer (&alias_link));
-                  continue;
-                }
-            }
-
-          libfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd, path,
-                                           SRT_RESOLVE_FLAGS_READABLE, NULL,
-                                           &local_error);
-
-          if (libfd < 0)
-            {
-              g_warning ("Unable to open %s/%s for reading: %s",
-                         self->mutable_sysroot, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          elf = pv_elf_open_fd (libfd, &local_error);
-
-          if (elf != NULL)
-            soname = pv_elf_get_soname (elf, &local_error);
-
-          if (soname == NULL)
-            {
-              g_warning ("Unable to get SONAME of %s/%s: %s",
-                         self->mutable_sysroot, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          /* If we found a library with SONAME libfoo.so.1 in the
-           * container, and libfoo.so.1 also exists among the overrides,
-           * delete it. */
-            {
-              g_autofree gchar *soname_link = NULL;
-
-              soname_link = g_build_filename (arch->libdir_in_current_namespace,
-                                              soname, NULL);
-
-              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
-                {
-                  g_hash_table_replace (delete[i],
-                                        g_strdup (dent->d_name),
-                                        g_steal_pointer (&soname_link));
                   continue;
                 }
             }

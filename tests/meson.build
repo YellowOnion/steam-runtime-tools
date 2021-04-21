@@ -287,6 +287,25 @@ foreach helper : [
   )
 endforeach
 
+foreach token : [
+  'LIB',
+  'PLATFORM',
+]
+  foreach helper : [
+    'mock-good-detect',
+    'mock-bad-detect',
+  ]
+    executable(
+      helper + '-' + token.to_lower(),
+      helper + '.c',
+      c_args : ['-DMOCK_LIBDL_TOKEN_' + token],
+      include_directories : project_include_dirs,
+      install: true,
+      install_dir: tests_dir
+    )
+  endforeach
+endforeach
+
 # These need to be the same as their -good- counterparts, to exercise
 # the case where the preliminary check succeeds, but actually rendering
 # a window fails (hence "mixed").

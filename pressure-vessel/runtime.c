@@ -2904,6 +2904,34 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
+          /* scope for alias_link */
+            {
+              g_autofree gchar *alias_link = NULL;
+              g_autofree gchar *alias_target = NULL;
+
+              /* If we're looking at /usr/lib/MULTIARCH/libcurl.so.3, and a
+               * symlink .../aliases/libcurl.so.3 exists and points to
+               * e.g. .../overrides/lib/$MULTIARCH/libcurl.so.4, then
+               * /usr/lib/MULTIARCH/libcurl.so.3 was overridden and should
+               * be deleted. However, if .../aliases/libcurl.so.3 points to
+               * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
+               * library was not overridden and we should not delete it. */
+              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+                                             dent->d_name, NULL);
+              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+                                                     NULL, NULL);
+
+              if (alias_target != NULL
+                  && flatpak_has_path_prefix (alias_target,
+                                              self->overrides_in_container))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&alias_link));
+                  continue;
+                }
+            }
+
           target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
                                            NULL, NULL);
 
@@ -2924,6 +2952,36 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                   g_hash_table_replace (delete[i],
                                         g_strdup (dent->d_name),
                                         g_steal_pointer (&soname_link));
+                  continue;
+                }
+            }
+
+          if (target != NULL)
+            {
+              g_autofree gchar *alias_link = NULL;
+              g_autofree gchar *alias_target = NULL;
+
+              /* If we're looking at /usr/lib/MULTIARCH/libcurl.so.3, which
+               * points to libcurl.so.4, and a
+               * symlink .../aliases/libcurl.so.3 exists and points to
+               * e.g. .../overrides/lib/$MULTIARCH/libcurl.so.4, then
+               * /usr/lib/MULTIARCH/libcurl.so.3 was overridden and should
+               * be deleted. However, if .../aliases/libcurl.so.3 points to
+               * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
+               * library was not overridden and we should not delete it. */
+              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+                                             glnx_basename (target),
+                                             NULL);
+              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+                                                     NULL, NULL);
+
+              if (alias_target != NULL
+                  && flatpak_has_path_prefix (alias_target,
+                                              self->overrides_in_container))
+                {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&alias_link));
                   continue;
                 }
             }

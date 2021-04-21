@@ -4108,6 +4108,223 @@ pv_runtime_create_aliases (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * @egl_icd_details: (element-type IcdDetails):
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_egl_drivers (PvRuntime *self,
+                     RuntimeArchitecture *arch,
+                     GPtrArray *egl_icd_details,
+                     GPtrArray *patterns,
+                     GError **error)
+{
+  gsize j;
+  /* As with Vulkan layers, the order of the manifests matters
+   * but the order of the actual libraries does not. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* If we have just a SONAME, we do not want to place the library
+   * under a subdir, otherwise ld.so will not be able to find it */
+  const gboolean use_subdir_for_kind_soname = FALSE;
+
+  g_debug ("Collecting %s EGL drivers from provider...",
+           arch->details->tuple);
+
+  for (j = 0; j < egl_icd_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
+      SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
+
+      if (!srt_egl_icd_check_error (icd, NULL))
+        continue;
+
+      details->resolved_library = srt_egl_icd_resolve_library_path (icd);
+      g_assert (details->resolved_library != NULL);
+
+      if (!bind_icd (self, arch, j, "glvnd", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @vulkan_icd_details: (element-type IcdDetails):
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_vulkan_icds (PvRuntime *self,
+                     RuntimeArchitecture *arch,
+                     GPtrArray *vulkan_icd_details,
+                     GPtrArray *patterns,
+                     GError **error)
+{
+  gsize j;
+  /* As with Vulkan layers, the order of the manifests matters
+   * but the order of the actual libraries does not. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* If we have just a SONAME, we do not want to place the library
+   * under a subdir, otherwise ld.so will not be able to find it */
+  const gboolean use_subdir_for_kind_soname = FALSE;
+
+  g_debug ("Collecting %s Vulkan drivers from provider...",
+           arch->details->tuple);
+
+  for (j = 0; j < vulkan_icd_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
+      SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
+
+      if (!srt_vulkan_icd_check_error (icd, NULL))
+        continue;
+
+      details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
+      g_assert (details->resolved_library != NULL);
+
+      if (!bind_icd (self, arch, j, "vulkan", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_vdpau_drivers (PvRuntime *self,
+                       SrtSystemInfo *system_info,
+                       RuntimeArchitecture *arch,
+                       GPtrArray *patterns,
+                       GError **error)
+{
+  g_autoptr(SrtObjectList) vdpau_drivers = NULL;
+  /* The VDPAU loader looks up drivers by name, not by readdir(),
+   * so order doesn't matter unless there are name collisions. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* These libraries are always expected to be located under the
+   * "vdpau" subdir */
+  const gboolean use_subdir_for_kind_soname = TRUE;
+  const GList *icd_iter;
+  gsize j;
+
+  g_debug ("Enumerating %s VDPAU ICDs on provider...", arch->details->tuple);
+  vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
+                                                      arch->details->tuple,
+                                                      SRT_DRIVER_FLAGS_NONE);
+
+  for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+    {
+      g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+      details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_library != NULL);
+      g_assert (g_path_is_absolute (details->resolved_library));
+
+      /* In practice we won't actually use the sequence number for VDPAU
+       * because they can only be located in a single directory,
+       * so by definition we can't have collisions. Anything that
+       * ends up in a numbered subdirectory won't get used. */
+      if (!bind_icd (self, arch, j, "vdpau", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_dri_drivers (PvRuntime *self,
+                     SrtSystemInfo *system_info,
+                     RuntimeArchitecture *arch,
+                     GPtrArray *patterns,
+                     GString *dri_path,
+                     GError **error)
+{
+  g_autoptr(SrtObjectList) dri_drivers = NULL;
+  /* The DRI loader looks up drivers by name, not by readdir(),
+   * so order doesn't matter unless there are name collisions. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* These libraries are always expected to be located under the
+   * "dri" subdir */
+  const gboolean use_subdir_for_kind_soname = TRUE;
+  const GList *icd_iter;
+  gsize j;
+
+  g_debug ("Enumerating %s DRI drivers on provider...",
+           arch->details->tuple);
+  dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                  arch->details->tuple,
+                                                  SRT_DRIVER_FLAGS_NONE);
+
+  for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+    {
+      g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+
+      details->resolved_library = srt_dri_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_library != NULL);
+      g_assert (g_path_is_absolute (details->resolved_library));
+
+      if (!bind_icd (self, arch, j, "dri", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, dri_path, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_va_api_drivers (PvRuntime *self,
+                        SrtSystemInfo *system_info,
+                        RuntimeArchitecture *arch,
+                        GPtrArray *patterns,
+                        GString *va_api_path,
+                        GError **error)
+{
+  g_autoptr(SrtObjectList) va_api_drivers = NULL;
+  /* The VA-API loader looks up drivers by name, not by readdir(),
+   * so order doesn't matter unless there are name collisions. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* These libraries are always expected to be located under the
+   * "dri" subdir */
+  const gboolean use_subdir_for_kind_soname = TRUE;
+  const GList *icd_iter;
+  gsize j;
+
+  g_debug ("Enumerating %s VA-API drivers on provider...",
+           arch->details->tuple);
+  va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                        arch->details->tuple,
+                                                        SRT_DRIVER_FLAGS_NONE);
+
+  for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+    {
+      g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+
+      details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_library != NULL);
+      g_assert (g_path_is_absolute (details->resolved_library));
+
+      if (!bind_icd (self, arch, j, "dri", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, va_api_path, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -4313,11 +4530,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *libdrm = NULL;
           g_autofree gchar *libdrm_amdgpu = NULL;
           g_autofree gchar *libglx_mesa = NULL;
-          g_autoptr(SrtObjectList) dri_drivers = NULL;
-          g_autoptr(SrtObjectList) vdpau_drivers = NULL;
-          g_autoptr(SrtObjectList) va_api_drivers = NULL;
-          gboolean use_numbered_subdirs;
-          gboolean use_subdir_for_kind_soname;
           g_autoptr(GPtrArray) patterns = NULL;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
@@ -4349,57 +4561,13 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           collect_graphics_libraries_patterns (patterns);
 
-          g_debug ("Collecting %s EGL drivers from provider...",
-                   arch->details->tuple);
-          /* As with Vulkan layers, the order of the manifests matters
-           * but the order of the actual libraries does not. */
-          use_numbered_subdirs = FALSE;
-          /* If we have just a SONAME, we do not want to place the library
-           * under a subdir, otherwise ld.so will not be able to find it */
-          use_subdir_for_kind_soname = FALSE;
+          if (!collect_egl_drivers (self, arch, egl_icd_details, patterns,
+                                    error))
+            return FALSE;
 
-          for (j = 0; j < egl_icd_details->len; j++)
-            {
-              IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
-              SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
-
-              if (!srt_egl_icd_check_error (icd, NULL))
-                continue;
-
-              details->resolved_library = srt_egl_icd_resolve_library_path (icd);
-              g_assert (details->resolved_library != NULL);
-
-              if (!bind_icd (self, arch, j, "glvnd", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, NULL, error))
-                return FALSE;
-            }
-
-          g_debug ("Collecting %s Vulkan drivers from provider...",
-                   arch->details->tuple);
-          /* As with Vulkan layers, the order of the manifests matters
-           * but the order of the actual libraries does not. */
-          use_numbered_subdirs = FALSE;
-          /* If we have just a SONAME, we do not want to place the library
-           * under a subdir, otherwise ld.so will not be able to find it */
-          use_subdir_for_kind_soname = FALSE;
-
-          for (j = 0; j < vulkan_icd_details->len; j++)
-            {
-              IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
-              SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
-
-              if (!srt_vulkan_icd_check_error (icd, NULL))
-                continue;
-
-              details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
-              g_assert (details->resolved_library != NULL);
-
-              if (!bind_icd (self, arch, j, "vulkan", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, NULL, error))
-                return FALSE;
-            }
+          if (!collect_vulkan_icds (self, arch, vulkan_icd_details,
+                                    patterns, error))
+            return FALSE;
 
           if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
             {
@@ -4414,85 +4582,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VDPAU ICDs on provider...", arch->details->tuple);
-          vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
-                                                              arch->details->tuple,
-                                                              SRT_DRIVER_FLAGS_NONE);
-          /* The VDPAU loader looks up drivers by name, not by readdir(),
-           * so order doesn't matter unless there are name collisions. */
-          use_numbered_subdirs = FALSE;
-          /* These libraries are always expected to be located under the
-           * "vdpau" subdir */
-          use_subdir_for_kind_soname = TRUE;
+          if (!collect_vdpau_drivers (self, system_info, arch, patterns, error))
+            return FALSE;
 
-          for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
-            {
-              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-              details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
-              g_assert (details->resolved_library != NULL);
-              g_assert (g_path_is_absolute (details->resolved_library));
+          if (!collect_dri_drivers (self, system_info, arch, patterns,
+                                    dri_path, error))
+            return FALSE;
 
-              /* In practice we won't actually use the sequence number for VDPAU
-               * because they can only be located in a single directory,
-               * so by definition we can't have collisions. Anything that
-               * ends up in a numbered subdirectory won't get used. */
-              if (!bind_icd (self, arch, j, "vdpau", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, NULL, error))
-                return FALSE;
-            }
-
-          g_debug ("Enumerating %s DRI drivers on provider...",
-                   arch->details->tuple);
-          dri_drivers = srt_system_info_list_dri_drivers (system_info,
-                                                          arch->details->tuple,
-                                                          SRT_DRIVER_FLAGS_NONE);
-          /* The DRI loader looks up drivers by name, not by readdir(),
-           * so order doesn't matter unless there are name collisions. */
-          use_numbered_subdirs = FALSE;
-          /* These libraries are always expected to be located under the
-           * "dri" subdir */
-          use_subdir_for_kind_soname = TRUE;
-
-          for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
-            {
-              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-
-              details->resolved_library = srt_dri_driver_resolve_library_path (details->icd);
-              g_assert (details->resolved_library != NULL);
-              g_assert (g_path_is_absolute (details->resolved_library));
-
-              if (!bind_icd (self, arch, j, "dri", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, dri_path, error))
-                return FALSE;
-            }
-
-          g_debug ("Enumerating %s VA-API drivers on provider...",
-                   arch->details->tuple);
-          va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
-                                                                arch->details->tuple,
-                                                                SRT_DRIVER_FLAGS_NONE);
-          /* The VA-API loader looks up drivers by name, not by readdir(),
-           * so order doesn't matter unless there are name collisions. */
-          use_numbered_subdirs = FALSE;
-          /* These libraries are always expected to be located under the
-           * "dri" subdir */
-          use_subdir_for_kind_soname = TRUE;
-
-          for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
-            {
-              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-
-              details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
-              g_assert (details->resolved_library != NULL);
-              g_assert (g_path_is_absolute (details->resolved_library));
-
-              if (!bind_icd (self, arch, j, "dri", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, va_api_path, error))
-                return FALSE;
-            }
+          if (!collect_va_api_drivers (self, system_info, arch, patterns,
+                                       va_api_path, error))
+            return FALSE;
 
           if (!pv_runtime_capture_libraries (self, arch,
                                              arch->libdir_in_current_namespace,

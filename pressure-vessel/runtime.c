@@ -2846,9 +2846,11 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
                                                            NULL, error))
-            return glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
-                                      self->mutable_sysroot,
-                                      libdir);
+            {
+              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+                                 self->mutable_sysroot, libdir);
+              goto out;
+            }
 
           if (dent == NULL)
             break;

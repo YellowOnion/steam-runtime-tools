@@ -3062,6 +3062,43 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
         }
+
+      /* Iterate over the directory again, to clean up dangling development
+       * symlinks */
+      glnx_dirfd_iterator_rewind (&iters[i]);
+
+      while (TRUE)
+        {
+          g_autofree gchar *target = NULL;
+          gpointer reason;
+
+          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
+                                                           NULL, error))
+            {
+              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+                                 self->mutable_sysroot, libdir);
+              goto out;
+            }
+
+          if (dent == NULL)
+            break;
+
+          if (dent->d_type != DT_LNK)
+            continue;
+
+          /* If we were going to delete it anyway, ignore */
+          if (g_hash_table_lookup_extended (delete[i], dent->d_name, NULL, NULL))
+            continue;
+
+          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+                                           NULL, NULL);
+
+          /* If we're going to delete the target, also delete the symlink
+           * rather than leaving it dangling */
+          if (g_hash_table_lookup_extended (delete[i], target, NULL, &reason))
+            g_hash_table_replace (delete[i], g_strdup (dent->d_name),
+                                  g_strdup (reason));
+        }
     }
 
   for (i = 0; i < dirs->len; i++)

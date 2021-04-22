@@ -2880,15 +2880,21 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           path = g_build_filename (libdir, dent->d_name, NULL);
 
+          /* Suppose we have a shared library libcurl.so.4 -> libcurl.so.4.2.0
+           * in the container and libcurl.so.4.7.0 in the provider,
+           * with a backwards-compatibility alias libcurl.so.3.
+           * dent->d_name might be any of those strings. */
+
           /* scope for soname_link */
             {
               g_autofree gchar *soname_link = NULL;
 
+              /* If we're looking at /usr/lib/MULTIARCH/libcurl.so.4, and a
+               * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists, then
+               * we want to delete /usr/lib/MULTIARCH/libcurl.so.4. */
               soname_link = g_build_filename (arch->libdir_in_current_namespace,
                                               dent->d_name, NULL);
 
-              /* If we found libfoo.so.1 in the container, and libfoo.so.1
-               * also exists among the overrides, delete it. */
               if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
                 {
                   g_hash_table_replace (delete[i],
@@ -2905,13 +2911,14 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               g_autofree gchar *soname_link = NULL;
 
+              /* If we're looking at /usr/lib/MULTIARCH/libcurl.so, which
+               * points to libcurl.so.4, and a
+               * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists,
+               * then we want to delete /usr/lib/MULTIARCH/libcurl.so. */
               soname_link = g_build_filename (arch->libdir_in_current_namespace,
                                               glnx_basename (target),
                                               NULL);
 
-              /* If the symlink in the container points to
-               * /foo/bar/libfoo.so.1, and libfoo.so.1 also exists among
-               * the overrides, delete it. */
               if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
                 {
                   g_hash_table_replace (delete[i],

@@ -32,6 +32,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -656,6 +657,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
   g_autoptr(GError) local_error = NULL;
   g_autoptr(PvBwrapLock) variable_lock = NULL;
   g_autoptr(PvBwrapLock) base_lock = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   g_auto(GLnxDirFdIterator) variable_dir_iter = { FALSE };
   g_auto(GLnxDirFdIterator) runtime_base_iter = { FALSE };
   glnx_autofd int variable_dir_fd = -1;
@@ -673,6 +675,9 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
   g_return_val_if_fail (variable_dir != NULL, FALSE);
   g_return_val_if_fail (runtime_base != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  timer = _srt_profiling_start ("Cleaning up legacy runtimes in %s and %s",
+                                variable_dir, runtime_base);
 
   if (g_mkdir_with_parents (variable_dir, 0700) != 0)
     return glnx_throw_errno_prefix (error, "Unable to create %s",
@@ -776,6 +781,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
                             GError **error)
 {
   g_auto(GLnxDirFdIterator) iter = { FALSE };
+  g_autoptr(SrtProfilingTimer) timer = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->variable_dir != NULL, FALSE);
@@ -783,6 +789,9 @@ pv_runtime_garbage_collect (PvRuntime *self,
   /* We don't actually *use* this: it just acts as an assertion that
    * we are holding the lock on the parent directory. */
   g_return_val_if_fail (variable_dir_lock != NULL, FALSE);
+
+  timer = _srt_profiling_start ("Cleaning up temporary runtimes in %s",
+                                self->variable_dir);
 
   if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->variable_dir,
                                     TRUE, &iter, error))
@@ -882,6 +891,7 @@ pv_runtime_create_copy (PvRuntime *self,
   g_autoptr(GDir) dir = NULL;
   g_autoptr(PvBwrapLock) copy_lock = NULL;
   g_autoptr(PvBwrapLock) source_lock = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   const char *member;
   const char *source_usr;
   glnx_autofd int temp_dir_fd = -1;
@@ -894,6 +904,8 @@ pv_runtime_create_copy (PvRuntime *self,
   /* We don't actually *use* this: it just acts as an assertion that
    * we are holding the lock on the parent directory. */
   g_return_val_if_fail (variable_dir_lock != NULL, FALSE);
+
+  timer = _srt_profiling_start ("Temporary runtime copy");
 
   temp_dir = g_build_filename (self->variable_dir, "tmp-XXXXXX", NULL);
 
@@ -1055,6 +1067,7 @@ pv_runtime_unpack (PvRuntime *self,
                    GError **error)
 {
   g_autoptr(GString) debug_tarball = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autofree gchar *deploy_basename = NULL;
   g_autofree gchar *unpack_dir = NULL;
 
@@ -1145,6 +1158,7 @@ pv_runtime_unpack (PvRuntime *self,
     return FALSE;
 
   /* Slow path: we need to do this the hard way. */
+  timer = _srt_profiling_start ("Unpacking %s", self->source);
   unpack_dir = g_build_filename (self->variable_dir, "tmp-XXXXXX", NULL);
 
   if (g_mkdtemp (unpack_dir) == NULL)
@@ -1988,6 +2002,8 @@ pv_runtime_capture_libraries (PvRuntime *self,
                               GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) libc_timer =
+    _srt_profiling_start ("Main capsule-capture-libs call");
   gsize i;
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
@@ -2736,6 +2752,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                                         GError **error)
 {
   g_autoptr(GPtrArray) dirs = NULL;
+  g_autoptr(SrtProfilingTimer) timer = NULL;
   GHashTable **delete = NULL;
   GLnxDirFdIterator *iters = NULL;
   gboolean ret = FALSE;
@@ -2748,6 +2765,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
   /* Not applicable/possible if we don't have a mutable sysroot */
   g_return_val_if_fail (self->mutable_sysroot != NULL, FALSE);
+
+  timer = _srt_profiling_start ("Removing overridden %s libraries",
+                                arch->details->tuple);
 
   dirs = multiarch_details_get_libdirs (arch->details,
                                         MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
@@ -3300,6 +3320,8 @@ collect_vulkan_layers (PvRuntime *self,
                        GError **error)
 {
   gsize j;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting Vulkan %s layers", dir_name);
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
   g_return_val_if_fail (dependency_patterns != NULL, FALSE);
@@ -3579,6 +3601,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                 GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) libc_timer =
+    _srt_profiling_start ("glibc");
   g_autofree char *libc_target = NULL;
 
   g_return_val_if_fail (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK, FALSE);
@@ -4016,6 +4040,8 @@ pv_runtime_create_aliases (PvRuntime *self,
                            GError **error)
 {
   g_autoptr(JsonParser) parser = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Creating library aliases");
   JsonNode *node = NULL;
   JsonArray *libraries_array = NULL;
   JsonArray *aliases_array = NULL;
@@ -4108,6 +4134,248 @@ pv_runtime_create_aliases (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * @egl_icd_details: (element-type IcdDetails):
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_egl_drivers (PvRuntime *self,
+                     RuntimeArchitecture *arch,
+                     GPtrArray *egl_icd_details,
+                     GPtrArray *patterns,
+                     GError **error)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting EGL drivers");
+  gsize j;
+  /* As with Vulkan layers, the order of the manifests matters
+   * but the order of the actual libraries does not. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* If we have just a SONAME, we do not want to place the library
+   * under a subdir, otherwise ld.so will not be able to find it */
+  const gboolean use_subdir_for_kind_soname = FALSE;
+
+  g_debug ("Collecting %s EGL drivers from provider...",
+           arch->details->tuple);
+
+  for (j = 0; j < egl_icd_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
+      SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
+
+      if (!srt_egl_icd_check_error (icd, NULL))
+        continue;
+
+      details->resolved_library = srt_egl_icd_resolve_library_path (icd);
+      g_assert (details->resolved_library != NULL);
+
+      if (!bind_icd (self, arch, j, "glvnd", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @vulkan_icd_details: (element-type IcdDetails):
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_vulkan_icds (PvRuntime *self,
+                     RuntimeArchitecture *arch,
+                     GPtrArray *vulkan_icd_details,
+                     GPtrArray *patterns,
+                     GError **error)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting Vulkan ICDs");
+  gsize j;
+  /* As with Vulkan layers, the order of the manifests matters
+   * but the order of the actual libraries does not. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* If we have just a SONAME, we do not want to place the library
+   * under a subdir, otherwise ld.so will not be able to find it */
+  const gboolean use_subdir_for_kind_soname = FALSE;
+
+  g_debug ("Collecting %s Vulkan drivers from provider...",
+           arch->details->tuple);
+
+  for (j = 0; j < vulkan_icd_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
+      SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
+
+      if (!srt_vulkan_icd_check_error (icd, NULL))
+        continue;
+
+      details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
+      g_assert (details->resolved_library != NULL);
+
+      if (!bind_icd (self, arch, j, "vulkan", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_vdpau_drivers (PvRuntime *self,
+                       SrtSystemInfo *system_info,
+                       RuntimeArchitecture *arch,
+                       GPtrArray *patterns,
+                       GError **error)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting VDPAU drivers");
+  g_autoptr(SrtObjectList) vdpau_drivers = NULL;
+  /* The VDPAU loader looks up drivers by name, not by readdir(),
+   * so order doesn't matter unless there are name collisions. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* These libraries are always expected to be located under the
+   * "vdpau" subdir */
+  const gboolean use_subdir_for_kind_soname = TRUE;
+  const GList *icd_iter;
+  gsize j;
+
+  g_debug ("Enumerating %s VDPAU ICDs on provider...", arch->details->tuple);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating VDPAU drivers");
+
+      vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
+                                                          arch->details->tuple,
+                                                          SRT_DRIVER_FLAGS_NONE);
+    }
+
+  for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+    {
+      g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+      details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_library != NULL);
+      g_assert (g_path_is_absolute (details->resolved_library));
+
+      /* In practice we won't actually use the sequence number for VDPAU
+       * because they can only be located in a single directory,
+       * so by definition we can't have collisions. Anything that
+       * ends up in a numbered subdirectory won't get used. */
+      if (!bind_icd (self, arch, j, "vdpau", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_dri_drivers (PvRuntime *self,
+                     SrtSystemInfo *system_info,
+                     RuntimeArchitecture *arch,
+                     GPtrArray *patterns,
+                     GString *dri_path,
+                     GError **error)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting DRI drivers");
+  g_autoptr(SrtObjectList) dri_drivers = NULL;
+  /* The DRI loader looks up drivers by name, not by readdir(),
+   * so order doesn't matter unless there are name collisions. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* These libraries are always expected to be located under the
+   * "dri" subdir */
+  const gboolean use_subdir_for_kind_soname = TRUE;
+  const GList *icd_iter;
+  gsize j;
+
+  g_debug ("Enumerating %s DRI drivers on provider...",
+           arch->details->tuple);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating DRI drivers");
+
+      dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                      arch->details->tuple,
+                                                      SRT_DRIVER_FLAGS_NONE);
+    }
+
+  for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+    {
+      g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+
+      details->resolved_library = srt_dri_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_library != NULL);
+      g_assert (g_path_is_absolute (details->resolved_library));
+
+      if (!bind_icd (self, arch, j, "dri", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, dri_path, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_va_api_drivers (PvRuntime *self,
+                        SrtSystemInfo *system_info,
+                        RuntimeArchitecture *arch,
+                        GPtrArray *patterns,
+                        GString *va_api_path,
+                        GError **error)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting VA-API drivers");
+  g_autoptr(SrtObjectList) va_api_drivers = NULL;
+  /* The VA-API loader looks up drivers by name, not by readdir(),
+   * so order doesn't matter unless there are name collisions. */
+  gboolean use_numbered_subdirs = FALSE;
+  /* These libraries are always expected to be located under the
+   * "dri" subdir */
+  const gboolean use_subdir_for_kind_soname = TRUE;
+  const GList *icd_iter;
+  gsize j;
+
+  g_debug ("Enumerating %s VA-API drivers on provider...",
+           arch->details->tuple);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating VA-API drivers");
+
+      va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                            arch->details->tuple,
+                                                            SRT_DRIVER_FLAGS_NONE);
+    }
+
+  for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
+    {
+      g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
+
+      details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_library != NULL);
+      g_assert (g_path_is_absolute (details->resolved_library));
+
+      if (!bind_icd (self, arch, j, "dri", details,
+                     &use_numbered_subdirs, use_subdir_for_kind_soname,
+                     patterns, va_api_path, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -4133,6 +4401,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtProfilingTimer) part_timer = NULL;
   guint n_egl_icds;
   guint n_vulkan_icds;
   const GList *icd_iter;
@@ -4161,12 +4431,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_return_val_if_fail (container_env != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  timer = _srt_profiling_start ("Using graphics stack from %s",
+                                self->provider_in_current_namespace);
+
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
   srt_system_info_set_sysroot (system_info, self->provider_in_current_namespace);
   _srt_system_info_set_check_flags (system_info, SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS);
 
+  part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
   g_debug ("Enumerating EGL ICDs on provider system...");
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
   n_egl_icds = g_list_length (egl_icds);
@@ -4196,6 +4470,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_ptr_array_add (egl_icd_details, icd_details_new (icd));
     }
 
+  g_clear_pointer (&part_timer, _srt_profiling_end);
+
+  part_timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
   g_debug ("Enumerating Vulkan ICDs on provider system...");
   vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
                                                   multiarch_tuples);
@@ -4226,8 +4503,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
     }
 
+  g_clear_pointer (&part_timer, _srt_profiling_end);
+
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
+      part_timer = _srt_profiling_start ("Enumerating Vulkan layers");
       g_debug ("Enumerating Vulkan explicit layers on provider system...");
       vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
 
@@ -4286,6 +4566,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
         }
+
+      g_clear_pointer (&part_timer, _srt_profiling_end);
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -4300,6 +4582,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_auto (RuntimeArchitecture) arch_on_stack = { i };
       RuntimeArchitecture *arch = &arch_on_stack;
 
+      part_timer = _srt_profiling_start ("%s libraries", multiarch_tuples[i]);
       g_debug ("Checking for %s libraries...", multiarch_tuples[i]);
 
       if (runtime_architecture_init (arch, self))
@@ -4313,11 +4596,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *libdrm = NULL;
           g_autofree gchar *libdrm_amdgpu = NULL;
           g_autofree gchar *libglx_mesa = NULL;
-          g_autoptr(SrtObjectList) dri_drivers = NULL;
-          g_autoptr(SrtObjectList) vdpau_drivers = NULL;
-          g_autoptr(SrtObjectList) va_api_drivers = NULL;
-          gboolean use_numbered_subdirs;
-          gboolean use_subdir_for_kind_soname;
           g_autoptr(GPtrArray) patterns = NULL;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
@@ -4349,150 +4627,37 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           collect_graphics_libraries_patterns (patterns);
 
-          g_debug ("Collecting %s EGL drivers from host system...",
-                   arch->details->tuple);
-          /* As with Vulkan layers, the order of the manifests matters
-           * but the order of the actual libraries does not. */
-          use_numbered_subdirs = FALSE;
-          /* If we have just a SONAME, we do not want to place the library
-           * under a subdir, otherwise ld.so will not be able to find it */
-          use_subdir_for_kind_soname = FALSE;
+          if (!collect_egl_drivers (self, arch, egl_icd_details, patterns,
+                                    error))
+            return FALSE;
 
-          for (j = 0; j < egl_icd_details->len; j++)
-            {
-              IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
-              SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
-
-              if (!srt_egl_icd_check_error (icd, NULL))
-                continue;
-
-              details->resolved_library = srt_egl_icd_resolve_library_path (icd);
-              g_assert (details->resolved_library != NULL);
-
-              if (!bind_icd (self, arch, j, "glvnd", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, NULL, error))
-                return FALSE;
-            }
-
-          g_debug ("Collecting %s Vulkan drivers from host system...",
-                   arch->details->tuple);
-          /* As with Vulkan layers, the order of the manifests matters
-           * but the order of the actual libraries does not. */
-          use_numbered_subdirs = FALSE;
-          /* If we have just a SONAME, we do not want to place the library
-           * under a subdir, otherwise ld.so will not be able to find it */
-          use_subdir_for_kind_soname = FALSE;
-
-          for (j = 0; j < vulkan_icd_details->len; j++)
-            {
-              IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
-              SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
-
-              if (!srt_vulkan_icd_check_error (icd, NULL))
-                continue;
-
-              details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
-              g_assert (details->resolved_library != NULL);
-
-              if (!bind_icd (self, arch, j, "vulkan", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, NULL, error))
-                return FALSE;
-            }
+          if (!collect_vulkan_icds (self, arch, vulkan_icd_details,
+                                    patterns, error))
+            return FALSE;
 
           if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
             {
-              g_debug ("Collecting Vulkan explicit layers from host system...");
+              g_debug ("Collecting Vulkan explicit layers from provider...");
               if (!collect_vulkan_layers (self, vulkan_exp_layer_details,
                                           patterns, arch, "vulkan_exp_layer", error))
                 return FALSE;
 
-              g_debug ("Collecting Vulkan implicit layers from host system...");
+              g_debug ("Collecting Vulkan implicit layers from provider...");
               if (!collect_vulkan_layers (self, vulkan_imp_layer_details,
                                           patterns, arch, "vulkan_imp_layer", error))
                 return FALSE;
             }
 
-          g_debug ("Enumerating %s VDPAU ICDs on host system...", arch->details->tuple);
-          vdpau_drivers = srt_system_info_list_vdpau_drivers (system_info,
-                                                              arch->details->tuple,
-                                                              SRT_DRIVER_FLAGS_NONE);
-          /* The VDPAU loader looks up drivers by name, not by readdir(),
-           * so order doesn't matter unless there are name collisions. */
-          use_numbered_subdirs = FALSE;
-          /* These libraries are always expected to be located under the
-           * "vdpau" subdir */
-          use_subdir_for_kind_soname = TRUE;
+          if (!collect_vdpau_drivers (self, system_info, arch, patterns, error))
+            return FALSE;
 
-          for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
-            {
-              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-              details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
-              g_assert (details->resolved_library != NULL);
-              g_assert (g_path_is_absolute (details->resolved_library));
+          if (!collect_dri_drivers (self, system_info, arch, patterns,
+                                    dri_path, error))
+            return FALSE;
 
-              /* In practice we won't actually use the sequence number for VDPAU
-               * because they can only be located in a single directory,
-               * so by definition we can't have collisions. Anything that
-               * ends up in a numbered subdirectory won't get used. */
-              if (!bind_icd (self, arch, j, "vdpau", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, NULL, error))
-                return FALSE;
-            }
-
-          g_debug ("Enumerating %s DRI drivers on host system...",
-                   arch->details->tuple);
-          dri_drivers = srt_system_info_list_dri_drivers (system_info,
-                                                          arch->details->tuple,
-                                                          SRT_DRIVER_FLAGS_NONE);
-          /* The DRI loader looks up drivers by name, not by readdir(),
-           * so order doesn't matter unless there are name collisions. */
-          use_numbered_subdirs = FALSE;
-          /* These libraries are always expected to be located under the
-           * "dri" subdir */
-          use_subdir_for_kind_soname = TRUE;
-
-          for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
-            {
-              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-
-              details->resolved_library = srt_dri_driver_resolve_library_path (details->icd);
-              g_assert (details->resolved_library != NULL);
-              g_assert (g_path_is_absolute (details->resolved_library));
-
-              if (!bind_icd (self, arch, j, "dri", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, dri_path, error))
-                return FALSE;
-            }
-
-          g_debug ("Enumerating %s VA-API drivers on host system...",
-                   arch->details->tuple);
-          va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
-                                                                arch->details->tuple,
-                                                                SRT_DRIVER_FLAGS_NONE);
-          /* The VA-API loader looks up drivers by name, not by readdir(),
-           * so order doesn't matter unless there are name collisions. */
-          use_numbered_subdirs = FALSE;
-          /* These libraries are always expected to be located under the
-           * "dri" subdir */
-          use_subdir_for_kind_soname = TRUE;
-
-          for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
-            {
-              g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-
-              details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
-              g_assert (details->resolved_library != NULL);
-              g_assert (g_path_is_absolute (details->resolved_library));
-
-              if (!bind_icd (self, arch, j, "dri", details,
-                             &use_numbered_subdirs, use_subdir_for_kind_soname,
-                             patterns, va_api_path, error))
-                return FALSE;
-            }
+          if (!collect_va_api_drivers (self, system_info, arch, patterns,
+                                       va_api_path, error))
+            return FALSE;
 
           if (!pv_runtime_capture_libraries (self, arch,
                                              arch->libdir_in_current_namespace,
@@ -4525,7 +4690,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                             "libdrm_amdgpu.so.1", NULL);
 
           /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
-           * ${prefix}/share/libdrm from the host. ${prefix} is derived from
+           * ${prefix}/share/libdrm from the provider. ${prefix} is derived from
            * the absolute path of libdrm_amdgpu.so.1 */
           if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
             {
@@ -4534,7 +4699,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                            libdrm_data_in_provider);
             }
           /* As a fallback we also try libdrm.so.2 because libdrm_amdgpu.so.1
-           * might not be available in all host systems.
+           * might not be available in all providers.
            * It's important to check for libdrm_amdgpu.so.1 first, because
            * the freedesktop.org GL runtime doesn't provide libdrm.so.2, and if
            * we check for it first we would end up looking for the "libdrm"
@@ -4554,7 +4719,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           libglx_mesa = g_build_filename (arch->libdir_in_current_namespace, "libGLX_mesa.so.0", NULL);
 
           /* If we have libGLX_mesa.so.0 in overrides we also want to mount
-           * ${prefix}/share/drirc.d from the host. ${prefix} is derived from
+           * ${prefix}/share/drirc.d from the provider. ${prefix} is derived from
            * the absolute path of libGLX_mesa.so.0 */
           if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
             {
@@ -4614,12 +4779,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             }
 
           /* Make sure we do this last, so that we have really copied
-           * everything from the host that we are going to */
+           * everything from the provider that we are going to */
           if (self->mutable_sysroot != NULL &&
               !pv_runtime_remove_overridden_libraries (self, arch, error))
             return FALSE;
         }
+
+      g_clear_pointer (&part_timer, _srt_profiling_end);
     }
+
+  part_timer = _srt_profiling_start ("Finishing graphics stack capture");
 
   if (!any_architecture_works)
     {
@@ -4637,7 +4806,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "None of the supported CPU architectures are common to "
-                   "the host system and the container (tried: %s)",
+                   "the graphics provider and the container (tried: %s)",
                    archs->str);
       g_string_free (archs, TRUE);
       return FALSE;

@@ -36,6 +36,7 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "flatpak-bwrap-private.h"
@@ -1028,7 +1029,10 @@ pv_set_up_logging (gboolean opt_verbose)
     log_levels |= G_LOG_LEVEL_INFO;
 
   if (opt_verbose)
-    log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
+    {
+      log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
+      _srt_profiling_enable ();
+    }
 
   g_log_set_handler (G_LOG_DOMAIN, log_levels,
                      opt_timestamp ? pv_log_to_stderr_with_timestamp : pv_log_to_stderr,

@@ -145,7 +145,6 @@ endforeach
 # Helper programs and manual tests
 helpers = [
   'cheap-copy',
-  'elf-get-soname',
   'helper',
 ]
 

@@ -77,8 +77,6 @@ pressure_vessel_utils = static_library(
   sources : [
     'bwrap-lock.c',
     'bwrap-lock.h',
-    'elf-utils.c',
-    'elf-utils.h',
     'flatpak-bwrap.c',
     'flatpak-bwrap-private.h',
     'flatpak-utils-base.c',
@@ -94,7 +92,6 @@ pressure_vessel_utils = static_library(
   dependencies : [
     threads,
     gio_unix,
-    libelf,
     libglnx_dep,
     libsteamrt_static_dep,
   ],

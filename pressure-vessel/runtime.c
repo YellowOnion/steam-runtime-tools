@@ -39,7 +39,6 @@
 
 #include "bwrap.h"
 #include "bwrap-lock.h"
-#include "elf-utils.h"
 #include "enumtypes.h"
 #include "exports.h"
 #include "flatpak-run-private.h"
@@ -2837,18 +2836,17 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
       while (TRUE)
         {
-          g_autoptr(Elf) elf = NULL;
-          g_autoptr(GError) local_error = NULL;
-          glnx_autofd int libfd = -1;
           g_autofree gchar *path = NULL;
-          g_autofree gchar *soname = NULL;
           g_autofree gchar *target = NULL;
+          const char *target_base;
 
           if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
                                                            NULL, error))
-            return glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
-                                      self->mutable_sysroot,
-                                      libdir);
+            {
+              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+                                 self->mutable_sysroot, libdir);
+              goto out;
+            }
 
           if (dent == NULL)
             break;
@@ -2877,18 +2875,38 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             continue;
 
           path = g_build_filename (libdir, dent->d_name, NULL);
+          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+                                           NULL, NULL);
+          if (target != NULL)
+            target_base = glnx_basename (target);
+          else
+            target_base = NULL;
+
+          /* Suppose we have a shared library libcurl.so.4 -> libcurl.so.4.2.0
+           * in the container and libcurl.so.4.7.0 in the provider,
+           * with a backwards-compatibility alias libcurl.so.3.
+           * dent->d_name might be any of those strings. */
 
           /* scope for soname_link */
+          if (TRUE)   /* to avoid -Wmisleading-indentation */
             {
               g_autofree gchar *soname_link = NULL;
 
+              /* If we're looking at
+               * /usr/lib/MULTIARCH/libcurl.so.4 -> libcurl.so.4.2.0, and a
+               * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists, then
+               * we want to delete /usr/lib/MULTIARCH/libcurl.so.4 and
+               * /usr/lib/MULTIARCH/libcurl.so.4.2.0. */
               soname_link = g_build_filename (arch->libdir_in_current_namespace,
                                               dent->d_name, NULL);
 
-              /* If we found libfoo.so.1 in the container, and libfoo.so.1
-               * also exists among the overrides, delete it. */
               if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
                 {
+                  if (target_base != NULL)
+                    g_hash_table_replace (delete[i],
+                                          g_strdup (target_base),
+                                          g_strdup (soname_link));
+
                   g_hash_table_replace (delete[i],
                                         g_strdup (dent->d_name),
                                         g_steal_pointer (&soname_link));
@@ -2896,22 +2914,63 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
-          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
-                                           NULL, NULL);
+          /* scope for alias_link */
+          if (TRUE)   /* to avoid -Wmisleading-indentation */
+            {
+              g_autofree gchar *alias_link = NULL;
+              g_autofree gchar *alias_target = NULL;
+
+              /* If we're looking at
+               * /usr/lib/MULTIARCH/libcurl.so.3 -> libcurl.so.4, and a
+               * symlink .../aliases/libcurl.so.3 exists and points to
+               * e.g. .../overrides/lib/$MULTIARCH/libcurl.so.4, then
+               * /usr/lib/MULTIARCH/libcurl.so.3 was overridden and should
+               * be deleted; /usr/lib/MULTIARCH/libcurl.so.4 should also
+               * be deleted.
+               *
+               * However, if .../aliases/libcurl.so.3 points to
+               * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
+               * library was not overridden and we should not delete
+               * anything. */
+              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+                                             dent->d_name, NULL);
+              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+                                                     NULL, NULL);
+
+              if (alias_target != NULL
+                  && flatpak_has_path_prefix (alias_target,
+                                              self->overrides_in_container))
+                {
+                  if (target_base != NULL)
+                    g_hash_table_replace (delete[i],
+                                          g_strdup (target_base),
+                                          g_strdup (alias_link));
+
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (dent->d_name),
+                                        g_steal_pointer (&alias_link));
+                  continue;
+                }
+            }
 
           if (target != NULL)
             {
               g_autofree gchar *soname_link = NULL;
 
+              /* If we're looking at
+               * /usr/lib/MULTIARCH/libcurl.so -> libcurl.so.4, and a
+               * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists,
+               * then we want to delete /usr/lib/MULTIARCH/libcurl.so
+               * and /usr/lib/MULTIARCH/libcurl.so.4. */
               soname_link = g_build_filename (arch->libdir_in_current_namespace,
                                               glnx_basename (target),
                                               NULL);
 
-              /* If the symlink in the container points to
-               * /foo/bar/libfoo.so.1, and libfoo.so.1 also exists among
-               * the overrides, delete it. */
               if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
                 {
+                  g_hash_table_replace (delete[i],
+                                        g_strdup (target_base),
+                                        g_strdup (soname_link));
                   g_hash_table_replace (delete[i],
                                         g_strdup (dent->d_name),
                                         g_steal_pointer (&soname_link));
@@ -2919,48 +2978,78 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
-          libfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd, path,
-                                           SRT_RESOLVE_FLAGS_READABLE, NULL,
-                                           &local_error);
-
-          if (libfd < 0)
+          if (target != NULL)
             {
-              g_warning ("Unable to open %s/%s for reading: %s",
-                         self->mutable_sysroot, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
+              g_autofree gchar *alias_link = NULL;
+              g_autofree gchar *alias_target = NULL;
 
-          elf = pv_elf_open_fd (libfd, &local_error);
+              /* If we're looking at
+               * /usr/lib/MULTIARCH/libcurl.so.3 -> libcurl.so.4, and a
+               * symlink .../aliases/libcurl.so.3 exists and points to
+               * e.g. .../overrides/lib/$MULTIARCH/libcurl.so.4, then
+               * /usr/lib/MULTIARCH/libcurl.so.3 was overridden and should
+               * be deleted; /usr/lib/MULTIARCH/libcurl.so.4 should also
+               * be deleted.
+               *
+               * However, if .../aliases/libcurl.so.3 points to
+               * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
+               * library was not overridden and we should not delete it. */
+              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+                                             glnx_basename (target),
+                                             NULL);
+              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+                                                     NULL, NULL);
 
-          if (elf != NULL)
-            soname = pv_elf_get_soname (elf, &local_error);
-
-          if (soname == NULL)
-            {
-              g_warning ("Unable to get SONAME of %s/%s: %s",
-                         self->mutable_sysroot, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          /* If we found a library with SONAME libfoo.so.1 in the
-           * container, and libfoo.so.1 also exists among the overrides,
-           * delete it. */
-            {
-              g_autofree gchar *soname_link = NULL;
-
-              soname_link = g_build_filename (arch->libdir_in_current_namespace,
-                                              soname, NULL);
-
-              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+              if (alias_target != NULL
+                  && flatpak_has_path_prefix (alias_target,
+                                              self->overrides_in_container))
                 {
                   g_hash_table_replace (delete[i],
+                                        g_strdup (target_base),
+                                        g_strdup (alias_link));
+                  g_hash_table_replace (delete[i],
                                         g_strdup (dent->d_name),
-                                        g_steal_pointer (&soname_link));
+                                        g_steal_pointer (&alias_link));
                   continue;
                 }
             }
+        }
+
+      /* Iterate over the directory again, to clean up dangling development
+       * symlinks */
+      glnx_dirfd_iterator_rewind (&iters[i]);
+
+      while (TRUE)
+        {
+          g_autofree gchar *target = NULL;
+          gpointer reason;
+
+          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
+                                                           NULL, error))
+            {
+              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+                                 self->mutable_sysroot, libdir);
+              goto out;
+            }
+
+          if (dent == NULL)
+            break;
+
+          if (dent->d_type != DT_LNK)
+            continue;
+
+          /* If we were going to delete it anyway, ignore */
+          if (g_hash_table_lookup_extended (delete[i], dent->d_name, NULL, NULL))
+            continue;
+
+          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+                                           NULL, NULL);
+
+          /* If we're going to delete the target, also delete the symlink
+           * rather than leaving it dangling */
+          if (g_hash_table_lookup_extended (delete[i], target, NULL, &reason))
+            g_hash_table_replace (delete[i], g_strdup (dent->d_name),
+                                  g_strdup (reason));
         }
     }
 

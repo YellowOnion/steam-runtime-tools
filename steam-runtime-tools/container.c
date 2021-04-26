@@ -52,6 +52,7 @@ struct _SrtContainerInfo
 {
   /*< private >*/
   GObject parent;
+  gchar *flatpak_version;
   gchar *host_directory;
   SrtContainerType type;
 };
@@ -64,6 +65,7 @@ struct _SrtContainerInfoClass
 
 enum {
   PROP_0,
+  PROP_FLATPAK_VERSION,
   PROP_HOST_DIRECTORY,
   PROP_TYPE,
   N_PROPERTIES
@@ -86,6 +88,10 @@ srt_container_info_get_property (GObject *object,
 
   switch (prop_id)
     {
+      case PROP_FLATPAK_VERSION:
+        g_value_set_string (value, self->flatpak_version);
+        break;
+
       case PROP_HOST_DIRECTORY:
         g_value_set_string (value, self->host_directory);
         break;
@@ -109,6 +115,12 @@ srt_container_info_set_property (GObject *object,
 
   switch (prop_id)
     {
+      case PROP_FLATPAK_VERSION:
+        /* Construct-only */
+        g_return_if_fail (self->flatpak_version == NULL);
+        self->flatpak_version = g_value_dup_string (value);
+        break;
+
       case PROP_HOST_DIRECTORY:
         /* Construct-only */
         g_return_if_fail (self->host_directory == NULL);
@@ -131,6 +143,7 @@ srt_container_info_finalize (GObject *object)
 {
   SrtContainerInfo *self = SRT_CONTAINER_INFO (object);
 
+  g_free (self->flatpak_version);
   g_free (self->host_directory);
 
   G_OBJECT_CLASS (srt_container_info_parent_class)->finalize (object);
@@ -146,6 +159,13 @@ srt_container_info_class_init (SrtContainerInfoClass *cls)
   object_class->get_property = srt_container_info_get_property;
   object_class->set_property = srt_container_info_set_property;
   object_class->finalize = srt_container_info_finalize;
+
+  properties[PROP_FLATPAK_VERSION] =
+    g_param_spec_string ("flatpak-version", "Flatpak version",
+                         "Which Flatpak version, if any, is in use",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
 
   properties[PROP_HOST_DIRECTORY] =
     g_param_spec_string ("host-directory", "Host directory",
@@ -212,6 +232,7 @@ _srt_check_container (int sysroot_fd,
   g_autofree gchar *contents = NULL;
   g_autofree gchar *run_host_path = NULL;
   g_autofree gchar *host_directory = NULL;
+  g_autofree gchar *flatpak_version = NULL;
   SrtContainerType type = SRT_CONTAINER_TYPE_UNKNOWN;
   glnx_autofd int run_host_fd = -1;
 
@@ -312,7 +333,31 @@ _srt_check_container (int sysroot_fd,
   type = SRT_CONTAINER_TYPE_NONE;
 
 out:
-  return _srt_container_info_new (type, host_directory);
+  if (type == SRT_CONTAINER_TYPE_FLATPAK)
+    {
+      g_autoptr(GKeyFile) info = NULL;
+      g_autoptr(GError) local_error = NULL;
+      g_autofree gchar *flatpak_info_content = NULL;
+      gsize len;
+
+      if (_srt_file_get_contents_in_sysroot (sysroot_fd, "/.flatpak-info",
+                                             &flatpak_info_content,
+                                             &len, NULL))
+        {
+          info = g_key_file_new ();
+
+          if (!g_key_file_load_from_data (info, flatpak_info_content, len,
+                                          G_KEY_FILE_NONE, &local_error))
+            g_debug ("Unable to load Flatpak instance info: %s", local_error->message);
+
+          flatpak_version = g_key_file_get_string (info,
+                                                   FLATPAK_METADATA_GROUP_INSTANCE,
+                                                   FLATPAK_METADATA_KEY_FLATPAK_VERSION,
+                                                   NULL);
+        }
+    }
+
+  return _srt_container_info_new (type, flatpak_version, host_directory);
 }
 
 /**
@@ -362,6 +407,28 @@ srt_container_info_get_container_host_directory (SrtContainerInfo *self)
 }
 
 /**
+ * srt_container_info_get_flatpak_version:
+ * @self: A SrtContainerInfo object
+ *
+ * If the program appears to be running in a container type
+ * %SRT_CONTAINER_TYPE_FLATPAK, return the Flatpak version.
+ *
+ * Returns: (type filename) (nullable): A filename, or %NULL if the container
+ *  type is not %SRT_CONTAINER_TYPE_FLATPAK or if it was not able to identify
+ *  the Flatpak version.
+ */
+const gchar *
+srt_container_info_get_flatpak_version (SrtContainerInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_CONTAINER_INFO (self), NULL);
+
+  if (self->type != SRT_CONTAINER_TYPE_FLATPAK)
+    return NULL;
+
+  return self->flatpak_version;
+}
+
+/**
  * _srt_system_info_get_container_info_from_report:
  * @json_obj: (not nullable): A JSON Object used to search for "container"
  *  property
@@ -380,6 +447,7 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
   JsonObject *json_sub_obj;
   JsonObject *json_host_obj = NULL;
   const gchar *type_string = NULL;
+  const gchar *flatpak_version = NULL;
   const gchar *host_path = NULL;
   SrtContainerType type = SRT_CONTAINER_TYPE_UNKNOWN;
 
@@ -403,6 +471,10 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
             }
         }
 
+      flatpak_version = json_object_get_string_member_with_default (json_sub_obj,
+                                                                    "flatpak_version",
+                                                                    NULL);
+
       if (json_object_has_member (json_sub_obj, "host"))
         {
           json_host_obj = json_object_get_object_member (json_sub_obj, "host");
@@ -413,5 +485,6 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
 
 out:
   return _srt_container_info_new (type,
+                                  flatpak_version,
                                   host_path);
 }

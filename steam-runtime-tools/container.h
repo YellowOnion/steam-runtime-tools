@@ -76,3 +76,5 @@ _SRT_PUBLIC
 SrtContainerType srt_container_info_get_container_type (SrtContainerInfo *self);
 _SRT_PUBLIC
 const gchar *srt_container_info_get_container_host_directory (SrtContainerInfo *self);
+_SRT_PUBLIC
+const gchar *srt_container_info_get_flatpak_version (SrtContainerInfo *self);

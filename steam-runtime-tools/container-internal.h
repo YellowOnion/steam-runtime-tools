@@ -33,6 +33,8 @@
 /*
  * _srt_container_info_new:
  * @type: Type of container
+ * @flatpak_version: (nullable): Flatpak container version, this value is
+ *  relevant only if @type is %SRT_CONTAINER_TYPE_FLATPAK
  * @host_directory: (nullable) (type filename): Directory where host files can
  *  be found
  *
@@ -42,19 +44,26 @@
  * Returns: (transfer full): A new #SrtContainerInfo
  */
 static inline SrtContainerInfo *_srt_container_info_new (SrtContainerType type,
+                                                         const gchar *flatpak_version,
                                                          const gchar *host_directory);
 
 #ifndef __GTK_DOC_IGNORE__
 static inline SrtContainerInfo *
 _srt_container_info_new (SrtContainerType type,
+                         const gchar *flatpak_version,
                          const gchar *host_directory)
 {
   return g_object_new (SRT_TYPE_CONTAINER_INFO,
                        "type", type,
+                       "flatpak-version", flatpak_version,
                        "host-directory", host_directory,
                        NULL);
 }
 #endif
+
+/* See flatpak-metadata(5) */
+#define FLATPAK_METADATA_GROUP_INSTANCE "Instance"
+#define FLATPAK_METADATA_KEY_FLATPAK_VERSION "flatpak-version"
 
 SrtContainerInfo *_srt_check_container (int sysroot_fd,
                                         const gchar *sysroot);

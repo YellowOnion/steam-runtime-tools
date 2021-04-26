@@ -320,6 +320,11 @@ keys:
         **unknown** (if we appear to be in a container but the type is
         unknown), or **none** (if we do not appear to be in a container).
 
+    **flatpak_version**
+    :   The version string describing the Flatpak container. This key is
+        optional and is not provided if it could not be determined or if the
+        container **type** is not **flatpak**.
+
     **host**
     :   An object describing the host system. The keys are strings:
 

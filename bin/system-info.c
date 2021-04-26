@@ -648,10 +648,15 @@ static void
 jsonify_container (JsonBuilder *builder,
                    SrtSystemInfo *info)
 {
-  SrtContainerType type = srt_system_info_get_container_type (info);
-  gchar *host_directory = srt_system_info_dup_container_host_directory (info);
-  gchar **env = NULL;
-  SrtSystemInfo *host = NULL;
+  SrtContainerInfo *container_info = srt_system_info_check_container (info);
+  SrtContainerType type = SRT_CONTAINER_TYPE_UNKNOWN;
+  const gchar *flatpak_version = NULL;
+  const gchar *host_directory = NULL;
+  g_autoptr(SrtSystemInfo) host = NULL;
+
+  type = srt_container_info_get_container_type (container_info);
+  flatpak_version = srt_container_info_get_flatpak_version (container_info);
+  host_directory = srt_container_info_get_container_host_directory (container_info);
 
   json_builder_set_member_name (builder, "container");
   json_builder_begin_object (builder);
@@ -661,6 +666,12 @@ jsonify_container (JsonBuilder *builder,
 
       if (type != SRT_CONTAINER_TYPE_NONE)
         {
+          if (flatpak_version != NULL)
+            {
+              json_builder_set_member_name (builder, "flatpak_version");
+              json_builder_add_string_value (builder, flatpak_version);
+            }
+
           json_builder_set_member_name (builder, "host");
           json_builder_begin_object (builder);
             {
@@ -678,10 +689,6 @@ jsonify_container (JsonBuilder *builder,
         }
     }
   json_builder_end_object (builder);
-
-  g_free (host_directory);
-  g_clear_object (&host);
-  g_strfreev (env);
 }
 
 static void

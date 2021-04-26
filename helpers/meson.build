@@ -164,13 +164,20 @@ executable(
 
 subdir('lib')
 
+sizeof_pointer = c_compiler.sizeof('void*')
+
+if sizeof_pointer == 4
+  subdir('lib32')
+elif sizeof_pointer == 8
+  subdir('lib64')
+endif
+
 if multiarch == 'i386-linux-gnu'
   subdir('i386')
   subdir('i486')
   subdir('i586')
   subdir('i686')
 
-  subdir('lib32')
   subdir('lib/i386-linux-gnu')
 
   # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
@@ -181,7 +188,6 @@ elif multiarch == 'x86_64-linux-gnu'
   subdir('x86_64')
   subdir('xeon_phi')
 
-  subdir('lib64')
   subdir('lib/x86_64-linux-gnu')
 
   # To support Ubuntu 12.04, see above

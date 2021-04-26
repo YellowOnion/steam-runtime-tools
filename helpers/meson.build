@@ -183,14 +183,35 @@ if multiarch != ''
   subdir('multiarch')
 endif
 
+if host_machine.cpu_family() == 'x86'
+  expected_platform = 'i686'
+else
+  # This is correct for at least aarch64 and x86_64, and a reasonable guess
+  # everywhere else
+  expected_platform = host_machine.cpu_family()
+endif
+
+# We can inline one instance of identify-platform here. All the others
+# must be in a subdirectory due to Meson limitations.
+shared_module(
+  'identify-platform',
+  'identify-platform.c',
+  c_args : ['-D_SRT_PLATFORM_VALUE="' + expected_platform + '"',],
+  install : true,
+  install_dir : join_paths(
+    pkglibexecdir,
+    multiarch,
+    expected_platform,
+  )
+)
+
+# Detect special-case $PLATFORM values on x86
 if multiarch == 'i386-linux-gnu'
   subdir('i386')
   subdir('i486')
   subdir('i586')
-  subdir('i686')
 elif multiarch == 'x86_64-linux-gnu'
   subdir('haswell')
-  subdir('x86_64')
   subdir('xeon_phi')
 endif
 

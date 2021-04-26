@@ -162,86 +162,30 @@ executable(
   install_dir : pkglibexecdir,
 )
 
-# Due to some Meson's limitations it is not possible to build multiple times
-# the same library, with the same name, and place it in a different directory.
-# For this reason we generate the required meson.build files in subdirectories
-# to avoid conflicts.
-# https://github.com/mesonbuild/meson/issues/2320
-# https://github.com/mesonbuild/meson/issues/4019
-
-meson_library_template = '''
-shared_module(
-  'identify-lib',
-  '@0@',
-  c_args : ['-D_SRT_LIB_VALUE="@1@"',],
-  install : true,
-  install_dir : join_paths(
-    pkglibexecdir,
-    multiarch,
-    '@1@',
-  )
-)
-'''
-
-# This was supposed to be a dictionary but meson < 0.53.0 doesn't support
-# the usage of variables containing a string value as keys.
-components = [['lib', '../identify-lib.c']]
-
-if multiarch != ''
-  components += [
-    ['lib' / multiarch, '../../identify-lib.c'],
-    # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
-    # the multiarch
-    [multiarch, '../identify-lib.c'],
-  ]
-endif
+subdir('lib')
 
 if multiarch == 'i386-linux-gnu'
-  components += [['lib32', '../identify-lib.c']]
-  platform_dirs = ['i386', 'i486', 'i586', 'i686']
+  subdir('i386')
+  subdir('i486')
+  subdir('i586')
+  subdir('i686')
+
+  subdir('lib32')
+  subdir('lib/i386-linux-gnu')
+
+  # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
+  # the multiarch
+  subdir('i386-linux-gnu')
 elif multiarch == 'x86_64-linux-gnu'
-  components += [['lib64', '../identify-lib.c']]
-  platform_dirs = ['x86_64', 'haswell', 'xeon_phi']
+  subdir('haswell')
+  subdir('x86_64')
+  subdir('xeon_phi')
+
+  subdir('lib64')
+  subdir('lib/x86_64-linux-gnu')
+
+  # To support Ubuntu 12.04, see above
+  subdir('x86_64-linux-gnu')
 endif
-
-foreach component : components
-  subdir = '_generated_' + component[0]
-  meson_library = meson_library_template.format(component[1], component[0])
-  run_command(
-    python,
-    'create-meson-in-subdir.py',
-    meson.current_source_dir() / subdir,
-    meson_library,
-    check : true,
-  )
-  subdir(subdir)
-endforeach
-
-meson_platform_template = '''
-shared_module(
-  'identify-platform',
-  '../identify-platform.c',
-  c_args : ['-D_SRT_PLATFORM_VALUE="@0@"',],
-  install : true,
-  install_dir : join_paths(
-    pkglibexecdir,
-    multiarch,
-    '@0@',
-  )
-)
-'''
-
-foreach platform_dir : platform_dirs
-  generated_dir = '_generated_' + platform_dir
-  meson_platform = meson_platform_template.format(platform_dir)
-  run_command(
-    python,
-    'create-meson-in-subdir.py',
-    meson.current_source_dir() / generated_dir,
-    meson_platform,
-    check : true,
-  )
-  subdir(generated_dir)
-endforeach
 
 # vim:set sw=2 sts=2 et:

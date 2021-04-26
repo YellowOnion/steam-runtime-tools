@@ -4527,7 +4527,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     return FALSE;
 
   srt_system_info_set_sysroot (system_info, self->provider_in_current_namespace);
-  _srt_system_info_set_check_flags (system_info, SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS);
+  _srt_system_info_set_check_flags (system_info,
+                                    (SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
+                                     | SRT_CHECK_FLAGS_SKIP_EXTRAS));
 
   part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
   g_debug ("Enumerating EGL ICDs on provider system...");

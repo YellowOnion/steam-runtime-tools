@@ -166,6 +166,53 @@ test_object (Fixture *f,
 }
 
 static void
+test_libdl (Fixture *f,
+            gconstpointer context)
+{
+  g_autoptr(SrtSystemInfo) info = NULL;
+  g_autofree gchar *libdl = NULL;
+  g_autoptr(GError) error = NULL;
+
+  info = srt_system_info_new (NULL);
+  g_assert_nonnull (info);
+  srt_system_info_set_helpers_path (info, f->builddir);
+  libdl = srt_system_info_dup_libdl_lib (info, "mock-good", &error);
+  g_assert_cmpstr (libdl, ==, "lib");
+  g_assert_no_error (error);
+  g_free (libdl);
+  /* Test cache */
+  libdl = srt_system_info_dup_libdl_lib (info, "mock-good", &error);
+  g_assert_cmpstr (libdl, ==, "lib");
+  g_assert_no_error (error);
+  g_free (libdl);
+
+  libdl = srt_system_info_dup_libdl_platform (info, "mock-good", &error);
+  g_assert_cmpstr (libdl, ==, "x86_64");
+  g_assert_no_error (error);
+  g_free (libdl);
+  /* Test cache */
+  libdl = srt_system_info_dup_libdl_platform (info, "mock-good", &error);
+  g_assert_cmpstr (libdl, ==, "x86_64");
+  g_assert_no_error (error);
+  g_free (libdl);
+
+  libdl = srt_system_info_dup_libdl_lib (info, "mock-bad", &error);
+  g_assert_cmpstr (libdl, ==, NULL);
+  g_assert_error (error, G_IO_ERROR, G_IO_ERROR_FAILED);
+  g_assert_cmpstr (error->message, ==, "Unable to find the library: "
+                                       "${ORIGIN}/i386-linux-gnu/${PLATFORM}/libidentify-lib.so: "
+                                       "cannot open shared object file: No such file or directory\n");
+
+  g_clear_error (&error);
+  libdl = srt_system_info_dup_libdl_platform (info, "mock-bad", &error);
+  g_assert_cmpstr (libdl, ==, NULL);
+  g_assert_error (error, G_IO_ERROR, G_IO_ERROR_FAILED);
+  g_assert_cmpstr (error->message, ==, "Unable to find the library: "
+                                       "${ORIGIN}/i386-linux-gnu/${PLATFORM}/libidentify-platform.so: "
+                                       "cannot open shared object file: No such file or directory\n");
+}
+
+static void
 check_libraries_result (GList *libraries)
 {
   SrtLibrary *library = NULL;
@@ -2440,6 +2487,13 @@ assert_equal_strings_arrays (const gchar * const *array1,
 
 static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
 
+typedef enum
+{
+  LIBDL_TOKEN_SKIP = 0,
+  LIBDL_TOKEN_LIB,
+  LIBDL_TOKEN_PLATFORM,
+} LibdlToken;
+
 typedef struct
 {
   const gchar *path;
@@ -2521,7 +2575,17 @@ typedef struct
 
 typedef struct
 {
+  LibdlToken libdl_token;
+  const char *expansion_value;
+  const char *error_domain;
+  int error_code;
+  const char *error_message;
+} LibdlTest;
+
+typedef struct
+{
   gboolean can_run;
+  LibdlTest libdl[3];
   SrtLibraryIssues issues;
   RuntimeLinkerTest runtime_linker;
   DriverTest dri_drivers[5];
@@ -2670,6 +2734,20 @@ static const JsonTest json_test[] =
     {
       {
         .can_run = FALSE,
+        .libdl =
+        {
+          {
+            .libdl_token = LIBDL_TOKEN_LIB,
+            .expansion_value = "lib32",
+          },
+          {
+            .libdl_token = LIBDL_TOKEN_PLATFORM,
+            .error_domain = "g-io-error-quark",
+            .error_code = G_IO_ERROR_NOT_FOUND,
+            .error_message = "Unable to find the library: ${ORIGIN}/i386-linux-gnu/${PLATFORM}/libidentify-platform.so: "
+                             "cannot open shared object file: No such file or directory",
+          },
+        },
         .runtime_linker =
         {
           .path = "/lib/ld-linux.so.2",
@@ -2762,6 +2840,17 @@ static const JsonTest json_test[] =
 
       {
         .can_run = TRUE,
+        .libdl =
+        {
+          {
+            .libdl_token = LIBDL_TOKEN_LIB,
+            .expansion_value = "lib",
+          },
+          {
+            .libdl_token = LIBDL_TOKEN_PLATFORM,
+            .expansion_value = "x86_64",
+          },
+        },
         .runtime_linker =
         {
           .path = "/lib64/ld-linux-x86-64.so.2",
@@ -3342,6 +3431,53 @@ assert_expected_runtime_linker (SrtSystemInfo *info,
 }
 
 static void
+assert_expected_libdl (SrtSystemInfo *info,
+                       const char *multiarch_tuple,
+                       const LibdlTest *libdl)
+{
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *libdl_expanded = NULL;
+
+  switch (libdl->libdl_token)
+    {
+      case LIBDL_TOKEN_LIB:
+        libdl_expanded = srt_system_info_dup_libdl_lib (info, multiarch_tuple,
+                                                        &error);
+        break;
+
+      case LIBDL_TOKEN_PLATFORM:
+        libdl_expanded = srt_system_info_dup_libdl_platform (info, multiarch_tuple,
+                                                             &error);
+        break;
+
+      case LIBDL_TOKEN_SKIP:
+      default:
+        g_return_if_reached ();
+    }
+
+  g_assert_cmpstr (libdl->expansion_value, ==, libdl_expanded);
+
+  if (libdl->expansion_value != NULL)
+    {
+      g_assert (libdl->error_domain == NULL);
+      g_assert (libdl->error_code == 0);
+      g_assert_cmpstr (libdl->error_message, ==, NULL);
+
+      g_assert_no_error (error);
+    }
+  else
+    {
+      g_assert_cmpstr (libdl->expansion_value, ==, NULL);
+      g_assert_cmpstr (libdl->error_domain, !=, NULL);
+      g_assert_cmpstr (libdl->error_message, !=, NULL);
+
+      g_assert_error (error, g_quark_from_string (libdl->error_domain),
+                      libdl->error_code);
+      g_assert_cmpstr (error->message, ==, libdl->error_message);
+    }
+}
+
+static void
 json_parsing (Fixture *f,
               gconstpointer context)
 {
@@ -3449,6 +3585,9 @@ json_parsing (Fixture *f,
 
           g_assert_cmpint (this_arch.issues, ==,
                            srt_system_info_check_libraries (info, multiarch_tuples[j], NULL));
+
+          for (jj = 0; this_arch.libdl[jj].libdl_token != LIBDL_TOKEN_SKIP; jj++)
+            assert_expected_libdl (info, multiarch_tuples[j], &this_arch.libdl[jj]);
 
           assert_expected_runtime_linker (info,
                                           multiarch_tuples[j],
@@ -3876,6 +4015,8 @@ main (int argc,
 
   g_test_add ("/system-info/object", Fixture, NULL,
               setup, test_object, teardown);
+  g_test_add ("/system-info/test_libdl", Fixture, NULL,
+              setup, test_libdl, teardown);
   g_test_add ("/system-info/libraries_presence", Fixture, NULL,
               setup, libraries_presence, teardown);
   g_test_add ("/system-info/auto_expectations", Fixture, NULL,

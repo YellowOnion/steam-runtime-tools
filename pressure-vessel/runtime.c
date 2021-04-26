@@ -4596,6 +4596,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *libdrm = NULL;
           g_autofree gchar *libdrm_amdgpu = NULL;
           g_autofree gchar *libglx_mesa = NULL;
+          g_autofree gchar *platform_token = NULL;
           g_autoptr(GPtrArray) patterns = NULL;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
@@ -4767,6 +4768,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return glnx_throw_errno_prefix (error,
                                                 "Unable to create symlink %s -> %s",
                                                 platform_link, arch->details->tuple);
+            }
+
+          platform_token = srt_system_info_dup_libdl_platform (system_info,
+                                                               multiarch_tuples[i],
+                                                               &local_error);
+          if (platform_token == NULL)
+            {
+              /* This is not a critical error, try to continue */
+              g_warning ("The dynamic linker expansion of \"$PLATFORM\" is not what we "
+                         "expected, VDPAU drivers might not work: %s", local_error->message);
+              g_clear_error (&local_error);
             }
 
           if (!pv_runtime_create_aliases (self, arch, &local_error))

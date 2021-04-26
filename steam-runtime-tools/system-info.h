@@ -288,6 +288,15 @@ gboolean srt_system_info_check_runtime_linker (SrtSystemInfo *self,
                                                gchar **real_path,
                                                GError **error);
 
+_SRT_PUBLIC
+gchar *srt_system_info_dup_libdl_lib (SrtSystemInfo *self,
+                                      const char *multiarch_tuple,
+                                      GError **error);
+_SRT_PUBLIC
+gchar *srt_system_info_dup_libdl_platform (SrtSystemInfo *self,
+                                           const char *multiarch_tuple,
+                                           GError **error);
+
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtSystemInfo, g_object_unref)
 #endif

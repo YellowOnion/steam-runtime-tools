@@ -37,6 +37,7 @@
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
 #include "steam-runtime-tools/json-utils-internal.h"
+#include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/locale-internal.h"
 #include "steam-runtime-tools/os-internal.h"
@@ -261,6 +262,11 @@ typedef struct
   SrtLibraryIssues cached_combined_issues;
   gboolean libraries_cache_available;
 
+  gchar *libdl_lib;
+  GError *libdl_lib_error;
+  gchar *libdl_platform;
+  GError *libdl_platform_error;
+
   GHashTable *cached_graphics_results;
   SrtGraphicsIssues cached_combined_graphics_issues;
   gboolean graphics_cache_available;
@@ -339,6 +345,10 @@ abi_free (gpointer self)
 
   g_free (abi->runtime_linker_resolved);
   g_clear_error (&abi->runtime_linker_error);
+  g_free (abi->libdl_lib);
+  g_clear_error (&abi->libdl_lib_error);
+  g_free (abi->libdl_platform);
+  g_clear_error (&abi->libdl_platform_error);
   g_slice_free (Abi, self);
 }
 
@@ -698,6 +708,72 @@ get_runtime_linker_from_report (SrtSystemInfo *self,
     }
 }
 
+static void
+get_libdl_from_report (SrtSystemInfo *self,
+                       Abi *abi,
+                       JsonObject *json_arch_obj)
+{
+  gsize i;
+
+  /* Struct to avoid code duplication between all the similar libdl entries */
+  typedef struct
+  {
+    const gchar *member_name;
+    gchar **abi_member;
+    GError **abi_member_error;
+  } LibdlStruct;
+
+  LibdlStruct libdl_elements[] =
+  {
+    { "libdl-LIB", &abi->libdl_lib, &abi->libdl_lib_error },
+    { "libdl-PLATFORM", &abi->libdl_platform, &abi->libdl_platform_error },
+  };
+
+  g_return_if_fail (abi->libdl_lib == NULL);
+  g_return_if_fail (abi->libdl_lib_error == NULL);
+  g_return_if_fail (abi->libdl_platform == NULL);
+  g_return_if_fail (abi->libdl_platform_error == NULL);
+
+  for (i = 0; i < G_N_ELEMENTS (libdl_elements); i++)
+    {
+      JsonNode *subnode;
+      const LibdlStruct *libdl_element = &libdl_elements[i];
+
+      if (!json_object_has_member (json_arch_obj, libdl_element->member_name))
+        continue;
+
+      subnode = json_object_get_member (json_arch_obj, libdl_element->member_name);
+
+      if (JSON_NODE_HOLDS_VALUE (subnode))
+        {
+          *libdl_element->abi_member = g_strdup (json_node_get_string (subnode));
+        }
+      else
+        {
+          JsonObject *json_element_obj;
+          GQuark error_domain;
+          int error_code;
+          const char *error_message;
+
+          json_element_obj = json_object_get_object_member (json_arch_obj,
+                                                            libdl_element->member_name);
+
+          error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_element_obj,
+                                                                                          "error-domain",
+                                                                                          NULL));
+          error_code = json_object_get_int_member_with_default (json_element_obj,
+                                                                "error-code",
+                                                                -1);
+          error_message = json_object_get_string_member_with_default (json_element_obj,
+                                                                      "error",
+                                                                      "Unknown error");
+
+          g_set_error_literal (libdl_element->abi_member_error, error_domain, error_code,
+                               error_message);
+        }
+    }
+}
+
 /**
  * srt_system_info_new_from_json:
  * @path: (not nullable) (type filename): Path to a JSON report
@@ -805,6 +881,8 @@ srt_system_info_new_from_json (const char *path,
           abi = ensure_abi_unless_immutable (info, l->data);
 
           abi->can_run = _srt_architecture_can_run_from_report (json_arch_obj);
+
+          get_libdl_from_report (info, abi, json_arch_obj);
 
           abi->libraries_cache_available = TRUE;
           abi->cached_combined_issues = _srt_library_get_issues_from_report (json_arch_obj);
@@ -4410,4 +4488,148 @@ srt_system_info_check_runtime_linker (SrtSystemInfo *self,
                    multiarch_tuple);
       g_return_val_if_reached (FALSE);
     }
+}
+
+/**
+ * srt_system_info_dup_libdl_lib:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: A multiarch tuple defining an ABI, as printed
+ *  by `gcc -print-multiarch` in the Steam Runtime
+ * @error: Used to raise an error on failure.
+ *
+ * Return the expansion of the dynamic linker string token `$LIB`,
+ * if possible.
+ *
+ * If the library path to be loaded with `dlopen()` or similar contains
+ * the literal tokens `$LIB` or `${LIB}`, the dynamic linker will replace
+ * them with the library directory returned by this function. See `ld.so(8)`
+ * section "Dynamic string tokens" for more details.
+ *
+ * Because there is currently no glibc API to determine how this token would
+ * be expanded, only a finite number of known values can currently be detected.
+ * If called on a platform where `$LIB` has a different expansion, this
+ * function will return %NULL.
+ *
+ * %NULL is also returned if an error occurs while attempting to determine the
+ * expansion of this token.
+ *
+ * Typical values look like `lib`, `lib32`, `lib64`, `lib/x86-64-linux-gnu`
+ * or `lib/i386-linux-gnu`.
+ *
+ * Returns: (transfer full) (type filename) (nullable): A filename, or %NULL.
+ */
+gchar *
+srt_system_info_dup_libdl_lib (SrtSystemInfo *self,
+                               const char *multiarch_tuple,
+                               GError **error)
+{
+  Abi *abi = NULL;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    return glnx_null_throw (error, "ABI \"%s\" not included in report",
+                            multiarch_tuple);
+
+  /* If we cached already the result, we return it */
+  if (abi->libdl_lib != NULL)
+    {
+      return g_strdup (abi->libdl_lib);
+    }
+  else if (abi->libdl_lib_error != NULL)
+    {
+      if (error != NULL)
+        *error = g_error_copy (abi->libdl_lib_error);
+      return NULL;
+    }
+
+  if (self->immutable_values)
+    return glnx_null_throw (error, "libdl LIB for ABI \"%s\" not included in report",
+                            multiarch_tuple);
+
+  abi->libdl_lib = _srt_libdl_detect_lib (self->env,
+                                          self->helpers_path,
+                                          multiarch_tuple,
+                                          &abi->libdl_lib_error);
+
+  if (abi->libdl_lib_error != NULL && error != NULL)
+    *error = g_error_copy (abi->libdl_lib_error);
+
+  return g_strdup (abi->libdl_lib);
+}
+
+/**
+ * srt_system_info_dup_libdl_platform:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: A multiarch tuple defining an ABI, as printed
+ *  by `gcc -print-multiarch` in the Steam Runtime
+ * @error: Used to raise an error on failure.
+ *
+ * Return the expansion of the dynamic linker string token `$PLATFORM`,
+ * if possible.
+ *
+ * If the library path to be loaded with `dlopen()` or similar contains
+ * the literal tokens `$PLATFORM` or `${PLATFORM}`, the dynamic linker will
+ * replace them with the library directory returned by this function. See
+ * `ld.so(8)` section "Dynamic string tokens" for more details.
+ *
+ * Because there is currently no glibc API to determine how this token would
+ * be expanded, only a finite number of known values can currently be detected.
+ * If called on a platform where `$PLATFORM` has a different expansion, this
+ * function will return %NULL.
+ *
+ * %NULL is also returned if an error occurs while attempting to determine the
+ * expansion of this token.
+ *
+ * Typical values look like `x86_64`, `haswell`, `xeon_phi`, `i386`, `i486`,
+ * `i586`, or `i686`.
+ *
+ * Returns: (transfer full) (type filename) (nullable): A filename, or %NULL.
+ */
+gchar *
+srt_system_info_dup_libdl_platform (SrtSystemInfo *self,
+                                    const char *multiarch_tuple,
+                                    GError **error)
+{
+  Abi *abi = NULL;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  abi = ensure_abi_unless_immutable (self, multiarch_tuple);
+
+  if (abi == NULL)
+    return glnx_null_throw (error, "ABI \"%s\" not included in report",
+                            multiarch_tuple);
+
+  /* If we cached already the result, we return it */
+  if (abi->libdl_platform != NULL)
+    {
+      return g_strdup (abi->libdl_platform);
+    }
+  else if (abi->libdl_platform_error != NULL)
+    {
+      if (error != NULL)
+        *error = g_error_copy (abi->libdl_platform_error);
+      return NULL;
+    }
+
+  if (self->immutable_values)
+    return glnx_null_throw (error, "libdl PLATFORM for ABI \"%s\" not included in report",
+                            multiarch_tuple);
+
+  abi->libdl_platform = _srt_libdl_detect_platform (self->env,
+                                                    self->helpers_path,
+                                                    multiarch_tuple,
+                                                    &abi->libdl_platform_error);
+
+  if (abi->libdl_platform_error != NULL && error != NULL)
+    *error = g_error_copy (abi->libdl_platform_error);
+
+  return g_strdup (abi->libdl_platform);
 }

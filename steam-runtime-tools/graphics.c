@@ -4357,6 +4357,7 @@ out:
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
  *  such as %SRT_ABI_X86_64
+ * @check_flags: Flags affecting how we do the search
  * @module: Which graphic module to search
  * @drivers_out: (inout): Prepend the found drivers to this list.
  *  If @module is #SRT_GRAPHICS_DRI_MODULE or #SRT_GRAPHICS_VAAPI_MODULE or
@@ -4373,6 +4374,7 @@ _srt_get_modules_full (const char *sysroot,
                        gchar **envp,
                        const char *helpers_path,
                        const char *multiarch_tuple,
+                       SrtCheckFlags check_flags,
                        SrtGraphicsModule module,
                        GList **drivers_out)
 {
@@ -4389,7 +4391,6 @@ _srt_get_modules_full (const char *sysroot,
   gchar *tmp_dir = NULL;
   GHashTable *drivers_set;
   gboolean is_extra = FALSE;
-  int driver_class;
   GPtrArray *vdpau_argv = NULL;
   GError *error = NULL;
 
@@ -4463,7 +4464,10 @@ _srt_get_modules_full (const char *sysroot,
 
       /* We continue to search for libraries but we mark them all as "extra" because the
        * loader wouldn't have picked them up. */
-      is_extra = TRUE;
+      if (check_flags & SRT_CHECK_FLAGS_SKIP_EXTRAS)
+        goto out;
+      else
+        is_extra = TRUE;
     }
 
   /* If we are in a Flatpak environment we search in the same paths that Flatpak uses,
@@ -4529,7 +4533,12 @@ _srt_get_modules_full (const char *sysroot,
        * The only exception is for VDPAU, becuase in a Flatpak environment the search path
        * is the same as in a non container environment. */
       if (module != SRT_GRAPHICS_VDPAU_MODULE)
-        is_extra = TRUE;
+        {
+          if (check_flags & SRT_CHECK_FLAGS_SKIP_EXTRAS)
+            goto out;
+          else
+            is_extra = TRUE;
+        }
     }
 
   for (gsize i = 0; loader_libraries[i] != NULL; i++)
@@ -4611,43 +4620,46 @@ _srt_get_modules_full (const char *sysroot,
             }
         }
 
-      if (force_elf_class)
+      if (!(check_flags & SRT_CHECK_FLAGS_SKIP_EXTRAS))
         {
-          if (g_strcmp0 (force_elf_class, "64") == 0)
-            driver_class = ELFCLASS64;
-          else
-            driver_class = ELFCLASS32;
-        }
-      else
-        {
-          driver_class = _srt_get_library_class (driver_canonical_path);
-        }
+          const GList *this_extra_path;
+          int driver_class;
 
-      const GList *this_extra_path;
-      if (driver_class != ELFCLASSNONE)
-        {
-          extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
-          for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
+          if (force_elf_class)
             {
-              if (!g_hash_table_contains (drivers_set, this_extra_path->data))
+              if (g_strcmp0 (force_elf_class, "64") == 0)
+                driver_class = ELFCLASS64;
+              else
+                driver_class = ELFCLASS32;
+            }
+          else
+            {
+              driver_class = _srt_get_library_class (driver_canonical_path);
+            }
+
+          if (driver_class != ELFCLASSNONE)
+            {
+              extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
+              for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
                 {
-                  g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
-                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
-                                              this_extra_path->data, TRUE, module,
-                                              drivers_out);
+                  if (!g_hash_table_contains (drivers_set, this_extra_path->data))
+                    {
+                      g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
+                      _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                                  this_extra_path->data, TRUE, module,
+                                                  drivers_out);
+                    }
                 }
             }
+
+          free (driver_canonical_path);
+          g_free (libdir);
+          g_free (libdir_driver);
+          g_object_unref (library_details);
+          if (extras)
+            g_list_free_full (extras, g_free);
         }
-
-      free (driver_canonical_path);
-      g_free (libdir);
-      g_free (libdir_driver);
-      g_object_unref (library_details);
-      if (extras)
-        g_list_free_full (extras, g_free);
     }
-
-
 
   if (module == SRT_GRAPHICS_VDPAU_MODULE)
     {
@@ -4702,19 +4714,22 @@ _srt_get_modules_full (const char *sysroot,
       _srt_list_modules_from_directory (envp, vdpau_argv, tmp_dir, drivers_set,
                                         SRT_GRAPHICS_VDPAU_MODULE, is_extra, drivers_out);
 
-      /* Debian used to hardcode "/usr/lib/vdpau" as an additional search path for VDPAU.
-       * However since libvdpau 1.3-1 it has been removed; reference:
-       * <https://salsa.debian.org/nvidia-team/libvdpau/commit/11a3cd84>
-       * Just to be sure to not miss a potentially valid library path we search on it
-       * unconditionally, flagging it as extra. */
-      gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
-      if (!g_hash_table_contains (drivers_set, debian_additional))
+      if (!(check_flags & SRT_CHECK_FLAGS_SKIP_EXTRAS))
         {
-          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
-                                      debian_additional, TRUE, module,
-                                      drivers_out);
+          /* Debian used to hardcode "/usr/lib/vdpau" as an additional search path for VDPAU.
+           * However since libvdpau 1.3-1 it has been removed; reference:
+           * <https://salsa.debian.org/nvidia-team/libvdpau/commit/11a3cd84>
+           * Just to be sure to not miss a potentially valid library path we search on it
+           * unconditionally, flagging it as extra. */
+          gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
+          if (!g_hash_table_contains (drivers_set, debian_additional))
+            {
+              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                          debian_additional, TRUE, module,
+                                          drivers_out);
+            }
+          g_free (debian_additional);
         }
-      g_free (debian_additional);
     }
 
 out:
@@ -4834,6 +4849,7 @@ out:
  * @helpers_path: (nullable): An optional path to find "inspect-library" helper, PATH is used if %NULL
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
  *  such as %SRT_ABI_X86_64
+ * @check_flags: Flags affecting how we do the search
  * @which: Graphics modules to look for
  *
  * Implementation of srt_system_info_list_dri_drivers() etc.
@@ -4854,6 +4870,7 @@ _srt_list_graphics_modules (const char *sysroot,
                             gchar **envp,
                             const char *helpers_path,
                             const char *multiarch_tuple,
+                            SrtCheckFlags check_flags,
                             SrtGraphicsModule which)
 {
   GList *drivers = NULL;
@@ -4864,8 +4881,8 @@ _srt_list_graphics_modules (const char *sysroot,
   if (which == SRT_GRAPHICS_GLX_MODULE)
     _srt_list_glx_icds (sysroot, envp, helpers_path, multiarch_tuple, &drivers);
   else
-    _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple, which,
-                           &drivers);
+    _srt_get_modules_full (sysroot, envp, helpers_path, multiarch_tuple,
+                           check_flags, which, &drivers);
 
   return g_list_reverse (drivers);
 }

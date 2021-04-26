@@ -296,6 +296,7 @@ GList *_srt_list_graphics_modules (const gchar *sysroot,
                                    gchar **envp,
                                    const char *helpers_path,
                                    const char *multiarch_tuple,
+                                   SrtCheckFlags check_flags,
                                    SrtGraphicsModule which);
 
 G_GNUC_INTERNAL

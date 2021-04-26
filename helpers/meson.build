@@ -162,86 +162,57 @@ executable(
   install_dir : pkglibexecdir,
 )
 
-# Due to some Meson's limitations it is not possible to build multiple times
-# the same library, with the same name, and place it in a different directory.
-# For this reason we generate the required meson.build files in subdirectories
-# to avoid conflicts.
-# https://github.com/mesonbuild/meson/issues/2320
-# https://github.com/mesonbuild/meson/issues/4019
+# Detect $LIB expanding to just lib (common case)
+subdir('lib')
 
-meson_library_template = '''
-shared_module(
-  'identify-lib',
-  '@0@',
-  c_args : ['-D_SRT_LIB_VALUE="@1@"',],
-  install : true,
-  install_dir : join_paths(
-    pkglibexecdir,
-    multiarch,
-    '@1@',
-  )
-)
-'''
+sizeof_pointer = c_compiler.sizeof('void*')
 
-# This was supposed to be a dictionary but meson < 0.53.0 doesn't support
-# the usage of variables containing a string value as keys.
-components = [['lib', '../identify-lib.c']]
+# Detect $LIB expanding to lib32 or lib64 (semi-common case)
+if sizeof_pointer == 4
+  subdir('lib32')
+elif sizeof_pointer == 8
+  subdir('lib64')
+endif
 
 if multiarch != ''
-  components += [
-    ['lib' / multiarch, '../../identify-lib.c'],
-    # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
-    # the multiarch
-    [multiarch, '../identify-lib.c'],
-  ]
+  # Detect $LIB expanding to lib/MULTIARCH (Debian, Ubuntu, fd.o SDK)
+  subdir('lib/multiarch')
+
+  # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
+  # the multiarch
+  subdir('multiarch')
 endif
 
-if multiarch == 'i386-linux-gnu'
-  components += [['lib32', '../identify-lib.c']]
-  platform_dirs = ['i386', 'i486', 'i586', 'i686']
-elif multiarch == 'x86_64-linux-gnu'
-  components += [['lib64', '../identify-lib.c']]
-  platform_dirs = ['x86_64', 'haswell', 'xeon_phi']
+if host_machine.cpu_family() == 'x86'
+  expected_platform = 'i686'
+else
+  # This is correct for at least aarch64 and x86_64, and a reasonable guess
+  # everywhere else
+  expected_platform = host_machine.cpu_family()
 endif
 
-foreach component : components
-  subdir = '_generated_' + component[0]
-  meson_library = meson_library_template.format(component[1], component[0])
-  run_command(
-    python,
-    'create-meson-in-subdir.py',
-    meson.current_source_dir() / subdir,
-    meson_library,
-    check : true,
-  )
-  subdir(subdir)
-endforeach
-
-meson_platform_template = '''
+# We can inline one instance of identify-platform here. All the others
+# must be in a subdirectory due to Meson limitations.
 shared_module(
   'identify-platform',
-  '../identify-platform.c',
-  c_args : ['-D_SRT_PLATFORM_VALUE="@0@"',],
+  'identify-platform.c',
+  c_args : ['-D_SRT_PLATFORM_VALUE="' + expected_platform + '"',],
   install : true,
   install_dir : join_paths(
     pkglibexecdir,
     multiarch,
-    '@0@',
+    expected_platform,
   )
 )
-'''
 
-foreach platform_dir : platform_dirs
-  generated_dir = '_generated_' + platform_dir
-  meson_platform = meson_platform_template.format(platform_dir)
-  run_command(
-    python,
-    'create-meson-in-subdir.py',
-    meson.current_source_dir() / generated_dir,
-    meson_platform,
-    check : true,
-  )
-  subdir(generated_dir)
-endforeach
+# Detect special-case $PLATFORM values on x86
+if multiarch == 'i386-linux-gnu'
+  subdir('i386')
+  subdir('i486')
+  subdir('i586')
+elif multiarch == 'x86_64-linux-gnu'
+  subdir('haswell')
+  subdir('xeon_phi')
+endif
 
 # vim:set sw=2 sts=2 et:

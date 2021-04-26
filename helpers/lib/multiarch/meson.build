@@ -4,11 +4,12 @@
 shared_module(
   'identify-lib',
   '../../identify-lib.c',
-  c_args : ['-D_SRT_LIB_VALUE="lib/i386-linux-gnu"',],
+  c_args : ['-D_SRT_LIB_VALUE="lib/' + multiarch + '"',],
   install : true,
   install_dir : join_paths(
     pkglibexecdir,
     multiarch,
-    'lib/i386-linux-gnu',
+    'lib',
+    multiarch,
   )
 )

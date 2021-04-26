@@ -162,14 +162,25 @@ executable(
   install_dir : pkglibexecdir,
 )
 
+# Detect $LIB expanding to just lib (common case)
 subdir('lib')
 
 sizeof_pointer = c_compiler.sizeof('void*')
 
+# Detect $LIB expanding to lib32 or lib64 (semi-common case)
 if sizeof_pointer == 4
   subdir('lib32')
 elif sizeof_pointer == 8
   subdir('lib64')
+endif
+
+if multiarch != ''
+  # Detect $LIB expanding to lib/MULTIARCH (Debian, Ubuntu, fd.o SDK)
+  subdir('lib/multiarch')
+
+  # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
+  # the multiarch
+  subdir('multiarch')
 endif
 
 if multiarch == 'i386-linux-gnu'
@@ -177,21 +188,10 @@ if multiarch == 'i386-linux-gnu'
   subdir('i486')
   subdir('i586')
   subdir('i686')
-
-  subdir('lib/i386-linux-gnu')
-
-  # This is to support Ubuntu 12.04 where $LIB wrongly expanded to just
-  # the multiarch
-  subdir('i386-linux-gnu')
 elif multiarch == 'x86_64-linux-gnu'
   subdir('haswell')
   subdir('x86_64')
   subdir('xeon_phi')
-
-  subdir('lib/x86_64-linux-gnu')
-
-  # To support Ubuntu 12.04, see above
-  subdir('x86_64-linux-gnu')
 endif
 
 # vim:set sw=2 sts=2 et:

@@ -27,6 +27,7 @@
 #pragma once
 
 #include "steam-runtime-tools/steam-runtime-tools.h"
+#include "steam-runtime-tools/container-internal.h"
 
 #include <json-glib/json-glib.h>
 

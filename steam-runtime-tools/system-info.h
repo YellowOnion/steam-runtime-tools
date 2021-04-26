@@ -32,6 +32,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/container.h>
 #include <steam-runtime-tools/cpu-feature.h>
 #include <steam-runtime-tools/graphics.h>
 #include <steam-runtime-tools/library.h>
@@ -74,28 +75,6 @@ typedef enum
   SRT_DRIVER_FLAGS_NONE = 0
 } SrtDriverFlags;
 
-/**
- * SrtContainerType:
- * @SRT_CONTAINER_TYPE_UNKNOWN: Unknown container type
- * @SRT_CONTAINER_TYPE_NONE: No container detected
- * @SRT_CONTAINER_TYPE_FLATPAK: Running in a Flatpak app
- * @SRT_CONTAINER_TYPE_PRESSURE_VESSEL: Running in a Steam Runtime container
- *  using pressure-vessel
- * @SRT_CONTAINER_TYPE_DOCKER: Running in a Docker container
- * @SRT_CONTAINER_TYPE_PODMAN: Running in a Podman container
- *
- * A type of container.
- */
-typedef enum
-{
-  SRT_CONTAINER_TYPE_NONE = 0,
-  SRT_CONTAINER_TYPE_FLATPAK,
-  SRT_CONTAINER_TYPE_PRESSURE_VESSEL,
-  SRT_CONTAINER_TYPE_DOCKER,
-  SRT_CONTAINER_TYPE_PODMAN,
-  SRT_CONTAINER_TYPE_UNKNOWN = -1
-} SrtContainerType;
-
 typedef struct _SrtSystemInfo SrtSystemInfo;
 typedef struct _SrtSystemInfoClass SrtSystemInfoClass;
 
@@ -119,6 +98,8 @@ SrtSystemInfo *srt_system_info_new_from_json (const char *path,
 _SRT_PUBLIC
 gboolean srt_system_info_can_run (SrtSystemInfo *self,
                                   const char *multiarch_tuple);
+_SRT_PUBLIC
+SrtContainerInfo *srt_system_info_check_container (SrtSystemInfo *self);
 _SRT_PUBLIC
 SrtContainerType srt_system_info_get_container_type (SrtSystemInfo *self);
 _SRT_PUBLIC

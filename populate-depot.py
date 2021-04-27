@@ -1061,6 +1061,8 @@ class Main:
         ) as unarchiver, gzip.open(
             os.path.join(dest, 'usr-mtree.txt.gz'), 'wt'
         ) as writer:
+            lc_names = {}                   # type: Dict[str, str]
+            differ_only_by_case = set()     # type: Set[str]
             sha256 = {}                     # type: Dict[str, str]
             sizes = {}                      # type: Dict[str, int]
 
@@ -1077,6 +1079,12 @@ class Main:
                     continue
 
                 name = name[len('files/'):]
+
+                if name.lower() in lc_names:
+                    differ_only_by_case.add(lc_names[name.lower()])
+                    differ_only_by_case.add(name)
+                else:
+                    lc_names[name.lower()] = name
 
                 fields = ['./' + self.octal_escape(name)]
 
@@ -1131,6 +1139,13 @@ class Main:
                     continue
 
                 writer.write(' '.join(fields) + '\n')
+
+            if differ_only_by_case:
+                writer.write('\n')
+                writer.write('# Files whose names differ only by case:\n')
+
+                for name in sorted(differ_only_by_case):
+                    writer.write('# {}\n'.format(self.octal_escape(name)))
 
 
 def main() -> None:

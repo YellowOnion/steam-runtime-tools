@@ -5153,15 +5153,27 @@ pv_runtime_bind (PvRuntime *self,
         }
     }
 
-  /* Some games detect that they have been run outside the Steam Runtime
-   * and try to re-run themselves via Steam. Trick them into thinking
-   * they are in the LD_LIBRARY_PATH Steam Runtime.
-   *
-   * We do not do this for games developed against soldier, because
-   * backwards compatibility is not a concern for game developers who
-   * have specifically opted-in to using the newer runtime. */
   if (self->is_scout)
-    pv_environ_lock_env (container_env, "STEAM_RUNTIME", "/");
+    {
+      const gchar *sdl_videodriver;
+
+      /* Some games detect that they have been run outside the Steam Runtime
+       * and try to re-run themselves via Steam. Trick them into thinking
+       * they are in the LD_LIBRARY_PATH Steam Runtime.
+       *
+       * We do not do this for games developed against soldier, because
+       * backwards compatibility is not a concern for game developers who
+       * have specifically opted-in to using the newer runtime. */
+      pv_environ_lock_env (container_env, "STEAM_RUNTIME", "/");
+
+      /* Scout is configured without Wayland support. For this reason, if
+       * the Wayland driver was forced via SDL_VIDEODRIVER, we expect that
+       * every game will fail to launch. When we detect this situation we
+       * unset SDL_VIDEODRIVER, so that the default x11 gets chosen instead */
+      sdl_videodriver = g_environ_getenv (self->original_environ, "SDL_VIDEODRIVER");
+      if (g_strcmp0 (sdl_videodriver, "wayland") == 0)
+        pv_environ_lock_env (container_env, "SDL_VIDEODRIVER", NULL);
+    }
 
   pv_runtime_set_search_paths (self, container_env);
 

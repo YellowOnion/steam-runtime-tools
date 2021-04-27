@@ -45,6 +45,13 @@
 #include "tree-copy.h"
 #include "utils.h"
 
+typedef struct
+{
+  GCancellable *cancellable;
+  GThread *thread;
+  SrtSystemInfo *system_info;
+} EnumerationThread;
+
 /*
  * PvRuntime:
  *
@@ -80,6 +87,8 @@ struct _PvRuntime
   const gchar *adverb_in_container;
   PvGraphicsProvider *provider;
   const gchar *host_in_current_namespace;
+  EnumerationThread indep_thread;
+  EnumerationThread *arch_threads;
 
   PvRuntimeFlags flags;
   int variable_dir_fd;
@@ -1221,6 +1230,238 @@ pv_runtime_unpack (PvRuntime *self,
   return TRUE;
 }
 
+typedef struct
+{
+  const MultiarchDetails *details;
+  PvRuntimeFlags flags;
+  PvGraphicsProvider *provider;
+  GCancellable *cancellable;
+} EnumerationThreadInputs;
+
+/* Called in main thread */
+static EnumerationThreadInputs *
+enumeration_thread_inputs_new (const MultiarchDetails *details,
+                               PvRuntimeFlags flags,
+                               PvGraphicsProvider *provider,
+                               GCancellable *cancellable)
+{
+  EnumerationThreadInputs *self = g_new0 (EnumerationThreadInputs, 1);
+
+  self->details = details;
+  self->flags = self->flags;
+  self->provider = g_object_ref (provider);
+  self->cancellable = g_object_ref (cancellable);
+  return self;
+}
+
+/* Called in enumeration thread */
+static void
+enumeration_thread_inputs_free (EnumerationThreadInputs *self)
+{
+  g_object_unref (self->cancellable);
+  g_object_unref (self->provider);
+  g_free (self);
+}
+
+/* Called in enumeration thread */
+static gpointer
+enumerate_arch (gpointer data)
+{
+  EnumerationThreadInputs *inputs = data;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Enumerating %s drivers in thread",
+                          inputs->details->tuple);
+  g_autoptr(SrtSystemInfo) system_info =
+    pv_graphics_provider_create_system_info (inputs->provider);
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating %s VDPAU drivers in thread",
+                              inputs->details->tuple);
+
+      /* We ignore the results. system_info will cache them for later
+       * calls, so when we're doing the actual work, redoing this call
+       * will just retrieve them */
+      srt_system_info_list_vdpau_drivers (system_info,
+                                          inputs->details->tuple,
+                                          SRT_DRIVER_FLAGS_NONE);
+    }
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating %s DRI drivers in thread",
+                              inputs->details->tuple);
+
+      srt_system_info_list_dri_drivers (system_info,
+                                        inputs->details->tuple,
+                                        SRT_DRIVER_FLAGS_NONE);
+    }
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating %s VA-API drivers in thread",
+                              inputs->details->tuple);
+
+      srt_system_info_list_va_api_drivers (system_info,
+                                           inputs->details->tuple,
+                                           SRT_DRIVER_FLAGS_NONE);
+    }
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  g_free (srt_system_info_dup_libdl_platform (system_info,
+                                              inputs->details->tuple, NULL));
+
+out:
+  enumeration_thread_inputs_free (inputs);
+  return g_steal_pointer (&system_info);
+}
+
+/* Called in enumeration thread */
+static gpointer
+enumerate_indep (gpointer data)
+{
+  EnumerationThreadInputs *inputs = data;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Enumerating cross-architecture ICDs in thread");
+  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
+
+  srt_system_info_set_sysroot (system_info,
+                               inputs->provider->path_in_current_ns);
+  _srt_system_info_set_check_flags (system_info,
+                                    (SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
+                                     | SRT_CHECK_FLAGS_SKIP_EXTRAS));
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating EGL ICDs in thread");
+
+      srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
+
+      srt_system_info_list_vulkan_icds (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (inputs->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating Vulkan layers in thread");
+
+      srt_system_info_list_explicit_vulkan_layers (system_info);
+      srt_system_info_list_implicit_vulkan_layers (system_info);
+    }
+
+out:
+  enumeration_thread_inputs_free (inputs);
+  return g_steal_pointer (&system_info);
+}
+
+/*
+ * Must be called from same thread as enumeration_thread_start_arch()
+ * or enumeration_thread_start_indep().
+ *
+ * Returns: (transfer none):
+ */
+static SrtSystemInfo *
+enumeration_thread_join (EnumerationThread *self)
+{
+  if (self->thread != NULL)
+    {
+      g_assert (self->system_info == NULL);
+      g_cancellable_cancel (self->cancellable);
+      self->system_info = g_thread_join (g_steal_pointer (&self->thread));
+    }
+
+  return self->system_info;
+}
+
+static void
+enumeration_thread_clear (EnumerationThread *self)
+{
+  enumeration_thread_join (self);
+  g_clear_object (&self->system_info);
+  g_clear_object (&self->cancellable);
+}
+
+static void
+enumeration_threads_clear (EnumerationThread **arr,
+                           gsize n)
+{
+  EnumerationThread *threads = *arr;
+  gsize i;
+
+  *arr = NULL;
+
+  if (threads == NULL)
+    return;
+
+  for (i = 0; i < n; i++)
+    enumeration_thread_clear (threads + i);
+}
+
+/* Must be called in main thread */
+static void
+enumeration_thread_start_arch (EnumerationThread *self,
+                               const MultiarchDetails *details,
+                               PvRuntimeFlags flags,
+                               PvGraphicsProvider *provider)
+{
+  g_return_if_fail (self->cancellable == NULL);
+  g_return_if_fail (self->system_info == NULL);
+  g_return_if_fail (self->thread == NULL);
+
+  self->cancellable = g_cancellable_new ();
+  self->thread = g_thread_new (details->tuple, enumerate_arch,
+                               enumeration_thread_inputs_new (details, flags,
+                                                              provider,
+                                                              self->cancellable));
+}
+
+/* Must be called in main thread */
+static void
+enumeration_thread_start_indep (EnumerationThread *self,
+                                PvRuntimeFlags flags,
+                                PvGraphicsProvider *provider)
+{
+  g_return_if_fail (self->cancellable == NULL);
+  g_return_if_fail (self->system_info == NULL);
+  g_return_if_fail (self->thread == NULL);
+
+  self->cancellable = g_cancellable_new ();
+  self->thread = g_thread_new ("cross-architecture", enumerate_indep,
+                               enumeration_thread_inputs_new (NULL, flags,
+                                                              provider,
+                                                              self->cancellable));
+}
+
 static gboolean
 pv_runtime_initable_init (GInitable *initable,
                           GCancellable *cancellable G_GNUC_UNUSED,
@@ -1234,6 +1475,29 @@ pv_runtime_initable_init (GInitable *initable,
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* Enumerating the graphics provider's drivers only requires things
+   * we already know, so start this first, and let it run in parallel
+   * with other setup. The results go in the SrtSystemInfo's cache
+   * for future use. */
+  if (self->provider != NULL
+      && !(self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD))
+    {
+      gsize i;
+
+      enumeration_thread_start_indep (&self->indep_thread,
+                                      self->flags,
+                                      self->provider);
+
+      self->arch_threads = g_new0 (EnumerationThread,
+                                   G_N_ELEMENTS (multiarch_details));
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_details); i++)
+        enumeration_thread_start_arch (&self->arch_threads[i],
+                                       &multiarch_details[i],
+                                       self->flags,
+                                       self->provider);
+    }
 
   /* If we are in Flatpak container we don't expect to have a working bwrap */
   if (self->bubblewrap != NULL
@@ -1494,6 +1758,9 @@ pv_runtime_dispose (GObject *object)
   PvRuntime *self = PV_RUNTIME (object);
 
   g_clear_object (&self->provider);
+  enumeration_thread_clear (&self->indep_thread);
+  enumeration_threads_clear (&self->arch_threads,
+                             G_N_ELEMENTS (multiarch_details));
 
   G_OBJECT_CLASS (pv_runtime_parent_class)->dispose (object);
 }
@@ -4416,7 +4683,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) vulkan_imp_layer_path = g_string_new ("");
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
-  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
+  g_autoptr(SrtSystemInfo) system_info = NULL;
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_explicit_layers = NULL;
@@ -4462,10 +4729,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
-  srt_system_info_set_sysroot (system_info, self->provider->path_in_current_ns);
-  _srt_system_info_set_check_flags (system_info,
-                                    (SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
-                                     | SRT_CHECK_FLAGS_SKIP_EXTRAS));
+  if (self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD)
+    system_info = pv_graphics_provider_create_system_info (self->provider);
+  else
+    system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
 
   part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
   g_debug ("Enumerating EGL ICDs on provider system...");
@@ -4625,6 +4892,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *libglx_mesa = NULL;
           g_autofree gchar *platform_token = NULL;
           g_autoptr(GPtrArray) patterns = NULL;
+          SrtSystemInfo *arch_system_info;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -4676,14 +4944,19 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          if (!collect_vdpau_drivers (self, system_info, arch, patterns, error))
+          if (self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD)
+            arch_system_info = system_info;
+          else
+            arch_system_info = enumeration_thread_join (&self->arch_threads[i]);
+
+          if (!collect_vdpau_drivers (self, arch_system_info, arch, patterns, error))
             return FALSE;
 
-          if (!collect_dri_drivers (self, system_info, arch, patterns,
+          if (!collect_dri_drivers (self, arch_system_info, arch, patterns,
                                     dri_path, error))
             return FALSE;
 
-          if (!collect_va_api_drivers (self, system_info, arch, patterns,
+          if (!collect_va_api_drivers (self, arch_system_info, arch, patterns,
                                        va_api_path, error))
             return FALSE;
 
@@ -4797,7 +5070,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                 platform_link, arch->details->tuple);
             }
 
-          platform_token = srt_system_info_dup_libdl_platform (system_info,
+          platform_token = srt_system_info_dup_libdl_platform (arch_system_info,
                                                                multiarch_tuples[i],
                                                                &local_error);
           if (platform_token == NULL)

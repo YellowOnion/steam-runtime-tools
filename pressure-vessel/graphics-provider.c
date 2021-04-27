@@ -20,6 +20,7 @@
 #include "graphics-provider.h"
 
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 #include "utils.h"
@@ -218,6 +219,24 @@ pv_graphics_provider_new (const char *path_in_current_ns,
                          "path-in-container-ns", path_in_container_ns,
                          "path-in-current-ns", path_in_current_ns,
                          NULL);
+}
+
+/*
+ * Create a new SrtSystemInfo, suitable for use in a separate thread.
+ */
+SrtSystemInfo *
+pv_graphics_provider_create_system_info (PvGraphicsProvider *self)
+{
+  g_autoptr(SrtSystemInfo) system_info = NULL;
+
+  g_return_val_if_fail (PV_IS_GRAPHICS_PROVIDER (self), NULL);
+
+  system_info = srt_system_info_new (NULL);
+  srt_system_info_set_sysroot (system_info, self->path_in_current_ns);
+  _srt_system_info_set_check_flags (system_info,
+                                    (SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
+                                     | SRT_CHECK_FLAGS_SKIP_EXTRAS));
+  return g_steal_pointer (&system_info);
 }
 
 static void

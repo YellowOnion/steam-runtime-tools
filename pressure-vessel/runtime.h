@@ -34,6 +34,8 @@
 
 /**
  * PvRuntimeFlags:
+ * @PV_RUNTIME_FLAGS_SINGLE_THREAD: Run in a single thread, for easier
+ *  debugging
  * @PV_RUNTIME_FLAGS_GENERATE_LOCALES: Generate missing locales
  * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
  * @PV_RUNTIME_FLAGS_VERBOSE: Be more verbose
@@ -49,7 +51,7 @@
  */
 typedef enum
 {
-  /* (1 << 0) available for reuse */
+  PV_RUNTIME_FLAGS_SINGLE_THREAD = (1 << 0),
   PV_RUNTIME_FLAGS_GENERATE_LOCALES = (1 << 1),
   PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_VERBOSE = (1 << 3),
@@ -62,7 +64,8 @@ typedef enum
 } PvRuntimeFlags;
 
 #define PV_RUNTIME_FLAGS_MASK \
-  (PV_RUNTIME_FLAGS_GENERATE_LOCALES \
+  (PV_RUNTIME_FLAGS_SINGLE_THREAD \
+   | PV_RUNTIME_FLAGS_GENERATE_LOCALES \
    | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    | PV_RUNTIME_FLAGS_VERBOSE \
    | PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS \

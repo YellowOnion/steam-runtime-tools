@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -700,6 +701,7 @@ static char *opt_runtime_base = NULL;
 static char *opt_runtime_id = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_share_pid = TRUE;
+static gboolean opt_single_thread = FALSE;
 static double opt_terminate_idle_timeout = 0.0;
 static double opt_terminate_timeout = -1.0;
 static char *opt_variable_dir = NULL;
@@ -1215,6 +1217,10 @@ static GOptionEntry options[] =
     "Run an interactive shell instead of COMMAND. Executing \"$@\" in that "
     "shell will run COMMAND [ARGS].",
     NULL },
+  { "single-thread", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_single_thread,
+    "Disable multi-threaded code paths, for debugging",
+    NULL },
   { "terminal", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
     "none: disable features that would use a terminal; "
@@ -1404,6 +1410,8 @@ main (int argc,
   opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
 
   opt_share_pid = pv_boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
+  opt_single_thread = pv_boolean_environment ("PRESSURE_VESSEL_SINGLE_THREAD",
+                                              opt_single_thread);
   opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
@@ -1913,6 +1921,9 @@ main (int argc,
 
       if (opt_copy_runtime)
         flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
+
+      if (opt_single_thread)
+        flags |= PV_RUNTIME_FLAGS_SINGLE_THREAD;
 
       if (flatpak_subsandbox != NULL)
         flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;

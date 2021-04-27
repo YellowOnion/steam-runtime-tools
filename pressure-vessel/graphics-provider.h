@@ -25,6 +25,8 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
+#include <steam-runtime-tools/steam-runtime-tools.h>
+
 typedef struct _PvGraphicsProvider PvGraphicsProvider;
 typedef struct _PvGraphicsProviderClass PvGraphicsProviderClass;
 
@@ -59,5 +61,6 @@ PvGraphicsProvider *pv_graphics_provider_new (const char *path_in_current_ns,
 
 gchar *pv_graphics_provider_search_in_path_and_bin (PvGraphicsProvider *self,
                                                     const gchar *program_name);
+SrtSystemInfo *pv_graphics_provider_create_system_info (PvGraphicsProvider *self);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvGraphicsProvider, g_object_unref)

@@ -32,6 +32,8 @@
  * SrtCheckFlags:
  * @SRT_CHECK_FLAGS_NONE: Behave normally
  * @SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS: Don't spend time detecting potential problems
+ * @SRT_CHECK_FLAGS_SKIP_EXTRAS: Don't spend time locating "extra" libraries that
+ *  are only interesting for diagnostic checks
  *
  * A bitfield with flags representing behaviour changes,
  * or %SRT_CHECK_FLAGS_NONE (which is numerically zero) for normal
@@ -40,6 +42,7 @@
 typedef enum
 {
   SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS = (1 << 0),
+  SRT_CHECK_FLAGS_SKIP_EXTRAS = (1 << 0),
   SRT_CHECK_FLAGS_NONE = 0
 } SrtCheckFlags;
 

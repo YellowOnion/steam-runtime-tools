@@ -3174,7 +3174,9 @@ _srt_system_info_set_check_flags (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   self->check_flags = flags;
 
-  /* SKIP_SLOW_CHECKS affects Vulkan and EGL modules */
+  /* SKIP_EXTRAS affects e.g. VDPAU modules.
+   * SKIP_SLOW_CHECKS affects Vulkan and EGL modules */
+  forget_graphics_modules (self);
   forget_icds (self);
   forget_layers (self);
 }
@@ -3492,6 +3494,7 @@ _srt_system_info_list_graphics_modules (SrtSystemInfo *self,
                                                                          self->env,
                                                                          self->helpers_path,
                                                                          multiarch_tuple,
+                                                                         self->check_flags,
                                                                          which);
       abi->graphics_modules[which].available = TRUE;
     }

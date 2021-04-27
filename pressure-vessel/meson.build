@@ -199,6 +199,8 @@ executable(
     'flatpak-exports-private.h',
     'flatpak-run.c',
     'flatpak-run-private.h',
+    'graphics-provider.c',
+    'graphics-provider.h',
     'runtime.c',
     'runtime.h',
     'wrap.c',

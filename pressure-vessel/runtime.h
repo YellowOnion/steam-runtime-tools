@@ -30,10 +30,10 @@
 #include "flatpak-bwrap-private.h"
 #include "flatpak-exports-private.h"
 #include "flatpak-utils-base-private.h"
+#include "graphics-provider.h"
 
 /**
  * PvRuntimeFlags:
- * @PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK: Use provider graphics stack
  * @PV_RUNTIME_FLAGS_GENERATE_LOCALES: Generate missing locales
  * @PV_RUNTIME_FLAGS_GC_RUNTIMES: Garbage-collect old temporary runtimes
  * @PV_RUNTIME_FLAGS_VERBOSE: Be more verbose
@@ -49,7 +49,7 @@
  */
 typedef enum
 {
-  PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK = (1 << 0),
+  /* (1 << 0) available for reuse */
   PV_RUNTIME_FLAGS_GENERATE_LOCALES = (1 << 1),
   PV_RUNTIME_FLAGS_GC_RUNTIMES = (1 << 2),
   PV_RUNTIME_FLAGS_VERBOSE = (1 << 3),
@@ -62,8 +62,7 @@ typedef enum
 } PvRuntimeFlags;
 
 #define PV_RUNTIME_FLAGS_MASK \
-  (PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK \
-   | PV_RUNTIME_FLAGS_GENERATE_LOCALES \
+  (PV_RUNTIME_FLAGS_GENERATE_LOCALES \
    | PV_RUNTIME_FLAGS_GC_RUNTIMES \
    | PV_RUNTIME_FLAGS_VERBOSE \
    | PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS \
@@ -89,8 +88,7 @@ PvRuntime *pv_runtime_new (const char *source,
                            const char *variable_dir,
                            const char *bubblewrap,
                            const char *tools_dir,
-                           const char *provider_in_current_namespace,
-                           const char *provider_in_container_namespace,
+                           PvGraphicsProvider *provider,
                            const GStrv original_environ,
                            PvRuntimeFlags flags,
                            GError **error);

@@ -41,6 +41,7 @@
 #include "flatpak-run-private.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
+#include "graphics-provider.h"
 #include "runtime.h"
 #include "utils.h"
 #include "wrap-flatpak.h"
@@ -1882,6 +1883,7 @@ main (int argc,
 
   if (opt_runtime != NULL || opt_runtime_archive != NULL)
     {
+      g_autoptr(PvGraphicsProvider) graphics_provider = NULL;
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
       g_autofree gchar *runtime_resolved = NULL;
       const char *runtime_path = NULL;
@@ -1893,7 +1895,15 @@ main (int argc,
         flags |= PV_RUNTIME_FLAGS_GENERATE_LOCALES;
 
       if (opt_graphics_provider != NULL && opt_graphics_provider[0] != '\0')
-        flags |= PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK;
+        {
+          g_assert (graphics_provider_mount_point != NULL);
+          graphics_provider = pv_graphics_provider_new (opt_graphics_provider,
+                                                        graphics_provider_mount_point,
+                                                        error);
+
+          if (graphics_provider == NULL)
+            goto out;
+        }
 
       if (opt_verbose)
         flags |= PV_RUNTIME_FLAGS_VERBOSE;
@@ -1949,8 +1959,7 @@ main (int argc,
                                 opt_variable_dir,
                                 bwrap_executable,
                                 tools_dir,
-                                opt_graphics_provider,
-                                graphics_provider_mount_point,
+                                graphics_provider,
                                 original_environ,
                                 flags,
                                 error);

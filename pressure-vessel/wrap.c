@@ -1891,6 +1891,8 @@ main (int argc,
 
   if (opt_runtime != NULL || opt_runtime_archive != NULL)
     {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+        _srt_profiling_start ("Setting up runtime");
       g_autoptr(PvGraphicsProvider) graphics_provider = NULL;
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
       g_autofree gchar *runtime_resolved = NULL;

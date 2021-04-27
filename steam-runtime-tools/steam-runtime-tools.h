@@ -28,6 +28,7 @@
 #define _SRT_IN_SINGLE_HEADER
 
 #include <steam-runtime-tools/architecture.h>
+#include <steam-runtime-tools/container.h>
 #include <steam-runtime-tools/cpu-feature.h>
 #include <steam-runtime-tools/desktop-entry.h>
 #include <steam-runtime-tools/enums.h>

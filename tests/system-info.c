@@ -2388,75 +2388,6 @@ steamscript_env (Fixture *f,
   g_strfreev (envp);
 }
 
-typedef struct
-{
-  const char *description;
-  const char *sysroot;
-  SrtContainerType type;
-  const char *host_directory;
-} ContainerTest;
-
-static const ContainerTest container_tests[] =
-{
-  { "Has /.dockerenv",
-    "debian-unstable", SRT_CONTAINER_TYPE_DOCKER, NULL },
-  { "Has an unknown value in /run/systemd/container",
-    "debian10", SRT_CONTAINER_TYPE_UNKNOWN, NULL },
-  { "Has 'docker' in /run/systemd/container",
-    "fedora", SRT_CONTAINER_TYPE_DOCKER, NULL },
-  { "Has /.flatpak-info and /run/host",
-    "flatpak-example", SRT_CONTAINER_TYPE_FLATPAK, "/run/host" },
-  { "Has /run/host",
-    "invalid-os-release", SRT_CONTAINER_TYPE_UNKNOWN, "/run/host" },
-  { "Has no evidence of being a container",
-    "no-os-release", SRT_CONTAINER_TYPE_NONE, NULL },
-  { "Has /run/pressure-vessel",
-    "steamrt", SRT_CONTAINER_TYPE_PRESSURE_VESSEL, NULL },
-  { "Has a Docker-looking /proc/1/cgroup",
-    "steamrt-unofficial", SRT_CONTAINER_TYPE_DOCKER, NULL },
-};
-
-static void
-test_containers (Fixture *f,
-                 gconstpointer context)
-{
-  gsize i, j;
-
-  for (i = 0; i < G_N_ELEMENTS (container_tests); i++)
-    {
-      const ContainerTest *test = &container_tests[i];
-      SrtSystemInfo *info;
-      gchar *sysroot, *got, *expected;
-
-      g_test_message ("%s: %s", test->sysroot, test->description);
-
-      sysroot = g_build_filename (f->sysroots, test->sysroot, NULL);
-
-      info = srt_system_info_new (NULL);
-      g_assert_nonnull (info);
-      srt_system_info_set_sysroot (info, sysroot);
-
-      for (j = 0; j < 2; j++)
-        {
-          g_assert_cmpint (srt_system_info_get_container_type (info), ==,
-                           test->type);
-          got = srt_system_info_dup_container_host_directory (info);
-
-          if (test->host_directory == NULL)
-            expected = NULL;
-          else
-            expected = g_build_filename (sysroot, test->host_directory, NULL);
-
-          g_assert_cmpstr (got, ==, expected);
-          g_free (got);
-          g_free (expected);
-        }
-
-      g_object_unref (info);
-      g_free (sysroot);
-    }
-}
-
 /* For the purpose of this test an array that is NULL, and one with just one
  * NULL element, are considered to be equal */
 static void
@@ -2527,6 +2458,7 @@ typedef struct
 {
   SrtContainerType type;
   const gchar *host_path;
+  const gchar *flatpak_version;
 } ContTest;
 
 typedef struct
@@ -3097,6 +3029,7 @@ static const JsonTest json_test[] =
     .container =
     {
       .type = SRT_CONTAINER_TYPE_FLATPAK,
+      .flatpak_version = "1.10.2",
     },
     .driver_environment =
     {
@@ -3506,6 +3439,7 @@ json_parsing (Fixture *f,
       g_autoptr(SrtObjectList) portal_backends = NULL;
       g_autoptr(SrtObjectList) explicit_layers = NULL;
       g_autoptr(SrtObjectList) implicit_layers = NULL;
+      g_autoptr(SrtContainerInfo) container = NULL;
       g_autofree gchar *portal_messages = NULL;
       g_autofree gchar *steamscript_path = NULL;
       g_autofree gchar *steamscript_version = NULL;
@@ -3560,9 +3494,12 @@ json_parsing (Fixture *f,
       g_assert_cmpstr (t->os_release.name, ==, name);
       g_assert_cmpstr (t->os_release.pretty_name, ==, pretty_name);
 
+      container = srt_system_info_check_container (info);
       host_directory = srt_system_info_dup_container_host_directory (info);
       g_assert_cmpint (t->container.type, ==, srt_system_info_get_container_type (info));
       g_assert_cmpstr (t->container.host_path, ==, host_directory);
+      g_assert_cmpstr (t->container.flatpak_version, ==,
+                       srt_container_info_get_flatpak_version (container));
 
       driver_environment_list = srt_system_info_list_driver_environment (info);
       assert_equal_strings_arrays (t->driver_environment,
@@ -4087,9 +4024,6 @@ main (int argc,
               setup, driver_environment, teardown);
   g_test_add ("/system-info/steamscript_env", Fixture, NULL,
               setup, steamscript_env, teardown);
-
-  g_test_add ("/system-info/containers", Fixture, NULL,
-              setup, test_containers, teardown);
 
   g_test_add ("/system-info/json_parsing", Fixture, NULL,
               setup, json_parsing, teardown);

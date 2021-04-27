@@ -24,6 +24,7 @@
 libsteamrt_sources = [
     'architecture-internal.h',
     'architecture.c',
+    'container.c',
     'cpu-feature-internal.h',
     'cpu-feature.c',
     'desktop-entry-internal.h',
@@ -69,6 +70,7 @@ libsteamrt_sources = [
 
 libsteamrt_public_headers = [
     'architecture.h',
+    'container.h',
     'cpu-feature.h',
     'desktop-entry.h',
     'graphics.h',

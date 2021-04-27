@@ -32,6 +32,7 @@
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
+#include "steam-runtime-tools/container-internal.h"
 #include "steam-runtime-tools/cpu-feature-internal.h"
 #include "steam-runtime-tools/desktop-entry-internal.h"
 #include "steam-runtime-tools/graphics.h"
@@ -117,6 +118,7 @@ struct _SrtSystemInfo
   /* If %TRUE, #SrtSystemInfo cannot be changed anymore */
   gboolean immutable_values;
   GHashTable *cached_hidden_deps;
+  SrtContainerInfo *container_info;
   SrtSteam *steam_data;
   SrtXdgPortal *xdg_portal_data;
   struct
@@ -163,12 +165,6 @@ struct _SrtSystemInfo
     gchar **messages_64;
     gboolean have_data;
   } pinned_libs;
-  struct
-  {
-    SrtContainerType type;
-    gchar *host_directory;
-    gboolean have_data;
-  } container;
   struct
   {
     GList *values;
@@ -373,8 +369,6 @@ srt_system_info_init (SrtSystemInfo *self)
 
   _srt_os_release_init (&self->os_release);
 
-  self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
-
   srt_system_info_set_sysroot (self, "/");
   srt_system_info_set_environ (self, NULL);
 }
@@ -433,9 +427,7 @@ forget_desktop_entries (SrtSystemInfo *self)
 static void
 forget_container_info (SrtSystemInfo *self)
 {
-  g_clear_pointer (&self->container.host_directory, g_free);
-  self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
-  self->container.have_data = FALSE;
+  g_clear_object (&self->container_info);
 }
 
 /*
@@ -629,8 +621,6 @@ srt_system_info_new (const char *expectations)
 }
 
 static gchar ** _srt_system_info_driver_environment_from_report (JsonObject *json_obj);
-static SrtContainerType _srt_system_info_get_container_info_from_report (JsonObject *json_obj,
-                                                                         gchar **host_path);
 static gchar ** _srt_system_info_get_pinned_libs_from_report (JsonObject *json_obj,
                                                               const gchar *which,
                                                               gchar ***messages);
@@ -857,8 +847,7 @@ srt_system_info_new_from_json (const char *path,
 
   _srt_os_release_populate_from_report (json_obj, &info->os_release);
 
-  info->container.type = _srt_system_info_get_container_info_from_report (json_obj,
-                                                                          &info->container.host_directory);
+  info->container_info = _srt_container_info_get_from_report (json_obj);
 
   info->cached_driver_environment = _srt_system_info_driver_environment_from_report (json_obj);
 
@@ -3859,151 +3848,31 @@ _srt_system_info_driver_environment_from_report (JsonObject *json_obj)
                                            "<invalid>");
 }
 
-typedef struct
-{
-  SrtContainerType type;
-  const char *name;
-} ContainerTypeName;
-
-static const ContainerTypeName container_types[] =
-{
-  { SRT_CONTAINER_TYPE_DOCKER, "docker" },
-  { SRT_CONTAINER_TYPE_FLATPAK, "flatpak" },
-  { SRT_CONTAINER_TYPE_PODMAN, "podman" },
-  { SRT_CONTAINER_TYPE_PRESSURE_VESSEL, "pressure-vessel" },
-};
-
-static SrtContainerType
-container_type_from_name (const char *name)
-{
-  gsize i;
-
-  for (i = 0; i < G_N_ELEMENTS (container_types); i++)
-    {
-      const ContainerTypeName *entry = &container_types[i];
-
-      if (strcmp (entry->name, name) == 0)
-        return entry->type;
-    }
-
-  return SRT_CONTAINER_TYPE_UNKNOWN;
-}
-
 static void
 ensure_container_info (SrtSystemInfo *self)
 {
-  g_autofree gchar *contents = NULL;
-  g_autofree gchar *run_host_path = NULL;
-  glnx_autofd int run_host_fd = -1;
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
-  if (self->container.have_data || self->immutable_values)
-    return;
+  if (self->container_info == NULL && !self->immutable_values)
+    self->container_info = _srt_check_container (self->sysroot_fd, self->sysroot);
+}
 
-  g_assert (self->container.host_directory == NULL);
-  g_assert (self->container.type == SRT_CONTAINER_TYPE_UNKNOWN);
-  g_assert (self->sysroot != NULL);
+/**
+ * srt_system_info_check_container:
+ * @self: The #SrtSystemInfo object
+ *
+ * Gather and return information about the container that is currently in use.
+ *
+ * Returns: (transfer full): An #SrtContainerInfo object.
+ *  Free with g_object_unref().
+ */
+SrtContainerInfo *
+srt_system_info_check_container (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
-  if (self->sysroot_fd < 0)
-    {
-      g_debug ("Cannot find container info: previously failed to open "
-               "sysroot %s", self->sysroot);
-      goto out;
-    }
-
-  g_debug ("Finding container info in sysroot %s...", self->sysroot);
-
-  run_host_fd = _srt_resolve_in_sysroot (self->sysroot_fd, "/run/host",
-                                         SRT_RESOLVE_FLAGS_DIRECTORY,
-                                         &run_host_path, NULL);
-
-  if (run_host_path != NULL)
-    self->container.host_directory = g_build_filename (self->sysroot,
-                                                       run_host_path,
-                                                       NULL);
-
-  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
-                                         "/run/host/container-manager",
-                                         &contents, NULL, NULL))
-    {
-      g_strchomp (contents);
-      self->container.type = container_type_from_name (contents);
-      g_debug ("Type %d based on /run/host/container-manager",
-               self->container.type);
-      goto out;
-    }
-
-  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
-                                         "/run/systemd/container",
-                                         &contents, NULL, NULL))
-    {
-      g_strchomp (contents);
-      self->container.type = container_type_from_name (contents);
-      g_debug ("Type %d based on /run/systemd/container",
-               self->container.type);
-      goto out;
-    }
-
-  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
-                                 "/.flatpak-info", G_FILE_TEST_IS_REGULAR))
-    {
-      self->container.type = SRT_CONTAINER_TYPE_FLATPAK;
-      g_debug ("Flatpak based on /.flatpak-info");
-      goto out;
-    }
-
-  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
-                                 "/run/pressure-vessel", G_FILE_TEST_IS_DIR))
-    {
-      self->container.type = SRT_CONTAINER_TYPE_PRESSURE_VESSEL;
-      g_debug ("pressure-vessel based on /run/pressure-vessel");
-      goto out;
-    }
-
-  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
-                                 "/.dockerenv", G_FILE_TEST_EXISTS))
-    {
-      self->container.type = SRT_CONTAINER_TYPE_DOCKER;
-      g_debug ("Docker based on /.dockerenv");
-      goto out;
-    }
-
-  if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
-                                 "/run/.containerenv", G_FILE_TEST_EXISTS))
-    {
-      self->container.type = SRT_CONTAINER_TYPE_PODMAN;
-      g_debug ("Podman based on /run/.containerenv");
-      goto out;
-    }
-
-  if (_srt_file_get_contents_in_sysroot (self->sysroot_fd,
-                                         "/proc/1/cgroup",
-                                         &contents, NULL, NULL))
-    {
-      if (strstr (contents, "/docker/") != NULL)
-        self->container.type = SRT_CONTAINER_TYPE_DOCKER;
-
-      if (self->container.type != SRT_CONTAINER_TYPE_UNKNOWN)
-        {
-          g_debug ("Type %d based on /proc/1/cgroup", self->container.type);
-          goto out;
-        }
-
-      g_clear_pointer (&contents, g_free);
-    }
-
-  if (run_host_fd >= 0)
-    {
-      g_debug ("Unknown container technology based on /run/host");
-      self->container.type = SRT_CONTAINER_TYPE_UNKNOWN;
-      goto out;
-    }
-
-  /* We haven't found any particular evidence of being in a container */
-  g_debug ("Probably not a container");
-  self->container.type = SRT_CONTAINER_TYPE_NONE;
-
-out:
-  self->container.have_data = TRUE;
+  ensure_container_info (self);
+  return g_object_ref (self->container_info);
 }
 
 /**
@@ -4023,7 +3892,7 @@ srt_system_info_get_container_type (SrtSystemInfo *self)
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), SRT_CONTAINER_TYPE_UNKNOWN);
 
   ensure_container_info (self);
-  return self->container.type;
+  return srt_container_info_get_container_type (self->container_info);
 }
 
 /**
@@ -4048,60 +3917,7 @@ srt_system_info_dup_container_host_directory (SrtSystemInfo *self)
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
 
   ensure_container_info (self);
-  return g_strdup (self->container.host_directory);
-}
-
-/**
- * _srt_system_info_get_container_info_from_report:
- * @json_obj: (not nullable): A JSON Object used to search for "container"
- *  property
- * @host_path: (not nullable): Used to return the host path
- *
- * If the provided @json_obj doesn't have a "container" member,
- * %SRT_CONTAINER_TYPE_UNKNOWN will be returned.
- * If @json_obj has some elements that we can't parse, the returned
- * #SrtContainerType will be set to %SRT_CONTAINER_TYPE_UNKNOWN.
- *
- * Returns: The found container type
- */
-static SrtContainerType
-_srt_system_info_get_container_info_from_report (JsonObject *json_obj,
-                                                 gchar **host_path)
-{
-  JsonObject *json_sub_obj;
-  JsonObject *json_host_obj = NULL;
-  const gchar *type_string = NULL;
-  SrtContainerType ret = SRT_CONTAINER_TYPE_UNKNOWN;
-
-  g_return_val_if_fail (host_path != NULL && *host_path == NULL, SRT_CONTAINER_TYPE_UNKNOWN);
-
-  if (json_object_has_member (json_obj, "container"))
-    {
-      json_sub_obj = json_object_get_object_member (json_obj, "container");
-
-      if (json_sub_obj == NULL)
-        goto out;
-
-      if (json_object_has_member (json_sub_obj, "type"))
-        {
-          type_string = json_object_get_string_member (json_sub_obj, "type");
-          if (!srt_enum_from_nick (SRT_TYPE_CONTAINER_TYPE, type_string, &ret, NULL))
-            {
-              g_debug ("The parsed container type '%s' is not a known element", type_string);
-              ret = SRT_CONTAINER_TYPE_UNKNOWN;
-            }
-        }
-
-      if (json_object_has_member (json_sub_obj, "host"))
-        {
-          json_host_obj = json_object_get_object_member (json_sub_obj, "host");
-          *host_path = g_strdup (json_object_get_string_member_with_default (json_host_obj, "path",
-                                                                             NULL));
-        }
-    }
-
-out:
-  return ret;
+  return g_strdup (srt_container_info_get_container_host_directory (self->container_info));
 }
 
 static void
@@ -4267,7 +4083,7 @@ ensure_xdg_portals_cached (SrtSystemInfo *self)
       _srt_check_xdg_portals (self->env,
                               self->helpers_path,
                               self->test_flags,
-                              self->container.type,
+                              srt_container_info_get_container_type (self->container_info),
                               srt_system_info_get_primary_multiarch_tuple (self),
                               &self->xdg_portal_data);
     }

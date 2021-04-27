@@ -29,6 +29,7 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 tests = [
   {'name': 'architecture'},
+  {'name': 'container'},
   {'name': 'desktop-entry'},
   {'name': 'graphics'},
   {

@@ -117,6 +117,7 @@ no-os-release/custom_path64/dri
 no-os-release/custom_path64/va
 no-os-release/usr/lib/dri
 no-os-release/usr/lib/vdpau
+podman-example/run/host
 steamrt/etc
 steamrt/overrides/bin
 steamrt/overrides/lib/x86_64-linux-gnu
@@ -206,7 +207,6 @@ fedora/usr/lib64/libva.so.2
 fedora/usr/lib64/libvdpau.so.1
 fedora/usr/lib64/vdpau/libvdpau_r300.so
 fedora/usr/lib64/vdpau/libvdpau_radeonsi.so
-flatpak-example/.flatpak-info
 flatpak-example/usr/lib/dri/r300_dri.so
 flatpak-example/usr/lib/dri/r600_drv_video.so
 flatpak-example/usr/lib/x86_64-mock-abi/GL/lib/dri/i965_dri.so
@@ -306,6 +306,23 @@ for name, target in {
         os.symlink(target, name)
     except FileExistsError:
         pass
+
+with open('flatpak-example/.flatpak-info', 'w') as writer:
+    writer.write('''\
+[Application]
+name=com.valvesoftware.Steam
+runtime=runtime/org.freedesktop.Platform/x86_64/20.08
+
+[Instance]
+branch=stable
+arch=x86_64
+flatpak-version=1.10.2
+session-bus-proxy=true
+system-bus-proxy=true
+devel=true''')
+
+with open('podman-example/run/host/container-manager', 'w') as writer:
+    writer.write("podman")
 
 with open('debian10/custom_path/Single-good-layer.json', 'w') as writer:
     writer.write('''\

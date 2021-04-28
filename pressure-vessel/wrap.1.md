@@ -214,6 +214,9 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 `--shell=instead`, `--shell-instead`
 :   The same as `--shell=after`, but do not run *COMMAND* at all.
 
+`--single-thread`
+:   Avoid multi-threaded code paths, for debugging.
+
 `--steam-app-id` *N*
 :   Assume that we are running Steam app ID *N*, specified as an integer.
     If using `--unshare-home`, use *~/.var/app/com.steampowered.AppN*

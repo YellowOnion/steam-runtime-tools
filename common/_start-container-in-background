@@ -8,7 +8,6 @@ me="${me##*/}"
 # This is a prototype and will probably not survive in its current form.
 # Don't rely on it.
 
-deploy=
 force=
 info=
 rendezvous=

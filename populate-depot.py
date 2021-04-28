@@ -407,6 +407,7 @@ class Main:
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
         version: str = 'latest',
+        versioned_directories: bool = False,
         **kwargs: Dict[str, Any],
     ) -> None:
         openers: List[urllib.request.BaseHandler] = []
@@ -468,6 +469,7 @@ class Main:
         self.unpack_runtimes = unpack_runtimes
         self.unpack_sources = unpack_sources
         self.unpack_sources_into = unpack_sources_into
+        self.versioned_directories = versioned_directories
 
         os.makedirs(self.cache, exist_ok=True)
 
@@ -652,11 +654,33 @@ class Main:
 
             component_version = ComponentVersion(runtime.name)
 
-            version = runtime.pinned_version
-            comment = ', '.join(sorted(runtime.runtime_files))
+            version = runtime.pinned_version or runtime.version
 
-            if version is None:
-                version = runtime.version
+            runtime_files = set(runtime.runtime_files)
+
+            if self.unpack_runtimes:
+                if self.versioned_directories:
+                    runtime_files.add(
+                        '{}_platform_{}/'.format(runtime.name, version)
+                    )
+
+                    if runtime.include_sdk:
+                        runtime_files.add(
+                            '{}_sdk_{}/'.format(runtime.name, version)
+                        )
+                        runtime_files.add(
+                            '{}_sysroot_{}/'.format(runtime.name, version)
+                        )
+                else:
+                    runtime_files.add(runtime.name + '/')
+
+                    if runtime.include_sdk:
+                        runtime_files.add(runtime.name + '_sdk/')
+                        runtime_files.add(runtime.name + '_sysroot/')
+
+            comment = ', '.join(sorted(runtime_files))
+
+            if runtime.pinned_version is None:
                 comment += ' (from local build)'
 
             component_version.version = version
@@ -666,7 +690,13 @@ class Main:
             self.versions.append(component_version)
 
             if self.unpack_runtimes:
-                dest = os.path.join(self.depot, runtime.name)
+                if self.versioned_directories:
+                    dest = os.path.join(
+                        self.depot,
+                        '{}_platform_{}'.format(runtime.name, version),
+                    )
+                else:
+                    dest = os.path.join(self.depot, runtime.name)
 
                 with suppress(FileNotFoundError):
                     shutil.rmtree(dest)
@@ -686,7 +716,16 @@ class Main:
                 )
 
                 if runtime.include_sdk:
-                    dest = os.path.join(self.depot, runtime.name + '_sdk')
+                    if self.versioned_directories:
+                        dest = os.path.join(
+                            self.depot,
+                            '{}_sdk_{}'.format(runtime.name, version),
+                        )
+                    else:
+                        dest = os.path.join(
+                            self.depot,
+                            '{}_sdk'.format(runtime.name),
+                        )
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(os.path.join(dest, 'files'))
@@ -720,9 +759,16 @@ class Main:
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
 
-                    sysroot = os.path.join(
-                        self.depot, runtime.name + '_sysroot',
-                    )
+                    if self.versioned_directories:
+                        sysroot = os.path.join(
+                            self.depot,
+                            '{}_sysroot_{}'.format(runtime.name, version),
+                        )
+                    else:
+                        sysroot = os.path.join(
+                            self.depot,
+                            '{}_sysroot'.format(runtime.name),
+                        )
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(sysroot)
@@ -1309,6 +1355,20 @@ def main() -> None:
         help=(
             'Unpack any source packages specified by --unpack-source '
             'into PATH/RUNTIME/SOURCE (default: ./RUNTIME/SOURCE).'
+        )
+    )
+    parser.add_argument(
+        '--versioned-directories', action='store_true', default=False,
+        help=(
+            'Include version number in unpacked runtime directories'
+        )
+    )
+    parser.add_argument(
+        '--no-versioned-directories', action='store_false',
+        dest='versioned_directories',
+        help=(
+            'Do not include version number in unpacked runtime directories '
+            '[default]'
         )
     )
     parser.add_argument(

@@ -34,6 +34,7 @@ here="${0%/*}"
     --depot=depot \
     --cache=.cache \
     --include-sdk \
+    --no-versioned-directories \
     --unpack-ld-library-path=depot \
     --unpack-runtimes \
     --unpack-source=steamrt \

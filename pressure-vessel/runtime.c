@@ -820,17 +820,10 @@ pv_runtime_garbage_collect (PvRuntime *self,
 
       if (g_str_has_prefix (dent->d_name, "deploy-"))
         {
-          /* Don't GC old deployments unless we know which one is current
-           * and therefore should not be deleted */
-          if (self->id == NULL)
-            {
-              g_debug ("Ignoring %s/deploy-*: current ID not known",
-                       self->variable_dir);
-              continue;
-            }
-
-          /* Don't GC the current deployment */
-          if (strcmp (dent->d_name + strlen ("deploy-"), self->id) == 0)
+          if (_srt_fstatat_is_same_file (self->variable_dir_fd,
+                                         dent->d_name,
+                                         AT_FDCWD,
+                                         self->deployment))
             {
               g_debug ("Ignoring %s/%s: is the current version",
                        self->variable_dir, dent->d_name);

@@ -1055,6 +1055,20 @@ class Main:
     def octal_escape(self, s: str) -> str:
         return self._NEEDS_OCTAL_ESCAPE.sub(self.octal_escape_char, s)
 
+    def filename_is_windows_friendly(self, s: str) -> bool:
+        for c in s:
+            # This is the set of characters that are reserved in Windows
+            # filenames, excluding '/' which obviously we're fine with
+            # using as a directory separator.
+            if c in r'<>:"\|?*':
+                return False
+
+            if c >= '\uDC80' and c <= '\uDCFF':
+                # surrogate escape, not Unicode
+                return False
+
+        return True
+
     def write_lookaside(self, archive: str, dest: str) -> None:
         with tarfile.open(
             archive, mode='r'
@@ -1063,6 +1077,7 @@ class Main:
         ) as writer:
             lc_names = {}                   # type: Dict[str, str]
             differ_only_by_case = set()     # type: Set[str]
+            not_windows_friendly = set()    # type: Set[str]
             sha256 = {}                     # type: Dict[str, str]
             sizes = {}                      # type: Dict[str, int]
 
@@ -1079,6 +1094,9 @@ class Main:
                     continue
 
                 name = name[len('files/'):]
+
+                if not self.filename_is_windows_friendly(name):
+                    not_windows_friendly.add(name)
 
                 if name.lower() in lc_names:
                     differ_only_by_case.add(lc_names[name.lower()])
@@ -1145,6 +1163,13 @@ class Main:
                 writer.write('# Files whose names differ only by case:\n')
 
                 for name in sorted(differ_only_by_case):
+                    writer.write('# {}\n'.format(self.octal_escape(name)))
+
+            if not_windows_friendly:
+                writer.write('\n')
+                writer.write('# Files whose names are not Windows-friendly:\n')
+
+                for name in sorted(not_windows_friendly):
                     writer.write('# {}\n'.format(self.octal_escape(name)))
 
 

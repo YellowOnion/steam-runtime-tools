@@ -29,6 +29,7 @@ from just-built files or by downloading a previous build.
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -88,6 +89,7 @@ class Runtime:
         suite: str,
 
         architecture: str = 'amd64,i386',
+        cache: str = '.cache',
         images_uri: str = DEFAULT_IMAGES_URI,
         include_sdk: bool = False,
         path: Optional[str] = None,
@@ -96,6 +98,7 @@ class Runtime:
         version: str = 'latest',
     ) -> None:
         self.architecture = architecture
+        self.cache = cache
         self.images_uri = images_uri
         self.include_sdk = include_sdk
         self.name = name
@@ -105,6 +108,9 @@ class Runtime:
         self.ssh_path = ssh_path
         self.version = version
         self.pinned_version = None      # type: Optional[str]
+        self.sha256 = {}                # type: Dict[str, str]
+
+        os.makedirs(self.cache, exist_ok=True)
 
         self.prefix = 'com.valvesoftware.SteamRuntime'
         self.platform = self.prefix + '.Platform'
@@ -166,6 +172,7 @@ class Runtime:
         cls,
         name: str,
         details: Dict[str, Any],
+        cache: str = '.cache',
         default_architecture: str = 'amd64,i386',
         default_include_sdk: bool = False,
         default_suite: str = '',
@@ -179,6 +186,7 @@ class Runtime:
             architecture=details.get(
                 'architecture', default_architecture,
             ),
+            cache=cache,
             images_uri=images_uri,
             include_sdk=details.get('include_sdk', default_include_sdk),
             path=details.get('path', None),
@@ -216,10 +224,32 @@ class Runtime:
     def fetch(
         self,
         filename: str,
-        destdir: str,
         opener: urllib.request.OpenerDirector,
         version: Optional[str] = None,
-    ) -> None:
+    ) -> str:
+        dest = os.path.join(self.cache, filename)
+
+        if filename in self.sha256:
+            try:
+                with open(dest, 'rb') as reader:
+                    hasher = hashlib.sha256()
+
+                    while True:
+                        blob = reader.read(4096)
+
+                        if not blob:
+                            break
+
+                        hasher.update(blob)
+
+                    digest = hasher.hexdigest()
+            except OSError:
+                pass
+            else:
+                if digest == self.sha256[filename]:
+                    logger.info('Using cached %r', dest)
+                    return dest
+
         if self.ssh_host and self.ssh_path:
             path = self.get_ssh_path(filename)
             logger.info('Downloading %r...', path)
@@ -229,21 +259,26 @@ class Runtime:
                 '--partial',
                 '--progress',
                 self.ssh_host + ':' + path,
-                os.path.join(destdir, filename),
+                dest,
             ], check=True)
         else:
             uri = self.get_uri(filename)
             logger.info('Downloading %r...', uri)
 
             with opener.open(uri) as response:
-                with open(os.path.join(destdir, filename), 'wb') as writer:
+                with open(dest + '.new', 'wb') as writer:
                     shutil.copyfileobj(response, writer)
+
+                os.rename(dest + '.new', dest)
+
+        return dest
 
     def pin_version(
         self,
         opener: urllib.request.OpenerDirector,
     ) -> str:
         pinned = self.pinned_version
+        sha256 = {}     # type: Dict[str, str]
 
         if pinned is None:
             if self.ssh_host and self.ssh_path:
@@ -253,12 +288,36 @@ class Runtime:
                     'ssh', self.ssh_host,
                     'cat {}'.format(shlex.quote(path)),
                 ], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
+
+                path = self.get_ssh_path(filename='SHA256SUMS')
+
+                sha256sums = subprocess.run([
+                    'ssh', self.ssh_host,
+                    'cat {}'.format(shlex.quote(path)),
+                ], stdout=subprocess.PIPE).stdout
+                assert sha256sums is not None
+
             else:
                 uri = self.get_uri(filename='VERSION.txt')
                 logger.info('Determining version number from %r...', uri)
                 with opener.open(uri) as response:
                     pinned = response.read().decode('utf-8').strip()
 
+                uri = self.get_uri(filename='SHA256SUMS')
+
+                with opener.open(uri) as response:
+                    sha256sums = response.read()
+
+            for line in sha256sums.splitlines():
+                sha256_bytes, name_bytes = line.split(maxsplit=1)
+                name = name_bytes.decode('utf-8')
+
+                if name.startswith('*'):
+                    name = name[1:]
+
+                sha256[name] = sha256_bytes.decode('ascii')
+
+            self.sha256 = sha256
             self.pinned_version = pinned
 
         return pinned
@@ -326,7 +385,7 @@ class Main:
     def __init__(
         self,
         architecture: str = 'amd64,i386',
-        cache: str = '',
+        cache: str = '.cache',
         credential_envs: Sequence[str] = (),
         credential_hosts: Sequence[str] = (),
         depot: str = 'depot',
@@ -406,8 +465,7 @@ class Main:
         self.unpack_sources = unpack_sources
         self.unpack_sources_into = unpack_sources_into
 
-        if cache:
-            os.makedirs(self.cache, exist_ok=True)
+        os.makedirs(self.cache, exist_ok=True)
 
         for runtime in runtimes:
             if '=' in runtime:
@@ -435,6 +493,7 @@ class Main:
         return Runtime.from_details(
             name,
             details,
+            cache=self.cache,
             default_architecture=self.default_architecture,
             default_include_sdk=self.default_include_sdk,
             default_suite=default_suite or self.default_suite,
@@ -790,21 +849,18 @@ class Main:
         filename = 'pressure-vessel-bin.tar.gz'
         runtime.pin_version(self.opener)
 
-        with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
-            runtime.fetch(
-                filename,
-                self.cache or tmp,
-                self.opener,
-            )
+        downloaded = runtime.fetch(
+            filename,
+            self.opener,
+        )
 
-            os.makedirs(self.depot, exist_ok=True)
-            subprocess.run(
-                [
-                    'tar', '-C', self.depot, '-xf',
-                    os.path.join(self.cache or tmp, filename),
-                ],
-                check=True,
-            )
+        os.makedirs(self.depot, exist_ok=True)
+        subprocess.run(
+            [
+                'tar', '-C', self.depot, '-xf', downloaded,
+            ],
+            check=True,
+        )
 
         return filename
 
@@ -877,7 +933,8 @@ class Main:
 
         pinned = runtime.pin_version(self.opener)
         for basename in runtime.runtime_files:
-            runtime.fetch(basename, self.depot, self.opener)
+            downloaded = runtime.fetch(basename, self.opener)
+            os.link(downloaded, os.path.join(self.depot, basename))
 
         with open(
             os.path.join(self.depot, runtime.build_id_file), 'w',
@@ -893,15 +950,11 @@ class Main:
         if self.unpack_sources:
             with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
                 want = set(self.unpack_sources)
-                runtime.fetch(
+                downloaded = runtime.fetch(
                     runtime.sources,
-                    self.cache or tmp,
                     self.opener,
                 )
-                with open(
-                    os.path.join(self.cache or tmp, runtime.sources),
-                    'rb'
-                ) as reader:
+                with open(downloaded, 'rb') as reader:
                     for stanza in Sources.iter_paragraphs(
                         sequence=reader,
                         use_apt_pkg=True,
@@ -919,9 +972,8 @@ class Main:
 
                             for f in stanza['files']:
                                 name = f['name']
-                                runtime.fetch(
+                                downloaded = runtime.fetch(
                                     os.path.join('sources', name),
-                                    self.cache or tmp,
                                     self.opener,
                                 )
 
@@ -943,11 +995,7 @@ class Main:
                                         [
                                             'dpkg-source',
                                             '-x',
-                                            os.path.join(
-                                                self.cache or tmp,
-                                                'sources',
-                                                name,
-                                            ),
+                                            downloaded,
                                             dest,
                                         ],
                                         check=True,
@@ -970,19 +1018,17 @@ class Main:
         logger.info('Downloading steam-runtime build %s', pinned)
         os.makedirs(self.unpack_ld_library_path, exist_ok=True)
 
-        with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
-            runtime.fetch(
-                filename,
-                self.cache or tmp,
-                self.opener,
-            )
-            subprocess.run(
-                [
-                    'tar', '-C', self.unpack_ld_library_path, '-xf',
-                    os.path.join(self.cache or tmp, filename),
-                ],
-                check=True,
-            )
+        downloaded = runtime.fetch(
+            filename,
+            self.opener,
+        )
+        subprocess.run(
+            [
+                'tar', '-C', self.unpack_ld_library_path, '-xf',
+                downloaded,
+            ],
+            check=True,
+        )
 
 
 def main() -> None:
@@ -1015,7 +1061,7 @@ def main() -> None:
     )
 
     parser.add_argument(
-        '--cache', default='',
+        '--cache', default='.cache',
         help=(
             'Cache downloaded files that are not in --depot here'
         ),

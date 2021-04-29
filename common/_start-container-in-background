@@ -8,7 +8,6 @@ me="${me##*/}"
 # This is a prototype and will probably not survive in its current form.
 # Don't rely on it.
 
-deploy=
 force=
 info=
 rendezvous=
@@ -30,7 +29,7 @@ fi
 
 log () {
     if [ -n "$use_timestamp" ]; then
-        printf '%s\n' "$(LD_PRELOAD= date +'%H:%M:%S.%6N'): ${me}[$$]: $*" >&2
+        printf '%s\n' "$(LD_PRELOAD='' date +'%H:%M:%S.%6N'): ${me}[$$]: $*" >&2
     else
         printf '%s\n' "${me}[$$]: $*" >&2
     fi

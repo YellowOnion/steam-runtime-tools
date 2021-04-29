@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 variables:
-    BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
+    BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:bullseye
 
 stages:
     - test
@@ -22,18 +22,18 @@ test:
     script: |
         set -eu
         set -o pipefail
-        make check 2>&1 | tee qa-buster.log
+        make check 2>&1 | tee qa-bullseye.log
     # Save qa.log for analysis
     artifacts:
         paths:
-            - qa-buster.log
+            - qa-bullseye.log
 
 todo:
     stage: analyze
     # Succeed if grep fails (no failing or expected-failure tests),
     # fail if grep succeeds
     script: |
-        ! grep -B10 '^not ok\b' qa-buster.log
+        ! grep -B10 '^not ok\b' qa-bullseye.log
     # Failure is just a warning
     allow_failure: true
 

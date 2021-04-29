@@ -39,6 +39,7 @@ rm -fr depots/test-sniper-archives
 mkdir -p depots/sniper-archives
 python3 ./populate-depot.py \
     --depot=depots/test-sniper-archives \
+    --toolmanifest \
     "$@" \
     sniper \
     ${NULL+}

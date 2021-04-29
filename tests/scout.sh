@@ -34,6 +34,7 @@ rm -fr depots/test-scout-archives
 mkdir -p depots/test-scout-archives
 python3 ./populate-depot.py \
     --depot=depots/test-scout-archives \
+    --toolmanifest \
     "$@" \
     scout \
     ${NULL+}

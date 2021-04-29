@@ -34,6 +34,7 @@ rm -fr depots/test-soldier-archives
 mkdir -p depots/test-soldier-archives
 python3 ./populate-depot.py \
     --depot=depots/test-soldier-archives \
+    --toolmanifest \
     "$@" \
     soldier \
     ${NULL+}

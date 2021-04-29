@@ -1,5 +1,6 @@
 /.cache/
 /depot/
+/depots/
 /local/
 /pressure-vessel-*-bin+src.tar.gz
 /pressure-vessel-*-bin.tar.gz

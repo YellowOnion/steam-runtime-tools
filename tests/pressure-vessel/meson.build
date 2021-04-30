@@ -36,6 +36,7 @@ tests = [
   'containers.py',
   'invocation.py',
   'launcher.py',
+  'mtree-apply.py',
   'test-locale-gen.sh',
   'utils.py',
 ]
@@ -146,6 +147,7 @@ endforeach
 helpers = [
   'cheap-copy',
   'helper',
+  'mtree-apply',
 ]
 
 foreach helper : helpers

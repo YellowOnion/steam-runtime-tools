@@ -606,6 +606,15 @@ class TestContainers(BaseTest):
                     check=True,
                 )
 
+                # Exercise the code path where we don't have a mtree manifest:
+                # this is important here because we're editing the runtime
+                # in-place to have the OLD-DEPLOYMENT flag-file, but the
+                # manifest doesn't include that, so if we're using a runtime
+                # with a manifest, that part will fail.
+                for manifest in ('usr-mtree.txt', 'usr-mtree.txt.gz'):
+                    with contextlib.suppress(FileNotFoundError):
+                        os.remove(os.path.join(old_dir, manifest))
+
                 if os.path.isdir(os.path.join(old_dir, 'files')):
                     old_dir = os.path.join(old_dir, 'files')
 

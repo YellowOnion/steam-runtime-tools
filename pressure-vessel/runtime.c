@@ -42,6 +42,7 @@
 #include "enumtypes.h"
 #include "exports.h"
 #include "flatpak-run-private.h"
+#include "mtree.h"
 #include "tree-copy.h"
 #include "utils.h"
 
@@ -820,17 +821,10 @@ pv_runtime_garbage_collect (PvRuntime *self,
 
       if (g_str_has_prefix (dent->d_name, "deploy-"))
         {
-          /* Don't GC old deployments unless we know which one is current
-           * and therefore should not be deleted */
-          if (self->id == NULL)
-            {
-              g_debug ("Ignoring %s/deploy-*: current ID not known",
-                       self->variable_dir);
-              continue;
-            }
-
-          /* Don't GC the current deployment */
-          if (strcmp (dent->d_name + strlen ("deploy-"), self->id) == 0)
+          if (_srt_fstatat_is_same_file (self->variable_dir_fd,
+                                         dent->d_name,
+                                         AT_FDCWD,
+                                         self->deployment))
             {
               g_debug ("Ignoring %s/%s: is the current version",
                        self->variable_dir, dent->d_name);
@@ -875,17 +869,17 @@ pv_runtime_init_variable_dir (PvRuntime *self,
 static gboolean
 pv_runtime_create_copy (PvRuntime *self,
                         PvBwrapLock *variable_dir_lock,
+                        const char *usr_mtree,
+                        PvMtreeApplyFlags mtree_flags,
                         GError **error)
 {
   g_autofree gchar *dest_usr = NULL;
-  g_autofree gchar *source_usr_subdir = NULL;
   g_autofree gchar *temp_dir = NULL;
   g_autoptr(GDir) dir = NULL;
   g_autoptr(PvBwrapLock) copy_lock = NULL;
   g_autoptr(PvBwrapLock) source_lock = NULL;
   g_autoptr(SrtProfilingTimer) timer = NULL;
   const char *member;
-  const char *source_usr;
   glnx_autofd int temp_dir_fd = -1;
   gboolean is_just_usr;
 
@@ -906,28 +900,62 @@ pv_runtime_create_copy (PvRuntime *self,
                                     "Cannot create temporary directory \"%s\"",
                                     temp_dir);
 
-  source_usr_subdir = g_build_filename (self->source_files, "usr", NULL);
   dest_usr = g_build_filename (temp_dir, "usr", NULL);
 
-  is_just_usr = !g_file_test (source_usr_subdir, G_FILE_TEST_IS_DIR);
+  if (usr_mtree != NULL)
+    {
+      is_just_usr = TRUE;
+    }
+  else
+    {
+      g_autofree gchar *source_usr_subdir = g_build_filename (self->source_files,
+                                                              "usr", NULL);
+
+      is_just_usr = !g_file_test (source_usr_subdir, G_FILE_TEST_IS_DIR);
+    }
 
   if (is_just_usr)
     {
       /* ${source_files}/usr does not exist, so assume it's a merged /usr,
        * for example ./scout/files. Copy ${source_files}/bin to
        * ${temp_dir}/usr/bin, etc. */
-      source_usr = self->source_files;
+      if (usr_mtree != NULL)
+        {
+          /* If there's a manifest available, it's actually quicker to iterate
+           * through the manifest and use that to populate a new copy of the
+           * runtime that it would be to do the equivalent of `cp -al` -
+           * presumably because the mtree is probably contiguous on disk,
+           * and the nested directories are probably not. */
+          glnx_autofd int dest_usr_fd = -1;
 
-      if (!pv_cheap_tree_copy (self->source_files, dest_usr,
-                               PV_COPY_FLAGS_NONE, error))
-        return FALSE;
+          if (!glnx_ensure_dir (AT_FDCWD, dest_usr, 0755, error))
+            return FALSE;
+
+          if (!glnx_opendirat (AT_FDCWD, dest_usr, FALSE, &dest_usr_fd, error))
+            {
+              g_prefix_error (error, "Unable to open \"%s\": ", dest_usr);
+              return FALSE;
+            }
+
+          if (!pv_mtree_apply (usr_mtree, dest_usr, dest_usr_fd,
+                               self->source_files, mtree_flags,
+                               error))
+            return FALSE;
+        }
+      else
+        {
+          /* Fall back to assuming that what's on-disk is correct. */
+          if (!pv_cheap_tree_copy (self->source_files, dest_usr,
+                                   PV_COPY_FLAGS_NONE, error))
+            return FALSE;
+        }
     }
   else
     {
       /* ${source_files}/usr exists, so assume it's a complete sysroot.
        * Merge ${source_files}/bin and ${source_files}/usr/bin into
        * ${temp_dir}/usr/bin, etc. */
-      source_usr = source_usr_subdir;
+      g_assert (usr_mtree == NULL);
 
       if (!pv_cheap_tree_copy (self->source_files, temp_dir,
                                PV_COPY_FLAGS_USRMERGE, error))
@@ -982,7 +1010,7 @@ pv_runtime_create_copy (PvRuntime *self,
                                         temp_dir);
     }
 
-  dir = g_dir_open (source_usr, 0, error);
+  dir = g_dir_open (dest_usr, 0, error);
 
   if (dir == NULL)
     return FALSE;
@@ -1471,7 +1499,9 @@ pv_runtime_initable_init (GInitable *initable,
   g_autoptr(PvBwrapLock) mutable_lock = NULL;
   g_autofree gchar *contents = NULL;
   g_autofree gchar *os_release = NULL;
+  g_autofree gchar *usr_mtree = NULL;
   gsize len;
+  PvMtreeApplyFlags mtree_flags = PV_MTREE_APPLY_FLAGS_NONE;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -1533,11 +1563,40 @@ pv_runtime_initable_init (GInitable *initable,
                          self->deployment);
     }
 
-  /* If it contains ./files/, assume it's a Flatpak-style runtime where
-   * ./files is a merged /usr and ./metadata is an optional GKeyFile */
+  /* If the deployment contains usr-mtree.txt, assume that it's a
+   * Flatpak-style merged-/usr runtime, and usr-mtree.txt describes
+   * what's in the runtime. The content is taken from the files/
+   * directory, but files not listed in the mtree are not included.
+   *
+   * The manifest compresses well (about 3:1 if sha256sums are included)
+   * so try to read a compressed version first, falling back to
+   * uncompressed. */
+  usr_mtree = g_build_filename (self->deployment, "usr-mtree.txt.gz", NULL);
+
+  if (g_file_test (usr_mtree, G_FILE_TEST_IS_REGULAR))
+    {
+      mtree_flags |= PV_MTREE_APPLY_FLAGS_GZIP;
+    }
+  else
+    {
+      g_clear_pointer (&usr_mtree, g_free);
+      usr_mtree = g_build_filename (self->deployment, "usr-mtree.txt", NULL);
+    }
+
+  if (!g_file_test (usr_mtree, G_FILE_TEST_IS_REGULAR))
+    g_clear_pointer (&usr_mtree, g_free);
+
+  /* Or, if it contains ./files/, assume it's a Flatpak-style runtime where
+   * ./files is a merged /usr and ./metadata is an optional GKeyFile. */
   self->source_files = g_build_filename (self->deployment, "files", NULL);
 
-  if (g_file_test (self->source_files, G_FILE_TEST_IS_DIR))
+  if (usr_mtree != NULL)
+    {
+      g_debug ("Assuming %s is a merged-/usr runtime because it has "
+               "a /usr mtree",
+               self->deployment);
+    }
+  else if (g_file_test (self->source_files, G_FILE_TEST_IS_DIR))
     {
       g_debug ("Assuming %s is a Flatpak-style runtime", self->deployment);
     }
@@ -1601,6 +1660,10 @@ pv_runtime_initable_init (GInitable *initable,
         return FALSE;
     }
 
+  /* Always copy the runtime into var/ before applying a manifest. */
+  if (usr_mtree != NULL)
+    self->flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
+
   if (self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME)
     {
       if (self->variable_dir_fd < 0)
@@ -1620,7 +1683,8 @@ pv_runtime_initable_init (GInitable *initable,
       if (mutable_lock == NULL)
         return FALSE;
 
-      if (!pv_runtime_create_copy (self, mutable_lock, error))
+      if (!pv_runtime_create_copy (self, mutable_lock, usr_mtree,
+                                   mtree_flags, error))
         return FALSE;
     }
 

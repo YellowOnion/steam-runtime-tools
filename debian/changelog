@@ -1,27 +1,41 @@
 steam-runtime-tools (0.20210421.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
-  * pressure-vessel: Speed up startup with cold cache by skipping
-    unnecessary checks
-  * pressure-vessel: Remove unnecessary bundled copies of vainfo and
-    vulkaninfo
-  * pv-wrap: Assume that Flatpak 1.11.x is at least 1.10.1-80-gcb47d83b
-  * pv-wrap: Suggest an appropriate `flatpak override` command.
-    The Steam Flatpak app can't have --allow=per-app-dev-shm set by
-    default until the Flatpak version used to build apps on Flathub's
-    buildbot supports it, but we need it (either that or --device=shm,
-    but --device=shm weakens the sandbox).
+  * pressure-vessel: Performance improvements, especially on systems with
+    slow I/O performance
+    - Enumerate host system graphics drivers in parallel with other
+      required setup
+    - Speed up startup with cold cache by skipping unnecessary checks
+    - Speed up --copy-runtime mode by not opening shared libraries
+      with libelf
+  * pressure-vessel: Add a new runtime format with unpacked files
+    accompanied by a mtree(5) manifest. This is more space-efficient than
+    deploying a tarball, and speeds up setup when running under Flatpak.
+    1.11.x subsandboxing. (Resolves: T27912)
+  * pv-wrap: Auto-detect Flatpak 1.11.x (T27612)
+  * pv-wrap: Suggest an appropriate `flatpak override` command if needed
   * pv-wrap: Remove support for escaping from a Flatpak container.
     We did this as a very early prototype, but it never fully worked, and
     required configuring Flatpak specially to allow Steam to escape from the
     sandbox (which obviously undermines Flatpak's intended sandboxing).
+  * pv-runtime: Fix some misleading log messages and comments
+  * pressure-vessel: Remove unnecessary bundled copies of vainfo and
+    vulkaninfo
   * tests: Update populate-depot.py from SteamLinuxRuntime.
     Adjust invocation as required.
-
-  [ Ludovico de Nittis ]
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 21 Apr 2021 14:22:04 +0100
+  [ Ludovico de Nittis ]
+  * system-info: Try to detect the expansion of $LIB and $PLATFORM (T27436)
+  * system-info: Detect Flatpak version (T27635)
+  * pressure-vessel: Undo SDL_VIDEODRIVER=wayland if running in scout.
+    The SDL in scout is too old for this to work.
+    (steam-runtime#232, steam-runtime#396, T27777)
+  * pressure-vessel: Show a warning if $PLATFORM cannot be detected.
+    This would break our ability to set up VDPAU drivers.
+  * Refactoring
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 30 Apr 2021 15:51:20 +0100
 
 steam-runtime-tools (0.20210415.0) scout; urgency=medium
 

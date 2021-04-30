@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210421.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210430.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Performance improvements, especially on systems with
@@ -35,7 +35,7 @@ steam-runtime-tools (0.20210421.0) UNRELEASED; urgency=medium
     This would break our ability to set up VDPAU drivers.
   * Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 30 Apr 2021 15:51:20 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 30 Apr 2021 16:45:15 +0100
 
 steam-runtime-tools (0.20210415.0) scout; urgency=medium
 

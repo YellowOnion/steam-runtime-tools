@@ -11,6 +11,10 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_architecture_error_quark@Base 0.20201124.0
  srt_architecture_get_expected_runtime_linker@Base 0.20201124.0
  srt_check_library_presence@Base 0.20190801.0
+ srt_container_info_get_container_host_directory@Base 0.20210430.0
+ srt_container_info_get_container_type@Base 0.20210430.0
+ srt_container_info_get_flatpak_version@Base 0.20210430.0
+ srt_container_info_get_type@Base 0.20210430.0
  srt_container_type_get_type@Base 0.20200306.0
  srt_desktop_entry_get_commandline@Base 0.20200415.0
  srt_desktop_entry_get_filename@Base 0.20200415.0
@@ -135,6 +139,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_can_run@Base 0.20190801.0
  srt_system_info_can_write_to_uinput@Base 0.20190801.0
  srt_system_info_check_all_graphics@Base 0.20190822.0
+ srt_system_info_check_container@Base 0.20210430.0
  srt_system_info_check_graphics@Base 0.20190822.0
  srt_system_info_check_libraries@Base 0.20190802.0
  srt_system_info_check_library@Base 0.20190802.0
@@ -142,6 +147,8 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_check_runtime_linker@Base 0.20201124.0
  srt_system_info_dup_container_host_directory@Base 0.20200306.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
+ srt_system_info_dup_libdl_lib@Base 0.20210430.0
+ srt_system_info_dup_libdl_platform@Base 0.20210430.0
  srt_system_info_dup_multiarch_tuples@Base 0.20210305.0
  srt_system_info_dup_os_build_id@Base 0.20190926.1
  srt_system_info_dup_os_id@Base 0.20190926.1

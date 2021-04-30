@@ -28,16 +28,33 @@ else
         ${NULL+}
 fi
 
-echo "1..1"
+echo "1..2"
 
 rm -fr depots/test-soldier-archives
 mkdir -p depots/test-soldier-archives
 python3 ./populate-depot.py \
     --depot=depots/test-soldier-archives \
+    --toolmanifest \
+    --include-archives \
+    --no-unpack-runtimes \
     "$@" \
     soldier \
     ${NULL+}
 find depots/test-soldier-archives -ls > depots/test-soldier-archives.txt
 echo "ok 1 - soldier, deploying from archive"
+
+rm -fr depots/test-soldier-unpacked
+mkdir -p depots/test-soldier-unpacked
+python3 ./populate-depot.py \
+    --depot=depots/test-soldier-unpacked \
+    --no-include-archives \
+    --toolmanifest \
+    --unpack-runtimes \
+    --versioned-directories \
+    "$@" \
+    soldier \
+    ${NULL+}
+find depots/test-soldier-unpacked -ls > depots/test-soldier-unpacked.txt
+echo "ok 2 - soldier, running from unpacked directory"
 
 # vim:set sw=4 sts=4 et:

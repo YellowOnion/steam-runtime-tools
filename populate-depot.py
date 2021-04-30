@@ -29,14 +29,17 @@ from just-built files or by downloading a previous build.
 """
 
 import argparse
+import gzip
 import hashlib
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.parse
 import urllib.request
@@ -47,6 +50,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Set,
 )
 
 from debian.deb822 import (
@@ -323,7 +327,32 @@ class Runtime:
         return pinned
 
 
-RUN_IN_WHATEVER_SOURCE = '''\
+RUN_IN_DIR_SOURCE = '''\
+#!/bin/sh
+# {source_for_generated_file}
+
+set -eu
+
+me="$(readlink -f "$0")"
+here="${{me%/*}}"
+me="${{me##*/}}"
+
+dir={escaped_name}_platform_{escaped_version}
+pressure_vessel="${{PRESSURE_VESSEL_PREFIX:-"${{here}}/pressure-vessel"}}"
+
+export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
+export PRESSURE_VESSEL_RUNTIME="${{dir}}"
+unset PRESSURE_VESSEL_RUNTIME_ARCHIVE
+export PRESSURE_VESSEL_RUNTIME_BASE="${{here}}"
+
+if [ -z "${{PRESSURE_VESSEL_VARIABLE_DIR-}}" ]; then
+    export PRESSURE_VESSEL_VARIABLE_DIR="${{here}}/var"
+fi
+
+exec "${{pressure_vessel}}/bin/pressure-vessel-unruntime" "$@"
+'''
+
+RUN_IN_ARCHIVE_SOURCE = '''\
 #!/bin/sh
 # {source_for_generated_file}
 
@@ -390,6 +419,7 @@ class Main:
         credential_hosts: Sequence[str] = (),
         depot: str = 'depot',
         images_uri: str = DEFAULT_IMAGES_URI,
+        include_archives: bool = True,
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
@@ -403,6 +433,7 @@ class Main:
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
         version: str = 'latest',
+        versioned_directories: bool = False,
         **kwargs: Dict[str, Any],
     ) -> None:
         openers: List[urllib.request.BaseHandler] = []
@@ -454,6 +485,7 @@ class Main:
         self.default_version = version
         self.depot = os.path.abspath(depot)
         self.images_uri = images_uri
+        self.include_archives = include_archives
         self.pressure_vessel = pressure_vessel
         self.runtimes = []      # type: List[Runtime]
         self.source_dir = source_dir
@@ -464,8 +496,15 @@ class Main:
         self.unpack_runtimes = unpack_runtimes
         self.unpack_sources = unpack_sources
         self.unpack_sources_into = unpack_sources_into
+        self.versioned_directories = versioned_directories
 
         os.makedirs(self.cache, exist_ok=True)
+
+        if not (self.include_archives or self.unpack_runtimes):
+            raise RuntimeError(
+                'Cannot use both --no-include-archives and '
+                '--no-unpack-runtimes'
+            )
 
         for runtime in runtimes:
             if '=' in runtime:
@@ -648,11 +687,36 @@ class Main:
 
             component_version = ComponentVersion(runtime.name)
 
-            version = runtime.pinned_version
-            comment = ', '.join(sorted(runtime.runtime_files))
+            version = runtime.pinned_version or runtime.version
 
-            if version is None:
-                version = runtime.version
+            if self.include_archives:
+                runtime_files = set(runtime.runtime_files)
+            else:
+                runtime_files = set()
+
+            if self.unpack_runtimes:
+                if self.versioned_directories:
+                    runtime_files.add(
+                        '{}_platform_{}/'.format(runtime.name, version)
+                    )
+
+                    if runtime.include_sdk:
+                        runtime_files.add(
+                            '{}_sdk_{}/'.format(runtime.name, version)
+                        )
+                        runtime_files.add(
+                            '{}_sysroot_{}/'.format(runtime.name, version)
+                        )
+                else:
+                    runtime_files.add(runtime.name + '/')
+
+                    if runtime.include_sdk:
+                        runtime_files.add(runtime.name + '_sdk/')
+                        runtime_files.add(runtime.name + '_sysroot/')
+
+            comment = ', '.join(sorted(runtime_files))
+
+            if runtime.pinned_version is None:
                 comment += ' (from local build)'
 
             component_version.version = version
@@ -662,7 +726,13 @@ class Main:
             self.versions.append(component_version)
 
             if self.unpack_runtimes:
-                dest = os.path.join(self.depot, runtime.name)
+                if self.versioned_directories:
+                    dest = os.path.join(
+                        self.depot,
+                        '{}_platform_{}'.format(runtime.name, version),
+                    )
+                else:
+                    dest = os.path.join(self.depot, runtime.name)
 
                 with suppress(FileNotFoundError):
                     shutil.rmtree(dest)
@@ -672,13 +742,26 @@ class Main:
                     'tar',
                     '-C', dest,
                     '-xf',
-                    os.path.join(self.depot, runtime.tarball),
+                    os.path.join(self.cache, runtime.tarball),
                 ]
                 logger.info('%r', argv)
                 subprocess.run(argv, check=True)
+                self.write_lookaside(
+                    os.path.join(self.cache, runtime.tarball),
+                    dest,
+                )
 
                 if runtime.include_sdk:
-                    dest = os.path.join(self.depot, runtime.name + '_sdk')
+                    if self.versioned_directories:
+                        dest = os.path.join(
+                            self.depot,
+                            '{}_sdk_{}'.format(runtime.name, version),
+                        )
+                    else:
+                        dest = os.path.join(
+                            self.depot,
+                            '{}_sdk'.format(runtime.name),
+                        )
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(os.path.join(dest, 'files'))
@@ -693,24 +776,35 @@ class Main:
                     argv = [
                         'tar',
                         '-C', dest,
-                        '-xf', os.path.join(self.depot, runtime.sdk_tarball),
+                        '-xf', os.path.join(self.cache, runtime.sdk_tarball),
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
+                    self.write_lookaside(
+                        os.path.join(self.cache, runtime.sdk_tarball),
+                        dest,
+                    )
 
                     argv = [
                         'tar',
                         '-C', os.path.join(dest, 'files', 'lib', 'debug'),
                         '--transform', r's,^\(\./\)\?files\(/\|$\),,',
                         '-xf',
-                        os.path.join(self.depot, runtime.debug_tarball),
+                        os.path.join(self.cache, runtime.debug_tarball),
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
 
-                    sysroot = os.path.join(
-                        self.depot, runtime.name + '_sysroot',
-                    )
+                    if self.versioned_directories:
+                        sysroot = os.path.join(
+                            self.depot,
+                            '{}_sysroot_{}'.format(runtime.name, version),
+                        )
+                    else:
+                        sysroot = os.path.join(
+                            self.depot,
+                            '{}_sysroot'.format(runtime.name),
+                        )
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(sysroot)
@@ -721,7 +815,7 @@ class Main:
                         '-C', os.path.join(sysroot, 'files'),
                         '--exclude', 'dev/*',
                         '-xf',
-                        os.path.join(self.depot, runtime.sysroot_tarball),
+                        os.path.join(self.cache, runtime.sysroot_tarball),
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
@@ -737,17 +831,30 @@ class Main:
             with open(
                 os.path.join(self.depot, 'run-in-' + runtime.name), 'w'
             ) as writer:
-                writer.write(
-                    RUN_IN_WHATEVER_SOURCE.format(
-                        escaped_arch=shlex.quote(runtime.architecture),
-                        escaped_name=shlex.quote(runtime.name),
-                        escaped_runtime=shlex.quote(runtime.platform),
-                        escaped_suite=shlex.quote(runtime.suite),
-                        source_for_generated_file=(
-                            'Generated file, do not edit'
-                        ),
+                if self.unpack_runtimes:
+                    writer.write(
+                        RUN_IN_DIR_SOURCE.format(
+                            escaped_name=shlex.quote(runtime.name),
+                            escaped_version=shlex.quote(
+                                str(runtime.pinned_version)
+                            ),
+                            source_for_generated_file=(
+                                'Generated file, do not edit'
+                            ),
+                        )
                     )
-                )
+                else:
+                    writer.write(
+                        RUN_IN_ARCHIVE_SOURCE.format(
+                            escaped_arch=shlex.quote(runtime.architecture),
+                            escaped_name=shlex.quote(runtime.name),
+                            escaped_runtime=shlex.quote(runtime.platform),
+                            escaped_suite=shlex.quote(runtime.suite),
+                            source_for_generated_file=(
+                                'Generated file, do not edit'
+                            ),
+                        )
+                    )
             os.chmod(os.path.join(self.depot, 'run-in-' + runtime.name), 0o755)
 
         for runtime in self.runtimes[0:]:
@@ -779,17 +886,30 @@ class Main:
             with open(
                 os.path.join(self.depot, 'run'), 'w'
             ) as writer:
-                writer.write(
-                    RUN_IN_WHATEVER_SOURCE.format(
-                        escaped_arch=shlex.quote(runtime.architecture),
-                        escaped_name=shlex.quote(runtime.name),
-                        escaped_runtime=shlex.quote(runtime.platform),
-                        escaped_suite=shlex.quote(runtime.suite),
-                        source_for_generated_file=(
-                            'Generated file, do not edit'
-                        ),
+                if self.unpack_runtimes:
+                    writer.write(
+                        RUN_IN_DIR_SOURCE.format(
+                            escaped_name=shlex.quote(runtime.name),
+                            escaped_version=shlex.quote(
+                                str(runtime.pinned_version)
+                            ),
+                            source_for_generated_file=(
+                                'Generated file, do not edit'
+                            ),
+                        )
                     )
-                )
+                else:
+                    writer.write(
+                        RUN_IN_ARCHIVE_SOURCE.format(
+                            escaped_arch=shlex.quote(runtime.architecture),
+                            escaped_name=shlex.quote(runtime.name),
+                            escaped_runtime=shlex.quote(runtime.platform),
+                            escaped_suite=shlex.quote(runtime.suite),
+                            source_for_generated_file=(
+                                'Generated file, do not edit'
+                            ),
+                        )
+                    )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
             if self.toolmanifest:
@@ -932,20 +1052,24 @@ class Main:
         """
 
         pinned = runtime.pin_version(self.opener)
+
         for basename in runtime.runtime_files:
             downloaded = runtime.fetch(basename, self.opener)
-            os.link(downloaded, os.path.join(self.depot, basename))
 
-        with open(
-            os.path.join(self.depot, runtime.build_id_file), 'w',
-        ) as writer:
-            writer.write(f'{pinned}\n')
+            if self.include_archives:
+                os.link(downloaded, os.path.join(self.depot, basename))
 
-        if runtime.include_sdk:
+        if self.include_archives:
             with open(
-                os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+                os.path.join(self.depot, runtime.build_id_file), 'w',
             ) as writer:
                 writer.write(f'{pinned}\n')
+
+            if runtime.include_sdk:
+                with open(
+                    os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+                ) as writer:
+                    writer.write(f'{pinned}\n')
 
         if self.unpack_sources:
             with tempfile.TemporaryDirectory(prefix='populate-depot.') as tmp:
@@ -1029,6 +1153,136 @@ class Main:
             ],
             check=True,
         )
+
+    def octal_escape_char(self, match: 're.Match') -> str:
+        ret = []    # type: List[str]
+
+        for byte in match.group(0).encode('utf-8', 'surrogateescape'):
+            ret.append('\\%03o' % byte)
+
+        return ''.join(ret)
+
+    _NEEDS_OCTAL_ESCAPE = re.compile(r'[^-A-Za-z0-9+,./:@_]')
+
+    def octal_escape(self, s: str) -> str:
+        return self._NEEDS_OCTAL_ESCAPE.sub(self.octal_escape_char, s)
+
+    def filename_is_windows_friendly(self, s: str) -> bool:
+        for c in s:
+            # This is the set of characters that are reserved in Windows
+            # filenames, excluding '/' which obviously we're fine with
+            # using as a directory separator.
+            if c in r'<>:"\|?*':
+                return False
+
+            if c >= '\uDC80' and c <= '\uDCFF':
+                # surrogate escape, not Unicode
+                return False
+
+        return True
+
+    def write_lookaside(self, archive: str, dest: str) -> None:
+        with tarfile.open(
+            archive, mode='r'
+        ) as unarchiver, gzip.open(
+            os.path.join(dest, 'usr-mtree.txt.gz'), 'wt'
+        ) as writer:
+            lc_names = {}                   # type: Dict[str, str]
+            differ_only_by_case = set()     # type: Set[str]
+            not_windows_friendly = set()    # type: Set[str]
+            sha256 = {}                     # type: Dict[str, str]
+            sizes = {}                      # type: Dict[str, int]
+
+            writer.write('#mtree\n')
+            writer.write('. type=dir\n')
+
+            for member in unarchiver:
+                name = member.name
+
+                if name.startswith('./'):
+                    name = name[len('./'):]
+
+                if not name.startswith('files/'):
+                    continue
+
+                name = name[len('files/'):]
+
+                if not self.filename_is_windows_friendly(name):
+                    not_windows_friendly.add(name)
+
+                if name.lower() in lc_names:
+                    differ_only_by_case.add(lc_names[name.lower()])
+                    differ_only_by_case.add(name)
+                else:
+                    lc_names[name.lower()] = name
+
+                fields = ['./' + self.octal_escape(name)]
+
+                if member.isfile() or member.islnk():
+                    fields.append('type=file')
+                    fields.append('mode=%o' % member.mode)
+                    fields.append('time=%d' % member.mtime)
+
+                    if member.islnk():
+                        writer.write(
+                            '# hard link to {}\n'.format(
+                                self.octal_escape(member.linkname),
+                            ),
+                        )
+                        assert member.linkname in sizes
+                        fields.append('size=%d' % sizes[member.linkname])
+
+                        if sizes[member.linkname] > 0:
+                            assert member.linkname in sha256
+                            fields.append('sha256=' + sha256[member.linkname])
+                    else:
+                        fields.append('size=%d' % member.size)
+                        sizes[member.name] = member.size
+
+                        if member.size > 0:
+                            hasher = hashlib.sha256()
+                            extract = unarchiver.extractfile(member)
+                            assert extract is not None
+                            with extract:
+                                while True:
+                                    blob = extract.read(4096)
+
+                                    if not blob:
+                                        break
+
+                                    hasher.update(blob)
+
+                            fields.append('sha256=' + hasher.hexdigest())
+                            sha256[member.name] = hasher.hexdigest()
+
+                elif member.issym():
+                    fields.append('type=link')
+                    fields.append('link=' + self.octal_escape(member.linkname))
+                elif member.isdir():
+                    fields.append('type=dir')
+                else:
+                    writer.write(
+                        '# unknown file type: {}\n'.format(
+                            self.octal_escape(member.name),
+                        ),
+                    )
+                    continue
+
+                writer.write(' '.join(fields) + '\n')
+
+            if differ_only_by_case:
+                writer.write('\n')
+                writer.write('# Files whose names differ only by case:\n')
+
+                for name in sorted(differ_only_by_case):
+                    writer.write('# {}\n'.format(self.octal_escape(name)))
+
+            if not_windows_friendly:
+                writer.write('\n')
+                writer.write('# Files whose names are not Windows-friendly:\n')
+
+                for name in sorted(not_windows_friendly):
+                    writer.write('# {}\n'.format(self.octal_escape(name)))
 
 
 def main() -> None:
@@ -1126,6 +1380,19 @@ def main() -> None:
         )
     )
     parser.add_argument(
+        '--include-archives', action='store_true', default=True,
+        help=(
+            'Provide the runtime as an archive to be unpacked '
+            '[default]'
+        )
+    )
+    parser.add_argument(
+        '--no-include-archives', action='store_false', dest='include_archives',
+        help=(
+            'Do not provide the runtime as an archive to be unpacked'
+        )
+    )
+    parser.add_argument(
         '--include-sdk', default=False, action='store_true',
         help='Include a corresponding SDK',
     )
@@ -1155,6 +1422,12 @@ def main() -> None:
         )
     )
     parser.add_argument(
+        '--no-unpack-runtimes', action='store_false', dest='unpack_runtimes',
+        help=(
+            "Don't unpack the runtimes into the --depot"
+        )
+    )
+    parser.add_argument(
         '--unpack-source', metavar='PACKAGE', action='append', default=[],
         dest='unpack_sources',
         help=(
@@ -1167,6 +1440,20 @@ def main() -> None:
         help=(
             'Unpack any source packages specified by --unpack-source '
             'into PATH/RUNTIME/SOURCE (default: ./RUNTIME/SOURCE).'
+        )
+    )
+    parser.add_argument(
+        '--versioned-directories', action='store_true', default=False,
+        help=(
+            'Include version number in unpacked runtime directories'
+        )
+    )
+    parser.add_argument(
+        '--no-versioned-directories', action='store_false',
+        dest='versioned_directories',
+        help=(
+            'Do not include version number in unpacked runtime directories '
+            '[default]'
         )
     )
     parser.add_argument(

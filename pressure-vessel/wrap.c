@@ -2171,6 +2171,22 @@ main (int argc,
                   adjusted_path = g_build_filename ("/run/parent", preload, NULL);
                   g_debug ("%s -> %s", preload, adjusted_path);
                   pv_search_path_append (adjusted, adjusted_path);
+
+                  if (g_str_has_suffix (preload, "/libshared-library-guard.so"))
+                    {
+                      /* We special case libshared-library-guard because usually
+                       * its blockedlist file is located in `/app` and we need
+                       * to change that to the `/run/parent` counterpart */
+                      const gchar *blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
+                      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS))
+                        {
+                          g_autofree gchar *adjusted_blockedlist = NULL;
+                          adjusted_blockedlist = g_build_filename ("/run/parent",
+                                                                   blockedlist, NULL);
+                          pv_environ_lock_env (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
+                                               adjusted_blockedlist);
+                        }
+                    }
                 }
               else
                 {

@@ -1094,9 +1094,11 @@ class Main:
                                 exist_ok=True,
                             )
 
+                            file_path = {}    # type: Dict[str, str]
+
                             for f in stanza['files']:
                                 name = f['name']
-                                downloaded = runtime.fetch(
+                                file_path[name] = runtime.fetch(
                                     os.path.join('sources', name),
                                     self.opener,
                                 )
@@ -1119,7 +1121,7 @@ class Main:
                                         [
                                             'dpkg-source',
                                             '-x',
-                                            downloaded,
+                                            file_path[name],
                                             dest,
                                         ],
                                         check=True,

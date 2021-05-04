@@ -836,7 +836,7 @@ class Main:
                         RUN_IN_DIR_SOURCE.format(
                             escaped_name=shlex.quote(runtime.name),
                             escaped_version=shlex.quote(
-                                str(runtime.pinned_version)
+                                str(runtime.pinned_version or runtime.version)
                             ),
                             source_for_generated_file=(
                                 'Generated file, do not edit'
@@ -891,7 +891,7 @@ class Main:
                         RUN_IN_DIR_SOURCE.format(
                             escaped_name=shlex.quote(runtime.name),
                             escaped_version=shlex.quote(
-                                str(runtime.pinned_version)
+                                str(runtime.pinned_version or runtime.version)
                             ),
                             source_for_generated_file=(
                                 'Generated file, do not edit'
@@ -989,7 +989,7 @@ class Main:
 
         for basename in runtime.runtime_files:
             src = os.path.join(runtime.path, basename)
-            dest = os.path.join(self.depot, basename)
+            dest = os.path.join(self.cache, basename)
             logger.info('Hard-linking local runtime %r to %r', src, dest)
 
             with suppress(FileNotFoundError):
@@ -997,16 +997,26 @@ class Main:
 
             os.link(src, dest)
 
-        with open(
-            os.path.join(self.depot, runtime.build_id_file), 'w',
-        ) as writer:
-            writer.write(f'{runtime.version}\n')
+            if self.include_archives:
+                dest = os.path.join(self.depot, basename)
+                logger.info('Hard-linking local runtime %r to %r', src, dest)
 
-        if runtime.include_sdk:
+                with suppress(FileNotFoundError):
+                    os.unlink(dest)
+
+                os.link(src, dest)
+
+        if self.include_archives:
             with open(
-                os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+                os.path.join(self.depot, runtime.build_id_file), 'w',
             ) as writer:
                 writer.write(f'{runtime.version}\n')
+
+            if runtime.include_sdk:
+                with open(
+                    os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+                ) as writer:
+                    writer.write(f'{runtime.version}\n')
 
         if self.unpack_sources:
             with open(

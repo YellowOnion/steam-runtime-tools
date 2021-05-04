@@ -135,20 +135,24 @@ class TestPressureVessel(unittest.TestCase):
                 raise
 
     def get_runtime_build_id(self, suite):
-        filename = (
-            'com.valvesoftware.SteamRuntime.Platform-'
-            '{}-{}-buildid.txt'
-        ).format(
-            ','.join(self.dpkg_architectures),
-            suite,
-        )
-
         with self.catch('get build ID'):
-            with open(os.path.join(self.depot, filename)) as reader:
-                runtime_build_id = reader.read().strip()
+            with open(os.path.join(self.depot, 'VERSIONS.txt')) as reader:
+                for line in reader:
+                    if line.startswith('#'):
+                        continue
 
-        logger.info('%s build ID: %s', suite, runtime_build_id)
-        return runtime_build_id
+                    fields = line.rstrip('\n').split('\t')
+
+                    if len(fields) < 2:
+                        continue
+
+                    if fields[0] == suite:
+                        logger.info('%s build ID: %s', suite, fields[1])
+                        return fields[1]
+                else:
+                    raise RuntimeError(
+                        'suite {} not found in VERSIONS.txt'.format(suite)
+                    )
 
     def run_subprocess(
         self,

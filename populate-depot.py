@@ -419,7 +419,7 @@ class Main:
         credential_hosts: Sequence[str] = (),
         depot: str = 'depot',
         images_uri: str = DEFAULT_IMAGES_URI,
-        include_archives: bool = True,
+        include_archives: bool = False,
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
@@ -429,7 +429,7 @@ class Main:
         suite: str = '',
         toolmanifest: bool = False,
         unpack_ld_library_path: str = '',
-        unpack_runtimes: bool = False,
+        unpack_runtimes: bool = True,
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
         version: str = 'latest',
@@ -1349,16 +1349,16 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--include-archives', action='store_true', default=True,
+        '--include-archives', action='store_true', default=False,
         help=(
-            'Provide the runtime as an archive to be unpacked '
-            '[default]'
+            'Provide the runtime as an archive to be unpacked'
         )
     )
     parser.add_argument(
         '--no-include-archives', action='store_false', dest='include_archives',
         help=(
-            'Do not provide the runtime as an archive to be unpacked'
+            'Do not provide the runtime as an archive to be unpacked '
+            '[default]'
         )
     )
     parser.add_argument(
@@ -1384,10 +1384,10 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--unpack-runtimes', action='store_true', default=False,
+        '--unpack-runtimes', action='store_true', default=True,
         help=(
             "Unpack the runtimes into the --depot, for use with "
-            "pressure-vessel's tests/containers.py."
+            "pressure-vessel's tests/containers.py. [default]"
         )
     )
     parser.add_argument(

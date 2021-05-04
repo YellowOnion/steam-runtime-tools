@@ -40,4 +40,5 @@ here="${0%/*}"
     --unpack-runtimes \
     --unpack-source=steamrt \
     --unpack-sources-into=sources \
+    --versioned-directories \
     "$@"

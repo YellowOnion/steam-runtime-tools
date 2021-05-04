@@ -1412,17 +1412,17 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--versioned-directories', action='store_true', default=False,
+        '--versioned-directories', action='store_true', default=True,
         help=(
-            'Include version number in unpacked runtime directories'
+            'Include version number in unpacked runtime directories '
+            '[default]'
         )
     )
     parser.add_argument(
         '--no-versioned-directories', action='store_false',
         dest='versioned_directories',
         help=(
-            'Do not include version number in unpacked runtime directories '
-            '[default]'
+            'Do not include version number in unpacked runtime directories'
         )
     )
     parser.add_argument(

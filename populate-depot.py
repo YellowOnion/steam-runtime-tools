@@ -883,33 +883,10 @@ class Main:
                     content['manifest']['unlisted'] = '1'
                 vdf.dump(content, writer, pretty=True, escaped=True)
 
-            with open(
-                os.path.join(self.depot, 'run'), 'w'
-            ) as writer:
-                if self.unpack_runtimes:
-                    writer.write(
-                        RUN_IN_DIR_SOURCE.format(
-                            escaped_name=shlex.quote(runtime.name),
-                            escaped_version=shlex.quote(
-                                str(runtime.pinned_version or runtime.version)
-                            ),
-                            source_for_generated_file=(
-                                'Generated file, do not edit'
-                            ),
-                        )
-                    )
-                else:
-                    writer.write(
-                        RUN_IN_ARCHIVE_SOURCE.format(
-                            escaped_arch=shlex.quote(runtime.architecture),
-                            escaped_name=shlex.quote(runtime.name),
-                            escaped_runtime=shlex.quote(runtime.platform),
-                            escaped_suite=shlex.quote(runtime.suite),
-                            source_for_generated_file=(
-                                'Generated file, do not edit'
-                            ),
-                        )
-                    )
+            shutil.copy2(
+                os.path.join(self.depot, 'run-in-' + runtime.name),
+                os.path.join(self.depot, 'run'),
+            )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
             if self.toolmanifest:

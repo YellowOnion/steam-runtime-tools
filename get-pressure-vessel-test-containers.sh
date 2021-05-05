@@ -33,11 +33,12 @@ here="${0%/*}"
 "${here}/populate-depot.py" \
     --depot=depot \
     --cache=.cache \
-    --include-archives \
+    --no-include-archives \
     --include-sdk \
     --no-versioned-directories \
     --unpack-ld-library-path=depot \
     --unpack-runtimes \
     --unpack-source=steamrt \
     --unpack-sources-into=sources \
+    --versioned-directories \
     "$@"

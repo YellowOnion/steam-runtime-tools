@@ -337,7 +337,7 @@ me="$(readlink -f "$0")"
 here="${{me%/*}}"
 me="${{me##*/}}"
 
-dir={escaped_name}_platform_{escaped_version}
+dir={escaped_dir}
 pressure_vessel="${{PRESSURE_VESSEL_PREFIX:-"${{here}}/pressure-vessel"}}"
 
 export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
@@ -419,7 +419,7 @@ class Main:
         credential_hosts: Sequence[str] = (),
         depot: str = 'depot',
         images_uri: str = DEFAULT_IMAGES_URI,
-        include_archives: bool = True,
+        include_archives: bool = False,
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
         runtimes: Sequence[str] = (),
@@ -429,7 +429,7 @@ class Main:
         suite: str = '',
         toolmanifest: bool = False,
         unpack_ld_library_path: str = '',
-        unpack_runtimes: bool = False,
+        unpack_runtimes: bool = True,
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
         version: str = 'latest',
@@ -687,7 +687,14 @@ class Main:
 
             component_version = ComponentVersion(runtime.name)
 
-            version = runtime.pinned_version or runtime.version
+            if runtime.path:
+                with open(
+                    os.path.join(runtime.path, runtime.build_id_file), 'r',
+                ) as text_reader:
+                    version = text_reader.read().strip()
+            else:
+                version = runtime.pinned_version or ''
+                assert version
 
             if self.include_archives:
                 runtime_files = set(runtime.runtime_files)
@@ -696,43 +703,12 @@ class Main:
 
             if self.unpack_runtimes:
                 if self.versioned_directories:
-                    runtime_files.add(
-                        '{}_platform_{}/'.format(runtime.name, version)
-                    )
-
-                    if runtime.include_sdk:
-                        runtime_files.add(
-                            '{}_sdk_{}/'.format(runtime.name, version)
-                        )
-                        runtime_files.add(
-                            '{}_sysroot_{}/'.format(runtime.name, version)
-                        )
+                    subdir = '{}_platform_{}'.format(runtime.name, version)
                 else:
-                    runtime_files.add(runtime.name + '/')
+                    subdir = runtime.name
 
-                    if runtime.include_sdk:
-                        runtime_files.add(runtime.name + '_sdk/')
-                        runtime_files.add(runtime.name + '_sysroot/')
-
-            comment = ', '.join(sorted(runtime_files))
-
-            if runtime.pinned_version is None:
-                comment += ' (from local build)'
-
-            component_version.version = version
-            component_version.runtime = runtime.suite
-            component_version.runtime_version = version
-            component_version.comment = comment
-            self.versions.append(component_version)
-
-            if self.unpack_runtimes:
-                if self.versioned_directories:
-                    dest = os.path.join(
-                        self.depot,
-                        '{}_platform_{}'.format(runtime.name, version),
-                    )
-                else:
-                    dest = os.path.join(self.depot, runtime.name)
+                dest = os.path.join(self.depot, subdir)
+                runtime_files.add(subdir + '/')
 
                 with suppress(FileNotFoundError):
                     shutil.rmtree(dest)
@@ -753,15 +729,12 @@ class Main:
 
                 if runtime.include_sdk:
                     if self.versioned_directories:
-                        dest = os.path.join(
-                            self.depot,
-                            '{}_sdk_{}'.format(runtime.name, version),
-                        )
+                        sdk_subdir = '{}_sdk_{}'.format(runtime.name, version)
                     else:
-                        dest = os.path.join(
-                            self.depot,
-                            '{}_sdk'.format(runtime.name),
-                        )
+                        sdk_subdir = '{}_sdk'.format(runtime.name)
+
+                    dest = os.path.join(self.depot, sdk_subdir)
+                    runtime_files.add(sdk_subdir + '/')
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(os.path.join(dest, 'files'))
@@ -796,15 +769,14 @@ class Main:
                     subprocess.run(argv, check=True)
 
                     if self.versioned_directories:
-                        sysroot = os.path.join(
-                            self.depot,
-                            '{}_sysroot_{}'.format(runtime.name, version),
+                        sysroot_subdir = '{}_sysroot_{}'.format(
+                            runtime.name, version,
                         )
                     else:
-                        sysroot = os.path.join(
-                            self.depot,
-                            '{}_sysroot'.format(runtime.name),
-                        )
+                        sysroot_subdir = '{}_sysroot'.format(runtime.name)
+
+                    sysroot = os.path.join(self.depot, sysroot_subdir)
+                    runtime_files.add(sysroot_subdir + '/')
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(sysroot)
@@ -834,10 +806,7 @@ class Main:
                 if self.unpack_runtimes:
                     writer.write(
                         RUN_IN_DIR_SOURCE.format(
-                            escaped_name=shlex.quote(runtime.name),
-                            escaped_version=shlex.quote(
-                                str(runtime.pinned_version)
-                            ),
+                            escaped_dir=shlex.quote(subdir),
                             source_for_generated_file=(
                                 'Generated file, do not edit'
                             ),
@@ -856,6 +825,17 @@ class Main:
                         )
                     )
             os.chmod(os.path.join(self.depot, 'run-in-' + runtime.name), 0o755)
+
+            comment = ', '.join(sorted(runtime_files))
+
+            if runtime.path:
+                comment += ' (from local build)'
+
+            component_version.version = version
+            component_version.runtime = runtime.suite
+            component_version.runtime_version = version
+            component_version.comment = comment
+            self.versions.append(component_version)
 
         for runtime in self.runtimes[0:]:
             if not self.toolmanifest:
@@ -883,33 +863,10 @@ class Main:
                     content['manifest']['unlisted'] = '1'
                 vdf.dump(content, writer, pretty=True, escaped=True)
 
-            with open(
-                os.path.join(self.depot, 'run'), 'w'
-            ) as writer:
-                if self.unpack_runtimes:
-                    writer.write(
-                        RUN_IN_DIR_SOURCE.format(
-                            escaped_name=shlex.quote(runtime.name),
-                            escaped_version=shlex.quote(
-                                str(runtime.pinned_version)
-                            ),
-                            source_for_generated_file=(
-                                'Generated file, do not edit'
-                            ),
-                        )
-                    )
-                else:
-                    writer.write(
-                        RUN_IN_ARCHIVE_SOURCE.format(
-                            escaped_arch=shlex.quote(runtime.architecture),
-                            escaped_name=shlex.quote(runtime.name),
-                            escaped_runtime=shlex.quote(runtime.platform),
-                            escaped_suite=shlex.quote(runtime.suite),
-                            source_for_generated_file=(
-                                'Generated file, do not edit'
-                            ),
-                        )
-                    )
+            shutil.copy2(
+                os.path.join(self.depot, 'run-in-' + runtime.name),
+                os.path.join(self.depot, 'run'),
+            )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
             if self.toolmanifest:
@@ -989,7 +946,7 @@ class Main:
 
         for basename in runtime.runtime_files:
             src = os.path.join(runtime.path, basename)
-            dest = os.path.join(self.depot, basename)
+            dest = os.path.join(self.cache, basename)
             logger.info('Hard-linking local runtime %r to %r', src, dest)
 
             with suppress(FileNotFoundError):
@@ -997,16 +954,26 @@ class Main:
 
             os.link(src, dest)
 
-        with open(
-            os.path.join(self.depot, runtime.build_id_file), 'w',
-        ) as writer:
-            writer.write(f'{runtime.version}\n')
+            if self.include_archives:
+                dest = os.path.join(self.depot, basename)
+                logger.info('Hard-linking local runtime %r to %r', src, dest)
 
-        if runtime.include_sdk:
+                with suppress(FileNotFoundError):
+                    os.unlink(dest)
+
+                os.link(src, dest)
+
+        if self.include_archives:
             with open(
-                os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+                os.path.join(self.depot, runtime.build_id_file), 'w',
             ) as writer:
                 writer.write(f'{runtime.version}\n')
+
+            if runtime.include_sdk:
+                with open(
+                    os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
+                ) as writer:
+                    writer.write(f'{runtime.version}\n')
 
         if self.unpack_sources:
             with open(
@@ -1382,16 +1349,16 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--include-archives', action='store_true', default=True,
+        '--include-archives', action='store_true', default=False,
         help=(
-            'Provide the runtime as an archive to be unpacked '
-            '[default]'
+            'Provide the runtime as an archive to be unpacked'
         )
     )
     parser.add_argument(
         '--no-include-archives', action='store_false', dest='include_archives',
         help=(
-            'Do not provide the runtime as an archive to be unpacked'
+            'Do not provide the runtime as an archive to be unpacked '
+            '[default]'
         )
     )
     parser.add_argument(
@@ -1417,10 +1384,10 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--unpack-runtimes', action='store_true', default=False,
+        '--unpack-runtimes', action='store_true', default=True,
         help=(
             "Unpack the runtimes into the --depot, for use with "
-            "pressure-vessel's tests/containers.py."
+            "pressure-vessel's tests/containers.py. [default]"
         )
     )
     parser.add_argument(
@@ -1445,17 +1412,17 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--versioned-directories', action='store_true', default=False,
+        '--versioned-directories', action='store_true', default=True,
         help=(
-            'Include version number in unpacked runtime directories'
+            'Include version number in unpacked runtime directories '
+            '[default]'
         )
     )
     parser.add_argument(
         '--no-versioned-directories', action='store_false',
         dest='versioned_directories',
         help=(
-            'Do not include version number in unpacked runtime directories '
-            '[default]'
+            'Do not include version number in unpacked runtime directories'
         )
     )
     parser.add_argument(

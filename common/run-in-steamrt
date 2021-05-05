@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+echo "$0: This script is no longer used" >&2
+exit 2

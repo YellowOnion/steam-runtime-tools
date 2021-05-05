@@ -687,7 +687,14 @@ class Main:
 
             component_version = ComponentVersion(runtime.name)
 
-            version = runtime.pinned_version or runtime.version
+            if runtime.path:
+                with open(
+                    os.path.join(runtime.path, runtime.build_id_file), 'r',
+                ) as text_reader:
+                    version = text_reader.read().strip()
+            else:
+                version = runtime.pinned_version or ''
+                assert version
 
             if self.include_archives:
                 runtime_files = set(runtime.runtime_files)
@@ -821,7 +828,7 @@ class Main:
 
             comment = ', '.join(sorted(runtime_files))
 
-            if runtime.pinned_version is None:
+            if runtime.path:
                 comment += ' (from local build)'
 
             component_version.version = version

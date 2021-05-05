@@ -179,6 +179,13 @@ if [ -z "$soldier_version" ]; then
     exit 1
 fi
 
+case "$soldier_version" in
+    (latest-*)
+        echo "Bail out! $soldier_version is not a valid version"
+        exit 1
+        ;;
+esac
+
 run_dir="$(sed -ne 's/^dir=//p' depots/test-soldier-local/run)"
 echo "# Expected: soldier_platform_$soldier_version"
 echo "# In ./run: $run_dir"

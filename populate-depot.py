@@ -337,7 +337,7 @@ me="$(readlink -f "$0")"
 here="${{me%/*}}"
 me="${{me##*/}}"
 
-dir={escaped_name}_platform_{escaped_version}
+dir={escaped_dir}
 pressure_vessel="${{PRESSURE_VESSEL_PREFIX:-"${{here}}/pressure-vessel"}}"
 
 export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
@@ -696,43 +696,12 @@ class Main:
 
             if self.unpack_runtimes:
                 if self.versioned_directories:
-                    runtime_files.add(
-                        '{}_platform_{}/'.format(runtime.name, version)
-                    )
-
-                    if runtime.include_sdk:
-                        runtime_files.add(
-                            '{}_sdk_{}/'.format(runtime.name, version)
-                        )
-                        runtime_files.add(
-                            '{}_sysroot_{}/'.format(runtime.name, version)
-                        )
+                    subdir = '{}_platform_{}'.format(runtime.name, version)
                 else:
-                    runtime_files.add(runtime.name + '/')
+                    subdir = runtime.name
 
-                    if runtime.include_sdk:
-                        runtime_files.add(runtime.name + '_sdk/')
-                        runtime_files.add(runtime.name + '_sysroot/')
-
-            comment = ', '.join(sorted(runtime_files))
-
-            if runtime.pinned_version is None:
-                comment += ' (from local build)'
-
-            component_version.version = version
-            component_version.runtime = runtime.suite
-            component_version.runtime_version = version
-            component_version.comment = comment
-            self.versions.append(component_version)
-
-            if self.unpack_runtimes:
-                if self.versioned_directories:
-                    dest = os.path.join(
-                        self.depot,
-                        '{}_platform_{}'.format(runtime.name, version),
-                    )
-                else:
-                    dest = os.path.join(self.depot, runtime.name)
+                dest = os.path.join(self.depot, subdir)
+                runtime_files.add(subdir + '/')
 
                 with suppress(FileNotFoundError):
                     shutil.rmtree(dest)
@@ -753,15 +722,12 @@ class Main:
 
                 if runtime.include_sdk:
                     if self.versioned_directories:
-                        dest = os.path.join(
-                            self.depot,
-                            '{}_sdk_{}'.format(runtime.name, version),
-                        )
+                        sdk_subdir = '{}_sdk_{}'.format(runtime.name, version)
                     else:
-                        dest = os.path.join(
-                            self.depot,
-                            '{}_sdk'.format(runtime.name),
-                        )
+                        sdk_subdir = '{}_sdk'.format(runtime.name)
+
+                    dest = os.path.join(self.depot, sdk_subdir)
+                    runtime_files.add(sdk_subdir + '/')
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(os.path.join(dest, 'files'))
@@ -796,15 +762,14 @@ class Main:
                     subprocess.run(argv, check=True)
 
                     if self.versioned_directories:
-                        sysroot = os.path.join(
-                            self.depot,
-                            '{}_sysroot_{}'.format(runtime.name, version),
+                        sysroot_subdir = '{}_sysroot_{}'.format(
+                            runtime.name, version,
                         )
                     else:
-                        sysroot = os.path.join(
-                            self.depot,
-                            '{}_sysroot'.format(runtime.name),
-                        )
+                        sysroot_subdir = '{}_sysroot'.format(runtime.name)
+
+                    sysroot = os.path.join(self.depot, sysroot_subdir)
+                    runtime_files.add(sysroot_subdir + '/')
 
                     with suppress(FileNotFoundError):
                         shutil.rmtree(sysroot)
@@ -834,10 +799,7 @@ class Main:
                 if self.unpack_runtimes:
                     writer.write(
                         RUN_IN_DIR_SOURCE.format(
-                            escaped_name=shlex.quote(runtime.name),
-                            escaped_version=shlex.quote(
-                                str(runtime.pinned_version or runtime.version)
-                            ),
+                            escaped_dir=shlex.quote(subdir),
                             source_for_generated_file=(
                                 'Generated file, do not edit'
                             ),
@@ -856,6 +818,17 @@ class Main:
                         )
                     )
             os.chmod(os.path.join(self.depot, 'run-in-' + runtime.name), 0o755)
+
+            comment = ', '.join(sorted(runtime_files))
+
+            if runtime.pinned_version is None:
+                comment += ' (from local build)'
+
+            component_version.version = version
+            component_version.runtime = runtime.suite
+            component_version.runtime_version = version
+            component_version.comment = comment
+            self.versions.append(component_version)
 
         for runtime in self.runtimes[0:]:
             if not self.toolmanifest:

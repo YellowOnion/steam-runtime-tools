@@ -859,7 +859,7 @@ class Main:
                         use_tool_subprocess_reaper='1',
                     )
                 )       # type: Dict[str, Any]
-                if runtime.suite == 'soldier':
+                if runtime.suite != 'scout':
                     content['manifest']['unlisted'] = '1'
                 vdf.dump(content, writer, pretty=True, escaped=True)
 

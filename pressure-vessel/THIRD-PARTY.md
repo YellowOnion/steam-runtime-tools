@@ -2,10 +2,9 @@ Third-party modules
 ===================
 
 pressure-vessel includes the capsule-capture-libs utility from libcapsule,
-which is licensed under [LGPL-2.1-or-later][]. See
-libcapsule.txt. Complete source code can be obtained from the
-same place as pressure-vessel, or from
-<https://gitlab.collabora.com/vivek/libcapsule/>.
+which is licensed under [LGPL-2.1-or-later][]. Complete source code can
+be obtained from the same place as pressure-vessel, or from
+<https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 pressure-vessel incorporates code from GNOME libglnx, variously licensed
 under [LGPL-2.0-or-later][] and [LGPL-2.1-or-later][].

@@ -6,8 +6,6 @@ dpkg --add-architecture amd64
 dpkg --add-architecture i386
 apt-get -y update
 apt-get -y install \
-    libcapsule-tools-relocatable:amd64 \
-    libcapsule-tools-relocatable:i386 \
     libsteam-runtime-tools-0-0:amd64 \
     libsteam-runtime-tools-0-0:i386 \
     libsteam-runtime-tools-0-helpers:amd64 \

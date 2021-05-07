@@ -9,7 +9,6 @@ Build-Depends:
  gcc (>= 4:4.8) | gcc-4.8,
  glslang-tools,
  gtk-doc-tools <!nodoc>,
- libcapsule-tools | libcapsule-tools-relocatable,
  libelf-dev,
  libgl1-mesa-dev | libgl-dev,
  libglib2.0-dev,
@@ -89,7 +88,6 @@ Section: misc
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
- libcapsule-tools-relocatable,
  waffle-utils-multiarch,
 Description:
  The Steam Runtime is the library stack used to run the Steam client
@@ -139,7 +137,6 @@ Architecture: amd64 i386
 Multi-Arch: foreign
 Depends:
  bubblewrap,
- libcapsule-tools-relocatable (>= 0.20201120.0),
  python3 (>= 3.5) | python3.5,
  steam-runtime-tools-bin,
  ${misc:Depends},
@@ -157,7 +154,6 @@ Section: libs
 Architecture: amd64
 Multi-Arch: foreign
 Depends:
- libcapsule-tools-relocatable (>= 0.20201120.0),
  libsteam-runtime-tools-0-helpers,
  waffle-utils-multiarch,
  ${misc:Depends},
@@ -172,7 +168,6 @@ Section: libs
 Architecture: i386
 Multi-Arch: foreign
 Depends:
- libcapsule-tools-relocatable (>= 0.20201120.0),
  libsteam-runtime-tools-0-helpers,
  waffle-utils-multiarch,
  ${misc:Depends},

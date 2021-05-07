@@ -5,9 +5,6 @@
 /build/
 /builddir/
 /helpers/_generated_*/
-/libcapsule/
-/libcapsule_*.dsc
-/libcapsule_*.tar.[gx]z
 /obj-*/
 /pressure-vessel-[0-9]*.tar.gz
 /relocatable-install/

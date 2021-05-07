@@ -61,7 +61,7 @@ package:
     variables:
         STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
         STEAM_CI_INSTALL_SCRIPT: |
-            apt-get -y install libcapsule-tools pkg-create-dbgsym
+            apt-get -y install pkg-create-dbgsym
 
 package:i386:
     extends: .build_package
@@ -69,7 +69,7 @@ package:i386:
         BUILD_IMAGE: registry.gitlab.steamos.cloud/steamrt/scout/sdk/i386:beta
         STEAM_CI_DEB_BUILD: any     # debuild --build=any, aka -B
         STEAM_CI_INSTALL_SCRIPT: |
-            apt-get -y install libcapsule-tools pkg-create-dbgsym
+            apt-get -y install pkg-create-dbgsym
 
 build:devel:
     stage: build
@@ -142,10 +142,6 @@ build:devel:
         # be able to get its source code
         apt-get -y dist-upgrade
 
-        apt-get -y --no-install-recommends install \
-        libcapsule-tools \
-        ${NULL+}
-
         # g++ 4.6 is too old (see also debian/rules)
         export CC=gcc-4.8
         export CXX=g++-4.8
@@ -217,10 +213,6 @@ relocatable-install:
         - |
             apt-get -y --no-install-recommends install \
             bubblewrap \
-            libcapsule0 \
-            libcapsule-tools \
-            libcapsule-tools-relocatable:amd64 \
-            libcapsule-tools-relocatable:i386 \
             libglib2.0-dev \
             libxau-dev \
             meson \

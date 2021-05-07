@@ -77,7 +77,6 @@ ARCHS = [
 ]
 # package to install from => source package for copyright information
 DEPENDENCIES = {
-    'libcapsule-tools-relocatable': 'libcapsule',
     'libelf1': 'elfutils',
     'waffle-utils-multiarch': 'waffle',
     'zlib1g': 'zlib',
@@ -113,10 +112,6 @@ EXECUTABLES = [
     'pressure-vessel-try-setlocale',
     'pressure-vessel-wrap',
     'steam-runtime-system-info',
-]
-LIBCAPSULE_TOOLS = [
-    'capsule-capture-libs',
-    'capsule-symbols',
 ]
 
 
@@ -295,38 +290,13 @@ def main():
             0o644,
         )
 
+        inst_pkglibexecdir = os.path.join(
+            installation,
+            'libexec',
+            'steam-runtime-tools-0',
+        )
+
         for arch in ARCHS:
-            path = '/usr/lib/libcapsule/relocatable/{}-{}'.format(
-                arch.multiarch,
-                LIBCAPSULE_TOOLS[0],
-            )
-
-            if not os.path.exists(path):
-                package = 'libcapsule-tools-relocatable'
-                v_check_call([
-                    'apt-get',
-                    'download',
-                    package + ':' + arch.name,
-                ], cwd=tmpdir)
-                v_check_call(
-                    'dpkg-deb -X {}_*_{}.deb build-relocatable'.format(
-                        quote(package),
-                        quote(arch.name),
-                    ),
-                    cwd=tmpdir,
-                    shell=True,
-                )
-                path = '{}/build-relocatable/{}'.format(tmpdir, path)
-
-            for tool in LIBCAPSULE_TOOLS:
-                install_exe(
-                    os.path.join(
-                        os.path.dirname(path),
-                        '{}-{}'.format(arch.multiarch, tool),
-                    ),
-                    os.path.join(installation, 'bin'),
-                )
-
             path = os.path.join(
                 args.prefix, 'libexec', 'steam-runtime-tools-0',
             )
@@ -354,29 +324,21 @@ def main():
             for tool in glob.glob(os.path.join(path, arch.multiarch + '-*')):
                 install_exe(
                     tool,
-                    os.path.join(
-                        installation,
-                        'libexec',
-                        'steam-runtime-tools-0',
-                        os.path.basename(tool),
-                    ),
+                    os.path.join(inst_pkglibexecdir, os.path.basename(tool)),
                 )
 
             for shader in glob.glob(os.path.join(path, 'shaders', '*.spv')):
                 install(
                     shader,
                     os.path.join(
-                        installation, 'libexec', 'steam-runtime-tools-0',
+                        inst_pkglibexecdir,
                         'shaders', os.path.basename(shader),
                     )
                 )
 
             shutil.copytree(
                 os.path.join(path, arch.multiarch),
-                os.path.join(
-                    installation, 'libexec', 'steam-runtime-tools-0',
-                    arch.multiarch,
-                ),
+                os.path.join(inst_pkglibexecdir, arch.multiarch),
             )
 
         primary_architecture = subprocess.check_output([
@@ -390,8 +352,8 @@ def main():
             )
 
             v_check_call([
-                '{}/bin/{}-capsule-capture-libs'.format(
-                    installation,
+                '{}/{}-capsule-capture-libs'.format(
+                    inst_pkglibexecdir,
                     arch.multiarch,
                 ),
                 '--dest={}/build-relocatable/{}/lib'.format(
@@ -415,8 +377,8 @@ def main():
                     libsrt_pattern = 'soname:libsteam-runtime-tools-0.so.0'
 
                 v_check_call([
-                    '{}/bin/{}-capsule-capture-libs'.format(
-                        installation,
+                    '{}/{}-capsule-capture-libs'.format(
+                        inst_pkglibexecdir,
                         arch.multiarch,
                     ),
                     '--dest={}/build-relocatable/{}/lib'.format(
@@ -484,12 +446,7 @@ def main():
 
                 install_exe(
                     path,
-                    os.path.join(
-                        installation,
-                        'libexec',
-                        'steam-runtime-tools-0',
-                        exe,
-                    )
+                    os.path.join(inst_pkglibexecdir, exe)
                 )
 
         # For bwrap (and possibly other programs in future) we don't have

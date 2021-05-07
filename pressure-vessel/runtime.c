@@ -68,7 +68,8 @@ struct _PvRuntime
   gchar *id;
   gchar *deployment;
   gchar *source_files;          /* either deployment or that + "/files" */
-  gchar *tools_dir;
+  const gchar *pv_prefix;
+  const gchar *helpers_path;
   PvBwrapLock *runtime_lock;
   GStrv original_environ;
 
@@ -116,7 +117,6 @@ enum {
   PROP_FLAGS,
   PROP_ID,
   PROP_VARIABLE_DIR,
-  PROP_TOOLS_DIRECTORY,
   N_PROPERTIES
 };
 
@@ -330,7 +330,7 @@ runtime_architecture_init (RuntimeArchitecture *self,
 
   self->capsule_capture_libs_basename = g_strdup_printf ("%s-capsule-capture-libs",
                                                          self->details->tuple);
-  self->capsule_capture_libs = g_build_filename (runtime->tools_dir,
+  self->capsule_capture_libs = g_build_filename (runtime->pv_prefix, "bin",
                                                  self->capsule_capture_libs_basename,
                                                  NULL);
   self->libdir_in_current_namespace = g_build_filename (runtime->overrides, "lib",
@@ -443,10 +443,6 @@ pv_runtime_get_property (GObject *object,
         g_value_set_string (value, self->source);
         break;
 
-      case PROP_TOOLS_DIRECTORY:
-        g_value_set_string (value, self->tools_dir);
-        break;
-
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -530,12 +526,6 @@ pv_runtime_set_property (GObject *object,
 
         break;
 
-      case PROP_TOOLS_DIRECTORY:
-        /* Construct-only */
-        g_return_if_fail (self->tools_dir == NULL);
-        self->tools_dir = g_value_dup_string (value);
-        break;
-
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -550,7 +540,6 @@ pv_runtime_constructed (GObject *object)
 
   g_return_if_fail (self->original_environ != NULL);
   g_return_if_fail (self->source != NULL);
-  g_return_if_fail (self->tools_dir != NULL);
 }
 
 static void
@@ -1506,6 +1495,11 @@ pv_runtime_initable_init (GInitable *initable,
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
+  self->pv_prefix = _srt_find_myself (&self->helpers_path, error);
+
+  if (self->pv_prefix == NULL)
+    return FALSE;
+
   /* Enumerating the graphics provider's drivers only requires things
    * we already know, so start this first, and let it run in parallel
    * with other setup. The results go in the SrtSystemInfo's cache
@@ -1608,12 +1602,6 @@ pv_runtime_initable_init (GInitable *initable,
     }
 
   g_debug ("Taking runtime files from: %s", self->source_files);
-
-  if (!g_file_test (self->tools_dir, G_FILE_TEST_IS_DIR))
-    {
-      return glnx_throw (error, "\"%s\" is not a directory",
-                         self->tools_dir);
-    }
 
   /* Take a lock on the runtime until we're finished with setup,
    * to make sure it doesn't get deleted.
@@ -1849,7 +1837,6 @@ pv_runtime_finalize (GObject *object)
   g_free (self->source);
   g_free (self->source_files);
   g_free (self->deployment);
-  g_free (self->tools_dir);
 
   if (self->runtime_lock != NULL)
     pv_bwrap_lock_free (self->runtime_lock);
@@ -1919,13 +1906,6 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
-  properties[PROP_TOOLS_DIRECTORY] =
-    g_param_spec_string ("tools-directory", "Tools directory",
-                         "Path to pressure-vessel/bin in current namespace",
-                         NULL,
-                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
-                          G_PARAM_STATIC_STRINGS));
-
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
@@ -1934,14 +1914,12 @@ pv_runtime_new (const char *source,
                 const char *id,
                 const char *variable_dir,
                 const char *bubblewrap,
-                const char *tools_dir,
                 PvGraphicsProvider *provider,
                 const GStrv original_environ,
                 PvRuntimeFlags flags,
                 GError **error)
 {
   g_return_val_if_fail (source != NULL, NULL);
-  g_return_val_if_fail (tools_dir != NULL, NULL);
   g_return_val_if_fail ((flags & ~(PV_RUNTIME_FLAGS_MASK)) == 0, NULL);
 
   return g_initable_new (PV_TYPE_RUNTIME,
@@ -1953,7 +1931,6 @@ pv_runtime_new (const char *source,
                          "variable-dir", variable_dir,
                          "source", source,
                          "id", id,
-                         "tools-directory", tools_dir,
                          "flags", flags,
                          NULL);
 }
@@ -5300,8 +5277,6 @@ pv_runtime_bind (PvRuntime *self,
                  PvEnviron *container_env,
                  GError **error)
 {
-  g_autofree gchar *pressure_vessel_prefix = NULL;
-
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail ((exports == NULL) == (bwrap == NULL), FALSE);
   g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
@@ -5335,8 +5310,6 @@ pv_runtime_bind (PvRuntime *self,
   if (bwrap != NULL)
     bind_runtime_finish (self, exports, bwrap);
 
-  pressure_vessel_prefix = g_path_get_dirname (self->tools_dir);
-
   /* Make sure pressure-vessel itself is visible there. */
   if (self->mutable_sysroot != NULL)
     {
@@ -5356,7 +5329,7 @@ pv_runtime_bind (PvRuntime *self,
 
       dest = glnx_fdrel_abspath (parent_dirfd, "from-host");
 
-      if (!pv_cheap_tree_copy (pressure_vessel_prefix, dest,
+      if (!pv_cheap_tree_copy (self->pv_prefix, dest,
                                PV_COPY_FLAGS_NONE, error))
         return FALSE;
 
@@ -5372,7 +5345,7 @@ pv_runtime_bind (PvRuntime *self,
   else
     {
       g_autofree gchar *pressure_vessel_prefix_in_host_namespace =
-        pv_current_namespace_path_to_host_path (pressure_vessel_prefix);
+        pv_current_namespace_path_to_host_path (self->pv_prefix);
 
       g_assert (bwrap != NULL);
 

@@ -1,49 +1,44 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Steam Runtime tools
-License: Expat and Apache-2.0 and LGPL-2.1+
-Comment: SPDX-License-Identifier: MIT and Apache-2.0 and LGPL-2.1-or-later
+License: Expat and Apache-2.0 and LGPL-2.1+ and Zlib
+Comment: SPDX-License-Identifier: MIT and Apache-2.0 and LGPL-2.1-or-later and Zlib
 
 Files:
  *
  debian/*
 Copyright:
- © 2019-2020 Collabora Ltd.
-License: Expat
+ 1995-1997 Peter Mattis
+ 1995-1997 Spencer Kimball
+ 1995-1997 Josh MacDonald
+ 1997-2000 GLib team
+ 1997-2020 Sam Lantinga
+ 2000-2021 Red Hat, Inc
+ 2010-2011 Lennart Poettering
+ 2012-2017 Colin Walters
+ 2013 Rinat Ibragimov
+ 2013-2021 Collabora Ltd.
+ 2015 Canonical Limited
+ 2016 Zbigniew Jędrzejewski-Szmek
+ 2017 Endless Mobile, Inc.
+ 2018 Georges Basile Stavracas Neto
+ 2018 Philip Withnall
+License: Expat and LGPL-2+ and LGPL-2.1+ and Zlib
 
 Files:
- pressure-vessel/*
- subprojects/*
- tests/shellcheck.sh
+ helpers/check-gl.cpp
+ helpers/check-vulkan.c
 Copyright:
- 2014-2019 Red Hat, Inc
- 2017-2019 Collabora Ltd.
-License: LGPL-2.1+
-
-Files:
- pressure-vessel/try-setlocale.*
-Copyright:
- 2019 Collabora Ltd.
-License: Expat
+ 2012 Arvin Schnell
+ 2012 Rob Clark
+ 2015 Intel Corporation
+ 2019-2021 Collabora Ltd.
+License: Apache-2.0
 
 Files:
  build-aux/git-version-gen
 Copyright:
  2007-2018 Free Software Foundation, Inc.
 License: GPL-3+
-
-Files:
- subprojects/libglnx/*
-Copyright:
- 1995-1997 Peter Mattis
- 1995-1997 Spencer Kimball
- 1995-1997 Josh MacDonald
- 2010-2011 Lennart Poettering
- 2012-2017 Colin Walters
- 2015 Canonical Limited
- 2017 Red Hat, Inc.
- 2017 Endless Mobile, Inc.
- 2019 Collabora Ltd.
-License: LGPL-2+
 
 License: Apache-2.0
  Licensed under the Apache License, Version 2.0 (the "License");
@@ -133,3 +128,22 @@ License: GPL-3+
  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Comment:
  On Debian systems see /usr/share/common-licenses/GPL-3
+
+License: Zlib
+ SPDX-License-Identifier: Zlib
+ .
+ This software is provided 'as-is', without any express or implied
+ warranty.  In no event will the authors be held liable for any damages
+ arising from the use of this software.
+ .
+ Permission is granted to anyone to use this software for any purpose,
+ including commercial applications, and to alter it and redistribute it
+ freely, subject to the following restrictions:
+ .
+ 1. The origin of this software must not be misrepresented; you must not
+    claim that you wrote the original software. If you use this software
+    in a product, an acknowledgment in the product documentation would be
+    appreciated but is not required.
+ 2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+ 3. This notice may not be removed or altered from any source distribution.

@@ -1,0 +1,191 @@
+libcapsule provides a few tools to help initialise a proxy library project:
+
+Assuming a host tree containing libGL mounted at /host, the simplest route
+to a [hopefully] working project is as follows:
+
+  ~$ $(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL libcapsule-tools) libGL.so.1 /host
+
+  Generating project for /host : libGL.so.1 1.2.0 proxy
+  Creating project directory libGL-proxy
+  Working in /home/vivek/src/valve/dlmopen/libGL-proxy
+  Extracting dynamic symbols from /host : libGL.so.1
+  Preparing proxy source files
+  Initialising configure.ac
+  Initialising Makefile.am
+  Bootstrapping autoconf templates for libGL.so.1
+  Running initial configuration
+  autoreconf: Entering directory `.'
+  autoreconf: configure.ac: not using Gettext
+  autoreconf: running: aclocal --force 
+  autoreconf: configure.ac: tracing
+  autoreconf: running: libtoolize --copy --force
+  libtoolize: putting auxiliary files in `.'.
+  libtoolize: copying file `./ltmain.sh'
+  libtoolize: putting macros in AC_CONFIG_MACRO_DIR, `m4'.
+  libtoolize: copying file `m4/libtool.m4'
+  libtoolize: copying file `m4/ltoptions.m4'
+  libtoolize: copying file `m4/ltsugar.m4'
+  libtoolize: copying file `m4/ltversion.m4'
+  libtoolize: copying file `m4/lt~obsolete.m4'
+  libtoolize: Consider adding `-I m4' to ACLOCAL_AMFLAGS in Makefile.am.
+  autoreconf: running: /usr/bin/autoconf --force
+  autoreconf: configure.ac: not using Autoheader
+  autoreconf: running: automake --add-missing --copy --force-missing
+  Makefile.am: installing './depcomp'
+  autoreconf: Leaving directory `.'
+  /home/x/src/valve/dlmopen/libGL-proxy is ready for ./configure, \
+      see README for details
+
+This will set up a project to build a proxy for libGL.so.1, expected
+to be found in a foreign filesystem tree mounted at /host.
+
+The target library (the real libGL.so.1) must be present in a well-formed
+tree mounted at /host at the point at which you run this command.
+
+If you ever make changes which require the proxy library source files
+to be regenerated (changing the foreign tree location from /host or
+altering the list of symbols to export) then the foreign tree must
+likewise be present.
+
+However you do not need the tree to be present to build the library itself
+once the project has been initialised.
+
+The layout of the project will be as follows:
+
+
+  ./shim/
+  ./shim/libGL.so.1.shared
+  ./shim/libGL.so.1.dlopen
+  ./shim/libGL.so.1.symbols.updated-for
+  ./shim/libGL.so.1.excluded
+  ./shim/libGL.so.1.dlsym
+  ./configure
+  ./build-aux/…
+  ./m4/…
+  ./README
+  ./dd.log
+  ./preconfigure.log
+  ./Makefile.am
+  ./configure.ac
+  ./aclocal.m4
+  ./arena.log
+  ./Makefile.in
+
+A few of these files are of immediate interest:
+----------------------------------------------------------------------------
+preconfigure.log:
+
+  This records the initial bootstrapping step of the project, which uses
+  autoconf to set up the build system from libcapsule's templates.
+
+  If things are working, there's little of interest here, but if something's
+  not quite right there may be important clues recorded here.
+----------------------------------------------------------------------------
+Makefile.am
+
+  A few important details are recorded here:
+
+  CAPSULE_LIBRARY - The stub of the library name (‘GL’ in this case).
+
+  CAPSULE_VERSION_libfoo.so.0 -
+                    The version number of the proxy library for libfoo.so.0
+                    defaults to the same version as the library in /host
+                    if that can be deduced from the /host tree.
+
+                    Only the major version (major.minor.sub) needs to match,
+                    otherwise you may change this as desired.
+
+  CAPSULE_TREE    - The location of the foreign tree.
+
+                    You may change this, but doing so requires the source
+                    to be regenerated, which requires the new foreign tree
+                    to be present.
+
+  CAPSULE_MAJOR   - Major version of the library we're encapsulating
+----------------------------------------------------------------------------
+shim/libGL.so.1.excluded
+
+  This file should contain a list of libraries which should _NOT_
+  be picked up from the /host tree and isolated in the capsule,
+  one per line.
+
+  The following library is always considered to be excluded by
+  the code generator, so there's no need to add it explicitly:
+
+  libdl.so.2
+
+  Other libraries which you may need to add, depending on the exact
+  API presented by the proxied library, are:
+
+  libc.so.6          - if memory allocated inside the target library
+                       is freed by the main program, or similar.
+
+  libpthread.so.0    - if thread synchronisation or similar occurs
+  libpthread-2.19.so   both inside the proxied library and your main
+                       program AND the two need to be aware of one
+                       another.
+
+
+----------------------------------------------------------------------------
+shim/libGL.so.1.shared
+
+  This file should contain any extra libraries whose symbols should _also_ be
+  exported from the capsule, along with those from the main library libGL.so.
+
+  It will generally be empty, but in libGL.so's case it must contain:
+
+  libxcb.so.1
+  libxcb-glx.so.0
+  libxcb-dri2.so.0
+  libxcb-dri3.so.0
+  libxcb-present.so.0
+  libxcb-sync.so.1
+  libX11.so
+
+  Every time this file is modified, you will need to run
+
+      make maintainer-update-capsule-symbols
+
+  to update the list of exported symbols in shim/libGL.so.1.symbols.
+  This will also update shim/libGL.so.1.symbols.updated-for to record
+  the fact that it does not need updating again. You can use
+
+      make maintainer-update-capsule-symbols CAPSULE_SEARCH_TREE=/sysroot
+
+  to specify a custom root directory to search for these libraries.
+
+----------------------------------------------------------------------------
+shim/capsule/_int_dlopen.h
+
+  This file is not created by default.
+
+  The _int_dlopen wrapper is installed inside the capsule and takes
+  care of any /host path prefixing so that the encapsulated libraries
+  get their native targets with dlmopen (and don't break encapsulation
+  by calling dlopen).
+
+  A default implementation provided by libcapsule is normally used.
+  See libcapsule's <capsule/_int_dlopen.h> for that implementation.
+
+  To use a custom implementation, create the file and implement a
+  function with the same signature:
+
+  static void *_int_dlopen (const char *filename, int flags)
+  {
+    ⋮
+  }
+
+----------------------------------------------------------------------------
+That's it - you should be ready to:
+
+  ./configure
+  make
+
+Your generated capsule libraries will be in .libs,
+and you can use ‘make install’ et al, as usual, to install them.
+
+Note that you should be careful about this, as you are deliberately
+generating a library which has the same name as a ‘real’ one, which
+is very much not a normal situation, and carelessness here could break
+your system.
+

@@ -1,0 +1,18 @@
+Tests: gnome-desktop-testing smoke
+Restrictions: allow-stderr
+Depends:
+ autoconf,
+ automake,
+ bubblewrap,
+ build-essential,
+ gnome-desktop-testing,
+ libcapsule-dev,
+ libcapsule-tests,
+ libcapsule-tools,
+ libipc-run-perl,
+ libglib2.0-0,
+ libxml2,
+ libtool,
+ perl,
+ pkg-config,
+ zlib1g,

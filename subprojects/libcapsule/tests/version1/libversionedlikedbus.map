@@ -1,0 +1,8 @@
+LIBVERSIONED1 {
+  global:
+    symbol*;
+};
+LIBVERSIONEDPRIVATE_1_0_0 {
+  global:
+    _private*;
+};

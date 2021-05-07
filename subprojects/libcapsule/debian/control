@@ -1,0 +1,157 @@
+Source: libcapsule
+Section: libs
+Priority: optional
+Maintainer: Vivek Das Mohapatra <vivek@collabora.com>
+Standards-Version: 3.9.8
+Build-Depends:
+ autoconf,
+ autoconf-archive <pkg.libcapsule.from-git>,
+ automake,
+ bubblewrap,
+ chrpath,
+ debhelper,
+ dh-autoreconf,
+ gtk-doc-tools,
+ libelf-dev,
+ libipc-run-perl,
+ libglib2.0-0 <!nocheck>,
+ libglib2.0-dev [amd64],
+ libxml2 <!nocheck>,
+ perl:any | perl,
+ xsltproc,
+ zlib1g <!nocheck>,
+Build-Depends-Indep:
+ libglib2.0-dev,
+Vcs-Git: https://gitlab.collabora.com/vivek/libcapsule.git
+Vcs-Browser: https://gitlab.collabora.com/vivek/libcapsule
+Homepage: https://gitlab.collabora.com/vivek/libcapsule
+
+Package: libcapsule-dev
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libdevel
+Depends:
+ libc6-dev,
+ libcapsule0 (= ${binary:Version}),
+ libelf-dev,
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains the files needed to build libcapsule proxy libraries.
+
+Package: libcapsule-doc
+Architecture: all
+Multi-Arch: foreign
+Section: doc
+Depends:
+ ${misc:Depends},
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains documentation.
+
+Package: libcapsule-tools
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libdevel
+Depends:
+ ${shlibs:Depends},
+Recommends:
+ libcapsule-dev (= ${binary:Version}),
+Breaks: libcapsule-dev-bin (<< ${binary:Version}),
+Replaces: libcapsule-dev-bin (<< ${binary:Version}),
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains the files needed to generate libcapsule proxy libraries.
+
+Package: libcapsule-tools-relocatable
+Architecture: amd64 i386
+Multi-Arch: same
+Section: misc
+Depends:
+ ${shlibs:Depends},
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains relocatable versions of the tools used to enumerate
+ library symbols and dependencies. After building this package on a system
+ with the oldest glibc that is to be supported, they can be bundled in
+ projects that need to run on an arbitrary host system and make use of
+ libcapsule to prepare a container. To do this, the relocatable tools
+ must be copied to PATH/bin/TUPLE-capsule-TOOL, and their required
+ non-glibc libraries (libelf and zlib) must be copied to PATH/lib/TUPLE.
+
+Package: libcapsule-gl-shims
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libs
+Breaks: libcapsule-libgl1-shims (<< ${binary:Version}),
+Replaces: libcapsule-libgl1-shims (<< ${binary:Version}),
+Description: OpenGL-related shim libraries
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains libcapsule proxy libraries for libGL, libGLX,
+ libOpenGL and related libraries.
+
+Package: libcapsule-libgl1-shims
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libs
+Depends: libcapsule-gl-shims
+Description: OpenGL-related shim libraries - transitional package
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This transitional package depends on libcapsule-gl-shims.
+
+Package: libcapsule-tests
+Architecture: amd64 i386
+Section: misc
+Depends:
+ bubblewrap,
+ libcapsule-gl-shims (= ${binary:Version}),
+ libipc-run-perl,
+ libsort-versions-perl,
+ mesa-utils,
+ perl,
+ pkg-config,
+ ${shlibs:Depends},
+Description:
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains automated tests.
+
+Package: libcapsule0
+Architecture: amd64 i386
+Multi-Arch: same
+Section: libs
+Depends:
+ ${shlibs:Depends},
+Description: Segregated run-time linker library
+ libcapsule is a helper library used to implement segregated run-time
+ dynamic linking proxy libraries - used (for example) to load a library
+ that has dependencies incompatible with the regular libraries that are
+ part of the host OS, such as an incompatible libstdc++ version.
+ .
+ This package contains the run-time component(s) of libcapsule.

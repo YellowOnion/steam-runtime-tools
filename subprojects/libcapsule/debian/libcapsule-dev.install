@@ -1,0 +1,4 @@
+usr/include/*
+usr/lib/*/libcapsule.a
+usr/lib/*/libcapsule.so
+usr/lib/*/pkgconfig/libcapsule.pc

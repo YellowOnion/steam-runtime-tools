@@ -1,0 +1,15 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+libexecdir=@libexecdir@
+datarootdir=@datarootdir@
+datadir=@datarootdir@
+
+Name: libcapsule
+Description: segregated dynamic linking library
+Version: @VERSION@
+
+Requires:
+Libs: -L${libdir} -lcapsule
+Cflags: -I${includedir}

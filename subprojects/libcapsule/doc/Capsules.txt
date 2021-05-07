@@ -1,0 +1,157 @@
+This document covers the details of how libcapsule manages proxy capsule
+libraries.
+
+For details of how symbol hiding/relocation is done, see Strategy.txt.
+
+============================================================================
+Summary:
+
+Each capsule library acts as a shim for at least one target library, with
+which it shares a soname, and whose symbols it exports to the libraries
+that link to it (both at dynamic link time and via dlopen/dlsym).
+
+Capsules _may_ act as a shim for more than one library, but they can have
+only one soname: This pattern of use was necessary during the early
+development of libcapsule when we supported at most one capsule in any
+given link chain but is no longer required.
+
+============================================================================
+Details:
+
+Each capsule library must
+
+a) depend on libcapsule (ie have libcapsule in a DT_NEEDED entry)
+
+b) #include "capsule/capsule-shim.h"
+
+c) declare a globally visible symbol called capsule_meta which should
+   be a populated struct of type capsule_metadata
+
+   NOTE: it should not attempt to use this variable, only
+   the handle returned by capsule_init(). That handle will be
+   initialised based on the metadata.
+
+d) declare UNVERSIONED_STUB( f ); for each function ‘f’ it wishes to proxy
+
+e) declare a static global variable:
+   static capsule cap;
+
+f) In its constructor:
+
+   assign the return of capsule_init to ‘cap’
+
+g) In its destructor:
+
+   call capsule_close
+
+============================================================================
+Metadata example (for a libGL.so.1 capsule):
+
+static const char *exclude[] =
+{ // MUST NOT be pulled from the capsule
+  // prefixed filesystem tree:
+  "libdl.so.2",
+  NULL
+};
+
+// make sure this symbol has global visibility so
+// that the libcapsule initialisation can find it
+__attribute__ ((visibility("default")))
+capsule_metadata capsule_meta =
+{
+    .capsule_abi      = 0,
+    .soname           = "libGL.so.1",
+    .default_prefix   = "/host",
+    .exclude          = exclude, 
+    .export           = valid_dlsym_sources,
+};
+
+============================================================================
+Sequences of events:
+
+Normal linking
+
+A library or executable using a capsule is loaded
+
+The linker notes that the capsule is listed in DT_NEEDED and loads it
+
+The linker notes that libcapsule is DT_NEEDED by the capsule and loads _that_
+(if it is not already loaded).
+
+Various libraries are loaded - once all DT_NEEDEDs have been satisfied:
+
+The constructors for the loaded DSOs run in reverse dependency order,
+in particular:
+
+The constructor for libcapsule runs, and does the following:
+
+  - harvests metadata from all currently loaded capsules and caches them
+  - caches the addresses of the default implementations of dlopen and dlsym
+  - groups the metadata by filesystem prefix
+    - all capsules that specify /foo as their prefix will be grouped into
+      the same private namespace
+    - a capsule's prefix is determined by (in descending priority)
+      - the soname specific env var (eg CAPSULE_LIBGL_SO_1_PREFIX)
+      - the CAPSULE_PREFIX env var
+      - the static prefix in the capsule's metadata 
+      - NOTE: env vars don't apply here to setuid/setgid processes,
+        or if libcapsule was compiled using glibc older than 2.17
+  - aggregates the exclude and export metadata lists, grouping
+    them by prefix (and deduplicating the resulting lists)
+    - eg the ‘export’ list from a namespace will be all the sonames from
+      all the .export entries from all capsules that share that namespace
+      (as determined by their prefix) 
+
+The constructor for each loaded capsule runs and calls
+capsule_init( static-copy-of-soname ) which does the following:
+
+  - calls _capsule_load to load the real target library
+
+  - calls _capsule_relocate to update the global offset tables (GOTs)
+    of all DSOs outside the capsule to use the real symbols from the
+    target instead of the dummy entries in the capsule
+
+  - calls _capsule_relocate_dlopen to install wrappers for any special-case
+    functions (typically just dlopen - dlsym is handled by _capsule_relocate)
+    that require careful handling.
+
+dlopen() of a capsule (from outside the capsule):
+
+This is similar to normal linking, except:
+
+  - The libcapsule constructor does not run
+  - the capsule's constructor's call to capsule_init triggers a re-harvesting
+    of available metadata, and a re-calculation of the aggregated lists
+  - the _capsule_relocate and _capsule_relocate_dlopen sequences for _all_
+    capsules are triggered
+
+dlopen() of a normal library (from outside the capsule):
+
+  - the _capsule_relocate and _capsule_relocate_dlopen sequences for _all_
+    capsules are triggered
+
+dlopen() of a normal library inside the capsule:
+
+  - secretly translated into a capsule_shim_dlopen call
+
+dlopen() of a capsule from inside the capsule:
+
+  - cats and dogs living together
+  - total chaos
+  - the end of the world
+
+dlsym() from inside the capsule:
+
+  - nothing special, works as normal
+  - this might break if dlsym is called on the NULL handle
+    with the expectation that the calling namespace and
+    public namespace are the same
+
+dlsym() from outside the capsule
+
+  - handled by the wrapper we installed earlier
+  - looks first inside each capsule namespace for the requested symbol
+    - if said symbol is found _and_ comes from a DSO in the export list
+      then it is returned
+    - otherwise we fall back to vanilla dlsym
+

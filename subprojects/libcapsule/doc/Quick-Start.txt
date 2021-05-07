@@ -1,0 +1,59 @@
+In the top level directory:
+
+  autoreconf -ivf
+  ./configure
+  make
+
+libcapsule.so will be in .libs/
+
+The test environment is currently:
+
+A chroot containing a debian/jessie filesystem with libGL.so removed,
+the libcapsule .deb installed and with the "real" OS filesystem bind
+mounted at /host.
+
+In the chroot:
+
+Generate a proxy project for libGL and related libraries:
+
+  ~$ mkdir proxies
+  ~$ cd proxies
+  ~$ CAPTOOL=$(pkg-config --variable=CAPSULE_INIT_PROJECT_TOOL libcapsule-tools)
+  ~$ LIBS="xcb.so.1 xcb-glx.so.0 xcb-dri2.so.0 xcb-dri3.so.0 xcb-present.so.0"
+  ~$ LIBS="$LIBS xcb-sync.so.1 X11.so.6 GL.so.1 Xext.so.6"
+  ~$ for x in $LIBS; do $CAPTOOL lib$x /host; done
+  ~$ for x in *-proxy; do (cd $x && ./configure --prefix=/shim) || break; done
+  ~$ for x in *-proxy; do (cd $x && make) || break; done
+  ~$ for x in *-proxy; do (cd $x && sudo make install) || break; done
+
+Now make said proxy libraries available. You should also:
+Ensure that ldd $(which glxgears) points to the libGL.so capsule
+Make sure a full filesystem from the host OS is mounted at /host
+
+  ~$ export LD_LIBRARY_PATH=/shim/lib
+  ~$ export DISPLAY=:0 # if you need this
+
+Make sure your chroot is set up so that trivial XOrg programs can run
+(xterm, xev, xeyes or whatever).
+
+Run glxgears (or openarena, or whatever).
+
+If it fails:
+
+ export CAPSULE_DEBUG=path,search,capsule,mprotect,wrappers,ldcache
+ glxgears 2>&1 | tee glxgears.capsule.log
+
+capsule debug flags: 
+  path     # path manipulation and translation
+  search   # searching for DSOs
+  ldcache  # loading/processing the ld cache
+  capsule  # setting up the proxy capsule
+  mprotect # handling mprotect (for RELRO)
+  wrappers # function wrappers installed in the capsule
+  reloc    # patching capsule symbols into external DSOs
+  elf      # detailed ELF introspection logging
+
+NOTE: If your Mesa is older than 17.x, see the final item regarding patchelf
+in the Limitations.txt file for a workaround.
+
+TODO: add instructions for bwrap instead of chroot here.

@@ -1,0 +1,17 @@
+# vim:set ft=automake:
+# Processed by capsule-init-project. Everything before the first blank
+# line is removed during processing.
+
+AUTOMAKE_OPTIONS = subdir-objects
+ACLOCAL_AMFLAGS  = -I m4
+AM_CFLAGS        = -std=c99 -D_GNU_SOURCE -Wall -Werror
+AM_CFLAGS       += $(CAPSULE_CFLAGS)
+AM_CAPSULE_MKSTUBLIB_FLAGS :=
+
+CAPSULE_SONAMES :=
+lib_LTLIBRARIES =
+CLEANFILES      =
+BUILT_SOURCES   =
+
+include @CAPSULE_MKINC@/disabled.mk
+include @CAPSULE_MKINC@/capsule-shim.mk

@@ -1,0 +1,10 @@
+Building libcapsule from git requires GNU autoconf-archive macros. The
+oldest supported version is 20180313-1 from Debian 9 'stretch'. If your
+development system or container is older, unpack or clone a suitable
+version of autoconf-archive and use commands like:
+
+   libcapsule$ ACLOCAL_PATH=/path/to/autoconf-archive/m4 NOCONFIGURE=1 ./autogen.sh
+   libcapsule$ ./configure
+   libcapsule$ make
+
+Building from tarball releases removes this requirement.

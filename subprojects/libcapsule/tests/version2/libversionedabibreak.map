@@ -1,0 +1,4 @@
+LIBVERSIONED2 {
+  global:
+    *;
+};

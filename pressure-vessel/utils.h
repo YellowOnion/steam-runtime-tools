@@ -44,9 +44,6 @@
 #define pv_log_failure(...) \
   g_log (G_LOG_DOMAIN, PV_LOG_LEVEL_FAILURE, __VA_ARGS__)
 
-int pv_envp_cmp (const void *p1,
-                 const void *p2);
-
 void pv_get_current_dirs (gchar **cwd_p,
                           gchar **cwd_l);
 

@@ -99,7 +99,7 @@ class Runtime:
         path: Optional[str] = None,
         ssh_host: str = '',
         ssh_path: str = '',
-        version: str = 'latest',
+        version: str = '',
     ) -> None:
         self.architecture = architecture
         self.cache = cache
@@ -180,7 +180,7 @@ class Runtime:
         default_architecture: str = 'amd64,i386',
         default_include_sdk: bool = False,
         default_suite: str = '',
-        default_version: str = 'latest',
+        default_version: str = '',
         images_uri: str = DEFAULT_IMAGES_URI,
         ssh_host: str = '',
         ssh_path: str = '',
@@ -207,7 +207,7 @@ class Runtime:
     ) -> str:
         suite = self.suite
         uri = self.images_uri.replace('SUITE', suite)
-        v = version or self.pinned_version or self.version
+        v = version or self.pinned_version or self.version or 'latest'
         return f'{uri}/{v}/{filename}'
 
     def get_ssh_path(
@@ -218,7 +218,7 @@ class Runtime:
         ssh_host = self.ssh_host
         suite = self.suite
         ssh_path = self.ssh_path.replace('SUITE', suite)
-        v = version or self.pinned_version or self.version
+        v = version or self.pinned_version or self.version or 'latest'
 
         if not ssh_host or not ssh_path:
             raise RuntimeError('ssh host/path not configured')
@@ -421,6 +421,7 @@ class Main:
         images_uri: str = DEFAULT_IMAGES_URI,
         include_archives: bool = False,
         include_sdk: bool = False,
+        layered: bool = False,
         pressure_vessel: str = 'scout',
         runtime: str = 'scout',
         source_dir: str = HERE,
@@ -432,7 +433,7 @@ class Main:
         unpack_runtime: bool = True,
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
-        version: str = 'latest',
+        version: str = '',
         versioned_directories: bool = False,
         **kwargs: Dict[str, Any],
     ) -> None:
@@ -483,6 +484,7 @@ class Main:
         self.depot = os.path.abspath(depot)
         self.images_uri = images_uri
         self.include_archives = include_archives
+        self.layered = layered
         self.pressure_vessel = pressure_vessel
         self.source_dir = source_dir
         self.ssh_host = ssh_host
@@ -561,6 +563,70 @@ class Main:
                 shutil.copy(source, merged)
 
     def run(self) -> None:
+        if self.layered:
+            self.do_layered_runtime()
+        else:
+            self.do_container_runtime()
+
+    def do_layered_runtime(self) -> None:
+        if self.runtime.name != 'scout':
+            raise InvocationError('Can only layer scout onto soldier')
+
+        if self.unpack_ld_library_path:
+            raise InvocationError(
+                'Cannot use --unpack-ld-library-path with --layered'
+            )
+
+        if self.include_archives:
+            raise InvocationError(
+                'Cannot use --include-archives with --layered'
+            )
+
+        if self.default_include_sdk:
+            raise InvocationError(
+                'Cannot use --include-sdk with --layered'
+            )
+
+        if self.unpack_sources:
+            raise InvocationError(
+                'Cannot use --unpack-source with --layered'
+            )
+
+        self.merge_dir_into_depot(
+            os.path.join(self.source_dir, 'runtimes', 'scout-on-soldier')
+        )
+        # Copy the launcher script for compatibility
+        shutil.copy(
+            os.path.join(self.depot, 'run-in-scout'),
+            os.path.join(self.depot, 'run')
+        )
+        shutil.copy(
+            os.path.join(self.depot, 'run-in-scout'),
+            os.path.join(self.depot, '_v2-entry-point'),
+        )
+
+        if self.runtime.version:
+            self.unpack_ld_library_path = self.depot
+            self.download_scout_tarball(self.runtime)
+            local_version = ComponentVersion('LD_LIBRARY_PATH')
+            version = self.runtime.pinned_version
+            assert version is not None
+            local_version.version = version
+            local_version.runtime = 'scout'
+            local_version.runtime_version = version
+        else:
+            unspecified_version = ComponentVersion('LD_LIBRARY_PATH')
+            unspecified_version.version = '-'
+            unspecified_version.runtime = 'scout'
+            unspecified_version.runtime_version = '-'
+            unspecified_version.comment = (
+                'see ~/.steam/root/ubuntu12_32/steam-runtime/version.txt'
+            )
+            self.versions.append(unspecified_version)
+
+        self.write_component_versions()
+
+    def do_container_runtime(self) -> None:
         pv_version = ComponentVersion('pressure-vessel')
 
         self.merge_dir_into_depot(os.path.join(self.source_dir, 'common'))
@@ -860,6 +926,9 @@ class Main:
             )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
 
+        self.write_component_versions()
+
+    def write_component_versions(self) -> None:
         try:
             with subprocess.Popen(
                 [
@@ -1262,7 +1331,7 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--version', default='latest',
+        '--version', default='',
         help=(
             'Default version to use if none is specified'
         )
@@ -1349,6 +1418,10 @@ def main() -> None:
     parser.add_argument(
         '--include-sdk', default=False, action='store_true',
         help='Include a corresponding SDK',
+    )
+    parser.add_argument(
+        '--layered', default=False, action='store_true',
+        help='Produce a layered runtime that runs scout on soldier',
     )
     parser.add_argument(
         '--source-dir', default=HERE,

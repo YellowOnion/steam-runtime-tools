@@ -281,17 +281,17 @@ _srt_resolve_in_sysroot (int sysroot,
               if (!glnx_fstatat (fd, "", &stat_buf, AT_EMPTY_PATH, error))
                 {
                   g_prefix_error (error,
-                                  "Unable to determine whether \"%s\" "
+                                  "Unable to determine whether \"%s/%s\" "
                                   "is a directory",
-                                  current_path->str);
+                                  current_path->str, next);
                   return -1;
                 }
 
               if (!S_ISDIR (stat_buf.st_mode))
                 {
                   g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_DIRECTORY,
-                               "\"%s\" is not a directory",
-                               current_path->str);
+                               "\"%s/%s\" is not a directory",
+                               current_path->str, next);
                 }
             }
 

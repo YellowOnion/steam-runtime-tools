@@ -1231,8 +1231,8 @@ ensure_overrides_cached (SrtSystemInfo *self)
   if (!self->overrides.have_data)
     {
       static const char * const paths[] = {
-          "overrides",
-          "usr/lib/pressure-vessel/overrides",
+          "overrides/",
+          "usr/lib/pressure-vessel/overrides/",
       };
       g_autoptr(GError) error = NULL;
       g_autofree gchar *output = NULL;

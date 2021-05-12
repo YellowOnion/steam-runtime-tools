@@ -292,6 +292,7 @@ _srt_resolve_in_sysroot (int sysroot,
                   g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_DIRECTORY,
                                "\"%s/%s\" is not a directory",
                                current_path->str, next);
+                  return -1;
                 }
             }
 

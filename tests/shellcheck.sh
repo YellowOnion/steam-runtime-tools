@@ -22,8 +22,6 @@ cd "$G_TEST_SRCDIR"
 n=0
 for shell_script in \
         debian/tests/depot \
-        common/deploy-runtime \
-        common/run-in-steamrt \
         common/_start-container-in-background \
         common/_v2-entry-point \
         tests/*.sh \

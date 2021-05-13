@@ -842,7 +842,7 @@ class Main:
                 continue
 
             with open(
-                os.path.join(self.depot, 'toolmanifest.v2.vdf'), 'w'
+                os.path.join(self.depot, 'toolmanifest.vdf'), 'w'
             ) as writer:
                 import vdf      # noqa
 
@@ -868,12 +868,6 @@ class Main:
                 os.path.join(self.depot, 'run'),
             )
             os.chmod(os.path.join(self.depot, 'run'), 0o755)
-
-            if self.toolmanifest:
-                shutil.copy2(
-                    os.path.join(self.depot, 'toolmanifest.v2.vdf'),
-                    os.path.join(self.depot, 'toolmanifest.vdf'),
-                )
 
         try:
             with subprocess.Popen(

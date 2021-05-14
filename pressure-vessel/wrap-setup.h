@@ -26,6 +26,7 @@
 
 #include "flatpak-bwrap-private.h"
 #include "flatpak-exports-private.h"
+#include "wrap-pipewire.h"
 
 void pv_wrap_share_sockets (FlatpakBwrap *bwrap,
                             PvEnviron *container_env,

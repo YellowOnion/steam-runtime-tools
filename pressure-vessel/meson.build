@@ -209,6 +209,8 @@ executable(
     'wrap.c',
     'wrap-flatpak.c',
     'wrap-flatpak.h',
+    'wrap-pipewire.c',
+    'wrap-pipewire.h',
     'wrap-setup.c',
     'wrap-setup.h',
   ],

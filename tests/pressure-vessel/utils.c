@@ -34,6 +34,7 @@
 #include "libglnx/libglnx.h"
 
 #include "tests/test-utils.h"
+#include "flatpak-utils-private.h"
 #include "mtree.h"
 #include "utils.h"
 
@@ -281,14 +282,14 @@ test_envp_cmp (Fixture *f,
       g_autofree gchar *copy = g_strdup (sorted[i]);
 
       g_test_message ("%s == %s", copy, sorted[i]);
-      g_assert_cmpint (pv_envp_cmp (&copy, &sorted[i]), ==, 0);
-      g_assert_cmpint (pv_envp_cmp (&sorted[i], &copy), ==, 0);
+      g_assert_cmpint (flatpak_envp_cmp (&copy, &sorted[i]), ==, 0);
+      g_assert_cmpint (flatpak_envp_cmp (&sorted[i], &copy), ==, 0);
 
       for (j = i + 1; j < G_N_ELEMENTS (sorted); j++)
         {
           g_test_message ("%s < %s", sorted[i], sorted[j]);
-          g_assert_cmpint (pv_envp_cmp (&sorted[i], &sorted[j]), <, 0);
-          g_assert_cmpint (pv_envp_cmp (&sorted[j], &sorted[i]), >, 0);
+          g_assert_cmpint (flatpak_envp_cmp (&sorted[i], &sorted[j]), <, 0);
+          g_assert_cmpint (flatpak_envp_cmp (&sorted[j], &sorted[i]), >, 0);
         }
     }
 
@@ -297,7 +298,7 @@ test_envp_cmp (Fixture *f,
   for (i = 0; i < G_N_ELEMENTS (unsorted); i++)
     sort_this[i] = unsorted[i];
 
-  qsort (sort_this, G_N_ELEMENTS (unsorted), sizeof (char *), pv_envp_cmp);
+  qsort (sort_this, G_N_ELEMENTS (unsorted), sizeof (char *), flatpak_envp_cmp);
 
   for (i = 0; i < G_N_ELEMENTS (sorted); i++)
     g_assert_cmpstr (sorted[i], ==, sort_this[i]);

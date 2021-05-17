@@ -76,6 +76,7 @@ void          flatpak_bwrap_add_bind_arg (FlatpakBwrap *bwrap,
                                           const char   *type,
                                           const char   *src,
                                           const char   *dest);
+void          flatpak_bwrap_sort_envp (FlatpakBwrap *bwrap);
 gboolean      flatpak_bwrap_bundle_args (FlatpakBwrap *bwrap,
                                          int           start,
                                          int           end,

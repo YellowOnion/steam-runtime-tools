@@ -277,6 +277,21 @@ flatpak_bwrap_add_bind_arg (FlatpakBwrap *bwrap,
     }
 }
 
+/*
+ * Sort bwrap->envp. This has no practical effect, but it's easier to
+ * see what is going on in a large environment block if the variables
+ * are sorted.
+ */
+void
+flatpak_bwrap_sort_envp (FlatpakBwrap *bwrap)
+{
+  if (bwrap->envp != NULL)
+    {
+      qsort (bwrap->envp, g_strv_length (bwrap->envp), sizeof (char *),
+             flatpak_envp_cmp);
+    }
+}
+
 gboolean
 flatpak_bwrap_bundle_args (FlatpakBwrap *bwrap,
                            int           start,

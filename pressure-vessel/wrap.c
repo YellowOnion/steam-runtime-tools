@@ -1725,7 +1725,7 @@ main (int argc,
 
       g_debug ("Environment variables:");
 
-      qsort (env, g_strv_length (env), sizeof (char *), pv_envp_cmp);
+      qsort (env, g_strv_length (env), sizeof (char *), flatpak_envp_cmp);
 
       for (i = 0; env[i] != NULL; i++)
         {
@@ -2748,9 +2748,7 @@ main (int argc,
 
   /* We'll have permuted the order anyway, so we might as well sort it,
    * to make debugging a bit easier. */
-  if (final_argv->envp != NULL)
-    qsort (final_argv->envp, g_strv_length (final_argv->envp),
-           sizeof (char *), pv_envp_cmp);
+  flatpak_bwrap_sort_envp (final_argv);
 
   if (opt_verbose)
     {

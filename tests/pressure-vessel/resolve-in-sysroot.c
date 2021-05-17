@@ -128,11 +128,12 @@ test_resolve_in_sysroot (Fixture *f,
   static const ResolveTest tests[] =
   {
     { { "a/b/c/d" }, { "a/b/c/d" } },
+    { { "a/b/c/d/" }, { "a/b/c/d" } },
     {
       { "a/b/c/d", SRT_RESOLVE_FLAGS_NONE, RESOLVE_CALL_FLAGS_IGNORE_PATH },
       { "a/b/c/d" },
     },
-    { { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
+    { { "a/b/c/d/", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
     {
       { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P, RESOLVE_CALL_FLAGS_IGNORE_PATH },
       { "a/b/c/d" },
@@ -150,8 +151,17 @@ test_resolve_in_sysroot (Fixture *f,
       { "a/b/c/d" }
     },
     { { "a/b/c/file", SRT_RESOLVE_FLAGS_READABLE }, { "a/b/c/file" } },
+    { { "a/b/c/file/" }, { NULL, G_IO_ERROR_NOT_DIRECTORY }},
     {
       { "a/b/c/file", SRT_RESOLVE_FLAGS_DIRECTORY },
+      { NULL, G_IO_ERROR_NOT_DIRECTORY }
+    },
+    {
+      { "a/b/c/file/", SRT_RESOLVE_FLAGS_DIRECTORY },
+      { NULL, G_IO_ERROR_NOT_DIRECTORY }
+    },
+    {
+      { "a/b/c/file/", SRT_RESOLVE_FLAGS_READABLE },
       { NULL, G_IO_ERROR_NOT_DIRECTORY }
     },
     {
@@ -161,8 +171,9 @@ test_resolve_in_sysroot (Fixture *f,
     { { "a/b///////.////./././///././c/d" }, { "a/b/c/d" } },
     { { "/a/b///////.////././../b2////././c2/d2" }, { "a/b2/c2/d2" } },
     { { "a/b/c/d/e/f" }, { NULL, G_IO_ERROR_NOT_FOUND } },
+    { { "a/b/c/d/e/f/", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
     { { "a/b/c/d/e/f", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
-    { { "a/b/c/d/e/f" }, { "a/b/c/d/e/f" } },
+    { { "a/b/c/d/e/f/" }, { "a/b/c/d/e/f" } },
     { { "a/b/c/d/e/f", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d/e/f" } },
     { { "a3/b3/c3" }, { NULL, G_IO_ERROR_NOT_FOUND } },
     { { "a3/b3/c3", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a3/b3/c3" } },

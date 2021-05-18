@@ -1,3 +1,17 @@
+steam-runtime-tools (0.20210518.0) scout; urgency=medium
+
+  * system-info: List /overrides/ correctly in recent SteamLinuxRuntime.
+    When pressure-vessel operates in --copy-runtime mode, /overrides is a
+    symlink to /usr/lib/pressure-vessel/overrides. "find /overrides -ls"
+    is useless here: it just lists the symlink, rather than traversing the
+    directory hierarchy.
+  * pv-wrap: Share Pipewire socket with container if available
+  * pv-runtime: Refactoring
+  * resolve-in-sysroot: Correct misleading error messages
+  * resolve-in-sysroot: Correctly bail out if a non-directory is found
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 18 May 2021 11:22:07 +0100
+
 steam-runtime-tools (0.20210430.0) scout; urgency=medium
 
   [ Simon McVittie ]

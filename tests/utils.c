@@ -264,6 +264,46 @@ test_file_in_sysroot (Fixture *f,
     }
 }
 
+static void
+test_get_path_after (Fixture *f,
+                     gconstpointer context)
+{
+  static const struct
+  {
+    const char *str;
+    const char *prefix;
+    const char *expected;
+  } tests[] =
+  {
+    { "/run/host/usr", "/run/host", "usr" },
+    { "/run/host/usr", "/run/host/", "usr" },
+    { "/run/host", "/run/host", "" },
+    { "////run///host////usr", "//run//host", "usr" },
+    { "////run///host////usr", "//run//host////", "usr" },
+    { "/run/hostage", "/run/host", NULL },
+    /* Any number of leading slashes is ignored, even zero */
+    { "foo/bar", "/foo", "bar" },
+    { "/foo/bar", "foo", "bar" },
+  };
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    {
+      const char *str = tests[i].str;
+      const char *prefix = tests[i].prefix;
+      const char *expected = tests[i].expected;
+
+      if (expected == NULL)
+        g_test_message ("%s should not have path prefix %s",
+                        str, prefix);
+      else
+        g_test_message ("%s should have path prefix %s followed by %s",
+                        str, prefix, expected);
+
+      g_assert_cmpstr (_srt_get_path_after (str, prefix), ==, expected);
+    }
+}
+
 /*
  * Test _srt_filter_gameoverlayrenderer function.
  */
@@ -430,6 +470,8 @@ main (int argc,
               setup, test_file_in_sysroot, teardown);
   g_test_add ("/utils/filter_gameoverlayrenderer", Fixture, NULL, setup,
               filter_gameoverlayrenderer, teardown);
+  g_test_add ("/utils/get-path-after", Fixture, NULL,
+              setup, test_get_path_after, teardown);
   g_test_add ("/utils/same-file", Fixture, NULL,
               setup, test_same_file, teardown);
   g_test_add ("/utils/str_is_integer", Fixture, NULL,

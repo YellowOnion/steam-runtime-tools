@@ -512,7 +512,7 @@ path_to_handle (GUnixFDList *fd_list,
       real = realpath (path, NULL);
 
       if (real != NULL)
-        after = pv_get_path_after (real, home_realpath);
+        after = _srt_get_path_after (real, home_realpath);
 
       if (after != NULL)
         {

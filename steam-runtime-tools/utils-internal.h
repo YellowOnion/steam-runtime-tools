@@ -119,6 +119,9 @@ G_GNUC_INTERNAL gchar **_srt_recursive_list_content (const gchar *sysroot,
                                                      const gchar *directory,
                                                      gchar ***messages_out);
 
+G_GNUC_INTERNAL const char *_srt_get_path_after (const char *str,
+                                                 const char *prefix);
+
 /*
  * _srt_is_same_stat:
  * @a: a stat buffer

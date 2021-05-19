@@ -35,7 +35,7 @@ mkdir -p depots/test-scout-archives
 python3 ./populate-depot.py \
     --depot=depots/test-scout-archives \
     --include-archives \
-    --no-unpack-runtimes \
+    --no-unpack-runtime \
     --toolmanifest \
     "$@" \
     scout \
@@ -49,7 +49,7 @@ python3 ./populate-depot.py \
     --depot=depots/test-scout-unpacked \
     --no-include-archives \
     --toolmanifest \
-    --unpack-runtimes \
+    --unpack-runtime \
     --versioned-directories \
     "$@" \
     scout \

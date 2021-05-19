@@ -38,7 +38,7 @@ python3 ./populate-depot.py \
     --depot=depots/test-soldier-archives \
     --toolmanifest \
     --include-archives \
-    --no-unpack-runtimes \
+    --no-unpack-runtime \
     "$@" \
     soldier \
     ${NULL+}
@@ -98,7 +98,7 @@ python3 ./populate-depot.py \
     --depot=depots/test-soldier-unpacked \
     --no-include-archives \
     --toolmanifest \
-    --unpack-runtimes \
+    --unpack-runtime \
     --versioned-directories \
     "$@" \
     soldier \
@@ -156,7 +156,7 @@ python3 ./populate-depot.py \
     --depot=depots/test-soldier-local \
     --no-include-archives \
     --toolmanifest \
-    --unpack-runtimes \
+    --unpack-runtime \
     --versioned-directories \
     "$@" \
     --pressure-vessel=./.cache \
@@ -222,7 +222,7 @@ python3 ./populate-depot.py \
     --depot=depots/test-soldier-unversioned \
     --no-include-archives \
     --toolmanifest \
-    --unpack-runtimes \
+    --unpack-runtime \
     --no-versioned-directories \
     "$@" \
     soldier \

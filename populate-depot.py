@@ -422,14 +422,14 @@ class Main:
         include_archives: bool = False,
         include_sdk: bool = False,
         pressure_vessel: str = 'scout',
-        runtimes: Sequence[str] = (),
+        runtime: str = 'scout',
         source_dir: str = HERE,
         ssh_host: str = '',
         ssh_path: str = '',
         suite: str = '',
         toolmanifest: bool = False,
         unpack_ld_library_path: str = '',
-        unpack_runtimes: bool = True,
+        unpack_runtime: bool = True,
         unpack_sources: Sequence[str] = (),
         unpack_sources_into: str = '.',
         version: str = 'latest',
@@ -437,9 +437,6 @@ class Main:
         **kwargs: Dict[str, Any],
     ) -> None:
         openers: List[urllib.request.BaseHandler] = []
-
-        if not runtimes:
-            runtimes = ('scout',)
 
         if not credential_hosts:
             credential_hosts = []
@@ -487,39 +484,37 @@ class Main:
         self.images_uri = images_uri
         self.include_archives = include_archives
         self.pressure_vessel = pressure_vessel
-        self.runtimes = []      # type: List[Runtime]
         self.source_dir = source_dir
         self.ssh_host = ssh_host
         self.ssh_path = ssh_path
         self.toolmanifest = toolmanifest
         self.unpack_ld_library_path = unpack_ld_library_path
-        self.unpack_runtimes = unpack_runtimes
+        self.unpack_runtime = unpack_runtime
         self.unpack_sources = unpack_sources
         self.unpack_sources_into = unpack_sources_into
         self.versioned_directories = versioned_directories
 
         os.makedirs(self.cache, exist_ok=True)
 
-        if not (self.include_archives or self.unpack_runtimes):
+        if not (self.include_archives or self.unpack_runtime):
             raise RuntimeError(
                 'Cannot use both --no-include-archives and '
-                '--no-unpack-runtimes'
+                '--no-unpack-runtime'
             )
 
-        for runtime in runtimes:
-            if '=' in runtime:
-                name, rhs = runtime.split('=', 1)
+        if '=' in runtime:
+            name, rhs = runtime.split('=', 1)
 
-                if rhs.startswith('{'):
-                    details = json.loads(rhs)
-                else:
-                    with open(rhs, 'rb') as reader:
-                        details = json.load(reader)
+            if rhs.startswith('{'):
+                details = json.loads(rhs)
             else:
-                name = runtime
-                details = {}
+                with open(rhs, 'rb') as reader:
+                    details = json.load(reader)
+        else:
+            name = runtime
+            details = {}
 
-            self.runtimes.append(self.new_runtime(name, details))
+        self.runtime = self.new_runtime(name, details)
 
         self.versions = []      # type: List[ComponentVersion]
 
@@ -570,21 +565,18 @@ class Main:
 
         self.merge_dir_into_depot(os.path.join(self.source_dir, 'common'))
 
-        for runtime in self.runtimes:
-            root = os.path.join(self.source_dir, runtime.name)
+        root = os.path.join(self.source_dir, self.runtime.name)
 
-            if os.path.exists(root):
-                self.merge_dir_into_depot(root)
+        if os.path.exists(root):
+            self.merge_dir_into_depot(root)
 
-        for runtime in self.runtimes:
-            if runtime.name == self.pressure_vessel:
-                logger.info(
-                    'Downloading pressure-vessel from %s', runtime.name)
-                pressure_vessel_runtime = runtime
-                pv_version.comment = self.download_pressure_vessel(
-                    pressure_vessel_runtime
-                )
-                break
+        if self.runtime.name == self.pressure_vessel:
+            logger.info(
+                'Downloading pressure-vessel from %s', self.runtime.name)
+            pressure_vessel_runtime = self.runtime
+            pv_version.comment = self.download_pressure_vessel(
+                pressure_vessel_runtime
+            )
         else:
             if self.pressure_vessel.startswith('{'):
                 logger.info(
@@ -667,13 +659,12 @@ class Main:
                 ', '.join(self.unpack_sources), self.unpack_sources_into)
             os.makedirs(self.unpack_sources_into, exist_ok=True)
 
-            for runtime in self.runtimes:
-                os.makedirs(
-                    os.path.join(self.unpack_sources_into, runtime.name),
-                    exist_ok=True,
-                )
+            os.makedirs(
+                os.path.join(self.unpack_sources_into, self.runtime.name),
+                exist_ok=True,
+            )
 
-        for runtime in self.runtimes:
+        for runtime in (self.runtime,):     # too much to reindent right now
             if runtime.path:
                 logger.info(
                     'Using runtime from local directory %r',
@@ -701,7 +692,7 @@ class Main:
             else:
                 runtime_files = set()
 
-            if self.unpack_runtimes:
+            if self.unpack_runtime:
                 if self.versioned_directories:
                     subdir = '{}_platform_{}'.format(runtime.name, version)
                 else:
@@ -803,7 +794,7 @@ class Main:
             with open(
                 os.path.join(self.depot, 'run-in-' + runtime.name), 'w'
             ) as writer:
-                if self.unpack_runtimes:
+                if self.unpack_runtime:
                     writer.write(
                         RUN_IN_DIR_SOURCE.format(
                             escaped_dir=shlex.quote(subdir),
@@ -837,7 +828,7 @@ class Main:
             component_version.comment = comment
             self.versions.append(component_version)
 
-        for runtime in self.runtimes[0:]:
+        for runtime in (self.runtime,):     # too much to reindent right now
             if not self.toolmanifest:
                 continue
 
@@ -1331,7 +1322,7 @@ def main() -> None:
     parser.add_argument(
         '--depot', default='depot',
         help=(
-            'Download runtimes into this existing directory'
+            'Download runtime into this existing directory'
         )
     )
     parser.add_argument(
@@ -1378,16 +1369,18 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--unpack-runtimes', action='store_true', default=True,
+        '--unpack-runtime', '--unpack-runtimes',
+        action='store_true', default=True,
         help=(
-            "Unpack the runtimes into the --depot, for use with "
+            "Unpack the runtime into the --depot, for use with "
             "pressure-vessel's tests/containers.py. [default]"
         )
     )
     parser.add_argument(
-        '--no-unpack-runtimes', action='store_false', dest='unpack_runtimes',
+        '--no-unpack-runtime', '--no-unpack-runtimes',
+        action='store_false', dest='unpack_runtime',
         help=(
-            "Don't unpack the runtimes into the --depot"
+            "Don't unpack the runtime into the --depot"
         )
     )
     parser.add_argument(
@@ -1420,12 +1413,11 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        'runtimes',
-        default=[],
+        'runtime',
+        default='',
         metavar='NAME[="DETAILS"]',
-        nargs='*',
         help=(
-            'Runtimes to download, in the form NAME or NAME="DETAILS". '
+            'Runtime to download, in the form NAME or NAME="DETAILS". '
             'DETAILS is a JSON object containing something like '
             '{"path": "../prebuilt", "suite: "scout", "version": "latest", '
             '"architecture": "amd64,i386", "include_sdk": true}, or the '

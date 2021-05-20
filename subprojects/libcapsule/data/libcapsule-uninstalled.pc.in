@@ -1,0 +1,10 @@
+libdir=@abs_top_builddir@/capsule
+includedir=@abs_top_srcdir@/capsule
+
+Name: libcapsule
+Description: segregated dynamic linking library
+Version: @VERSION@
+
+Requires:
+Libs: -L${libdir} -lcapsule
+Cflags: -I${includedir}

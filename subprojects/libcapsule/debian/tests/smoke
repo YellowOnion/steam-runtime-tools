@@ -1,0 +1,55 @@
+#!/usr/bin/perl
+
+# Copyright © 2017 Collabora Ltd.
+#
+# This library is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation; either version 2.1 of the
+# License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+
+use autodie;
+use File::Temp qw();
+use IPC::Run qw(run);
+use Test::More;
+
+my $scratch = File::Temp->newdir();
+chdir($scratch);
+
+open(my $fh, '>', 'trivial.c');
+print {$fh} <<'EOF';
+#define _GNU_SOURCE
+
+#include <stdio.h>
+
+#include <capsule/capsule.h>
+
+int
+main (void)
+{
+  char *prefix = capsule_get_prefix( "/host", "libfoo.so.0" );
+  printf( "%s\n", prefix );
+  return 0;
+}
+EOF
+close($fh);
+
+ok(! system('gcc -c -o trivial.o trivial.c $(pkg-config --cflags libcapsule)'),
+    'compiled');
+ok(! system('gcc -o trivial trivial.o $(pkg-config --libs libcapsule)'),
+    'linked');
+ok(-x 'trivial', 'executable');
+my $output;
+$ENV{CAPSULE_LIBFOO_SO_0_PREFIX} = '/foo';
+ok(run(['./trivial'], '>', \$output), 'executed successfully');
+is($output, "/foo\n", 'printed desired output');
+
+chdir('/');
+done_testing;

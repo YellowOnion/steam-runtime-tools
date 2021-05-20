@@ -1,0 +1,342 @@
+#!/bin/bash
+
+# Copyright © 2017 Collabora Ltd
+
+# This file is part of libcapsule.
+
+# libcapsule is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation; either version 2.1 of the
+# License, or (at your option) any later version.
+
+# libcapsule is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public
+# License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
+
+set -u
+set -e
+
+declare -A NODE;
+top=$(dirname $0);
+top=${top:-.};
+me=$(basename $0);
+
+usage ()
+{
+cat << EOF
+Usage: $me [OPTIONS] TARGET EXCLUDES EXPORTS OUTPUT [DSO-VERSION [TREE]]"
+    Options:
+        --capsule-pkgdatadir=PATH
+                                Use supporting files from PATH
+                                [default: libcapsule's \${pkgdatadir}]
+        --capsule-symbols-tool=PATH
+                                Use replacement capsule-symbols(1)
+        --symbols-from=PATH     Use symbols from this file
+                                [default: \${OUTPUT%.c}.symbols]
+        --[no-]update-symbols   Do or don't update symbols list if EXPORTS
+                                is newer than it [default: do]
+        --search-tree=PATH      Find libraries to be proxied in this
+                                chroot, sysroot or container now
+                                [default: TREE or /]
+        --runtime-tree=PATH     Generated code will find proxied
+                                libraries in this chroot, sysroot or
+                                container at runtime if CAPSULE_PREFIX
+                                is unset [default: TREE or /host]
+    Positional parameters:
+        TARGET                  SONAME of shared library to proxy,
+                                for example libGL.so.1
+        EXCLUDES                List of SONAMEs never loaded from TREE
+                                in addition to libdl.so.2
+        EXPORTS                 List of extra SONAMEs whose symbols are
+                                to be exported from the shim, in addition
+                                to TARGET itself
+        OUTPUT                  C source code filename to output,
+                                for example libGL.so.c
+        DSO-VERSION             Major or MAJOR:MINOR:MICRO version (as for
+                                libtool -version-number) to export, for
+                                example 1 or 1:x:y for libGL.so.1
+                                [default: parse SONAME]
+        TREE                    Chroot or container to find libraries in,
+                                both now and at runtime; overridden by
+                                --runtime-tree and --search-tree
+EOF
+    exit "${1:-0}"
+}
+
+update_symbols=
+
+getopt_temp="$(getopt -o 'h' \
+    -l 'capsule-symbols-tool:,search-tree:,runtime-tree:,symbols-from:,update-symbols,no-update-symbols,help' \
+    -n "$me" -- "$@")"
+eval set -- "$getopt_temp"
+
+while true;
+do
+    case "$1" in
+        (--capsule-symbols-tool)
+            CAPSULE_SYMBOLS_TOOL="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--runtime-tree)
+            runtime_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--search-tree)
+            search_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--symbols-from)
+            symbol_file="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--update-symbols)
+            update_symbols=yes;
+            shift;
+            continue;
+            ;;
+
+        (--no-update-symbols)
+            update_symbols=;
+            shift;
+            continue;
+            ;;
+
+        (--help|-h)
+            usage 0;
+            ;;
+
+        (--)
+            shift;
+            break;
+            ;;
+        (*)
+            echo "$me: Internal error" >&2;
+            usage 2 >&2;
+            ;;
+    esac
+done
+
+: "${PKG_CONFIG:=pkg-config}"
+: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL libcapsule-tools)"}"
+
+if [ "$#" -lt 4 ] || [ "$#" -gt 6 ];
+then
+    usage 2 >&2;
+fi;
+
+proxied_dso=$1;    shift;
+proxy_excluded=$1; shift;
+proxy_extra=$1;    shift;
+proxy_src=$1;      shift;
+
+if [ "$#" -gt 0 ];
+then
+    ltver=$1; shift;
+fi
+
+if [ "$#" -gt 0 ];
+then
+    proxy_tree=$1; shift;
+else
+    proxy_tree=
+fi
+
+if [ -n "${ltver:-}" ];
+then
+    major_version="${ltver%%:*}"
+elif [ "x${proxied_dso%.so.*}" != "x$proxied_dso" ]; then
+    major_version="${proxied_dso##*.so.}"
+fi
+
+: "${runtime_tree:="$proxy_tree"}"
+: "${runtime_tree:=/host}"
+: "${search_tree:="$proxy_tree"}"
+: "${search_tree:=/}"
+
+dso_base=${proxied_dso#lib}
+dso_base=${dso_base%.so*}
+proxied_dso=lib${dso_base}.so.${major_version};
+
+map_file=${proxy_src%.c}.map;
+
+if [ -z "${symbol_file:-}" ];
+then
+    symbol_file=${proxy_src%.c}.symbols;
+fi
+
+exec >$proxy_src.tmp;
+
+echo '#include "capsule/capsule-shim.h"'
+
+# generate the .symbols file if it doesn't exist, or if the proxy_extra
+# control file has been updated:
+if [ -n "$update_symbols" ] && [ $symbol_file -ot $proxy_extra ];
+then
+    echo -n > $symbol_file;
+    if (for pt in $proxied_dso $(cat $proxy_extra);
+        do
+            if [ x$V = x1 ];
+            then
+                echo "  $CAPSULE_SYMBOLS_TOOL $pt $search_tree" >&2;
+            else
+                echo "  SYMBOLS $pt $search_tree" >&2;
+            fi;
+            $CAPSULE_SYMBOLS_TOOL $pt $search_tree || exit 1;
+        done) > $symbol_file.tmp;
+    then
+        LC_ALL=C sort -u "$symbol_file.tmp" > "$symbol_file.tmp2";
+        rm -f "$symbol_file.tmp";
+        mv "$symbol_file.tmp2" "$symbol_file";
+    else
+        code=$?;
+        rm $symbol_file.tmp
+        exit $code;
+    fi;
+fi;
+
+
+while read symbol version dependency;
+do
+    case $version in
+        @*)
+            echo "VERSIONED_STUB  ( $symbol, $version );";
+            node=${version##*@};
+            NODE[$node]=${NODE[$node]:-}" "$symbol;
+            ;;
+        *)
+            echo "UNVERSIONED_STUB( $symbol );";
+            ;;
+    esac;
+done < $symbol_file;
+
+cat - <<EOF
+static capsule cap;
+static const char soname[] = "$proxied_dso";
+
+// _int_dlopen() from libcapsule or a locally overridden version
+#include "capsule/_int_dlopen.h"
+
+// Array of SONAMEs that will not have a private copy inside a capsule.
+// Only one copy of each of these will be loaded, and they will
+// be loaded without respecting the #capsule_namespace's @prefix.
+static const char *exclude[] =
+{
+EOF
+
+while read excluded x;
+do
+    case $excluded in lib*) printf "%32s \"%s\",\n" "" $excluded; ;; esac;
+done < $proxy_excluded;
+
+cat - <<EOF
+  NULL
+};
+
+// DSOs to restrict dlsym lookups to:
+static const char *valid_dlsym_sources[] =
+{
+  soname,
+EOF
+
+if [ -f "${proxy_extra}" ];
+then
+    for pt in $(cat $proxy_extra);
+    do
+        cat - <<EOF
+  "$pt",
+EOF
+    done;
+fi;
+
+cat - <<EOF
+  NULL
+};
+
+// -------------------------------------------------------------
+// this is an array of the functions we want to act as a shim for:
+static capsule_item relocs[] =
+{
+EOF
+
+while read sym x;
+do
+    cat - <<EOF
+  { "$sym" },
+EOF
+done < $symbol_file;
+
+cat - <<EOF
+  { "dlsym", (capsule_addr) capsule_external_dlsym,
+             (capsule_addr) capsule_external_dlsym, },
+  { NULL }
+};
+
+// make sure this symbol has global visibility so
+// that the libcapsule initialisation can find it
+__attribute__ ((visibility("default")))
+capsule_metadata capsule_meta =
+{
+    .capsule_abi      = 0,
+    .soname           = soname,
+    .default_prefix   = "/host",
+    .exclude          = exclude,
+    .export           = valid_dlsym_sources,
+    .items            = relocs,
+    .int_dlopen       = _int_dlopen,
+    .int_free         = _wrapped_free,
+    .int_realloc      = _wrapped_realloc,
+};
+
+static void __attribute__ ((constructor)) _capsule_init (void)
+{
+    // Don't use capsule_meta.soname here, because if we did, it would be
+    // a relocatable, interposable reference to capsule_meta (assuming the
+    // shim library wasn't linked with -Bsymbolic). At runtime, we'd get
+    // an arbitrarily chosen one of the capsule_meta symbols defined by
+    // the other shim libraries sharing our global symbol namespace,
+    // and in particular not necessarily our own, with predictably bad
+    // results.
+    cap = capsule_init( soname );
+}
+
+static void __attribute__ ((destructor)) _capsule_exit (void)
+{
+    capsule_close( cap );
+    cap = NULL;
+}
+EOF
+
+echo -n > $map_file;
+exec >& $map_file;
+
+for node in ${!NODE[@]};
+do
+    echo "$node {";
+    echo "  global:";
+    for symbol in ${NODE[$node]};
+    do
+        echo "    $symbol;";
+    done;
+    echo "};";
+    echo;
+done;
+
+# scrub the (symbol version) map file if it's empty:
+if [ ! -s $map_file ];
+then
+    rm -f $map_file;
+fi;
+
+mv "$proxy_src.tmp" "$proxy_src";

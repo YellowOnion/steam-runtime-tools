@@ -1,0 +1,4 @@
+gtk-doc.make
+libcapsule-docs.xml
+libcapsule-overrides.txt
+libcapsule-sections.txt

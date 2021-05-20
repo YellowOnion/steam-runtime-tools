@@ -1,0 +1,10 @@
+libcapsule.so.0 libcapsule0 #MINVER#
+* Build-Depends-Package: libcapsule-dev
+ capsule_close@Base 0.20180430.0
+ capsule_external_dlopen@Base 0.20180430.0
+ capsule_external_dlsym@Base 0.20180430.0
+ capsule_get_prefix@Base 0.20180430.0
+ capsule_init@Base 0.20180430.0
+ capsule_shim_dlopen@Base 0.20180430.0
+ capsule_shim_free@Base 0.20180430.0
+ capsule_shim_realloc@Base 0.20180430.0

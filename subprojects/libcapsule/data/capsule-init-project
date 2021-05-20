@@ -1,0 +1,297 @@
+#!/bin/bash
+
+set -e;
+set -u;
+
+me=$(basename $0);
+
+usage ()
+{
+cat << EOF
+Usage: $me [OPTIONS] TARGET...
+    Options:
+        --capsule-pkgdatadir=PATH
+                                Use supporting files from PATH
+                                [default: libcapsule's \${pkgdatadir}]
+        --capsule-symbols-tool=PATH
+                                Use replacement capsule-symbols(1)
+                                [default: ${CAPSULE_SYMBOLS_TOOL:-ask pkg-config}]
+        --capsule-version-tool=PATH
+                                Use replacement capsule-version(1)
+                                [default: ${CAPSULE_VERSION_TOOL:-ask pkg-config}]
+        --search-tree=PATH      Find libraries to be proxied in this
+                                chroot, sysroot or container now
+                                [default: /]
+        --set-version=VERSION   Use this as the library's version number
+                                (major, major.minor or major.minor.micro)
+                                [default: based on first TARGET]
+        --symbols-from-dir=PATH Use symbols from files in this directory
+                                instead of running capsule-symbols(1)
+        --runtime-tree=PATH     Generated code will find proxied
+                                libraries in this chroot, sysroot or
+                                container at runtime if CAPSULE_PREFIX
+                                is unset [default: /host]
+        --package-name=PACKAGE  Use this name for the generated package
+                                [default: based on name of first TARGET]
+        --destination=PATH      Create the project here
+                                [default: ./PACKAGE]
+        TARGET...               SONAMEs of the libraries to be proxied
+                                (libfoo.so.2), or libfoo.so.2/2.1.3
+                                to force a version
+EOF
+    exit "${1:-0}"
+}
+
+getopt_temp="$(getopt -o 'h' \
+    -l 'autoreconf,no-autoreconf,capsule-pkgdatadir:,capsule-symbols-tool:,capsule-version-tool:,destination:,package-name:,search-tree:,set-version:,symbols-from-dir:,runtime-tree:,help' \
+    -n "$me" -- "$@")"
+eval set -- "$getopt_temp"
+
+autoreconf=yes
+dest=
+package_name=
+runtime_tree=
+search_tree=
+symbols_from=
+ver=
+
+while true;
+do
+    case "$1" in
+        (--help|-h)
+            usage 0;
+            ;;
+
+        (--autoreconf)
+            autoreconf=yes;
+            shift;
+            continue;
+            ;;
+
+        (--no-autoreconf)
+            autoreconf=;
+            shift;
+            continue;
+            ;;
+
+        (--capsule-pkgdatadir)
+            CAPSULE_MKINC="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--capsule-symbols-tool)
+            CAPSULE_SYMBOLS_TOOL="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--capsule-version-tool)
+            CAPSULE_VERSION_TOOL="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--destination)
+            dest="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--package-name)
+            package_name="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--runtime-tree)
+            runtime_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--search-tree)
+            search_tree="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--set-version)
+            ver="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--symbols-from-dir)
+            symbols_from="$2"
+            shift 2;
+            continue;
+            ;;
+
+        (--)
+            shift;
+            break;
+            ;;
+        (*)
+            echo "$me: Internal error" >&2;
+            usage 2 >&2;
+            ;;
+    esac
+done
+
+if [ "$#" -lt 1 ];
+then
+    usage 2 >&2;
+fi;
+
+first_target_maybe_ver="$1";
+first_target="${first_target_maybe_ver%%/*}";
+
+if [ -z "$package_name" ];
+then
+    package_name="${first_target%%.so.*}";
+    package_name="${package_name%%.so}-proxy";
+fi;
+
+if [ -z "$dest" ];
+then
+    dest="$package_name";
+fi;
+
+: "${PKG_CONFIG:=pkg-config}"
+: "${CAPSULE_MKINC:="$($PKG_CONFIG --variable=makeinc libcapsule-tools)"}"
+: "${CAPSULE_SYMBOLS_TOOL:="$($PKG_CONFIG --variable=CAPSULE_SYMBOLS_TOOL libcapsule-tools)"}"
+: "${CAPSULE_VERSION_TOOL:="$($PKG_CONFIG --variable=CAPSULE_VERSION_TOOL libcapsule-tools)"}"
+: "${runtime_tree:="/host"}"
+: "${search_tree:="/"}"
+
+if [ -z "$ver" ];
+then
+    if [ "x$first_target" != "x$first_target_maybe_ver" ];
+    then
+        ver="${first_target_maybe_ver#*/}";
+    else
+        read x x ver x < <("$CAPSULE_VERSION_TOOL" "$first_target" "$search_tree");
+    fi;
+fi;
+
+echo "Generating project for $package_name, shims for $runtime_tree libraries: $*";
+
+echo "Creating project directory $dest";
+
+mkdir -p "$dest";
+cd $dest;
+mkdir -p m4;
+mkdir -p shim;
+
+echo "Working in $PWD";
+
+escaped_target="$(echo "$first_target" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+escaped_search_tree="$(echo "$search_tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+escaped_runtime_tree="$(echo "$runtime_tree" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+sed \
+    -e "1,/^\$/d" \
+    -e "s,@TARGET@,$escaped_target," \
+    < "$CAPSULE_MKINC/shim-README.in" \
+    > README;
+
+echo Initialising configure.ac;
+
+sed \
+    -e "1,/^\$/d" \
+    -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
+    -e "s,@SEARCH_TREE@,$escaped_search_tree," \
+    -e "s,@PACKAGE@,$package_name," \
+    -e "s,@VER@,$ver," \
+    < "$CAPSULE_MKINC/shim-configure.ac.in" \
+    > configure.ac;
+
+echo Initialising Makefile.am;
+
+sed \
+    -e "1,/^\$/d" \
+    -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
+    -e "s,@SEARCH_TREE@,$escaped_search_tree," \
+    -e "s,@PACKAGE@,$package_name," \
+    -e "s,@VER@,$ver," \
+    < "$CAPSULE_MKINC/shim-Makefile.am" \
+    > Makefile.am;
+
+for target_maybe_ver in "$@"; do
+    target="${target_maybe_ver%%/*}";
+    if [ "x$target" != "x$target_maybe_ver" ];
+    then
+        target_ver="${target_maybe_ver#*/}";
+    else
+        read x x target_ver x < <("$CAPSULE_VERSION_TOOL" "$target" "$search_tree");
+    fi;
+
+    base=${target%%.so.*};
+    base=${base%.so};
+    name=${base#lib};
+    lcbase=${base,,};
+    amname=${name//-/_};
+
+    escaped_target="$(echo "$target" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+    automake_target="${escaped_target//-/_}"
+    escaped_lib="$(echo "$name" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+    automake_lib="$(echo "$amname" | sed -e 's/\\/\\\\/g' -e 's/,/\\,/g')"
+
+    maj=${ver%%.*};
+
+    echo "Preparing proxy source files: $target"
+    touch shim/$target.{shared,excluded};
+
+    if [ -z "$symbols_from" ]; then
+        echo Extracting dynamic symbols from $search_tree : $target;
+
+        "$CAPSULE_SYMBOLS_TOOL" "$target" "$search_tree" > "shim/$target.symbols.tmp";
+        LC_ALL=C sort -u "shim/$target.symbols.tmp" > "shim/$target.symbols";
+        rm -f "shim/$target.symbols.tmp";
+    else
+        LC_ALL=C sort -u "$symbols_from/$target.symbols" > "shim/$target.symbols";
+    fi
+    touch "shim/$target.symbols.updated-for";
+
+    sed \
+        -e "1,/^\$/d" \
+        -e "s,@TARGET@,$escaped_target," \
+        -e "s,@AMTARGET@,$automake_target," \
+        -e "s,@LIB@,$escaped_lib," \
+        -e "s,@AMLIB@,$automake_lib," \
+        -e "s,@RUNTIME_TREE@,$escaped_runtime_tree," \
+        -e "s,@SEARCH_TREE@,$escaped_search_tree," \
+        -e "s,@PACKAGE@,$package_name," \
+        -e "s,@TARGET_VER@,$target_ver," \
+        < "$CAPSULE_MKINC/shim-target-Makefile.am" \
+        >> Makefile.am;
+done
+
+cp "$CAPSULE_MKINC/shim-.gitignore" .gitignore
+
+if [ -n "$autoreconf" ]; then
+    echo Running initial configuration;
+    autoreconf -ivf
+fi
+
+cat - <<EOF
+$PWD is ready for ./configure, see README for details.
+
+You will probably want to add the following files to your version
+control system:
+
+Makefile.am
+README
+configure.ac
+EOF
+
+
+for target_maybe_ver in "$@"; do
+    target="${target_maybe_ver%%/*}";
+    cat - <<EOF
+shim/$target.excluded
+shim/$target.shared
+shim/$target.symbols
+shim/$target.symbols.updated-for
+EOF
+done

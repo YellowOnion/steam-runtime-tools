@@ -83,8 +83,6 @@ override_dh_auto_install:
 		$(DESTDIR)/usr/$(pkglibexecdir)/
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-wflinfo \
 		$(DESTDIR)/usr/$(pkglibexecdir)/
-	ln -s ../../lib/libcapsule/relocatable/$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
-		$(DESTDIR)/usr/$(pkglibexecdir)/
 	set -e; for x in $(DESTDIR)/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \
 		if [ -f "$$x" ] \
 		&& cmp -s "$$x" \
@@ -110,9 +108,8 @@ override_dh_link:
 	:
 	install -d $(relocatable_pkglibdir)
 	ln -fnsv ../libsteam-runtime-tools-0.so.0 $(relocatable_pkglibdir)
-	export PATH=/usr/lib/libcapsule/relocatable:$$PATH; \
 	LD_LIBRARY_PATH='$(DESTDIR)/usr/$(libdir)' \
-	$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
+	$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
 		--container / \
 		--dest $(relocatable_pkglibdir) \
 		--link-target / \
@@ -120,6 +117,7 @@ override_dh_link:
 		--provider / \
 		only-dependencies:path:$(DESTDIR)/usr/bin/steam-runtime-check-requirements \
 		only-dependencies:path:$(DESTDIR)/usr/bin/steam-runtime-system-info \
+		only-dependencies:path:$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-capsule-capture-libs \
 		only-dependencies:path:$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-check-locale \
 		$(NULL)
 	:

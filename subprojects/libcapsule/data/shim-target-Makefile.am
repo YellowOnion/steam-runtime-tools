@@ -1,0 +1,19 @@
+# vim:set ft=automake:
+# Processed by capsule-init-project. Everything before the first blank
+# line is removed during processing; the second blank line is to
+# provide some spacing between target libraries.
+
+
+# -------- @TARGET@ --------
+
+CAPSULE_SONAMES += @TARGET@
+CAPSULE_VERSION_@AMTARGET@ := @TARGET_VER@
+lib_LTLIBRARIES += lib@LIB@.la
+
+nodist_lib@AMLIB@_la_SOURCES = shim/@TARGET@.c
+lib@AMLIB@_la_LDFLAGS = $(shim_ldflags_@AMTARGET@)
+lib@AMLIB@_la_LIBADD = $(CAPSULE_LIBS)
+
+CLEANFILES     += $(nodist_lib@AMLIB@_la_SOURCES) \
+                  $(nodist_lib@AMLIB@_la_SOURCES:.c=.map)
+BUILT_SOURCES  += $(nodist_lib@AMLIB@_la_SOURCES)

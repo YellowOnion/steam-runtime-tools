@@ -215,4 +215,33 @@ elif multiarch == 'x86_64-linux-gnu'
   subdir('xeon_phi')
 endif
 
+if multiarch == 'i386-linux-gnu' or multiarch == 'x86_64-linux-gnu'
+  if meson.version().version_compare('>=0.58.0')
+    # replaces deprecated source_root()
+    libcapsule_srcdir = meson.global_source_root() / 'subprojects' / 'libcapsule'
+  else
+    libcapsule_srcdir = meson.source_root() / 'subprojects' / 'libcapsule'
+  endif
+
+  # libcapsule doesn't currently have a Meson build system, so instead
+  # of building it as a subproject, we build our own source file that
+  # #includes everything we need from it.
+  executable(
+    multiarch + '-capsule-capture-libs',
+    'capture-libs.c',
+    c_args : [
+      '-DHOST_PREFIX="' + multiarch + '-"',
+      '-DPACKAGE_TARNAME="' + meson.project_name() + '"',
+      '-DPACKAGE_VERSION="' + meson.project_version() + '"',
+    ],
+    dependencies: [libdl, libelf],
+    include_directories : project_include_dirs,
+    install : true,
+    install_dir : pkglibexecdir,
+    # Use libelf from the adjacent libdir, ignoring LD_LIBRARY_PATH
+    build_rpath : pkglibexec_rpath,
+    install_rpath : pkglibexec_rpath,
+  )
+endif
+
 # vim:set sw=2 sts=2 et:

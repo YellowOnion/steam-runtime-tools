@@ -1,0 +1,121 @@
+#!/usr/bin/env groovy
+/*
+ * SPDX-License-Identifier: LGPL-2.1+
+ *
+ * Copyright © 2017-2018 Collabora Ltd
+ *
+ * This package is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This package is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this package.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ */
+@Library('steamos-ci') _
+
+pipeline {
+  agent none
+
+  options {
+    timestamps()
+    skipDefaultCheckout()
+  }
+
+  stages {
+    stage ("deb-build-snapshot") {
+      agent {
+        docker {
+          label 'docker-slave'
+          image "docker-registry.internal.collabora.com/steamos/package-builder:${env.CI_SUITE ?: 'brewmaster'}"
+          registryUrl 'https://docker-registry.internal.collabora.com'
+          registryCredentialsId 'ccu-docker-internal-collabora-com'
+          alwaysPull true
+        }
+      }
+      environment {
+        HOME="${env.WORKSPACE}"
+        TMPDIR="${env.WORKSPACE}"
+        PYTHONUNBUFFERED="1"
+      }
+      steps {
+        sh '''
+        git config --global user.name Jenkins
+        git config --global user.email nobody@example.com
+        '''
+        checkoutCollaboraGitlab('vivek/libcapsule', 'master', 'src')
+        sh '''
+        mkdir -p debs
+        echo "jenkins::$(id -u):$(id -g):Jenkins:$(pwd):/bin/sh" > passwd
+        export NSS_WRAPPER_PASSWD=$(pwd)/passwd
+        export NSS_WRAPPER_GROUP=/dev/null
+        export LD_PRELOAD=libnss_wrapper.so
+        ( cd src && deb-build-snapshot -d ../debs -s -u localhost )
+        '''
+        stash name: 'debs', includes: 'debs/**'
+        archiveArtifacts 'debs/**'
+      }
+      post {
+        always {
+          deleteDir()
+        }
+      }
+    }
+
+    stage ("autopkgtest") {
+      agent {
+        docker {
+          label 'docker-slave'
+          args '--device=/dev/kvm'
+          image 'docker-registry.internal.collabora.com/steamos/package-builder:stretch'
+          registryUrl 'https://docker-registry.internal.collabora.com'
+          registryCredentialsId 'ccu-docker-internal-collabora-com'
+          alwaysPull true
+        }
+      }
+      environment {
+        HOME="${env.WORKSPACE}"
+        TMPDIR="${env.WORKSPACE}"
+        PYTHONUNBUFFERED="1"
+      }
+      steps {
+        sh 'git config --global user.name Jenkins'
+        sh 'git config --global user.email nobody@example.com'
+        checkoutCollaboraGitlab('vivek/libcapsule', 'master', 'src')
+        unstash 'debs'
+        sh '''
+        mkdir -p tmp
+        mkdir -p output
+        wget --progress=dot:giga -O autopkgtest.qcow2 https://images.collabora.co.uk/steam/autopkgtest-virt-qemu/${CI_SUITE:=brewmaster}_amd64.qcow2
+
+        case "${CI_SUITE}" in
+            (brewmaster)
+                set -- --add-apt-source='deb http://deb.debian.org/debian jessie main'
+                for x in /etc/apt/trusted.gpg.d/*.gpg; do
+                    set -- --copy="$x:$x" "$@"
+                done
+                ;;
+            (*)
+                set --
+                ;;
+        esac
+
+        autopkgtest "$@" --apt-upgrade --no-built-binaries --output-dir ./output/ debs/*.deb ./src/ -- qemu --qemu-options="-drive format=raw,read-only,if=pflash,file=/usr/share/ovmf/OVMF.fd" ./autopkgtest.qcow2
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts 'output/**'
+          deleteDir()
+        }
+      }
+    }
+  }
+}
+/* vim:set sts=2 sw=2 et: */

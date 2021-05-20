@@ -330,7 +330,7 @@ runtime_architecture_init (RuntimeArchitecture *self,
 
   self->capsule_capture_libs_basename = g_strdup_printf ("%s-capsule-capture-libs",
                                                          self->details->tuple);
-  self->capsule_capture_libs = g_build_filename (runtime->pv_prefix, "bin",
+  self->capsule_capture_libs = g_build_filename (runtime->helpers_path,
                                                  self->capsule_capture_libs_basename,
                                                  NULL);
   self->libdir_in_current_namespace = g_build_filename (runtime->overrides, "lib",

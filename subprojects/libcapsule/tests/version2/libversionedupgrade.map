@@ -1,0 +1,9 @@
+LIBVERSIONED1 {
+  global:
+    symbol1;
+    symbol2;
+};
+LIBVERSIONED2 {
+  global:
+    symbol3;
+} LIBVERSIONED1;

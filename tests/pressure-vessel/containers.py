@@ -271,35 +271,8 @@ class TestContainers(BaseTest):
                     symlinks=True,
                 )
 
-            fallback_libcapsule_tools = os.path.join(
-                cls.containers_dir,
-                'steam-runtime', 'usr', 'lib', 'libcapsule', 'relocatable',
-            )
-
-            if not os.path.isdir(fallback_libcapsule_tools):
-                fallback_libcapsule_tools = '/usr/lib/libcapsule/relocatable'
-
             for multiarch in ('i386-linux-gnu', 'x86_64-linux-gnu'):
-                for tool in ('capsule-capture-libs', 'capsule-symbols'):
-                    exe = multiarch + '-' + tool
-                    tool_path = os.path.join(cls.pv_dir, 'bin', exe)
-                    found = shutil.which(exe)
-                    relocatable = os.path.join(
-                        os.environ.get(
-                            'PRESSURE_VESSEL_LIBCAPSULE_TOOLS',
-                            fallback_libcapsule_tools,
-                        ),
-                        exe,
-                    )
-
-                    if found is not None:
-                        cls.copy2(found, tool_path)
-                    elif os.path.isfile(relocatable):
-                        cls.copy2(relocatable, tool_path)
-                    else:
-                        raise unittest.SkipTest('{} not found'.format(exe))
-
-                for tool in ('inspect-library',):
+                for tool in ('inspect-library', 'capsule-capture-libs'):
                     exe = multiarch + '-' + tool
                     tool_path = os.path.join(
                         cls.pv_dir,

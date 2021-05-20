@@ -84,9 +84,8 @@ EXES = [
 WRAPPED = [
     'bwrap',
 ]
-MULTIARCH = [
+HELPERS = [
     'capsule-capture-libs',
-    'capsule-symbols',
 ]
 SCRIPTS = [
     'pressure-vessel-unruntime',
@@ -200,10 +199,15 @@ def main():
         path = os.path.join(relocatable_install, 'bin', exe)
         check_dependencies(test, relocatable_install, path, is_wrapper=True)
 
-    for basename in MULTIARCH:
+    for basename in HELPERS:
         for multiarch, ld_so in LD_SO:
             exe = '{}-{}'.format(multiarch, basename)
-            path = os.path.join(relocatable_install, 'bin', exe)
+            path = os.path.join(
+                relocatable_install,
+                'libexec',
+                'steam-runtime-tools-0',
+                exe,
+            )
 
             if isexec(path):
                 test.ok('{} exists and is executable'.format(path))

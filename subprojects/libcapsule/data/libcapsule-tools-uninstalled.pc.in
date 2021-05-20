@@ -1,0 +1,10 @@
+makeinc=@abs_top_srcdir@/data
+CAPSULE_CAPTURE_LIBS_TOOL=@abs_top_builddir@/capsule-capture-libs
+CAPSULE_INIT_PROJECT_TOOL=@abs_top_srcdir@/data/capsule-init-project
+CAPSULE_MKSTUBLIB_TOOL=@abs_top_srcdir@/data/capsule-mkstublib
+CAPSULE_SYMBOLS_TOOL=@abs_top_builddir@/capsule-symbols
+CAPSULE_VERSION_TOOL=@abs_top_builddir@/capsule-version
+
+Name: libcapsule-tools
+Description: segregated dynamic linking library - development tools
+Version: @VERSION@

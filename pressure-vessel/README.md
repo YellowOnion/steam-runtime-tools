@@ -115,49 +115,11 @@ that is likely to depend on libraries from your host system, which is
 good for quick turnaround and debugging, but not suitable for deployment
 to the public. For that, you'll want a relocatable installation: see below.
 
-If you are developing pressure-vessel, you might well want to alter
-the bundled libcapsule tools. You can do this by building your own
-copy of libcapsule. This requires 32- and 64-bit copies of libelf (the
-version from elfutils) and its development files.
-
-    git clone https://gitlab.collabora.com/vivek/libcapsule.git
-    cd libcapsule
-    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/SteamLinuxRuntime/pressure-vessel"
-    libdir="lib/x86_64-linux-gnu"
-    NOCONFIGURE=1 ./autogen.sh
-    mkdir _build _build/i386 _build/x86_64
-    ( cd _build/x86_64; ../../configure
-    --host=x86_64-linux-gnu --enable-host-prefix=x86_64-linux-gnu- \
-    --prefix="$prefix" --libdir="\${prefix}/$libdir" \
-    --disable-gtk-doc --disable-shared --without-glib )
-    ( cd _build/i386; ../../configure
-    --host=i686-linux-gnu --enable-host-prefix=i386-linux-gnu- \
-    --prefix="$prefix" --libdir="\${prefix}/$libdir" \
-    --disable-gtk-doc --disable-shared --without-glib )
-    make -C _build/x86_64
-    make -C _build/i386
-    make -C _build/x86_64 install
-    make -C _build/i386 install
-
-Use `--host=i586-linux-gnu` instead of `--host=i686-linux-gnu` if your
-distribution uses that tuple for its 32-bit compiler. For the i386 build,
-if you don't have an `i?86-linux-gnu-gcc` you might have to add
-`CC="gcc -m32"` to the i386 configure command line.
-
-Again, this will give you a non-production version of libcapsule that is
-likely to depend on libraries from your host system.
-
 Building a relocatable install for deployment
 ---------------------------------------------
 
 To make the built version compatible with older systems, you will need
-a SteamRT 1 'scout' environment.
-
-For this, you need prebuilt versions of libcapsule-tools-relocatable:amd64
-and libcapsule-tools-relocatable:i386 either in your build environment
-or available via apt-get. For example, you could do the build in a
-SteamRT 1 'scout' SDK Docker image that has those packages already.
-Then you can do:
+a SteamRT 1 'scout' environment. Then you can do:
 
     meson --prefix="$(pwd)/_build/prefix" -Dsrcdir=src _build
     ninja -C _build

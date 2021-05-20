@@ -1,0 +1,192 @@
+<!--
+Copyright © 2017 Collabora Ltd
+
+This file is part of libcapsule.
+
+libcapsule is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as
+published by the Free Software Foundation; either version 2.1 of the
+License, or (at your option) any later version.
+
+libcapsule is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with libcapsule.  If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<refentry id="capsule-init-project">
+
+  <refentryinfo>
+    <title>capsule-init-project</title>
+    <productname>libcapsule</productname>
+    <authorgroup>
+      <author>
+        <contrib>Developer</contrib>
+        <firstname>Vivek</firstname>
+        <surname>Das Mohapatra</surname>
+      </author>
+      <author>
+        <contrib>Developer</contrib>
+        <firstname>Simon</firstname>
+        <surname>McVittie</surname>
+      </author>
+    </authorgroup>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>capsule-init-project</refentrytitle>
+    <manvolnum>1</manvolnum>
+    <refmiscinfo class="manual">User Commands</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>capsule-init-project</refname>
+    <refpurpose>libcapsule proxy library project setup tool</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>capsule-init-project</command>
+      <arg choice="opt">OPTIONS</arg>
+      <arg choice="req" rep="repeat">TARGET</arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1>
+    <title>Description</title>
+    <para>
+      <command>capsule-init-project</command> creates a project which
+      uses libcapsule to create a proxy for a library, usually from
+      a foreign filesystem tree.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Arguments</title>
+    <variablelist>
+
+      <varlistentry>
+        <term><option>TARGET</option></term>
+        <listitem>
+          <para>
+            The base name of the target, of the form libFOO.so.X (eg libz.so.1).
+            It can optionally be combined with a version number in the
+            form libFOO.so.X/VERSION (e.g. libz.so.1/1.2.3).
+          </para>
+        </listitem>
+      </varlistentry>
+
+    </variablelist>
+  </refsect1>
+
+  <refsect1>
+    <title>Options</title>
+    <variablelist>
+
+      <varlistentry>
+        <term><option>--capsule-pkgdatadir=PATH</option></term>
+        <listitem>
+          <para>Use supporting files from PATH</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--capsule-symbols-tool=PATH</option></term>
+        <listitem>
+          <para>Use replacement capsule-symbols(1)</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--capsule-version-tool=PATH</option></term>
+        <listitem>
+          <para>Use replacement capsule-version(1)</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--search-tree=PATH</option></term>
+        <listitem>
+          <para>
+            Find libraries to be proxied in this chroot,
+            sysroot or container at compile-time.
+          </para>
+          <para>default: TREE or /host if unset</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--set-version=VERSION</option></term>
+        <listitem>
+          <para>
+            Use this as the package version
+            (major, major.minor or major.minor.micro)
+            instead of using capsule-version(1) on the first
+            <option>TARGET</option>
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--symbols-from-dir=PATH</option></term>
+        <listitem>
+          <para>
+            Use symbols files in this directory instead of the
+            output of capsule-symbols(1)
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--runtime-tree=PATH</option></term>
+        <listitem>
+          <para>
+            Find libraries to be proxied in this chroot, sysroot or
+            container at runtime. The default is /host.
+          </para>
+          <para>
+            If libcapsule was compiled with glibc 2.17 or later and the
+            process is not privileged, this can be overridden at runtime
+            by setting a SONAME-specific environment variable (for
+            example CAPSULE_LIBGL_SO_1_PREFIX for libGL.so.1) or by
+            setting the generic CAPSULE_PREFIX environment variable.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--package-name=PACKAGE</option></term>
+        <listitem>
+          <para>
+            Use this name for the generated Autotools package,
+            instead of libFOO-proxy
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>--destination=PATH</option></term>
+        <listitem>
+          <para>
+            Use this name for the generated directory,
+            instead of libFOO-proxy or the argument of
+            <option>--package-name</option>
+          </para>
+        </listitem>
+      </varlistentry>
+
+    </variablelist>
+  </refsect1>
+
+  <refsect1><title>See also</title>
+  <para>
+    <citerefentry>
+      <refentrytitle>capsule-mkstublib</refentrytitle>
+      <manvolnum>1</manvolnum>
+    </citerefentry>
+  </para>
+  </refsect1>
+</refentry>

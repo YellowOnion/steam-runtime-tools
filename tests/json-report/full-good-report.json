@@ -17,16 +17,17 @@
     ],
     "pinned_libs_32" : {
       "list" : [
-        " 13902790      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_32",
-        " 13902813      4 -rw-r--r--   1 me  me        50 Apr 24 21:32 pinned_libs_32/system_libGLU.so.1",
-        " 13902814      4 lrwxrwxrwx   1 me  me       107 Apr 24 21:32 pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13"
+        "pinned_libs_32/has_pins",
+        "pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13",
+        "pinned_libs_32/system_libGLU.so.1"
+
       ]
     },
     "pinned_libs_64" : {
       "list" : [
-        " 13902791      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_64",
-        " 13902805      4 -rw-r--r--   1 me  me        46 Apr 24 21:32 pinned_libs_64/system_libGLU.so.1",
-        " 13902795      4 lrwxrwxrwx   1 me  me       100 Apr 24 21:32 pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0"
+        "pinned_libs_64/has_pins",
+        "pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0",
+        "pinned_libs_64/system_libGLU.so.1"
       ]
     }
   },

@@ -1234,12 +1234,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
           "overrides/",
           "usr/lib/pressure-vessel/overrides/",
       };
-      g_autoptr(GError) error = NULL;
-      g_autofree gchar *output = NULL;
-      g_autofree gchar *messages = NULL;
       g_autofree gchar *runtime = NULL;
-      const gchar *argv[] = {"find", NULL, "-ls", NULL};
-      int exit_status = -1;
       gsize i;
 
       self->overrides.have_data = TRUE;
@@ -1255,45 +1250,13 @@ ensure_overrides_cached (SrtSystemInfo *self)
           if (_srt_file_test_in_sysroot (self->sysroot, self->sysroot_fd,
                                          paths[i], G_FILE_TEST_EXISTS))
             {
-              argv[1] = paths[i];
+              self->overrides.values = _srt_recursive_list_content (self->sysroot,
+                                                                    self->sysroot_fd,
+                                                                    paths[i],
+                                                                    self->env,
+                                                                    &self->overrides.messages);
               break;
             }
-        }
-
-      if (argv[1] == NULL)
-        return;
-
-      if (!g_spawn_sync (self->sysroot,     /* working directory */
-                        (gchar **) argv,
-                        self->env,
-                        G_SPAWN_SEARCH_PATH,
-                        _srt_child_setup_unblock_signals,
-                        NULL,    /* user data */
-                        &output, /* stdout */
-                        &messages, /* stderr */
-                        &exit_status,
-                        &error))
-        {
-          g_debug ("An error occurred calling the \"find\" binary: %s", error->message);
-          self->overrides.messages = g_new0 (gchar *, 2);
-          self->overrides.messages[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
-          self->overrides.messages[1] = NULL;
-          return;
-        }
-
-      if (exit_status != 0)
-        g_debug ("... wait status %d", exit_status);
-
-      if (output != NULL)
-        {
-          g_strchomp (output);
-          self->overrides.values = g_strsplit (output, "\n", -1);
-        }
-
-      if (messages != NULL)
-        {
-          g_strchomp (messages);
-          self->overrides.messages = g_strsplit (messages, "\n", -1);
         }
     }
 }
@@ -1311,11 +1274,10 @@ ensure_overrides_cached (SrtSystemInfo *self)
  *
  * The output is intended to be human-readable debugging information,
  * rather than something to use programmatically, and its format is
- * not guaranteed. It is currently in `find -ls` format.
+ * not guaranteed.
  *
  * Similarly, @messages is intended to be human-readable debugging
- * information. It is currently whatever was output on standard error
- * by `find -ls`.
+ * information.
  *
  * Returns: (array zero-terminated=1) (transfer full) (nullable): A
  *  %NULL-terminated array of libraries that have been overridden,
@@ -1340,11 +1302,7 @@ srt_system_info_list_pressure_vessel_overrides (SrtSystemInfo *self,
 static void
 ensure_pinned_libs_cached (SrtSystemInfo *self)
 {
-  gchar *output = NULL;
-  gchar *messages = NULL;
-  gchar *runtime = NULL;
-  int exit_status = -1;
-  GError *error = NULL;
+  g_autofree gchar *runtime = NULL;
 
   g_return_if_fail (_srt_check_not_setuid ());
 
@@ -1357,86 +1315,18 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
       if (runtime == NULL || g_strcmp0 (runtime, "/") == 0)
         return;
 
-      const gchar *argv[] = {"find", "pinned_libs_32", "-ls", NULL};
+      self->pinned_libs.values_32 = _srt_recursive_list_content (runtime,
+                                                                 -1,
+                                                                 "pinned_libs_32",
+                                                                 self->env,
+                                                                 &self->pinned_libs.messages_32);
 
-      if (!g_spawn_sync (runtime, /* working directory */
-                        (gchar **) argv,
-                        self->env,
-                        G_SPAWN_SEARCH_PATH,
-                        _srt_child_setup_unblock_signals,
-                        NULL,    /* user data */
-                        &output, /* stdout */
-                        &messages, /* stderr */
-                        &exit_status,
-                        &error))
-        {
-          g_debug ("An error occurred calling the \"find\" binary: %s", error->message);
-          self->pinned_libs.messages_32 = g_new0 (gchar *, 2);
-          self->pinned_libs.messages_32[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
-          self->pinned_libs.messages_32[1] = NULL;
-          goto out;
-        }
-
-      if (exit_status != 0)
-        g_debug ("... wait status %d", exit_status);
-
-      if (output != NULL)
-        {
-          g_strchomp (output);
-          self->pinned_libs.values_32 = g_strsplit (output, "\n", -1);
-        }
-
-      if (messages != NULL)
-        {
-          g_strchomp (messages);
-          self->pinned_libs.messages_32 = g_strsplit (messages, "\n", -1);
-        }
-
-      g_free (output);
-      g_free (messages);
-
-      /* Do the same check for `pinned_libs_64` */
-      argv[1] = "pinned_libs_64";
-
-      if (!g_spawn_sync (runtime,    /* working directory */
-                        (gchar **) argv,
-                        self->env,
-                        G_SPAWN_SEARCH_PATH,
-                        _srt_child_setup_unblock_signals,
-                        NULL,    /* user data */
-                        &output, /* stdout */
-                        &messages, /* stderr */
-                        &exit_status,
-                        &error))
-        {
-          g_debug ("An error occurred calling the \"find\" binary: %s", error->message);
-          self->pinned_libs.messages_64 = g_new0 (gchar *, 2);
-          self->pinned_libs.messages_64[0] = g_strdup_printf ("%s %d: %s", g_quark_to_string (error->domain), error->code, error->message);
-          self->pinned_libs.messages_64[1] = NULL;
-          goto out;
-        }
-
-      if (exit_status != 0)
-        g_debug ("... wait status %d", exit_status);
-
-      if (output != NULL)
-        {
-          g_strchomp (output);
-          self->pinned_libs.values_64 = g_strsplit (output, "\n", -1);
-        }
-
-      if (messages != NULL)
-        {
-          g_strchomp (messages);
-          self->pinned_libs.messages_64 = g_strsplit (messages, "\n", -1);
-        }
+      self->pinned_libs.values_64 = _srt_recursive_list_content (runtime,
+                                                                 -1,
+                                                                 "pinned_libs_64",
+                                                                 self->env,
+                                                                 &self->pinned_libs.messages_64);
     }
-
-  out:
-    g_clear_error (&error);
-    g_free (output);
-    g_free (messages);
-    g_free (runtime);
 }
 
 /**
@@ -1461,14 +1351,14 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
  *
  * The output is intended to be human-readable debugging information,
  * rather than something to use programmatically, and its format is
- * not guaranteed. It is currently in `find -ls` format.
+ * not guaranteed.
  *
  * Similarly, @messages is intended to be human-readable debugging
- * information. It is currently whatever was output on standard error
- * by `find -ls`.
+ * information.
  *
  * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable):
- *  An array of strings, or %NULL if we were unable to call "find".
+ *  An array of strings, or %NULL if not in an `LD_LIBRARY_PATH`-based Steam
+ *  Runtime or if it was not possible to list the pinned libs.
  *  Free with g_strfreev().
  */
 gchar **
@@ -1507,14 +1397,14 @@ srt_system_info_list_pinned_libs_32 (SrtSystemInfo *self,
  *
  * The output is intended to be human-readable debugging information,
  * rather than something to use programmatically, and its format is
- * not guaranteed. It is currently in `find -ls` format.
+ * not guaranteed.
  *
  * Similarly, @messages is intended to be human-readable debugging
- * information. It is currently whatever was output on standard error
- * by `find -ls`.
+ * information.
  *
  * Returns: (array zero-terminated=1) (transfer full) (element-type utf8) (nullable):
- *  An array of strings, or %NULL if we were unable to call "find".
+ *  An array of strings, or %NULL if not in an `LD_LIBRARY_PATH`-based Steam
+ *  Runtime or if it was not possible to list the pinned libs.
  *  Free with g_strfreev().
  */
 gchar **

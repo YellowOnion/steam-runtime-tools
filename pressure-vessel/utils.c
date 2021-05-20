@@ -743,50 +743,6 @@ pv_terminate_all_child_processes (GTimeSpan wait_period,
   return TRUE;
 }
 
-/*
- * @str: A path
- * @prefix: A possible prefix
- *
- * The same as flatpak_has_path_prefix(), but instead of a boolean,
- * return the part of @str after @prefix (non-%NULL but possibly empty)
- * if @str has prefix @prefix, or %NULL if it does not.
- *
- * Returns: (nullable) (transfer none): the part of @str after @prefix,
- *  or %NULL if @str is not below @prefix
- */
-const char *
-pv_get_path_after (const char *str,
-                   const char *prefix)
-{
-  while (TRUE)
-    {
-      /* Skip consecutive slashes to reach next path
-         element */
-      while (*str == '/')
-        str++;
-      while (*prefix == '/')
-        prefix++;
-
-      /* No more prefix path elements? Done! */
-      if (*prefix == 0)
-        return str;
-
-      /* Compare path element */
-      while (*prefix != 0 && *prefix != '/')
-        {
-          if (*str != *prefix)
-            return NULL;
-          str++;
-          prefix++;
-        }
-
-      /* Matched prefix path element,
-         must be entire str path element */
-      if (*str != '/' && *str != 0)
-        return NULL;
-    }
-}
-
 /**
  * pv_current_namespace_path_to_host_path:
  * @current_env_path: a path in the current environment
@@ -814,7 +770,7 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
         home = g_get_home_dir ();
 
       if (home != NULL)
-        after = pv_get_path_after (current_env_path, home);
+        after = _srt_get_path_after (current_env_path, home);
 
       /* If we are inside a Flatpak container, usually, the home
        * folder is '${HOME}/.var/app/${FLATPAK_ID}' on the host system */
@@ -844,7 +800,7 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
             }
         }
 
-      after = pv_get_path_after (current_env_path, "/run/host");
+      after = _srt_get_path_after (current_env_path, "/run/host");
 
       /* In a Flatpak container, usually, '/run/host' is the root of the
        * host system */

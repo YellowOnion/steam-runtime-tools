@@ -1129,3 +1129,290 @@ _srt_steam_command_via_pipe (const char * const *arguments,
 
   return TRUE;
 }
+
+typedef struct
+{
+  const char *from;
+  const char *to;
+} CommonReplacements;
+
+/*
+ * _srt_list_directory_content:
+ * @working_dir_fd: File descriptor to the current working directory
+ * @working_dir_path: (not nullable) (type filename): Working directory in
+ *  the sysroot
+ * @sub_directory: (nullable) (type filename): If %NULL, the @working_dir_path
+ *  itself will be opened
+ * @common_replacements: (nullable): If not %NULL, perform these replacements
+ *  to the beginning of the targets paths for symlinks that have been found
+ * @level: Current level of recursion
+ * @result: (not nullable): The elements that @directory contains are appended
+ *  to this array
+ * @messages: (not nullable): Human-readable debug information are appended
+ *  to this array
+ */
+static void
+_srt_list_directory_content (int working_dir_fd,
+                             const gchar *working_dir_path,
+                             const gchar *sub_directory,
+                             const CommonReplacements *common_replacements,
+                             int level,
+                             GPtrArray *result,
+                             GPtrArray *messages)
+{
+  g_autofree gchar *full_working_path = NULL;
+  g_auto(GLnxDirFdIterator) iter = { FALSE };
+  g_autoptr(GError) error = NULL;
+  gsize i;
+
+  g_return_if_fail (working_dir_path != NULL);
+  g_return_if_fail (result != NULL);
+  g_return_if_fail (messages != NULL);
+
+  if (sub_directory != NULL)
+    full_working_path = g_build_filename (working_dir_path, sub_directory, NULL);
+  else
+    full_working_path = g_strdup (working_dir_path);
+
+  /* Arbitrary limit. If we reach this level of recursion it's a sign that
+   * something went wrong and it's better to bail out. */
+  if (level > 9)
+    {
+      g_ptr_array_add (messages, g_strdup_printf ("%s/... (too much recursion, not shown)",
+                                                  full_working_path));
+      return;
+    }
+
+  if (!glnx_dirfd_iterator_init_at (working_dir_fd,
+                                   sub_directory != NULL ? sub_directory : ".",
+                                   FALSE,
+                                   &iter,
+                                   &error))
+    {
+      glnx_prefix_error (&error,
+                         "An error occurred trying to initialize an iterator for \"%s\"",
+                         full_working_path);
+      g_debug ("%s", error->message);
+      g_ptr_array_add (messages, g_strdup_printf ("%s %d: %s",
+                                                  g_quark_to_string (error->domain),
+                                                  error->code, error->message));
+      return;
+    }
+
+  while (error == NULL)
+    {
+      struct dirent *dent;
+      g_autofree gchar *full_name = NULL;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent, NULL, &error))
+        {
+          glnx_prefix_error (&error, "An error occurred trying to initerate through \"%s\"",
+                             full_working_path);
+          g_debug ("%s", error->message);
+          g_ptr_array_add (messages, g_strdup_printf ("%s %d: %s",
+                                                      g_quark_to_string (error->domain),
+                                                      error->code, error->message));
+          return;
+        }
+
+      if (dent == NULL)
+        break;
+
+      full_name = g_build_filename (full_working_path, dent->d_name, NULL);
+
+      if (dent->d_type == DT_LNK)
+        {
+          g_autofree gchar *target = NULL;
+
+          target = glnx_readlinkat_malloc (iter.fd, dent->d_name, NULL, &error);
+          if (target == NULL)
+            {
+              glnx_prefix_error (&error, "An error occurred trying to read the symlink \"%s\"",
+                                 full_name);
+              g_debug ("%s", error->message);
+              g_ptr_array_add (messages, g_strdup_printf ("%s %d: %s",
+                                                          g_quark_to_string (error->domain),
+                                                          error->code, error->message));
+              g_clear_error (&error);
+              target = g_strdup ("(unknown)");
+            }
+
+          for (i = 0; common_replacements != NULL && common_replacements[i].to != NULL; i++)
+            {
+              if (common_replacements[i].from == NULL)
+                continue;
+
+              const gchar *after = _srt_get_path_after (target, common_replacements[i].from);
+
+              if (after != NULL)
+                {
+                  g_autofree gchar *new_target = NULL;
+                  new_target = g_build_filename (common_replacements[i].to, after, NULL);
+                  g_clear_pointer (&target, g_free);
+                  target = g_steal_pointer (&new_target);
+                  break;
+                }
+            }
+
+          g_ptr_array_add (result, g_strdup_printf ("%s -> %s", full_name, target));
+        }
+      else if (dent->d_type == DT_DIR)
+        {
+          g_ptr_array_add (result, g_strdup_printf ("%s/", full_name));
+
+          _srt_list_directory_content (iter.fd, full_working_path, dent->d_name,
+                                       common_replacements, level + 1, result, messages);
+        }
+      else
+        {
+          g_ptr_array_add (result, g_steal_pointer (&full_name));
+        }
+
+    }
+}
+
+/*
+ * _srt_recursive_list_content:
+ * @sysroot: (not nullable) (type filename): A path used as the root
+ * @sysroot_fd: A file descriptor opened on @sysroot, or negative to
+ *  reopen it
+ * @directory: (not nullable) (type filename): A path below the root directory,
+ *  either absolute or relative (to the root)
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
+ *  was this array
+ * @messages_out: (optional) (out) (array zero-terminated=1) (transfer full):
+ *  If not %NULL, used to return a %NULL-terminated array of diagnostic
+ *  messages. Free with g_strfreev().
+ *
+ * Returns: (array zero-terminated=1) (transfer full) (nullable): A
+ *  %NULL-terminated array of files, symbolic links and directories, that
+ *  are present in the provided @directory. Free with g_strfreev().
+ */
+gchar **
+_srt_recursive_list_content (const gchar *sysroot,
+                             int sysroot_fd,
+                             const gchar *directory,
+                             gchar **envp,
+                             gchar ***messages_out)
+{
+  g_autoptr(GPtrArray) content = NULL;
+  g_autoptr(GPtrArray) messages = NULL;
+  glnx_autofd int local_sysroot_fd = -1;
+  glnx_autofd int top_fd = -1;
+  g_autoptr(GError) error = NULL;
+  const gchar *steam_runtime = NULL;
+
+  g_return_val_if_fail (sysroot != NULL, NULL);
+  g_return_val_if_fail (directory != NULL, NULL);
+  g_return_val_if_fail (envp != NULL, NULL);
+  g_return_val_if_fail (messages_out == NULL || *messages_out == NULL, NULL);
+
+  steam_runtime = g_environ_getenv (envp, "STEAM_RUNTIME");
+  /* If STEAM_RUNTIME is just the root directory we don't want to replace
+   * every leading '/' with $STEAM_RUNTIME */
+  if (g_strcmp0 (steam_runtime, "/") == 0)
+    steam_runtime = NULL;
+
+  const CommonReplacements common_replacements[] =
+  {
+    { steam_runtime, "$STEAM_RUNTIME" },
+    { g_environ_getenv (envp, "HOME"), "$HOME" },
+    { NULL, NULL },
+  };
+
+  content = g_ptr_array_new_with_free_func (g_free);
+  messages = g_ptr_array_new_with_free_func (g_free);
+
+  if (sysroot_fd < 0)
+    {
+      if (!glnx_opendirat (-1, sysroot, FALSE, &local_sysroot_fd, &error))
+        {
+          glnx_prefix_error (&error, "An error occurred trying to open sysroot \"%s\"",
+                             sysroot);
+          g_debug ("%s", error->message);
+          g_ptr_array_add (messages, g_strdup_printf ("%s %d: %s",
+                                                      g_quark_to_string (error->domain),
+                                                      error->code, error->message));
+          goto out;
+        }
+      sysroot_fd = local_sysroot_fd;
+    }
+
+  top_fd = _srt_resolve_in_sysroot (sysroot_fd,
+                                    directory,
+                                    SRT_RESOLVE_FLAGS_DIRECTORY,
+                                    NULL,
+                                    &error);
+
+  if (top_fd < 0)
+    {
+      glnx_prefix_error (&error, "An error occurred trying to resolve \"%s\" in sysroot",
+                         directory);
+      g_debug ("%s", error->message);
+      g_ptr_array_add (messages, g_strdup_printf ("%s %d: %s",
+                                                  g_quark_to_string (error->domain),
+                                                  error->code, error->message));
+      goto out;
+    }
+
+  _srt_list_directory_content (top_fd, directory, NULL, common_replacements, 0,
+                               content, messages);
+
+  g_ptr_array_sort (content, _srt_indirect_strcmp0);
+
+out:
+  if (content->len > 0)
+    g_ptr_array_add (content, NULL);
+
+  if (messages_out != NULL && messages->len > 0)
+    {
+      g_ptr_array_add (messages, NULL);
+      *messages_out = (GStrv) g_ptr_array_free (g_steal_pointer (&messages), FALSE);
+    }
+
+  return (GStrv) g_ptr_array_free (g_steal_pointer (&content), FALSE);
+}
+
+/*
+ * @str: A path
+ * @prefix: A possible prefix
+ *
+ * The same as flatpak_has_path_prefix(), but instead of a boolean,
+ * return the part of @str after @prefix (non-%NULL but possibly empty)
+ * if @str has prefix @prefix, or %NULL if it does not.
+ *
+ * Returns: (nullable) (transfer none): the part of @str after @prefix,
+ *  or %NULL if @str is not below @prefix
+ */
+const char *
+_srt_get_path_after (const char *str,
+                     const char *prefix)
+{
+  while (TRUE)
+    {
+      /* Skip consecutive slashes to reach next path
+         element */
+      while (*str == '/')
+        str++;
+      while (*prefix == '/')
+        prefix++;
+
+      /* No more prefix path elements? Done! */
+      if (*prefix == 0)
+        return str;
+
+      /* Compare path element */
+      while (*prefix != 0 && *prefix != '/')
+        {
+          if (*str != *prefix)
+            return NULL;
+          str++;
+          prefix++;
+        }
+
+      /* Matched prefix path element,
+         must be entire str path element */
+      if (*str != '/' && *str != 0)
+        return NULL;
+    }
+}

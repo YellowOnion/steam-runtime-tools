@@ -40,7 +40,7 @@ mkdir -p depots/sniper-archives
 python3 ./populate-depot.py \
     --depot=depots/test-sniper-archives \
     --include-archives \
-    --no-unpack-runtimes \
+    --no-unpack-runtime \
     --toolmanifest \
     "$@" \
     sniper \
@@ -54,7 +54,7 @@ python3 ./populate-depot.py \
     --depot=depots/test-sniper-unpacked \
     --no-include-archives \
     --toolmanifest \
-    --unpack-runtimes \
+    --unpack-runtime \
     --versioned-directories \
     "$@" \
     sniper \

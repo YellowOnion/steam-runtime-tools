@@ -59,12 +59,11 @@ class TestPressureVessel(unittest.TestCase):
         # and the runtime(s).
         self.depot = os.path.abspath('depot')
 
-        # Apt suites used for the runtime (scout, heavy or soldier).
+        # Apt suite used for the runtime (scout, heavy or soldier).
         # Default: scout
-        self.runtime_suites = os.getenv(
-            'TEST_CONTAINER_RUNTIME_SUITES',
-            os.getenv('TEST_CONTAINER_RUNTIME_SUITE', 'scout'),
-        ).split()
+        self.suite = os.getenv(
+            'TEST_CONTAINER_RUNTIME_SUITE', 'scout'
+        )
 
         # dpkg architectures in the runtime, with primary architecture
         # first. Default: amd64, i386
@@ -134,7 +133,7 @@ class TestPressureVessel(unittest.TestCase):
 
                 raise
 
-    def get_runtime_build_id(self, suite):
+    def get_runtime_build_id(self):
         with self.catch('get build ID'):
             with open(os.path.join(self.depot, 'VERSIONS.txt')) as reader:
                 for line in reader:
@@ -146,12 +145,12 @@ class TestPressureVessel(unittest.TestCase):
                     if len(fields) < 2:
                         continue
 
-                    if fields[0] == suite:
-                        logger.info('%s build ID: %s', suite, fields[1])
+                    if fields[0] == self.suite:
+                        logger.info('%s build ID: %s', self.suite, fields[1])
                         return fields[1]
                 else:
                     raise RuntimeError(
-                        'suite {} not found in VERSIONS.txt'.format(suite)
+                        'suite {} not found in VERSIONS.txt'.format(self.suite)
                     )
 
     def run_subprocess(
@@ -290,17 +289,15 @@ class TestPressureVessel(unittest.TestCase):
                 else:
                     logger.info('(no stderr)')
 
-        for suite in self.runtime_suites:
-            self.get_runtime_build_id(suite)
+        self.get_runtime_build_id()
 
     def get_pressure_vessel_adverb(
         self,
-        suite,
         ld_library_path_runtime=None        # type: typing.Optional[str]
     ):
         # type: (...) -> typing.List[str]
         adverb = [
-            os.path.join(self.depot, 'run-in-' + suite),
+            os.path.join(self.depot, 'run-in-' + self.suite),
             '--verbose',
             '--',
         ]
@@ -312,14 +309,12 @@ class TestPressureVessel(unittest.TestCase):
 
         return adverb
 
-    def _test_pressure_vessel(
+    def test_pressure_vessel(
         self,
-        suite,
         artifact_prefix='s-r-s-i-inside',
         ld_library_path_runtime=None        # type: typing.Optional[str]
     ) -> None:
         adverb = self.get_pressure_vessel_adverb(
-            suite,
             ld_library_path_runtime=ld_library_path_runtime,
         )
 
@@ -372,7 +367,7 @@ class TestPressureVessel(unittest.TestCase):
         ) as reader:
             parsed = json.load(reader)
 
-        runtime_build_id = self.get_runtime_build_id(suite)
+        runtime_build_id = self.get_runtime_build_id()
 
         self.assertIsInstance(parsed, dict)
         self.assertIn('can-write-uinput', parsed)
@@ -416,15 +411,15 @@ class TestPressureVessel(unittest.TestCase):
             self.assertIn('pretty_name', parsed['os-release'])
             self.assertIn('version_id', parsed['os-release'])
 
-            if suite == 'scout':
+            if self.suite == 'scout':
                 self.assertEqual('1', parsed['os-release']['version_id'])
-            elif suite == 'heavy':
+            elif self.suite == 'heavy':
                 self.assertEqual('1.5', parsed['os-release']['version_id'])
-            elif suite == 'soldier':
+            elif self.suite == 'soldier':
                 self.assertEqual('2', parsed['os-release']['version_id'])
 
             self.assertEqual(
-                suite,
+                self.suite,
                 parsed['os-release']['version_codename'],
             )
             self.assertEqual(
@@ -436,7 +431,7 @@ class TestPressureVessel(unittest.TestCase):
 
         for arch in self.dpkg_architectures:
             if arch == 'i386':
-                if suite == 'heavy':
+                if self.suite == 'heavy':
                     # heavy doesn't fully support i386
                     continue
 
@@ -491,11 +486,6 @@ class TestPressureVessel(unittest.TestCase):
         self.assertIn('egl', parsed)
         self.assertIn('vulkan', parsed)
 
-    def test_pressure_vessel(self) -> None:
-        for suite in self.runtime_suites:
-            with self.subTest(suite):
-                self._test_pressure_vessel(suite)
-
     def test_unruntime(self) -> None:
         if self.ld_library_path_runtime is not None:
             self.run_subprocess(
@@ -505,19 +495,16 @@ class TestPressureVessel(unittest.TestCase):
                 stderr=2,
             )
 
-            for suite in self.runtime_suites:
-                with self.subTest(suite):
-                    self._test_pressure_vessel(
-                        suite,
-                        artifact_prefix='s-r-s-i-inside-unruntime',
-                        ld_library_path_runtime=self.ld_library_path_runtime,
-                    )
+            self.test_pressure_vessel(
+                artifact_prefix='s-r-s-i-inside-unruntime',
+                ld_library_path_runtime=self.ld_library_path_runtime,
+            )
         else:
             self.skipTest(
                 'TEST_CONTAINER_RUNTIME_LD_LIBRARY_PATH_RUNTIME not provided'
             )
 
-    def _test_steamrt_platform(self, suite: str) -> None:
+    def test_steamrt_platform(self) -> None:
         steamrt_source = self.steamrt_source
 
         if steamrt_source is None:
@@ -526,7 +513,7 @@ class TestPressureVessel(unittest.TestCase):
             )
             return
 
-        steamrt_source = steamrt_source.replace('SUITE', suite)
+        steamrt_source = steamrt_source.replace('SUITE', self.suite)
 
         if not os.path.exists(
             os.path.join(steamrt_source, 'debian', 'tests', 'platform')
@@ -537,7 +524,7 @@ class TestPressureVessel(unittest.TestCase):
             )
             return
 
-        adverb = self.get_pressure_vessel_adverb(suite)
+        adverb = self.get_pressure_vessel_adverb()
 
         with self.tee_file_and_stderr(
             os.path.join(self.artifacts, 'platform.log'),
@@ -550,11 +537,6 @@ class TestPressureVessel(unittest.TestCase):
                     stderr=subprocess.STDOUT,
                     check=True,
                 )
-
-    def test_steamrt_platform(self) -> None:
-        for suite in self.runtime_suites:
-            with self.subTest(suite):
-                self._test_steamrt_platform(suite)
 
     def tearDown(self) -> None:
         pass

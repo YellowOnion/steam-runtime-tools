@@ -1253,6 +1253,7 @@ ensure_overrides_cached (SrtSystemInfo *self)
               self->overrides.values = _srt_recursive_list_content (self->sysroot,
                                                                     self->sysroot_fd,
                                                                     paths[i],
+                                                                    self->env,
                                                                     &self->overrides.messages);
               break;
             }
@@ -1317,11 +1318,13 @@ ensure_pinned_libs_cached (SrtSystemInfo *self)
       self->pinned_libs.values_32 = _srt_recursive_list_content (runtime,
                                                                  -1,
                                                                  "pinned_libs_32",
+                                                                 self->env,
                                                                  &self->pinned_libs.messages_32);
 
       self->pinned_libs.values_64 = _srt_recursive_list_content (runtime,
                                                                  -1,
                                                                  "pinned_libs_64",
+                                                                 self->env,
                                                                  &self->pinned_libs.messages_64);
     }
 }

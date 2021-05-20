@@ -1130,6 +1130,12 @@ _srt_steam_command_via_pipe (const char * const *arguments,
   return TRUE;
 }
 
+typedef struct
+{
+  const char *from;
+  const char *to;
+} CommonReplacements;
+
 /*
  * _srt_list_directory_content:
  * @working_dir_fd: File descriptor to the current working directory
@@ -1137,6 +1143,8 @@ _srt_steam_command_via_pipe (const char * const *arguments,
  *  the sysroot
  * @sub_directory: (nullable) (type filename): If %NULL, the @working_dir_path
  *  itself will be opened
+ * @common_replacements: (nullable): If not %NULL, perform these replacements
+ *  to the beginning of the targets paths for symlinks that have been found
  * @level: Current level of recursion
  * @result: (not nullable): The elements that @directory contains are appended
  *  to this array
@@ -1147,6 +1155,7 @@ static void
 _srt_list_directory_content (int working_dir_fd,
                              const gchar *working_dir_path,
                              const gchar *sub_directory,
+                             const CommonReplacements *common_replacements,
                              int level,
                              GPtrArray *result,
                              GPtrArray *messages)
@@ -1154,6 +1163,7 @@ _srt_list_directory_content (int working_dir_fd,
   g_autofree gchar *full_working_path = NULL;
   g_auto(GLnxDirFdIterator) iter = { FALSE };
   g_autoptr(GError) error = NULL;
+  gsize i;
 
   g_return_if_fail (working_dir_path != NULL);
   g_return_if_fail (result != NULL);
@@ -1227,14 +1237,31 @@ _srt_list_directory_content (int working_dir_fd,
               target = g_strdup ("(unknown)");
             }
 
+          for (i = 0; common_replacements != NULL && common_replacements[i].to != NULL; i++)
+            {
+              if (common_replacements[i].from == NULL)
+                continue;
+
+              const gchar *after = _srt_get_path_after (target, common_replacements[i].from);
+
+              if (after != NULL)
+                {
+                  g_autofree gchar *new_target = NULL;
+                  new_target = g_build_filename (common_replacements[i].to, after, NULL);
+                  g_clear_pointer (&target, g_free);
+                  target = g_steal_pointer (&new_target);
+                  break;
+                }
+            }
+
           g_ptr_array_add (result, g_strdup_printf ("%s -> %s", full_name, target));
         }
       else if (dent->d_type == DT_DIR)
         {
           g_ptr_array_add (result, g_strdup_printf ("%s/", full_name));
 
-          _srt_list_directory_content (iter.fd, full_working_path, dent->d_name, level + 1,
-                                       result, messages);
+          _srt_list_directory_content (iter.fd, full_working_path, dent->d_name,
+                                       common_replacements, level + 1, result, messages);
         }
       else
         {
@@ -1251,6 +1278,8 @@ _srt_list_directory_content (int working_dir_fd,
  *  reopen it
  * @directory: (not nullable) (type filename): A path below the root directory,
  *  either absolute or relative (to the root)
+ * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
+ *  was this array
  * @messages_out: (optional) (out) (array zero-terminated=1) (transfer full):
  *  If not %NULL, used to return a %NULL-terminated array of diagnostic
  *  messages. Free with g_strfreev().
@@ -1263,6 +1292,7 @@ gchar **
 _srt_recursive_list_content (const gchar *sysroot,
                              int sysroot_fd,
                              const gchar *directory,
+                             gchar **envp,
                              gchar ***messages_out)
 {
   g_autoptr(GPtrArray) content = NULL;
@@ -1270,10 +1300,25 @@ _srt_recursive_list_content (const gchar *sysroot,
   glnx_autofd int local_sysroot_fd = -1;
   glnx_autofd int top_fd = -1;
   g_autoptr(GError) error = NULL;
+  const gchar *steam_runtime = NULL;
 
   g_return_val_if_fail (sysroot != NULL, NULL);
   g_return_val_if_fail (directory != NULL, NULL);
+  g_return_val_if_fail (envp != NULL, NULL);
   g_return_val_if_fail (messages_out == NULL || *messages_out == NULL, NULL);
+
+  steam_runtime = g_environ_getenv (envp, "STEAM_RUNTIME");
+  /* If STEAM_RUNTIME is just the root directory we don't want to replace
+   * every leading '/' with $STEAM_RUNTIME */
+  if (g_strcmp0 (steam_runtime, "/") == 0)
+    steam_runtime = NULL;
+
+  const CommonReplacements common_replacements[] =
+  {
+    { steam_runtime, "$STEAM_RUNTIME" },
+    { g_environ_getenv (envp, "HOME"), "$HOME" },
+    { NULL, NULL },
+  };
 
   content = g_ptr_array_new_with_free_func (g_free);
   messages = g_ptr_array_new_with_free_func (g_free);
@@ -1310,7 +1355,8 @@ _srt_recursive_list_content (const gchar *sysroot,
       goto out;
     }
 
-  _srt_list_directory_content (top_fd, directory, NULL, 0, content, messages);
+  _srt_list_directory_content (top_fd, directory, NULL, common_replacements, 0,
+                               content, messages);
 
   g_ptr_array_sort (content, _srt_indirect_strcmp0);
 

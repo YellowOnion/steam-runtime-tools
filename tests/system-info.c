@@ -1864,15 +1864,12 @@ overrides (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  /* The overrides folder contains 4 folders plus the root folder, plus 4 files,
-   * plus one ".keep" file */
-  g_assert_cmpint (i, ==, 10);
+  /* The overrides folder contains 4 folders, plus 4 files, plus one ".keep" file */
+  g_assert_cmpint (i, ==, 9);
   g_assert_true (seen_link);
   g_strfreev (output);
 
-  g_assert_nonnull (issues);
-  g_assert_cmpstr (issues[0], ==, NULL);
-  g_strfreev (issues);
+  g_assert_null (issues);
 
   /* Repeat the same check, this time using the cached result */
   output = srt_system_info_list_pressure_vessel_overrides (info, &issues);
@@ -1883,13 +1880,11 @@ overrides (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  g_assert_cmpint (i, ==, 10);
+  g_assert_cmpint (i, ==, 9);
   g_assert_true (seen_link);
   g_strfreev (output);
 
-  g_assert_nonnull (issues);
-  g_assert_cmpstr (issues[0], ==, NULL);
-  g_strfreev (issues);
+  g_assert_null (issues);
 
   g_object_unref (info);
   g_free (sysroot);
@@ -1939,11 +1934,10 @@ overrides_issues (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  /* The overrides folder contains 4 folders plus the root folder, plus one symlink,
-   * plus 2 ".keep" files.
+  /* The overrides folder contains 4 folders, plus one symlink, plus 2 ".keep" files.
    * We expect to not be able to open the "lib" folder, so we should have 4 less items than
    * a "normal" scenario */
-  g_assert_cmpint (i, ==, 4);
+  g_assert_cmpint (i, ==, 3);
   /* We expect not to be able to reach the symlink */
   g_assert_false (seen_link);
   g_strfreev (output);
@@ -2038,15 +2032,12 @@ pinned_libraries (Fixture *f,
       if (strstr (values[i], "has_pins") != NULL)
         seen_pins = TRUE;
     }
-  /* We placed 3 files in `pinned_libs_32`. We expect to have 3 files plus the folder
-   * itself */
-  g_assert_cmpint (i, ==, 4);
+  /* We placed 3 files in `pinned_libs_32` */
+  g_assert_cmpint (i, ==, 3);
   g_assert_true (seen_pins);
   g_strfreev (values);
 
-  g_assert_nonnull (messages);
-  g_assert_cmpstr (messages[0], ==, NULL);
-  g_strfreev (messages);
+  g_assert_null (messages);
 
   /* Repeat the same check, this time using the cached values */
   values = srt_system_info_list_pinned_libs_32 (info, &messages);
@@ -2057,13 +2048,11 @@ pinned_libraries (Fixture *f,
       if (strstr (values[i], "has_pins") != NULL)
         seen_pins = TRUE;
     }
-  g_assert_cmpint (i, ==, 4);
+  g_assert_cmpint (i, ==, 3);
   g_assert_true (seen_pins);
   g_strfreev (values);
 
-  g_assert_nonnull (messages);
-  g_assert_cmpstr (messages[0], ==, NULL);
-  g_strfreev (messages);
+  g_assert_null (messages);
 
   g_free (target1);
   g_free (target2);
@@ -2103,13 +2092,11 @@ pinned_libraries (Fixture *f,
       if (strstr (values[i], "has_pins") != NULL)
         seen_pins = TRUE;
     }
-  g_assert_cmpint (i, ==, 4);
+  g_assert_cmpint (i, ==, 3);
   g_assert_true (seen_pins);
   g_strfreev (values);
 
-  g_assert_nonnull (messages);
-  g_assert_cmpstr (messages[0], ==, NULL);
-  g_strfreev (messages);
+  g_assert_null (messages);
 
   /* Repeat the same check, this time using the cached values */
   values = srt_system_info_list_pinned_libs_64 (info, &messages);
@@ -2120,13 +2107,11 @@ pinned_libraries (Fixture *f,
       if (strstr (values[i], "has_pins") != NULL)
         seen_pins = TRUE;
     }
-  g_assert_cmpint (i, ==, 4);
+  g_assert_cmpint (i, ==, 3);
   g_assert_true (seen_pins);
   g_strfreev (values);
 
-  g_assert_nonnull (messages);
-  g_assert_cmpstr (messages[0], ==, NULL);
-  g_strfreev (messages);
+  g_assert_null (messages);
 
   g_free (target1);
   g_free (target2);
@@ -2177,9 +2162,8 @@ pinned_libraries_permission (Fixture *f,
       if (strstr (values[i], "no_access") != NULL)
         seen_no_access = TRUE;
     }
-  /* We placed 1 folder in `pinned_libs_32`. We expect to have 1 folder plus the
-   * parent folder itself */
-  g_assert_cmpint (i, ==, 2);
+  /* We placed 1 folder in `pinned_libs_32` */
+  g_assert_cmpint (i, ==, 1);
   g_assert_true (seen_no_access);
   g_strfreev (values);
 
@@ -2208,9 +2192,8 @@ pinned_libraries_permission (Fixture *f,
       if (strstr (values[i], "no_access") != NULL)
         seen_no_access = TRUE;
     }
-  /* We placed 1 folder in `pinned_libs_32`. We expect to have 1 folder plus the
-   * parent folder itself */
-  g_assert_cmpint (i, ==, 2);
+  /* We placed 1 folder in `pinned_libs_32` */
+  g_assert_cmpint (i, ==, 1);
   g_assert_true (seen_no_access);
   g_strfreev (values);
 
@@ -2242,9 +2225,7 @@ pinned_libraries_missing (Fixture *f,
   g_assert_cmpint (g_rmdir (fake_home->pinned_32), ==, 0);
 
   values = srt_system_info_list_pinned_libs_32 (info, &messages);
-  g_assert_nonnull (values);
-  g_assert_cmpstr (values[0], ==, NULL);
-  g_strfreev (values);
+  g_assert_null (values);
 
   g_assert_nonnull (messages);
   g_assert_cmpstr (strstr (messages[0], "pinned_libs_32"), !=, NULL);
@@ -2257,9 +2238,7 @@ pinned_libraries_missing (Fixture *f,
   g_assert_cmpint (g_rmdir (fake_home->pinned_64), ==, 0);
 
   values = srt_system_info_list_pinned_libs_64 (info, &messages);
-  g_assert_nonnull (values);
-  g_assert_cmpstr (values[0], ==, NULL);
-  g_strfreev (values);
+  g_assert_null (values);
 
   g_assert_nonnull (messages);
   g_assert_cmpstr (strstr (messages[0], "pinned_libs_64"), !=, NULL);
@@ -2633,16 +2612,16 @@ static const JsonTest json_test[] =
       .issues = SRT_RUNTIME_ISSUES_NONE,
       .pinned_libs_32 =
       {
-        " 13902790      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_32",
-        " 13902813      4 -rw-r--r--   1 me  me        50 Apr 24 21:32 pinned_libs_32/system_libGLU.so.1",
-        " 13902814      4 lrwxrwxrwx   1 me  me       107 Apr 24 21:32 pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13",
+        "pinned_libs_32/has_pins",
+        "pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13",
+        "pinned_libs_32/system_libGLU.so.1",
         NULL,
       },
       .pinned_libs_64 =
       {
-        " 13902791      4 drwxr-xr-x   2 me  me      4096 Apr 24 21:32 pinned_libs_64",
-        " 13902805      4 -rw-r--r--   1 me  me        46 Apr 24 21:32 pinned_libs_64/system_libGLU.so.1",
-        " 13902795      4 lrwxrwxrwx   1 me  me       100 Apr 24 21:32 pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0",
+        "pinned_libs_64/has_pins",
+        "pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0",
+        "pinned_libs_64/system_libGLU.so.1",
         NULL,
       },
     },

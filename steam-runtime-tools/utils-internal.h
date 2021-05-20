@@ -114,6 +114,11 @@ G_GNUC_INTERNAL gboolean _srt_steam_command_via_pipe (const char * const *argume
                                                       gssize n_arguments,
                                                       GError **error);
 
+G_GNUC_INTERNAL gchar **_srt_recursive_list_content (const gchar *sysroot,
+                                                     int sysroot_fd,
+                                                     const gchar *directory,
+                                                     gchar ***messages_out);
+
 /*
  * _srt_is_same_stat:
  * @a: a stat buffer

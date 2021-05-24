@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+
+set -eu
+set -o pipefail
+
+# Don't load the Steam Overlay into this helper script. Put it back later.
+saved_ld_preload="${LD_PRELOAD-}"
+unset LD_PRELOAD
+
+me="$(readlink -f "$0")"
+here="${me%/*}"
+
+log () {
+    printf '%s\n' "${me}[$$]: $*" >&2
+}
+
+usage () {
+    local code="$1"
+    shift
+
+    if [ "$code" -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo "Usage:"
+    echo "$me [OPTIONS] [--] COMMAND [ARGS...]"
+    echo
+    echo "Run a command in the scout Steam Runtime."
+    echo
+    echo "Required arguments:"
+    echo "COMMAND [ARGS...] Run this."
+    echo
+    echo "Options:"
+    echo "--verb=%verb%     Mode to operate in [default=waitforexitandrun]."
+
+    exit "${code}"
+}
+
+main () {
+    local getopt_temp="help"
+    local runtime
+    local src
+
+    getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
+    eval "set -- $getopt_temp"
+    unset getopt_temp
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            (--help)
+                usage 0
+                # not reached
+                ;;
+
+            (--verb)
+                case "$2" in
+                    (run|waitforexitandrun)
+                        ;;
+                    (*)
+                        log "Ignoring unknown Steam compatibility interface verb: $2"
+                        ;;
+                esac
+                ;;
+
+            (--)
+                shift
+                break
+                ;;
+
+            (-*)
+                log "Unknown option: $1"
+                usage 125
+                # not reached
+                ;;
+
+            (*)
+                break
+                ;;
+        esac
+    done
+
+    if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
+        log "Error: A command to run is required"
+        usage 125
+    fi
+
+    mkdir -p "${here}/var"
+
+    if [ "${STEAM_LINUX_RUNTIME_LOG-}" = 1 ]; then
+        echo "See SteamLinuxRuntime_soldier/var/ for newer" \
+            "SteamLinuxRuntime log files." \
+            > "${here}/var/.slr-latest.log.$$"
+        mv -f "${here}/var/.slr-latest.log.$$" "${here}/var/slr-latest.log"
+    fi
+
+    # Just because zenity was available on the host system doesn't mean
+    # it's available in this container (soldier doesn't currently have it)
+    unset STEAM_ZENITY
+
+    if [ -d "${here}/steam-runtime" ]; then
+        runtime="${here}/steam-runtime"
+    else
+        # Note that this only works because setup.sh and run.sh do not take
+        # the $(realpath) of their $0.
+        runtime="${here}/var/steam-runtime"
+        mkdir -p "$runtime"
+        src="${STEAM_COMPAT_CLIENT_INSTALL_PATH:-"$HOME/.steam/root"}/ubuntu12_32/steam-runtime"
+
+        ln -fns "$src/amd64" "$runtime/"
+        ln -fns "$src/i386" "$runtime/"
+        ln -fns "$src/lib" "$runtime/"
+        ln -fns "$src/run.sh" "$runtime/"
+        ln -fns "$src/setup.sh" "$runtime/"
+        ln -fns "$src/usr" "$runtime/"
+    fi
+
+    # Make sure pinning is up to date
+    "$runtime/setup.sh"
+
+    if [ -n "$saved_ld_preload" ]; then
+        case "$1" in
+            (*=*)
+                # Replace inadvisable executable name with something env(1)
+                # will not misinterpret
+                set -- sh -euc 'exec -- "$@"' sh "$@"
+                ;;
+        esac
+
+        set -- env LD_PRELOAD="$saved_ld_preload" "$@"
+    fi
+
+    exec "$runtime/run.sh" "$@"
+
+    # This should never be reached
+    log "Internal error: exec failed"
+    exit 1
+}
+
+main "$@"
+
+# vim:set sw=4 sts=4 et:

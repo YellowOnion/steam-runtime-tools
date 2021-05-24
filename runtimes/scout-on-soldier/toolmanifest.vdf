@@ -1,0 +1,6 @@
+"manifest"
+{
+  "version" "2"
+  "commandline" "/run-in-scout --"
+  "require_tool_appid" "1391110"
+}

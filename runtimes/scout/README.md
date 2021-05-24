@@ -23,6 +23,15 @@ Development and debugging
 The runtime's behaviour can be changed by running the Steam client with
 environment variables set.
 
+`STEAM_LINUX_RUNTIME_LOG=1` will enable logging. Log files appear in
+`SteamLinuxRuntime/var/slr-*.log`, with filenames containing the app ID.
+`slr-latest.log` is a symbolic link to whichever one was created most
+recently.
+
+`STEAM_LINUX_RUNTIME_VERBOSE=1` produces more detailed log output,
+either to a log file (if `STEAM_LINUX_RUNTIME_LOG=1` is also used) or to
+the same place as `steam` output (otherwise).
+
 `PRESSURE_VESSEL_WRAP_GUI=1` will
 spawn a 'test mode' dialog allowing you to select a different runtime
 and set various options. This developer tool requires Python 3, PyGI,

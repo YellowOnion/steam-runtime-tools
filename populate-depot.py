@@ -565,7 +565,7 @@ class Main:
 
         self.merge_dir_into_depot(os.path.join(self.source_dir, 'common'))
 
-        root = os.path.join(self.source_dir, self.runtime.name)
+        root = os.path.join(self.source_dir, 'runtimes', self.runtime.name)
 
         if os.path.exists(root):
             self.merge_dir_into_depot(root)

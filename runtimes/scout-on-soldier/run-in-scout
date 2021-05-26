@@ -37,6 +37,7 @@ usage () {
 }
 
 main () {
+    local error
     local getopt_temp="help"
     local runtime
     local src
@@ -115,7 +116,13 @@ main () {
     fi
 
     # Make sure pinning is up to date
-    "$runtime/setup.sh" > /dev/null
+    if "$runtime/setup.sh" > /dev/null; then
+        :   # OK
+    else
+        error="$?"
+        log "Error: setup.sh failed with exit status $error"
+        exit "$error"
+    fi
 
     if [ -n "$saved_ld_preload" ]; then
         case "$1" in

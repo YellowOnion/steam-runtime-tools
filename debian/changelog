@@ -1,3 +1,23 @@
+steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * Build capsule-capture-libs from a bundled copy of libcapsule,
+    currently v0.20210114.0.
+    This reduces the number of components required to get a pressure-vessel
+    build: now all we need is the multiarch-prefixed wflinfo, and some
+    common shared libraries. (s-r-t!311)
+
+  [ Ludovico de Nittis ]
+  * Use a more compact output for overrides and pinned libraries.
+    Most of the information in `find -ls` output is not particularly
+    interesting for debugging, so just log the list of files, whether each
+    one is a directory, and the targets of symlinks. Replace the paths
+    to the home directory and the LD_LIBRARY_PATH Steam Runtime with
+    $HOME and $STEAM_RUNTIME respectively, to make things more concise.
+    (s-r-t!315, Resolves: T28240)
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 26 May 2021 11:05:21 +0100
+
 steam-runtime-tools (0.20210518.0) scout; urgency=medium
 
   * system-info: List /overrides/ correctly in recent SteamLinuxRuntime.

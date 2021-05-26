@@ -29,6 +29,7 @@ from just-built files or by downloading a previous build.
 """
 
 import argparse
+import errno
 import gzip
 import hashlib
 import json
@@ -423,6 +424,7 @@ class Main:
         include_archives: bool = False,
         include_sdk: bool = False,
         layered: bool = False,
+        minimize: bool = False,
         pressure_vessel: str = 'scout',
         runtime: str = 'scout',
         source_dir: str = HERE,
@@ -486,6 +488,7 @@ class Main:
         self.images_uri = images_uri
         self.include_archives = include_archives
         self.layered = layered
+        self.minimize = minimize
         self.pressure_vessel = pressure_vessel
         self.source_dir = source_dir
         self.ssh_host = ssh_host
@@ -805,6 +808,10 @@ class Main:
                     os.path.join(self.cache, runtime.tarball),
                     dest,
                 )
+
+                if self.minimize:
+                    self.minimize_runtime(dest)
+
                 self.ensure_ref(dest)
 
                 if runtime.include_sdk:
@@ -837,6 +844,10 @@ class Main:
                         os.path.join(self.cache, runtime.sdk_tarball),
                         dest,
                     )
+
+                    if self.minimize:
+                        self.minimize_runtime(dest)
+
                     self.ensure_ref(dest)
 
                     argv = [
@@ -1334,6 +1345,38 @@ class Main:
                 for name in sorted(not_windows_friendly):
                     writer.write('# {}\n'.format(self.octal_escape(name)))
 
+    def minimize_runtime(self, root: str) -> None:
+        '''
+        Remove files that pressure-vessel can reconstitute from the manifest.
+
+        This is the equivalent of:
+
+        find $root/files -type l -delete
+        find $root/files -empty -delete
+
+        Note that this needs to be done before ensure_ref(), otherwise
+        it will delete files/.ref too.
+        '''
+        for (dirpath, dirnames, filenames) in os.walk(
+            os.path.join(root, 'files'),
+            topdown=False,
+        ):
+            for f in filenames + dirnames:
+                path = os.path.join(dirpath, f)
+
+                try:
+                    statinfo = os.lstat(path)
+                except FileNotFoundError:
+                    continue
+
+                if stat.S_ISLNK(statinfo.st_mode) or statinfo.st_size == 0:
+                    os.remove(path)
+            try:
+                os.rmdir(dirpath)
+            except OSError as e:
+                if e.errno != errno.ENOTEMPTY:
+                    raise
+
 
 def main() -> None:
     logging.basicConfig()
@@ -1449,6 +1492,21 @@ def main() -> None:
     parser.add_argument(
         '--layered', default=False, action='store_true',
         help='Produce a layered runtime that runs scout on soldier',
+    )
+    parser.add_argument(
+        '--minimize', action='store_true', default=False,
+        help=(
+            'Omit empty files, empty directories and symlinks from '
+            'runtime content, requiring pressure-vessel to fill them in '
+            'from the mtree manifest'
+        )
+    )
+    parser.add_argument(
+        '--no-minimize', action='store_false', dest='minimize',
+        help=(
+            'Include empty files, empty directories and symlinks in '
+            'runtime content [default]'
+        )
     )
     parser.add_argument(
         '--source-dir', default=HERE,

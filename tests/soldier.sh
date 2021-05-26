@@ -154,6 +154,7 @@ rm -fr depots/test-soldier-local
 mkdir -p depots/test-soldier-local
 python3 ./populate-depot.py \
     --depot=depots/test-soldier-local \
+    --minimize \
     --no-include-archives \
     --toolmanifest \
     --unpack-runtime \
@@ -219,6 +220,24 @@ if ! [ -f "depots/test-soldier-local/$run_dir/files/.ref" ]; then
     exit 1
 fi
 
+empties="$(find "depots/test-soldier-local/$run_dir/files" -name .ref -prune -o -empty -print)"
+
+if [ -n "$empties" ]; then
+    echo "# Files not minimized:"
+    echo "$empties" | sed -e 's/^/# /'
+    echo "Bail out! Files not minimized"
+    exit 1
+fi
+
+symlinks="$(find "depots/test-soldier-local/$run_dir/files" -type l)"
+
+if [ -n "$symlinks" ]; then
+    echo "# Symlinks not minimized:"
+    echo "$symlinks" | sed -e 's/^/# /'
+    echo "Bail out! Symlinks not minimized"
+    exit 1
+fi
+
 echo "ok 3 - soldier, running from local builds"
 
 rm -fr depots/test-soldier-unversioned
@@ -226,6 +245,7 @@ mkdir -p depots/test-soldier-unversioned
 python3 ./populate-depot.py \
     --depot=depots/test-soldier-unversioned \
     --no-include-archives \
+    --no-minimize \
     --toolmanifest \
     --unpack-runtime \
     --no-versioned-directories \
@@ -276,6 +296,24 @@ for dir in depots/test-soldier-unversioned/soldier*; do
         exit 1
     fi
 done
+
+empties="$(find "depots/test-soldier-unversioned/soldier/files" -name .ref -prune -o -empty | sed -e 's/^/# /')"
+echo "# Empty files/dirs in runtime:"
+echo "$empties"
+
+if [ -z "$empties" ]; then
+    echo "Bail out! Runtime should include empty files"
+    exit 1
+fi
+
+symlinks="$(find "depots/test-soldier-unversioned/soldier/files" -type l | sed -e 's/^/# /')"
+echo "# Symlinks in runtime:"
+echo "$symlinks"
+
+if [ -z "$symlinks" ]; then
+    echo "Bail out! Runtime should include symlinks"
+    exit 1
+fi
 
 echo "ok 4 - soldier, running from unpacked directory without version"
 

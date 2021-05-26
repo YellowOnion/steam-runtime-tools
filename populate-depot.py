@@ -1279,7 +1279,17 @@ class Main:
                 if member.isfile() or member.islnk():
                     fields.append('type=file')
                     fields.append('mode=%o' % member.mode)
-                    fields.append('time=%d' % member.mtime)
+
+                    # We only store mtime to 1-second precision for now,
+                    # but some mtree implementations require the dot.
+                    #
+                    # If we add sub-second precision, note that some
+                    # versions of mtree use the part after the dot
+                    # as integer nanoseconds, so "1.234" is actually
+                    # 1 second + 234 nanoseconds, or what normal people
+                    # would write as 1.000000234 - we can be compatible
+                    # with both by always showing the time in %d.%09d format.
+                    fields.append('time=%d.0' % member.mtime)
 
                     if member.islnk():
                         writer.write(

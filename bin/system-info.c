@@ -972,10 +972,11 @@ main (int argc,
       jsonify_runtime_issues (builder, runtime_issues);
       json_builder_end_array (builder);
 
-      if (g_strcmp0 (rt_path, "/") == 0)
-        {
-          overrides = srt_system_info_list_pressure_vessel_overrides (info, &messages);
+      overrides = srt_system_info_list_pressure_vessel_overrides (info, &messages);
 
+      if ((overrides != NULL && overrides[0] != NULL)
+          || (messages != NULL && messages[0] != NULL))
+        {
           json_builder_set_member_name (builder, "overrides");
           json_builder_begin_object (builder);
 

@@ -1234,16 +1234,9 @@ ensure_overrides_cached (SrtSystemInfo *self)
           "overrides/",
           "usr/lib/pressure-vessel/overrides/",
       };
-      g_autofree gchar *runtime = NULL;
       gsize i;
 
       self->overrides.have_data = TRUE;
-
-      runtime = srt_system_info_dup_runtime_path (self);
-      /* Skip checking the overridden folder if we are not in a pressure-vessel
-       * Steam Runtime container */
-      if (g_strcmp0 (runtime, "/") != 0)
-        return;
 
       for (i = 0; i < G_N_ELEMENTS (paths); i++)
         {

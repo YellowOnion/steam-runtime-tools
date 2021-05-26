@@ -115,7 +115,7 @@ main () {
     fi
 
     # Make sure pinning is up to date
-    "$runtime/setup.sh"
+    "$runtime/setup.sh" > /dev/null
 
     if [ -n "$saved_ld_preload" ]; then
         case "$1" in

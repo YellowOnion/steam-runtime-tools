@@ -42,6 +42,7 @@ main () {
     local runtime
     local src
 
+    getopt_temp="$getopt_temp,verb:"
     getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
     eval "set -- $getopt_temp"
     unset getopt_temp
@@ -61,6 +62,7 @@ main () {
                         log "Ignoring unknown Steam compatibility interface verb: $2"
                         ;;
                 esac
+                shift 2
                 ;;
 
             (--)

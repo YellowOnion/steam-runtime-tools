@@ -37,6 +37,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -626,6 +627,27 @@ class Main:
 
         self.write_component_versions()
 
+    def ensure_ref(self, path: str) -> None:
+        '''
+        Create $path/files/.ref as an empty regular file.
+
+        This is useful because pressure-vessel would create this file
+        during processing. If it gets committed to the depot, then Steampipe
+        will remove it when superseded.
+        '''
+        ref = os.path.join(path, 'files', '.ref')
+
+        try:
+            statinfo = os.stat(ref, follow_symlinks=False)
+        except FileNotFoundError:
+            with open(ref, 'x'):
+                pass
+        else:
+            if statinfo.st_size > 0 or not stat.S_ISREG(statinfo.st_mode):
+                raise RuntimeError(
+                    'Expected {} to be an empty regular file'.format(path)
+                )
+
     def do_container_runtime(self) -> None:
         pv_version = ComponentVersion('pressure-vessel')
 
@@ -783,6 +805,7 @@ class Main:
                     os.path.join(self.cache, runtime.tarball),
                     dest,
                 )
+                self.ensure_ref(dest)
 
                 if runtime.include_sdk:
                     if self.versioned_directories:
@@ -814,6 +837,7 @@ class Main:
                         os.path.join(self.cache, runtime.sdk_tarball),
                         dest,
                     )
+                    self.ensure_ref(dest)
 
                     argv = [
                         'tar',
@@ -1292,6 +1316,9 @@ class Main:
                     continue
 
                 writer.write(' '.join(fields) + '\n')
+
+            if '.ref' not in lc_names:
+                writer.write('./.ref type=file size=0 mode=644\n')
 
             if differ_only_by_case:
                 writer.write('\n')

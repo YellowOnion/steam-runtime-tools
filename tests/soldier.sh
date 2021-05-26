@@ -214,6 +214,11 @@ for dir in depots/test-soldier-local/soldier*; do
     fi
 done
 
+if ! [ -f "depots/test-soldier-local/$run_dir/files/.ref" ]; then
+    echo "Bail out! files/.ref not created"
+    exit 1
+fi
+
 echo "ok 3 - soldier, running from local builds"
 
 rm -fr depots/test-soldier-unversioned

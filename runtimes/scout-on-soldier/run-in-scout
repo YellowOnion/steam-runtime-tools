@@ -155,9 +155,7 @@ main () {
 
     [ -z "$verbose" ] || log "Running: $runtime/run.sh $(printf '%q ' "$@")"
     exec "$runtime/run.sh" "$@"
-
     # This should never be reached
-    log "Internal error: exec failed"
     exit 1
 }
 

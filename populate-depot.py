@@ -29,6 +29,7 @@ from just-built files or by downloading a previous build.
 """
 
 import argparse
+import errno
 import gzip
 import hashlib
 import json
@@ -37,6 +38,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -422,6 +424,7 @@ class Main:
         include_archives: bool = False,
         include_sdk: bool = False,
         layered: bool = False,
+        minimize: bool = False,
         pressure_vessel: str = 'scout',
         runtime: str = 'scout',
         source_dir: str = HERE,
@@ -485,6 +488,7 @@ class Main:
         self.images_uri = images_uri
         self.include_archives = include_archives
         self.layered = layered
+        self.minimize = minimize
         self.pressure_vessel = pressure_vessel
         self.source_dir = source_dir
         self.ssh_host = ssh_host
@@ -625,6 +629,27 @@ class Main:
             self.versions.append(unspecified_version)
 
         self.write_component_versions()
+
+    def ensure_ref(self, path: str) -> None:
+        '''
+        Create $path/files/.ref as an empty regular file.
+
+        This is useful because pressure-vessel would create this file
+        during processing. If it gets committed to the depot, then Steampipe
+        will remove it when superseded.
+        '''
+        ref = os.path.join(path, 'files', '.ref')
+
+        try:
+            statinfo = os.stat(ref, follow_symlinks=False)
+        except FileNotFoundError:
+            with open(ref, 'x'):
+                pass
+        else:
+            if statinfo.st_size > 0 or not stat.S_ISREG(statinfo.st_mode):
+                raise RuntimeError(
+                    'Expected {} to be an empty regular file'.format(path)
+                )
 
     def do_container_runtime(self) -> None:
         pv_version = ComponentVersion('pressure-vessel')
@@ -784,6 +809,11 @@ class Main:
                     dest,
                 )
 
+                if self.minimize:
+                    self.minimize_runtime(dest)
+
+                self.ensure_ref(dest)
+
                 if runtime.include_sdk:
                     if self.versioned_directories:
                         sdk_subdir = '{}_sdk_{}'.format(runtime.name, version)
@@ -814,6 +844,11 @@ class Main:
                         os.path.join(self.cache, runtime.sdk_tarball),
                         dest,
                     )
+
+                    if self.minimize:
+                        self.minimize_runtime(dest)
+
+                    self.ensure_ref(dest)
 
                     argv = [
                         'tar',
@@ -1244,7 +1279,17 @@ class Main:
                 if member.isfile() or member.islnk():
                     fields.append('type=file')
                     fields.append('mode=%o' % member.mode)
-                    fields.append('time=%d' % member.mtime)
+
+                    # We only store mtime to 1-second precision for now,
+                    # but some mtree implementations require the dot.
+                    #
+                    # If we add sub-second precision, note that some
+                    # versions of mtree use the part after the dot
+                    # as integer nanoseconds, so "1.234" is actually
+                    # 1 second + 234 nanoseconds, or what normal people
+                    # would write as 1.000000234 - we can be compatible
+                    # with both by always showing the time in %d.%09d format.
+                    fields.append('time=%d.0' % member.mtime)
 
                     if member.islnk():
                         writer.write(
@@ -1293,6 +1338,9 @@ class Main:
 
                 writer.write(' '.join(fields) + '\n')
 
+            if '.ref' not in lc_names:
+                writer.write('./.ref type=file size=0 mode=644\n')
+
             if differ_only_by_case:
                 writer.write('\n')
                 writer.write('# Files whose names differ only by case:\n')
@@ -1306,6 +1354,38 @@ class Main:
 
                 for name in sorted(not_windows_friendly):
                     writer.write('# {}\n'.format(self.octal_escape(name)))
+
+    def minimize_runtime(self, root: str) -> None:
+        '''
+        Remove files that pressure-vessel can reconstitute from the manifest.
+
+        This is the equivalent of:
+
+        find $root/files -type l -delete
+        find $root/files -empty -delete
+
+        Note that this needs to be done before ensure_ref(), otherwise
+        it will delete files/.ref too.
+        '''
+        for (dirpath, dirnames, filenames) in os.walk(
+            os.path.join(root, 'files'),
+            topdown=False,
+        ):
+            for f in filenames + dirnames:
+                path = os.path.join(dirpath, f)
+
+                try:
+                    statinfo = os.lstat(path)
+                except FileNotFoundError:
+                    continue
+
+                if stat.S_ISLNK(statinfo.st_mode) or statinfo.st_size == 0:
+                    os.remove(path)
+            try:
+                os.rmdir(dirpath)
+            except OSError as e:
+                if e.errno != errno.ENOTEMPTY:
+                    raise
 
 
 def main() -> None:
@@ -1422,6 +1502,21 @@ def main() -> None:
     parser.add_argument(
         '--layered', default=False, action='store_true',
         help='Produce a layered runtime that runs scout on soldier',
+    )
+    parser.add_argument(
+        '--minimize', action='store_true', default=False,
+        help=(
+            'Omit empty files, empty directories and symlinks from '
+            'runtime content, requiring pressure-vessel to fill them in '
+            'from the mtree manifest'
+        )
+    )
+    parser.add_argument(
+        '--no-minimize', action='store_false', dest='minimize',
+        help=(
+            'Include empty files, empty directories and symlinks in '
+            'runtime content [default]'
+        )
     )
     parser.add_argument(
         '--source-dir', default=HERE,

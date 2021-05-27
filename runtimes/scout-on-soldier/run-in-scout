@@ -37,10 +37,18 @@ usage () {
 }
 
 main () {
+    local error
     local getopt_temp="help"
     local runtime
     local src
+    local verbose=
 
+    if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
+        verbose=yes
+    fi
+
+    getopt_temp="$getopt_temp,verb:"
+    getopt_temp="$getopt_temp,verbose"
     getopt_temp="$(getopt -o '' --long "$getopt_temp" -n "$me" -- "$@")"
     eval "set -- $getopt_temp"
     unset getopt_temp
@@ -60,6 +68,12 @@ main () {
                         log "Ignoring unknown Steam compatibility interface verb: $2"
                         ;;
                 esac
+                shift 2
+                ;;
+
+            (--verbose)
+                verbose=yes
+                shift
                 ;;
 
             (--)
@@ -93,6 +107,8 @@ main () {
         mv -f "${here}/var/.slr-latest.log.$$" "${here}/var/slr-latest.log"
     fi
 
+    [ -z "$verbose" ] || log "Command to run: $(printf '%q ' "$@")"
+
     # Just because zenity was available on the host system doesn't mean
     # it's available in this container (soldier doesn't currently have it)
     unset STEAM_ZENITY
@@ -114,8 +130,16 @@ main () {
         ln -fns "$src/usr" "$runtime/"
     fi
 
+    [ -z "$verbose" ] || log "$runtime/setup.sh..."
+
     # Make sure pinning is up to date
-    "$runtime/setup.sh"
+    if "$runtime/setup.sh" > /dev/null; then
+        :   # OK
+    else
+        error="$?"
+        log "Error: setup.sh failed with exit status $error"
+        exit "$error"
+    fi
 
     if [ -n "$saved_ld_preload" ]; then
         case "$1" in
@@ -129,10 +153,9 @@ main () {
         set -- env LD_PRELOAD="$saved_ld_preload" "$@"
     fi
 
+    [ -z "$verbose" ] || log "Running: $runtime/run.sh $(printf '%q ' "$@")"
     exec "$runtime/run.sh" "$@"
-
     # This should never be reached
-    log "Internal error: exec failed"
     exit 1
 }
 

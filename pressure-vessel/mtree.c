@@ -201,14 +201,48 @@ pv_mtree_entry_parse (const char *line,
 
       if (g_str_has_prefix (tokens[i], "time="))
         {
-          gdouble value = g_ascii_strtod (equals + 1, &endptr);
+          guint64 value;
+          guint64 ns = 0;
 
-          if (equals[1] == '\0' || *endptr != '\0')
+          value = g_ascii_strtoull (equals + 1, &endptr, 10);
+
+          if (equals[1] == '\0' || (*endptr != '\0' && *endptr != '.'))
             return glnx_throw (error,
                                "%s:%u: Invalid time %s",
                                filename, line_number, equals + 1);
 
-          entry->mtime_usec = (value * G_TIME_SPAN_SECOND);
+          /* This is silly, but time=1.234 has historically meant
+           * 1 second + 234 nanoseconds, or what normal people would
+           * write as 1.000000234, so parsing it as a float is incorrect
+           * (for example mtree-netbsd in Debian still prints it
+           * like that).
+           *
+           * time=1.0 is unambiguous, and so is time=1.123456789
+           * with exactly 9 digits. */
+          if (*endptr == '.' && strcmp (endptr, ".0") != 0)
+            {
+              const char *dot = endptr;
+
+              ns = g_ascii_strtoull (dot + 1, &endptr, 10);
+
+              if (dot[1] == '\0' || *endptr != '\0' || ns > 999999999)
+                return glnx_throw (error,
+                                   "%s:%u: Invalid nanoseconds count %s",
+                                   filename, line_number, dot + 1);
+
+              /* If necessary this could become just a warning, but for
+               * now require it to be unambiguous - libarchive and
+               * FreeBSD mtree show this unambiguous format. */
+              if (endptr != dot + 10)
+                return glnx_throw (error,
+                                   "%s:%u: Ambiguous nanoseconds count %s, "
+                                   "should have exactly 9 digits",
+                                   filename, line_number, dot + 1);
+            }
+
+          /* We store it as a GTimeSpan which is "only" microsecond
+           * precision. */
+          entry->mtime_usec = (value * G_TIME_SPAN_SECOND) + (ns / 1000);
           continue;
         }
 

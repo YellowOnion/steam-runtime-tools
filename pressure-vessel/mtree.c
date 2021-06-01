@@ -153,7 +153,8 @@ pv_mtree_entry_parse (const char *line,
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "contents="))
+      if (g_str_has_prefix (tokens[i], "contents=")
+          || g_str_has_prefix (tokens[i], "content="))
         {
           entry->contents = g_strcompress (equals + 1);
           continue;

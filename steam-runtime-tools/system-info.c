@@ -1234,16 +1234,9 @@ ensure_overrides_cached (SrtSystemInfo *self)
           "overrides/",
           "usr/lib/pressure-vessel/overrides/",
       };
-      g_autofree gchar *runtime = NULL;
       gsize i;
 
       self->overrides.have_data = TRUE;
-
-      runtime = srt_system_info_dup_runtime_path (self);
-      /* Skip checking the overridden folder if we are not in a pressure-vessel
-       * Steam Runtime container */
-      if (g_strcmp0 (runtime, "/") != 0)
-        return;
 
       for (i = 0; i < G_N_ELEMENTS (paths); i++)
         {
@@ -2562,7 +2555,17 @@ ensure_runtime_cached (SrtSystemInfo *self)
   if (self->runtime.issues == SRT_RUNTIME_ISSUES_NONE &&
       self->runtime.path == NULL)
     {
-      if (g_strcmp0 (self->os_release.id, "steamrt") == 0)
+      const char *runtime = g_environ_getenv (self->env, "STEAM_RUNTIME");
+
+      if (runtime != NULL && runtime[0] == '/' && runtime[1] != '\0')
+        {
+          self->runtime.issues = _srt_runtime_check (srt_steam_get_bin32_path (self->steam_data),
+                                                     self->runtime.expected_version,
+                                                     self->env,
+                                                     &self->runtime.version,
+                                                     &self->runtime.path);
+        }
+      else if (g_strcmp0 (self->os_release.id, "steamrt") == 0)
         {
           self->runtime.path = g_strdup ("/");
           self->runtime.version = g_strdup (self->os_release.build_id);

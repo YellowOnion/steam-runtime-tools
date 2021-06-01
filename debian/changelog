@@ -6,9 +6,17 @@ steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
     This reduces the number of components required to get a pressure-vessel
     build: now all we need is the multiarch-prefixed wflinfo, and some
     common shared libraries. (s-r-t!311)
+  * system-info: Make STEAM_RUNTIME take precedence over os-release.
+    If we're running the scout runtime inside a soldier container
+    (scout_layered_slim beta branch, T18668) then we want to be reporting
+    facts about the scout runtime.
+  * system-info: Show /overrides even if in scout runtime.
+    This is helpful if we're stacking the scout runtime onto the soldier
+    runtime (T18668): both pinned_libs_* and overrides are relevant there.
 
   [ Ludovico de Nittis ]
-  * Use a more compact output for overrides and pinned libraries.
+  * system-info: Use a more compact output for overrides and pinned
+    libraries.
     Most of the information in `find -ls` output is not particularly
     interesting for debugging, so just log the list of files, whether each
     one is a directory, and the targets of symlinks. Replace the paths
@@ -16,7 +24,7 @@ steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
     $HOME and $STEAM_RUNTIME respectively, to make things more concise.
     (s-r-t!315, Resolves: T28240)
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 26 May 2021 11:05:21 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 01 Jun 2021 12:26:55 +0100
 
 steam-runtime-tools (0.20210518.0) scout; urgency=medium
 

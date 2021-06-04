@@ -1,8 +1,8 @@
 steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
-  * Build capsule-capture-libs from a bundled copy of libcapsule,
-    currently v0.20210114.0.
+  * pressure-vessel: Build capsule-capture-libs from a bundled copy of
+    libcapsule, currently v0.20210114.0.
     This reduces the number of components required to get a pressure-vessel
     build: now all we need is the multiarch-prefixed wflinfo, and some
     common shared libraries. (s-r-t!311)
@@ -23,8 +23,10 @@ steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
     to the home directory and the LD_LIBRARY_PATH Steam Runtime with
     $HOME and $STEAM_RUNTIME respectively, to make things more concise.
     (s-r-t!315, Resolves: T28240)
+  * pv-wrap: Adjust Flatpak libshared-library-guard configuration path
+    (T27444)
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 01 Jun 2021 12:26:55 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 04 Jun 2021 18:51:10 +0100
 
 steam-runtime-tools (0.20210518.0) scout; urgency=medium
 

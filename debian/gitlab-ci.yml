@@ -3,7 +3,6 @@ include:
       file: '/steam-gitlab-ci-common.yml'
 
 variables:
-    BUILD_IMAGE: registry.gitlab.steamos.cloud/steamrt/scout/sdk:beta
     STEAM_CI_USE_BINARIES_FROM: build
     STEAM_CI_DEPENDENCIES: >-
         debhelper
@@ -51,6 +50,8 @@ variables:
     # different devices
     STEAM_CI_TMPDIR: "${CI_PROJECT_DIR}/debian/tmpdir"
 
+    BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}'
+
 stages:
     - build
     - relocatable-install
@@ -59,6 +60,7 @@ stages:
 package:
     extends: .build_package
     variables:
+        BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}'
         STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
         STEAM_CI_INSTALL_SCRIPT: |
             apt-get -y install pkg-create-dbgsym
@@ -66,7 +68,7 @@ package:
 package:i386:
     extends: .build_package
     variables:
-        BUILD_IMAGE: registry.gitlab.steamos.cloud/steamrt/scout/sdk/i386:beta
+        BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_I386_DOCKER_IMAGE}'
         STEAM_CI_DEB_BUILD: any     # debuild --build=any, aka -B
         STEAM_CI_INSTALL_SCRIPT: |
             apt-get -y install pkg-create-dbgsym
@@ -199,7 +201,7 @@ build:scout-i386:
             - _build/scout-i386/meson-logs/*.txt
         when: always
 
-relocatable-install:
+relocatable-install:debug:
     stage: relocatable-install
     needs:
         - build:scout
@@ -213,30 +215,84 @@ relocatable-install:
         - |
             apt-get -y --no-install-recommends install \
             bubblewrap \
-            libglib2.0-dev \
-            libxau-dev \
+            libglib2.0-dev:amd64 \
+            libglib2.0-dev:i386 \
+            libxau-dev:amd64 \
+            libxau-dev:i386 \
             meson \
+            waffle-utils-multiarch:amd64 \
+            waffle-utils-multiarch:i386 \
             ${NULL+}
 
-            rm -fr _build/scout/relocatable-install
+            rm -fr _build/debug/relocatable-install
+            mkdir -p _build/debug
             _build/scout/prefix/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
-              --output _build/scout/relocatable-install \
-              --archive "$(pwd)/_build/scout" \
+              --output _build/debug/relocatable-install \
+              --archive "$(pwd)/_build/debug" \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
             prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
-              "$(pwd)/_build/scout/relocatable-install"
+              "$(pwd)/_build/debug/relocatable-install"
     artifacts:
         paths:
-            - _build/scout/pressure-vessel-*-bin.tar.gz
-            - _build/scout/pressure-vessel-*-bin+src.tar.gz
+            - _build/debug/pressure-vessel-*-bin.tar.gz
+            - _build/debug/pressure-vessel-*-bin+src.tar.gz
+        when: on_success
+
+relocatable-install:production:
+    stage: relocatable-install
+    needs:
+        - package
+        - package:i386
+    tags:
+        - docker
+        - linux
+    image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}"
+    script:
+        - *prepare_scout
+        - |
+            apt-get -y --no-install-recommends install \
+            bubblewrap \
+            libglib2.0-dev:amd64 \
+            libglib2.0-dev:i386 \
+            libxau-dev:amd64 \
+            libxau-dev:i386 \
+            meson \
+            waffle-utils-multiarch:amd64 \
+            waffle-utils-multiarch:i386 \
+            ${NULL+}
+
+            dpkg -i \
+            debian/tmp/artifacts/build/*_amd64.*deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-0-dbgsym_*_i386.*deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-0_*_i386.deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-dev_*_i386.deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-helpers-dbgsym_*_i386.*deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-helpers_*_i386.deb \
+            debian/tmp/artifacts/build/libsteam-runtime-tools-0-relocatable-libs_*_i386.deb \
+            debian/tmp/artifacts/build/pressure-vessel-libs-i386_*_i386.deb \
+            ${NULL+}
+
+            rm -fr _build/production/relocatable-install
+            mkdir -p _build/production
+            /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+              --output _build/production/relocatable-install \
+              --archive "$(pwd)/_build/production" \
+              ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
+              ${NULL+}
+            prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
+              "$(pwd)/_build/production/relocatable-install"
+    artifacts:
+        paths:
+            - _build/production/pressure-vessel-*-bin.tar.gz
+            - _build/production/pressure-vessel-*-bin+src.tar.gz
         when: on_success
 
 .prepare_test: &prepare_test
     - |
         set -eux
 
-        PRESSURE_VESSEL=$(ls _build/scout/pressure-vessel-*-bin.tar.gz | head -1)
+        PRESSURE_VESSEL=$(ls _build/production/pressure-vessel-*-bin.tar.gz | head -1)
         mkdir -p _build/depot-template/common
 
         if [ -n "${IMAGES_DOWNLOAD_URL}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL}" ]; then
@@ -276,7 +332,7 @@ relocatable-install:
 
 .test_template:
     needs:
-        - relocatable-install
+        - relocatable-install:production
     stage: test
     tags:
         - docker

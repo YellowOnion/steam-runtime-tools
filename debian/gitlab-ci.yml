@@ -52,9 +52,29 @@ variables:
 
     BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}'
 
+    # These need to be configured in
+    # https://gitlab.steamos.cloud/groups/steamrt/-/settings/ci_cd
+    # Hostname of the machine that receives pressure-vessel releases
+    PRESSURE_VESSEL_CI_UPLOAD_HOST: ''
+    # Create a File variable with the public key(s) of P_V_CI_UPLOAD_HOST,
+    # in the usual ~/.ssh/known_hosts format:
+    # upload-host.example ssh-rsa AAA...
+    # upload-host.example ecdsa-sha2-nistp256 AAA...
+    # upload-host.example ssh-ed25519 AAA...
+    PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE: ''
+    # Path on P_V_CI_UPLOAD_HOST: /srv/VHOST/www/pressure-vessel/snapshots
+    PRESSURE_VESSEL_CI_UPLOAD_PATH: ''
+    # Similar path on P_V_CI_UPLOAD_HOST for unreleased test-builds
+    PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_PATH: ''
+    # User to log in on P_V_CI_UPLOAD_HOST
+    PRESSURE_VESSEL_CI_UPLOAD_USER: ''
+    # Create a File variable with a private key authorized for P_V_CI_UPLOAD_USER
+    PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE: ''
+
 stages:
     - build
     - relocatable-install
+    - deploy
     - test
 
 package:
@@ -278,21 +298,22 @@ relocatable-install:production:
             /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
               --output _build/production/relocatable-install \
               --archive "$(pwd)/_build/production" \
+              --no-archive-versions \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
             prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
               "$(pwd)/_build/production/relocatable-install"
     artifacts:
         paths:
-            - _build/production/pressure-vessel-*-bin.tar.gz
-            - _build/production/pressure-vessel-*-bin+src.tar.gz
+            - _build/production/pressure-vessel-bin.tar.gz
+            - _build/production/pressure-vessel-bin+src.tar.gz
         when: on_success
 
 .prepare_test: &prepare_test
     - |
         set -eux
 
-        PRESSURE_VESSEL=$(ls _build/production/pressure-vessel-*-bin.tar.gz | head -1)
+        PRESSURE_VESSEL=_build/production/pressure-vessel-bin.tar.gz
         mkdir -p _build/depot-template/common
 
         if [ -n "${IMAGES_DOWNLOAD_URL}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL}" ]; then
@@ -451,5 +472,66 @@ autopkgtest:
             debian/tmp/artifacts/build/steam-runtime-tools-bin-dbgsym_*_amd64.*deb \
             ${NULL+}
             apt-get -y -f install
+
+deploy:
+    stage: deploy
+    tags:
+        - docker
+        - linux
+    needs:
+        - package
+        - package:i386
+        - relocatable-install:production
+    rules:
+        - if: '$DEVEL_DOCKER_REGISTRY == ""'
+          when: never
+        - if: '$DEVEL_DOCKER_IMAGE == ""'
+          when: never
+        - if: '$PRESSURE_VESSEL_CI_UPLOAD_HOST == ""'
+          when: never
+        - if: '$PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE == ""'
+          when: never
+        - if: '$CI_COMMIT_TAG && $PRESSURE_VESSEL_CI_UPLOAD_PATH == ""'
+          when: never
+        - if: >-
+            $PRESSURE_VESSEL_CI_UPLOAD_PATH == ""
+            && $PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_PATH == ""
+          when: never
+        - if: '$PRESSURE_VESSEL_CI_UPLOAD_USER == ""'
+          when: never
+        - if: '$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE == ""'
+          when: never
+        - if: '$CI_COMMIT_TAG'
+          when: always
+        - when: manual
+    image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
+    variables:
+        STEAM_CI_DEPENDENCIES: >-
+            openssh-client
+    script:
+        - |
+            if ! [ -f "$PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE" ]; then
+                echo "P_V_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE must be of type File" >&2
+                exit 1
+            fi
+            if ! [ -f "$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE" ]; then
+                echo "P_V_CI_UPLOAD_SSH_PRIVATE_KEY_FILE must be of type File" >&2
+                exit 1
+            fi
+            chmod 0600 "$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE"
+
+            if [ -n "${CI_COMMIT_TAG-}" ]; then
+                path="$PRESSURE_VESSEL_CI_UPLOAD_PATH"
+            else
+                path="$PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_PATH"
+            fi
+
+            ./pressure-vessel/upload-artifacts.py \
+            --host="$PRESSURE_VESSEL_CI_UPLOAD_HOST" \
+            --path="$path" \
+            --login="$PRESSURE_VESSEL_CI_UPLOAD_USER" \
+            --ssh-known-hosts="$PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE" \
+            --ssh-private-key="$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE" \
+            ${NULL+}
 
 # vim:set sw=4 sts=4 et:

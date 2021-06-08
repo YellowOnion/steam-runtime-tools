@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210608.0) scout; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Build capsule-capture-libs from a bundled copy of
@@ -13,6 +13,7 @@ steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
   * system-info: Show /overrides even if in scout runtime.
     This is helpful if we're stacking the scout runtime onto the soldier
     runtime (T18668): both pinned_libs_* and overrides are relevant there.
+  * CI: Upload a pressure-vessel binary release for each tag (T28526)
 
   [ Ludovico de Nittis ]
   * system-info: Use a more compact output for overrides and pinned
@@ -26,7 +27,7 @@ steam-runtime-tools (0.20210518.1) UNRELEASED; urgency=medium
   * pv-wrap: Adjust Flatpak libshared-library-guard configuration path
     (T27444)
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 04 Jun 2021 18:51:10 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Jun 2021 16:06:58 +0100
 
 steam-runtime-tools (0.20210518.0) scout; urgency=medium
 

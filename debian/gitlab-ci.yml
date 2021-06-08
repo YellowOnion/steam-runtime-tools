@@ -503,7 +503,9 @@ deploy:
           when: never
         - if: '$CI_COMMIT_TAG'
           when: always
-        - when: manual
+        # To debug changes to this CI step, change this to when: always
+        # or when: manual, and push to a protected branch
+        - when: never
     image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
     variables:
         STEAM_CI_DEPENDENCIES: >-

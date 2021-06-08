@@ -1,8 +1,8 @@
-steam-runtime-tools (0.20210608.2) scout; urgency=medium
+steam-runtime-tools (0.20210608.3) scout; urgency=medium
 
   * Rebuild with adjusted CI settings
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 08 Jun 2021 16:41:01 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 08 Jun 2021 16:43:27 +0100
 
 steam-runtime-tools (0.20210608.0) scout; urgency=medium
 

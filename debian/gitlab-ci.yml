@@ -81,7 +81,7 @@ package:
     extends: .build_package
     variables:
         BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}'
-        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: yes
+        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
         STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
         STEAM_CI_INSTALL_SCRIPT: |
             apt-get -y install pkg-create-dbgsym
@@ -90,7 +90,7 @@ package:i386:
     extends: .build_package
     variables:
         BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_I386_DOCKER_IMAGE}'
-        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: yes
+        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
         STEAM_CI_DEB_BUILD: any     # debuild --build=any, aka -B
         STEAM_CI_INSTALL_SCRIPT: |
             apt-get -y install pkg-create-dbgsym

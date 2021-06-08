@@ -238,9 +238,20 @@ class TestPressureVessel(unittest.TestCase):
             'steam-runtime-system-info',
         ):
             with self.catch('--version', exe=exe):
+                exe_path = os.path.join('pressure-vessel', 'bin', exe)
+
+                if (
+                    exe.endswith('capsule-capture-libs')
+                    and not os.path.exists(exe_path)
+                ):
+                    exe_path = os.path.join(
+                        'pressure-vessel', 'libexec', 'steam-runtime-tools-0',
+                        exe,
+                    )
+
                 completed = self.run_subprocess(
                     [
-                        os.path.join('pressure-vessel', 'bin', exe),
+                        exe_path,
                         '--version',
                     ],
                     check=True,

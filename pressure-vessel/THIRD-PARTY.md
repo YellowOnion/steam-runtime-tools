@@ -29,7 +29,7 @@ programs and libraries:
 - bubblewrap: [LGPL-2.0-or-later][]. See bubblewrap.txt.
 
 - libblkid.so.1, libmount.so.1 from util-linux: [LGPL-2.1-or-later][].
-  See util-linux.txt.
+  See libblkid1.txt, libmount1.txt.
 
 - libffi.so.6 from libffi: [MIT][]. See libffi.txt.
 

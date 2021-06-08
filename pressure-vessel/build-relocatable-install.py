@@ -85,6 +85,7 @@ DEPENDENCIES = {
 WRAPPED_PROGRAMS = {
     'bwrap': 'bubblewrap',
 }
+# same as DEPENDENCIES
 PRIMARY_ARCH_DEPENDENCIES = {
     'bubblewrap': 'bubblewrap',
     'libblkid1': 'util-linux',
@@ -97,9 +98,15 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libselinux1': 'libselinux',
     'libxau6': 'libxau',
 }
+# executable => binary package in DEPENDENCIES
 HELPERS = {
     'wflinfo': 'waffle-utils-multiarch',
 }
+# Packages where different binary packages can have different copyright
+# files
+DIFFERENT_COPYRIGHT_FILES = [
+    'util-linux',
+]
 SCRIPTS = [
     'pressure-vessel-locale-gen',
     'pressure-vessel-test-ui',
@@ -522,14 +529,24 @@ def main():
             if os.path.exists('/usr/share/doc/{}/copyright'.format(package)):
                 installed_binaries.add(package)
 
-                install(
-                    '/usr/share/doc/{}/copyright'.format(package),
-                    os.path.join(
-                        installation,
-                        'metadata',
-                        '{}.txt'.format(source),
-                    ),
-                )
+                if source in DIFFERENT_COPYRIGHT_FILES:
+                    install(
+                        '/usr/share/doc/{}/copyright'.format(package),
+                        os.path.join(
+                            installation,
+                            'metadata',
+                            '{}.txt'.format(package),
+                        ),
+                    )
+                else:
+                    install(
+                        '/usr/share/doc/{}/copyright'.format(package),
+                        os.path.join(
+                            installation,
+                            'metadata',
+                            '{}.txt'.format(source),
+                        ),
+                    )
 
                 for expr in set(
                     v_check_output([

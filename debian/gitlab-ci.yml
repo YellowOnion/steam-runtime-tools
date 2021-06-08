@@ -93,6 +93,8 @@ package:
         STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
         STEAM_CI_INSTALL_SCRIPT: |
             apt-get -y install pkg-create-dbgsym
+            chmod -R a+rX,og-w .
+            umask 022
 
 package:i386:
     extends: .build_package

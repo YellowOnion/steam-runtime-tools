@@ -47,6 +47,23 @@ typedef enum
   PV_MTREE_ENTRY_KIND_SOCKET = 's',
 } PvMtreeEntryKind;
 
+/*
+ * PvMtreeEntryFlags:
+ * @PV_MTREE_ENTRY_FLAGS_IGNORE_BELOW: Anything below this directory (but
+ *  not the directory itself!) is to be ignored
+ * @PV_MTREE_ENTRY_FLAGS_NO_CHANGE: When applying a manifest to a directory
+ *  on disk, don't modify this file or directory
+ * @PV_MTREE_ENTRY_FLAGS_OPTIONAL: When applying or verifying a manifest,
+ *  it's OK if this item doesn't exist
+ */
+typedef enum
+{
+  PV_MTREE_ENTRY_FLAGS_IGNORE_BELOW = (1 << 0),
+  PV_MTREE_ENTRY_FLAGS_NO_CHANGE = (1 << 1),
+  PV_MTREE_ENTRY_FLAGS_OPTIONAL = (1 << 2),
+  PV_MTREE_ENTRY_FLAGS_NONE = 0
+} PvMtreeEntryFlags;
+
 typedef struct _PvMtreeEntry PvMtreeEntry;
 
 struct _PvMtreeEntry
@@ -59,6 +76,7 @@ struct _PvMtreeEntry
   GTimeSpan mtime_usec;
   int mode;
   PvMtreeEntryKind kind;
+  PvMtreeEntryFlags entry_flags;
 };
 
 #define PV_MTREE_ENTRY_BLANK \

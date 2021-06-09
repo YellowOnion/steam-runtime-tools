@@ -40,12 +40,51 @@
 #define trace(...) do { } while (0)
 #endif
 
-gboolean
-pv_mtree_entry_parse (const char *line,
-                      PvMtreeEntry *entry,
-                      const char *filename,
-                      guint line_number,
-                      GError **error)
+static gboolean
+is_token (const char *token,
+          const char *equals,
+          const char *expected)
+{
+  if (equals == NULL)
+    {
+      return strcmp (token, expected) == 0;
+    }
+  else
+    {
+      g_assert (equals >= token);
+      g_assert (*equals == '=');
+      return strncmp (token, expected, equals - token) == 0;
+    }
+}
+
+static gboolean
+require_value (const char *token,
+               const char *equals,
+               GError **error)
+{
+  if (equals == NULL)
+    return glnx_throw (error, "%s requires a value", token);
+
+  return TRUE;
+}
+
+static gboolean
+forbid_value (const char *token,
+              const char *equals,
+              GError **error)
+{
+  if (equals != NULL)
+    return glnx_throw (error, "%s does not take a value", token);
+
+  return TRUE;
+}
+
+static gboolean
+pv_mtree_entry_parse_internal (const char *line,
+                               PvMtreeEntry *entry,
+                               const char *filename,
+                               guint line_number,
+                               GError **error)
 {
   PvMtreeEntry blank = PV_MTREE_ENTRY_BLANK;
   g_auto(GStrv) tokens = NULL;
@@ -57,19 +96,14 @@ pv_mtree_entry_parse (const char *line,
     return TRUE;
 
   if (line[0] == '/')
-    return glnx_throw (error,
-                       "%s:%u: Special commands not supported",
-                       filename, line_number);
+    return glnx_throw (error, "Special commands not supported");
 
   if (line[0] != '.' || (line[1] != ' ' && line[1] != '/' && line[1] != '\0'))
     return glnx_throw (error,
-                       "%s:%u: Filenames not relative to top level not supported",
-                       filename, line_number);
+                       "Filenames not relative to top level not supported");
 
   if (g_str_has_suffix (line, "\\"))
-    return glnx_throw (error,
-                       "%s:%u: Continuation lines not supported",
-                       filename, line_number);
+    return glnx_throw (error, "Continuation lines not supported");
 
   for (i = 0; line[i] != '\0'; i++)
     {
@@ -96,8 +130,8 @@ pv_mtree_entry_parse (const char *line,
                * newline are not supported here */
               default:
                 return glnx_throw (error,
-                                   "%s:%u: Unsupported backslash escape: \"\\%c\"",
-                                   filename, line_number, line[i + 1]);
+                                   "Unsupported backslash escape: \"\\%c\"",
+                                   line[i + 1]);
             }
         }
     }
@@ -105,115 +139,174 @@ pv_mtree_entry_parse (const char *line,
   tokens = g_strsplit_set (line, " \t", -1);
 
   if (tokens == NULL)
-    return glnx_throw (error, "%s:%u: Line is empty", filename, line_number);
+    return glnx_throw (error, "Line is empty");
 
   entry->name = g_strcompress (tokens[0]);
 
   for (i = 1; tokens[i] != NULL; i++)
     {
+      static const char * const ignored[] =
+      {
+        "cksum",
+        "device",
+        "flags",
+        "gid",
+        "gname",
+        "inode",
+        "md5",
+        "md5digest",
+        "nlink",
+        "resdevice",
+        "ripemd160digest",
+        "rmd160",
+        "rmd160digest",
+        "sha1",
+        "sha1digest",
+        "sha384",
+        "sha384digest",
+        "sha512",
+        "sha512digest",
+        "uid",
+        "uname",
+      };
       const char *equals;
       char *endptr;
+      gsize j;
 
       equals = strchr (tokens[i], '=');
 
-      if (equals == NULL)
-        return glnx_throw (error,
-                           "%s:%u: No value for keyword '%s'",
-                           filename, line_number, tokens[i]);
+      for (j = 0; j < G_N_ELEMENTS (ignored); j++)
+        {
+          if (is_token (tokens[i], equals, ignored[j]))
+            break;
+        }
 
-      if (g_str_has_prefix (tokens[i], "cksum=")
-          || g_str_has_prefix (tokens[i], "device=")
-          || g_str_has_prefix (tokens[i], "flags=")
-          || g_str_has_prefix (tokens[i], "gid=")
-          || g_str_has_prefix (tokens[i], "gname=")
-          || g_str_has_prefix (tokens[i], "ignore=")
-          || g_str_has_prefix (tokens[i], "inode=")
-          || g_str_has_prefix (tokens[i], "md5=")
-          || g_str_has_prefix (tokens[i], "md5digest=")
-          || g_str_has_prefix (tokens[i], "nlink=")
-          || g_str_has_prefix (tokens[i], "nochange=")
-          || g_str_has_prefix (tokens[i], "optional=")
-          || g_str_has_prefix (tokens[i], "resdevice=")
-          || g_str_has_prefix (tokens[i], "ripemd160digest=")
-          || g_str_has_prefix (tokens[i], "rmd160=")
-          || g_str_has_prefix (tokens[i], "rmd160digest=")
-          || g_str_has_prefix (tokens[i], "sha1=")
-          || g_str_has_prefix (tokens[i], "sha1digest=")
-          || g_str_has_prefix (tokens[i], "sha384=")
-          || g_str_has_prefix (tokens[i], "sha384digest=")
-          || g_str_has_prefix (tokens[i], "sha512=")
-          || g_str_has_prefix (tokens[i], "sha512digest=")
-          || g_str_has_prefix (tokens[i], "uid=")
-          || g_str_has_prefix (tokens[i], "uname="))
+      if (j < G_N_ELEMENTS (ignored))
         continue;
 
-      if (g_str_has_prefix (tokens[i], "link="))
+#define REQUIRE_VALUE \
+      G_STMT_START \
+        { \
+          if (!require_value (tokens[i], equals, error)) \
+            return FALSE; \
+        } \
+      G_STMT_END
+
+#define FORBID_VALUE(token) \
+      G_STMT_START \
+        { \
+          if (!forbid_value ((token), equals, error)) \
+            return FALSE; \
+        } \
+      G_STMT_END
+
+      if (is_token (tokens[i], equals, "link"))
         {
+          REQUIRE_VALUE;
           entry->link = g_strcompress (equals + 1);
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "contents="))
+      if (is_token (tokens[i], equals, "contents")
+          || is_token (tokens[i], equals, "content"))
         {
+          REQUIRE_VALUE;
           entry->contents = g_strcompress (equals + 1);
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "sha256=")
-          || g_str_has_prefix (tokens[i], "sha256digest="))
+      if (is_token (tokens[i], equals, "sha256")
+          || is_token (tokens[i], equals, "sha256digest"))
         {
+          REQUIRE_VALUE;
+
           if (entry->sha256 == NULL)
             entry->sha256 = g_strdup (equals + 1);
           else if (strcmp (entry->sha256, equals + 1) != 0)
             return glnx_throw (error,
-                               "%s:%u: sha256 and sha256digest not consistent",
-                               filename, line_number);
+                               "sha256 and sha256digest not consistent");
 
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "mode="))
+      if (is_token (tokens[i], equals, "mode"))
         {
-          gint64 value = g_ascii_strtoll (equals + 1, &endptr, 8);
+          gint64 value;
+
+          REQUIRE_VALUE;
+          value = g_ascii_strtoll (equals + 1, &endptr, 8);
 
           if (equals[1] == '\0' || *endptr != '\0')
-            return glnx_throw (error,
-                               "%s:%u: Invalid mode %s",
-                               filename, line_number, equals + 1);
+            return glnx_throw (error, "Invalid mode %s", equals + 1);
 
           entry->mode = value & 07777;
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "size="))
+      if (is_token (tokens[i], equals, "size"))
         {
-          gint64 value = g_ascii_strtoll (equals + 1, &endptr, 10);
+          gint64 value;
+
+          REQUIRE_VALUE;
+          value = g_ascii_strtoll (equals + 1, &endptr, 10);
 
           if (equals[1] == '\0' || *endptr != '\0')
-            return glnx_throw (error,
-                               "%s:%u: Invalid size %s",
-                               filename, line_number, equals + 1);
+            return glnx_throw (error, "Invalid size %s", equals + 1);
 
           entry->size = value;
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "time="))
+      if (is_token (tokens[i], equals, "time"))
         {
-          gdouble value = g_ascii_strtod (equals + 1, &endptr);
+          guint64 value;
+          guint64 ns = 0;
 
-          if (equals[1] == '\0' || *endptr != '\0')
-            return glnx_throw (error,
-                               "%s:%u: Invalid time %s",
-                               filename, line_number, equals + 1);
+          REQUIRE_VALUE;
+          value = g_ascii_strtoull (equals + 1, &endptr, 10);
 
-          entry->mtime_usec = (value * G_TIME_SPAN_SECOND);
+          if (equals[1] == '\0' || (*endptr != '\0' && *endptr != '.'))
+            return glnx_throw (error, "Invalid time %s", equals + 1);
+
+          /* This is silly, but time=1.234 has historically meant
+           * 1 second + 234 nanoseconds, or what normal people would
+           * write as 1.000000234, so parsing it as a float is incorrect
+           * (for example mtree-netbsd in Debian still prints it
+           * like that).
+           *
+           * time=1.0 is unambiguous, and so is time=1.123456789
+           * with exactly 9 digits. */
+          if (*endptr == '.' && strcmp (endptr, ".0") != 0)
+            {
+              const char *dot = endptr;
+
+              ns = g_ascii_strtoull (dot + 1, &endptr, 10);
+
+              if (dot[1] == '\0' || *endptr != '\0' || ns > 999999999)
+                return glnx_throw (error, "Invalid nanoseconds count %s",
+                                   dot + 1);
+
+              /* If necessary this could become just a warning, but for
+               * now require it to be unambiguous - libarchive and
+               * FreeBSD mtree show this unambiguous format. */
+              if (endptr != dot + 10)
+                return glnx_throw (error,
+                                   "Ambiguous nanoseconds count %s, "
+                                   "should have exactly 9 digits",
+                                   dot + 1);
+            }
+
+          /* We store it as a GTimeSpan which is "only" microsecond
+           * precision. */
+          entry->mtime_usec = (value * G_TIME_SPAN_SECOND) + (ns / 1000);
           continue;
         }
 
-      if (g_str_has_prefix (tokens[i], "type="))
+      if (is_token (tokens[i], equals, "type"))
         {
           int value;
+
+          REQUIRE_VALUE;
 
           if (srt_enum_from_nick (PV_TYPE_MTREE_ENTRY_KIND, equals + 1,
                                   &value, NULL))
@@ -224,24 +317,56 @@ pv_mtree_entry_parse (const char *line,
           continue;
         }
 
+      if (is_token (tokens[i], equals, "ignore"))
+        {
+          FORBID_VALUE ("ignore");
+          entry->entry_flags |= PV_MTREE_ENTRY_FLAGS_IGNORE_BELOW;
+          continue;
+        }
+
+      if (is_token (tokens[i], equals, "nochange"))
+        {
+          FORBID_VALUE ("nochange");
+          entry->entry_flags |= PV_MTREE_ENTRY_FLAGS_NO_CHANGE;
+          continue;
+        }
+
+      if (is_token (tokens[i], equals, "optional"))
+        {
+          FORBID_VALUE ("optional");
+          entry->entry_flags |= PV_MTREE_ENTRY_FLAGS_OPTIONAL;
+          continue;
+        }
+
       g_warning ("%s:%u: Unknown mtree keyword %s",
                  filename, line_number, tokens[i]);
     }
 
   if (entry->kind == PV_MTREE_ENTRY_KIND_UNKNOWN)
-    return glnx_throw (error,
-                       "%s:%u: Unknown mtree entry type",
-                       filename, line_number);
+    return glnx_throw (error, "Unknown mtree entry type");
 
   if (entry->link != NULL && entry->kind != PV_MTREE_ENTRY_KIND_LINK)
-    return glnx_throw (error,
-                       "%s:%u: Non-symlink cannot have a symlink target",
-                       filename, line_number);
+    return glnx_throw (error, "Non-symlink cannot have a symlink target");
 
   if (entry->link == NULL && entry->kind == PV_MTREE_ENTRY_KIND_LINK)
-    return glnx_throw (error,
-                       "%s:%u: Symlink must have a symlink target",
-                       filename, line_number);
+    return glnx_throw (error, "Symlink must have a symlink target");
+
+  return TRUE;
+}
+
+gboolean
+pv_mtree_entry_parse (const char *line,
+                      PvMtreeEntry *entry,
+                      const char *filename,
+                      guint line_number,
+                      GError **error)
+{
+  if (!pv_mtree_entry_parse_internal (line, entry,
+                                      filename, line_number, error))
+    {
+      g_prefix_error (error, "%s: %u: ", filename, line_number);
+      return FALSE;
+    }
 
   return TRUE;
 }
@@ -465,6 +590,7 @@ pv_mtree_apply (const char *mtree,
             /* For other regular files we just assert that it already exists
              * (and is not a symlink). */
             if (fd < 0
+                && !(entry.entry_flags & PV_MTREE_ENTRY_FLAGS_OPTIONAL)
                 && !glnx_openat_rdonly (parent_fd, base, FALSE, &fd, error))
               return glnx_prefix_error (error,
                                         "Unable to open \"%s\" in \"%s\"",
@@ -519,7 +645,9 @@ pv_mtree_apply (const char *mtree,
       else
         adjusted_mode = 0644;
 
-      if (fd >= 0 && !glnx_fchmod (fd, adjusted_mode, error))
+      if (fd >= 0
+          && !(entry.entry_flags & PV_MTREE_ENTRY_FLAGS_NO_CHANGE)
+          && !glnx_fchmod (fd, adjusted_mode, error))
         {
           g_prefix_error (error,
                           "Unable to set mode of \"%s\" in \"%s\": ",
@@ -527,7 +655,10 @@ pv_mtree_apply (const char *mtree,
           return FALSE;
         }
 
-      if (entry.mtime_usec >= 0 && fd >= 0 && entry.kind == PV_MTREE_ENTRY_KIND_FILE)
+      if (entry.mtime_usec >= 0
+          && fd >= 0
+          && !(entry.entry_flags & PV_MTREE_ENTRY_FLAGS_NO_CHANGE)
+          && entry.kind == PV_MTREE_ENTRY_KIND_FILE)
         {
           struct timespec times[2] =
           {

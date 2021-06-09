@@ -330,12 +330,13 @@ test_mtree_entry_parse (Fixture *f,
       { .size = -1, .mtime_usec = -1, .mode = -1,
         .kind = PV_MTREE_ENTRY_KIND_UNKNOWN },
     },
-    { ". type=dir",
+    { ". type=dir ignore",
       ".",
       { .size = -1, .mtime_usec = -1, .mode = -1,
-        .kind = PV_MTREE_ENTRY_KIND_DIR },
+        .kind = PV_MTREE_ENTRY_KIND_DIR,
+        .entry_flags = PV_MTREE_ENTRY_FLAGS_IGNORE_BELOW },
     },
-    { "./foo type=file sha256=ffff mode=0640 size=42 time=1597415889.5",
+    { "./foo type=file sha256=ffff mode=0640 size=42 time=1597415889.500000000",
       "./foo",
       { .size = 42,
         .mtime_usec = 1597415889 * G_TIME_SPAN_SECOND + (G_TIME_SPAN_SECOND / 2),
@@ -343,22 +344,24 @@ test_mtree_entry_parse (Fixture *f,
         .kind = PV_MTREE_ENTRY_KIND_FILE },
       .sha256 = "ffff",
     },
-    { "./foo type=file sha256digest=ffff mode=4755",
+    { "./foo type=file sha256digest=ffff mode=4755 time=1234567890 optional",
       "./foo",
-      { .size = -1, .mtime_usec = -1, .mode = 04755,
+      { .size = -1, .mtime_usec = (1234567890 * G_TIME_SPAN_SECOND),
+        .mode = 04755, .kind = PV_MTREE_ENTRY_KIND_FILE,
+        .entry_flags = PV_MTREE_ENTRY_FLAGS_OPTIONAL },
+      .sha256 = "ffff",
+    },
+    { "./foo type=file sha256=ffff sha256digest=ffff time=1234567890.0",
+      "./foo",
+      { .size = -1, .mtime_usec = (1234567890 * G_TIME_SPAN_SECOND), .mode = -1,
         .kind = PV_MTREE_ENTRY_KIND_FILE },
       .sha256 = "ffff",
     },
-    { "./foo type=file sha256=ffff sha256digest=ffff",
-      "./foo",
-      { .size = -1, .mtime_usec = -1, .mode = -1,
-        .kind = PV_MTREE_ENTRY_KIND_FILE },
-      .sha256 = "ffff",
-    },
-    { "./symlink type=link link=/dev/null",
+    { "./symlink type=link link=/dev/null nochange",
       "./symlink",
       { .size = -1, .mtime_usec = -1, .mode = -1,
-        .kind = PV_MTREE_ENTRY_KIND_LINK },
+        .kind = PV_MTREE_ENTRY_KIND_LINK,
+        .entry_flags = PV_MTREE_ENTRY_FLAGS_NO_CHANGE },
       .link = "/dev/null",
     },
     { "./silly-name/\\001\\123\\n\\r type=link link=\\\"\\\\\\b",
@@ -368,8 +371,8 @@ test_mtree_entry_parse (Fixture *f,
       .link = "\"\\\b",
     },
     { ("./ignore cksum=123 device=456 contents=./ignore flags=123 gid=123 "
-       "gname=users ignore=1 inode=123 md5=ffff md5digest=ffff nlink=1 "
-       "nochange=1 optional=1 resdevice=123 "
+       "gname=users ignore inode=123 md5=ffff md5digest=ffff nlink=1 "
+       "nochange optional resdevice=123 "
        "ripemd160digest=ffff rmd160=ffff rmd160digest=ffff "
        "sha1=ffff sha1digest=ffff "
        "sha384=ffff sha384digest=ffff "
@@ -377,7 +380,10 @@ test_mtree_entry_parse (Fixture *f,
        "uid=0 uname=root type=dir"),
       "./ignore",
       { .size = -1, .mtime_usec = -1, .mode = -1,
-        .kind = PV_MTREE_ENTRY_KIND_DIR },
+        .kind = PV_MTREE_ENTRY_KIND_DIR,
+        .entry_flags = (PV_MTREE_ENTRY_FLAGS_IGNORE_BELOW
+                        | PV_MTREE_ENTRY_FLAGS_NO_CHANGE
+                        | PV_MTREE_ENTRY_FLAGS_OPTIONAL) },
     },
     { "./foo type=file sha256=ffff sha256digest=eeee", .error = TRUE },
     { "./foo type=file mode=1a", .error = TRUE },
@@ -392,6 +398,9 @@ test_mtree_entry_parse (Fixture *f,
     { "./symlink type=file link=/dev/null", .error = TRUE },
     { "./symlink type=link", .error = TRUE },
     { "      ", .error = TRUE },
+    { "./not-time type=file type=1a", .error = TRUE },
+    { "./not-time type=file type=1.2a", .error = TRUE },
+    { "./ambiguous-time type=file type=1.234", .error = TRUE },
   };
   gsize i;
 
@@ -421,6 +430,7 @@ test_mtree_entry_parse (Fixture *f,
           g_assert_cmpint (got.mtime_usec, ==, expected.mtime_usec);
           g_assert_cmpint (got.mode, ==, expected.mode);
           g_assert_cmpint (got.kind, ==, expected.kind);
+          g_assert_cmphex (got.entry_flags, ==, expected.entry_flags);
         }
     }
 }

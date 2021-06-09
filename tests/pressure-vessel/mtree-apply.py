@@ -146,6 +146,8 @@ class TestMtreeApply(BaseTest):
         ./create type=file size=0
         ./make-executable type=file mode=755
         ./make-non-executable type=file mode=644 time=1597415889
+        ./do-not-assert type=file optional
+        ./do-not-chmod type=file mode=755 nochange
         '''
 
         with tempfile.NamedTemporaryFile(
@@ -163,7 +165,11 @@ class TestMtreeApply(BaseTest):
             (Path(expected) / 'sym').mkdir()
             (Path(expected) / 'sym' / 'link').symlink_to('/dev/null')
 
-            for filename in 'make-executable', 'make-non-executable':
+            for filename in (
+                'make-executable',
+                'make-non-executable',
+                'do-not-chmod',
+            ):
                 for d in Path(expected), Path(dest):
                     with open(str(d / filename), 'w') as writer:
                         writer.write('#!/bin/sh\n')
@@ -178,6 +184,8 @@ class TestMtreeApply(BaseTest):
             (Path(expected) / 'create').chmod(0o644)
             (Path(expected) / 'make-executable').chmod(0o755)
             (Path(expected) / 'make-non-executable').chmod(0o644)
+            (Path(dest) / 'do-not-chmod').chmod(0o644)
+            (Path(expected) / 'do-not-chmod').chmod(0o644)
             os.utime(
                 str(Path(expected) / 'make-non-executable'),
                 times=(1597415889, 1597415889),

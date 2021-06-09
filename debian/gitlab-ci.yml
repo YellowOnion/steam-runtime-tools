@@ -71,6 +71,14 @@ variables:
     # Create a File variable with a private key authorized for P_V_CI_UPLOAD_USER
     PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE: ''
 
+workflow:
+    rules:
+        - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+          when: never
+        - if: '$CI_COMMIT_BRANCH == "master" && $CI_PIPELINE_SOURCE == "push"'
+          when: never
+        - when: always
+
 stages:
     - build
     - relocatable-install

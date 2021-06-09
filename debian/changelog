@@ -1,3 +1,10 @@
+steam-runtime-tools (0.20210608.4) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Improve compatibility with other mtree implementations
+  * CI: Improve configuration
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 09 Jun 2021 14:57:57 +0100
+
 steam-runtime-tools (0.20210608.3) scout; urgency=medium
 
   * Rebuild with adjusted CI settings

@@ -3111,7 +3111,6 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
       while (TRUE)
         {
-          g_autofree gchar *path = NULL;
           g_autofree gchar *target = NULL;
           const char *target_base;
 
@@ -3149,7 +3148,6 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
               strstr (dent->d_name, ".so.") == NULL)
             continue;
 
-          path = g_build_filename (libdir, dent->d_name, NULL);
           target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
                                            NULL, NULL);
           if (target != NULL)

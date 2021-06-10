@@ -639,7 +639,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
   g_autoptr(GError) local_error = NULL;
   g_autoptr(PvBwrapLock) variable_lock = NULL;
   g_autoptr(PvBwrapLock) base_lock = NULL;
-  g_autoptr(SrtProfilingTimer) timer = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_auto(GLnxDirFdIterator) variable_dir_iter = { FALSE };
   g_auto(GLnxDirFdIterator) runtime_base_iter = { FALSE };
   glnx_autofd int variable_dir_fd = -1;
@@ -763,7 +763,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
                             GError **error)
 {
   g_auto(GLnxDirFdIterator) iter = { FALSE };
-  g_autoptr(SrtProfilingTimer) timer = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->variable_dir != NULL, FALSE);
@@ -866,8 +866,8 @@ pv_runtime_create_copy (PvRuntime *self,
   g_autofree gchar *temp_dir = NULL;
   g_autoptr(GDir) dir = NULL;
   g_autoptr(PvBwrapLock) copy_lock = NULL;
-  g_autoptr(PvBwrapLock) source_lock = NULL;
-  g_autoptr(SrtProfilingTimer) timer = NULL;
+  G_GNUC_UNUSED g_autoptr(PvBwrapLock) source_lock = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   const char *member;
   glnx_autofd int temp_dir_fd = -1;
   gboolean is_just_usr;
@@ -1076,7 +1076,7 @@ pv_runtime_unpack (PvRuntime *self,
                    GError **error)
 {
   g_autoptr(GString) debug_tarball = NULL;
-  g_autoptr(SrtProfilingTimer) timer = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autofree gchar *deploy_basename = NULL;
   g_autofree gchar *unpack_dir = NULL;
 
@@ -3026,7 +3026,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                                         GError **error)
 {
   g_autoptr(GPtrArray) dirs = NULL;
-  g_autoptr(SrtProfilingTimer) timer = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   GHashTable **delete = NULL;
   GLnxDirFdIterator *iters = NULL;
   gboolean ret = FALSE;
@@ -3111,7 +3111,6 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
       while (TRUE)
         {
-          g_autofree gchar *path = NULL;
           g_autofree gchar *target = NULL;
           const char *target_base;
 
@@ -3149,7 +3148,6 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
               strstr (dent->d_name, ".so.") == NULL)
             continue;
 
-          path = g_build_filename (libdir, dent->d_name, NULL);
           target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
                                            NULL, NULL);
           if (target != NULL)
@@ -3655,6 +3653,7 @@ collect_vulkan_layers (PvRuntime *self,
     _srt_profiling_start ("Collecting Vulkan %s layers", dir_name);
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
+  g_return_val_if_fail (layer_details != NULL, FALSE);
   g_return_val_if_fail (dependency_patterns != NULL, FALSE);
   g_return_val_if_fail (dir_name != NULL, FALSE);
 
@@ -3760,7 +3759,7 @@ pv_runtime_get_ld_so (PvRuntime *self,
 {
   if (self->mutable_sysroot != NULL)
     {
-      glnx_autofd int fd = -1;
+      G_GNUC_UNUSED glnx_autofd int fd = -1;
 
       fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
                                     arch->ld_so,
@@ -4733,7 +4732,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(SrtProfilingTimer) timer = NULL;
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
   guint n_egl_icds;
   guint n_vulkan_icds;

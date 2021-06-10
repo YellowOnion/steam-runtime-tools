@@ -95,7 +95,8 @@ pv_wrap_check_flatpak (const char *tools_dir,
     {
       g_auto(GStrv) devices = NULL;
       g_auto(GStrv) features = NULL;
-      g_auto(GStrv) filesystems = NULL;
+      /* This might be used for an additional check in the future */
+      G_GNUC_UNUSED g_auto(GStrv) filesystems = NULL;
 
       g_warning ("Using experimental Flatpak sub-sandboxing "
                  "(requires Flatpak 1.11.x commit 1.10.1-80-gcb47d83b "

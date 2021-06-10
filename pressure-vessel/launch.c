@@ -200,7 +200,7 @@ process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
 static void
 forward_signal (int sig)
 {
-  g_autoptr(GVariant) reply = NULL;
+  G_GNUC_UNUSED g_autoptr(GVariant) reply = NULL;
   gboolean to_process_group = FALSE;
   g_autoptr(GError) error = NULL;
 
@@ -537,7 +537,6 @@ path_to_handle (GUnixFDList *fd_list,
             {
               close (path_fd);
               path_fd = var_fd;
-              var_fd = -1;
             }
           else
             {
@@ -743,7 +742,7 @@ main (int argc,
   g_auto(GVariantBuilder) env_builder = {};
   g_auto(GVariantBuilder) options_builder = {};
   g_autoptr(AutoUnixFDList) fd_list = NULL;
-  g_autoptr(GVariant) reply = NULL;
+  G_GNUC_UNUSED g_autoptr(GVariant) reply = NULL;
   gint stdin_handle = -1;
   gint stdout_handle = -1;
   gint stderr_handle = -1;
@@ -883,6 +882,7 @@ main (int argc,
   launch_exit_status = LAUNCH_EX_FAILED;
   loop = g_main_loop_new (NULL, FALSE);
 
+  g_assert (api != NULL);
   if (api->service_bus_name != NULL)
     {
       if (opt_dbus_address != NULL || opt_socket != NULL)

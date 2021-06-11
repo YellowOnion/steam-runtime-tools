@@ -1,6 +1,6 @@
 "manifest"
 {
   "version" "2"
-  "commandline" "/run-in-scout --"
+  "commandline" "/scout-on-soldier-entry-point-v2 --"
   "require_tool_appid" "1391110"
 }

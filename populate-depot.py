@@ -776,15 +776,6 @@ class Main:
         self.merge_dir_into_depot(
             os.path.join(self.source_dir, 'runtimes', 'scout-on-soldier')
         )
-        # Copy the launcher script for compatibility
-        shutil.copy(
-            os.path.join(self.depot, 'run-in-scout'),
-            os.path.join(self.depot, 'run')
-        )
-        shutil.copy(
-            os.path.join(self.depot, 'run-in-scout'),
-            os.path.join(self.depot, '_v2-entry-point'),
-        )
 
         if self.runtime.version:
             self.unpack_ld_library_path = self.depot

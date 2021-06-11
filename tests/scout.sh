@@ -99,8 +99,7 @@ find depots/test-scout-layered -ls > depots/test-scout-layered.txt
 test -e depots/test-scout-layered/README.md
 test -e depots/test-scout-layered/VERSIONS.txt
 test -e depots/test-scout-layered/toolmanifest.vdf
-test -x depots/test-scout-layered/run
-test -x depots/test-scout-layered/run-in-scout
+test -x depots/test-scout-layered/scout-on-soldier-entry-point-v2
 test -x depots/test-scout-layered/_v2-entry-point
 test ! -e depots/test-scout-layered/steam-runtime
 echo "ok 3 - scout, layered on soldier, reusing standard LDLP runtime"
@@ -119,8 +118,7 @@ find depots/test-scout-layered-beta -ls > depots/test-scout-layered-beta.txt
 test -e depots/test-scout-layered-beta/README.md
 test -e depots/test-scout-layered-beta/VERSIONS.txt
 test -e depots/test-scout-layered-beta/toolmanifest.vdf
-test -x depots/test-scout-layered-beta/run
-test -x depots/test-scout-layered-beta/run-in-scout
+test -x depots/test-scout-layered-beta/scout-on-soldier-entry-point-v2
 test -x depots/test-scout-layered-beta/_v2-entry-point
 test -e depots/test-scout-layered-beta/steam-runtime/version.txt
 test -d depots/test-scout-layered-beta/steam-runtime/usr/

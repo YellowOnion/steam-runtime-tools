@@ -697,20 +697,6 @@ class Main:
                     default_suite='local',
                 )
                 pv_version.comment = 'from local file'
-            elif os.path.isfile(self.pressure_vessel):
-                logger.info(
-                    'Downloading pressure-vessel using JSON from %r',
-                    self.pressure_vessel)
-                with open(self.pressure_vessel, 'rb') as reader:
-                    details = json.load(reader)
-                pressure_vessel_runtime = self.new_runtime(
-                    'scout',
-                    details,
-                    default_suite='scout',
-                )
-                pv_version.comment = self.download_pressure_vessel(
-                    pressure_vessel_runtime
-                )
             else:
                 logger.info(
                     'Assuming %r is a suite containing pressure-vessel',

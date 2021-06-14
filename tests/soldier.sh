@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright © 2021 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 
@@ -11,21 +11,26 @@ if [ -n "${TESTS_ONLY-}" ]; then
 fi
 
 if [ -n "${IMAGES_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
-    set -- \
+    populate_depot_args=( \
         --credential-env IMAGES_DOWNLOAD_CREDENTIAL \
         --images-uri "${IMAGES_DOWNLOAD_URL}"/steamrt-SUITE/snapshots \
-        --pressure-vessel=scout \
         ${NULL+}
+    pressure_vessel_args=( \
+        --pressure-vessel=scout \
+    )
 elif [ -n "${IMAGES_SSH_HOST-}" ] && [ -n "${IMAGES_SSH_PATH-}" ]; then
-    set -- \
+    populate_depot_args=( \
         --ssh-host "${IMAGES_SSH_HOST}" \
         --ssh-path "${IMAGES_SSH_PATH}" \
-        ${NULL+}
+    )
+    pressure_vessel_args=()
 else
-    set -- \
-        --pressure-vessel='{"version": "latest-container-runtime-public-beta"}' \
+    populate_depot_args=( \
         --version latest-container-runtime-public-beta \
-        ${NULL+}
+    )
+    pressure_vessel_args=( \
+        --pressure-vessel-from-runtime-json='{"version": "latest-container-runtime-public-beta"}' \
+    )
 fi
 
 echo "1..4"
@@ -39,7 +44,8 @@ python3 ./populate-depot.py \
     --toolmanifest \
     --include-archives \
     --no-unpack-runtime \
-    "$@" \
+    "${populate_depot_args[@]}" \
+    "${pressure_vessel_args[@]}" \
     soldier \
     ${NULL+}
 find depots/test-soldier-archives -ls > depots/test-soldier-archives.txt
@@ -100,7 +106,8 @@ python3 ./populate-depot.py \
     --toolmanifest \
     --unpack-runtime \
     --versioned-directories \
-    "$@" \
+    "${populate_depot_args[@]}" \
+    "${pressure_vessel_args[@]}" \
     soldier \
     ${NULL+}
 find depots/test-soldier-unpacked -ls > depots/test-soldier-unpacked.txt
@@ -159,8 +166,8 @@ python3 ./populate-depot.py \
     --toolmanifest \
     --unpack-runtime \
     --versioned-directories \
-    "$@" \
-    --pressure-vessel=./.cache \
+    "${populate_depot_args[@]}" \
+    --pressure-vessel-archive=./.cache/pressure-vessel-bin.tar.gz \
     'soldier={"path": "./depots/test-soldier-archives"}' \
     ${NULL+}
 find depots/test-soldier-local -ls > depots/test-soldier-local.txt
@@ -224,6 +231,8 @@ empties="$(find "depots/test-soldier-local/$run_dir/files" -name .ref -prune -o 
 
 if [ -n "$empties" ]; then
     echo "# Files not minimized:"
+    # ${variable//search/replace} can't do this:
+    # shellcheck disable=SC2001
     echo "$empties" | sed -e 's/^/# /'
     echo "Bail out! Files not minimized"
     exit 1
@@ -233,6 +242,7 @@ symlinks="$(find "depots/test-soldier-local/$run_dir/files" -type l)"
 
 if [ -n "$symlinks" ]; then
     echo "# Symlinks not minimized:"
+    # shellcheck disable=SC2001
     echo "$symlinks" | sed -e 's/^/# /'
     echo "Bail out! Symlinks not minimized"
     exit 1
@@ -249,7 +259,8 @@ python3 ./populate-depot.py \
     --toolmanifest \
     --unpack-runtime \
     --no-versioned-directories \
-    "$@" \
+    "${populate_depot_args[@]}" \
+    "${pressure_vessel_args[@]}" \
     soldier \
     ${NULL+}
 find depots/test-soldier-unversioned -ls > depots/test-soldier-unversioned.txt

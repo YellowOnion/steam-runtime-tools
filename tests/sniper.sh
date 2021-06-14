@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright © 2021 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 
@@ -11,15 +11,19 @@ if [ -n "${TESTS_ONLY-}" ]; then
 fi
 
 if [ -n "${IMAGES_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
-    set -- \
+    populate_depot_args=( \
         --credential-env IMAGES_DOWNLOAD_CREDENTIAL \
         --images-uri "${IMAGES_DOWNLOAD_URL}"/steamrt-SUITE/snapshots \
-        ${NULL+}
+    )
+    pressure_vessel_args=( \
+        --pressure-vessel=scout \
+    )
 elif [ -n "${IMAGES_SSH_HOST-}" ] && [ -n "${IMAGES_SSH_PATH-}" ]; then
-    set -- \
+    populate_depot_args=( \
         --ssh-host "${IMAGES_SSH_HOST}" \
         --ssh-path "${IMAGES_SSH_PATH}" \
-        ${NULL+}
+    )
+    pressure_vessel_args=()
 else
     # There's no public release of sniper yet, so this won't actually work
     # without supplying a URL and credentials for the non-public version
@@ -27,10 +31,12 @@ else
     exit 0
 
     # When there's a public release, this will probably work
-    set -- \
-        --pressure-vessel='{"version": "latest-container-runtime-public-beta"}' \
+    populate_depot_args=( \
         --version latest-container-runtime-public-beta \
-        ${NULL+}
+    )
+    pressure_vessel_args=( \
+        --pressure-vessel-from-runtime-json='{"version": "latest-container-runtime-public-beta"}' \
+    )
 fi
 
 echo "1..2"
@@ -42,7 +48,8 @@ python3 ./populate-depot.py \
     --include-archives \
     --no-unpack-runtime \
     --toolmanifest \
-    "$@" \
+    "${populate_depot_args[@]}" \
+    "${pressure_vessel_args[@]}" \
     sniper \
     ${NULL+}
 find depots/test-sniper-archives -ls > depots/test-sniper-archives.txt
@@ -56,7 +63,8 @@ python3 ./populate-depot.py \
     --toolmanifest \
     --unpack-runtime \
     --versioned-directories \
-    "$@" \
+    "${populate_depot_args[@]}" \
+    "${pressure_vessel_args[@]}" \
     sniper \
     ${NULL+}
 find depots/test-sniper-unpacked -ls > depots/test-sniper-unpacked.txt

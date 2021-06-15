@@ -27,6 +27,7 @@ fi
 for suite in $suites; do
     python3 ./pressure-vessel/populate-depot.py \
         --depot="$builddir/depots/$suite" \
+        --include-archives \
         --no-versioned-directories \
         --pressure-vessel "${PRESSURE_VESSEL}" \
         --source-dir="$builddir/depot-template" \

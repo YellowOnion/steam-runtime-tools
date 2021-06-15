@@ -117,6 +117,35 @@ build:devel:
         - |
             set -eux
 
+            mkdir -p -m700 "${STEAM_CI_TMPDIR}"
+            export TMPDIR="${STEAM_CI_TMPDIR}"
+
+            mkdir -p _build
+            meson \
+                -Dman=true \
+                --werror \
+                _build/devel
+            ninja -C _build/devel
+            ninja -C _build/devel install
+            meson test --verbose -C _build/devel
+
+    artifacts:
+        paths:
+            - _build/devel/meson-logs/*.txt
+        when: always
+
+build:clang:
+    stage: build
+    tags:
+        - docker
+        - linux
+    rules:
+        - if: '$DEVEL_DOCKER_REGISTRY != "" && $DEVEL_DOCKER_IMAGE != ""'
+    image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
+    script:
+        - |
+            set -eux
+
             apt-get -y --no-install-recommends install \
             clang \
             clang-tools \
@@ -124,12 +153,6 @@ build:devel:
 
             mkdir -p -m700 "${STEAM_CI_TMPDIR}"
             export TMPDIR="${STEAM_CI_TMPDIR}"
-
-            mkdir -p _build
-            meson --werror -Dman=true _build/devel
-            ninja -C _build/devel
-            ninja -C _build/devel install
-            meson test --verbose -C _build/devel
 
             export CC=clang
             export CXX=clang++
@@ -140,13 +163,11 @@ build:devel:
                 --werror \
                 _build/clang-asan
             ninja -C _build/clang-asan
-            ninja -C _build/clang-asan scan-build
             ninja -C _build/clang-asan install
             meson test --verbose -C _build/clang-asan
 
     artifacts:
         paths:
-            - _build/devel/meson-logs/*.txt
             - _build/clang-asan/meson-logs/*.txt
         when: always
 

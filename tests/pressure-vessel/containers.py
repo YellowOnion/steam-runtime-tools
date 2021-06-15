@@ -93,6 +93,7 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 import unittest
 
 try:
@@ -524,6 +525,9 @@ class TestContainers(BaseTest):
             if not os.path.isdir(runtime):
                 self.skipTest('{} not found'.format(runtime))
 
+        start_time = time.time()
+        logger.info('Testing: %s', test_name)
+
         artifacts = os.path.join(
             self.artifacts,
             test_name,
@@ -828,6 +832,11 @@ class TestContainers(BaseTest):
                         is_soldier=is_soldier,
                         require_flag_file=require_flag_file,
                     )
+
+        logger.info(
+            'Time elapsed in %s: %.1f',
+            test_name, time.time() - start_time,
+        )
 
     def _assert_mutable_sysroot(
         self,
@@ -1258,7 +1267,9 @@ class TestContainers(BaseTest):
             self._test_scout('scout_copy', scout, copy=True, locales=True)
 
         with self.subTest('fake-home'):
-            self._test_scout('scout_fake_home', scout, copy=True, fake_home=True)
+            self._test_scout(
+                'scout_fake_home', scout, copy=True, fake_home=True,
+            )
 
         with self.subTest('transient'):
             self._test_scout('scout', scout)
@@ -1311,7 +1322,8 @@ class TestContainers(BaseTest):
 
         with self.subTest('fake-home'):
             self._test_soldier(
-                'soldier_sysroot_fake_home', soldier, copy=True, fake_home=True,
+                'soldier_sysroot_fake_home', soldier, copy=True,
+                fake_home=True,
             )
 
         with self.subTest('transient'):

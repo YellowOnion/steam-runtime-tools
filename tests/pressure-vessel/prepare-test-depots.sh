@@ -18,13 +18,18 @@ if [ -n "${IMAGES_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; 
         --images-uri "${IMAGES_DOWNLOAD_URL}"/steamrt-SUITE/snapshots \
         ${NULL+}
 else
-    suites="scout"
-    set -- \
-        --version latest-steam-client-public-beta \
-        ${NULL+}
+    suites="scout=latest-steam-client-public-beta soldier=latest-container-runtime-public-beta"
+    set --      # no extra arguments
 fi
 
 for suite in $suites; do
+    case "$suite" in
+        (*=*)
+            set -- "$@" --version "${suite#*=}"
+            suite="${suite%%=*}"
+            ;;
+    esac
+
     time python3 ./pressure-vessel/populate-depot.py \
         --depot="$builddir/depots/$suite" \
         --include-archives \

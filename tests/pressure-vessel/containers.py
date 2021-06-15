@@ -1258,7 +1258,9 @@ class TestContainers(BaseTest):
             self._test_scout('scout_copy', scout, copy=True, locales=True)
 
         with self.subTest('fake-home'):
-            self._test_scout('scout_fake_home', scout, copy=True, fake_home=True)
+            self._test_scout(
+                'scout_fake_home', scout, copy=True, fake_home=True,
+            )
 
         with self.subTest('transient'):
             self._test_scout('scout', scout)
@@ -1311,7 +1313,8 @@ class TestContainers(BaseTest):
 
         with self.subTest('fake-home'):
             self._test_soldier(
-                'soldier_sysroot_fake_home', soldier, copy=True, fake_home=True,
+                'soldier_sysroot_fake_home', soldier, copy=True,
+                fake_home=True,
             )
 
         with self.subTest('transient'):

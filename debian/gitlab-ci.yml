@@ -321,36 +321,6 @@ relocatable-install:production:
             - _build/production/pressure-vessel-bin+src.tar.gz
         when: on_success
 
-.prepare_test: &prepare_test
-    - |
-        set -eux
-
-        PRESSURE_VESSEL=_build/production/pressure-vessel-bin.tar.gz
-        mkdir -p _build/depot-template/common
-
-        if [ -n "${IMAGES_DOWNLOAD_URL}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL}" ]; then
-            python3 ./pressure-vessel/populate-depot.py \
-            --depot=_build/depot \
-            --source-dir=_build/depot-template \
-            --include-sdk \
-            --unpack-runtimes \
-            --credential-env IMAGES_DOWNLOAD_CREDENTIAL \
-            --images-uri "${IMAGES_DOWNLOAD_URL}"/steamrt-SUITE/snapshots \
-            --pressure-vessel "${PRESSURE_VESSEL}" \
-            scout \
-            soldier \
-            ${NULL+}
-        else
-            python3 ./pressure-vessel/populate-depot.py \
-            --depot=_build/depot \
-            --source-dir=_build/depot-template \
-            --unpack-runtimes \
-            --pressure-vessel "${PRESSURE_VESSEL}" \
-            --version latest-steam-client-public-beta \
-            scout \
-            ${NULL+}
-        fi
-
 .i386_dependencies: &i386_dependencies
     - |
         set -eux
@@ -384,7 +354,7 @@ test:debian-10:
     extends: .test_template
     image: debian:buster-slim
     script:
-        - *prepare_test
+        - ./tests/pressure-vessel/prepare-test-depots.sh
         - *i386_dependencies
         - |
             set -eux
@@ -397,7 +367,7 @@ test:ubuntu-18.04:
     extends: .test_template
     image: ubuntu:18.04
     script:
-        - *prepare_test
+        - ./tests/pressure-vessel/prepare-test-depots.sh
         - *i386_dependencies
         - |
             set -eux
@@ -410,7 +380,7 @@ test:ubuntu-20.04:
     extends: .test_template
     image: ubuntu:20.04
     script:
-        - *prepare_test
+        - ./tests/pressure-vessel/prepare-test-depots.sh
         - *i386_dependencies
         - |
             set -eux
@@ -448,7 +418,7 @@ test:archlinux:
             export PYTHONPATH="$tempdir/python-debian/lib"
 
     script:
-        - *prepare_test
+        - ./tests/pressure-vessel/prepare-test-depots.sh
         - |
             set -eux
 

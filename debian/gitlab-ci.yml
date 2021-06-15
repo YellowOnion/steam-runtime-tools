@@ -321,7 +321,7 @@ relocatable-install:production:
             - _build/production/pressure-vessel-bin+src.tar.gz
         when: on_success
 
-.i386_dependencies: &i386_dependencies
+.test_dependencies: &test_dependencies
     - |
         set -eux
 
@@ -331,6 +331,7 @@ relocatable-install:production:
         apt-get -y --no-install-recommends install \
         libc6-i386 \
         libgl1-mesa-dri:i386 \
+        time \
         ${NULL+}
 
 .test_template:
@@ -354,8 +355,8 @@ test:debian-10:
     extends: .test_template
     image: debian:buster-slim
     script:
+        - *test_dependencies
         - ./tests/pressure-vessel/prepare-test-depots.sh
-        - *i386_dependencies
         - |
             set -eux
 
@@ -367,8 +368,8 @@ test:ubuntu-18.04:
     extends: .test_template
     image: ubuntu:18.04
     script:
+        - *test_dependencies
         - ./tests/pressure-vessel/prepare-test-depots.sh
-        - *i386_dependencies
         - |
             set -eux
 
@@ -380,8 +381,8 @@ test:ubuntu-20.04:
     extends: .test_template
     image: ubuntu:20.04
     script:
+        - *test_dependencies
         - ./tests/pressure-vessel/prepare-test-depots.sh
-        - *i386_dependencies
         - |
             set -eux
 

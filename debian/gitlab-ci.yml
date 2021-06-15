@@ -163,7 +163,6 @@ build:clang:
                 --werror \
                 _build/clang-asan
             ninja -C _build/clang-asan
-            ninja -C _build/clang-asan scan-build
             ninja -C _build/clang-asan install
             meson test --verbose -C _build/clang-asan
 

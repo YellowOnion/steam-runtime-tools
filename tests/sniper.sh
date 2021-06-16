@@ -10,20 +10,26 @@ if [ -n "${TESTS_ONLY-}" ]; then
     exit 0
 fi
 
+populate_depot_args=()
+
+if [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
+    populate_depot_args=( \
+        "${populate_depot_args[@]}" \
+        --credential-env IMAGES_DOWNLOAD_CREDENTIAL \
+    )
+fi
+
 if [ -n "${IMAGES_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     populate_depot_args=( \
-        --credential-env IMAGES_DOWNLOAD_CREDENTIAL \
+        "${populate_depot_args[@]}" \
         --images-uri "${IMAGES_DOWNLOAD_URL}"/steamrt-SUITE/snapshots \
-    )
-    pressure_vessel_args=( \
-        --pressure-vessel=scout \
     )
 elif [ -n "${IMAGES_SSH_HOST-}" ] && [ -n "${IMAGES_SSH_PATH-}" ]; then
     populate_depot_args=( \
+        "${populate_depot_args[@]}" \
         --ssh-host "${IMAGES_SSH_HOST}" \
         --ssh-path "${IMAGES_SSH_PATH}" \
     )
-    pressure_vessel_args=()
 else
     # There's no public release of sniper yet, so this won't actually work
     # without supplying a URL and credentials for the non-public version
@@ -32,8 +38,23 @@ else
 
     # When there's a public release, this will probably work
     populate_depot_args=( \
+        "${populate_depot_args[@]}" \
         --version latest-container-runtime-public-beta \
     )
+fi
+
+if [ -n "${PRESSURE_VESSEL_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
+    pressure_vessel_args=( \
+        --pressure-vessel-uri="${PRESSURE_VESSEL_DOWNLOAD_URL}" \
+        --pressure-vessel-version=latest \
+    )
+elif [ -n "${PRESSURE_VESSEL_SSH_HOST-"${IMAGES_SSH_HOST}"}" ] && [ -n "${PRESSURE_VESSEL_SSH_PATH-}" ]; then
+    pressure_vessel_args=( \
+        --pressure-vessel-ssh-host="${PRESSURE_VESSEL_SSH_HOST-"${IMAGES_SSH_HOST}"}" \
+        --pressure-vessel-ssh-path="${PRESSURE_VESSEL_SSH_PATH}" \
+        --pressure-vessel-version=latest \
+    )
+else
     pressure_vessel_args=( \
         --pressure-vessel-from-runtime-json='{"version": "latest-container-runtime-public-beta"}' \
     )

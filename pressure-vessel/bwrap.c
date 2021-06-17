@@ -355,16 +355,6 @@ pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap)
                           "--proc", "/proc",
                           "--ro-bind", "/sys", "/sys",
                           NULL);
-
-  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/pts", "/dev/pts",
-                            NULL);
-
-  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/shm", "/dev/shm",
-                            NULL);
 }
 
 FlatpakBwrap *

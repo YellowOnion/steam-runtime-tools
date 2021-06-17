@@ -117,9 +117,50 @@ is built up by taking the required tool, then appending the tool that
 requires it, and finally appending the actual game: so if a compat tool
 named `Inner` requires a compat tool named `Outer`, and both tools have
 `/run %verb% --` as their `commandline`, then the final command line will
-look something like:
+look something like this:
 
-    /path/to/Outer/run waitforexitandrun -- /path/to/Inner/run waitforexitandrun -- /path/to/game.exe
+    /path/to/Outer/run waitforexitandrun -- \
+    /path/to/Inner/run waitforexitandrun -- \
+    /path/to/game.exe
+
+(In reality it would all be one line, rather than having escaped newlines
+as shown here.)
+
+## Launch options
+
+If a Steam game has user-specified launch options configured in its
+Properties, and they contain the special token `%command%`, then
+`%command%` is replaced by the entire command-line built up from the
+compatibility tools. For example, if a compat tool named `Inner` requires
+a compat tool named `Outer`, both tools have `/run %verb% --` as their
+`commandline`, and the user has set the Launch Options in the game's
+properties to
+
+    DEBUG=yes taskset --cpu-list 0,2 %command% -console
+
+then the final command line will look something like this:
+
+    DEBUG=yes taskset --cpu-list 0,2 \
+    /path/to/Outer/run waitforexitandrun -- \
+    /path/to/Inner/run waitforexitandrun -- \
+    /path/to/game.exe -console
+
+(In reality it would all be one line, rather than having escaped newlines
+as shown here.)
+
+If the user-specified launch options for a Steam game do not contain
+`%command%`, then they are simply appended to the command-line. For
+example, setting the launch options to `--debug` is equivalent to
+`%command% --debug`.
+
+Shortcuts for non-Steam games do not currently implement the special
+handling for `%command%`: the configured launch options are simply
+appended to the command-line, regardless of whether they contain
+`%command%` or not.
+
+Please note that not all invocations of compatibility tools take the
+user-specified launch options into account: they are used when running
+the actual game, but they are not used for install scripts.
 
 ## Environment
 
@@ -221,6 +262,8 @@ The environment variable `STEAM_COMPAT_SESSION_ID` is not set.
 The environment variable `STEAM_COMPAT_APP_ID` is set to the app-ID
 of the game. The environment variable `SteamAppId` has the same value.
 
+The [launch options](#launch-options) are used.
+
 ## Windows games with no install script
 
 Some Windows games, such as Soldat (638490), do not have an
@@ -239,6 +282,8 @@ of the game. The environment variable `SteamAppId` has the same value.
 
 The current working directory is the working directory configured in the
 game's Steam metadata, as usual.
+
+The [launch options](#launch-options) are used.
 
 ## Windows games with an install script (since Steam beta 1623823138)
 
@@ -267,6 +312,8 @@ Since Steam beta 1623823138, these games are run like this:
     (usually `~/.local/share/Steam` or `~/.steam/debian-installation`)
     but this is probably not guaranteed.
 
+    The [launch options](#launch-options) are **not** used here.
+
 * Run the actual game in the usual way.
 
     The environment variable `STEAM_COMPAT_SESSION_ID` is not set.
@@ -276,6 +323,8 @@ Since Steam beta 1623823138, these games are run like this:
 
     The current working directory is the working directory configured in
     the game's Steam metadata, as usual.
+
+    The [launch options](#launch-options) are used, as usual.
 
 ## Historical behaviour of Windows games (session mode v2)
 
@@ -300,6 +349,8 @@ to run before it could be launched. They were invoked like this:
     As currently implemented, it appears to be the Steam installation
     (usually `~/.local/share/Steam` or `~/.steam/debian-installation`)
     but this is probably not guaranteed.
+
+    The [launch options](#launch-options) are **not** used here.
 
     The compat tool is expected to do any setup that it needs to do
     (for example pressure-vessel must start a container), then run
@@ -330,6 +381,8 @@ to run before it could be launched. They were invoked like this:
     The environment variables `STEAM_COMPAT_APP_ID` and `SteamAppId`
     are both set to the app-ID of the game as usual.
 
+    The [launch options](#launch-options) are used, as usual.
+
 ## Non-Steam games
 
 Version 1 compat tools are not invoked specially.
@@ -359,3 +412,6 @@ The current working directory defaults to the directory containing the
 main executable, but can be reconfigured through the shortcut's properties.
 Steam Linux Runtime (pressure-vessel) containers will not work as expected
 unless this is set to the game's top-level directory.
+
+Launch options are appended to the command-line. The special token
+`%command%` in Steam games' launch options is not used here.

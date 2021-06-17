@@ -42,7 +42,7 @@ if [ -n "${PRESSURE_VESSEL_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTI
         --pressure-vessel-uri="${PRESSURE_VESSEL_DOWNLOAD_URL}" \
         --pressure-vessel-version=latest \
     )
-elif [ -n "${PRESSURE_VESSEL_SSH_HOST-"${IMAGES_SSH_HOST}"}" ] && [ -n "${PRESSURE_VESSEL_SSH_PATH-}" ]; then
+elif [ -n "${PRESSURE_VESSEL_SSH_HOST-"${IMAGES_SSH_HOST-}"}" ] && [ -n "${PRESSURE_VESSEL_SSH_PATH-}" ]; then
     pressure_vessel_args=( \
         --pressure-vessel-ssh-host="${PRESSURE_VESSEL_SSH_HOST-"${IMAGES_SSH_HOST}"}" \
         --pressure-vessel-ssh-path="${PRESSURE_VESSEL_SSH_PATH}" \

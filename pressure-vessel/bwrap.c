@@ -350,21 +350,31 @@ pv_bwrap_copy_tree (FlatpakBwrap *bwrap,
 void
 pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap)
 {
+  g_autofree char *link = NULL;
+
   flatpak_bwrap_add_args (bwrap,
                           "--dev-bind", "/dev", "/dev",
                           "--proc", "/proc",
                           "--ro-bind", "/sys", "/sys",
                           NULL);
 
-  if (g_file_test ("/dev/pts", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/pts", "/dev/pts",
-                            NULL);
+  link = glnx_readlinkat_malloc (AT_FDCWD, "/dev/shm", NULL, NULL);
 
-  if (g_file_test ("/dev/shm", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--dev-bind", "/dev/shm", "/dev/shm",
-                            NULL);
+  if (g_strcmp0 (link, "/run/shm") == 0)
+    {
+      if (g_file_test ("/run/shm", G_FILE_TEST_IS_DIR))
+        flatpak_bwrap_add_args (bwrap,
+                                "--bind", "/run/shm", "/run/shm",
+                                NULL);
+      else
+        flatpak_bwrap_add_args (bwrap,
+                                "--dir", "/run/shm",
+                                NULL);
+    }
+  else if (link != NULL)
+    {
+      g_warning ("Unexpected /dev/shm symlink %s", link);
+    }
 }
 
 FlatpakBwrap *

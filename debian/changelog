@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210617.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210617.1) scout; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix compatibility with Ubuntu 14.04 and other older
@@ -13,7 +13,7 @@ steam-runtime-tools (0.20210617.0) UNRELEASED; urgency=medium
   [ Ludovico de Nittis ]
   * pressure-vessel: Address various build warnings
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 17 Jun 2021 18:58:09 +0100
+ -- Simon McVittie <smcv@collabora.com>  Thu, 17 Jun 2021 19:03:58 +0100
 
 steam-runtime-tools (0.20210608.3) scout; urgency=medium
 

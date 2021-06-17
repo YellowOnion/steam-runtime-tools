@@ -126,6 +126,10 @@ while [ "$#" -gt 0 ]; do
                 (waitforexitandrun)
                     is_main=yes
                     ;;
+                (run)
+                    export PRESSURE_VESSEL_BATCH=1
+                    is_main=
+                    ;;
                 (*)
                     is_main=
                     ;;

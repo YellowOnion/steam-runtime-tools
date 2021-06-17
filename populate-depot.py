@@ -622,9 +622,7 @@ class Main:
                 n_sources += 1
 
         if n_sources == 0:
-            # For now, default to historical behaviour.
-            # TODO: Eventually change this to version = 'latest'
-            pressure_vessel_from_runtime = 'scout'
+            pressure_vessel_version = 'latest'
         elif n_sources > 1:
             raise RuntimeError(
                 'Cannot combine more than one of '

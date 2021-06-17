@@ -1,9 +1,19 @@
-steam-runtime-tools (0.20210608.4) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210617.0) UNRELEASED; urgency=medium
 
+  [ Simon McVittie ]
+  * pressure-vessel: Fix compatibility with Ubuntu 14.04 and other older
+    non-systemd Debian derivatives
   * pressure-vessel: Improve compatibility with other mtree implementations
+  * tests: Update populate-depot.py from SteamLinuxRuntime v0.20210608.0
   * CI: Improve configuration
+  * docs: Document the Steam compatibility tool interface.
+    This is based on testing with Steam beta 1623823138 and older versions,
+    and is not necessarily authoritative.
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 09 Jun 2021 14:57:57 +0100
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Address various build warnings
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 17 Jun 2021 18:58:09 +0100
 
 steam-runtime-tools (0.20210608.3) scout; urgency=medium
 

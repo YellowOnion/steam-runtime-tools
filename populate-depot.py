@@ -784,6 +784,8 @@ class Main:
             local_version.version = version
             local_version.runtime = 'scout'
             local_version.runtime_version = version
+            local_version.comment = 'steam-runtime/'
+            self.versions.append(local_version)
         else:
             unspecified_version = ComponentVersion('LD_LIBRARY_PATH')
             unspecified_version.version = '-'

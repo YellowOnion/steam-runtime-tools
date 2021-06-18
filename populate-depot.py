@@ -53,6 +53,7 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    Tuple,
 )
 
 from debian.deb822 import (
@@ -481,11 +482,16 @@ exec "${{pressure_vessel}}/bin/pressure-vessel-unruntime" "$@"
 
 
 class ComponentVersion:
-    def __init__(self, name: str = '') -> None:
+    def __init__(
+        self,
+        name: str = '',
+        sort_weight: int = 0,
+    ) -> None:
         self.name = name
         self.version = ''
         self.runtime = ''
         self.runtime_version = ''
+        self.sort_weight = sort_weight
         self.comment = ''
 
     def __str__(self) -> str:
@@ -498,6 +504,9 @@ class ComponentVersion:
             )
 
         return ret
+
+    def to_sort_key(self) -> Tuple[int, str]:
+        return (self.sort_weight, self.to_tsv())
 
     def to_tsv(self) -> str:
         if self.comment:
@@ -520,6 +529,7 @@ class Main:
         credential_envs: Sequence[str] = (),
         credential_hosts: Sequence[str] = (),
         depot: str = 'depot',
+        depot_version: str = '',
         images_uri: str = DEFAULT_IMAGES_URI,
         include_archives: bool = False,
         include_sdk: bool = False,
@@ -592,6 +602,7 @@ class Main:
         self.default_suite = suite
         self.default_version = version
         self.depot = os.path.abspath(depot)
+        self.depot_version = depot_version
         self.images_uri = images_uri
         self.include_archives = include_archives
         self.layered = layered
@@ -1132,7 +1143,13 @@ class Main:
         except (OSError, subprocess.SubprocessError):
             version = 'unknown'
 
-        component_version = ComponentVersion('SteamLinuxRuntime')
+        if self.depot_version:
+            component_version = ComponentVersion('depot', sort_weight=-1)
+            component_version.version = self.depot_version
+            component_version.comment = 'Overall version number'
+            self.versions.append(component_version)
+
+        component_version = ComponentVersion('scripts')
         component_version.version = version
         component_version.comment = 'Entry point scripts, etc.'
         self.versions.append(component_version)
@@ -1142,7 +1159,7 @@ class Main:
                 '#Name\tVersion\t\tRuntime\tRuntime_Version\tComment\n'
             )
 
-            for entry in sorted(self.versions, key=lambda v: v.to_tsv()):
+            for entry in sorted(self.versions, key=lambda v: v.to_sort_key()):
                 logger.info('Component version: %s', entry)
                 writer.write(entry.to_tsv())
 
@@ -1637,6 +1654,12 @@ def main() -> None:
         '--depot', default='depot',
         help=(
             'Download runtime into this existing directory'
+        )
+    )
+    parser.add_argument(
+        '--depot-version', default='',
+        help=(
+            'Set an overall version number for the depot contents'
         )
     )
 

@@ -110,8 +110,13 @@ main () {
     [ -z "$verbose" ] || log "Command to run: $(printf '%q ' "$@")"
 
     # Just because zenity was available on the host system doesn't mean
-    # it's available in this container (soldier doesn't currently have it)
-    unset STEAM_ZENITY
+    # it's available in this container. soldier historically didn't have it,
+    # but it was added in 0.20210618.0.
+    if [ -x /usr/bin/zenity ]; then
+        export STEAM_ZENITY=/usr/bin/zenity
+    else
+        unset STEAM_ZENITY
+    fi
 
     if [ -d "${here}/steam-runtime" ]; then
         runtime="${here}/steam-runtime"

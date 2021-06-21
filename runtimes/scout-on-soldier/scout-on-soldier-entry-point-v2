@@ -120,6 +120,8 @@ main () {
 
     if [ -d "${here}/steam-runtime" ]; then
         src="${here}/steam-runtime"
+    elif [ -n "${STEAM_RUNTIME_SCOUT-}" ] && [ -d "${STEAM_RUNTIME_SCOUT-}" ]; then
+        src="${STEAM_RUNTIME_SCOUT}"
     else
         src="${STEAM_COMPAT_CLIENT_INSTALL_PATH:-"$HOME/.steam/root"}/ubuntu12_32/steam-runtime"
     fi

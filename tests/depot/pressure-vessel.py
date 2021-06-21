@@ -204,7 +204,6 @@ class TestPressureVessel(unittest.TestCase):
             with self.catch('List contents of depot'):
                 completed = self.run_subprocess(
                     ['find', '.', '-ls'],
-                    check=True,
                     cwd=self.depot,
                     stdout=tee.stdin,
                     stderr=subprocess.PIPE,
@@ -217,6 +216,8 @@ class TestPressureVessel(unittest.TestCase):
                     )
                 else:
                     logger.info('(no stderr)')
+
+                completed.check_returncode()
 
         with self.catch('Read VERSION.txt'):
             with open(
@@ -254,7 +255,6 @@ class TestPressureVessel(unittest.TestCase):
                         exe_path,
                         '--version',
                     ],
-                    check=True,
                     cwd=self.depot,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -273,6 +273,8 @@ class TestPressureVessel(unittest.TestCase):
                 else:
                     logger.info('(no stderr)')
 
+                completed.check_returncode()
+
         with open(
             os.path.join(self.artifacts, 's-r-s-i-outside.json'),
             'w',
@@ -286,7 +288,6 @@ class TestPressureVessel(unittest.TestCase):
                         ),
                         '--verbose',
                     ],
-                    check=True,
                     cwd=self.depot,
                     stdout=writer,
                     stderr=subprocess.PIPE,
@@ -299,6 +300,8 @@ class TestPressureVessel(unittest.TestCase):
                     )
                 else:
                     logger.info('(no stderr)')
+
+                completed.check_returncode()
 
         self.get_runtime_build_id()
 
@@ -335,7 +338,6 @@ class TestPressureVessel(unittest.TestCase):
                 cwd=self.tmpdir.name,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True,
             )
 
             logger.info(
@@ -351,6 +353,8 @@ class TestPressureVessel(unittest.TestCase):
             else:
                 logger.info('(no stderr)')
 
+            completed.check_returncode()
+
         with open(
             os.path.join(self.artifacts, artifact_prefix + '.json'),
             'w',
@@ -361,7 +365,6 @@ class TestPressureVessel(unittest.TestCase):
                     cwd=self.tmpdir.name,
                     stdout=writer,
                     stderr=subprocess.PIPE,
-                    check=True,
                 )
 
                 if completed.stderr:
@@ -371,6 +374,8 @@ class TestPressureVessel(unittest.TestCase):
                     )
                 else:
                     logger.info('(no stderr)')
+
+                completed.check_returncode()
 
         with open(
             os.path.join(self.artifacts, artifact_prefix + '.json'),

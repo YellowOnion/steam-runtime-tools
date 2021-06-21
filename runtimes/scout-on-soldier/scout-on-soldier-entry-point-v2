@@ -39,8 +39,10 @@ usage () {
 main () {
     local error
     local getopt_temp="help"
+    local ours
     local runtime
     local src
+    local theirs
     local verbose=
 
     if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
@@ -130,6 +132,21 @@ main () {
     # the $(realpath) of their $0.
     runtime="${here}/var/steam-runtime"
     mkdir -p "$runtime"
+
+    if [ -e "$runtime/version.txt" ]; then
+        ours="$(cat "$runtime/version.txt" || echo none)"
+    else
+        ours=none
+    fi
+
+    theirs="$(cat "$src/version.txt")"
+
+    if [ "$ours" != "$theirs" ]; then
+        [ -z "$verbose" ] || log "scout runtime switched from '$ours' to '$theirs'"
+        rm -fr "$runtime"
+        mkdir -p "$runtime"
+        printf '%s\n' "$theirs" > "$runtime/version.txt"
+    fi
 
     ln -fns "$src/amd64" "$runtime/"
     ln -fns "$src/i386" "$runtime/"

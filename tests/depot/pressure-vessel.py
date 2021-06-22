@@ -3,6 +3,34 @@
 #
 # SPDX-License-Identifier: MIT
 
+r"""
+To run manually:
+
+./populate-depot.py \
+    --depot=depots/test \
+    --depot-version local \
+    --suite soldier \
+    --version latest \
+    --ssh-host ... \
+    --ssh-path .../steamrt-SUITE/snapshots \
+    --pressure-vessel-version latest \
+    --pressure-vessel-ssh-path .../pressure-vessel/snapshots \
+    --minimize \
+    --unpack-ld-library-path depots/ldlp \
+    --unpack-source steamrt \
+    --unpack-sources-into depots \
+    soldier
+
+rm -fr depots/artifacts
+mkdir depots/artifacts
+
+TEST_CONTAINER_RUNTIME_SUITE=soldier \
+TEST_CONTAINER_RUNTIME_LD_LIBRARY_PATH_RUNTIME=depots/ldlp/steam-runtime \
+TEST_CONTAINER_RUNTIME_STEAMRT_SOURCE=depots/ldlp/steamrt \
+AUTOPKGTEST_ARTIFACTS=depots/artifacts \
+./tests/depot/pressure-vessel.py
+"""
+
 import contextlib
 import json
 import logging

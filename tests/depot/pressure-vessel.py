@@ -275,10 +275,9 @@ class TestPressureVessel(unittest.TestCase):
 
                 completed.check_returncode()
 
-        with open(
+        with self.tee_file_and_stderr(
             os.path.join(self.artifacts, 's-r-s-i-outside.json'),
-            'w',
-        ) as writer:
+        ) as tee:
             with self.catch('steam-runtime-system-info outside container'):
                 completed = self.run_subprocess(
                     [
@@ -291,7 +290,7 @@ class TestPressureVessel(unittest.TestCase):
                         '--verbose',
                     ],
                     cwd=self.depot,
-                    stdout=writer,
+                    stdout=tee.stdin,
                     stderr=subprocess.PIPE,
                 )
 
@@ -357,10 +356,9 @@ class TestPressureVessel(unittest.TestCase):
 
             completed.check_returncode()
 
-        with open(
+        with self.tee_file_and_stderr(
             os.path.join(self.artifacts, artifact_prefix + '.json'),
-            'w',
-        ) as writer:
+        ) as tee:
             with self.catch('run s-r-s-i in container'):
                 completed = self.run_subprocess(
                     adverb + [
@@ -368,7 +366,7 @@ class TestPressureVessel(unittest.TestCase):
                         'steam-runtime-system-info', '--verbose'
                     ],
                     cwd=self.tmpdir.name,
-                    stdout=writer,
+                    stdout=tee.stdin,
                     stderr=subprocess.PIPE,
                 )
 

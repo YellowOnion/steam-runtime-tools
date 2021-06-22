@@ -879,7 +879,11 @@ class Main:
             if self.runtime.name == 'scout':
                 scout = self.runtime
             else:
-                scout = self.new_runtime('scout', {}, default_suite='scout')
+                scout = self.new_runtime(
+                    'scout',
+                    dict(version='latest'),
+                    default_suite='scout',
+                )
             logger.info(
                 'Downloading LD_LIBRARY_PATH Steam Runtime from scout into %r',
                 self.unpack_ld_library_path)

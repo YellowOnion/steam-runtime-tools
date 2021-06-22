@@ -122,10 +122,13 @@ main () {
 
     if [ -d "${here}/steam-runtime" ]; then
         src="${here}/steam-runtime"
+        [ -z "$verbose" ] || log "Using local scout runtime ${src}"
     elif [ -n "${STEAM_RUNTIME_SCOUT-}" ] && [ -d "${STEAM_RUNTIME_SCOUT-}" ]; then
         src="${STEAM_RUNTIME_SCOUT}"
+        [ -z "$verbose" ] || log "Using specified scout runtime ${src}"
     else
         src="${STEAM_COMPAT_CLIENT_INSTALL_PATH:-"$HOME/.steam/root"}/ubuntu12_32/steam-runtime"
+        [ -z "$verbose" ] || log "Using default scout runtime ${src}"
     fi
 
     # Note that this only works because setup.sh and run.sh do not take
@@ -146,6 +149,8 @@ main () {
         rm -fr "$runtime"
         mkdir -p "$runtime"
         printf '%s\n' "$theirs" > "$runtime/version.txt"
+    else
+        [ -z "$verbose" ] || log "scout runtime version '$ours'"
     fi
 
     ln -fns "$src/amd64" "$runtime/"
@@ -155,13 +160,17 @@ main () {
     ln -fns "$src/setup.sh" "$runtime/"
     ln -fns "$src/usr" "$runtime/"
 
+    # Make sure pinning is up to date
+    error=0
     [ -z "$verbose" ] || log "$runtime/setup.sh..."
 
-    # Make sure pinning is up to date
-    if "$runtime/setup.sh" > /dev/null; then
-        :   # OK
+    if [ -n "$verbose" ]; then
+        "$runtime/setup.sh" >&2 || error="$?"
     else
-        error="$?"
+        "$runtime/setup.sh" > /dev/null || error="$?"
+    fi
+
+    if [ "$error" != 0 ]; then
         log "Error: setup.sh failed with exit status $error"
         exit "$error"
     fi

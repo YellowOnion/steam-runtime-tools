@@ -282,6 +282,8 @@ class TestPressureVessel(unittest.TestCase):
             with self.catch('steam-runtime-system-info outside container'):
                 completed = self.run_subprocess(
                     [
+                        'env',
+                        'G_MESSAGES_DEBUG=all',
                         os.path.join(
                             'pressure-vessel', 'bin',
                             'steam-runtime-system-info',
@@ -295,8 +297,8 @@ class TestPressureVessel(unittest.TestCase):
 
                 if completed.stderr:
                     logger.info(
-                        'steam-runtime-system-info --verbose (stderr) -> %s',
-                        completed.stderr,
+                        'steam-runtime-system-info --verbose (stderr) ->\n%s',
+                        completed.stderr.decode('utf-8', 'backslashreplace'),
                     )
                 else:
                     logger.info('(no stderr)')
@@ -361,7 +363,10 @@ class TestPressureVessel(unittest.TestCase):
         ) as writer:
             with self.catch('run s-r-s-i in container'):
                 completed = self.run_subprocess(
-                    adverb + ['steam-runtime-system-info', '--verbose'],
+                    adverb + [
+                        'env', 'G_MESSAGES_DEBUG=all',
+                        'steam-runtime-system-info', '--verbose'
+                    ],
                     cwd=self.tmpdir.name,
                     stdout=writer,
                     stderr=subprocess.PIPE,

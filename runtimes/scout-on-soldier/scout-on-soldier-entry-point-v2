@@ -158,6 +158,7 @@ main () {
     ln -fns "$src/i386" "$runtime/"
     ln -fns "$src/lib" "$runtime/"
     ln -fns "$src/run.sh" "$runtime/"
+    ln -fns "$src/scripts" "$runtime/"
     ln -fns "$src/setup.sh" "$runtime/"
     ln -fns "$src/usr" "$runtime/"
     mkdir -p "$runtime/pinned_libs_32"

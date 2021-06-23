@@ -102,6 +102,12 @@ test -e depots/test-scout-layered/toolmanifest.vdf
 test -x depots/test-scout-layered/scout-on-soldier-entry-point-v2
 test -x depots/test-scout-layered/_v2-entry-point
 test ! -e depots/test-scout-layered/steam-runtime
+
+if ! grep $'^LD_LIBRARY_PATH\t-\tscout\t-\t#' depots/test-scout-layered/VERSIONS.txt >/dev/null; then
+    echo "Bail out! LD_LIBRARY_PATH runtime's (lack of) version number not found"
+    exit 1
+fi
+
 echo "ok 3 - scout, layered on soldier, reusing standard LDLP runtime"
 
 rm -fr depots/test-scout-layered-beta
@@ -122,6 +128,12 @@ test -x depots/test-scout-layered-beta/scout-on-soldier-entry-point-v2
 test -x depots/test-scout-layered-beta/_v2-entry-point
 test -e depots/test-scout-layered-beta/steam-runtime/version.txt
 test -d depots/test-scout-layered-beta/steam-runtime/usr/
+
+if ! grep -E $'^LD_LIBRARY_PATH\t[0-9.]+\tscout\t[0-9.]+\t#' depots/test-scout-layered-beta/VERSIONS.txt >/dev/null; then
+    echo "Bail out! LD_LIBRARY_PATH runtime's version number not found"
+    exit 1
+fi
+
 echo "ok 4 - scout, layered on soldier, with own copy of beta LDLP runtime"
 
 # vim:set sw=4 sts=4 et:

@@ -62,6 +62,7 @@ rm -fr depots/test-soldier-archives
 mkdir -p depots/test-soldier-archives
 python3 ./populate-depot.py \
     --depot=depots/test-soldier-archives \
+    --depot-version=0.1.2.3 \
     --toolmanifest \
     --include-archives \
     --no-unpack-runtime \
@@ -72,6 +73,11 @@ python3 ./populate-depot.py \
 find depots/test-soldier-archives -ls > depots/test-soldier-archives.txt
 tar -tf "depots/test-soldier-archives/${archive}-runtime.tar.gz" \
     > depots/test-soldier-archives-tar.txt
+
+if ! grep $'^depot\t0\\.1\\.2\\.3\t' depots/test-soldier-archives/VERSIONS.txt >/dev/null; then
+    echo "Bail out! Depot version number not found"
+    exit 1
+fi
 
 buildid="$(cat "depots/test-soldier-archives/$archive-buildid.txt")"
 soldier_version="$(

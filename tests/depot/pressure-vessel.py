@@ -3,6 +3,34 @@
 #
 # SPDX-License-Identifier: MIT
 
+r"""
+To run manually:
+
+./populate-depot.py \
+    --depot=depots/test \
+    --depot-version local \
+    --suite soldier \
+    --version latest \
+    --ssh-host ... \
+    --ssh-path .../steamrt-SUITE/snapshots \
+    --pressure-vessel-version latest \
+    --pressure-vessel-ssh-path .../pressure-vessel/snapshots \
+    --minimize \
+    --unpack-ld-library-path depots/ldlp \
+    --unpack-source steamrt \
+    --unpack-sources-into depots \
+    soldier
+
+rm -fr depots/artifacts
+mkdir depots/artifacts
+
+TEST_CONTAINER_RUNTIME_SUITE=soldier \
+TEST_CONTAINER_RUNTIME_LD_LIBRARY_PATH_RUNTIME=depots/ldlp/steam-runtime \
+TEST_CONTAINER_RUNTIME_STEAMRT_SOURCE=depots/ldlp/steamrt \
+AUTOPKGTEST_ARTIFACTS=depots/artifacts \
+./tests/depot/pressure-vessel.py
+"""
+
 import contextlib
 import json
 import logging
@@ -89,16 +117,32 @@ class TestPressureVessel(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
 
-        if self.ld_library_path_runtime is not None:
-            if os.access(self.ld_library_path_runtime, os.W_OK):
-                self.ld_library_path_runtime = os.path.abspath(
-                    self.ld_library_path_runtime,
-                )
+        ldlp = self.ld_library_path_runtime
+
+        if ldlp is not None:
+            if os.access(ldlp, os.W_OK):
+                self.ld_library_path_runtime = ldlp = os.path.abspath(ldlp)
             else:
                 old = self.ld_library_path_runtime
-                new = os.path.join(self.tmpdir.name, 'ldlp')
-                shutil.copytree(old, new, symlinks=True)
-                self.ld_library_path_runtime = new
+                ldlp = os.path.join(self.tmpdir.name, 'ldlp')
+                shutil.copytree(old, ldlp, symlinks=True)
+                self.ld_library_path_runtime = ldlp
+
+        if self.suite == 'soldier' and ldlp is not None:
+            self.scout_layered = os.path.abspath(
+                'runtimes/scout-on-soldier'
+            )
+
+            old = self.scout_layered
+            new = os.path.join(self.tmpdir.name, 'scout-on-soldier')
+            shutil.copytree(old, new, symlinks=True)
+            os.symlink(
+                self.ld_library_path_runtime,
+                os.path.join(new, 'steam-runtime'),
+            )
+            self.scout_layered = new
+        else:
+            self.scout_layered = ''
 
         artifacts = os.getenv('AUTOPKGTEST_ARTIFACTS')
 
@@ -204,7 +248,6 @@ class TestPressureVessel(unittest.TestCase):
             with self.catch('List contents of depot'):
                 completed = self.run_subprocess(
                     ['find', '.', '-ls'],
-                    check=True,
                     cwd=self.depot,
                     stdout=tee.stdin,
                     stderr=subprocess.PIPE,
@@ -217,6 +260,8 @@ class TestPressureVessel(unittest.TestCase):
                     )
                 else:
                     logger.info('(no stderr)')
+
+                completed.check_returncode()
 
         with self.catch('Read VERSION.txt'):
             with open(
@@ -254,7 +299,6 @@ class TestPressureVessel(unittest.TestCase):
                         exe_path,
                         '--version',
                     ],
-                    check=True,
                     cwd=self.depot,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -273,42 +317,55 @@ class TestPressureVessel(unittest.TestCase):
                 else:
                     logger.info('(no stderr)')
 
-        with open(
+                completed.check_returncode()
+
+        with self.tee_file_and_stderr(
             os.path.join(self.artifacts, 's-r-s-i-outside.json'),
-            'w',
-        ) as writer:
+        ) as tee:
             with self.catch('steam-runtime-system-info outside container'):
                 completed = self.run_subprocess(
                     [
+                        'env',
+                        'G_MESSAGES_DEBUG=all',
                         os.path.join(
                             'pressure-vessel', 'bin',
                             'steam-runtime-system-info',
                         ),
                         '--verbose',
                     ],
-                    check=True,
                     cwd=self.depot,
-                    stdout=writer,
+                    stdout=tee.stdin,
                     stderr=subprocess.PIPE,
                 )
 
                 if completed.stderr:
                     logger.info(
-                        'steam-runtime-system-info --verbose (stderr) -> %s',
-                        completed.stderr,
+                        'steam-runtime-system-info --verbose (stderr) ->\n%s',
+                        completed.stderr.decode('utf-8', 'backslashreplace'),
                     )
                 else:
                     logger.info('(no stderr)')
+
+                completed.check_returncode()
 
         self.get_runtime_build_id()
 
     def get_pressure_vessel_adverb(
         self,
-        ld_library_path_runtime=None        # type: typing.Optional[str]
+        ld_library_path_runtime=None,       # type: typing.Optional[str]
+        scout_layered=False
     ):
         # type: (...) -> typing.List[str]
         adverb = [
             os.path.join(self.depot, 'run-in-' + self.suite),
+        ]
+
+        if self.ld_library_path_runtime is not None:
+            adverb = adverb + [
+                '--filesystem=' + self.ld_library_path_runtime,
+            ]
+
+        adverb = adverb + [
             '--verbose',
             '--',
         ]
@@ -318,15 +375,50 @@ class TestPressureVessel(unittest.TestCase):
                 os.path.join(ld_library_path_runtime, 'run.sh'),
             ] + adverb
 
+        if scout_layered:
+            adverb = adverb + [
+                os.path.join(
+                    self.scout_layered,
+                    'scout-on-soldier-entry-point-v2',
+                ),
+                '--verbose',
+                '--',
+            ]
+
         return adverb
 
     def test_pressure_vessel(
         self,
         artifact_prefix='s-r-s-i-inside',
-        ld_library_path_runtime=None        # type: typing.Optional[str]
+        ld_library_path_runtime=None,       # type: typing.Optional[str]
+        scout_layered=False
     ) -> None:
+        if scout_layered:
+            with self.tee_file_and_stderr(
+                os.path.join(self.artifacts, 'scout-layered-contents.txt')
+            ) as tee, self.catch(
+                'List contents of scout_layered'
+            ):
+                completed = self.run_subprocess(
+                    ['find', '.', '-ls'],
+                    cwd=self.scout_layered,
+                    stdout=tee.stdin,
+                    stderr=subprocess.PIPE,
+                )
+
+                if completed.stderr:
+                    logger.info(
+                        '(stderr) ->\n%s',
+                        completed.stderr.decode('utf-8', 'backslashreplace'),
+                    )
+                else:
+                    logger.info('(no stderr)')
+
+                completed.check_returncode()
+
         adverb = self.get_pressure_vessel_adverb(
             ld_library_path_runtime=ld_library_path_runtime,
+            scout_layered=scout_layered,
         )
 
         with self.catch('cat /etc/os-release in container'):
@@ -335,7 +427,6 @@ class TestPressureVessel(unittest.TestCase):
                 cwd=self.tmpdir.name,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True,
             )
 
             logger.info(
@@ -351,17 +442,20 @@ class TestPressureVessel(unittest.TestCase):
             else:
                 logger.info('(no stderr)')
 
-        with open(
+            completed.check_returncode()
+
+        with self.tee_file_and_stderr(
             os.path.join(self.artifacts, artifact_prefix + '.json'),
-            'w',
-        ) as writer:
+        ) as tee:
             with self.catch('run s-r-s-i in container'):
                 completed = self.run_subprocess(
-                    adverb + ['steam-runtime-system-info', '--verbose'],
+                    adverb + [
+                        'env', 'G_MESSAGES_DEBUG=all',
+                        'steam-runtime-system-info', '--verbose'
+                    ],
                     cwd=self.tmpdir.name,
-                    stdout=writer,
+                    stdout=tee.stdin,
                     stderr=subprocess.PIPE,
-                    check=True,
                 )
 
                 if completed.stderr:
@@ -371,6 +465,8 @@ class TestPressureVessel(unittest.TestCase):
                     )
                 else:
                     logger.info('(no stderr)')
+
+                completed.check_returncode()
 
         with open(
             os.path.join(self.artifacts, artifact_prefix + '.json'),
@@ -389,7 +485,13 @@ class TestPressureVessel(unittest.TestCase):
             diagnostic=parsed.get('runtime'),
         ):
             self.assertIn('runtime', parsed)
-            self.assertEqual('/', parsed['runtime'].get('path'))
+            if scout_layered:
+                self.assertEqual(
+                    os.path.join(self.scout_layered, 'var', 'steam-runtime'),
+                    parsed['runtime'].get('path'),
+                )
+            else:
+                self.assertEqual('/', parsed['runtime'].get('path'))
             self.assertIn('version', parsed['runtime'])
             issues = parsed['runtime'].get('issues', [])
             self.assertNotIn('disabled', issues)
@@ -405,8 +507,13 @@ class TestPressureVessel(unittest.TestCase):
             # we want to be able to test unofficial runtimes too
 
             self.assertIn('overrides', parsed['runtime'])
-            self.assertNotIn('pinned_libs_32', parsed['runtime'])
-            self.assertNotIn('pinned_libs_64', parsed['runtime'])
+
+            if scout_layered:
+                self.assertIn('pinned_libs_32', parsed['runtime'])
+                self.assertIn('pinned_libs_64', parsed['runtime'])
+            else:
+                self.assertNotIn('pinned_libs_32', parsed['runtime'])
+                self.assertNotIn('pinned_libs_64', parsed['runtime'])
 
         with self.catch(
             'os-release information',
@@ -509,6 +616,21 @@ class TestPressureVessel(unittest.TestCase):
             self.test_pressure_vessel(
                 artifact_prefix='s-r-s-i-inside-unruntime',
                 ld_library_path_runtime=self.ld_library_path_runtime,
+            )
+        else:
+            self.skipTest(
+                'TEST_CONTAINER_RUNTIME_LD_LIBRARY_PATH_RUNTIME not provided'
+            )
+
+    def test_scout_layered(self) -> None:
+        if self.suite != 'soldier':
+            self.skipTest('Suite is not soldier')
+        elif self.ld_library_path_runtime is not None:
+            assert self.scout_layered
+            self.test_pressure_vessel(
+                artifact_prefix='scout-layered',
+                ld_library_path_runtime=self.ld_library_path_runtime,
+                scout_layered=True,
             )
         else:
             self.skipTest(

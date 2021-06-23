@@ -1,4 +1,4 @@
-# Copyright © 2019 Collabora Ltd.
+# Copyright © 2019-2021 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -42,6 +42,16 @@ executable(
 )
 
 executable(
+  'steam-runtime-identify-library-abi',
+  'identify-library-abi.c',
+  dependencies : [glib, gio_unix, libelf, libglnx_dep, libsteamrt_static_dep],
+  install : true,
+  # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
+executable(
   'steam-runtime-input-monitor',
   'input-monitor.c',
   dependencies : [gio_unix, glib, gobject, json_glib, libglnx_dep, libsteamrt_static_dep],
@@ -74,6 +84,7 @@ executable(
 if get_option('man')
   foreach bin_name : [
     'check-requirements',
+    'identify-library-abi',
     'input-monitor',
     'steam-remote',
     'system-info',

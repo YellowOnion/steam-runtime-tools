@@ -227,6 +227,7 @@ maybe_load_nvidia_modules (GError **error)
   {
     "nvidia-modprobe",
     "-u",
+    "-c=0",
     NULL
   };
 

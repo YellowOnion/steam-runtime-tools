@@ -48,6 +48,7 @@
 
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
+#include "flatpak-systemd-dbus-generated.h"
 
 /* In Flatpak this is optional, in pressure-vessel not so much */
 #define ENABLE_XAUTH
@@ -1673,6 +1674,8 @@ flatpak_ensure_data_dir (GFile        *app_id_dir,
   return TRUE;
 }
 
+#endif
+
 struct JobData
 {
   char      *job;
@@ -1707,8 +1710,16 @@ systemd_unit_name_escape (const gchar *in)
   return g_string_free (str, FALSE);
 }
 
+/*
+ * Modified from Flatpak's version. For simplicity we assume that @owner
+ * and @prefix are in a form that don't need escaping to be a valid systemd
+ * scope name.
+ */
 gboolean
-flatpak_run_in_transient_unit (const char *appid, GError **error)
+flatpak_run_in_transient_unit (const char *owner,
+                               const char *prefix,
+                               const char *appid,
+                               GError **error)
 {
   g_autoptr(GDBusConnection) conn = NULL;
   g_autofree char *path = NULL;
@@ -1753,7 +1764,8 @@ flatpak_run_in_transient_unit (const char *appid, GError **error)
     goto out;
 
   appid_escaped = systemd_unit_name_escape (appid);
-  name = g_strdup_printf ("app-flatpak-%s-%d.scope", appid_escaped, getpid ());
+  name = g_strdup_printf ("app-%s-%s%s-%d.scope",
+                          owner, prefix, appid_escaped, getpid ());
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(sv)"));
 
@@ -1794,8 +1806,6 @@ out:
 
   return res;
 }
-
-#endif
 
 void
 flatpak_run_add_font_path_args (FlatpakBwrap *bwrap)

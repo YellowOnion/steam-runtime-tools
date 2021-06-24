@@ -287,3 +287,46 @@ pv_wrap_use_host_os (FlatpakExports *exports,
 
   return TRUE;
 }
+
+const char *
+pv_wrap_get_steam_app_id (const char *from_command_line)
+{
+  const char *value;
+
+  if (from_command_line != NULL)
+    return from_command_line;
+
+  if ((value = g_getenv ("STEAM_COMPAT_APP_ID")) != NULL)
+    return value;
+
+  if ((value = g_getenv ("SteamAppId")) != NULL)
+    return value;
+
+  return NULL;
+}
+
+/*
+ * Try to move the current process into a scope defined by the given
+ * Steam app ID. If that's not possible, ignore.
+ */
+void
+pv_wrap_move_into_scope (const char *steam_app_id)
+{
+  g_autoptr(GError) local_error = NULL;
+
+  if (steam_app_id != NULL)
+    {
+      if (steam_app_id[0] == '\0')
+        steam_app_id = NULL;
+      else if (strcmp (steam_app_id, "0") == 0)
+        steam_app_id = NULL;
+    }
+
+  if (steam_app_id != NULL)
+    flatpak_run_in_transient_unit ("steam", "app", steam_app_id, &local_error);
+  else
+    flatpak_run_in_transient_unit ("steam", "", "unknown", &local_error);
+
+  if (local_error != NULL)
+    g_debug ("Cannot move into a systemd scope: %s", local_error->message);
+}

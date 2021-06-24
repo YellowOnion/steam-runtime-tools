@@ -38,6 +38,12 @@
 #include "flatpak-utils-private.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
 
+/* modified for pressure-vessel */
+gboolean flatpak_run_in_transient_unit (const char *owner,
+                                        const char *prefix,
+                                        const char *appid,
+                                        GError    **error);
+
 /* See flatpak-metadata(5) */
 
 #define FLATPAK_METADATA_GROUP_APPLICATION "Application"

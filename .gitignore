@@ -1,7 +1,6 @@
 .*.sw?
 /.mypy_cache
-/_build*/
-/_build/
+/_build*
 /build/
 /builddir/
 /helpers/_generated_*/

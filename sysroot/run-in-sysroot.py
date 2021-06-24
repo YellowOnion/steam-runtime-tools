@@ -55,6 +55,7 @@ def main():
 
     abs_srcdir = os.path.abspath(args.srcdir)
     abs_builddir = os.path.abspath(args.builddir)
+    real_builddir = os.path.realpath(args.builddir)
 
     if args.sysroot is None:
         args.sysroot = os.path.join(abs_builddir, 'sysroot')
@@ -93,7 +94,7 @@ def main():
     os.makedirs(
         os.path.join(abs_sysroot, './' + abs_srcdir), exist_ok=True)
     os.makedirs(
-        os.path.join(abs_sysroot, './' + abs_builddir), exist_ok=True)
+        os.path.join(abs_sysroot, './' + real_builddir), exist_ok=True)
 
     argv = [
         'bwrap',
@@ -113,8 +114,16 @@ def main():
         '--tmpfs', '/run',
         '--tmpfs', '/run/host',
         '--bind', abs_srcdir, abs_srcdir,
-        '--bind', abs_builddir, abs_builddir,
+        '--bind', real_builddir, real_builddir,
     ]
+
+    if (
+        real_builddir != abs_builddir
+        and os.path.commonpath([abs_builddir, abs_srcdir]) != abs_srcdir
+    ):
+        argv.extend([
+            '--symlink', real_builddir, abs_builddir,
+        ])
 
     for var in (
         'AUTOPKGTEST_ARTIFACTS',

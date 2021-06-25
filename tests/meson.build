@@ -52,6 +52,7 @@ tests = [
 if get_option('bin')
   tests += [
     {'name': 'check-requirements-cli'},
+    {'name': 'identify-library-abi-cli'},
     {'name': 'system-info-cli', 'static': true, 'slow': true},
   ]
 endif

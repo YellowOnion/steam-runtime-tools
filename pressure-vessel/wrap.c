@@ -357,7 +357,7 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
     {
       g_autofree gchar *joined = g_strjoinv (":", values);
 
-      pv_environ_lock_env (container_env, variable, joined);
+      pv_environ_setenv (container_env, variable, joined);
     }
 }
 
@@ -420,9 +420,9 @@ use_tmpfs_home (FlatpakExports *exports,
                           "--symlink", tmp, "/var/tmp",
                           NULL);
 
-  pv_environ_lock_env (container_env, "XDG_CACHE_HOME", cache);
-  pv_environ_lock_env (container_env, "XDG_CONFIG_HOME", config);
-  pv_environ_lock_env (container_env, "XDG_DATA_HOME", data);
+  pv_environ_setenv (container_env, "XDG_CACHE_HOME", cache);
+  pv_environ_setenv (container_env, "XDG_CONFIG_HOME", config);
+  pv_environ_setenv (container_env, "XDG_DATA_HOME", data);
 
   return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY, FALSE,
                        real_home, NULL, error);
@@ -502,9 +502,9 @@ use_fake_home (FlatpakExports *exports,
                           "--bind", tmp, "/var/tmp",
                           NULL);
 
-  pv_environ_lock_env (container_env, "XDG_CACHE_HOME", cache);
-  pv_environ_lock_env (container_env, "XDG_CONFIG_HOME", config);
-  pv_environ_lock_env (container_env, "XDG_DATA_HOME", data);
+  pv_environ_setenv (container_env, "XDG_CACHE_HOME", cache);
+  pv_environ_setenv (container_env, "XDG_CONFIG_HOME", config);
+  pv_environ_setenv (container_env, "XDG_DATA_HOME", data);
 
   flatpak_exports_add_path_expose (exports,
                                    FLATPAK_FILESYSTEM_MODE_READ_WRITE,
@@ -1337,9 +1337,6 @@ main (int argc,
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
-  g_autoptr(GString) lock_env = g_string_new ("");
-  g_auto(GLnxTmpfile) lock_env_tmpf  = { 0, };
-  g_autofree char *lock_env_fd = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
 
   setlocale (LC_ALL, "");
@@ -2184,8 +2181,8 @@ main (int argc,
                           g_autofree gchar *adjusted_blockedlist = NULL;
                           adjusted_blockedlist = g_build_filename ("/run/parent",
                                                                    blockedlist, NULL);
-                          pv_environ_lock_env (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
-                                               adjusted_blockedlist);
+                          pv_environ_setenv (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
+                                             adjusted_blockedlist);
                         }
                     }
                 }
@@ -2259,9 +2256,9 @@ main (int argc,
       else
         {
           if (adjusted->len != 0)
-            pv_environ_lock_env (container_env, variable, adjusted->str);
+            pv_environ_setenv (container_env, variable, adjusted->str);
           else
-            pv_environ_lock_env (container_env, variable, NULL);
+            pv_environ_setenv (container_env, variable, NULL);
         }
     }
 
@@ -2334,16 +2331,16 @@ main (int argc,
   else
     {
       for (i = 0; i < G_N_ELEMENTS (known_required_env); i++)
-        pv_environ_lock_env (container_env,
-                             known_required_env[i].name,
-                             g_getenv (known_required_env[i].name));
+        pv_environ_setenv (container_env,
+                           known_required_env[i].name,
+                           g_getenv (known_required_env[i].name));
 
       flatpak_bwrap_add_args (flatpak_subsandbox,
                               "--directory", cwd_p,
                               NULL);
     }
 
-  pv_environ_lock_env (container_env, "PWD", NULL);
+  pv_environ_setenv (container_env, "PWD", NULL);
 
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
@@ -2369,7 +2366,7 @@ main (int argc,
 
               *equals = '\0';
 
-              pv_environ_lock_env (container_env, opt_env_if_host[i],
+              pv_environ_setenv (container_env, opt_env_if_host[i],
                                    equals + 1);
 
               *equals = '=';
@@ -2428,12 +2425,12 @@ main (int argc,
       const GList *iter;
 
       /* Let these inherit from the sub-sandbox environment */
-      pv_environ_lock_inherit_env (container_env, "FLATPAK_ID");
-      pv_environ_lock_inherit_env (container_env, "FLATPAK_SANDBOX_DIR");
-      pv_environ_lock_inherit_env (container_env, "DBUS_SESSION_BUS_ADDRESS");
-      pv_environ_lock_inherit_env (container_env, "DBUS_SYSTEM_BUS_ADDRESS");
-      pv_environ_lock_inherit_env (container_env, "DISPLAY");
-      pv_environ_lock_inherit_env (container_env, "XDG_RUNTIME_DIR");
+      pv_environ_inherit_env (container_env, "FLATPAK_ID");
+      pv_environ_inherit_env (container_env, "FLATPAK_SANDBOX_DIR");
+      pv_environ_inherit_env (container_env, "DBUS_SESSION_BUS_ADDRESS");
+      pv_environ_inherit_env (container_env, "DBUS_SYSTEM_BUS_ADDRESS");
+      pv_environ_inherit_env (container_env, "DISPLAY");
+      pv_environ_inherit_env (container_env, "XDG_RUNTIME_DIR");
 
       /* The bwrap envp will be completely ignored when calling
        * pv-launch, and in fact putting them in its environment
@@ -2476,21 +2473,6 @@ main (int argc,
 
   final_argv = flatpak_bwrap_new (original_environ);
 
-  /* Lock variables where appropriate */
-    {
-      g_autoptr(GList) vars = pv_environ_get_locked (container_env);
-      const GList *iter;
-
-      for (iter = vars; iter != NULL; iter = iter->next)
-        {
-          const char *var = iter->data;
-
-          g_debug ("Locking environment variable: %s", var);
-          g_string_append (lock_env, var);
-          g_string_append_c (lock_env, '\0');
-        }
-    }
-
   /* Populate final_argv->envp, overwriting its copy of original_environ.
    * We skip this if we are in a Flatpak environment, because in that case
    * we already used `--setenv` for all the variables that we care about and
@@ -2530,16 +2512,6 @@ main (int argc,
    * any environment variables. Make sure we get an assertion failure
    * if we try. */
   g_clear_pointer (&container_env, pv_environ_free);
-
-  if (opt_launcher)
-    {
-      if (!flatpak_buffer_to_sealed_memfd_or_tmpfile (&lock_env_tmpf, "lock-env",
-                                                      lock_env->str, lock_env->len,
-                                                      error))
-        goto out;
-
-      lock_env_fd = g_strdup_printf ("%d", lock_env_tmpf.fd);
-    }
 
   if (bwrap != NULL)
     {
@@ -2645,9 +2617,6 @@ main (int argc,
           flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%d", fd);
         }
 
-      if (lock_env_fd != NULL)
-        flatpak_bwrap_add_arg_printf (adverb_argv, "--pass-fd=%s", lock_env_fd);
-
       switch (opt_shell)
         {
           case PV_SHELL_AFTER:
@@ -2714,13 +2683,6 @@ main (int argc,
 
       if (opt_verbose)
         flatpak_bwrap_add_arg (launcher_argv, "--verbose");
-
-      g_debug ("Adding locked environment variables...");
-      g_assert (lock_env_fd != NULL);
-      g_assert (lock_env_tmpf.fd >= 0);
-      flatpak_bwrap_add_fd (launcher_argv, glnx_steal_fd (&lock_env_tmpf.fd));
-      flatpak_bwrap_add_args (launcher_argv,
-                              "--lock-env-from-fd", lock_env_fd, NULL);
 
       /* In --launcher mode, arguments after the "--" separator are
        * passed to the launcher */

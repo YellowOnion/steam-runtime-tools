@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210630.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210630.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]
   * pv-wrap: Make Nvidia Vulkan ray-tracing more likely to work.
@@ -7,7 +7,7 @@ steam-runtime-tools (0.20210630.0) UNRELEASED; urgency=medium
   * steam-runtime-identify-library-abi: New executable to identify the
     ABI of shared libraries.
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 30 Jun 2021 11:58:07 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 30 Jun 2021 12:26:40 +0100
 
 steam-runtime-tools (0.20210617.1) scout; urgency=medium
 

@@ -212,7 +212,7 @@ test_arguments_validation (Fixture *f,
         NULL,
       },
       .exit_status = 1,
-      .stderr_contains = "Unable to realpath",
+      .stderr_contains = "Unable to find real path",
     },
   };
 

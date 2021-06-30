@@ -224,7 +224,7 @@ run (int argc,
       real_directory = realpath (opt_directory, NULL);
 
       if (real_directory == NULL)
-        return glnx_throw_errno_prefix (error, "Unable to realpath \"%s\"", opt_directory);
+        return glnx_throw_errno_prefix (error, "Unable to find real path of \"%s\"", opt_directory);
 
       if (nftw (real_directory, list_libraries_helper, 10, FTW_DEPTH|FTW_PHYS) < 0)
         {

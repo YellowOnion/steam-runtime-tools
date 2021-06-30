@@ -227,6 +227,8 @@ class Uploader:
             shutil.rmtree(str(upload))
 
         upload.mkdir()
+        packages = Path('_build', 'upload', 'packages')
+        packages.mkdir()
         sources = Path('_build', 'upload', 'sources')
         sources.mkdir()
 
@@ -234,6 +236,10 @@ class Uploader:
             if str(a).endswith('.dsc'):
                 subprocess.check_call([
                     'dcmd', 'ln', str(a), str(sources),
+                ])
+            elif str(a).endswith(('.deb', '.ddeb')):
+                subprocess.check_call([
+                    'dcmd', 'ln', str(a), str(packages),
                 ])
 
         a = Path('_build', 'production', 'pressure-vessel-bin.tar.gz')

@@ -102,11 +102,13 @@ class Uploader:
         path: str,
         login: str,
         dry_run: bool,
+        dbgsym_path: str = '',
         ssh_known_hosts: typing.Optional[str] = None,
         ssh_private_key: typing.Optional[str] = None,
     ) -> None:
         self.host = host
         self.basedir = path
+        self.dbgsym_path = dbgsym_path
         self.login = login
         self.dry_run = dry_run
 
@@ -227,6 +229,8 @@ class Uploader:
             shutil.rmtree(str(upload))
 
         upload.mkdir()
+        dbgsym = Path('_build', 'upload-dbgsym')
+        dbgsym.mkdir()
         packages = Path('_build', 'upload', 'packages')
         packages.mkdir()
         sources = Path('_build', 'upload', 'sources')
@@ -234,13 +238,16 @@ class Uploader:
 
         for a in Path('debian', 'tmp', 'artifacts', 'build').iterdir():
             if str(a).endswith('.dsc'):
+                # Use dcmd to also link all the files that make up the
+                # source package
                 subprocess.check_call([
                     'dcmd', 'ln', str(a), str(sources),
                 ])
             elif str(a).endswith(('.deb', '.ddeb')):
-                subprocess.check_call([
-                    'dcmd', 'ln', str(a), str(packages),
-                ])
+                os.link(str(a), str(packages / a.name))
+
+                if '-dbgsym_' in a.name or '-dbg_' in a.name:
+                    os.link(str(a), str(dbgsym / a.name))
 
         a = Path('_build', 'production', 'pressure-vessel-bin.tar.gz')
         os.link(str(a), upload / a.name)
@@ -305,7 +312,7 @@ class Uploader:
 
         logger.info('Uploading artifacts using rsync...')
 
-        for argv in [
+        commands = [
             # First pass: upload with --size-only to preserve hard-links
             # among source tarballs, excluding *.txt because they might
             # legitimately change without their size changing
@@ -345,7 +352,28 @@ class Uploader:
                 '_build/upload/',
                 '{}:{}/{}/'.format(self.ssh_target, self.basedir, version),
             ]
-        ]:
+        ]
+
+        if self.dbgsym_path:
+            # Upload detached debug symbols to a directory from which
+            # debuginfod will read them
+            commands.append([
+                'rsync',
+                '--rsh', ' '.join(map(shlex.quote, self.ssh[:-1])),
+                '--chmod=a+rX,og-w',
+                '--links',
+                '--partial',
+                '--perms',
+                '--recursive',
+                '--size-only',
+                '--verbose',
+                '_build/upload-dbgsym/',
+                '{}:{}/'.format(
+                    self.ssh_target, self.dbgsym_path,
+                ),
+            ])
+
+        for argv in commands:
             if self.dry_run:
                 logger.info('Would run: %r', argv)
             else:
@@ -389,6 +417,7 @@ def main() -> None:
 
     parser.add_argument('--host', required=True)
     parser.add_argument('--path', required=True)
+    parser.add_argument('--dbgsym-path', default='')
     parser.add_argument('--login', required=True)
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--ssh-known-hosts', default=None)

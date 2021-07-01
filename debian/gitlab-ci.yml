@@ -64,8 +64,11 @@ variables:
     PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE: ''
     # Path on P_V_CI_UPLOAD_HOST: /srv/VHOST/www/pressure-vessel/snapshots
     PRESSURE_VESSEL_CI_UPLOAD_PATH: ''
+    # Path on P_V_CI_UPLOAD_HOST: /srv/.../dbgsym/pressure-vessel
+    PRESSURE_VESSEL_CI_UPLOAD_DBGSYM_PATH: ''
     # Similar path on P_V_CI_UPLOAD_HOST for unreleased test-builds
     PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_PATH: ''
+    PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_DBGSYM_PATH: ''
     # User to log in on P_V_CI_UPLOAD_HOST
     PRESSURE_VESSEL_CI_UPLOAD_USER: ''
     # Create a File variable with a private key authorized for P_V_CI_UPLOAD_USER
@@ -528,13 +531,16 @@ deploy:
 
             if [ -n "${CI_COMMIT_TAG-}" ]; then
                 path="$PRESSURE_VESSEL_CI_UPLOAD_PATH"
+                dbgsym_path="$PRESSURE_VESSEL_CI_UPLOAD_DBGSYM_PATH"
             else
                 path="$PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_PATH"
+                dbgsym_path="$PRESSURE_VESSEL_CI_UPLOAD_PLAYGROUND_DBGSYM_PATH"
             fi
 
             ./pressure-vessel/upload-artifacts.py \
             --host="$PRESSURE_VESSEL_CI_UPLOAD_HOST" \
             --path="$path" \
+            --dbgsym-path="$dbgsym_path" \
             --login="$PRESSURE_VESSEL_CI_UPLOAD_USER" \
             --ssh-known-hosts="$PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE" \
             --ssh-private-key="$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE" \

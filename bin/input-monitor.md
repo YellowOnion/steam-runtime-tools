@@ -3,6 +3,11 @@ title: steam-runtime-input-monitor
 section: 1
 ...
 
+<!-- This document:
+Copyright 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 steam-runtime-input-monitor - list input devices

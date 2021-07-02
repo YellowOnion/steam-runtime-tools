@@ -1,6 +1,11 @@
 pressure-vessel file locking model
 ==================================
 
+<!-- This document:
+Copyright © 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 pressure-vessel uses fcntl locks to guard concurrent access to runtimes.
 They are `F_OFD_SETLK` locks if possible, falling back to POSIX
 process-oriented `F_SETLK` locks on older kernels. See `bwrap-lock.c`

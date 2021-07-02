@@ -1,6 +1,11 @@
 Contributing to pressure-vessel
 ===============================
 
+<!-- This document:
+Copyright © 2019-2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 See [README.md](README.md) for general information about
 `pressure-vessel`, and for information about building and testing it.
 

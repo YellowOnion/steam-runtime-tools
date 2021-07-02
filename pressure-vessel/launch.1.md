@@ -3,6 +3,11 @@ title: pressure-vessel-launch
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2020-2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-launch - client to launch processes in a container

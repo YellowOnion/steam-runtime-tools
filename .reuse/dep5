@@ -1,0 +1,49 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: steam-runtime-tools
+Source: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/
+
+Files: debian/*
+Copyright: 2013-2021 Collabora Ltd.
+License: MIT
+
+Files:
+ docs/reference/version.xml.in
+ helpers/shader.*
+ tests/template.test.in
+ tests/*.json
+ tests/*/*.json
+ tests/*/*.symbols
+Copyright: 2019-2021 Collabora Ltd.
+License: MIT
+
+Files: subprojects/libcapsule/*
+Copyright:
+ 1999-2018 Free Software Foundation, Inc.
+ 2017-2020 Collabora Ltd.
+License: LGPL-2.1-or-later AND FSFAP AND MIT
+
+Files: subprojects/libcapsule/tests/CapsuleTestDpkg.pm
+Copyright:
+ 2007 Raphaël Hertzog
+ 2009-2010 Modestas Vainius
+License: GPL-2.0-or-later
+
+Files:
+ build-aux/git-version-gen
+ subprojects/libcapsule/build-aux/git-version-gen
+Copyright: 2007-2017 Free Software Foundation, Inc.
+License: GPL-3.0-or-later
+
+Files: subprojects/libglnx/*
+Copyright:
+ 1995-1997 Josh MacDonald
+ 1995-1997 Peter Mattis
+ 1995-1997 Spencer Kimball
+ 2010-2011 Lennart Poettering
+ 2012-2021 Colin Walters
+ 2015 Canonical Ltd.
+ 2016 Zbigniew Jędrzejewski-Szmek
+ 2017-2019 Endless OS Foundation LLC
+ 2017 Red Hat, Inc.
+ 2019 Collabora Ltd.
+License: LGPL-2.1-or-later AND FSFAP AND MIT

@@ -3,6 +3,11 @@ title: steam-runtime-steam-remote
 section: 1
 ...
 
+<!-- This document:
+Copyright 2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 steam-runtime-steam-remote - stub Steam executable

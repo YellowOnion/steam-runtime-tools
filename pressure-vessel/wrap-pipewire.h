@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Collabora Ltd.
  *
- * SPDX-Identifier: MIT
+ * SPDX-License-Identifier: MIT
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),

@@ -1,3 +1,6 @@
+# Copyright 2019 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+
 # libsteam-runtime-tools itself
 {
    libsrt deliberate one-per-process leak

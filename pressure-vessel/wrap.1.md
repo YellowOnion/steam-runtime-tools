@@ -3,6 +3,11 @@ title: pressure-vessel-wrap
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2020-2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-wrap - run programs in a bubblewrap container

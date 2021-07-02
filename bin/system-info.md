@@ -3,6 +3,11 @@ title: steam-runtime-system-info
 section: 1
 ...
 
+<!-- This document:
+Copyright 2019-2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 steam-runtime-system-info - examine the Steam runtime environment and diagnose potential issues

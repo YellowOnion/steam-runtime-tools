@@ -3,6 +3,11 @@ title: pressure-vessel-unruntime
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-unruntime - run Steam games in a bubblewrap container

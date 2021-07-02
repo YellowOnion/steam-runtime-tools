@@ -1,6 +1,11 @@
 Testing pressure-vessel on multiple-GPU systems
 ===============================================
 
+<!-- This document:
+Copyright © 2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 Multiple GPU support on Vulkan is complicated, and it often isn't obvious
 which part of the stack has a bug. This document describes how you can
 test various scenarios, to help to isolate which part of the stack we

@@ -5,6 +5,7 @@
  * Copyright (C) 2007  OpenedHand Ltd.
  * Copyright (C) 2009  Intel Corp.
  * Copyright © 2019-2021 Collabora Ltd.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

@@ -3,6 +3,11 @@ title: steam-runtime-identify-library-abi
 section: 1
 ...
 
+<!-- This document:
+Copyright 2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 steam-runtime-identify-library-abi - Identify the ABI of the libraries stored in a specific directory or from the ldconfig output list

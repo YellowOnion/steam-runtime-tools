@@ -1,6 +1,11 @@
 steam-runtime-tools — Steam Runtime integration for the Steam client
 ====================================================================
 
+<!-- This document:
+Copyright 2019-2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 The steam-runtime-tools library provides low-level Unix-specific tools
 and functionality for the Steam client, including the pressure-vessel
 tool that runs Steam games in containers.

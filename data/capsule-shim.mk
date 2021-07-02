@@ -1,3 +1,6 @@
+# Copyright © 2017 Collabora Ltd
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
 # allow stub file generation to be quiet or verbose per the value of V
 V         ?= 0
 GENSTUB_V1 =

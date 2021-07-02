@@ -1,6 +1,7 @@
 dnl Copyright © 2017 Collabora Ltd
 
 dnl This file is part of libcapsule.
+dnl SPDX-License-Identifier: LGPL-2.1-or-later
 
 dnl libcapsule is free software: you can redistribute it and/or modify
 dnl it under the terms of the GNU Lesser General Public License as

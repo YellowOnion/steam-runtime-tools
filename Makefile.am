@@ -1,4 +1,5 @@
 # Copyright © 2017 Collabora Ltd
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 # This file is part of libcapsule.
 
@@ -567,6 +568,12 @@ CLEANFILES             += $(nodist_tests_shim_libnotgl_la_SOURCES)
 CLEANFILES             += $(nodist_tests_shim_libnotgles_la_SOURCES)
 
 EXTRA_DIST             += $(top_srcdir)/.version
+EXTRA_DIST             += .reuse/dep5
+EXTRA_DIST             += LICENSES/FSFAP.txt
+EXTRA_DIST             += LICENSES/GPL-2.0-or-later.txt
+EXTRA_DIST             += LICENSES/GPL-3.0-or-later.txt
+EXTRA_DIST             += LICENSES/LGPL-2.1-or-later.txt
+EXTRA_DIST             += LICENSES/MIT.txt
 EXTRA_DIST             += autogen.sh
 EXTRA_DIST             += build-aux/git-version-gen
 EXTRA_DIST             += ci/Jenkinsfile

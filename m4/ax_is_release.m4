@@ -39,6 +39,7 @@
 #
 #   Copyright (c) 2015 Philip Withnall <philip@tecnocode.co.uk>
 #   Copyright (c) 2016 Collabora Ltd.
+#   SPDX-License-Identifier: FSFAP
 #
 #   Copying and distribution of this file, with or without modification, are
 #   permitted in any medium without royalty provided the copyright notice

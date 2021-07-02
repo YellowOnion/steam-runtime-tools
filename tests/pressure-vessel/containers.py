@@ -539,7 +539,8 @@ class TestContainers(BaseTest):
         argv = [
             self.pv_wrap,
             '--verbose',
-            '--write-final-argv', final_argv_temp.name
+            '--write-final-argv', final_argv_temp.name,
+            '--filesystem', self.artifacts,
         ]
 
         if archive and (fast_path or copy):

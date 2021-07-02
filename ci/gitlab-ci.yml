@@ -161,3 +161,11 @@ build:arch:
             pkgconf \
             sudo \
             ${NULL+}
+
+reuse:
+    image:
+        name: fsfe/reuse:latest
+        entrypoint: [""]
+    before_script: []
+    script:
+        - reuse lint

@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // notgl-green — one of two implementations of libnotgl, taking the
 // role of the NVIDIA implementation of OpenGL

@@ -1,3 +1,6 @@
+// Copyright © 2017-2020 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
+
 #include "capsule/capsule.h"
 #include "capsule/capsule-private.h"
 #include "capsule/capsule-malloc.h"

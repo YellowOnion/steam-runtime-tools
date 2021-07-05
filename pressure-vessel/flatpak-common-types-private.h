@@ -1,6 +1,7 @@
 /*
  * Taken from Flatpak, last updated: 1.8.2
  * Copyright © 2015 Red Hat, Inc
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

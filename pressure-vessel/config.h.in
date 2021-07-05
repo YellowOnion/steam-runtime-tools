@@ -1,3 +1,8 @@
+/*
+ * Copyright 2019-2020 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ */
+
 #define G_LOG_DOMAIN "pressure-vessel"
 /* These are the paths where we expect to find the system fonts */
 #define SYSTEM_FONTS_DIR "/usr/share/fonts"

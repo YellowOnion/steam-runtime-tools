@@ -3,6 +3,11 @@ title: pressure-vessel-adverb
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2020-2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-adverb - wrap processes in various ways

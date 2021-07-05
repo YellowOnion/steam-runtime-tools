@@ -1,6 +1,11 @@
 Third-party modules
 ===================
 
+<!-- This document:
+Copyright © 2018-2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 pressure-vessel includes the capsule-capture-libs utility from libcapsule,
 which is licensed under [LGPL-2.1-or-later][]. Complete source code can
 be obtained from the same place as pressure-vessel, or from

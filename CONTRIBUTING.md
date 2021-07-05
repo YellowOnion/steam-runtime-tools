@@ -1,5 +1,10 @@
 # Contributing to steam-runtime-tools
 
+<!-- This file:
+Copyright 2019-2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 ## Issue tracking
 
 Our main bug tracking system for the whole Steam Runtime is

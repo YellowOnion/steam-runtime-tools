@@ -1,4 +1,6 @@
 #!@sh@
+# Copyright 2019-2020 Collabora Ltd.
+# SPDX-License-Identifier: MIT
 exec "@python@" \
 "${DESTDIR}@prefix@/@pv_dir@/@srcdir@/pressure-vessel/build-relocatable-install.py" \
 --prefix "@prefix@" \

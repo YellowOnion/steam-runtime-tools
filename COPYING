@@ -2,7 +2,7 @@ SPDX-License-Identifier: MIT and LGPL-2.1-or-later and Apache-2.0 and Zlib
 
 The overall license of steam-runtime-tools and pressure-vessel is
 LGPL-2.1-or-later <https://spdx.org/licenses/LGPL-2.1-or-later.html>,
-which can be found in the file `COPYING.LGPL-2.1`:
+which can be found in the file `LICENSES/LGPL-2.1-or-later.txt`:
 
     SPDX-License-Identifier: LGPL-2.1-or-later
 
@@ -21,8 +21,8 @@ which can be found in the file `COPYING.LGPL-2.1`:
 
 Some of the individual source files are under the more permissive
 MIT/X11 or Zlib licenses, and can be extracted into proprietary projects
-without needing to follow the terms of the LGPL. See `COPYING.MIT` and
-`COPYING.Zlib` or the individual source files for details.
+without needing to follow the terms of the LGPL. See `LICENSES/`
+or the individual source files for details.
 
 See individual source files for copyright and licensing details, and
 in particular pressure-vessel/THIRD-PARTY.md for details of third-party
@@ -30,4 +30,4 @@ libraries used or included in pressure-vessel releases.
 
 For supporting code that is marked as being under the
 Apache license version 2.0, the full license text can be found in
-`COPYING.Apache-2.0`.
+`LICENSES/Apache-2.0.txt`.

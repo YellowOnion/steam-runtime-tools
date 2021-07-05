@@ -3,6 +3,11 @@ title: pressure-vessel-try-setlocale
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2019 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-try-setlocale - check whether a locale works

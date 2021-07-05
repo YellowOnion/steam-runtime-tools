@@ -1,5 +1,10 @@
 # Steam compatibility tool interface
 
+<!-- This document:
+Copyright 2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 ## Compatibility tool declaration
 
 Compatibility tools are declared by a file `compatibilitytool.vdf`,

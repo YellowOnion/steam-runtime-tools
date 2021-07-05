@@ -460,4 +460,17 @@ deploy:
             --ssh-private-key="$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE" \
             ${NULL+}
 
+reuse:
+    stage: test
+    tags:
+        - docker
+        - linux
+    needs: []
+    image:
+        name: fsfe/reuse:latest
+        entrypoint: [""]
+    before_script: []
+    script:
+        - reuse lint
+
 # vim:set sw=4 sts=4 et:

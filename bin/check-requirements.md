@@ -3,6 +3,11 @@ title: steam-runtime-check-requirements
 section: 1
 ...
 
+<!-- This document:
+Copyright 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 steam-runtime-check-requirements - perform checks to ensure that the Steam client requirements are met

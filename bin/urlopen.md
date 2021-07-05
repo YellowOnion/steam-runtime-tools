@@ -3,6 +3,11 @@ title: steam-runtime-urlopen
 section: 1
 ...
 
+<!-- This document:
+Copyright 2021 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 steam-runtime-urlopen - Alternative xdg-open executable

@@ -1,3 +1,7 @@
+/*
+ * Copyright 2019-2021 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ */
 #define G_LOG_DOMAIN "@project_name@"
 #define _SRT_SONAME "libsteam-runtime-tools-@api_major@.so.@abi_major"
 #define _SRT_MULTIARCH "@multiarch@"

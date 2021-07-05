@@ -2,6 +2,7 @@
  * A cut-down version of common/flatpak-utils from Flatpak
  *
  * Copyright © 2014 Red Hat, Inc
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

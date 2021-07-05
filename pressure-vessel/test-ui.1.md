@@ -3,6 +3,11 @@ title: pressure-vessel-test-ui
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-test-ui - testing/development UI for pressure-vessel

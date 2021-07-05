@@ -3,6 +3,11 @@ title: pressure-vessel-locale-gen
 section: 1
 ...
 
+<!-- This document:
+Copyright © 2019-2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 # NAME
 
 pressure-vessel-locale-gen - generate additional locales

@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2021 Collabora Ltd.
+# SPDX-License-Identifier: MIT
 
 set -eux
 

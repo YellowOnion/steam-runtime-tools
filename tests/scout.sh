@@ -33,7 +33,7 @@ elif [ -n "${IMAGES_SSH_HOST-}" ] && [ -n "${IMAGES_SSH_PATH-}" ]; then
 else
     populate_depot_args=( \
         "${populate_depot_args[@]}" \
-        --version latest-container-runtime-public-beta \
+        --version latest-steam-client-public-beta \
     )
 fi
 

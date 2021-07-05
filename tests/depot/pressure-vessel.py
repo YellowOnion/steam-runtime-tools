@@ -123,7 +123,7 @@ class TestPressureVessel(unittest.TestCase):
             if os.access(ldlp, os.W_OK):
                 self.ld_library_path_runtime = ldlp = os.path.abspath(ldlp)
             else:
-                old = self.ld_library_path_runtime
+                old = ldlp
                 ldlp = os.path.join(self.tmpdir.name, 'ldlp')
                 shutil.copytree(old, ldlp, symlinks=True)
                 self.ld_library_path_runtime = ldlp
@@ -136,10 +136,7 @@ class TestPressureVessel(unittest.TestCase):
             old = self.scout_layered
             new = os.path.join(self.tmpdir.name, 'scout-on-soldier')
             shutil.copytree(old, new, symlinks=True)
-            os.symlink(
-                self.ld_library_path_runtime,
-                os.path.join(new, 'steam-runtime'),
-            )
+            os.symlink(ldlp, os.path.join(new, 'steam-runtime'))
             self.scout_layered = new
         else:
             self.scout_layered = ''

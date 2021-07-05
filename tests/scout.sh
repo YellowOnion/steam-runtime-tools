@@ -19,6 +19,10 @@ if [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     )
 fi
 
+if [ -z "${PRESSURE_VESSEL_DOWNLOAD_URL-}" ]; then
+    PRESSURE_VESSEL_DOWNLOAD_URL=https://repo.steampowered.com/pressure-vessel/snapshots/
+fi
+
 if [ -n "${IMAGES_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     populate_depot_args=( \
         "${populate_depot_args[@]}" \
@@ -33,11 +37,11 @@ elif [ -n "${IMAGES_SSH_HOST-}" ] && [ -n "${IMAGES_SSH_PATH-}" ]; then
 else
     populate_depot_args=( \
         "${populate_depot_args[@]}" \
-        --version latest-container-runtime-public-beta \
+        --version latest-steam-client-public-beta \
     )
 fi
 
-if [ -n "${PRESSURE_VESSEL_DOWNLOAD_URL-}" ] && [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
+if [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     pressure_vessel_args=( \
         --pressure-vessel-uri="${PRESSURE_VESSEL_DOWNLOAD_URL}" \
         --pressure-vessel-version=latest \
@@ -50,7 +54,8 @@ elif [ -n "${PRESSURE_VESSEL_SSH_HOST-"${IMAGES_SSH_HOST-}"}" ] && [ -n "${PRESS
     )
 else
     pressure_vessel_args=( \
-        --pressure-vessel-from-runtime-json='{"version": "latest-container-runtime-public-beta"}' \
+        --pressure-vessel-uri="${PRESSURE_VESSEL_DOWNLOAD_URL}" \
+        --pressure-vessel-version=latest \
     )
 fi
 

@@ -18,6 +18,8 @@ pressure-vessel-adverb - wrap processes in various ways
 [**--[no-]exit-with-parent**]
 [**--fd** *FD*...]
 [**--[no-]generate-locales**]
+[**--ld-audit** *MODULE*...]
+[**--ld-preload** *MODULE*...]
 [**--pass-fd** *FD*...]
 [**--shell** **none**|**after**|**fail**|**instead**]
 [**--subreaper**]
@@ -27,6 +29,7 @@ pressure-vessel-adverb - wrap processes in various ways
 [**--[no-]wait**]
 [**--[no-]write**]
 **--lock-file** *FILENAME*...]
+
 [**--verbose**]
 [**--**]
 *COMMAND* [*ARGUMENTS...*]
@@ -67,6 +70,16 @@ exit status.
     temporary directory which is passed to the *COMMAND* in the
     **LOCPATH** environment variable.
     **--no-generate-locales** disables this behaviour, and is the default.
+
+**--ld-audit** *MODULE*
+:   Add *MODULE* to **LD_AUDIT** before executing *COMMAND*.
+
+**--ld-preload** *MODULE*
+:   Add *MODULE* to **LD_PRELOAD** before executing *COMMAND*.
+    Some adjustments may be performed to the provided *MODULE*, e.g.
+    multiple preloads of gameoverlayrenderer.so for different ABIs may be
+    joined together into a single path by leveraging the dynamic linker
+    token expansion feature.
 
 **--lock-file** *FILENAME*
 :   Lock the file *FILENAME* according to the most recently seen

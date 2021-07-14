@@ -2530,6 +2530,7 @@ bind_runtime_base (PvRuntime *self,
   {
     "/etc/amd",
     "/etc/drirc",
+    "/etc/nvidia",
     "/run/bumblebee.socket",
     NULL
   };
@@ -4739,10 +4740,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   const GList *icd_iter;
   gboolean all_libglx_from_provider = TRUE;
   gboolean all_libdrm_from_provider = TRUE;
+  gboolean all_nvidia_from_provider = TRUE;
   g_autoptr(GHashTable) drirc_data_in_provider = g_hash_table_new_full (g_str_hash,
                                                                         g_str_equal,
                                                                         g_free, NULL);
   g_autoptr(GHashTable) libdrm_data_in_provider = g_hash_table_new_full (g_str_hash,
+                                                                         g_str_equal,
+                                                                         g_free, NULL);
+  g_autoptr(GHashTable) nvidia_data_in_provider = g_hash_table_new_full (g_str_hash,
                                                                          g_str_equal,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -4930,6 +4935,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *libdrm = NULL;
           g_autofree gchar *libdrm_amdgpu = NULL;
           g_autofree gchar *libglx_mesa = NULL;
+          g_autofree gchar *libglx_nvidia = NULL;
           g_autofree gchar *platform_token = NULL;
           g_autoptr(GPtrArray) patterns = NULL;
           SrtSystemInfo *arch_system_info;
@@ -5074,6 +5080,24 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libglx_from_provider = FALSE;
             }
 
+          libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
+
+          /* If we have libGLX_nvidia.so.0 in overrides we also want to mount
+           * ${prefix}/share/nvidia from the provider. ${prefix} is derived from
+           * the absolute path of libGLX_nvidia.so.0 */
+          if (g_file_test (libglx_nvidia, G_FILE_TEST_IS_SYMLINK))
+            {
+              pv_runtime_collect_lib_data (self, arch, "nvidia", libglx_nvidia,
+                                           provider_in_container_namespace_guarded,
+                                           nvidia_data_in_provider);
+            }
+          else
+            {
+              /* For at least a single architecture, libGLX_nvidia is newer in the container */
+              all_nvidia_from_provider = FALSE;
+            }
+
+
           dirs = multiarch_details_get_libdirs (arch->details,
                                                 MULTIARCH_LIBDIRS_FLAGS_NONE);
 
@@ -5175,6 +5199,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (!pv_runtime_finish_lib_data (self, bwrap, "drirc.d", "libGLX_mesa.so.0",
                                    all_libglx_from_provider,
                                    drirc_data_in_provider, error))
+    return FALSE;
+
+  if (!pv_runtime_finish_lib_data (self, bwrap, "nvidia", "libGLX_nvidia.so.0",
+                                   all_nvidia_from_provider,
+                                   nvidia_data_in_provider, error))
     return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");

@@ -15,6 +15,17 @@ log_to_file=
 log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${PRESSURE_VESSEL_VARIABLE_DIR-"${here}/var"}"}
 keep_logs=
 use_timestamp=
+ld_preload=
+# Arguments for pressure-vessel-wrap
+declare -a container_args=()
+
+if [ -n "${LD_PRELOAD-}" ]; then
+    container_args+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
+    ld_preload="$LD_PRELOAD"
+fi
+
+unset LD_PRELOAD
+
 
 if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
     verbose=yes
@@ -33,7 +44,7 @@ fi
 
 log () {
     if [ -n "$use_timestamp" ]; then
-        timestamp=$(LD_PRELOAD='' date +'%H:%M:%S.%6N')
+        timestamp=$(date +'%H:%M:%S.%6N')
         printf '%s\n' "${timestamp}: ${me}[$$]: $*" >&2
     else
         printf '%s\n' "${me}[$$]: $*" >&2
@@ -287,13 +298,17 @@ case "${STEAM_RUNTIME-}" in
         ;;
 esac
 
+old_IFS="$IFS"
+IFS=":"
+for word in $ld_preload; do
+    container_args+=("--ld-preload=$word")
+done
+IFS="$old_IFS"
+
 unset LD_LIBRARY_PATH
 unset STEAM_RUNTIME
 
 pressure_vessel="${PRESSURE_VESSEL_PREFIX:-"${here}/pressure-vessel"}"
-
-# Arguments for pressure-vessel-wrap, currently none
-declare -a container_args=()
 
 if [ -z "${suite}" ]; then
     run=run
@@ -387,7 +402,6 @@ fi
     --lock-file "${rendezvous}/.ref" \
     -- \
 env \
-    -u LD_PRELOAD \
     -u FONTCONFIG_PATH \
     -u SteamLauncherUI \
     -u SteamAppId \
@@ -432,7 +446,6 @@ if [ -n "$is_main" ]; then
 else
     launch_args=( \
         ${launch_args[0]+"${launch_args[@]}"} \
-        --unset-env LD_PRELOAD \
     )
 fi
 

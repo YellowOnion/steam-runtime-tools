@@ -1,3 +1,21 @@
+steam-runtime-tools (0.20210630.1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pv-runtime: Share /usr/share/nvidia with container if NVIDIA driver
+    is used (steam-runtime-tools#73, T29292)
+  * pressure-vessel: Adjust LD_PRELOAD to reduce misleading ELF warnings
+    (steam-runtime-tools#33, T28950)
+
+  [ Simon McVittie ]
+  * pressure-vessel: Remove the concept of "locking" environment variables.
+    This complexity is no longer necessary with the simplified compat-tool
+    interface in the current stable version of Steam.
+  * pv-wrap: Optionally try to run games in a systemd scope
+  * Add licensing information in REUSE format
+  * CI/test improvements
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 20 Jul 2021 18:03:02 +0100
+
 steam-runtime-tools (0.20210630.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

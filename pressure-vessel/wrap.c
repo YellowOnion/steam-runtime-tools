@@ -703,6 +703,7 @@ static char *opt_runtime_id = NULL;
 static Tristate opt_share_home = TRISTATE_MAYBE;
 static gboolean opt_share_pid = TRUE;
 static gboolean opt_single_thread = FALSE;
+static gboolean opt_systemd_scope = FALSE;
 static double opt_terminate_idle_timeout = 0.0;
 static double opt_terminate_timeout = -1.0;
 static char *opt_variable_dir = NULL;
@@ -1222,6 +1223,12 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_single_thread,
     "Disable multi-threaded code paths, for debugging",
     NULL },
+  { "systemd-scope", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_systemd_scope,
+    "Attempt to run the game in a systemd scope", NULL },
+  { "no-systemd-scope", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_systemd_scope,
+    "Do not run the game in a systemd scope", NULL },
   { "terminal", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_terminal_cb,
     "none: disable features that would use a terminal; "
@@ -1338,6 +1345,7 @@ main (int argc,
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
+  const char *steam_app_id;
 
   setlocale (LC_ALL, "");
 
@@ -1399,6 +1407,8 @@ main (int argc,
 
   opt_remove_game_overlay = pv_boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
                                                     FALSE);
+  opt_systemd_scope = pv_boolean_environment ("PRESSURE_VESSEL_SYSTEMD_SCOPE",
+                                              opt_systemd_scope);
   opt_import_vulkan_layers = pv_boolean_environment ("PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS",
                                                      TRUE);
 
@@ -1577,6 +1587,8 @@ main (int argc,
       argc--;
     }
 
+  steam_app_id = pv_wrap_get_steam_app_id (opt_steam_app_id);
+
   home = g_get_home_dir ();
 
   if (opt_share_home == TRISTATE_YES)
@@ -1598,27 +1610,11 @@ main (int argc,
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
     }
-  else if (opt_steam_app_id)
+  else if (steam_app_id != NULL)
     {
       is_home_shared = FALSE;
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
-                                                opt_steam_app_id);
-      opt_fake_home = g_build_filename (home, ".var", "app",
-                                        opt_freedesktop_app_id, NULL);
-    }
-  else if (g_getenv ("STEAM_COMPAT_APP_ID") != NULL)
-    {
-      is_home_shared = FALSE;
-      opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
-                                                g_getenv ("STEAM_COMPAT_APP_ID"));
-      opt_fake_home = g_build_filename (home, ".var", "app",
-                                        opt_freedesktop_app_id, NULL);
-    }
-  else if (g_getenv ("SteamAppId") != NULL)
-    {
-      is_home_shared = FALSE;
-      opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
-                                                g_getenv ("SteamAppId"));
+                                                steam_app_id);
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
     }
@@ -2787,9 +2783,15 @@ main (int argc,
     }
 
   if (opt_only_prepare)
-    ret = 0;
-  else
-    pv_bwrap_execve (final_argv, fileno (original_stdout), error);
+    {
+      ret = 0;
+      goto out;
+    }
+
+  if (opt_systemd_scope)
+    pv_wrap_move_into_scope (steam_app_id);
+
+  pv_bwrap_execve (final_argv, fileno (original_stdout), error);
 
 out:
   if (local_error != NULL)

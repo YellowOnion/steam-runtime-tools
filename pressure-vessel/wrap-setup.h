@@ -36,3 +36,7 @@ void pv_wrap_share_sockets (FlatpakBwrap *bwrap,
 gboolean pv_wrap_use_host_os (FlatpakExports *exports,
                               FlatpakBwrap *bwrap,
                               GError **error);
+
+void pv_wrap_move_into_scope (const char *steam_app_id);
+
+const char *pv_wrap_get_steam_app_id (const char *from_command_line);

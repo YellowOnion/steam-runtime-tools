@@ -84,6 +84,34 @@ gboolean flatpak_buffer_to_sealed_memfd_or_tmpfile (GLnxTmpfile *tmpf,
                                                     size_t       len,
                                                     GError     **error);
 
+typedef GMainContext GMainContextPopDefault;
+static inline void
+flatpak_main_context_pop_default_destroy (void *p)
+{
+  GMainContext *main_context = p;
+
+  if (main_context)
+    {
+      /* Ensure we don't leave some cleanup callbacks unhandled as we will never iterate this context again. */
+      while (g_main_context_pending (main_context))
+        g_main_context_iteration (main_context, TRUE);
+
+      g_main_context_pop_thread_default (main_context);
+      g_main_context_unref (main_context);
+    }
+}
+
+static inline GMainContextPopDefault *
+flatpak_main_context_new_default (void)
+{
+  GMainContext *main_context = g_main_context_new ();
+
+  g_main_context_push_thread_default (main_context);
+  return main_context;
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (GMainContextPopDefault, flatpak_main_context_pop_default_destroy)
+
 #if !GLIB_CHECK_VERSION (2, 43, 4)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (GUnixFDList, g_object_unref)
 #endif

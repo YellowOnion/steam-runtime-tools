@@ -68,6 +68,13 @@ launcher1 = gnome.gdbus_codegen(
   namespace : 'Pv',
 )
 
+systemd_dbus = gnome.gdbus_codegen(
+  'flatpak-systemd-dbus-generated',
+  sources : 'org.freedesktop.systemd1.xml',
+  interface_prefix : 'org.freedesktop.systemd1.',
+  namespace : 'Systemd',
+)
+
 enums = gnome.mkenums_simple(
   'enumtypes',
   sources : headers,
@@ -119,6 +126,21 @@ launcher_codegen = static_library(
 launcher_codegen_dep = declare_dependency(
   link_with : launcher_codegen,
   sources : launcher1[1],
+)
+
+systemd_codegen = static_library(
+  'pressure-vessel-systemd-codegen',
+  sources : systemd_dbus,
+  dependencies : [
+    gio_unix,
+  ],
+  c_args : silence_gdbus_codegen_warnings + pv_c_args,
+  include_directories : pv_include_dirs,
+  install: false,
+)
+systemd_codegen_dep = declare_dependency(
+  link_with : systemd_codegen,
+  sources : systemd_dbus[1],
 )
 
 executable(
@@ -217,6 +239,7 @@ executable(
   c_args : pv_c_args,
   dependencies : [
     pressure_vessel_utils_dep,
+    systemd_codegen_dep,
     gio_unix,
     xau,
     libglnx_dep,

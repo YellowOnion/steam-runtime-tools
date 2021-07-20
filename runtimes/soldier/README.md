@@ -56,9 +56,6 @@ Some more advanced environment variables (subject to change):
 * `PRESSURE_VESSEL_SHELL=instead` runs an interactive shell in the
     container instead of running the game.
 
-* `STEAM_COMPAT_FORCE_SESSIONS` forces session mode when the compat tool
-    is used.
-
 * See the pressure-vessel source code for more.
 
 Licensing and copyright

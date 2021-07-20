@@ -122,6 +122,14 @@ gchar *my_g_utf8_make_valid (const gchar *str,
                              gssize len);
 #endif
 
+#if !GLIB_CHECK_VERSION(2, 54, 0)
+#define g_ptr_array_find_with_equal_func(h, n, e, i) my_g_ptr_array_find_with_equal_func (h, n, e, i)
+gboolean my_g_ptr_array_find_with_equal_func (GPtrArray *haystack,
+                                              gconstpointer needle,
+                                              GEqualFunc equal_func,
+                                              guint *index_);
+#endif
+
 #ifndef g_info
 #define g_info(...)     g_log (G_LOG_DOMAIN,         \
                                G_LOG_LEVEL_INFO,     \

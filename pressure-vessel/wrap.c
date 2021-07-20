@@ -714,39 +714,11 @@ static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 static char *opt_write_final_argv = NULL;
 
-typedef struct
-{
-  const char *variable;
-  GPtrArray *values;
-} PreloadModule;
-
 static PreloadModule opt_preload_modules[] =
 {
-  { "LD_AUDIT", NULL },
-  { "LD_PRELOAD", NULL },
+  { "LD_AUDIT", NULL, NULL },
+  { "LD_PRELOAD", NULL, NULL },
 };
-
-static gboolean
-append_preload_module (const char *variable,
-                       const char *value,
-                       GError **error)
-{
-  gsize i;
-
-  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
-    {
-      if (strcmp (variable, opt_preload_modules[i].variable) == 0)
-        break;
-    }
-
-  g_return_val_if_fail (i < G_N_ELEMENTS (opt_preload_modules), FALSE);
-
-  if (opt_preload_modules[i].values == NULL)
-    opt_preload_modules[i].values = g_ptr_array_new_with_free_func (g_free);
-
-  g_ptr_array_add (opt_preload_modules[i].values, g_strdup (value));
-  return TRUE;
-}
 
 /*
  * check_main_program:
@@ -768,7 +740,9 @@ opt_host_ld_preload_cb (const gchar *option_name,
 {
   g_warning ("%s is deprecated, use --ld-preload=%s instead",
              option_name, value);
-  return append_preload_module ("LD_PRELOAD", value, error);
+  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
+                            "LD_PRELOAD", value, FALSE);
+  return TRUE;
 }
 
 static gboolean
@@ -777,7 +751,9 @@ opt_ld_audit_cb (const gchar *option_name,
                  gpointer data,
                  GError **error)
 {
-  return append_preload_module ("LD_AUDIT", value, error);
+  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
+                            "LD_AUDIT", value, FALSE);
+  return TRUE;
 }
 
 static gboolean
@@ -786,7 +762,9 @@ opt_ld_preload_cb (const gchar *option_name,
                    gpointer data,
                    GError **error)
 {
-  return append_preload_module ("LD_PRELOAD", value, error);
+  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
+                            "LD_PRELOAD", value, FALSE);
+  return TRUE;
 }
 
 static gboolean
@@ -2113,12 +2091,9 @@ main (int argc,
   for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
     {
       const char *variable = opt_preload_modules[i].variable;
-      const GPtrArray *values = opt_preload_modules[i].values;
-      g_autoptr(GString) adjusted = NULL;
+      const GPtrArray *values = opt_preload_modules[i].original_values;
       gsize len;
       gsize j;
-
-      adjusted = g_string_new ("");
 
       g_debug ("Adjusting %s...", variable);
 
@@ -2164,7 +2139,9 @@ main (int argc,
 
                   adjusted_path = g_build_filename ("/run/parent", preload, NULL);
                   g_debug ("%s -> %s", preload, adjusted_path);
-                  pv_search_path_append (adjusted, adjusted_path);
+                  pv_append_preload_module (opt_preload_modules,
+                                            G_N_ELEMENTS (opt_preload_modules),
+                                            variable, adjusted_path, TRUE);
 
                   if (g_str_has_suffix (preload, "/libshared-library-guard.so"))
                     {
@@ -2185,7 +2162,9 @@ main (int argc,
               else
                 {
                   g_debug ("%s -> unmodified", preload);
-                  pv_search_path_append (adjusted, preload);
+                  pv_append_preload_module (opt_preload_modules,
+                                            G_N_ELEMENTS (opt_preload_modules),
+                                            variable, preload, TRUE);
                 }
 
               /* No FlatpakExports here: any file not in /usr or /app that
@@ -2207,7 +2186,9 @@ main (int argc,
                   /* When using a runtime we can't write to /usr/ or /libQUAL/,
                    * so redirect this preloaded module to the corresponding
                    * location in /run/host. */
-                  pv_search_path_append (adjusted, adjusted_path);
+                  pv_append_preload_module (opt_preload_modules,
+                                            G_N_ELEMENTS (opt_preload_modules),
+                                            variable, adjusted_path, TRUE);
                 }
               else
                 {
@@ -2228,33 +2209,15 @@ main (int argc,
                                                        preload);
                     }
 
-                  pv_search_path_append (adjusted, preload);
+                  pv_append_preload_module (opt_preload_modules,
+                                            G_N_ELEMENTS (opt_preload_modules),
+                                            variable, preload, TRUE);
                 }
             }
           else
             {
               g_info ("%s module '%s' does not exist", variable, preload);
             }
-        }
-
-      if (bwrap != NULL)
-        {
-          /* If we adjusted the module paths from the one provided by the host
-           * to something that is valid in the container, we shouldn't add them to
-           * the bwrap envp. Otherwise when we call "pv_bwrap_execve()" we will
-           * create an environment that tries to preload libraries that are not
-           * available, until it actually executes "bwrap".
-           * This can be avoided by using the bwrap option "--setenv" instead. */
-          if (adjusted->len != 0)
-            flatpak_bwrap_add_args (bwrap, "--setenv", variable,
-                                    adjusted->str, NULL);
-        }
-      else
-        {
-          if (adjusted->len != 0)
-            pv_environ_setenv (container_env, variable, adjusted->str);
-          else
-            pv_environ_setenv (container_env, variable, NULL);
         }
     }
 
@@ -2658,6 +2621,37 @@ main (int argc,
             break;
         }
 
+      for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+        {
+          const gchar *variable = opt_preload_modules[i].variable;
+          const GPtrArray *values = opt_preload_modules[i].adjusted_values;
+          const gchar *option = NULL;
+          gsize j;
+
+          if (g_strcmp0 (variable, "LD_AUDIT") == 0)
+            {
+              option = "--ld-audit";
+            }
+          else if (g_strcmp0 (variable, "LD_PRELOAD") == 0)
+            {
+              option = "--ld-preload";
+            }
+          else
+            {
+              /* Programming error: this logic needs to be updated
+               * to handle this new preload module */
+              g_critical ("Unhandled preload module %s", variable);
+              continue;
+            }
+
+          if (values == NULL)
+            continue;
+
+          for (j = 0; j < values->len; j++)
+            flatpak_bwrap_add_arg_printf (adverb_argv, "%s=%s", option,
+                                          (gchar *)g_ptr_array_index (values, j));
+        }
+
       if (opt_verbose)
         flatpak_bwrap_add_arg (adverb_argv, "--verbose");
 
@@ -2797,8 +2791,7 @@ out:
   if (local_error != NULL)
     pv_log_failure ("%s", local_error->message);
 
-  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
-    g_clear_pointer (&opt_preload_modules[i].values, g_ptr_array_unref);
+  pv_preload_modules_free (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules));
 
   g_clear_pointer (&opt_env_if_host, g_strfreev);
   g_clear_pointer (&opt_freedesktop_app_id, g_free);

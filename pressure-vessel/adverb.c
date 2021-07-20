@@ -3,7 +3,7 @@
  * The lock is basically flock(1), but using fcntl locks compatible with
  * those used by bubblewrap and Flatpak.
  *
- * Copyright © 2019-2020 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -37,6 +37,7 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
+#include "steam-runtime-tools/steam-runtime-tools.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -66,9 +67,49 @@ static GPid child_pid;
 
 typedef struct
 {
+  const gchar *abi;
+  const gchar *directory_name;
+} AbiTuplesDetails;
+
+static AbiTuplesDetails abi_tuples_details[] =
+{
+  { SRT_ABI_I386, "ubuntu12_32" },
+  { SRT_ABI_X86_64, "ubuntu12_64" },
+};
+
+typedef struct
+{
   int original_stdout_fd;
   int *pass_fds;
 } ChildSetupData;
+
+typedef struct
+{
+  gchar *root_path;
+  gchar *platform_token_path;
+  GHashTable *abi_paths;
+} LibTempDirs;
+
+static PreloadModule opt_preload_modules[] =
+{
+  { "LD_AUDIT", NULL, NULL },
+  { "LD_PRELOAD", NULL, NULL },
+};
+
+static void
+lib_temp_dirs_free (LibTempDirs *lib_temp_dirs)
+{
+  if (lib_temp_dirs->root_path != NULL)
+    _srt_rm_rf (lib_temp_dirs->root_path);
+
+  g_clear_pointer (&lib_temp_dirs->root_path, g_free);
+  g_clear_pointer (&lib_temp_dirs->platform_token_path, g_free);
+  g_clear_pointer (&lib_temp_dirs->abi_paths, g_hash_table_unref);
+
+  g_free (lib_temp_dirs);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (LibTempDirs, lib_temp_dirs_free)
 
 static void
 child_setup_cb (gpointer user_data)
@@ -172,6 +213,28 @@ opt_fd_cb (const char *name,
    * it won't change our behaviour either way, and if it was passed
    * to us across a fork(), it had better be an OFD. */
   g_ptr_array_add (global_locks, pv_bwrap_lock_new_take (fd, TRUE));
+  return TRUE;
+}
+
+static gboolean
+opt_ld_audit_cb (const gchar *option_name,
+                 const gchar *value,
+                 gpointer data,
+                 GError **error)
+{
+  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
+                            "LD_AUDIT", value, FALSE);
+  return TRUE;
+}
+
+static gboolean
+opt_ld_preload_cb (const gchar *option_name,
+                   const gchar *value,
+                   gpointer data,
+                   GError **error)
+{
+  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
+                            "LD_PRELOAD", value, FALSE);
   return TRUE;
 }
 
@@ -403,6 +466,52 @@ run_helper_sync (const char *cwd,
 }
 
 static gboolean
+generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
+                        GError **error)
+{
+  g_autoptr(SrtSystemInfo) info = NULL;
+  gsize i;
+
+  g_return_val_if_fail (lib_temp_dirs != NULL, FALSE);
+  g_return_val_if_fail (lib_temp_dirs->abi_paths == NULL, FALSE);
+
+  info = srt_system_info_new (NULL);
+
+  lib_temp_dirs->root_path = g_dir_make_tmp ("pressure-vessel-libs-XXXXXX", error);
+  if (lib_temp_dirs->root_path == NULL)
+    return glnx_prefix_error (error,
+                              "Cannot create temporary directory for platform specific libraries");
+
+  lib_temp_dirs->platform_token_path = g_build_filename (lib_temp_dirs->root_path,
+                                                         "${PLATFORM}", NULL);
+
+  lib_temp_dirs->abi_paths = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+  for (i = 0; i < G_N_ELEMENTS (abi_tuples_details); i++)
+    {
+      g_autofree gchar *libdl_platform = NULL;
+      g_autofree gchar *abi_path = NULL;
+      libdl_platform = srt_system_info_dup_libdl_platform (info,
+                                                           abi_tuples_details[i].abi,
+                                                           error);
+      if (!libdl_platform)
+        return glnx_prefix_error (error,
+                                  "Unknown expansion of the dl string token $PLATFORM");
+
+      abi_path = g_build_filename (lib_temp_dirs->root_path, libdl_platform, NULL);
+
+      if (g_mkdir (abi_path, 0700) != 0)
+        return glnx_throw_errno_prefix (error, "Unable to create \"%s\"", abi_path);
+
+      g_hash_table_insert (lib_temp_dirs->abi_paths,
+                           g_strdup (abi_tuples_details[i].abi),
+                           g_steal_pointer (&abi_path));
+    }
+
+  return TRUE;
+}
+
+static gboolean
 generate_locales (gchar **locpath_out,
                   GError **error)
 {
@@ -510,6 +619,12 @@ terminate_child_cb (int signum)
     }
 }
 
+static void
+append_to_search_path (const gchar *item, GString *search_path)
+{
+  pv_search_path_append (search_path, item);
+}
+
 static GOptionEntry options[] =
 {
   { "batch", '\0',
@@ -566,6 +681,17 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_wait,
     "Exit unsuccessfully if a lock-file is busy [default].",
     NULL },
+
+  { "ld-audit", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_audit_cb,
+    "Add MODULE to LD_AUDIT before executing COMMAND.",
+    "MODULE" },
+  { "ld-preload", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
+    "Add MODULE to LD_PRELOAD before executing COMMAND. Some adjustments "
+    "may be performed, e.g. joining together multiple gameoverlayrenderer.so "
+    "preloads into a single path by leveraging the dynamic linker token expansion",
+    "MODULE" },
 
   { "lock-file", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_lock_file_cb,
@@ -644,6 +770,9 @@ main (int argc,
   sigset_t mask;
   struct sigaction terminate_child_action = {};
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
+  g_autoptr(LibTempDirs) lib_temp_dirs = g_new0 (LibTempDirs, 1);
+  gboolean all_abi_paths_created = TRUE;
+  gsize i;
 
   sigemptyset (&mask);
   sigaddset (&mask, SIGCHLD);
@@ -807,6 +936,113 @@ main (int argc,
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
   flatpak_bwrap_finish (wrapped_command);
 
+  if (!generate_lib_temp_dirs (lib_temp_dirs, error))
+    {
+      all_abi_paths_created = FALSE;
+      g_warning ("%s", local_error->message);
+      g_clear_error (error);
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+    {
+      const char *variable = opt_preload_modules[i].variable;
+      const GPtrArray *values = opt_preload_modules[i].original_values;
+      g_autofree gchar *platform_overlay_path = NULL;
+      g_autoptr(GPtrArray) search_path = NULL;
+      g_autoptr(GString) buffer = NULL;
+      gsize j;
+
+      if (values == NULL)
+        continue;
+
+      search_path = g_ptr_array_new_with_free_func (g_free);
+      buffer = g_string_new ("");
+
+      if (g_strcmp0 (variable, "LD_PRELOAD") != 0 || !all_abi_paths_created)
+        {
+          /* Currently we perform adjustments only for LD_PRELOAD.
+           * Also if we were not able to create the temporary libraries
+           * directories, we simply avoid any adjustment and try to continue */
+          for (j = 0; j < values->len; j++)
+            {
+              const char *preload = g_ptr_array_index (values, j);
+              g_assert (preload != NULL);
+              if (*preload == '\0')
+                continue;
+
+              pv_search_path_append (buffer, preload);
+            }
+
+          if (buffer->len != 0)
+            flatpak_bwrap_set_env (wrapped_command, variable, buffer->str, TRUE);
+
+          /* No adjustment needed, continue to the next preload module */
+          continue;
+        }
+
+      g_debug ("Adjusting %s...", variable);
+      platform_overlay_path = g_build_filename (lib_temp_dirs->platform_token_path,
+                                               "gameoverlayrenderer.so", NULL);
+      for (j = 0; j < values->len; j++)
+        {
+          const char *preload = g_ptr_array_index (values, j);
+          g_assert (preload != NULL);
+          if (*preload == '\0')
+            continue;
+
+          if (g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+            {
+              g_autofree gchar *link = NULL;
+
+              for (gsize jj = 0; jj < G_N_ELEMENTS (abi_tuples_details); jj++)
+                {
+                  g_autofree gchar *expected_suffix = g_strdup_printf ("/%s/gameoverlayrenderer.so",
+                                                                       abi_tuples_details[jj].directory_name);
+                  if (g_str_has_suffix (preload, expected_suffix))
+                    {
+                      link = g_build_filename (g_hash_table_lookup (lib_temp_dirs->abi_paths,
+                                                                    abi_tuples_details[jj].abi),
+                                               "gameoverlayrenderer.so", NULL);
+                      break;
+                    }
+                }
+
+              if (link == NULL)
+                {
+                  g_ptr_array_add (search_path, g_strdup (preload));
+                  g_debug ("Preloading gameoverlayrenderer.so from an unexpected path \"%s\", "
+                           "just leave it as is without adjusting", preload);
+                  continue;
+                }
+
+              if (symlink (preload, link) != 0)
+                {
+                  /* This might also happen if the same gameoverlayrenderer.so
+                   * was given multiple times. We don't expect this under normal
+                   * circumstances, so we bail out. */
+                  glnx_throw_errno_prefix (error,
+                                           "Unable to create symlink %s -> %s",
+                                           link, preload);
+                  goto out;
+                }
+              g_debug ("created symlink %s -> %s", link, preload);
+
+              if (!g_ptr_array_find_with_equal_func (search_path, platform_overlay_path,
+                                                     g_str_equal, NULL))
+                g_ptr_array_add (search_path, g_strdup (platform_overlay_path));
+            }
+          else
+            {
+              g_ptr_array_add (search_path, g_strdup (preload));
+            }
+        }
+
+      g_ptr_array_foreach (search_path, (GFunc) append_to_search_path, buffer);
+
+      if (buffer->len != 0)
+        flatpak_bwrap_set_env (wrapped_command, variable, buffer->str, TRUE);
+    }
+
   if (opt_generate_locales)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) profiling =
@@ -856,8 +1092,6 @@ main (int argc,
 
   if (opt_verbose)
     {
-      gsize i;
-
       g_message ("Command-line:");
 
       for (i = 0; i < wrapped_command->argv->len - 1; i++)
@@ -904,8 +1138,6 @@ main (int argc,
    * our stdin and stderr open. */
   if (child_setup_data.pass_fds != NULL)
     {
-      gsize i;
-
       for (i = 0; child_setup_data.pass_fds[i] > -1; i++)
         {
           if (child_setup_data.pass_fds[i] > 2)
@@ -967,6 +1199,8 @@ out:
 
   if (locales_temp_dir != NULL)
     _srt_rm_rf (locales_temp_dir);
+
+  pv_preload_modules_free (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules));
 
   if (local_error != NULL)
     pv_log_failure ("%s", local_error->message);

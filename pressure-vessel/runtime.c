@@ -4048,12 +4048,19 @@ pv_runtime_collect_libc_family (PvRuntime *self,
   return TRUE;
 }
 
+typedef enum
+{
+  PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST = (1 << 0),
+  PV_RUNTIME_DATA_FLAGS_NONE = 0
+} PvRuntimeDataFlags;
+
 static void
 pv_runtime_collect_lib_data (PvRuntime *self,
                              RuntimeArchitecture *arch,
                              const char *dir_basename,
                              const char *lib_path,
                              const char *provider_in_container_namespace_guarded,
+                             PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
   g_autofree char *target = NULL;
@@ -4066,13 +4073,31 @@ pv_runtime_collect_lib_data (PvRuntime *self,
       g_autofree gchar *dir = NULL;
       g_autofree gchar *lib_multiarch = NULL;
       g_autofree gchar *dir_in_provider = NULL;
-      g_autofree gchar *dir_in_provider_fallback = NULL;
+      g_autofree gchar *dir_in_provider_usr_share = NULL;
 
       /* If we are unable to find the lib data in the provider, we try as
        * a last resort `/usr/share`. This should help for example Exherbo
        * that uses the unusual `/usr/${gnu_tuple}/lib` path for shared
-       * libraries. */
-      dir_in_provider_fallback = g_build_filename ("/usr", "share", dir_basename, NULL);
+       * libraries.
+       *
+       * Some libraries, like the NVIDIA proprietary driver, hard-code
+       * /usr/share even if they are installed in some other location.
+       * For these libraries, we look in this /usr/share-based path
+       * *first*. */
+      dir_in_provider_usr_share = g_build_filename ("/usr", "share", dir_basename, NULL);
+
+      if ((flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+          && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                        self->provider->fd,
+                                        dir_in_provider_usr_share,
+                                        G_FILE_TEST_IS_DIR))
+        {
+          g_debug ("Using %s based on hard-coded /usr/share",
+                   dir_in_provider_usr_share);
+          g_hash_table_add (data_in_provider,
+                            g_steal_pointer (&dir_in_provider_usr_share));
+          return;
+        }
 
       dir = g_path_get_dirname (target);
 
@@ -4098,28 +4123,34 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                                      dir_in_provider,
                                      G_FILE_TEST_IS_DIR))
         {
+          g_debug ("Using %s based on library path %s",
+                   dir_in_provider, dir);
           g_hash_table_add (data_in_provider,
                             g_steal_pointer (&dir_in_provider));
+          return;
         }
-      else if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                          self->provider->fd,
-                                          dir_in_provider_fallback,
-                                          G_FILE_TEST_IS_DIR))
+
+      if (!(flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+          && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                        self->provider->fd,
+                                        dir_in_provider_usr_share,
+                                        G_FILE_TEST_IS_DIR))
         {
+          g_debug ("Using %s based on fallback to /usr/share",
+                   dir_in_provider_usr_share);
           g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider_fallback));
+                            g_steal_pointer (&dir_in_provider_usr_share));
+          return;
         }
+
+      if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
+        g_info ("We were expecting the %s directory in the provider to "
+                "be located in \"%s\", but instead it is missing",
+                dir_basename, dir_in_provider);
       else
-        {
-          if (g_strcmp0 (dir_in_provider, dir_in_provider_fallback) == 0)
-            g_info ("We were expecting the %s directory in the provider to "
-                    "be located in \"%s\", but instead it is missing",
-                    dir_basename, dir_in_provider);
-          else
-            g_info ("We were expecting the %s directory in the provider to "
-                    "be located in \"%s\" or \"%s\", but instead it is missing",
-                    dir_basename, dir_in_provider, dir_in_provider_fallback);
-        }
+        g_info ("We were expecting the %s directory in the provider to "
+                "be located in \"%s\" or \"%s\", but instead it is missing",
+                dir_basename, dir_in_provider, dir_in_provider_usr_share);
     }
 }
 
@@ -5043,6 +5074,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm_amdgpu,
                                            provider_in_container_namespace_guarded,
+                                           PV_RUNTIME_DATA_FLAGS_NONE,
                                            libdrm_data_in_provider);
             }
           /* As a fallback we also try libdrm.so.2 because libdrm_amdgpu.so.1
@@ -5055,6 +5087,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
                                            provider_in_container_namespace_guarded,
+                                           PV_RUNTIME_DATA_FLAGS_NONE,
                                            libdrm_data_in_provider);
             }
           else
@@ -5072,6 +5105,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               pv_runtime_collect_lib_data (self, arch, "drirc.d", libglx_mesa,
                                            provider_in_container_namespace_guarded,
+                                           PV_RUNTIME_DATA_FLAGS_NONE,
                                            drirc_data_in_provider);
             }
           else
@@ -5083,12 +5117,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
 
           /* If we have libGLX_nvidia.so.0 in overrides we also want to mount
-           * ${prefix}/share/nvidia from the provider. ${prefix} is derived from
-           * the absolute path of libGLX_nvidia.so.0 */
+           * /usr/share/nvidia from the provider. In this case it's
+           * /usr/share/nvidia that is the preferred path, with
+           * ${prefix}/share/nvidia as a fallback. */
           if (g_file_test (libglx_nvidia, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "nvidia", libglx_nvidia,
                                            provider_in_container_namespace_guarded,
+                                           PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
                                            nvidia_data_in_provider);
             }
           else

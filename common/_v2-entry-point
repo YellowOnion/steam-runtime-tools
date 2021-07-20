@@ -277,16 +277,11 @@ else
     run="run-in-${suite}"
 fi
 
-exec_container () {
-    # Run as a single command
-    exec "${here}/${run}" \
-        ${container_args[0]+"${container_args[@]}"} \
-        -- \
-        "$@" \
-        ${NULL+}
-    exit 125
-}
-
-exec_container "$@"
+exec "${here}/${run}" \
+    ${container_args[0]+"${container_args[@]}"} \
+    -- \
+    "$@" \
+    ${NULL+}
+exit 125
 
 # vim:set sw=4 sts=4 et:

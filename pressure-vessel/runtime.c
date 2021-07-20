@@ -4771,7 +4771,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   const GList *icd_iter;
   gboolean all_libglx_from_provider = TRUE;
   gboolean all_libdrm_from_provider = TRUE;
-  gboolean all_nvidia_from_provider = TRUE;
   g_autoptr(GHashTable) drirc_data_in_provider = g_hash_table_new_full (g_str_hash,
                                                                         g_str_equal,
                                                                         g_free, NULL);
@@ -5127,12 +5126,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                            PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
                                            nvidia_data_in_provider);
             }
-          else
-            {
-              /* For at least a single architecture, libGLX_nvidia is newer in the container */
-              all_nvidia_from_provider = FALSE;
-            }
-
 
           dirs = multiarch_details_get_libdirs (arch->details,
                                                 MULTIARCH_LIBDIRS_FLAGS_NONE);
@@ -5238,8 +5231,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     return FALSE;
 
   if (!pv_runtime_finish_lib_data (self, bwrap, "nvidia", "libGLX_nvidia.so.0",
-                                   all_nvidia_from_provider,
-                                   nvidia_data_in_provider, error))
+                                   TRUE, nvidia_data_in_provider, error))
     return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");

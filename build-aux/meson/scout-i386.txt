@@ -5,7 +5,7 @@ c = '/usr/bin/gcc-4.8'
 cpp = '/usr/bin/g++-4.8'
 ar = '/usr/bin/ar'
 strip = '/usr/bin/strip'
-pkgconfig = '/usr/local/bin/i686-linux-gnu-pkg-config'
+pkgconfig = '/usr/bin/i686-linux-gnu-pkg-config'
 exe_wrapper = '/usr/bin/env'
 
 [properties]

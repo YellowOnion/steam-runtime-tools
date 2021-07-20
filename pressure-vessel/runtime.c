@@ -2578,7 +2578,7 @@ bind_runtime_base (PvRuntime *self,
                           "--symlink", "../run", "/var/run",
                           NULL);
 
-  pv_environ_lock_env (container_env, "XDG_RUNTIME_DIR", xrd);
+  pv_environ_setenv (container_env, "XDG_RUNTIME_DIR", xrd);
 
   if (self->provider != NULL
       && (g_strcmp0 (self->provider->path_in_host_ns, "/") != 0
@@ -5261,23 +5261,23 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   if (dri_path->len != 0)
-    pv_environ_lock_env (container_env, "LIBGL_DRIVERS_PATH", dri_path->str);
+    pv_environ_setenv (container_env, "LIBGL_DRIVERS_PATH", dri_path->str);
   else
-    pv_environ_lock_env (container_env, "LIBGL_DRIVERS_PATH", NULL);
+    pv_environ_setenv (container_env, "LIBGL_DRIVERS_PATH", NULL);
 
   if (egl_path->len != 0)
-    pv_environ_lock_env (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
-                         egl_path->str);
+    pv_environ_setenv (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
+                       egl_path->str);
   else
-    pv_environ_lock_env (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
-                         NULL);
+    pv_environ_setenv (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
+                       NULL);
 
-  pv_environ_lock_env (container_env, "__EGL_VENDOR_LIBRARY_DIRS", NULL);
+  pv_environ_setenv (container_env, "__EGL_VENDOR_LIBRARY_DIRS", NULL);
 
   if (vulkan_path->len != 0)
-    pv_environ_lock_env (container_env, "VK_ICD_FILENAMES", vulkan_path->str);
+    pv_environ_setenv (container_env, "VK_ICD_FILENAMES", vulkan_path->str);
   else
-    pv_environ_lock_env (container_env, "VK_ICD_FILENAMES", NULL);
+    pv_environ_setenv (container_env, "VK_ICD_FILENAMES", NULL);
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
@@ -5301,17 +5301,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           prepended_data_dirs = g_strdup_printf ("%s:%s", override_share, xdg_data_dirs);
 
-          pv_environ_lock_env (container_env, "XDG_DATA_DIRS",
-                               prepended_data_dirs);
+          pv_environ_setenv (container_env, "XDG_DATA_DIRS",
+                             prepended_data_dirs);
         }
-      pv_environ_lock_env (container_env, "VK_LAYER_PATH", NULL);
+      pv_environ_setenv (container_env, "VK_LAYER_PATH", NULL);
     }
 
   if (va_api_path->len != 0)
-    pv_environ_lock_env (container_env, "LIBVA_DRIVERS_PATH",
-                         va_api_path->str);
+    pv_environ_setenv (container_env, "LIBVA_DRIVERS_PATH",
+                       va_api_path->str);
   else
-    pv_environ_lock_env (container_env, "LIBVA_DRIVERS_PATH", NULL);
+    pv_environ_setenv (container_env, "LIBVA_DRIVERS_PATH", NULL);
 
   /* We binded the VDPAU drivers in "%{libdir}/vdpau".
    * Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't
@@ -5322,7 +5322,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autofree gchar *vdpau_val = g_strdup_printf ("%s/lib/platform-${PLATFORM}/vdpau",
                                                  self->overrides_in_container);
 
-  pv_environ_lock_env (container_env, "VDPAU_DRIVER_PATH", vdpau_val);
+  pv_environ_setenv (container_env, "VDPAU_DRIVER_PATH", vdpau_val);
   return TRUE;
 }
 
@@ -5466,7 +5466,7 @@ pv_runtime_bind (PvRuntime *self,
        * We do not do this for games developed against soldier, because
        * backwards compatibility is not a concern for game developers who
        * have specifically opted-in to using the newer runtime. */
-      pv_environ_lock_env (container_env, "STEAM_RUNTIME", "/");
+      pv_environ_setenv (container_env, "STEAM_RUNTIME", "/");
 
       /* Scout is configured without Wayland support. For this reason, if
        * the Wayland driver was forced via SDL_VIDEODRIVER, we expect that
@@ -5474,7 +5474,7 @@ pv_runtime_bind (PvRuntime *self,
        * unset SDL_VIDEODRIVER, so that the default x11 gets chosen instead */
       sdl_videodriver = g_environ_getenv (self->original_environ, "SDL_VIDEODRIVER");
       if (g_strcmp0 (sdl_videodriver, "wayland") == 0)
-        pv_environ_lock_env (container_env, "SDL_VIDEODRIVER", NULL);
+        pv_environ_setenv (container_env, "SDL_VIDEODRIVER", NULL);
     }
 
   pv_runtime_set_search_paths (self, container_env);
@@ -5528,12 +5528,12 @@ pv_runtime_set_search_paths (PvRuntime *self,
                                     NULL);
 
   if (g_file_test (terminfo_path, G_FILE_TEST_IS_DIR))
-    pv_environ_lock_env (container_env, "TERMINFO_DIRS", "/lib/terminfo");
+    pv_environ_setenv (container_env, "TERMINFO_DIRS", "/lib/terminfo");
 
   /* The PATH from outside the container doesn't really make sense inside the
    * container: in principle the layout could be totally different. */
-  pv_environ_lock_env (container_env, "PATH", "/usr/bin:/bin");
-  pv_environ_lock_env (container_env, "LD_LIBRARY_PATH", ld_library_path->str);
+  pv_environ_setenv (container_env, "PATH", "/usr/bin:/bin");
+  pv_environ_setenv (container_env, "LD_LIBRARY_PATH", ld_library_path->str);
 }
 
 gboolean

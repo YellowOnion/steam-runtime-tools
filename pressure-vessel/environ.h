@@ -28,20 +28,14 @@ typedef struct _PvEnviron PvEnviron;
 PvEnviron *pv_environ_new (void);
 void pv_environ_free (PvEnviron *self);
 
-void pv_environ_lock_env (PvEnviron *self,
-                          const char *var,
-                          const char *val);
-void pv_environ_lock_inherit_env (PvEnviron *self,
-                                  const char *var);
-void pv_environ_set_env_overridable (PvEnviron *self,
-                                     const char *var,
-                                     const char *val);
+void pv_environ_setenv (PvEnviron *self,
+                        const char *var,
+                        const char *val);
+void pv_environ_inherit_env (PvEnviron *self,
+                             const char *var);
 
 GList *pv_environ_get_vars (PvEnviron *self);
-GList *pv_environ_get_locked (PvEnviron *self);
 const char *pv_environ_getenv (PvEnviron *self,
-                               const char *var);
-gboolean pv_environ_is_locked (PvEnviron *self,
                                const char *var);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvEnviron, pv_environ_free)

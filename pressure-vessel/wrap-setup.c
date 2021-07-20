@@ -49,13 +49,13 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   g_return_if_fail (container_env != NULL);
 
   /* If these are set by flatpak_run_add_x11_args(), etc., we'll
-   * change them from locked-and-unset to locked-and-set later.
+   * change them from unset to set later.
    * Every variable that is unset with flatpak_bwrap_unset_env() in
    * the functions we borrow from Flatpak (below) should be listed
    * here. */
-  pv_environ_lock_env (container_env, "DISPLAY", NULL);
-  pv_environ_lock_env (container_env, "PULSE_SERVER", NULL);
-  pv_environ_lock_env (container_env, "XAUTHORITY", NULL);
+  pv_environ_setenv (container_env, "DISPLAY", NULL);
+  pv_environ_setenv (container_env, "PULSE_SERVER", NULL);
+  pv_environ_setenv (container_env, "XAUTHORITY", NULL);
 
   flatpak_run_add_font_path_args (sharing_bwrap);
 
@@ -121,13 +121,13 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
 
       /* If this warning is reached, we might need to add this
        * variable to the block of
-       * pv_environ_lock_env (container_env, ., NULL) calls above */
+       * pv_environ_setenv (container_env, ., NULL) calls above */
       if (j >= G_N_ELEMENTS (known_vars))
         g_warning ("Extra environment variable %s set during container "
                    "setup but not in known_vars; check logic",
                    var);
 
-      pv_environ_lock_env (container_env, var, val);
+      pv_environ_setenv (container_env, var, val);
     }
 
   g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);

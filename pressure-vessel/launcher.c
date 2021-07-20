@@ -52,7 +52,6 @@
 
 static PvPortalListener *global_listener;
 
-static GHashTable *lock_env_hash = NULL;
 static GHashTable *client_pid_data_hash = NULL;
 static GMainLoop *main_loop;
 static PvLauncher1 *launcher;
@@ -326,22 +325,9 @@ handle_launch (PvLauncher1           *object,
 
   if (arg_flags & PV_LAUNCH_FLAGS_CLEAR_ENV)
     {
-      GHashTableIter iter;
-      const gchar *env_var;
-      const gchar *env_val;
-      gpointer k;
       char *empty[] = { NULL };
-      env = g_strdupv (empty);
 
-      /* Do not clear the variables that were locked */
-      g_hash_table_iter_init (&iter, lock_env_hash);
-      while (g_hash_table_iter_next (&iter, &k, NULL))
-        {
-          env_var = k;
-          env_val = g_getenv (env_var);
-          if (env_val != NULL)
-            env = g_environ_setenv (env, env_var, env_val, TRUE);
-        }
+      env = g_strdupv (empty);
     }
   else
     {
@@ -355,19 +341,9 @@ handle_launch (PvLauncher1           *object,
       const char *val = NULL;
       g_variant_get_child (arg_envs, i, "{&s&s}", &var, &val);
 
-      /* Ignore PWD: we special-case that later, and the debug message
-       * if it is locked would be confusing */
+      /* Ignore PWD: we special-case that later */
       if (g_strcmp0 (var, "PWD") == 0)
         continue;
-
-      if (g_hash_table_contains (lock_env_hash, var))
-        {
-          const gchar *locked_val = g_environ_getenv (env, var);
-          if (g_strcmp0 (val, locked_val) != 0)
-            g_info ("Ignoring request to set %s=\"%s\" because it was locked to \"%s\"",
-                    var, val, locked_val ? locked_val : "<unset>");
-          continue;
-        }
 
       env = g_environ_setenv (env, var, val, TRUE);
     }
@@ -379,15 +355,6 @@ handle_launch (PvLauncher1           *object,
       /* Again ignore PWD */
       if (g_strcmp0 (unset_env[i], "PWD") == 0)
         continue;
-
-      if (g_hash_table_contains (lock_env_hash, unset_env[i]))
-        {
-          const gchar *locked_val = g_environ_getenv (env, unset_env[i]);
-          if (locked_val != NULL)
-             g_info ("Ignoring request to unset %s because it was locked to \"%s\"",
-                     unset_env[i], locked_val);
-          continue;
-        }
 
       g_debug ("Unsetting the environment variable %s...", unset_env[i]);
       env = g_environ_unsetenv (env, unset_env[i]);
@@ -820,7 +787,6 @@ set_up_exit_on_readable (int fd,
 static gchar *opt_bus_name = NULL;
 static gint opt_exit_on_readable_fd = -1;
 static gint opt_info_fd = -1;
-static gint opt_lock_env_fd = -1;
 static gboolean opt_replace = FALSE;
 static gchar *opt_socket = NULL;
 static gchar *opt_socket_directory = NULL;
@@ -842,11 +808,6 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_info_fd,
     "Indicate readiness and print details of how to connect on this "
     "file descriptor instead of stdout.",
-    "FD" },
-  { "lock-env-from-fd", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_lock_env_fd,
-    "List of environment variables, separated with the null character "
-    "'\\0', that will be locked to their initial value. ",
     "FD" },
   { "replace", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_replace,
@@ -927,29 +888,6 @@ main (int argc,
     {
       ret = EX_OSERR;
       goto out;
-    }
-
-  lock_env_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-
-  if (opt_lock_env_fd >= 0)
-    {
-      g_autofree char *elem = NULL;
-      size_t len = 0;
-      g_autoptr(FILE) lock_env_file = fdopen (opt_lock_env_fd, "r");
-
-      if (lock_env_file == NULL)
-        {
-          glnx_null_throw_errno_prefix (error,
-                                        "Unable to read the given lock env fd %d",
-                                        opt_lock_env_fd);
-          ret = EX_OSERR;
-          goto out;
-        }
-
-      while (getdelim (&elem, &len, '\0', lock_env_file) > 0)
-        {
-          g_hash_table_add (lock_env_hash, g_strdup (elem));
-        }
     }
 
   if (opt_exit_on_readable_fd >= 0)
@@ -1054,7 +992,6 @@ out:
   g_free (opt_socket);
   g_free (opt_socket_directory);
   g_clear_object (&global_listener);
-  g_hash_table_destroy (lock_env_hash);
 
   if (local_error == NULL)
     ret = 0;

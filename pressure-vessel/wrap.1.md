@@ -227,6 +227,26 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     If using `--unshare-home`, use *~/.var/app/com.steampowered.AppN*
     as the home directory.
 
+`--systemd-scope`, `--no-systemd-scope`
+:   If `--systemd-scope` is specified, attempt to put the game into a
+    `systemd --user` scope. Its name will be similar to
+    `app-steam-app975370-12345.scope`, or `app-steam-unknown-12345.scope`
+    if the Steam app ID is not known (for example when running the
+    `Help -> System Information` diagnostic tools). The scope can be viewed
+    with `systemctl --user` or `systemd-cgls`, and can be terminated with
+    a command like `systemctl --user kill app-steam-app975370-12345.scope`.
+
+    These options have no effect if pressure-vessel cannot contact
+    systemd's D-Bus interface, and in particular they do not prevent
+    pressure-vessel from working on machines that do not have systemd.
+
+    These options have no effect when running under Flatpak. Flatpak will
+    always try to put the game in a scope with a name like
+    `app-flatpak-com.valvesoftware.Steam-12345.scope`, separate from the
+    scope used to run Steam itself.
+
+    The default is `--no-systemd-scope`.
+
 `--terminal=none`
 :   Disable features that would ordinarily use a terminal.
 
@@ -384,6 +404,10 @@ The following environment variables (among others) are read by
 
 `PRESSURE_VESSEL_SHELL` (`none`, `after`, `fail` or `instead`)
 :   Equivalent to `--shell="$PRESSURE_VESSEL_SHELL"`.
+
+`PRESSURE_VESSEL_SYSTEMD_SCOPE` (boolean)
+:   If set to `1`, equivalent to `--systemd-scope`.
+    If set to `0`, equivalent to `--no-systemd-scope`.
 
 `PRESSURE_VESSEL_TERMINAL` (`none`, `auto`, `tty` or `xterm`)
 :   Equivalent to `--terminal="$PRESSURE_VESSEL_TERMINAL"`.

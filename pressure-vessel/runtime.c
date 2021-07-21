@@ -130,6 +130,26 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
                                                 pv_runtime_initable_iface_init))
 
 /*
+ * Return whether @path is likely to be visible as-is in the container.
+ */
+static gboolean
+path_visible_in_container_namespace (PvRuntimeFlags flags,
+                                     const char *path)
+{
+  while (path[0] == '/')
+    path++;
+
+  /* This is mounted in wrap.c as a special case: NixOS uses a lot of
+   * absolute paths in /nix/store which we need to make available. */
+  if (!(flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+      && g_str_has_prefix (path, "nix")
+      && (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
+
+  return FALSE;
+}
+
+/*
  * Return whether @path is likely to be visible in the provider mount point
  * (e.g. /run/host).
  * This needs to be kept approximately in sync with pv_bwrap_bind_usr()
@@ -2911,7 +2931,19 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
       /* If it isn't in /usr, /lib, etc., then the symlink will be
        * dangling and this probably isn't going to work. */
-      if (!path_visible_in_provider_namespace (self->flags, source_in_provider))
+      if (path_visible_in_provider_namespace (self->flags, source_in_provider))
+        {
+          target = g_build_filename (self->provider->path_in_container_ns,
+                                     source_in_provider, NULL);
+        }
+      /* A few paths are always available as-is in the container, such
+       * as /nix */
+      else if (path_visible_in_container_namespace (self->flags,
+                                                    source_in_provider))
+        {
+          target = g_build_filename ("/", source_in_provider, NULL);
+        }
+      else
         {
           if (flags & TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK)
             {
@@ -2958,15 +2990,16 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
               return TRUE;
             }
-          else
-            {
-              g_warning ("\"%s\" is unlikely to appear in \"%s\"",
-                         source_in_provider, self->provider->path_in_container_ns);
-              /* ... but try it anyway, it can't hurt */
-            }
+
+          g_warning ("\"%s\" is unlikely to appear in \"%s\"",
+                     source_in_provider, self->provider->path_in_container_ns);
+          /* ... but try it anyway, it can't hurt.
+           * TODO: Is "/" more likely to work than "/run/host" here? */
+          target = g_build_filename (self->provider->path_in_container_ns,
+                                     source_in_provider, NULL);
         }
 
-      target = g_build_filename (self->provider->path_in_container_ns, source_in_provider, NULL);
+      g_return_val_if_fail (target != NULL, FALSE);
 
       if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
         return glnx_throw_errno_prefix (error,

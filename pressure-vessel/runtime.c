@@ -145,6 +145,9 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
   while (path[0] == '/')
     path++;
 
+  /* In a Flatpak subsandbox, the provider is /run/parent, and
+   * /run/parent/app in the subsandbox has the same content as /app
+   * in Steam. */
   if ((flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
       && g_str_has_prefix (path, "app")
       && (path[3] == '\0' || path[3] == '/'))

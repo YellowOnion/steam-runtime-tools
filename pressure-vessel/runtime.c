@@ -153,10 +153,8 @@ path_visible_in_container_namespace (PvRuntimeFlags flags,
  * Return whether @path is likely to be visible in the provider mount point
  * (e.g. /run/host).
  * This needs to be kept approximately in sync with pv_bwrap_bind_usr()
- * and Flatpak's --filesystem=host-os special keyword.
- *
- * This doesn't currently handle /etc: we make the pessimistic assumption
- * that /etc/ld.so.cache, etc., are not shared.
+ * and Flatpak's --filesystem=host-os and --filesystem=host-etc special
+ * keywords.
  */
 static gboolean
 path_visible_in_provider_namespace (PvRuntimeFlags flags,
@@ -186,6 +184,18 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
 
   if (g_str_has_prefix (path, "sbin") ||
       (path[4] == '\0' || path[4] == '/'))
+    return TRUE;
+
+  /* If the provider is /run/host, flatpak_exports_add_host_etc_expose()
+   * in wrap.c is responsible for mounting /etc on /run/host/etc.
+   *
+   * In a Flatpak subsandbox environment, flatpak_run_app() makes
+   * /run/parent/etc a symlink to /run/parent/usr/etc.
+   *
+   * Otherwise, bind_runtime_base() is responsible for mounting the provider's
+   * /etc on /run/gfx/etc. */
+  if (g_str_has_prefix (path, "etc")
+      && (path[3] == '\0' || path[3] == '/'))
     return TRUE;
 
   return FALSE;

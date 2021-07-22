@@ -3003,10 +3003,16 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
           g_warning ("\"%s\" is unlikely to appear in \"%s\"",
                      source_in_provider, self->provider->path_in_container_ns);
-          /* ... but try it anyway, it can't hurt.
-           * TODO: Is "/" more likely to work than "/run/host" here? */
-          target = g_build_filename (self->provider->path_in_container_ns,
-                                     source_in_provider, NULL);
+          /* We might as well try *something*.
+           * path_visible_in_provider_namespace() covers all the paths
+           * that are going to appear in /run/host or similar, so try with
+           * no special prefix here, as though
+           * path_visible_in_container_namespace() had returned true:
+           * that way, even if we're on a non-FHS distro that puts
+           * ld.so in /some/odd/path, it will be possible to use
+           * PRESSURE_VESSEL_FILESYSTEMS_RO=/some/odd/path
+           * as a workaround until pressure-vessel can be adjusted. */
+          target = g_build_filename ("/", source_in_provider, NULL);
         }
 
       g_return_val_if_fail (target != NULL, FALSE);

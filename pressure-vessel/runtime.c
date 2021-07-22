@@ -130,13 +130,31 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
                                                 pv_runtime_initable_iface_init))
 
 /*
+ * Return whether @path is likely to be visible as-is in the container.
+ */
+static gboolean
+path_visible_in_container_namespace (PvRuntimeFlags flags,
+                                     const char *path)
+{
+  while (path[0] == '/')
+    path++;
+
+  /* This is mounted in wrap.c as a special case: NixOS uses a lot of
+   * absolute paths in /nix/store which we need to make available. */
+  if (!(flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+      && g_str_has_prefix (path, "nix")
+      && (path[3] == '\0' || path[3] == '/'))
+    return TRUE;
+
+  return FALSE;
+}
+
+/*
  * Return whether @path is likely to be visible in the provider mount point
  * (e.g. /run/host).
  * This needs to be kept approximately in sync with pv_bwrap_bind_usr()
- * and Flatpak's --filesystem=host-os special keyword.
- *
- * This doesn't currently handle /etc: we make the pessimistic assumption
- * that /etc/ld.so.cache, etc., are not shared.
+ * and Flatpak's --filesystem=host-os and --filesystem=host-etc special
+ * keywords.
  */
 static gboolean
 path_visible_in_provider_namespace (PvRuntimeFlags flags,
@@ -145,6 +163,9 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
   while (path[0] == '/')
     path++;
 
+  /* In a Flatpak subsandbox, the provider is /run/parent, and
+   * /run/parent/app in the subsandbox has the same content as /app
+   * in Steam. */
   if ((flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
       && g_str_has_prefix (path, "app")
       && (path[3] == '\0' || path[3] == '/'))
@@ -163,6 +184,18 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
 
   if (g_str_has_prefix (path, "sbin") ||
       (path[4] == '\0' || path[4] == '/'))
+    return TRUE;
+
+  /* If the provider is /run/host, flatpak_exports_add_host_etc_expose()
+   * in wrap.c is responsible for mounting /etc on /run/host/etc.
+   *
+   * In a Flatpak subsandbox environment, flatpak_run_app() makes
+   * /run/parent/etc a symlink to /run/parent/usr/etc.
+   *
+   * Otherwise, bind_runtime_base() is responsible for mounting the provider's
+   * /etc on /run/gfx/etc. */
+  if (g_str_has_prefix (path, "etc")
+      && (path[3] == '\0' || path[3] == '/'))
     return TRUE;
 
   return FALSE;
@@ -2908,7 +2941,19 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
       /* If it isn't in /usr, /lib, etc., then the symlink will be
        * dangling and this probably isn't going to work. */
-      if (!path_visible_in_provider_namespace (self->flags, source_in_provider))
+      if (path_visible_in_provider_namespace (self->flags, source_in_provider))
+        {
+          target = g_build_filename (self->provider->path_in_container_ns,
+                                     source_in_provider, NULL);
+        }
+      /* A few paths are always available as-is in the container, such
+       * as /nix */
+      else if (path_visible_in_container_namespace (self->flags,
+                                                    source_in_provider))
+        {
+          target = g_build_filename ("/", source_in_provider, NULL);
+        }
+      else
         {
           if (flags & TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK)
             {
@@ -2955,15 +3000,22 @@ pv_runtime_take_from_provider (PvRuntime *self,
 
               return TRUE;
             }
-          else
-            {
-              g_warning ("\"%s\" is unlikely to appear in \"%s\"",
-                         source_in_provider, self->provider->path_in_container_ns);
-              /* ... but try it anyway, it can't hurt */
-            }
+
+          g_warning ("\"%s\" is unlikely to appear in \"%s\"",
+                     source_in_provider, self->provider->path_in_container_ns);
+          /* We might as well try *something*.
+           * path_visible_in_provider_namespace() covers all the paths
+           * that are going to appear in /run/host or similar, so try with
+           * no special prefix here, as though
+           * path_visible_in_container_namespace() had returned true:
+           * that way, even if we're on a non-FHS distro that puts
+           * ld.so in /some/odd/path, it will be possible to use
+           * PRESSURE_VESSEL_FILESYSTEMS_RO=/some/odd/path
+           * as a workaround until pressure-vessel can be adjusted. */
+          target = g_build_filename ("/", source_in_provider, NULL);
         }
 
-      target = g_build_filename (self->provider->path_in_container_ns, source_in_provider, NULL);
+      g_return_val_if_fail (target != NULL, FALSE);
 
       if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
         return glnx_throw_errno_prefix (error,

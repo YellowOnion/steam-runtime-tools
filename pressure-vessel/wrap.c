@@ -2091,6 +2091,23 @@ main (int argc,
                                      FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                      "/tmp");
 
+  if (flatpak_subsandbox != NULL)
+    {
+      /* We special case libshared-library-guard because usually
+       * its blockedlist file is located in `/app` and we need
+       * to change that to the `/run/parent` counterpart */
+      const gchar *blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
+
+      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS))
+        {
+          g_autofree gchar *adjusted_blockedlist = NULL;
+          adjusted_blockedlist = g_build_filename ("/run/parent",
+                                                   blockedlist, NULL);
+          pv_environ_setenv (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
+                             adjusted_blockedlist);
+        }
+    }
+
   adverb_preload_argv = g_ptr_array_new_with_free_func (g_free);
 
   /* We need the LD_PRELOADs from Steam visible at the paths that were
@@ -2153,22 +2170,6 @@ main (int argc,
                                    g_strdup_printf ("%s=%s",
                                                     option,
                                                     adjusted_path));
-
-                  if (g_str_has_suffix (preload, "/libshared-library-guard.so"))
-                    {
-                      /* We special case libshared-library-guard because usually
-                       * its blockedlist file is located in `/app` and we need
-                       * to change that to the `/run/parent` counterpart */
-                      const gchar *blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
-                      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS))
-                        {
-                          g_autofree gchar *adjusted_blockedlist = NULL;
-                          adjusted_blockedlist = g_build_filename ("/run/parent",
-                                                                   blockedlist, NULL);
-                          pv_environ_setenv (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
-                                             adjusted_blockedlist);
-                        }
-                    }
                 }
               else
                 {

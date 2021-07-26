@@ -47,8 +47,7 @@
 typedef struct
 {
   const char *variable;
-  GPtrArray *original_values;
-  GPtrArray *adjusted_values;
+  GPtrArray *values;
 } PreloadModule;
 
 void pv_get_current_dirs (gchar **cwd_p,
@@ -92,8 +91,7 @@ void pv_delete_dangling_symlink (int dirfd,
 void pv_append_preload_module (PreloadModule preload_modules[],
                                gsize n_preload_modules,
                                const char *variable,
-                               const char *value,
-                               gboolean adjusted_value);
+                               const char *value);
 
 void
 pv_preload_modules_free (PreloadModule preload_modules[],

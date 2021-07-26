@@ -92,8 +92,8 @@ typedef struct
 
 static PreloadModule opt_preload_modules[] =
 {
-  { "LD_AUDIT", NULL, NULL },
-  { "LD_PRELOAD", NULL, NULL },
+  { "LD_AUDIT", NULL },
+  { "LD_PRELOAD", NULL },
 };
 
 static void
@@ -223,7 +223,7 @@ opt_ld_audit_cb (const gchar *option_name,
                  GError **error)
 {
   pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_AUDIT", value, FALSE);
+                            "LD_AUDIT", value);
   return TRUE;
 }
 
@@ -234,7 +234,7 @@ opt_ld_preload_cb (const gchar *option_name,
                    GError **error)
 {
   pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value, FALSE);
+                            "LD_PRELOAD", value);
   return TRUE;
 }
 
@@ -946,7 +946,7 @@ main (int argc,
   for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
     {
       const char *variable = opt_preload_modules[i].variable;
-      const GPtrArray *values = opt_preload_modules[i].original_values;
+      const GPtrArray *values = opt_preload_modules[i].values;
       g_autofree gchar *platform_overlay_path = NULL;
       g_autoptr(GPtrArray) search_path = NULL;
       g_autoptr(GString) buffer = NULL;

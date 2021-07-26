@@ -2096,9 +2096,15 @@ main (int argc,
       /* We special case libshared-library-guard because usually
        * its blockedlist file is located in `/app` and we need
        * to change that to the `/run/parent` counterpart */
-      const gchar *blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
+      const gchar *blockedlist = g_getenv ("SHARED_LIBRARY_GUARD_CONFIG");
 
-      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS))
+      if (blockedlist == NULL)
+        blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
+
+      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS)
+          && (g_str_has_prefix (blockedlist, "/app/")
+              || g_str_has_prefix (blockedlist, "/usr/")
+              || g_str_has_prefix (blockedlist, "/lib")))
         {
           g_autofree gchar *adjusted_blockedlist = NULL;
           adjusted_blockedlist = g_build_filename ("/run/parent",

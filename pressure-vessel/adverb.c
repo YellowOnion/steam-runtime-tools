@@ -76,7 +76,8 @@ typedef struct
 {
   gchar *root_path;
   gchar *platform_token_path;
-  GHashTable *abi_paths;
+  /* Same order as pv_multiarch_details */
+  gchar *abi_paths[PV_N_SUPPORTED_ARCHITECTURES];
 } LibTempDirs;
 
 static PreloadModule opt_preload_modules[] =
@@ -88,12 +89,16 @@ static PreloadModule opt_preload_modules[] =
 static void
 lib_temp_dirs_free (LibTempDirs *lib_temp_dirs)
 {
+  gsize abi;
+
   if (lib_temp_dirs->root_path != NULL)
     _srt_rm_rf (lib_temp_dirs->root_path);
 
   g_clear_pointer (&lib_temp_dirs->root_path, g_free);
   g_clear_pointer (&lib_temp_dirs->platform_token_path, g_free);
-  g_clear_pointer (&lib_temp_dirs->abi_paths, g_hash_table_unref);
+
+  for (abi = 0; abi < G_N_ELEMENTS (lib_temp_dirs->abi_paths); abi++)
+    g_clear_pointer (&lib_temp_dirs->abi_paths[abi], g_free);
 
   g_free (lib_temp_dirs);
 }
@@ -462,7 +467,6 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
   gsize abi;
 
   g_return_val_if_fail (lib_temp_dirs != NULL, FALSE);
-  g_return_val_if_fail (lib_temp_dirs->abi_paths == NULL, FALSE);
 
   info = srt_system_info_new (NULL);
 
@@ -473,8 +477,6 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
 
   lib_temp_dirs->platform_token_path = g_build_filename (lib_temp_dirs->root_path,
                                                          "${PLATFORM}", NULL);
-
-  lib_temp_dirs->abi_paths = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
   for (abi = 0; abi < PV_N_SUPPORTED_ARCHITECTURES; abi++)
     {
@@ -503,9 +505,7 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
       if (g_mkdir (abi_path, 0700) != 0)
         return glnx_throw_errno_prefix (error, "Unable to create \"%s\"", abi_path);
 
-      g_hash_table_insert (lib_temp_dirs->abi_paths,
-                           g_strdup (pv_multiarch_details[abi].tuple),
-                           g_steal_pointer (&abi_path));
+      lib_temp_dirs->abi_paths[abi] = g_steal_pointer (&abi_path);
     }
 
   return TRUE;
@@ -1001,8 +1001,7 @@ main (int argc,
 
                   if (g_str_has_suffix (preload, expected_suffix))
                     {
-                      link = g_build_filename (g_hash_table_lookup (lib_temp_dirs->abi_paths,
-                                                                    pv_multiarch_details[abi].tuple),
+                      link = g_build_filename (lib_temp_dirs->abi_paths[abi],
                                                "gameoverlayrenderer.so", NULL);
                       break;
                     }

@@ -29,7 +29,6 @@ pressure-vessel-adverb - wrap processes in various ways
 [**--[no-]wait**]
 [**--[no-]write**]
 **--lock-file** *FILENAME*...]
-
 [**--verbose**]
 [**--**]
 *COMMAND* [*ARGUMENTS...*]

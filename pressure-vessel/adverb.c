@@ -80,11 +80,34 @@ typedef struct
   gchar *abi_paths[PV_N_SUPPORTED_ARCHITECTURES];
 } LibTempDirs;
 
-static PreloadModule opt_preload_modules[] =
+typedef enum
 {
-  { "LD_AUDIT", NULL },
-  { "LD_PRELOAD", NULL },
+  PRELOAD_VARIABLE_INDEX_LD_AUDIT,
+  PRELOAD_VARIABLE_INDEX_LD_PRELOAD,
+} PreloadVariableIndex;
+
+/* Indexed by PreloadVariableIndex */
+static const char *preload_variables[] =
+{
+  "LD_AUDIT",
+  "LD_PRELOAD",
 };
+
+typedef struct
+{
+  char *name;
+  gsize index_in_preload_variables;
+} AdverbPreloadModule;
+
+static void
+adverb_preload_module_clear (gpointer p)
+{
+  AdverbPreloadModule *self = p;
+
+  g_free (self->name);
+}
+
+static GArray *opt_preload_modules = NULL;
 
 static gpointer
 generic_strdup (gpointer p)
@@ -227,14 +250,34 @@ opt_fd_cb (const char *name,
 }
 
 static gboolean
+opt_ld_something (const char *option,
+                  gsize index_in_preload_variables,
+                  const char *value,
+                  gpointer data,
+                  GError **error)
+{
+  AdverbPreloadModule module = { NULL, 0 };
+
+  if (opt_preload_modules == NULL)
+    {
+      opt_preload_modules = g_array_new (FALSE, FALSE, sizeof (AdverbPreloadModule));
+      g_array_set_clear_func (opt_preload_modules, adverb_preload_module_clear);
+    }
+
+  module.index_in_preload_variables = index_in_preload_variables;
+  module.name = g_strdup (value);
+  g_array_append_val (opt_preload_modules, module);
+  return TRUE;
+}
+
+static gboolean
 opt_ld_audit_cb (const gchar *option_name,
                  const gchar *value,
                  gpointer data,
                  GError **error)
 {
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_AUDIT", value);
-  return TRUE;
+  return opt_ld_something (option_name, PRELOAD_VARIABLE_INDEX_LD_AUDIT,
+                           value, data, error);
 }
 
 static gboolean
@@ -243,9 +286,8 @@ opt_ld_preload_cb (const gchar *option_name,
                    gpointer data,
                    GError **error)
 {
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value);
-  return TRUE;
+  return opt_ld_something (option_name, PRELOAD_VARIABLE_INDEX_LD_PRELOAD,
+                           value, data, error);
 }
 
 static gboolean
@@ -959,56 +1001,45 @@ main (int argc,
       g_clear_error (error);
     }
 
-  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+  if (opt_preload_modules != NULL)
     {
-      const char *variable = opt_preload_modules[i].variable;
-      const GPtrArray *values = opt_preload_modules[i].values;
-      g_autofree gchar *platform_overlay_path = NULL;
-      g_autoptr(GPtrArray) search_path = NULL;
-      g_autoptr(GString) buffer = NULL;
-      gsize j;
+      GPtrArray *preload_search_paths[G_N_ELEMENTS (preload_variables)] = { NULL };
 
-      if (values == NULL)
-        continue;
-
-      search_path = g_ptr_array_new_with_free_func (g_free);
-      buffer = g_string_new ("");
-
-      if (g_strcmp0 (variable, "LD_PRELOAD") != 0 || !all_abi_paths_created)
+      /* Iterate through all modules, populating preload_search_paths */
+      for (i = 0; i < opt_preload_modules->len; i++)
         {
-          /* Currently we perform adjustments only for LD_PRELOAD.
-           * Also if we were not able to create the temporary libraries
-           * directories, we simply avoid any adjustment and try to continue */
-          for (j = 0; j < values->len; j++)
-            {
-              const char *preload = g_ptr_array_index (values, j);
-              g_assert (preload != NULL);
-              if (*preload == '\0')
-                continue;
+          const AdverbPreloadModule *module = &g_array_index (opt_preload_modules,
+                                                              AdverbPreloadModule, i);
+          GPtrArray *search_path = preload_search_paths[module->index_in_preload_variables];
+          const char *preload = module->name;
 
-              pv_search_path_append (buffer, preload);
-            }
-
-          if (buffer->len != 0)
-            flatpak_bwrap_set_env (wrapped_command, variable, buffer->str, TRUE);
-
-          /* No adjustment needed, continue to the next preload module */
-          continue;
-        }
-
-      g_debug ("Adjusting %s...", variable);
-      platform_overlay_path = g_build_filename (lib_temp_dirs->platform_token_path,
-                                               "gameoverlayrenderer.so", NULL);
-      for (j = 0; j < values->len; j++)
-        {
-          const char *preload = g_ptr_array_index (values, j);
           g_assert (preload != NULL);
+
           if (*preload == '\0')
             continue;
 
-          if (g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+          if (search_path == NULL)
+            {
+              preload_search_paths[module->index_in_preload_variables]
+                = search_path
+                = g_ptr_array_new_full (opt_preload_modules->len, g_free);
+            }
+
+          /* If we were not able to create the temporary library
+           * directories, we simply avoid any adjustment and try to continue */
+          if (!all_abi_paths_created)
+            {
+              g_ptr_array_add (search_path, g_strdup (preload));
+              continue;
+            }
+
+          if (module->index_in_preload_variables == PRELOAD_VARIABLE_INDEX_LD_PRELOAD
+              && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
             {
               g_autofree gchar *link = NULL;
+              g_autofree gchar *platform_overlay_path = g_build_filename (lib_temp_dirs->platform_token_path,
+                                                                          "gameoverlayrenderer.so",
+                                                                          NULL);
 
               for (gsize abi = 0; abi < PV_N_SUPPORTED_ARCHITECTURES; abi++)
                 {
@@ -1051,10 +1082,20 @@ main (int argc,
             }
         }
 
-      g_ptr_array_foreach (search_path, (GFunc) append_to_search_path, buffer);
+      /* Serialize search_paths[PRELOAD_VARIABLE_INDEX_LD_AUDIT] into
+       * LD_AUDIT, etc. */
+      for (i = 0; i < G_N_ELEMENTS (preload_variables); i++)
+        {
+          GPtrArray *search_path = preload_search_paths[i];
+          g_autoptr(GString) buffer = g_string_new ("");
+          const char *variable = preload_variables[i];
 
-      if (buffer->len != 0)
-        flatpak_bwrap_set_env (wrapped_command, variable, buffer->str, TRUE);
+          if (search_path != NULL)
+            g_ptr_array_foreach (search_path, (GFunc) append_to_search_path, buffer);
+
+          if (buffer->len != 0)
+            flatpak_bwrap_set_env (wrapped_command, variable, buffer->str, TRUE);
+        }
     }
 
   if (opt_generate_locales)
@@ -1214,7 +1255,7 @@ out:
   if (locales_temp_dir != NULL)
     _srt_rm_rf (locales_temp_dir);
 
-  pv_preload_modules_free (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules));
+  g_clear_pointer (&opt_preload_modules, g_array_unref);
 
   if (local_error != NULL)
     pv_log_failure ("%s", local_error->message);

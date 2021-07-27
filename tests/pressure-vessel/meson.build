@@ -56,7 +56,7 @@ foreach test_name : compiled_tests
       gio_unix,
       libglnx_dep,
       test_utils_static_libsteamrt_dep,
-      pressure_vessel_utils_dep,
+      pressure_vessel_wrap_lib_dep,
     ],
     include_directories : pv_include_dirs,
     install : false,

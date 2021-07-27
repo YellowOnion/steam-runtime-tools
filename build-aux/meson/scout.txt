@@ -1,0 +1,5 @@
+# Copyright 2021 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+[binaries]
+c = '/usr/bin/gcc-4.8'
+cpp = '/usr/bin/g++-4.8'

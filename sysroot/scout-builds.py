@@ -61,6 +61,7 @@ def setup(args):
         [
             'meson',
         ] + common_options + [
+            '--native-file=build-aux/meson/scout.txt',
             os.path.join(args.abs_builddir_parent, 'scout-x86_64')
         ] + list(args.args),
         cwd=args.abs_srcdir,

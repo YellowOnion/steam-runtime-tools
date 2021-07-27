@@ -86,6 +86,22 @@ static PreloadModule opt_preload_modules[] =
   { "LD_PRELOAD", NULL },
 };
 
+static gpointer
+generic_strdup (gpointer p)
+{
+  return g_strdup (p);
+}
+
+static void
+ptr_array_add_unique (GPtrArray *arr,
+                      const void *item,
+                      GEqualFunc equal_func,
+                      GBoxedCopyFunc copy_func)
+{
+  if (!g_ptr_array_find_with_equal_func (arr, item, equal_func, NULL))
+    g_ptr_array_add (arr, copy_func ((gpointer) item));
+}
+
 static void
 lib_temp_dirs_free (LibTempDirs *lib_temp_dirs)
 {
@@ -1026,10 +1042,8 @@ main (int argc,
                   goto out;
                 }
               g_debug ("created symlink %s -> %s", link, preload);
-
-              if (!g_ptr_array_find_with_equal_func (search_path, platform_overlay_path,
-                                                     g_str_equal, NULL))
-                g_ptr_array_add (search_path, g_strdup (platform_overlay_path));
+              ptr_array_add_unique (search_path, platform_overlay_path,
+                                    g_str_equal, generic_strdup);
             }
           else
             {

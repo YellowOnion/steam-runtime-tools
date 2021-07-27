@@ -80,6 +80,15 @@ class TestAdverb(BaseTest):
                 '--ld-preload=/nonexistent/libpreload.so',
                 '--ld-preload=/nonexistent/ubuntu12_32/gameoverlayrenderer.so',
                 '--ld-preload=/nonexistent/ubuntu12_64/gameoverlayrenderer.so',
+                ('--ld-preload'
+                 '=/nonexistent/lib32/libMangoHud.so'
+                 ':abi=i386-linux-gnu'),
+                ('--ld-preload'
+                 '=/nonexistent/lib64/libMangoHud.so'
+                 ':abi=x86_64-linux-gnu'),
+                ('--ld-preload'
+                 '=/nonexistent/lib64/64-bit-only.so'
+                 ':abi=x86_64-linux-gnu'),
                 '--',
                 'sh', '-euc',
                 # The hard-coded i686 and xeon_phi here must match up with
@@ -104,9 +113,9 @@ class TestAdverb(BaseTest):
                             xeon_phi="$(echo "$item" |
                                 sed -e 's/[$]{PLATFORM}/xeon_phi/g')"
                             printf "i686: symlink to "
-                            readlink "$i686"
+                            readlink "$i686" || echo "(nothing)"
                             printf "xeon_phi: symlink to "
-                            readlink "$xeon_phi"
+                            readlink "$xeon_phi" || echo "(nothing)"
                             ;;
                         (*)
                             echo "literal $item"
@@ -135,7 +144,11 @@ class TestAdverb(BaseTest):
                    lines[1]),
             ('LD_PRELOAD=/nonexistent/libpreload.so'
              ':/tmp/pressure-vessel-libs-XXXXXX/'
-             '${PLATFORM}/gameoverlayrenderer.so')
+             '${PLATFORM}/gameoverlayrenderer.so'
+             ':/tmp/pressure-vessel-libs-XXXXXX/'
+             '${PLATFORM}/libMangoHud.so'
+             ':/tmp/pressure-vessel-libs-XXXXXX/'
+             '${PLATFORM}/64-bit-only.so')
         )
         self.assertEqual(lines[2], 'literal /nonexistent/libpreload.so')
         self.assertEqual(
@@ -146,6 +159,22 @@ class TestAdverb(BaseTest):
             lines[4],
             ('xeon_phi: symlink to '
              '/nonexistent/ubuntu12_64/gameoverlayrenderer.so'),
+        )
+        self.assertEqual(
+            lines[5],
+            'i686: symlink to /nonexistent/lib32/libMangoHud.so',
+        )
+        self.assertEqual(
+            lines[6],
+            'xeon_phi: symlink to /nonexistent/lib64/libMangoHud.so',
+        )
+        self.assertEqual(
+            lines[7],
+            'i686: symlink to (nothing)',
+        )
+        self.assertEqual(
+            lines[8],
+            'xeon_phi: symlink to /nonexistent/lib64/64-bit-only.so',
         )
 
     def test_stdio_passthrough(self) -> None:
@@ -217,6 +246,9 @@ class TestAdverb(BaseTest):
     def test_wrong_options(self) -> None:
         for option in (
             '--an-unknown-option',
+            '--ld-preload=/nonexistent/libfoo.so:abi=hal9000-movieos',
+            '--ld-preload=/nonexistent/libfoo.so:abi=i386-linux-gnu:foo',
+            '--ld-preload=/nonexistent/libfoo.so:foo=bar',
             '--pass-fd=-1',
             '--shell=wrong',
             '--terminal=wrong',

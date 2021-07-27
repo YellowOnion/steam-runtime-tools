@@ -259,6 +259,51 @@ opt_ld_something (const char *option,
                   GError **error)
 {
   AdverbPreloadModule module = { NULL, 0, G_MAXSIZE };
+  g_auto(GStrv) parts = NULL;
+  const char *architecture = NULL;
+
+  parts = g_strsplit (value, ":", 0);
+
+  if (parts[0] != NULL)
+    {
+      gsize i;
+
+      for (i = 1; parts[i] != NULL; i++)
+        {
+          if (g_str_has_prefix (parts[i], "abi="))
+            {
+              gsize abi;
+
+              architecture = parts[i] + strlen ("abi=");
+
+              for (abi = 0; abi < PV_N_SUPPORTED_ARCHITECTURES; abi++)
+                {
+                  if (strcmp (architecture, pv_multiarch_details[abi].tuple) == 0)
+                    {
+                      module.abi_index = abi;
+                      break;
+                    }
+                }
+
+              if (module.abi_index == G_MAXSIZE)
+                {
+                  g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                               "Unsupported ABI %s",
+                               architecture);
+                  return FALSE;
+                }
+            }
+          else
+            {
+              g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                           "Unexpected option in %s=\"%s\": %s",
+                           option, value, parts[i]);
+              return FALSE;
+            }
+        }
+
+      value = parts[0];
+    }
 
   if (opt_preload_modules == NULL)
     {

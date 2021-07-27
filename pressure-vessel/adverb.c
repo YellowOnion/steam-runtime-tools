@@ -470,7 +470,7 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
                         GError **error)
 {
   g_autoptr(SrtSystemInfo) info = NULL;
-  gsize i;
+  gsize abi;
 
   g_return_val_if_fail (lib_temp_dirs != NULL, FALSE);
   g_return_val_if_fail (lib_temp_dirs->abi_paths == NULL, FALSE);
@@ -487,12 +487,12 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
 
   lib_temp_dirs->abi_paths = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
-  for (i = 0; i < G_N_ELEMENTS (abi_tuples_details); i++)
+  for (abi = 0; abi < G_N_ELEMENTS (abi_tuples_details); abi++)
     {
       g_autofree gchar *libdl_platform = NULL;
       g_autofree gchar *abi_path = NULL;
       libdl_platform = srt_system_info_dup_libdl_platform (info,
-                                                           abi_tuples_details[i].abi,
+                                                           abi_tuples_details[abi].abi,
                                                            error);
       if (!libdl_platform)
         return glnx_prefix_error (error,
@@ -504,7 +504,7 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
         return glnx_throw_errno_prefix (error, "Unable to create \"%s\"", abi_path);
 
       g_hash_table_insert (lib_temp_dirs->abi_paths,
-                           g_strdup (abi_tuples_details[i].abi),
+                           g_strdup (abi_tuples_details[abi].abi),
                            g_steal_pointer (&abi_path));
     }
 
@@ -994,14 +994,14 @@ main (int argc,
             {
               g_autofree gchar *link = NULL;
 
-              for (gsize jj = 0; jj < G_N_ELEMENTS (abi_tuples_details); jj++)
+              for (gsize abi = 0; abi < G_N_ELEMENTS (abi_tuples_details); abi++)
                 {
                   g_autofree gchar *expected_suffix = g_strdup_printf ("/%s/gameoverlayrenderer.so",
-                                                                       abi_tuples_details[jj].directory_name);
+                                                                       abi_tuples_details[abi].directory_name);
                   if (g_str_has_suffix (preload, expected_suffix))
                     {
                       link = g_build_filename (g_hash_table_lookup (lib_temp_dirs->abi_paths,
-                                                                    abi_tuples_details[jj].abi),
+                                                                    abi_tuples_details[abi].abi),
                                                "gameoverlayrenderer.so", NULL);
                       break;
                     }

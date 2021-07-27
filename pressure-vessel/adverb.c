@@ -97,6 +97,8 @@ typedef struct
 {
   char *name;
   gsize index_in_preload_variables;
+  /* An index in pv_multiarch_details, or G_MAXSIZE if unspecified */
+  gsize abi_index;
 } AdverbPreloadModule;
 
 static void
@@ -256,7 +258,7 @@ opt_ld_something (const char *option,
                   gpointer data,
                   GError **error)
 {
-  AdverbPreloadModule module = { NULL, 0 };
+  AdverbPreloadModule module = { NULL, 0, G_MAXSIZE };
 
   if (opt_preload_modules == NULL)
     {
@@ -1012,11 +1014,15 @@ main (int argc,
                                                               AdverbPreloadModule, i);
           GPtrArray *search_path = preload_search_paths[module->index_in_preload_variables];
           const char *preload = module->name;
+          const char *base;
+          gsize abi_index = module->abi_index;
 
           g_assert (preload != NULL);
 
           if (*preload == '\0')
             continue;
+
+          base = glnx_basename (preload);
 
           if (search_path == NULL)
             {
@@ -1033,14 +1039,10 @@ main (int argc,
               continue;
             }
 
-          if (module->index_in_preload_variables == PRELOAD_VARIABLE_INDEX_LD_PRELOAD
-              && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+          if (abi_index == G_MAXSIZE
+              && module->index_in_preload_variables == PRELOAD_VARIABLE_INDEX_LD_PRELOAD
+              && strcmp (base, "gameoverlayrenderer.so") == 0)
             {
-              g_autofree gchar *link = NULL;
-              g_autofree gchar *platform_overlay_path = g_build_filename (lib_temp_dirs->platform_token_path,
-                                                                          "gameoverlayrenderer.so",
-                                                                          NULL);
-
               for (gsize abi = 0; abi < PV_N_SUPPORTED_ARCHITECTURES; abi++)
                 {
                   g_autofree gchar *expected_suffix = g_strdup_printf ("/%s/gameoverlayrenderer.so",
@@ -1048,19 +1050,30 @@ main (int argc,
 
                   if (g_str_has_suffix (preload, expected_suffix))
                     {
-                      link = g_build_filename (lib_temp_dirs->abi_paths[abi],
-                                               "gameoverlayrenderer.so", NULL);
+                      abi_index = abi;
                       break;
                     }
                 }
 
-              if (link == NULL)
+              if (abi_index == G_MAXSIZE)
                 {
-                  g_ptr_array_add (search_path, g_strdup (preload));
-                  g_debug ("Preloading gameoverlayrenderer.so from an unexpected path \"%s\", "
-                           "just leave it as is without adjusting", preload);
-                  continue;
+                  g_debug ("Preloading %s from an unexpected path \"%s\", "
+                           "just leave it as is without adjusting",
+                           base, preload);
                 }
+            }
+
+          if (abi_index != G_MAXSIZE)
+            {
+              g_autofree gchar *link = NULL;
+              g_autofree gchar *platform_path = NULL;
+
+              g_debug ("Module %s is for %s",
+                       preload, pv_multiarch_details[abi_index].tuple);
+              platform_path = g_build_filename (lib_temp_dirs->platform_token_path,
+                                                base, NULL);
+              link = g_build_filename (lib_temp_dirs->abi_paths[abi_index],
+                                       base, NULL);
 
               if (symlink (preload, link) != 0)
                 {
@@ -1072,12 +1085,14 @@ main (int argc,
                                            link, preload);
                   goto out;
                 }
+
               g_debug ("created symlink %s -> %s", link, preload);
-              ptr_array_add_unique (search_path, platform_overlay_path,
+              ptr_array_add_unique (search_path, platform_path,
                                     g_str_equal, generic_strdup);
             }
           else
             {
+              g_debug ("Module %s is for all architectures", preload);
               g_ptr_array_add (search_path, g_strdup (preload));
             }
         }

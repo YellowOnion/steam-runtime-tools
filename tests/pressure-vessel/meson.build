@@ -55,9 +55,9 @@ foreach test_name : compiled_tests
     dependencies : [
       gio_unix,
       libglnx_dep,
-      test_utils_dep,
+      test_utils_static_libsteamrt_dep,
+      pressure_vessel_utils_dep,
     ],
-    link_with : [pressure_vessel_utils],
     include_directories : pv_include_dirs,
     install : false,
   )

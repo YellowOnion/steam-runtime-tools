@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // notgles-green — one of two implementations of libnotgles, taking the
 // role of the NVIDIA implementation of GLES

@@ -29,7 +29,7 @@ Files:
 Copyright:
  © 2015 Philip Withnall
  © 2016-2019 Collabora Ltd.
-License: Autoconf-permissive
+License: FSFAP
 
 License: LGPL-2.1+
  libcapsule is free software; you can redistribute it and/or modify
@@ -82,7 +82,8 @@ Comment:
  On Debian systems, the full text of the GNU General Public License
  version 3 can be found in the file '/usr/share/common-licenses/GPL-3'.
 
-License: Autoconf-permissive
- Copying and distribution of this file, with or without modification, are
- permitted in any medium without royalty provided the copyright notice
- and this notice are preserved.
+License: FSFAP
+ Copying and distribution of this file, with or without modification,
+ are permitted in any medium without royalty provided the copyright
+ notice and this notice are preserved. This file is offered as-is,
+ without any warranty.

@@ -1,4 +1,5 @@
-// Copyright © 2017 Collabora Ltd
+// Copyright © 2017-2021 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //
 // This file is part of libcapsule.
 //
@@ -1013,7 +1014,7 @@ capture_pattern( const char *pattern, const capture_options *options,
 
             "soname:libGLESv2.so.2",
             // Vendor ICDs for libGLESv2.so.2
-            "soname:libGLESv2_*.so.*",
+            "soname-match:libGLESv2_*.so.*",
 
             "soname:libGLX.so.0",
             // Vendor ICDs for libGL.so.1 and/or libGLX.so.0

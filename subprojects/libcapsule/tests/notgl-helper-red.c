@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // notgl-helper-red — An implementation of libnotgl-helper in the
 // host, taking the role of the host's libstdc++

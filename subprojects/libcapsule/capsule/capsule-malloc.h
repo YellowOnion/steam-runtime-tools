@@ -1,3 +1,7 @@
+// Copyright © 1996-2018 Free Software Foundation, Inc.
+// Copyright © 2018 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
+
 #pragma once
 
 #define CAPSULE_MALLOC_EXTRA_CHECKS

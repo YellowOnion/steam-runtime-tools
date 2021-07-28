@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // libnotgl-helper — A library used by the OpenGL driver, taking the
 // role of libstdc++

@@ -1,5 +1,6 @@
 /*
  * Copyright © 2019 Collabora Ltd.
+// SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * SPDX-License-Identifier: MIT
  *

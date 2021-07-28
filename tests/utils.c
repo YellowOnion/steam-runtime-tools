@@ -29,6 +29,7 @@
 #include <glib/gstdio.h>
 #include <glib-object.h>
 
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "test-utils.h"
@@ -340,6 +341,38 @@ filter_gameoverlayrenderer (Fixture *f,
 }
 
 static void
+test_gstring_replace (Fixture *f,
+                      gconstpointer context)
+{
+  static const struct
+  {
+    const char *string;
+    const char *original;
+    const char *replacement;
+    const char *expected;
+  }
+  tests[] =
+  {
+    { "/usr/$LIB/libMangoHud.so", "$LIB", "lib32", "/usr/lib32/libMangoHud.so" },
+    { "food for foals", "o", "", "fd fr fals" },
+    { "aaa", "a", "aaa", "aaaaaaaaa" },
+    { "aaa", "a", "", "" },
+    { "aaa", "aa", "bb", "bba" },
+  };
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    {
+      g_autoptr(GString) buffer = g_string_new (tests[i].string);
+
+      g_string_replace (buffer, tests[i].original, tests[i].replacement, 0);
+      g_assert_cmpstr (buffer->str, ==, tests[i].expected);
+      g_assert_cmpuint (buffer->len, ==, strlen (tests[i].expected));
+      g_assert_cmpuint (buffer->allocated_len, >=, strlen (tests[i].expected) + 1);
+    }
+}
+
+static void
 test_same_file (Fixture *f,
                 gconstpointer context)
 {
@@ -472,6 +505,8 @@ main (int argc,
               filter_gameoverlayrenderer, teardown);
   g_test_add ("/utils/get-path-after", Fixture, NULL,
               setup, test_get_path_after, teardown);
+  g_test_add ("/utils/gstring-replace", Fixture, NULL,
+              setup, test_gstring_replace, teardown);
   g_test_add ("/utils/same-file", Fixture, NULL,
               setup, test_same_file, teardown);
   g_test_add ("/utils/str_is_integer", Fixture, NULL,

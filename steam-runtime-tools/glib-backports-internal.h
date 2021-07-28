@@ -157,3 +157,11 @@ gboolean my_g_ptr_array_find_with_equal_func (GPtrArray *haystack,
 #define g_warning_once g_warning
 #endif
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 68, 0)
+#define g_string_replace(s,f,r,l) my_g_string_replace (s, f, r, l)
+guint my_g_string_replace (GString *string,
+                           const gchar *find,
+                           const gchar *replace,
+                           guint limit);
+#endif

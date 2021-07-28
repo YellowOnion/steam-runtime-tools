@@ -696,6 +696,7 @@ static gboolean opt_remove_game_overlay = FALSE;
 static gboolean opt_import_vulkan_layers = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GArray *opt_pass_fds = NULL;
+static GArray *opt_preload_modules = NULL;
 static char *opt_runtime = NULL;
 static char *opt_runtime_archive = NULL;
 static char *opt_runtime_base = NULL;
@@ -714,28 +715,50 @@ static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 static char *opt_write_final_argv = NULL;
 
-static PreloadModule opt_preload_modules[] =
+typedef enum
 {
-  { "LD_AUDIT", NULL },
-  { "LD_PRELOAD", NULL },
-};
-static const char * const adverb_preload_options[G_N_ELEMENTS (opt_preload_modules)] =
+  PRELOAD_VARIABLE_INDEX_LD_AUDIT,
+  PRELOAD_VARIABLE_INDEX_LD_PRELOAD,
+} PreloadVariableIndex;
+
+static const struct
 {
-  /* Must be in the same order as opt_preload_modules */
-  "--ld-audit",
-  "--ld-preload",
+  const char *variable;
+  const char *adverb_option;
+} preload_options[] =
+{
+  [PRELOAD_VARIABLE_INDEX_LD_AUDIT] = { "LD_AUDIT", "--ld-audit" },
+  [PRELOAD_VARIABLE_INDEX_LD_PRELOAD] = { "LD_PRELOAD", "--ld-preload" },
 };
 
-static gboolean
-opt_host_ld_preload_cb (const gchar *option_name,
-                        const gchar *value,
-                        gpointer data,
-                        GError **error)
+typedef struct
 {
-  g_warning ("%s is deprecated, use --ld-preload=%s instead",
-             option_name, value);
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value);
+  PreloadVariableIndex which;
+  gchar *preload;
+} WrapPreloadModule;
+
+static void
+wrap_preload_module_clear (gpointer p)
+{
+  WrapPreloadModule *self = p;
+
+  g_free (self->preload);
+}
+
+static gboolean
+opt_ld_something (PreloadVariableIndex which,
+                  const char *value,
+                  GError **error)
+{
+  WrapPreloadModule module = { which, g_strdup (value) };
+
+  if (opt_preload_modules == NULL)
+    {
+      opt_preload_modules = g_array_new (FALSE, FALSE, sizeof (WrapPreloadModule));
+      g_array_set_clear_func (opt_preload_modules, wrap_preload_module_clear);
+    }
+
+  g_array_append_val (opt_preload_modules, module);
   return TRUE;
 }
 
@@ -745,9 +768,7 @@ opt_ld_audit_cb (const gchar *option_name,
                  gpointer data,
                  GError **error)
 {
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_AUDIT", value);
-  return TRUE;
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_AUDIT, value, error);
 }
 
 static gboolean
@@ -756,9 +777,18 @@ opt_ld_preload_cb (const gchar *option_name,
                    gpointer data,
                    GError **error)
 {
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value);
-  return TRUE;
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_PRELOAD, value, error);
+}
+
+static gboolean
+opt_host_ld_preload_cb (const gchar *option_name,
+                        const gchar *value,
+                        gpointer data,
+                        GError **error)
+{
+  g_warning ("%s is deprecated, use --ld-preload=%s instead",
+             option_name, value);
+  return opt_ld_preload_cb (option_name, value, data, error);
 }
 
 static gboolean
@@ -2097,27 +2127,24 @@ main (int argc,
    * used for them, which might be their physical rather than logical
    * locations. Steam doesn't generally use LD_AUDIT, but the Steam app
    * on Flathub does, and it needs similar handling. */
-  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+  if (opt_preload_modules != NULL)
     {
-      const char *variable = opt_preload_modules[i].variable;
-      const GPtrArray *values = opt_preload_modules[i].values;
-      const char *option = adverb_preload_options[i];
-      gsize len;
       gsize j;
 
-      g_debug ("Adjusting %s...", variable);
+      g_debug ("Adjusting LD_AUDIT/LD_PRELOAD modules...");
 
-      if (values == NULL)
-        len = 0;
-      else
-        len = values->len;
-
-      for (j = 0; j < len; j++)
+      for (j = 0; j < opt_preload_modules->len; j++)
         {
+          const WrapPreloadModule *module = &g_array_index (opt_preload_modules,
+                                                            WrapPreloadModule,
+                                                            j);
+
+          g_assert (module->which >= 0);
+          g_assert (module->which < G_N_ELEMENTS (preload_options));
           pv_wrap_append_preload (adverb_preload_argv,
-                                  variable,
-                                  option,
-                                  g_ptr_array_index (values, j),
+                                  preload_options[module->which].variable,
+                                  preload_options[module->which].adverb_option,
+                                  module->preload,
                                   environ,
                                   append_preload_flags,
                                   runtime,
@@ -2701,8 +2728,7 @@ out:
   if (local_error != NULL)
     pv_log_failure ("%s", local_error->message);
 
-  pv_preload_modules_free (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules));
-
+  g_clear_pointer (&opt_preload_modules, g_array_unref);
   g_clear_pointer (&adverb_preload_argv, g_ptr_array_unref);
   g_clear_pointer (&opt_env_if_host, g_strfreev);
   g_clear_pointer (&opt_freedesktop_app_id, g_free);

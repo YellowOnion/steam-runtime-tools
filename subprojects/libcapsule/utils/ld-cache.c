@@ -1,5 +1,6 @@
 // Copyright © 1999-2017 Free Software Foundation, Inc.
-// Copyright © 2017 Collabora Ltd
+// Copyright © 2017-2021 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // This file is part of libcapsule.
 

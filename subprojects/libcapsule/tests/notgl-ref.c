@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // notgl-ref — reference implementation of libnotgl, taking the
 // role of the (possibly outdated) implementation of OpenGL in the container

@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // notgles-red — one of two implementations of libnotgles, taking the
 // role of the AMD implementation of GLES

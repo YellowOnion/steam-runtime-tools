@@ -1,4 +1,5 @@
 // Copyright © 2017 Collabora Ltd
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 // notgl-helper-ref — The implementation of libnotgl-helper in the
 // container, taking the role of the container's libstdc++

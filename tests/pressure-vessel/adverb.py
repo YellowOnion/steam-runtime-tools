@@ -27,6 +27,9 @@ from testutils import (
 logger = logging.getLogger('test-adverb')
 
 
+EX_USAGE = 64
+
+
 class TestAdverb(BaseTest):
     def run_subprocess(
         self,
@@ -210,6 +213,26 @@ class TestAdverb(BaseTest):
         finally:
             proc.wait()
             self.assertEqual(proc.returncode, 0)
+
+    def test_wrong_options(self) -> None:
+        for option in (
+            '--an-unknown-option',
+            '--pass-fd=-1',
+            '--shell=wrong',
+            '--terminal=wrong',
+        ):
+            proc = subprocess.Popen(
+                self.adverb + [
+                    option,
+                    '--',
+                    'sh', '-euc', 'exit 42',
+                ],
+                stdout=2,
+                stderr=2,
+                universal_newlines=True,
+            )
+            proc.wait()
+            self.assertEqual(proc.returncode, EX_USAGE)
 
     def tearDown(self) -> None:
         super().tearDown()

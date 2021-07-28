@@ -480,12 +480,23 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
     {
       g_autofree gchar *libdl_platform = NULL;
       g_autofree gchar *abi_path = NULL;
-      libdl_platform = srt_system_info_dup_libdl_platform (info,
-                                                           pv_multiarch_details[abi].tuple,
-                                                           error);
-      if (!libdl_platform)
-        return glnx_prefix_error (error,
-                                  "Unknown expansion of the dl string token $PLATFORM");
+
+      if (g_getenv ("PRESSURE_VESSEL_TEST_STANDARDIZE_PLATFORM") != NULL)
+        {
+          /* In unit tests it isn't straightforward to find the real
+           * ${PLATFORM}, so we use a predictable mock implementation:
+           * whichever platform happens to be listed first. */
+          libdl_platform = g_strdup (pv_multiarch_details[abi].platforms[0]);
+        }
+      else
+        {
+          libdl_platform = srt_system_info_dup_libdl_platform (info,
+                                                               pv_multiarch_details[abi].tuple,
+                                                               error);
+          if (!libdl_platform)
+            return glnx_prefix_error (error,
+                                      "Unknown expansion of the dl string token $PLATFORM");
+        }
 
       abi_path = g_build_filename (lib_temp_dirs->root_path, libdl_platform, NULL);
 

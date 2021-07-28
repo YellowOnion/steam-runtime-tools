@@ -48,6 +48,9 @@ typedef struct
    * in glibc.
    * Size is completely arbitrary, expand as needed */
   const char *platforms[5];
+
+  /* Directory used in Steam for gameoverlayrenderer.so. */
+  const char *gameoverlayrenderer_dir;
 } PvMultiarchDetails;
 
 extern const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES];

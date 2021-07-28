@@ -46,12 +46,14 @@ const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
     .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
     .other_ld_so_cache = { "ld-x86_64-pc-linux-gnu.cache", NULL },
     .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
+    .gameoverlayrenderer_dir = "ubuntu12_64",
   },
   {
     .tuple = "i386-linux-gnu",
     .multilib = { "i686-pc-linux-gnu/lib", "lib32", NULL },
     .other_ld_so_cache = { "ld-i686-pc-linux-gnu.cache", NULL },
     .platforms = { "i686", "i586", "i486", "i386", NULL },
+    .gameoverlayrenderer_dir = "ubuntu12_32",
   },
 };
 

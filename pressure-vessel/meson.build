@@ -147,6 +147,8 @@ executable(
   'pressure-vessel-adverb',
   sources : [
     'adverb.c',
+    'supported-architectures.c',
+    'supported-architectures.h',
     'wrap-interactive.c',
     'wrap-interactive.h',
   ],

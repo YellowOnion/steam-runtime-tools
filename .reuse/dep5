@@ -16,23 +16,24 @@ Files:
 Copyright: 2019-2021 Collabora Ltd.
 License: MIT
 
-Files: subprojects/libcapsule/*
-Copyright:
- 1999-2018 Free Software Foundation, Inc.
- 2017-2020 Collabora Ltd.
-License: LGPL-2.1-or-later AND FSFAP AND MIT
-
-Files: subprojects/libcapsule/tests/CapsuleTestDpkg.pm
-Copyright:
- 2007 Raphaël Hertzog
- 2009-2010 Modestas Vainius
-License: GPL-2.0-or-later
-
 Files:
  build-aux/git-version-gen
  subprojects/libcapsule/build-aux/git-version-gen
 Copyright: 2007-2017 Free Software Foundation, Inc.
 License: GPL-3.0-or-later
+
+Files:
+ subprojects/libcapsule/.gitignore
+ subprojects/libcapsule/AUTHORS
+ subprojects/libcapsule/data/*
+ subprojects/libcapsule/doc/*
+ subprojects/libcapsule/debian/*
+ subprojects/libcapsule/examples/*
+ subprojects/libcapsule/tests/*.map
+ subprojects/libcapsule/tests/*/*.map
+ subprojects/libcapsule/tests/*/*.symbols
+Copyright: 2017-2020 Collabora Ltd.
+License: LGPL-2.1-or-later
 
 Files: subprojects/libglnx/*
 Copyright:

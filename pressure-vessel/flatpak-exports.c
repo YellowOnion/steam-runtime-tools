@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: 1.9.x commit 1.8.0-74-g354b9a22
+ * Taken from Flatpak, last updated: 1.11.2
  * Copyright © 2014-2019 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -51,7 +51,6 @@
 #if defined(__GNUC__) && __GNUC__ >= 8
 # pragma GCC diagnostic ignored "-Wcast-function-type"
 #endif
-#pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wtype-limits"
 
 /* We don't want to export paths pointing into these, because they are readonly
@@ -391,6 +390,13 @@ flatpak_exports_append_bwrap_args (FlatpakExports *exports,
         flatpak_bwrap_add_args (bwrap,
                                 os_bind_mode, "/usr", "/run/host/usr", NULL);
 
+      /* /usr/local points to ../var/usrlocal on ostree systems,
+	 so bind-mount that too. */
+      if (flatpak_exports_stat_in_host (exports, "/var/usrlocal", &buf, 0, NULL) &&
+	    S_ISDIR (buf.st_mode))
+        flatpak_bwrap_add_args (bwrap,
+                                os_bind_mode, "/var/usrlocal", "/run/host/var/usrlocal", NULL);
+
       for (i = 0; flatpak_abs_usrmerged_dirs[i] != NULL; i++)
         {
           const char *subdir = flatpak_abs_usrmerged_dirs[i];
@@ -436,8 +442,6 @@ flatpak_exports_append_bwrap_args (FlatpakExports *exports,
 
       if (exports->host_etc == FLATPAK_FILESYSTEM_MODE_NONE)
         {
-          guint i;
-
           /* We are exposing the host /usr (and friends) but not the
            * host /etc. Additionally expose just enough of /etc to make
            * things that want to read /usr work as expected.

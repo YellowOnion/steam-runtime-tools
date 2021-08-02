@@ -305,8 +305,8 @@ multiarch_details_get_libdirs (const MultiarchDetails *self,
 
   if (flags & MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN)
     g_ptr_array_add (dirs,
-                     g_build_filename ("/usr", "lib", "mesa",
-                                       self->tuple, NULL));
+                     g_build_filename ("/usr", "lib", self->tuple, "mesa",
+                                       NULL));
 
   /* Try other multilib variants next. This includes
    * Exherbo/cross-compilation-style per-architecture prefixes,

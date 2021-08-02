@@ -4316,9 +4316,6 @@ pv_runtime_finish_libc_family (PvRuntime *self,
                                GHashTable *gconv_in_provider,
                                GError **error)
 {
-  g_autofree gchar *localedef = NULL;
-  g_autofree gchar *ldconfig = NULL;
-  g_autofree gchar *locale = NULL;
   GHashTableIter iter;
   const gchar *gconv_path;
   gsize i;
@@ -4333,6 +4330,17 @@ pv_runtime_finish_libc_family (PvRuntime *self,
     "/usr/x86_64-pc-linux-gnu/lib/locale",
     "/usr/i686-pc-linux-gnu/lib/locale",
     NULL
+  };
+  static const struct
+  {
+    const char *executable;
+    const char *target_path;
+    enum { OPTIONAL, IMPORTANT, ESSENTIAL } priority;
+  } glibc_executables[] =
+  {
+    { "ldconfig", .priority = ESSENTIAL, .target_path = "/sbin/ldconfig" },
+    { "locale", .priority = IMPORTANT },
+    { "localedef", .priority = IMPORTANT },
   };
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -4384,47 +4392,53 @@ pv_runtime_finish_libc_family (PvRuntime *self,
                                           error))
         return FALSE;
 
-      localedef = pv_graphics_provider_search_in_path_and_bin (self->provider, "localedef");
+      for (i = 0; i < G_N_ELEMENTS (glibc_executables); i++)
+        {
+          g_autoptr(GError) local_error = NULL;
+          const char *executable = glibc_executables[i].executable;
+          g_autofree char *provider_impl = NULL;
+          g_autofree char *target_path_alloc = NULL;
+          const char *target_path = glibc_executables[i].target_path;
+          TakeFromProviderFlags flags;
 
-      if (localedef == NULL)
-        {
-          g_warning ("Cannot find localedef");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap, localedef,
-                                               "/usr/bin/localedef",
-                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                               error))
-        {
-          return FALSE;
-        }
+          provider_impl = pv_graphics_provider_search_in_path_and_bin (self->provider,
+                                                                       executable);
 
-      locale = pv_graphics_provider_search_in_path_and_bin (self->provider, "locale");
+          if (target_path == NULL)
+            {
+              target_path_alloc = g_build_filename ("/usr/bin", executable, NULL);
+              target_path = target_path_alloc;
+            }
 
-      if (locale == NULL)
-        {
-          g_warning ("Cannot find locale");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap, locale,
-                                               "/usr/bin/locale",
-                                               TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                               error))
-        {
-          return FALSE;
-        }
+          if (glibc_executables[i].priority >= ESSENTIAL)
+            flags = TAKE_FROM_PROVIDER_FLAGS_NONE;
+          else
+            flags = TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE;
 
-      ldconfig = pv_graphics_provider_search_in_path_and_bin (self->provider, "ldconfig");
-
-      if (ldconfig == NULL)
-        {
-          g_warning ("Cannot find ldconfig");
-        }
-      else if (!pv_runtime_take_from_provider (self, bwrap,
-                                               ldconfig,
-                                               "/sbin/ldconfig",
-                                               TAKE_FROM_PROVIDER_FLAGS_NONE,
-                                               error))
-        {
-          return FALSE;
+          if (provider_impl == NULL)
+            {
+              if (glibc_executables[i].priority >= IMPORTANT)
+                g_warning ("Cannot find %s", executable);
+              else
+                g_debug ("Cannot find %s", executable);
+            }
+          else if (!pv_runtime_take_from_provider (self, bwrap, provider_impl,
+                                                   target_path,
+                                                   flags,
+                                                   &local_error))
+            {
+              if (glibc_executables[i].priority >= IMPORTANT)
+                {
+                  g_propagate_error (error, g_steal_pointer (&local_error));
+                  return FALSE;
+                }
+              else
+                {
+                  g_debug ("Cannot take %s from provider, ignoring: %s",
+                           provider_impl, local_error->message);
+                  g_clear_error (&local_error);
+                }
+            }
         }
 
       g_debug ("Making provider gconv modules visible in container");

@@ -4338,9 +4338,25 @@ pv_runtime_finish_libc_family (PvRuntime *self,
     enum { OPTIONAL, IMPORTANT, ESSENTIAL } priority;
   } glibc_executables[] =
   {
+    /* This is basically the libc-bin Debian package, which is
+     * marked Essential. At least ldd can fail to work if it is too
+     * dissimilar to the libc.so.6 in use. */
+    { "catchsegv" },
+    { "getconf" },
+    { "getent" },
+    { "iconv" },
     { "ldconfig", .priority = ESSENTIAL, .target_path = "/sbin/ldconfig" },
+    { "ldd", .priority = IMPORTANT },
     { "locale", .priority = IMPORTANT },
     { "localedef", .priority = IMPORTANT },
+    { "pldd" },
+    { "tzselect" },
+    { "zdump" },
+    /* We probably don't need developer tools gencat, rpcgen, memusage,
+     * memusagestat, mtrace, sotruss, sprof from libc-dev-bin, libc-devtools
+     * (and some have non-trivial dependencies). */
+    /* We probably don't need sysadmin tools /usr/sbin/iconvconfig,
+     * /usr/sbin/zic from libc-bin. */
   };
 
   g_return_val_if_fail (self->provider != NULL, FALSE);

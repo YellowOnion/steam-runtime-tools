@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20210803.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pressure-vessel: Update flatpak-exports to match Flatpak 1.11.2
+  * pv-runtime: Take ldd, etc. from provider if we are using its glibc,
+    for better compatibility with newer glibc in host OSs like Arch Linux
+    (Resolves: T29581)
+  * Update libcapsule subproject to v0.20210728.0
+
+  [ Ludovico de Nittis ]
+  * pv-runtime: Delete overridden libraries from the correct "mesa" path
+    to improve robustness
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 03 Aug 2021 10:28:19 +0100
+
 steam-runtime-tools (0.20210722.0) scout; urgency=medium
 
   [ Ludovico de Nittis ]

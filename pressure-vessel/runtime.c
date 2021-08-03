@@ -43,6 +43,7 @@
 #include "exports.h"
 #include "flatpak-run-private.h"
 #include "mtree.h"
+#include "supported-architectures.h"
 #include "tree-copy.h"
 #include "utils.h"
 
@@ -201,140 +202,10 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
   return FALSE;
 }
 
-/*
- * Supported Debian-style multiarch tuples
- */
-static const char * const multiarch_tuples[] =
-{
-  "x86_64-linux-gnu",
-  "i386-linux-gnu",
-  NULL
-};
-
-typedef struct
-{
-  const char *tuple;
-
-  /* Directories other than /usr/lib that we must search for loadable
-   * modules, least-ambiguous first, most-ambiguous last, not including
-   * Debian-style multiarch directories which are automatically derived
-   * from @tuple.
-   * - Exherbo <GNU-tuple>/lib
-   * - Red-Hat- or Arch-style lib<QUAL>
-   * - etc.
-   * Size is completely arbitrary, expand as needed */
-  const char *multilib[3];
-
-  /* Alternative paths for ld.so.cache, other than ld.so.cache itself.
-   * Size is completely arbitrary, expand as needed */
-  const char *other_ld_so_cache[2];
-
-  /* Known values that ${PLATFORM} can expand to.
-   * Refer to sysdeps/x86/cpu-features.c and sysdeps/x86/dl-procinfo.c
-   * in glibc.
-   * Size is completely arbitrary, expand as needed */
-  const char *platforms[5];
-} MultiarchDetails;
-
-/*
- * More details, in the same order as multiarch_tuples
- */
-static const MultiarchDetails multiarch_details[] =
-{
-  {
-    .tuple = "x86_64-linux-gnu",
-    .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
-    .other_ld_so_cache = { "ld-x86_64-pc-linux-gnu.cache", NULL },
-    .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
-  },
-  {
-    .tuple = "i386-linux-gnu",
-    .multilib = { "i686-pc-linux-gnu/lib", "lib32", NULL },
-    .other_ld_so_cache = { "ld-i686-pc-linux-gnu.cache", NULL },
-    .platforms = { "i686", "i586", "i486", "i386", NULL },
-  },
-};
-G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_details)
-                 == G_N_ELEMENTS (multiarch_tuples) - 1);
-
-/* Architecture-independent ld.so.cache filenames, other than the
- * conventional filename /etc/ld.so.cache used upstream and in Debian
- * (we assume this is also what's used in our runtimes). */
-static const char * const other_ld_so_cache[] =
-{
-  /* Clear Linux */
-  "/var/cache/ldconfig/ld.so.cache",
-};
-
-/*
- * @MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN:
- *  Return all library directories from which we might need to delete
- *  overridden libraries shipped in the runtime.
- */
-typedef enum
-{
-  MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN = (1 << 0),
-  MULTIARCH_LIBDIRS_FLAGS_NONE = 0
-} MultiarchLibdirsFlags;
-
-/*
- * Get the library directories associated with @self, most important or
- * unambiguous first.
- *
- * Returns: (transfer container) (element-type filename):
- */
-static GPtrArray *
-multiarch_details_get_libdirs (const MultiarchDetails *self,
-                               MultiarchLibdirsFlags flags)
-{
-  g_autoptr(GPtrArray) dirs = g_ptr_array_new_with_free_func (g_free);
-  gsize j;
-
-  /* Multiarch is the least ambiguous so we put it first.
-   *
-   * We historically searched /usr/lib before /lib, but Debian actually
-   * does the opposite, and we follow that here.
-   *
-   * Arguably we should search /usr/local/lib before /lib before /usr/lib,
-   * but we don't currently try /usr/local/lib. We could add a flag
-   * for that if we don't want to do it unconditionally. */
-  g_ptr_array_add (dirs,
-                   g_build_filename ("/lib", self->tuple, NULL));
-  g_ptr_array_add (dirs,
-                   g_build_filename ("/usr", "lib", self->tuple, NULL));
-
-  if (flags & MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN)
-    g_ptr_array_add (dirs,
-                     g_build_filename ("/usr", "lib", self->tuple, "mesa",
-                                       NULL));
-
-  /* Try other multilib variants next. This includes
-   * Exherbo/cross-compilation-style per-architecture prefixes,
-   * Red-Hat-style lib64 and Arch-style lib32. */
-  for (j = 0; j < G_N_ELEMENTS (self->multilib); j++)
-    {
-      if (self->multilib[j] == NULL)
-        break;
-
-      g_ptr_array_add (dirs,
-                       g_build_filename ("/", self->multilib[j], NULL));
-      g_ptr_array_add (dirs,
-                       g_build_filename ("/usr", self->multilib[j], NULL));
-    }
-
-  /* /lib and /usr/lib are lowest priority because they're the most
-   * ambiguous: we don't know whether they're meant to contain 32- or
-   * 64-bit libraries. */
-  g_ptr_array_add (dirs, g_strdup ("/lib"));
-  g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
-
-  return g_steal_pointer (&dirs);
-}
-
 typedef struct
 {
   gsize multiarch_index;
-  const MultiarchDetails *details;
+  const PvMultiarchDetails *details;
   gchar *aliases_in_current_namespace;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
@@ -349,16 +220,14 @@ runtime_architecture_init (RuntimeArchitecture *self,
 {
   const gchar *argv[] = { NULL, "--print-ld.so", NULL };
 
-  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_details),
-                        FALSE);
-  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_tuples) - 1,
+  g_return_val_if_fail (self->multiarch_index < PV_N_SUPPORTED_ARCHITECTURES,
                         FALSE);
   g_return_val_if_fail (self->details == NULL, FALSE);
 
-  self->details = &multiarch_details[self->multiarch_index];
+  self->details = &pv_multiarch_details[self->multiarch_index];
   g_return_val_if_fail (self->details != NULL, FALSE);
   g_return_val_if_fail (self->details->tuple != NULL, FALSE);
-  g_return_val_if_fail (g_strcmp0 (multiarch_tuples[self->multiarch_index],
+  g_return_val_if_fail (g_strcmp0 (pv_multiarch_tuples[self->multiarch_index],
                                    self->details->tuple) == 0, FALSE);
 
   self->capsule_capture_libs_basename = g_strdup_printf ("%s-capsule-capture-libs",
@@ -393,8 +262,8 @@ runtime_architecture_init (RuntimeArchitecture *self,
 static gboolean
 runtime_architecture_check_valid (RuntimeArchitecture *self)
 {
-  g_return_val_if_fail (self->multiarch_index < G_N_ELEMENTS (multiarch_details), FALSE);
-  g_return_val_if_fail (self->details == &multiarch_details[self->multiarch_index], FALSE);
+  g_return_val_if_fail (self->multiarch_index < PV_N_SUPPORTED_ARCHITECTURES, FALSE);
+  g_return_val_if_fail (self->details == &pv_multiarch_details[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->capsule_capture_libs_basename != NULL, FALSE);
   g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
@@ -1282,7 +1151,7 @@ pv_runtime_unpack (PvRuntime *self,
 
 typedef struct
 {
-  const MultiarchDetails *details;
+  const PvMultiarchDetails *details;
   PvRuntimeFlags flags;
   PvGraphicsProvider *provider;
   GCancellable *cancellable;
@@ -1290,7 +1159,7 @@ typedef struct
 
 /* Called in main thread */
 static EnumerationThreadInputs *
-enumeration_thread_inputs_new (const MultiarchDetails *details,
+enumeration_thread_inputs_new (const PvMultiarchDetails *details,
                                PvRuntimeFlags flags,
                                PvGraphicsProvider *provider,
                                GCancellable *cancellable)
@@ -1403,7 +1272,7 @@ enumerate_indep (gpointer data)
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating EGL ICDs in thread");
 
-      srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+      srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1414,7 +1283,7 @@ enumerate_indep (gpointer data)
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
 
-      srt_system_info_list_vulkan_icds (system_info, multiarch_tuples);
+      srt_system_info_list_vulkan_icds (system_info, pv_multiarch_tuples);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1480,7 +1349,7 @@ enumeration_threads_clear (EnumerationThread **arr,
 /* Must be called in main thread */
 static void
 enumeration_thread_start_arch (EnumerationThread *self,
-                               const MultiarchDetails *details,
+                               const PvMultiarchDetails *details,
                                PvRuntimeFlags flags,
                                PvGraphicsProvider *provider)
 {
@@ -1547,11 +1416,11 @@ pv_runtime_initable_init (GInitable *initable,
                                       self->provider);
 
       self->arch_threads = g_new0 (EnumerationThread,
-                                   G_N_ELEMENTS (multiarch_details));
+                                   PV_N_SUPPORTED_ARCHITECTURES);
 
-      for (i = 0; i < G_N_ELEMENTS (multiarch_details); i++)
+      for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
         enumeration_thread_start_arch (&self->arch_threads[i],
-                                       &multiarch_details[i],
+                                       &pv_multiarch_details[i],
                                        self->flags,
                                        self->provider);
     }
@@ -1845,7 +1714,7 @@ pv_runtime_dispose (GObject *object)
   g_clear_object (&self->provider);
   enumeration_thread_clear (&self->indep_thread);
   enumeration_threads_clear (&self->arch_threads,
-                             G_N_ELEMENTS (multiarch_details));
+                             PV_N_SUPPORTED_ARCHITECTURES);
 
   G_OBJECT_CLASS (pv_runtime_parent_class)->dispose (object);
 }
@@ -2247,9 +2116,9 @@ typedef struct
   gchar *resolved_library;
   /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
    * tuple in multiarch_tuples. */
-  IcdKind kinds[G_N_ELEMENTS (multiarch_tuples)];
+  IcdKind kinds[PV_N_SUPPORTED_ARCHITECTURES + 1];
   /* Last entry is always NULL */
-  gchar *paths_in_container[G_N_ELEMENTS (multiarch_tuples)];
+  gchar *paths_in_container[PV_N_SUPPORTED_ARCHITECTURES + 1];
 } IcdDetails;
 
 static IcdDetails *
@@ -2271,7 +2140,7 @@ icd_details_new (gpointer icd)
   self->icd = g_object_ref (icd);
   self->resolved_library = NULL;
 
-  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES + 1; i++)
     {
       self->kinds[i] = ICD_KIND_NONEXISTENT;
       self->paths_in_container[i] = NULL;
@@ -2288,7 +2157,7 @@ icd_details_free (IcdDetails *self)
   g_object_unref (self->icd);
   g_free (self->resolved_library);
 
-  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples); i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES + 1; i++)
     g_free (self->paths_in_container[i]);
 
   g_slice_free (IcdDetails, self);
@@ -2700,9 +2569,9 @@ bind_runtime_base (PvRuntime *self,
    * /var/cache/ldconfig/ld.so.cache. For simplicity, we make all these
    * paths symlinks to /etc/ld.so.cache, so that we only have to populate
    * the cache in one place. */
-  for (i = 0; i < G_N_ELEMENTS (other_ld_so_cache); i++)
+  for (i = 0; pv_other_ld_so_cache[i] != NULL; i++)
     {
-      const char *path = other_ld_so_cache[i];
+      const char *path = pv_other_ld_so_cache[i];
 
       flatpak_bwrap_add_args (bwrap,
                               "--symlink", "/etc/ld.so.cache", path,
@@ -2714,9 +2583,9 @@ bind_runtime_base (PvRuntime *self,
    * does this. Again, for simplicity we direct all these to the same path:
    * it's OK to mix multiple architectures' libraries into one cache,
    * as done in upstream glibc (and Debian, Arch, etc.). */
-  for (i = 0; i < G_N_ELEMENTS (multiarch_details); i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
-      const MultiarchDetails *details = &multiarch_details[i];
+      const PvMultiarchDetails *details = &pv_multiarch_details[i];
 
       for (j = 0; j < G_N_ELEMENTS (details->other_ld_so_cache); j++)
         {
@@ -3096,8 +2965,8 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   timer = _srt_profiling_start ("Removing overridden %s libraries",
                                 arch->details->tuple);
 
-  dirs = multiarch_details_get_libdirs (arch->details,
-                                        MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
+  dirs = pv_multiarch_details_get_libdirs (arch->details,
+                                           PV_MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
   delete = g_new0 (GHashTable *, dirs->len);
   iters = g_new0 (GLnxDirFdIterator, dirs->len);
 
@@ -3554,7 +3423,7 @@ setup_json_manifest (PvRuntime *self,
         return TRUE;
     }
 
-  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
       g_assert (i < G_N_ELEMENTS (details->kinds));
       g_assert (i < G_N_ELEMENTS (details->paths_in_container));
@@ -3568,7 +3437,7 @@ setup_json_manifest (PvRuntime *self,
           g_assert (details->paths_in_container[i] != NULL);
 
           json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
-                                       seq, multiarch_tuples[i]);
+                                       seq, pv_multiarch_tuples[i]);
           write_to_file = g_build_filename (write_to_dir, json_base, NULL);
           json_in_container = g_build_filename (self->overrides_in_container,
                                                 "share", sub_dir,
@@ -4893,7 +4762,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
   g_debug ("Enumerating EGL ICDs on provider system...");
-  egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+  egl_icds = srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
   n_egl_icds = g_list_length (egl_icds);
 
   egl_icd_details = g_ptr_array_new_full (n_egl_icds,
@@ -4926,7 +4795,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   part_timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
   g_debug ("Enumerating Vulkan ICDs on provider system...");
   vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
-                                                  multiarch_tuples);
+                                                  pv_multiarch_tuples);
   n_vulkan_icds = g_list_length (vulkan_icds);
 
   vulkan_icd_details = g_ptr_array_new_full (n_vulkan_icds,
@@ -5025,16 +4894,16 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
    * for some architecture. */
   self->all_libc_from_provider = TRUE;
 
-  g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+  g_assert (pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES] == NULL);
 
-  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
       g_autoptr(GError) local_error = NULL;
       g_auto (RuntimeArchitecture) arch_on_stack = { i };
       RuntimeArchitecture *arch = &arch_on_stack;
 
-      part_timer = _srt_profiling_start ("%s libraries", multiarch_tuples[i]);
-      g_debug ("Checking for %s libraries...", multiarch_tuples[i]);
+      part_timer = _srt_profiling_start ("%s libraries", pv_multiarch_tuples[i]);
+      g_debug ("Checking for %s libraries...", pv_multiarch_tuples[i]);
 
       if (runtime_architecture_init (arch, self))
         {
@@ -5209,8 +5078,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                            nvidia_data_in_provider);
             }
 
-          dirs = multiarch_details_get_libdirs (arch->details,
-                                                MULTIARCH_LIBDIRS_FLAGS_NONE);
+          dirs = pv_multiarch_details_get_libdirs (arch->details,
+                                                   PV_MULTIARCH_LIBDIRS_FLAGS_NONE);
 
           for (j = 0; j < dirs->len; j++)
             {
@@ -5246,7 +5115,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             }
 
           platform_token = srt_system_info_dup_libdl_platform (arch_system_info,
-                                                               multiarch_tuples[i],
+                                                               pv_multiarch_tuples[i],
                                                                &local_error);
           if (platform_token == NULL)
             {
@@ -5281,14 +5150,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     {
       GString *archs = g_string_new ("");
 
-      g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+      g_assert (pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES] == NULL);
 
-      for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+      for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
         {
           if (archs->len > 0)
             g_string_append (archs, ", ");
 
-          g_string_append (archs, multiarch_tuples[i]);
+          g_string_append (archs, pv_multiarch_tuples[i]);
         }
 
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -5518,7 +5387,7 @@ pv_runtime_bind (PvRuntime *self,
 
           search_path = _srt_graphics_get_vulkan_search_paths ("/",
                                                                self->original_environ,
-                                                               multiarch_tuples,
+                                                               pv_multiarch_tuples,
                                                                suffix);
 
           for (j = 0; search_path != NULL && search_path[j] != NULL; j++)
@@ -5576,18 +5445,18 @@ pv_runtime_set_search_paths (PvRuntime *self,
    * of setting LD_LIBRARY_PATH, for better robustness against
    * games that set their own LD_LIBRARY_PATH ignoring what they
    * got from the environment */
-  g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+  g_assert (pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES] == NULL);
 
-  for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
       g_autofree gchar *ld_path = NULL;
       g_autofree gchar *aliases = NULL;
 
       ld_path = g_build_filename (self->overrides_in_container, "lib",
-                                  multiarch_tuples[i], NULL);
+                                  pv_multiarch_tuples[i], NULL);
 
       aliases = g_build_filename (self->overrides_in_container, "lib",
-                                  multiarch_tuples[i], "aliases", NULL);
+                                  pv_multiarch_tuples[i], "aliases", NULL);
 
       pv_search_path_append (ld_library_path, ld_path);
       pv_search_path_append (ld_library_path, aliases);

@@ -147,6 +147,8 @@ executable(
   'pressure-vessel-adverb',
   sources : [
     'adverb.c',
+    'supported-architectures.c',
+    'supported-architectures.h',
     'wrap-interactive.c',
     'wrap-interactive.h',
   ],
@@ -228,6 +230,8 @@ pressure_vessel_wrap_lib = static_library(
     'graphics-provider.h',
     'runtime.c',
     'runtime.h',
+    'supported-architectures.c',
+    'supported-architectures.h',
     'wrap-flatpak.c',
     'wrap-flatpak.h',
     'wrap-pipewire.c',

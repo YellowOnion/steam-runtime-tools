@@ -208,8 +208,8 @@ executable(
   install_rpath : pv_rpath,
 )
 
-executable(
-  'pressure-vessel-wrap',
+pressure_vessel_wrap_lib = static_library(
+  'pressure-vessel-wrap-lib',
   sources : [
     'bwrap.c',
     'bwrap.h',
@@ -228,7 +228,6 @@ executable(
     'graphics-provider.h',
     'runtime.c',
     'runtime.h',
-    'wrap.c',
     'wrap-flatpak.c',
     'wrap-flatpak.h',
     'wrap-pipewire.c',
@@ -244,6 +243,24 @@ executable(
     xau,
     libglnx_dep,
     json_glib,
+  ],
+  include_directories : pv_include_dirs,
+)
+pressure_vessel_wrap_lib_dep = declare_dependency(
+  link_with : pressure_vessel_wrap_lib,
+  sources : [launcher1[1], systemd_dbus[1]],
+)
+
+executable(
+  'pressure-vessel-wrap',
+  sources : [
+    'wrap.c',
+  ],
+  c_args : pv_c_args,
+  dependencies : [
+    gio_unix,
+    libglnx_dep,
+    pressure_vessel_wrap_lib_dep,
   ],
   include_directories : pv_include_dirs,
   install : true,

@@ -716,8 +716,14 @@ static char *opt_write_final_argv = NULL;
 
 static PreloadModule opt_preload_modules[] =
 {
-  { "LD_AUDIT", NULL, NULL },
-  { "LD_PRELOAD", NULL, NULL },
+  { "LD_AUDIT", NULL },
+  { "LD_PRELOAD", NULL },
+};
+static const char * const adverb_preload_options[G_N_ELEMENTS (opt_preload_modules)] =
+{
+  /* Must be in the same order as opt_preload_modules */
+  "--ld-audit",
+  "--ld-preload",
 };
 
 /*
@@ -741,7 +747,7 @@ opt_host_ld_preload_cb (const gchar *option_name,
   g_warning ("%s is deprecated, use --ld-preload=%s instead",
              option_name, value);
   pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value, FALSE);
+                            "LD_PRELOAD", value);
   return TRUE;
 }
 
@@ -752,7 +758,7 @@ opt_ld_audit_cb (const gchar *option_name,
                  GError **error)
 {
   pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_AUDIT", value, FALSE);
+                            "LD_AUDIT", value);
   return TRUE;
 }
 
@@ -763,7 +769,7 @@ opt_ld_preload_cb (const gchar *option_name,
                    GError **error)
 {
   pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value, FALSE);
+                            "LD_PRELOAD", value);
   return TRUE;
 }
 
@@ -1324,6 +1330,7 @@ main (int argc,
   g_autoptr(FILE) original_stdout = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
   const char *steam_app_id;
+  g_autoptr(GPtrArray) adverb_preload_argv = NULL;
 
   setlocale (LC_ALL, "");
 
@@ -2084,6 +2091,25 @@ main (int argc,
                                      FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                      "/tmp");
 
+  if (flatpak_subsandbox != NULL)
+    {
+      /* We special case libshared-library-guard because usually
+       * its blockedlist file is located in `/app` and we need
+       * to change that to the `/run/parent` counterpart */
+      const gchar *blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
+
+      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS))
+        {
+          g_autofree gchar *adjusted_blockedlist = NULL;
+          adjusted_blockedlist = g_build_filename ("/run/parent",
+                                                   blockedlist, NULL);
+          pv_environ_setenv (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
+                             adjusted_blockedlist);
+        }
+    }
+
+  adverb_preload_argv = g_ptr_array_new_with_free_func (g_free);
+
   /* We need the LD_PRELOADs from Steam visible at the paths that were
    * used for them, which might be their physical rather than logical
    * locations. Steam doesn't generally use LD_AUDIT, but the Steam app
@@ -2091,7 +2117,8 @@ main (int argc,
   for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
     {
       const char *variable = opt_preload_modules[i].variable;
-      const GPtrArray *values = opt_preload_modules[i].original_values;
+      const GPtrArray *values = opt_preload_modules[i].values;
+      const char *option = adverb_preload_options[i];
       gsize len;
       gsize j;
 
@@ -2139,32 +2166,18 @@ main (int argc,
 
                   adjusted_path = g_build_filename ("/run/parent", preload, NULL);
                   g_debug ("%s -> %s", preload, adjusted_path);
-                  pv_append_preload_module (opt_preload_modules,
-                                            G_N_ELEMENTS (opt_preload_modules),
-                                            variable, adjusted_path, TRUE);
-
-                  if (g_str_has_suffix (preload, "/libshared-library-guard.so"))
-                    {
-                      /* We special case libshared-library-guard because usually
-                       * its blockedlist file is located in `/app` and we need
-                       * to change that to the `/run/parent` counterpart */
-                      const gchar *blockedlist = "/app/etc/freedesktop-sdk.ld.so.blockedlist";
-                      if (g_file_test (blockedlist, G_FILE_TEST_EXISTS))
-                        {
-                          g_autofree gchar *adjusted_blockedlist = NULL;
-                          adjusted_blockedlist = g_build_filename ("/run/parent",
-                                                                   blockedlist, NULL);
-                          pv_environ_setenv (container_env, "SHARED_LIBRARY_GUARD_CONFIG",
-                                             adjusted_blockedlist);
-                        }
-                    }
+                  g_ptr_array_add (adverb_preload_argv,
+                                   g_strdup_printf ("%s=%s",
+                                                    option,
+                                                    adjusted_path));
                 }
               else
                 {
                   g_debug ("%s -> unmodified", preload);
-                  pv_append_preload_module (opt_preload_modules,
-                                            G_N_ELEMENTS (opt_preload_modules),
-                                            variable, preload, TRUE);
+                  g_ptr_array_add (adverb_preload_argv,
+                                   g_strdup_printf ("%s=%s",
+                                                    option,
+                                                    preload));
                 }
 
               /* No FlatpakExports here: any file not in /usr or /app that
@@ -2186,9 +2199,10 @@ main (int argc,
                   /* When using a runtime we can't write to /usr/ or /libQUAL/,
                    * so redirect this preloaded module to the corresponding
                    * location in /run/host. */
-                  pv_append_preload_module (opt_preload_modules,
-                                            G_N_ELEMENTS (opt_preload_modules),
-                                            variable, adjusted_path, TRUE);
+                  g_ptr_array_add (adverb_preload_argv,
+                                   g_strdup_printf ("%s=%s",
+                                                    option,
+                                                    adjusted_path));
                 }
               else
                 {
@@ -2209,9 +2223,10 @@ main (int argc,
                                                        preload);
                     }
 
-                  pv_append_preload_module (opt_preload_modules,
-                                            G_N_ELEMENTS (opt_preload_modules),
-                                            variable, preload, TRUE);
+                  g_ptr_array_add (adverb_preload_argv,
+                                   g_strdup_printf ("%s=%s",
+                                                    option,
+                                                    preload));
                 }
             }
           else
@@ -2621,36 +2636,7 @@ main (int argc,
             break;
         }
 
-      for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
-        {
-          const gchar *variable = opt_preload_modules[i].variable;
-          const GPtrArray *values = opt_preload_modules[i].adjusted_values;
-          const gchar *option = NULL;
-          gsize j;
-
-          if (g_strcmp0 (variable, "LD_AUDIT") == 0)
-            {
-              option = "--ld-audit";
-            }
-          else if (g_strcmp0 (variable, "LD_PRELOAD") == 0)
-            {
-              option = "--ld-preload";
-            }
-          else
-            {
-              /* Programming error: this logic needs to be updated
-               * to handle this new preload module */
-              g_critical ("Unhandled preload module %s", variable);
-              continue;
-            }
-
-          if (values == NULL)
-            continue;
-
-          for (j = 0; j < values->len; j++)
-            flatpak_bwrap_add_arg_printf (adverb_argv, "%s=%s", option,
-                                          (gchar *)g_ptr_array_index (values, j));
-        }
+      flatpak_bwrap_append_args (adverb_argv, adverb_preload_argv);
 
       if (opt_verbose)
         flatpak_bwrap_add_arg (adverb_argv, "--verbose");
@@ -2793,6 +2779,7 @@ out:
 
   pv_preload_modules_free (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules));
 
+  g_clear_pointer (&adverb_preload_argv, g_ptr_array_unref);
   g_clear_pointer (&opt_env_if_host, g_strfreev);
   g_clear_pointer (&opt_freedesktop_app_id, g_free);
   g_clear_pointer (&opt_steam_app_id, g_free);

@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: 1.11.2
+ * Taken from Flatpak, last updated: 1.11.2-15-gc392e5ad
  * Copyright © 2014-2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -65,8 +65,21 @@ FlatpakFilesystemMode flatpak_exports_path_get_mode (FlatpakExports *exports,
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (FlatpakExports, flatpak_exports_free);
 
+/*
+ * FlatpakExportsTestFlags:
+ * @FLATPAK_EXPORTS_TEST_FLAGS_AUTOFS: Pretend everything is an autofs.
+ *
+ * Flags used to provide mock behaviour during unit testing.
+ */
+typedef enum
+{
+  FLATPAK_EXPORTS_TEST_FLAGS_AUTOFS = (1 << 0),
+  FLATPAK_EXPORTS_TEST_FLAGS_NONE = 0
+} FlatpakExportsTestFlags;
+
 void flatpak_exports_take_host_fd (FlatpakExports *exports,
                                    int             fd);
-
+void flatpak_exports_set_test_flags (FlatpakExports *exports,
+                                     FlatpakExportsTestFlags flags);
 
 #endif /* __FLATPAK_EXPORTS_H__ */

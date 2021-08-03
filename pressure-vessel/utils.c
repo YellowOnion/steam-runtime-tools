@@ -1001,8 +1001,6 @@ pv_delete_dangling_symlink (int dirfd,
  * @n_preload_modules: Size of @preload_modules
  * @variable: Variable where @value will be appended to
  * @value: Value that needs to be appended
- * @adjusted_value: If #TRUE, @value will be appended to the adjusted values
- *  array, otherwise it will be appended to the original values array
  *
  * Append @value to the #PreloadModule whose "variable" is the same as the
  * provided @variable.
@@ -1011,8 +1009,7 @@ void
 pv_append_preload_module (PreloadModule preload_modules[],
                           gsize n_preload_modules,
                           const char *variable,
-                          const char *value,
-                          gboolean adjusted_value)
+                          const char *value)
 {
   gsize i;
 
@@ -1029,20 +1026,10 @@ pv_append_preload_module (PreloadModule preload_modules[],
   if (i == n_preload_modules)
     g_return_if_reached ();
 
-  if (adjusted_value)
-    {
-      if (preload_modules[i].adjusted_values == NULL)
-        preload_modules[i].adjusted_values = g_ptr_array_new_with_free_func (g_free);
+  if (preload_modules[i].values == NULL)
+    preload_modules[i].values = g_ptr_array_new_with_free_func (g_free);
 
-      g_ptr_array_add (preload_modules[i].adjusted_values, g_strdup (value));
-    }
-  else
-    {
-      if (preload_modules[i].original_values == NULL)
-        preload_modules[i].original_values = g_ptr_array_new_with_free_func (g_free);
-
-      g_ptr_array_add (preload_modules[i].original_values, g_strdup (value));
-    }
+  g_ptr_array_add (preload_modules[i].values, g_strdup (value));
 }
 
 /**
@@ -1059,8 +1046,5 @@ pv_preload_modules_free (PreloadModule preload_modules[],
   gsize i;
 
   for (i = 0; i < n_preload_modules; i++)
-    {
-      g_clear_pointer (&preload_modules[i].original_values, g_ptr_array_unref);
-      g_clear_pointer (&preload_modules[i].adjusted_values, g_ptr_array_unref);
-    }
+    g_clear_pointer (&preload_modules[i].values, g_ptr_array_unref);
 }

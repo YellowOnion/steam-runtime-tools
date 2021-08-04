@@ -438,30 +438,11 @@ pv_wrap_append_preload (GPtrArray *argv,
       return;
     }
 
-  /* A subsandbox will just have the same LD_PRELOAD as the
-   * Flatpak itself, except that we have to redirect /usr and /app
-   * into /run/parent. */
-  if (flags & PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX)
-    {
-      /* No FlatpakExports here: any file not in /usr or /app that
-       * is visible to our "parent" Flatpak app is also visible
-       * to us. */
-      append_preload_internal (argv,
-                               option,
-                               preload,
-                               env,
-                               flags,
-                               runtime,
-                               NULL);
-    }
-  else
-    {
-      append_preload_internal (argv,
-                               option,
-                               preload,
-                               env,
-                               flags,
-                               runtime,
-                               exports);
-    }
+  append_preload_internal (argv,
+                           option,
+                           preload,
+                           env,
+                           flags,
+                           runtime,
+                           exports);
 }

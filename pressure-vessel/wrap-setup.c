@@ -336,6 +336,7 @@ pv_wrap_move_into_scope (const char *steam_app_id)
 static void
 append_preload_internal (GPtrArray *argv,
                          const char *option,
+                         const char *export_path,
                          const char *original_path,
                          GStrv env,
                          PvAppendPreloadFlags flags,
@@ -364,26 +365,105 @@ append_preload_internal (GPtrArray *argv,
 
       g_ptr_array_add (argv, g_strdup_printf ("%s=%s", option, original_path));
 
-      if (exports != NULL && original_path[0] == '/')
+      if (exports != NULL && export_path != NULL && export_path[0] == '/')
         {
           const gchar *steam_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
 
           if (steam_path != NULL
-              && flatpak_has_path_prefix (original_path, steam_path))
+              && flatpak_has_path_prefix (export_path, steam_path))
             {
               g_debug ("Skipping exposing \"%s\" because it is located "
                        "under the Steam client install path that we "
-                       "bind by default", original_path);
+                       "bind by default", export_path);
             }
           else
             {
-              g_debug ("%s needs adding to exports", original_path);
+              g_debug ("%s needs adding to exports", export_path);
               flatpak_exports_add_path_expose (exports,
                                                FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                               original_path);
+                                               export_path);
             }
         }
     }
+}
+
+/*
+ * Deal with a LD_PRELOAD or LD_AUDIT module that contains tokens whose
+ * expansion we can't control or predict, such as ${ORIGIN} or future
+ * additions. We can't do much with these, because we can't assume that
+ * the dynamic string tokens will expand in the same way for us as they
+ * will for other programs.
+ *
+ * We mostly have to pass them into the container and hope for the best.
+ * We can rewrite a /usr/, /lib or /app/ prefix, and we can export the
+ * directory containing the first path component that has a dynamic
+ * string token: for example, /opt/plat-${PLATFORM}/preload.so or
+ * /opt/$PLATFORM/preload.so both have to be exported as /opt.
+ *
+ * Arguments are the same as for pv_wrap_append_preload().
+ */
+static void
+append_preload_unsupported_token (GPtrArray *argv,
+                                  const char *option,
+                                  const char *preload,
+                                  GStrv env,
+                                  PvAppendPreloadFlags flags,
+                                  PvRuntime *runtime,
+                                  FlatpakExports *exports)
+{
+  g_autofree gchar *export_path = NULL;
+  char *dollar;
+  char *slash;
+
+  g_debug ("Found $ORIGIN or unsupported token in \"%s\"",
+           preload);
+
+  if (preload[0] == '/')
+    {
+      export_path = g_strdup (preload);
+      dollar = strchr (export_path, '$');
+      g_assert (dollar != NULL);
+      /* Truncate before '$' */
+      dollar[0] = '\0';
+      slash = strrchr (export_path, '/');
+      /* It's an absolute path, so there is definitely a '/' before '$' */
+      g_assert (slash != NULL);
+      /* Truncate before last '/' before '$' */
+      slash[0] = '\0';
+
+      /* If that truncation leaves it empty, don't try to expose
+       * the whole root filesystem */
+      if (export_path[0] != '/')
+        {
+          g_debug ("Not exporting root filesystem for \"%s\"",
+                   preload);
+          g_clear_pointer (&export_path, g_free);
+        }
+      else
+        {
+          g_debug ("Exporting \"%s\" for \"%s\"",
+                   export_path, preload);
+        }
+    }
+  else
+    {
+      /* Original path was relative and contained an unsupported
+       * token like $ORIGIN. Pass it through as-is, without any extra
+       * exports (because we don't know what the token means!), and
+       * hope for the best. export_path stays NULL. */
+      g_debug ("Not exporting \"%s\": not an absolute path, or starts "
+               "with $ORIGIN",
+               preload);
+    }
+
+  append_preload_internal (argv,
+                           option,
+                           export_path,
+                           preload,
+                           env,
+                           flags,
+                           runtime,
+                           exports);
 }
 
 /**
@@ -452,6 +532,7 @@ pv_wrap_append_preload (GPtrArray *argv,
          * isn't an absolute filename. */
         append_preload_internal (argv,
                                  option,
+                                 NULL,
                                  preload,
                                  env,
                                  flags,
@@ -460,16 +541,32 @@ pv_wrap_append_preload (GPtrArray *argv,
         break;
 
       case SRT_LOADABLE_KIND_PATH:
-        /* Ideally we would handle this more cleverly, but for now,
-         * assume preload is a filename: adjust the beginning if it's
-         * in /usr/ etc., and add it to the exports if absolute. */
-        append_preload_internal (argv,
-                                 option,
-                                 preload,
-                                 env,
-                                 flags,
-                                 runtime,
-                                 exports);
+        /* Paths can have dynamic string tokens. */
+        if (loadable_flags & (SRT_LOADABLE_FLAGS_ORIGIN
+                              | SRT_LOADABLE_FLAGS_UNKNOWN_TOKENS))
+          {
+            append_preload_unsupported_token (argv,
+                                              option,
+                                              preload,
+                                              env,
+                                              flags,
+                                              runtime,
+                                              exports);
+          }
+        /* TODO: else if SRT_LOADABLE_FLAGS_ABI_DEPENDENT, ... */
+        else
+          {
+            /* Assume preload is a filename: adjust the beginning if it's
+             * in /usr/ etc., and add it to the exports if absolute. */
+            append_preload_internal (argv,
+                                     option,
+                                     preload,
+                                     preload,
+                                     env,
+                                     flags,
+                                     runtime,
+                                     exports);
+          }
         break;
 
       case SRT_LOADABLE_KIND_ERROR:

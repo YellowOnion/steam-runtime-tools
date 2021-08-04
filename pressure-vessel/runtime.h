@@ -113,4 +113,7 @@ gboolean pv_runtime_use_shared_sockets (PvRuntime *self,
                                         PvEnviron *container_env,
                                         GError **error);
 
+gboolean pv_runtime_has_library (PvRuntime *self,
+                                 const char *library);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvRuntime, g_object_unref)

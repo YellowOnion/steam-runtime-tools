@@ -5751,3 +5751,103 @@ pv_runtime_get_modified_app (PvRuntime *self)
   else
     return NULL;
 }
+
+/*
+ * Return %TRUE if the runtime provides @library, either directly or
+ * via the graphics-stack provider.
+ */
+gboolean
+pv_runtime_has_library (PvRuntime *self,
+                        const char *library)
+{
+  glnx_autofd int source_files_fd = -1;
+  gsize i;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (library != NULL, FALSE);
+
+  g_debug ("Checking whether runtime has library: %s", library);
+
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
+    {
+      const PvMultiarchDetails *details = &pv_multiarch_details[i];
+      g_autoptr(GPtrArray) dirs = NULL;
+      gsize j;
+
+      dirs = pv_multiarch_details_get_libdirs (details,
+                                               PV_MULTIARCH_LIBDIRS_FLAGS_NONE);
+
+      for (j = 0; j < dirs->len; j++)
+        {
+          const char *libdir = g_ptr_array_index (dirs, j);
+          g_autofree gchar *path = g_build_filename (libdir, library, NULL);
+
+          if (self->mutable_sysroot_fd >= 0)
+            {
+              glnx_autofd int fd = -1;
+
+              fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd, path,
+                                            SRT_RESOLVE_FLAGS_NONE,
+                                            NULL, NULL);
+
+              if (fd >= 0)
+                {
+                  g_debug ("-> yes, ${mutable_sysroot}/%s", path);
+                  return TRUE;
+                }
+            }
+          else
+            {
+              glnx_autofd int fd = -1;
+
+              /* The runtime isn't necessarily a sysroot (it might just be a
+               * merged /usr) but in practice it'll be close enough: we look
+               * up each library in /usr/foo and /foo anyway. */
+              if (source_files_fd < 0)
+                {
+                  if (!glnx_opendirat (AT_FDCWD, self->source_files, TRUE,
+                                       &source_files_fd, NULL))
+                    continue;
+                }
+
+              fd = _srt_resolve_in_sysroot (source_files_fd, path,
+                                            SRT_RESOLVE_FLAGS_NONE,
+                                            NULL, NULL);
+
+              if (fd >= 0)
+                {
+                  g_debug ("-> yes, ${source_files}/%s", path);
+                  return TRUE;
+                }
+            }
+
+          /* If the graphics stack provider is not the same as the current
+           * namespace (in practice this rarely/never happens), we also
+           * want to steer clear of libraries that only exist in the
+           * graphics stack provider.
+           *
+           * If the graphics stack provider *is* the current namespace,
+           * and the library doesn't exist in the container runtime, then
+           * it's OK to use libraries from it in LD_PRELOAD, because there
+           * is no other version that might have been meant. */
+          if (self->provider != NULL
+              && g_strcmp0 (self->provider->path_in_current_ns, "/") != 0)
+            {
+              glnx_autofd int fd = -1;
+
+              fd = _srt_resolve_in_sysroot (self->provider->fd, path,
+                                            SRT_RESOLVE_FLAGS_NONE,
+                                            NULL, NULL);
+
+              if (fd >= 0)
+                {
+                  g_debug ("-> yes, ${provider}/%s", path);
+                  return TRUE;
+                }
+            }
+        }
+    }
+
+  g_debug ("-> no");
+  return FALSE;
+}

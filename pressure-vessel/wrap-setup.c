@@ -502,9 +502,6 @@ append_preload_per_architecture (GPtrArray *argv,
   g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
   gsize i;
 
-  g_debug ("Found $LIB or $PLATFORM in \"%s\", splitting architectures",
-           preload);
-
   if (system_info == NULL)
     system_info = srt_system_info_new (NULL);
 
@@ -537,10 +534,19 @@ append_preload_per_architecture (GPtrArray *argv,
           platform = pv_multiarch_details[i].platforms[0];
 
           mock_path = g_string_new (preload);
-          g_string_replace (mock_path, "$LIB", lib, 0);
-          g_string_replace (mock_path, "${LIB}", lib, 0);
-          g_string_replace (mock_path, "$PLATFORM", platform, 0);
-          g_string_replace (mock_path, "${PLATFORM}", platform, 0);
+
+          if (strchr (preload, '/') == NULL)
+            {
+              g_string_printf (mock_path, "/path/to/%s/%s", lib, preload);
+            }
+          else
+            {
+              g_string_replace (mock_path, "$LIB", lib, 0);
+              g_string_replace (mock_path, "${LIB}", lib, 0);
+              g_string_replace (mock_path, "$PLATFORM", platform, 0);
+              g_string_replace (mock_path, "${PLATFORM}", platform, 0);
+            }
+
           path = mock_path->str;
 
           /* As a special case, pretend one 64-bit library failed to load,
@@ -572,6 +578,73 @@ append_preload_per_architecture (GPtrArray *argv,
                   pv_multiarch_details[i].tuple,
                   preload);
         }
+    }
+}
+
+static void
+append_preload_basename (GPtrArray *argv,
+                         const char *option,
+                         const char *preload,
+                         GStrv env,
+                         PvAppendPreloadFlags flags,
+                         PvRuntime *runtime,
+                         FlatpakExports *exports)
+{
+  gboolean runtime_has_library = FALSE;
+
+  if (runtime != NULL)
+    runtime_has_library = pv_runtime_has_library (runtime, preload);
+
+  if (flags & PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS)
+    {
+      /* Mock implementation for unit tests: behave as though the
+       * container has everything except libfakeroot/libfakechroot. */
+      if (g_str_has_prefix (preload, "libfake"))
+        runtime_has_library = FALSE;
+      else
+        runtime_has_library = TRUE;
+    }
+
+  if (runtime_has_library)
+    {
+      /* If the library exists in the container runtime or in the
+       * stack we imported from the graphics provider, e.g.
+       * LD_PRELOAD=libpthread.so.0, then we certainly don't want
+       * to be loading it from the current namespace: that would
+       * bypass our logic for comparing library versions and picking
+       * the newest. Just pass through the LD_PRELOAD item into the
+       * container, and let the dynamic linker in the container choose
+       * what it means (container runtime or graphics provider as
+       * appropriate). */
+      g_debug ("Found \"%s\" in runtime or graphics stack provider, "
+               "passing %s through as-is",
+               preload, option);
+      append_preload_internal (argv,
+                               option,
+                               NULL,
+                               NULL,
+                               preload,
+                               env,
+                               flags,
+                               runtime,
+                               NULL);
+    }
+  else
+    {
+      /* There's no such library in the container runtime or in the
+       * graphics provider, so it's OK to inject the version from the
+       * current namespace. Use the same trick as for ${PLATFORM} to
+       * turn it into (up to) one absolute path per ABI. */
+      g_debug ("Did not find \"%s\" in runtime or graphics stack provider, "
+               "splitting architectures",
+               preload);
+      append_preload_per_architecture (argv,
+                                       option,
+                                       preload,
+                                       env,
+                                       flags,
+                                       runtime,
+                                       exports);
     }
 }
 
@@ -635,19 +708,13 @@ pv_wrap_append_preload (GPtrArray *argv,
       case SRT_LOADABLE_KIND_BASENAME:
         /* Basenames can't have dynamic string tokens. */
         g_warn_if_fail ((loadable_flags & SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS) == 0);
-        /* Ideally we would handle this more cleverly, but for now,
-         * pass preload through to the container without adjustment.
-         * It isn't useful to add it to the FlatpakExports, because it
-         * isn't an absolute filename. */
-        append_preload_internal (argv,
+        append_preload_basename (argv,
                                  option,
-                                 NULL,
-                                 NULL,
                                  preload,
                                  env,
                                  flags,
                                  runtime,
-                                 NULL);
+                                 exports);
         break;
 
       case SRT_LOADABLE_KIND_PATH:
@@ -665,6 +732,8 @@ pv_wrap_append_preload (GPtrArray *argv,
           }
         else if (loadable_flags & SRT_LOADABLE_FLAGS_ABI_DEPENDENT)
           {
+            g_debug ("Found $LIB or $PLATFORM in \"%s\", splitting architectures",
+                     preload);
             append_preload_per_architecture (argv,
                                              option,
                                              preload,

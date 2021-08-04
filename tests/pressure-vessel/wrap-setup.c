@@ -418,14 +418,11 @@ test_remap_ld_preload (Fixture *f,
   /* We don't know what ${ORIGIN} will expand to, so we have to cut off at
    * /overlay/libs */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/overlay"));
-
-  if (!flatpak_exports_path_is_visible (exports, "/overlay/libs"))
-    g_test_message ("TODO: Export /overlay/libs");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/overlay/libs"));
 
   /* We don't know what ${FUTURE} will expand to, so we have to cut off at
    * /future */
-  if (!flatpak_exports_path_is_visible (exports, "/future"))
-    g_test_message ("TODO: Export /future");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/future"));
 
   /* We don't export the entire root directory just because it has a
    * module in it */
@@ -659,14 +656,11 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   /* We don't know what ${ORIGIN} will expand to, so we have to cut off at
    * /overlay/libs */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/overlay"));
-
-  if (!flatpak_exports_path_is_visible (exports, "/overlay/libs"))
-    g_test_message ("TODO: Export /overlay/libs");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/overlay/libs"));
 
   /* We don't know what ${FUTURE} will expand to, so we have to cut off at
    * /future */
-  if (!flatpak_exports_path_is_visible (exports, "/future"))
-    g_test_message ("TODO: Export /future");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/future"));
 
   /* We don't export the entire root directory just because it has a
    * module in it */

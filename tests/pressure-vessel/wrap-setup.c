@@ -222,6 +222,8 @@ populate_ld_preload (Fixture *f,
     { "/in-root-${FUTURE}.so" },
     { "./${RELATIVE}.so" },
     { "./relative.so" },
+    { "libfakeroot.so" },
+    { "libpthread.so.0" },
     {
       "/usr/local/lib/libgtk3-nocsd.so.0",
       .warning = "Disabling gtk3-nocsd LD_PRELOAD: it is known to cause crashes.",
@@ -373,6 +375,30 @@ test_remap_ld_preload (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=./relative.so");
 
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libfakeroot is not in the runtime or graphics stack provider, only
+   * the current namespace */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_64
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_X86_64));
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_32
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_I386));
+
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libpthread.so.0 *is* in the runtime, as we would expect */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=libpthread.so.0");
+
   g_assert_cmpuint (argv->len, ==, i);
 
   /* FlatpakExports never exports /app */
@@ -520,6 +546,30 @@ test_remap_ld_preload_flatpak (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=./relative.so");
 
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libfakeroot is not in the runtime or graphics stack provider, only
+   * the current namespace */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_64
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_X86_64));
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_32
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_I386));
+
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libpthread.so.0 *is* in the runtime, as we would expect */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=libpthread.so.0");
+
   g_assert_cmpuint (argv->len, ==, i);
 }
 
@@ -619,6 +669,30 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=./relative.so");
+
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libfakeroot is not in the runtime or graphics stack provider, only
+   * the current namespace */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_64
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_X86_64));
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_32
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_I386));
+
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libpthread.so.0 *is* in the runtime, as we would expect */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=libpthread.so.0");
 
   g_assert_cmpuint (argv->len, ==, i);
 
@@ -760,6 +834,30 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=./relative.so");
+
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libfakeroot is not in the runtime or graphics stack provider, only
+   * the current namespace */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_64
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_X86_64));
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/path/to/"
+                    MOCK_LIB_32
+                    "/libfakeroot.so:abi="
+                    SRT_ABI_I386));
+
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libpthread.so.0 *is* in the runtime, as we would expect */
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=libpthread.so.0");
 
   g_assert_cmpuint (argv->len, ==, i);
 }

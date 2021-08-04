@@ -113,6 +113,7 @@ IFS=":"
 for word in $ld_audit; do
     options+=("--ld-audit=$word")
 done
+IFS=": "
 for word in $ld_preload; do
     options+=("--ld-preload=$word")
 done

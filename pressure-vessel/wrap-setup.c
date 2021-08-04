@@ -416,10 +416,8 @@ pv_wrap_append_preload (GPtrArray *argv,
       /* No FlatpakExports here: any file not in /usr or /app that
        * is visible to our "parent" Flatpak app is also visible
        * to us. */
-      return;
     }
-
-  if (g_file_test (preload, G_FILE_TEST_EXISTS))
+  else
     {
       if (runtime != NULL
           && (g_str_has_prefix (preload, "/usr/")
@@ -461,9 +459,5 @@ pv_wrap_append_preload (GPtrArray *argv,
                                             option,
                                             preload));
         }
-    }
-  else
-    {
-      g_info ("%s module '%s' does not exist", variable, preload);
     }
 }

@@ -207,8 +207,8 @@ populate_ld_preload (Fixture *f,
     const char *warning;
   } preloads[] =
   {
-    { "" },
-    { "" },
+    { "", .warning = "Ignoring invalid loadable module \"\"" },
+    { "", .warning = "Ignoring invalid loadable module \"\"" },
     { "/app/lib/libpreloadA.so" },
     { "/platform/plat-$PLATFORM/libpreloadP.so" },
     { "/opt/${LIB}/libpreloadL.so" },
@@ -226,7 +226,7 @@ populate_ld_preload (Fixture *f,
       "/usr/local/lib/libgtk3-nocsd.so.0",
       .warning = "Disabling gtk3-nocsd LD_PRELOAD: it is known to cause crashes.",
     },
-    { "" },
+    { "", .warning = "Ignoring invalid loadable module \"\"" },
   };
   gsize i;
 

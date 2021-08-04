@@ -21,6 +21,7 @@
 #include "wrap-setup.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -416,13 +417,13 @@ pv_wrap_append_preload (GPtrArray *argv,
                         PvRuntime *runtime,
                         FlatpakExports *exports)
 {
+  SrtLoadableKind kind;
+  SrtLoadableFlags loadable_flags;
+
   g_return_if_fail (argv != NULL);
   g_return_if_fail (option != NULL);
   g_return_if_fail (preload != NULL);
   g_return_if_fail (runtime == NULL || PV_IS_RUNTIME (runtime));
-
-  if (*preload == '\0')
-    return;
 
   if (strstr (preload, "gtk3-nocsd") != NULL)
     {
@@ -438,11 +439,47 @@ pv_wrap_append_preload (GPtrArray *argv,
       return;
     }
 
-  append_preload_internal (argv,
-                           option,
-                           preload,
-                           env,
-                           flags,
-                           runtime,
-                           exports);
+  kind = _srt_loadable_classify (preload, &loadable_flags);
+
+  switch (kind)
+    {
+      case SRT_LOADABLE_KIND_BASENAME:
+        /* Basenames can't have dynamic string tokens. */
+        g_warn_if_fail ((loadable_flags & SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS) == 0);
+        /* Ideally we would handle this more cleverly, but for now,
+         * pass preload through to the container without adjustment.
+         * It isn't useful to add it to the FlatpakExports, because it
+         * isn't an absolute filename. */
+        append_preload_internal (argv,
+                                 option,
+                                 preload,
+                                 env,
+                                 flags,
+                                 runtime,
+                                 NULL);
+        break;
+
+      case SRT_LOADABLE_KIND_PATH:
+        /* Ideally we would handle this more cleverly, but for now,
+         * assume preload is a filename: adjust the beginning if it's
+         * in /usr/ etc., and add it to the exports if absolute. */
+        append_preload_internal (argv,
+                                 option,
+                                 preload,
+                                 env,
+                                 flags,
+                                 runtime,
+                                 exports);
+        break;
+
+      case SRT_LOADABLE_KIND_ERROR:
+      default:
+        /* Empty string or similar syntactically invalid token:
+         * ignore with a warning. Since steam-runtime-tools!352 and
+         * steamlinuxruntime!64, the wrapper scripts don't give us
+         * an empty argument any more. */
+        g_warning ("Ignoring invalid loadable module \"%s\"", preload);
+
+        break;
+    }
 }

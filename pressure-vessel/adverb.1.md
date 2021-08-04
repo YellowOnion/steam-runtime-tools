@@ -18,8 +18,8 @@ pressure-vessel-adverb - wrap processes in various ways
 [**--[no-]exit-with-parent**]
 [**--fd** *FD*...]
 [**--[no-]generate-locales**]
-[**--ld-audit** *MODULE*...]
-[**--ld-preload** *MODULE*...]
+[**--ld-audit** *MODULE*[**:arch=***TUPLE*]...]
+[**--ld-preload** *MODULE*[**:**...]...]
 [**--pass-fd** *FD*...]
 [**--shell** **none**|**after**|**fail**|**instead**]
 [**--subreaper**]
@@ -70,15 +70,27 @@ exit status.
     **LOCPATH** environment variable.
     **--no-generate-locales** disables this behaviour, and is the default.
 
-**--ld-audit** *MODULE*
+**--ld-audit** *MODULE*[**:arch=***TUPLE*]
 :   Add *MODULE* to **LD_AUDIT** before executing *COMMAND*.
+    The optional *TUPLE* is the same as for **--ld-preload**, below.
 
-**--ld-preload** *MODULE*
+**--ld-preload** *MODULE*[**:arch=***TUPLE*]
 :   Add *MODULE* to **LD_PRELOAD** before executing *COMMAND*.
-    Some adjustments may be performed to the provided *MODULE*, e.g.
-    multiple preloads of gameoverlayrenderer.so for different ABIs may be
-    joined together into a single path by leveraging the dynamic linker
-    token expansion feature.
+
+    If the optional **:arch=***TUPLE* is given, the *MODULE* is only used for
+    the given architecture, and is paired with other modules (if any) that
+    share its basename; for example,
+    `/home/me/.steam/root/ubuntu12_32/gameoverlayrenderer.so:arch=i386-linux-gnu`
+    and
+    `/home/me/.steam/root/ubuntu12_64/gameoverlayrenderer.so:arch=x86_64-linux-gnu`
+    will be combined into a single **LD_PRELOAD** entry of the form
+    `/tmp/pressure-vessel-libs-123456/${PLATFORM}/gameoverlayrenderer.so`.
+
+    For a **LD_PRELOAD** module named `gameoverlayrenderer.so` in a directory
+    named `ubuntu12_32` or `ubuntu12_64`, the architecture is automatically
+    set to `i386-linux-gnu` or `x86_64-linux-gnu` respectively, if not
+    otherwise given. Other special-case behaviour might be added in future
+    if required.
 
 **--lock-file** *FILENAME*
 :   Lock the file *FILENAME* according to the most recently seen

@@ -520,6 +520,38 @@ append_preload_per_architecture (GPtrArray *argv,
                                      &details);
       path = srt_library_get_absolute_path (details);
 
+      if (flags & PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS)
+        {
+          /* Use mock results to get predictable behaviour in the unit
+           * tests, replacing the real result (above). This avoids needing
+           * to have real libraries in place when we do unit testing.
+           *
+           * tests/pressure-vessel/wrap-setup.c is the other side of this. */
+          g_autofree gchar *lib = NULL;
+          const char *platform = NULL;
+
+          /* As a mock ${LIB}, behave like Debian or the fdo SDK. */
+          lib = g_strdup_printf ("lib/%s", pv_multiarch_details[i].tuple);
+
+          /* As a mock ${PLATFORM}, use the first one listed. */
+          platform = pv_multiarch_details[i].platforms[0];
+
+          mock_path = g_string_new (preload);
+          g_string_replace (mock_path, "$LIB", lib, 0);
+          g_string_replace (mock_path, "${LIB}", lib, 0);
+          g_string_replace (mock_path, "$PLATFORM", platform, 0);
+          g_string_replace (mock_path, "${PLATFORM}", platform, 0);
+          path = mock_path->str;
+
+          /* As a special case, pretend one 64-bit library failed to load,
+           * so we can exercise what happens when there's only a 32-bit
+           * library available. */
+          if (strstr (path, "only-32-bit") != NULL
+              && strcmp (pv_multiarch_details[i].tuple,
+                         SRT_ABI_I386) != 0)
+            path = NULL;
+        }
+
       if (path != NULL)
         {
           g_debug ("Found %s version of %s at %s",

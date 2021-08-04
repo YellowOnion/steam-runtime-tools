@@ -259,7 +259,7 @@ populate_ld_preload (Fixture *f,
                               "--ld-preload",
                               preloads[i].string,
                               f->env,
-                              flags,
+                              flags | PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS,
                               runtime,
                               exports);
 
@@ -297,27 +297,37 @@ test_remap_ld_preload (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/app/lib/libpreloadA.so");
 
-  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/platform/plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_64
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_X86_64));
 
-  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/opt/"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_32
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_I386));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_64
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_X86_64));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_32
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -343,17 +353,13 @@ test_remap_ld_preload (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
 
-  /* TODO: We should split this up into its per-platform resolutions,
-   * then discard the 64-bit resolution because it doesn't exist, and
-   * only keep the 32-bit resolution */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/in-root-plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/in-root-plat-"
+                    MOCK_PLATFORM_32
+                    "-only-32-bit.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -384,22 +390,14 @@ test_remap_ld_preload (Fixture *f,
    * these. */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/opt"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/opt/lib"));
-
-  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_32 "/libpreloadL.so"))
-    g_test_message ("TODO: Export filenames in /opt/$LIB");
-
-  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_64 "/libpreloadL.so"))
-    g_test_message ("TODO: Export filenames in /opt/$LIB");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_32 "/libpreloadL.so"));
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_64 "/libpreloadL.so"));
 
   /* We don't always export /platform, so we have to explicitly export
    * these. */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/platform"));
-
-  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so"))
-    g_test_message ("TODO: Export filenames in /platform");
-
-  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so"))
-    g_test_message ("TODO: Export filenames in /platform");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so"));
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so"));
 
   /* FlatpakExports never exports /lib as /lib */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/lib"));
@@ -446,27 +444,37 @@ test_remap_ld_preload_flatpak (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/run/parent/app/lib/libpreloadA.so");
 
-  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/platform/plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_64
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_X86_64));
 
-  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/opt/"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_32
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_I386));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_64
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_X86_64));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_32
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -492,17 +500,13 @@ test_remap_ld_preload_flatpak (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
 
-  /* TODO: We should split this up into its per-platform resolutions,
-   * then discard the 64-bit resolution because it doesn't exist, and
-   * only keep the 32-bit resolution */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/in-root-plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/in-root-plat-"
+                    MOCK_PLATFORM_32
+                    "-only-32-bit.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -541,27 +545,37 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/app/lib/libpreloadA.so");
 
-  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/platform/plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_64
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_X86_64));
 
-  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/opt/"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_32
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_I386));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_64
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_X86_64));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_32
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -586,17 +600,13 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
 
-  /* TODO: We should split this up into its per-platform resolutions,
-   * then discard the 64-bit resolution because it doesn't exist, and
-   * only keep the 32-bit resolution */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/in-root-plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/in-root-plat-"
+                    MOCK_PLATFORM_32
+                    "-only-32-bit.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -627,22 +637,14 @@ test_remap_ld_preload_no_runtime (Fixture *f,
    * these. */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/opt"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/opt/lib"));
-
-  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_32 "/libpreloadL.so"))
-    g_test_message ("TODO: Export filenames in /opt/$LIB");
-
-  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_64 "/libpreloadL.so"))
-    g_test_message ("TODO: Export filenames in /opt/$LIB");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_32 "/libpreloadL.so"));
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_64 "/libpreloadL.so"));
 
   /* We don't always export /platform, so we have to explicitly export
    * these. */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/platform"));
-
-  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so"))
-    g_test_message ("TODO: Export filenames in /platform");
-
-  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so"))
-    g_test_message ("TODO: Export filenames in /platform");
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so"));
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so"));
 
   /* FlatpakExports never exports /lib as /lib */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/lib"));
@@ -683,27 +685,37 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/app/lib/libpreloadA.so");
 
-  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/platform/plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_64
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_X86_64));
 
-  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
-   * its per-platform resolutions */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/opt/"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/platform/plat-"
+                    MOCK_PLATFORM_32
+                    "/libpreloadP.so:abi="
+                    SRT_ABI_I386));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_64
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_X86_64));
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/opt/"
+                    MOCK_LIB_32
+                    "/libpreloadL.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
@@ -729,17 +741,13 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
 
-  /* TODO: We should split this up into its per-platform resolutions,
-   * then discard the 64-bit resolution because it doesn't exist, and
-   * only keep the 32-bit resolution */
-  while (argv->len > i)
-    {
-      if (g_str_has_prefix (g_ptr_array_index (argv, i),
-                            "--ld-preload=/in-root-plat-"))
-        i++;
-      else
-        break;
-    }
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==,
+                   ("--ld-preload=/in-root-plat-"
+                    MOCK_PLATFORM_32
+                    "-only-32-bit.so:abi="
+                    SRT_ABI_I386));
 
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),

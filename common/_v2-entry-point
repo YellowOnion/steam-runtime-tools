@@ -264,7 +264,9 @@ esac
 old_IFS="$IFS"
 IFS=": "
 for word in $ld_preload; do
-    container_args+=("--ld-preload=$word")
+    if [ -n "$word" ]; then
+        container_args+=("--ld-preload=$word")
+    fi
 done
 IFS="$old_IFS"
 

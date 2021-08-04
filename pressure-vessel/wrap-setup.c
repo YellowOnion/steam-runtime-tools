@@ -332,6 +332,59 @@ pv_wrap_move_into_scope (const char *steam_app_id)
     g_debug ("Cannot move into a systemd scope: %s", local_error->message);
 }
 
+static void
+append_preload_internal (GPtrArray *argv,
+                         const char *option,
+                         const char *original_path,
+                         GStrv env,
+                         PvAppendPreloadFlags flags,
+                         PvRuntime *runtime,
+                         FlatpakExports *exports)
+{
+  gboolean flatpak_subsandbox = ((flags & PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX) != 0);
+
+  if (runtime != NULL
+      && (g_str_has_prefix (original_path, "/usr/")
+          || g_str_has_prefix (original_path, "/lib")
+          || (flatpak_subsandbox && g_str_has_prefix (original_path, "/app/"))))
+    {
+      g_autofree gchar *adjusted_path = NULL;
+      const char *target = flatpak_subsandbox ? "/run/parent" : "/run/host";
+
+      adjusted_path = g_build_filename (target, original_path, NULL);
+      g_debug ("%s -> %s", original_path, adjusted_path);
+
+      g_ptr_array_add (argv, g_strdup_printf ("%s=%s",
+                                              option, adjusted_path));
+    }
+  else
+    {
+      g_debug ("%s -> unmodified", original_path);
+
+      g_ptr_array_add (argv, g_strdup_printf ("%s=%s", option, original_path));
+
+      if (exports != NULL)
+        {
+          const gchar *steam_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
+
+          if (steam_path != NULL
+              && flatpak_has_path_prefix (original_path, steam_path))
+            {
+              g_debug ("Skipping exposing \"%s\" because it is located "
+                       "under the Steam client install path that we "
+                       "bind by default", original_path);
+            }
+          else
+            {
+              g_debug ("%s needs adding to exports", original_path);
+              flatpak_exports_add_path_expose (exports,
+                                               FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                               original_path);
+            }
+        }
+    }
+}
+
 /**
  * pv_wrap_append_preload:
  * @argv: (element-type filename): Array of command-line options to populate
@@ -390,74 +443,25 @@ pv_wrap_append_preload (GPtrArray *argv,
    * into /run/parent. */
   if (flags & PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX)
     {
-      if (runtime != NULL
-          && (g_str_has_prefix (preload, "/usr/")
-              || g_str_has_prefix (preload, "/app/")
-              || g_str_has_prefix (preload, "/lib")))
-        {
-          g_autofree gchar *adjusted_path = NULL;
-
-          adjusted_path = g_build_filename ("/run/parent", preload, NULL);
-          g_debug ("%s -> %s", preload, adjusted_path);
-          g_ptr_array_add (argv,
-                           g_strdup_printf ("%s=%s",
-                                            option,
-                                            adjusted_path));
-        }
-      else
-        {
-          g_debug ("%s -> unmodified", preload);
-          g_ptr_array_add (argv,
-                           g_strdup_printf ("%s=%s",
-                                            option,
-                                            preload));
-        }
-
       /* No FlatpakExports here: any file not in /usr or /app that
        * is visible to our "parent" Flatpak app is also visible
        * to us. */
+      append_preload_internal (argv,
+                               option,
+                               preload,
+                               env,
+                               flags,
+                               runtime,
+                               NULL);
     }
   else
     {
-      if (runtime != NULL
-          && (g_str_has_prefix (preload, "/usr/")
-              || g_str_has_prefix (preload, "/lib")))
-        {
-          g_autofree gchar *adjusted_path = NULL;
-
-          adjusted_path = g_build_filename ("/run/host", preload, NULL);
-          g_debug ("%s -> %s", preload, adjusted_path);
-          /* When using a runtime we can't write to /usr/ or /libQUAL/,
-           * so redirect this preloaded module to the corresponding
-           * location in /run/host. */
-          g_ptr_array_add (argv,
-                           g_strdup_printf ("%s=%s",
-                                            option,
-                                            adjusted_path));
-        }
-      else
-        {
-          const gchar *steam_path = NULL;
-          steam_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
-
-          if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
-            {
-              g_debug ("Skipping exposing \"%s\" because it is located "
-                       "under the Steam client install path that we "
-                       "bind by default", preload);
-            }
-          else
-            {
-              g_debug ("%s -> unmodified, but added to exports", preload);
-              flatpak_exports_add_path_expose (exports,
-                                               FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                               preload);
-            }
-
-          g_ptr_array_add (argv,
-                           g_strdup_printf ("%s=%s",
-                                            option,
-                                            preload));
-        }
+      append_preload_internal (argv,
+                               option,
+                               preload,
+                               env,
+                               flags,
+                               runtime,
+                               exports);
     }
 }

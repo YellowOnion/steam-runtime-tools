@@ -363,7 +363,7 @@ append_preload_internal (GPtrArray *argv,
 
       g_ptr_array_add (argv, g_strdup_printf ("%s=%s", option, original_path));
 
-      if (exports != NULL)
+      if (exports != NULL && original_path[0] == '/')
         {
           const gchar *steam_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
 

@@ -2118,6 +2118,7 @@ main (int argc,
                                   variable,
                                   option,
                                   g_ptr_array_index (values, j),
+                                  environ,
                                   append_preload_flags,
                                   runtime,
                                   exports);

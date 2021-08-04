@@ -62,6 +62,7 @@ void pv_wrap_append_preload (GPtrArray *argv,
                              const char *variable,
                              const char *option,
                              const char *preload,
+                             GStrv env,
                              PvAppendPreloadFlags flags,
                              PvRuntime *runtime,
                              FlatpakExports *exports);

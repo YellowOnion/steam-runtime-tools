@@ -343,6 +343,8 @@ pv_wrap_move_into_scope (const char *steam_app_id)
  *  namespace, possibly including special ld.so tokens such as `$LIB`,
  *  or basename of a preloadable module to be found in the standard
  *  library search path
+ * @env: (array zero-terminated=1) (element-type filename): Environment
+ *  variables to be used instead of `environ`
  * @flags: Flags to adjust behaviour
  * @runtime: (nullable): Runtime to be used in container
  * @exports: (nullable): Used to configure extra paths that need to be
@@ -356,6 +358,7 @@ pv_wrap_append_preload (GPtrArray *argv,
                         const char *variable,
                         const char *option,
                         const char *preload,
+                        GStrv env,
                         PvAppendPreloadFlags flags,
                         PvRuntime *runtime,
                         FlatpakExports *exports)
@@ -437,7 +440,7 @@ pv_wrap_append_preload (GPtrArray *argv,
       else
         {
           const gchar *steam_path = NULL;
-          steam_path = g_getenv ("STEAM_COMPAT_CLIENT_INSTALL_PATH");
+          steam_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
 
           if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
             {

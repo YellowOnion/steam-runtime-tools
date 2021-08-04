@@ -262,7 +262,7 @@ case "${STEAM_RUNTIME-}" in
 esac
 
 old_IFS="$IFS"
-IFS=":"
+IFS=": "
 for word in $ld_preload; do
     container_args+=("--ld-preload=$word")
 done

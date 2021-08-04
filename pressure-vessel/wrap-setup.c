@@ -30,6 +30,7 @@
 #include "bwrap.h"
 #include "flatpak-run-private.h"
 #include "flatpak-utils-private.h"
+#include "supported-architectures.h"
 
 /*
  * Use code borrowed from Flatpak to share various bits of the
@@ -336,6 +337,7 @@ pv_wrap_move_into_scope (const char *steam_app_id)
 static void
 append_preload_internal (GPtrArray *argv,
                          const char *option,
+                         const char *multiarch_tuple,
                          const char *export_path,
                          const char *original_path,
                          GStrv env,
@@ -356,14 +358,25 @@ append_preload_internal (GPtrArray *argv,
       adjusted_path = g_build_filename (target, original_path, NULL);
       g_debug ("%s -> %s", original_path, adjusted_path);
 
-      g_ptr_array_add (argv, g_strdup_printf ("%s=%s",
-                                              option, adjusted_path));
+      if (multiarch_tuple != NULL)
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s:abi=%s",
+                                                option, adjusted_path,
+                                                multiarch_tuple));
+      else
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s",
+                                                option, adjusted_path));
     }
   else
     {
       g_debug ("%s -> unmodified", original_path);
 
-      g_ptr_array_add (argv, g_strdup_printf ("%s=%s", option, original_path));
+      if (multiarch_tuple != NULL)
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s:abi=%s",
+                                                option, original_path,
+                                                multiarch_tuple));
+      else
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s",
+                                                option, original_path));
 
       if (exports != NULL && export_path != NULL && export_path[0] == '/')
         {
@@ -458,12 +471,76 @@ append_preload_unsupported_token (GPtrArray *argv,
 
   append_preload_internal (argv,
                            option,
+                           NULL,
                            export_path,
                            preload,
                            env,
                            flags,
                            runtime,
                            exports);
+}
+
+/*
+ * Deal with a LD_PRELOAD or LD_AUDIT module that contains tokens whose
+ * expansion is ABI-dependent but otherwise fixed. We do these by
+ * breaking it up into several ABI-dependent LD_PRELOAD modules, which
+ * are recombined by pv-adverb. We have to do this because the expansion
+ * of the ABI-dependent tokens could be different in the container, due
+ * to using a different glibc.
+ *
+ * Arguments are the same as for pv_wrap_append_preload().
+ */
+static void
+append_preload_per_architecture (GPtrArray *argv,
+                                 const char *option,
+                                 const char *preload,
+                                 GStrv env,
+                                 PvAppendPreloadFlags flags,
+                                 PvRuntime *runtime,
+                                 FlatpakExports *exports)
+{
+  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
+  gsize i;
+
+  g_debug ("Found $LIB or $PLATFORM in \"%s\", splitting architectures",
+           preload);
+
+  if (system_info == NULL)
+    system_info = srt_system_info_new (NULL);
+
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
+    {
+      g_autoptr(GString) mock_path = NULL;
+      g_autoptr(SrtLibrary) details = NULL;
+      const char *path;
+
+      srt_system_info_check_library (system_info,
+                                     pv_multiarch_details[i].tuple,
+                                     preload,
+                                     &details);
+      path = srt_library_get_absolute_path (details);
+
+      if (path != NULL)
+        {
+          g_debug ("Found %s version of %s at %s",
+                   pv_multiarch_details[i].tuple, preload, path);
+          append_preload_internal (argv,
+                                   option,
+                                   pv_multiarch_details[i].tuple,
+                                   path,
+                                   path,
+                                   env,
+                                   flags,
+                                   runtime,
+                                   exports);
+        }
+      else
+        {
+          g_info ("Unable to load %s version of %s",
+                  pv_multiarch_details[i].tuple,
+                  preload);
+        }
+    }
 }
 
 /**
@@ -533,6 +610,7 @@ pv_wrap_append_preload (GPtrArray *argv,
         append_preload_internal (argv,
                                  option,
                                  NULL,
+                                 NULL,
                                  preload,
                                  env,
                                  flags,
@@ -553,13 +631,24 @@ pv_wrap_append_preload (GPtrArray *argv,
                                               runtime,
                                               exports);
           }
-        /* TODO: else if SRT_LOADABLE_FLAGS_ABI_DEPENDENT, ... */
+        else if (loadable_flags & SRT_LOADABLE_FLAGS_ABI_DEPENDENT)
+          {
+            append_preload_per_architecture (argv,
+                                             option,
+                                             preload,
+                                             env,
+                                             flags,
+                                             runtime,
+                                             exports);
+          }
         else
           {
-            /* Assume preload is a filename: adjust the beginning if it's
-             * in /usr/ etc., and add it to the exports if absolute. */
+            /* All dynamic tokens should be handled above, so we can
+             * assume that preload is a concrete filename */
+            g_warn_if_fail ((loadable_flags & SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS) == 0);
             append_preload_internal (argv,
                                      option,
+                                     NULL,
                                      preload,
                                      preload,
                                      env,

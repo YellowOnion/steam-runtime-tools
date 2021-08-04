@@ -28,6 +28,7 @@
 
 #include "bwrap.h"
 #include "flatpak-run-private.h"
+#include "flatpak-utils-private.h"
 
 /*
  * Use code borrowed from Flatpak to share various bits of the
@@ -329,4 +330,137 @@ pv_wrap_move_into_scope (const char *steam_app_id)
 
   if (local_error != NULL)
     g_debug ("Cannot move into a systemd scope: %s", local_error->message);
+}
+
+/**
+ * pv_wrap_append_preload:
+ * @argv: (element-type filename): Array of command-line options to populate
+ * @variable: (type filename): Environment variable from which this
+ *  preload module was taken, either `LD_AUDIT` or `LD_PRELOAD`
+ * @option: (type filename): Command-line option to add to @argv,
+ *  either `--ld-audit` or `--ld-preload`
+ * @preload: (type filename): Path of preloadable module in current
+ *  namespace, possibly including special ld.so tokens such as `$LIB`,
+ *  or basename of a preloadable module to be found in the standard
+ *  library search path
+ * @flags: Flags to adjust behaviour
+ * @runtime: (nullable): Runtime to be used in container
+ * @exports: (nullable): Used to configure extra paths that need to be
+ *  exported into the container
+ *
+ * Adjust @preload to be valid for the container and append it
+ * to @argv.
+ */
+void
+pv_wrap_append_preload (GPtrArray *argv,
+                        const char *variable,
+                        const char *option,
+                        const char *preload,
+                        PvAppendPreloadFlags flags,
+                        PvRuntime *runtime,
+                        FlatpakExports *exports)
+{
+  g_return_if_fail (argv != NULL);
+  g_return_if_fail (option != NULL);
+  g_return_if_fail (preload != NULL);
+  g_return_if_fail (runtime == NULL || PV_IS_RUNTIME (runtime));
+
+  if (*preload == '\0')
+    return;
+
+  if (strstr (preload, "gtk3-nocsd") != NULL)
+    {
+      g_warning ("Disabling gtk3-nocsd %s: it is known to cause crashes.",
+                 variable);
+      return;
+    }
+
+  if ((flags & PV_APPEND_PRELOAD_FLAGS_REMOVE_GAME_OVERLAY)
+      && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+    {
+      g_info ("Disabling Steam Overlay: %s", preload);
+      return;
+    }
+
+  /* A subsandbox will just have the same LD_PRELOAD as the
+   * Flatpak itself, except that we have to redirect /usr and /app
+   * into /run/parent. */
+  if (flags & PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX)
+    {
+      if (runtime != NULL
+          && (g_str_has_prefix (preload, "/usr/")
+              || g_str_has_prefix (preload, "/app/")
+              || g_str_has_prefix (preload, "/lib")))
+        {
+          g_autofree gchar *adjusted_path = NULL;
+
+          adjusted_path = g_build_filename ("/run/parent", preload, NULL);
+          g_debug ("%s -> %s", preload, adjusted_path);
+          g_ptr_array_add (argv,
+                           g_strdup_printf ("%s=%s",
+                                            option,
+                                            adjusted_path));
+        }
+      else
+        {
+          g_debug ("%s -> unmodified", preload);
+          g_ptr_array_add (argv,
+                           g_strdup_printf ("%s=%s",
+                                            option,
+                                            preload));
+        }
+
+      /* No FlatpakExports here: any file not in /usr or /app that
+       * is visible to our "parent" Flatpak app is also visible
+       * to us. */
+      return;
+    }
+
+  if (g_file_test (preload, G_FILE_TEST_EXISTS))
+    {
+      if (runtime != NULL
+          && (g_str_has_prefix (preload, "/usr/")
+              || g_str_has_prefix (preload, "/lib")))
+        {
+          g_autofree gchar *adjusted_path = NULL;
+
+          adjusted_path = g_build_filename ("/run/host", preload, NULL);
+          g_debug ("%s -> %s", preload, adjusted_path);
+          /* When using a runtime we can't write to /usr/ or /libQUAL/,
+           * so redirect this preloaded module to the corresponding
+           * location in /run/host. */
+          g_ptr_array_add (argv,
+                           g_strdup_printf ("%s=%s",
+                                            option,
+                                            adjusted_path));
+        }
+      else
+        {
+          const gchar *steam_path = NULL;
+          steam_path = g_getenv ("STEAM_COMPAT_CLIENT_INSTALL_PATH");
+
+          if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
+            {
+              g_debug ("Skipping exposing \"%s\" because it is located "
+                       "under the Steam client install path that we "
+                       "bind by default", preload);
+            }
+          else
+            {
+              g_debug ("%s -> unmodified, but added to exports", preload);
+              flatpak_exports_add_path_expose (exports,
+                                               FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                               preload);
+            }
+
+          g_ptr_array_add (argv,
+                           g_strdup_printf ("%s=%s",
+                                            option,
+                                            preload));
+        }
+    }
+  else
+    {
+      g_info ("%s module '%s' does not exist", variable, preload);
+    }
 }

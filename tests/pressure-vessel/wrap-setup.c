@@ -35,8 +35,20 @@
 
 #include "tests/test-utils.h"
 
+#include "supported-architectures.h"
 #include "wrap-setup.h"
 #include "utils.h"
+
+/* These match the first entry in PvMultiArchdetails.platforms,
+ * which is the easiest realistic thing for a mock implementation of
+ * srt_system_info_check_library() to use. */
+#define MOCK_PLATFORM_32 "i686"
+#define MOCK_PLATFORM_64 "xeon_phi"
+
+/* These match Debian multiarch, which is as good a thing as any for
+ * a mock implementation of srt_system_info_check_library() to use. */
+#define MOCK_LIB_32 "lib/" SRT_ABI_I386
+#define MOCK_LIB_64 "lib/" SRT_ABI_X86_64
 
 typedef struct
 {
@@ -117,11 +129,18 @@ setup (Fixture *f,
   static const char * const touch[] =
   {
     "app/lib/libpreloadA.so",
+    "future/libs-post2038/.exists",
     "home/me/libpreloadH.so",
     "lib/libpreload-rootfs.so",
+    "opt/" MOCK_LIB_32 "/libpreloadL.so",
+    "opt/" MOCK_LIB_64 "/libpreloadL.so",
+    "overlay/libs/usr/lib/libpreloadO.so",
+    "platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so",
+    "platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so",
     "steam/lib/gameoverlayrenderer.so",
     "usr/lib/libpreloadU.so",
     "usr/local/lib/libgtk3-nocsd.so.0",
+    "in-root-plat-" MOCK_PLATFORM_32 "-only-32-bit.so",
   };
   g_autoptr(GError) local_error = NULL;
   gsize i;
@@ -191,10 +210,18 @@ populate_ld_preload (Fixture *f,
     { "" },
     { "" },
     { "/app/lib/libpreloadA.so" },
+    { "/platform/plat-$PLATFORM/libpreloadP.so" },
+    { "/opt/${LIB}/libpreloadL.so" },
     { "/lib/libpreload-rootfs.so" },
     { "/usr/lib/libpreloadU.so" },
     { "/home/me/libpreloadH.so" },
     { "/steam/lib/gameoverlayrenderer.so" },
+    { "/overlay/libs/${ORIGIN}/../lib/libpreloadO.so" },
+    { "/future/libs-$FUTURE/libpreloadF.so" },
+    { "/in-root-plat-${PLATFORM}-only-32-bit.so" },
+    { "/in-root-${FUTURE}.so" },
+    { "./${RELATIVE}.so" },
+    { "./relative.so" },
     {
       "/usr/local/lib/libgtk3-nocsd.so.0",
       .warning = "Disabling gtk3-nocsd LD_PRELOAD: it is known to cause crashes.",
@@ -245,6 +272,12 @@ populate_ld_preload (Fixture *f,
           g_log_set_always_fatal (old_fatal_mask);
         }
     }
+
+  for (i = 0; i < argv->len; i++)
+    g_test_message ("argv[%" G_GSIZE_FORMAT "]: %s",
+                    i, (const char *) g_ptr_array_index (argv, i));
+
+  g_test_message ("argv->len: %" G_GSIZE_FORMAT, i);
 }
 
 static void
@@ -264,6 +297,28 @@ test_remap_ld_preload (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/app/lib/libpreloadA.so");
 
+  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/platform/plat-"))
+        i++;
+      else
+        break;
+    }
+
+  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/opt/"))
+        i++;
+      else
+        break;
+    }
+
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/run/host/lib/libpreload-rootfs.so");
@@ -280,6 +335,38 @@ test_remap_ld_preload (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/steam/lib/gameoverlayrenderer.so");
 
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
+
+  /* TODO: We should split this up into its per-platform resolutions,
+   * then discard the 64-bit resolution because it doesn't exist, and
+   * only keep the 32-bit resolution */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/in-root-plat-"))
+        i++;
+      else
+        break;
+    }
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/in-root-${FUTURE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./${RELATIVE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./relative.so");
+
   g_assert_cmpuint (argv->len, ==, i);
 
   /* FlatpakExports never exports /app */
@@ -292,6 +379,27 @@ test_remap_ld_preload (Fixture *f,
   g_assert_false (flatpak_exports_path_is_visible (exports, "/home"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/home/me"));
   g_assert_true (flatpak_exports_path_is_visible (exports, "/home/me/libpreloadH.so"));
+
+  /* We don't always export /opt, so we have to explicitly export
+   * these. */
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/opt"));
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/opt/lib"));
+
+  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_32 "/libpreloadL.so"))
+    g_test_message ("TODO: Export filenames in /opt/$LIB");
+
+  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_64 "/libpreloadL.so"))
+    g_test_message ("TODO: Export filenames in /opt/$LIB");
+
+  /* We don't always export /platform, so we have to explicitly export
+   * these. */
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/platform"));
+
+  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so"))
+    g_test_message ("TODO: Export filenames in /platform");
+
+  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so"))
+    g_test_message ("TODO: Export filenames in /platform");
 
   /* FlatpakExports never exports /lib as /lib */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/lib"));
@@ -306,6 +414,22 @@ test_remap_ld_preload (Fixture *f,
   g_assert_false (flatpak_exports_path_is_visible (exports, "/steam"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/steam/lib"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/steam/lib/gameoverlayrenderer.so"));
+
+  /* We don't know what ${ORIGIN} will expand to, so we have to cut off at
+   * /overlay/libs */
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/overlay"));
+
+  if (!flatpak_exports_path_is_visible (exports, "/overlay/libs"))
+    g_test_message ("TODO: Export /overlay/libs");
+
+  /* We don't know what ${FUTURE} will expand to, so we have to cut off at
+   * /future */
+  if (!flatpak_exports_path_is_visible (exports, "/future"))
+    g_test_message ("TODO: Export /future");
+
+  /* We don't export the entire root directory just because it has a
+   * module in it */
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/"));
 }
 
 static void
@@ -325,6 +449,28 @@ test_remap_ld_preload_flatpak (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/run/parent/app/lib/libpreloadA.so");
 
+  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/platform/plat-"))
+        i++;
+      else
+        break;
+    }
+
+  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/opt/"))
+        i++;
+      else
+        break;
+    }
+
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/run/parent/lib/libpreload-rootfs.so");
@@ -340,6 +486,38 @@ test_remap_ld_preload_flatpak (Fixture *f,
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/steam/lib/gameoverlayrenderer.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
+
+  /* TODO: We should split this up into its per-platform resolutions,
+   * then discard the 64-bit resolution because it doesn't exist, and
+   * only keep the 32-bit resolution */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/in-root-plat-"))
+        i++;
+      else
+        break;
+    }
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/in-root-${FUTURE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./${RELATIVE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./relative.so");
 
   g_assert_cmpuint (argv->len, ==, i);
 }
@@ -366,6 +544,28 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/app/lib/libpreloadA.so");
 
+  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/platform/plat-"))
+        i++;
+      else
+        break;
+    }
+
+  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/opt/"))
+        i++;
+      else
+        break;
+    }
+
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/lib/libpreload-rootfs.so");
@@ -377,6 +577,41 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/home/me/libpreloadH.so");
+
+  /* /steam/lib/gameoverlayrenderer.so is missing because we used the
+   * REMOVE_GAME_OVERLAY flag */
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
+
+  /* TODO: We should split this up into its per-platform resolutions,
+   * then discard the 64-bit resolution because it doesn't exist, and
+   * only keep the 32-bit resolution */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/in-root-plat-"))
+        i++;
+      else
+        break;
+    }
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/in-root-${FUTURE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./${RELATIVE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./relative.so");
 
   g_assert_cmpuint (argv->len, ==, i);
 
@@ -391,6 +626,27 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_false (flatpak_exports_path_is_visible (exports, "/home/me"));
   g_assert_true (flatpak_exports_path_is_visible (exports, "/home/me/libpreloadH.so"));
 
+  /* We don't always export /opt, so we have to explicitly export
+   * these. */
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/opt"));
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/opt/lib"));
+
+  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_32 "/libpreloadL.so"))
+    g_test_message ("TODO: Export filenames in /opt/$LIB");
+
+  if (!flatpak_exports_path_is_visible (exports, "/opt/" MOCK_LIB_64 "/libpreloadL.so"))
+    g_test_message ("TODO: Export filenames in /opt/$LIB");
+
+  /* We don't always export /platform, so we have to explicitly export
+   * these. */
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/platform"));
+
+  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so"))
+    g_test_message ("TODO: Export filenames in /platform");
+
+  if (!flatpak_exports_path_is_visible (exports, "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so"))
+    g_test_message ("TODO: Export filenames in /platform");
+
   /* FlatpakExports never exports /lib as /lib */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/lib"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/lib/libpreload-rootfs.so"));
@@ -399,6 +655,22 @@ test_remap_ld_preload_no_runtime (Fixture *f,
   g_assert_false (flatpak_exports_path_is_visible (exports, "/usr"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/usr/lib"));
   g_assert_false (flatpak_exports_path_is_visible (exports, "/usr/lib/libpreloadU.so"));
+
+  /* We don't know what ${ORIGIN} will expand to, so we have to cut off at
+   * /overlay/libs */
+  g_assert_false (flatpak_exports_path_is_visible (exports, "/overlay"));
+
+  if (!flatpak_exports_path_is_visible (exports, "/overlay/libs"))
+    g_test_message ("TODO: Export /overlay/libs");
+
+  /* We don't know what ${FUTURE} will expand to, so we have to cut off at
+   * /future */
+  if (!flatpak_exports_path_is_visible (exports, "/future"))
+    g_test_message ("TODO: Export /future");
+
+  /* We don't export the entire root directory just because it has a
+   * module in it */
+  g_assert_true (flatpak_exports_path_is_visible (exports, "/"));
 }
 
 static void
@@ -417,6 +689,28 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/app/lib/libpreloadA.so");
 
+  /* TODO: We should split up /platform/plat-$PLATFORM/libpreloadP.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/platform/plat-"))
+        i++;
+      else
+        break;
+    }
+
+  /* TODO: We should split up /opt/${LIB}/libpreloadL.so into
+   * its per-platform resolutions */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/opt/"))
+        i++;
+      else
+        break;
+    }
+
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/lib/libpreload-rootfs.so");
@@ -432,6 +726,38 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
   g_assert_cmpuint (argv->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (argv, i++),
                    ==, "--ld-preload=/steam/lib/gameoverlayrenderer.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
+
+  /* TODO: We should split this up into its per-platform resolutions,
+   * then discard the 64-bit resolution because it doesn't exist, and
+   * only keep the 32-bit resolution */
+  while (argv->len > i)
+    {
+      if (g_str_has_prefix (g_ptr_array_index (argv, i),
+                            "--ld-preload=/in-root-plat-"))
+        i++;
+      else
+        break;
+    }
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=/in-root-${FUTURE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./${RELATIVE}.so");
+
+  g_assert_cmpuint (argv->len, >, i);
+  g_assert_cmpstr (g_ptr_array_index (argv, i++),
+                   ==, "--ld-preload=./relative.so");
 
   g_assert_cmpuint (argv->len, ==, i);
 }

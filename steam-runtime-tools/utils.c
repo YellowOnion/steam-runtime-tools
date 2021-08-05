@@ -34,6 +34,8 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -1415,4 +1417,60 @@ _srt_get_path_after (const char *str,
       if (*str != '/' && *str != 0)
         return NULL;
     }
+}
+
+/*
+ * _srt_set_compatible_resource_limits:
+ * @pid: A process ID, or 0 to act on the current process
+ *
+ * Attempt to set resource limits (see `getrlimit(3)`) for the given
+ * process to have reasonable values that are compatible with the
+ * maximum number of programs and libraries.
+ *
+ * `RLIMIT_NOFILE`, the limit for file descriptor numbers that can be
+ * returned by a successful `open(2)`, `pipe(2)`, `dup(2)`, etc.,
+ * is set to 1024 or to the hard limit, whichever is lower, to avoid
+ * incompatibility with two classes of programs:
+ *
+ * - programs that call `select(2)`, which cannot represent file
+ *   descriptors higher than 1023 in the `fd_set` bitmask;
+ * - programs that allocate an amount of memory or perform a number
+ *   of operations proportional to `RLIMIT_NOFILE`, such as some
+ *   Java interpreters
+ *
+ * See <http://0pointer.net/blog/file-descriptor-limits.html> for more
+ * information on `RLIMIT_NOFILE` best practices.
+ *
+ * Other resource limits are not currently altered.
+ *
+ * This function is technically not async-signal-safe
+ * (see `signal-safety(7)`), but in practice can probably be called
+ * safely after `fork()` on glibc systems.
+ *
+ * Returns: 0 on success, or a negative errno value such as `-EINVAL`
+ *  on failure, with errno set.
+ */
+int
+_srt_set_compatible_resource_limits (pid_t pid)
+{
+  struct rlimit rlim = { 0, 0 };
+  int ret;
+
+  ret = prlimit (pid, RLIMIT_NOFILE, NULL, &rlim);
+
+  if (ret < 0)
+    return -errno;
+
+  if (rlim.rlim_cur != FD_SETSIZE
+      && (rlim.rlim_max >= FD_SETSIZE
+          || rlim.rlim_max == RLIM_INFINITY))
+    {
+      rlim.rlim_cur = FD_SETSIZE;
+      ret = prlimit (pid, RLIMIT_NOFILE, &rlim, NULL);
+
+      if (ret < 0)
+        return -errno;
+    }
+
+  return 0;
 }

@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <glib.h>
 
@@ -151,3 +152,5 @@ _srt_is_same_file (const gchar *a,
   return _srt_fstatat_is_same_file (AT_FDCWD, a,
                                     AT_FDCWD, b);
 }
+
+int _srt_set_compatible_resource_limits (pid_t pid);

@@ -799,7 +799,7 @@ static GOptionEntry options[] =
     "MODULE" },
 
   { "lock-file", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_lock_file_cb,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_lock_file_cb,
     "Open the given file and lock it, affected by options appearing "
     "earlier on the command-line. May be repeated.",
     NULL },

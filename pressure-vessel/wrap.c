@@ -1331,6 +1331,7 @@ main (int argc,
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
   const char *steam_app_id;
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
+  int result;
 
   setlocale (LC_ALL, "");
 
@@ -1667,6 +1668,10 @@ main (int argc,
   /* Finished parsing arguments, so any subsequent failures will make
    * us exit 1. */
   ret = 1;
+
+  if ((result = _srt_set_compatible_resource_limits (0)) < 0)
+    g_warning ("Unable to set normal resource limits: %s",
+               g_strerror (-result));
 
   if (opt_terminal != PV_TERMINAL_TTY)
     {

@@ -25,6 +25,9 @@
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
+#include <sys/resource.h>
+#include <sys/time.h>
+
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <glib-object.h>
@@ -372,6 +375,56 @@ test_gstring_replace (Fixture *f,
     }
 }
 
+G_STATIC_ASSERT (FD_SETSIZE == 1024);
+
+static void
+test_rlimit (Fixture *f,
+             gconstpointer context)
+{
+  struct rlimit original;
+  struct rlimit adjusted;
+
+  if (getrlimit (RLIMIT_NOFILE, &original) < 0)
+    {
+      int saved_errno = errno;
+      g_autofree gchar *message = NULL;
+
+      message = g_strdup_printf ("getrlimit: %s", g_strerror (saved_errno));
+      g_test_skip (message);
+      return;
+    }
+
+  if (original.rlim_max < 2048)
+    {
+      g_test_skip ("RLIMIT_NOFILE rlim_max is too small");
+      return;
+    }
+
+  adjusted = original;
+  adjusted.rlim_cur = 2048;
+  g_assert_no_errno (setrlimit (RLIMIT_NOFILE, &adjusted));
+  g_assert_cmpint (_srt_set_compatible_resource_limits (0), ==, 0);
+  g_assert_no_errno (getrlimit (RLIMIT_NOFILE, &adjusted));
+  g_assert_cmpint (adjusted.rlim_cur, ==, 1024);
+  g_assert_cmpint (adjusted.rlim_max, ==, original.rlim_max);
+
+  adjusted = original;
+  adjusted.rlim_cur = 512;
+  g_assert_no_errno (setrlimit (RLIMIT_NOFILE, &adjusted));
+  g_assert_cmpint (_srt_set_compatible_resource_limits (getpid ()), ==, 0);
+  g_assert_no_errno (getrlimit (RLIMIT_NOFILE, &adjusted));
+  g_assert_cmpint (adjusted.rlim_cur, ==, 1024);
+  g_assert_cmpint (adjusted.rlim_max, ==, original.rlim_max);
+
+  adjusted = original;
+  adjusted.rlim_cur = 1024;
+  g_assert_no_errno (setrlimit (RLIMIT_NOFILE, &adjusted));
+  g_assert_cmpint (_srt_set_compatible_resource_limits (0), ==, 0);
+  g_assert_no_errno (getrlimit (RLIMIT_NOFILE, &adjusted));
+  g_assert_cmpint (adjusted.rlim_cur, ==, 1024);
+  g_assert_cmpint (adjusted.rlim_max, ==, original.rlim_max);
+}
+
 static void
 test_same_file (Fixture *f,
                 gconstpointer context)
@@ -507,6 +560,8 @@ main (int argc,
               setup, test_get_path_after, teardown);
   g_test_add ("/utils/gstring-replace", Fixture, NULL,
               setup, test_gstring_replace, teardown);
+  g_test_add ("/utils/rlimit", Fixture, NULL,
+              setup, test_rlimit, teardown);
   g_test_add ("/utils/same-file", Fixture, NULL,
               setup, test_same_file, teardown);
   g_test_add ("/utils/str_is_integer", Fixture, NULL,

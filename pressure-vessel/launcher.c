@@ -845,6 +845,7 @@ main (int argc,
   GError **error = &local_error;
   int ret = EX_USAGE;
   GBusNameOwnerFlags flags;
+  int result;
 
   global_listener = pv_portal_listener_new ();
 
@@ -881,6 +882,10 @@ main (int argc,
 
   if (opt_verbose)
     pv_set_up_logging (opt_verbose);
+
+  if ((result = _srt_set_compatible_resource_limits (0)) < 0)
+    g_warning ("Unable to set normal resource limits: %s",
+               g_strerror (-result));
 
   if (!pv_portal_listener_set_up_info_fd (global_listener,
                                           opt_info_fd,

@@ -37,7 +37,6 @@ usage () {
 }
 
 main () {
-    local error
     local getopt_temp="help"
     local ours
     local runtime

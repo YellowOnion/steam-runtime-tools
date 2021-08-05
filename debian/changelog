@@ -1,17 +1,30 @@
-steam-runtime-tools (0.20210803.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210805.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
-  * pressure-vessel: Update flatpak-exports to match Flatpak 1.11.2
-  * pv-runtime: Take ldd, etc. from provider if we are using its glibc,
+  * pressure-vessel: Take ldd, etc. from provider if we are using its glibc,
     for better compatibility with newer glibc in host OSs like Arch Linux
     (Resolves: T29581)
+  * pv-launch: Show more explanatory message if Flatpak is using setuid
+    bwrap. In particular, this should help users of recent Flatpak
+    on Gentoo.
+  * pv-unruntime: Handle LD_PRELOAD with spaces correctly.
+    Unlike LD_AUDIT, LD_PRELOAD items are separated by either colon or
+    space delimiters.
+  * pv-wrap: Generalize SHARED_LIBRARY_GUARD_CONFIG handling to cope with
+    the case where the variable is already set, or points to a file in
+    /usr or /lib*
+  * pressure-vessel: Update flatpak-exports from Flatpak
   * Update libcapsule subproject to v0.20210728.0
+  * pressure-vessel: Refactor handling of LD_PRELOAD and LD_AUDIT modules
+  * pv-wrap, pv-launcher: Set a reasonable RLIMIT_NOFILE to avoid
+    problems with select(). (Related to steam-for-linux#7970.)
+  * tests: Improve pressure-vessel test coverage
 
   [ Ludovico de Nittis ]
   * pv-runtime: Delete overridden libraries from the correct "mesa" path
     to improve robustness
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 03 Aug 2021 10:28:19 +0100
+ -- Simon McVittie <smcv@collabora.com>  Thu, 05 Aug 2021 19:00:08 +0100
 
 steam-runtime-tools (0.20210722.0) scout; urgency=medium
 

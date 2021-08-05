@@ -1081,7 +1081,8 @@ static GOptionEntry options[] =
     "Use HOME as home directory. Implies --unshare-home. "
     "[Default: $PRESSURE_VESSEL_HOME if set]", "HOME" },
   { "host-ld-preload", '\0',
-    G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK, &opt_host_ld_preload_cb,
+    G_OPTION_FLAG_FILENAME | G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
+    &opt_host_ld_preload_cb,
     "Deprecated alias for --ld-preload=MODULE, which despite its name "
     "does not necessarily take the module from the host system",
     "MODULE" },
@@ -1102,12 +1103,12 @@ static GOptionEntry options[] =
     "container, or that needs to inherit the value from the host system, "
     "will be locked. This option implies --batch.", NULL },
   { "ld-audit", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_audit_cb,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_audit_cb,
     "Add MODULE from current execution environment to LD_AUDIT when "
     "executing COMMAND.",
     "MODULE" },
   { "ld-preload", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
     "Add MODULE from current execution environment to LD_PRELOAD when "
     "executing COMMAND.",
     "MODULE" },

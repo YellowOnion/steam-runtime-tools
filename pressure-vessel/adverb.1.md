@@ -21,6 +21,9 @@ pressure-vessel-adverb - wrap processes in various ways
 [**--ld-audit** *MODULE*[**:arch=***TUPLE*]...]
 [**--ld-preload** *MODULE*[**:**...]...]
 [**--pass-fd** *FD*...]
+[[**--add-ld.so-path** *PATH*...]
+**--regenerate-ld.so-cache** *PATH*]
+[**--set-ld-library-path** *VALUE*]
 [**--shell** **none**|**after**|**fail**|**instead**]
 [**--subreaper**]
 [**--terminal** **none**|**auto**|**tty**|**xterm**]
@@ -42,6 +45,12 @@ By default, it just runs *COMMAND* as a child process and reports its
 exit status.
 
 # OPTIONS
+
+**--add-ld.so-path** *PATH*
+:   Add *PATH* to the search path for **--regenerate-ld.so-cache**.
+    The final search path will consist of all **--add-ld.so-path**
+    arguments in the order they are given, followed by the lines
+    from `runtime-ld.so.conf` in order.
 
 **--create**
 :   Create each **--lock-file** that appears on the command-line after
@@ -105,6 +114,34 @@ exit status.
     from the parent process to the *COMMAND*. The default is to only pass
     through file descriptors 0, 1 and 2
     (**stdin**, **stdout** and **stderr**).
+
+**--regenerate-ld.so-cache** *PATH*
+:   Regenerate "ld.so.cache" in the directory *PATH*.
+
+    On entry to **pressure-vessel-adverb**, *PATH* should
+    contain `runtime-ld.so.conf`, a symbolic link or copy
+    of the runtime's original `/etc/ld.so.conf`. It will
+    usually also contain `ld.so.conf` and `ld.so.cache`
+    as symbolic links or copies of the runtime's original
+    `/etc/ld.so.conf` and `/etc/ld.so.cache`.
+
+    Before executing the *COMMAND*, **pressure-vessel-adverb**
+    will construct a new `ld.so.conf` in *PATH*, consisting of
+    all **--add-ld.so-path** arguments, followed by the contents
+    of `runtime-ld.so.conf`; then it will generate a new
+    `ld.so.cache` from that configuration. Both of these
+    will atomically replace the original files in *PATH*.
+
+    Other filenames in *PATH* will be used temporarily.
+
+    To make use of this feature, a container's `/etc/ld.so.conf`
+    and `/etc/ld.so.cache` should usually be symbolic links into
+    the *PATH* used here, which will typically be below `/run`.
+
+**--set-ld-library-path** *VALUE*
+:   Set the environment variable LD_LIBRARY_PATH to *VALUE* after
+    processing **--regenerate-ld.so-cache** (if used), but before
+    executing *COMMAND*.
 
 **--shell=after**
 :   Run an interactive shell after *COMMAND* exits.

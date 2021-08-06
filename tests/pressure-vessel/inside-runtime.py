@@ -164,6 +164,26 @@ class TestInsideRuntime(BaseTest):
         with open('/run/host/container-manager', 'r') as reader:
             self.assertEqual(reader.read(), 'pressure-vessel\n')
 
+        self.assertIsNotNone(os.environ.get('LD_LIBRARY_PATH'))
+
+        parts = os.environ.get('LD_LIBRARY_PATH', '').split(':')
+
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
+            for path in parts:
+                self.assertTrue(path.endswith('/aliases'))
+        else:
+            if (
+                'HOST_LD_LINUX_SO_REALPATH' in os.environ
+                and Path('/usr/lib/i386-linux-gnu').is_dir()
+            ):
+                self.assertIn('/overrides/lib/i386-linux-gnu', parts)
+
+            if (
+                'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
+                and Path('/usr/lib/x86_64-linux-gnu').is_dir()
+            ):
+                self.assertIn('/overrides/lib/x86_64-linux-gnu', parts)
+
     def test_overrides(self) -> None:
         if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
             target = os.readlink('/overrides')
@@ -171,6 +191,62 @@ class TestInsideRuntime(BaseTest):
 
         self.assertTrue(Path('/overrides').is_dir())
         self.assertTrue(Path('/overrides/lib').is_dir())
+
+        if (
+            'HOST_LD_LINUX_SO_REALPATH' in os.environ
+            and Path('/usr/lib/i386-linux-gnu').is_dir()
+        ):
+            self.assertTrue(Path('/overrides/lib/i386-linux-gnu').is_dir())
+
+        if (
+            'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
+            and Path('/usr/lib/x86_64-linux-gnu').is_dir()
+        ):
+            self.assertTrue(Path('/overrides/lib/x86_64-linux-gnu').is_dir())
+
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
+            # /etc/ld.so.* are symlinks to the mutable version
+            target = os.readlink('/etc/ld.so.cache')
+            self.assertEqual(target, '/run/pressure-vessel/ldso/ld.so.cache')
+            target = os.readlink('/etc/ld.so.conf')
+            self.assertEqual(target, '/run/pressure-vessel/ldso/ld.so.conf')
+
+            # Exherbo compatibility symlinks also exist
+            target = os.readlink('/etc/ld-i686-pc-linux-gnu.cache')
+            self.assertEqual(target, '/run/pressure-vessel/ldso/ld.so.cache')
+            target = os.readlink('/etc/ld-x86_64-pc-linux-gnu.cache')
+            self.assertEqual(target, '/run/pressure-vessel/ldso/ld.so.cache')
+            # Clear Linux compatibility symlinks, too
+            target = os.readlink('/var/cache/ldconfig/ld.so.cache')
+            self.assertEqual(target, '/run/pressure-vessel/ldso/ld.so.cache')
+
+            with open('/run/pressure-vessel/ldso/runtime-ld.so.conf') as reader:
+                lines_originally = reader.readlines()
+
+            with open('/etc/ld.so.conf') as reader:
+                lines_used = reader.readlines()
+
+            for line in lines_originally:
+                self.assertIn(line, lines_used)
+
+            if (
+                'HOST_LD_LINUX_SO_REALPATH' in os.environ
+                and Path('/usr/lib/i386-linux-gnu').is_dir()
+            ):
+                self.assertIn(
+                    '/usr/lib/pressure-vessel/overrides/lib/i386-linux-gnu\n',
+                    lines_used,
+                )
+
+            if (
+                'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
+                and Path('/usr/lib/x86_64-linux-gnu').is_dir()
+            ):
+                self.assertIn(
+                    ('/usr/lib/pressure-vessel/overrides/'
+                     'lib/x86_64-linux-gnu\n'),
+                    lines_used,
+                )
 
     def test_glibc(self) -> None:
         glibc = ctypes.cdll.LoadLibrary('libc.so.6')

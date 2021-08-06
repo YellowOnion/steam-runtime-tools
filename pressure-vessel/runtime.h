@@ -98,6 +98,7 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakExports *exports,
                           FlatpakBwrap *bwrap,
                           PvEnviron *container_env,
+                          gchar **regenerate_ld_so_cache,
                           GError **error);
 const char *pv_runtime_get_modified_usr (PvRuntime *self);
 const char *pv_runtime_get_modified_app (PvRuntime *self);

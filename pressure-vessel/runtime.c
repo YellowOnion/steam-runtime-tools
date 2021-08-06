@@ -2437,7 +2437,7 @@ bind_runtime_base (PvRuntime *self,
     NULL
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
-  gsize i, j;
+  gsize i;
   const gchar *member;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
@@ -2544,6 +2544,16 @@ bind_runtime_base (PvRuntime *self,
           if (self->provider != NULL && g_strv_contains (from_provider, dest))
             continue;
 
+          if (self->mutable_sysroot != NULL)
+            {
+              /* If we have a mutable sysroot, we handle ld.so.cache
+               * separately later, because we want to set it up to be
+               * possible for the -adverb to overwrite it. */
+              if (strcmp (dest, "/etc/ld.so.cache") == 0
+                  || strcmp (dest, "/etc/ld.so.conf") == 0)
+                continue;
+            }
+
           full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],
                                    member,
@@ -2561,44 +2571,6 @@ bind_runtime_base (PvRuntime *self,
               g_autofree gchar *on_host = pv_current_namespace_path_to_host_path (full);
               flatpak_bwrap_add_args (bwrap, "--ro-bind", on_host, dest, NULL);
             }
-        }
-    }
-
-  /* glibc from some distributions will want to load the ld.so cache from
-   * a distribution-specific path, e.g. Clear Linux uses
-   * /var/cache/ldconfig/ld.so.cache. For simplicity, we make all these
-   * paths symlinks to /etc/ld.so.cache, so that we only have to populate
-   * the cache in one place. */
-  for (i = 0; pv_other_ld_so_cache[i] != NULL; i++)
-    {
-      const char *path = pv_other_ld_so_cache[i];
-
-      flatpak_bwrap_add_args (bwrap,
-                              "--symlink", "/etc/ld.so.cache", path,
-                              NULL);
-    }
-
-  /* glibc from some distributions will want to load the ld.so cache from
-   * a distribution- and architecture-specific path, e.g. Exherbo
-   * does this. Again, for simplicity we direct all these to the same path:
-   * it's OK to mix multiple architectures' libraries into one cache,
-   * as done in upstream glibc (and Debian, Arch, etc.). */
-  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
-    {
-      const PvMultiarchDetails *details = &pv_multiarch_details[i];
-
-      for (j = 0; j < G_N_ELEMENTS (details->other_ld_so_cache); j++)
-        {
-          const char *base = details->other_ld_so_cache[j];
-          g_autofree gchar *path = NULL;
-
-          if (base == NULL)
-            break;
-
-          path = g_build_filename ("/etc", base, NULL);
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", "/etc/ld.so.cache", path,
-                                  NULL);
         }
     }
 
@@ -2670,6 +2642,211 @@ bind_runtime_base (PvRuntime *self,
                        item, self->provider->path_in_current_ns,
                        local_error->message);
               g_clear_error (&local_error);
+            }
+        }
+    }
+
+  return TRUE;
+}
+
+/*
+ * Exactly as symlinkat(2), except that if the destination already exists,
+ * it will be removed.
+ */
+static gboolean
+pv_runtime_symlinkat (const gchar *target,
+                      int destination_dirfd,
+                      const gchar *destination,
+                      GError **error)
+{
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (!glnx_shutil_rm_rf_at (destination_dirfd, destination, NULL, error))
+    return FALSE;
+
+  if (TEMP_FAILURE_RETRY (symlinkat (target, destination_dirfd, destination)) != 0)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to create symlink \".../%s\" -> \"%s\"",
+                                    destination, target);
+
+  return TRUE;
+}
+
+static gboolean
+bind_runtime_ld_so (PvRuntime *self,
+                    FlatpakBwrap *bwrap,
+                    PvEnviron *container_env,
+                    GError **error)
+{
+  gsize i, j;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (self->is_flatpak_env || bwrap != NULL, FALSE);
+  g_return_val_if_fail (self->mutable_sysroot != NULL || !self->is_flatpak_env, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (self->is_flatpak_env)
+    {
+      const gchar *xrd = NULL;
+      g_autofree gchar *ldso_runtime_dir = NULL;
+      g_autofree gchar *xrd_ld_so_conf = NULL;
+      g_autofree gchar *xrd_ld_so_cache = NULL;
+      glnx_autofd int sysroot_etc_dirfd = -1;
+      glnx_autofd int ldso_runtime_dirfd = -1;
+
+      sysroot_etc_dirfd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                                   "/etc",
+                                                   SRT_RESOLVE_FLAGS_MKDIR_P,
+                                                   NULL, error);
+      if (sysroot_etc_dirfd < 0)
+        return FALSE;
+
+      /* Because we're running under Flatpak in this code path,
+       * we expect that there is a XDG_RUNTIME_DIR even if the host system
+       * doesn't provide one; and because we require Flatpak 1.11.1,
+       * we can assume it's shared between our current sandbox and the
+       * game's subsandbox, with the same path in both. */
+      xrd = g_environ_getenv (self->original_environ, "XDG_RUNTIME_DIR");
+      if (xrd == NULL)
+        {
+          g_warning ("The environment variable XDG_RUNTIME_DIR is not set, skipping regeneration of ld.so");
+          return TRUE;
+        }
+
+      ldso_runtime_dir = g_build_filename (xrd, "pressure-vessel", "ldso", NULL);
+      if (g_mkdir_with_parents (ldso_runtime_dir, 0700) != 0)
+        return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                        ldso_runtime_dir);
+
+      xrd_ld_so_conf = g_build_filename (ldso_runtime_dir, "ld.so.conf", NULL);
+      xrd_ld_so_cache = g_build_filename (ldso_runtime_dir, "ld.so.cache", NULL);
+
+      if (!glnx_opendirat (-1, ldso_runtime_dir, TRUE, &ldso_runtime_dirfd, error))
+        return FALSE;
+
+      /* Rename the original ld.so.cache and conf because we will create
+       * symlinks in their places */
+      if (!glnx_renameat (self->mutable_sysroot_fd, "etc/ld.so.cache",
+                          self->mutable_sysroot_fd, "etc/runtime-ld.so.cache", error))
+        return FALSE;
+      if (!glnx_renameat (self->mutable_sysroot_fd, "etc/ld.so.conf",
+                          self->mutable_sysroot_fd, "etc/runtime-ld.so.conf", error))
+        return FALSE;
+
+      if (!pv_runtime_symlinkat (xrd_ld_so_cache, self->mutable_sysroot_fd,
+                                 "etc/ld.so.cache", error))
+        return FALSE;
+      if (!pv_runtime_symlinkat (xrd_ld_so_conf, self->mutable_sysroot_fd,
+                                 "etc/ld.so.conf", error))
+        return FALSE;
+
+      /* Create a symlink to the runtime's version */
+      if (!pv_runtime_symlinkat ("/etc/runtime-ld.so.cache", ldso_runtime_dirfd,
+                                 "runtime-ld.so.cache", error))
+        return FALSE;
+      if (!pv_runtime_symlinkat ("/etc/runtime-ld.so.conf", ldso_runtime_dirfd,
+                                 "runtime-ld.so.conf", error))
+        return FALSE;
+
+      /* Initially it's a symlink to the runtime's version and we rely on
+       * LD_LIBRARY_PATH for our overrides, but -adverb will overwrite this
+       * symlink */
+      if (!pv_runtime_symlinkat ("runtime-ld.so.cache", ldso_runtime_dirfd,
+                                 "ld.so.cache", error))
+        return FALSE;
+      if (!pv_runtime_symlinkat ("runtime-ld.so.conf", ldso_runtime_dirfd,
+                                 "ld.so.conf", error))
+        return FALSE;
+
+      /* Initially we have the following situation:
+       * ($XRD is an abbreviation for $XDG_RUNTIME_DIR)
+       * ${mutable_sysroot}/etc/ld.so.cache -> $XRD/pressure-vessel/ldso/ld.so.cache
+       * $XRD/pressure-vessel/ldso/ld.so.cache -> runtime-ld.so.cache
+       * $XRD/pressure-vessel/ldso/runtime-ld.so.cache -> ${mutable_sysroot}/etc/runtime-ld.so.cache
+       * ${mutable_sysroot}/etc/runtime-ld.so.cache is the original runtime's ld.so.cache
+       *
+       * After exectuting -adverb we expect the symlink $XRD/pressure-vessel/ldso/ld.so.cache
+       * to be replaced with a newly generated ld.so.cache that incorporates the
+       * necessary paths from LD_LIBRARY_PATH */
+    }
+  else
+    {
+      g_assert (bwrap != NULL);
+
+      const gchar *ld_so_cache_path = "/run/pressure-vessel/ldso/ld.so.cache";
+      g_autofree gchar *ld_so_cache_on_host = NULL;
+      g_autofree gchar *ld_so_conf_on_host = NULL;
+
+      /* We only support runtimes that include /etc/ld.so.cache and
+        * /etc/ld.so.conf at their interoperable path. */
+      ld_so_cache_on_host = g_build_filename (self->runtime_files_on_host,
+                                              "etc", "ld.so.cache", NULL);
+      ld_so_conf_on_host = g_build_filename (self->runtime_files_on_host,
+                                              "etc", "ld.so.conf", NULL);
+
+      flatpak_bwrap_add_args (bwrap,
+                              "--tmpfs", "/run/pressure-vessel/ldso",
+                              /* We put the ld.so.cache somewhere that we can
+                              * overwrite from inside the container by
+                              * replacing the symlink. */
+                              "--symlink",
+                              ld_so_cache_path,
+                              "/etc/ld.so.cache",
+                              "--symlink",
+                              "/run/pressure-vessel/ldso/ld.so.conf",
+                              "/etc/ld.so.conf",
+                              /* Initially it's a symlink to the runtime's
+                              * version and we rely on LD_LIBRARY_PATH
+                              * for our overrides, but -adverb will
+                              * overwrite this symlink. */
+                              "--symlink",
+                              "runtime-ld.so.cache",
+                              ld_so_cache_path,
+                              "--symlink",
+                              "runtime-ld.so.conf",
+                              "/run/pressure-vessel/ldso/ld.so.conf",
+                              /* Put the runtime's version in place too. */
+                              "--ro-bind", ld_so_cache_on_host,
+                              "/run/pressure-vessel/ldso/runtime-ld.so.cache",
+                              "--ro-bind", ld_so_conf_on_host,
+                              "/run/pressure-vessel/ldso/runtime-ld.so.conf",
+                              NULL);
+
+      /* glibc from some distributions will want to load the ld.so cache from
+       * a distribution-specific path, e.g. Clear Linux uses
+       * /var/cache/ldconfig/ld.so.cache. For simplicity, we make all these paths
+       * symlinks, so that we only have to populate the cache in one place. */
+      for (i = 0; pv_other_ld_so_cache[i] != NULL; i++)
+        {
+          const char *path = pv_other_ld_so_cache[i];
+
+          flatpak_bwrap_add_args (bwrap,
+                                  "--symlink", ld_so_cache_path, path,
+                                  NULL);
+        }
+
+      /* glibc from some distributions will want to load the ld.so cache from
+       * a distribution- and architecture-specific path, e.g. Exherbo
+       * does this. Again, for simplicity we direct all these to the same path:
+       * it's OK to mix multiple architectures' libraries into one cache,
+       * as done in upstream glibc (and Debian, Arch, etc.). */
+      for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
+        {
+          const PvMultiarchDetails *details = &pv_multiarch_details[i];
+
+          for (j = 0; j < G_N_ELEMENTS (details->other_ld_so_cache); j++)
+            {
+              const char *base = details->other_ld_so_cache[j];
+              g_autofree gchar *path = NULL;
+
+              if (base == NULL)
+                break;
+
+              path = g_build_filename ("/etc", base, NULL);
+              flatpak_bwrap_add_args (bwrap,
+                                      "--symlink", ld_so_cache_path, path,
+                                      NULL);
             }
         }
     }
@@ -5282,6 +5459,7 @@ pv_runtime_bind (PvRuntime *self,
                  FlatpakExports *exports,
                  FlatpakBwrap *bwrap,
                  PvEnviron *container_env,
+                 gchar **regenerate_ld_so_cache,
                  GError **error)
 {
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
@@ -5305,6 +5483,12 @@ pv_runtime_bind (PvRuntime *self,
   if (bwrap != NULL
       && !bind_runtime_base (self, bwrap, container_env, error))
     return FALSE;
+
+  if (bwrap != NULL || self->is_flatpak_env)
+    {
+      if (!bind_runtime_ld_so (self, bwrap, container_env, error))
+        return FALSE;
+    }
 
   if (self->provider != NULL)
     {
@@ -5430,6 +5614,26 @@ pv_runtime_bind (PvRuntime *self,
 
   pv_runtime_set_search_paths (self, container_env);
 
+  if (regenerate_ld_so_cache != NULL)
+    {
+      if (self->is_flatpak_env)
+        {
+          const gchar *xrd;
+          /* As in bind_runtime_ld_so(), we expect Flatpak to provide this
+           * in practice, even if the host system does not. */
+          xrd = g_environ_getenv (self->original_environ, "XDG_RUNTIME_DIR");
+          if (xrd == NULL)
+            *regenerate_ld_so_cache = NULL;
+          else
+            *regenerate_ld_so_cache = g_build_filename (xrd, "pressure-vessel",
+                                                        "ldso", NULL);
+        }
+      else
+        {
+          *regenerate_ld_so_cache = g_strdup ("/run/pressure-vessel/ldso");
+        }
+    }
+
   return TRUE;
 }
 
@@ -5441,10 +5645,10 @@ pv_runtime_set_search_paths (PvRuntime *self,
   g_autofree char *terminfo_path = NULL;
   gsize i;
 
-  /* TODO: Adapt the use_ld_so_cache code from Flatpak instead
-   * of setting LD_LIBRARY_PATH, for better robustness against
-   * games that set their own LD_LIBRARY_PATH ignoring what they
-   * got from the environment */
+  /* We need to set LD_LIBRARY_PATH here so that we can run
+   * pressure-vessel-adverb, even if it is going to regenerate
+   * the ld.so.cache for better robustness before launching the
+   * actual game */
   g_assert (pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES] == NULL);
 
   for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)

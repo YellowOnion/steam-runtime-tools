@@ -50,11 +50,14 @@
 
 static const char * const *global_original_environ = NULL;
 static GPtrArray *global_locks = NULL;
+static GPtrArray *global_ld_so_conf_entries = NULL;
 static GArray *global_pass_fds = NULL;
 static gboolean opt_batch = FALSE;
 static gboolean opt_create = FALSE;
 static gboolean opt_exit_with_parent = FALSE;
 static gboolean opt_generate_locales = FALSE;
+static gchar *opt_regenerate_ld_so_cache = NULL;
+static gchar *opt_set_ld_library_path = NULL;
 static PvShell opt_shell = PV_SHELL_NONE;
 static gboolean opt_subreaper = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
@@ -248,6 +251,20 @@ opt_fd_cb (const char *name,
    * it won't change our behaviour either way, and if it was passed
    * to us across a fork(), it had better be an OFD. */
   g_ptr_array_add (global_locks, pv_bwrap_lock_new_take (fd, TRUE));
+  return TRUE;
+}
+
+static gboolean
+opt_add_ld_so_cb (const char *name,
+                  const char *value,
+                  gpointer data,
+                  GError **error)
+{
+  g_return_val_if_fail (global_ld_so_conf_entries != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_val_if_fail (value != NULL, FALSE);
+
+  g_ptr_array_add (global_ld_so_conf_entries, g_strdup (value));
   return TRUE;
 }
 
@@ -617,6 +634,113 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
 }
 
 static gboolean
+regenerate_ld_so_cache (const GPtrArray *ld_so_cache_paths,
+                        const char *dir,
+                        GError **error)
+{
+  g_autoptr(GPtrArray) argv = g_ptr_array_new ();
+  g_autoptr(GString) conf = g_string_new ("");
+  g_autofree gchar *child_stdout = NULL;
+  g_autofree gchar *child_stderr = NULL;
+  g_autofree gchar *conf_path = g_build_filename (dir, "ld.so.conf", NULL);
+  g_autofree gchar *rt_conf_path = g_build_filename (dir, "runtime-ld.so.conf", NULL);
+  g_autofree gchar *replace_path = g_build_filename (dir, "ld.so.cache", NULL);
+  g_autofree gchar *new_path = g_build_filename (dir, "new-ld.so.cache", NULL);
+  g_autofree gchar *contents = NULL;
+  int wait_status;
+  gsize i;
+
+  for (i = 0; ld_so_cache_paths != NULL && i < ld_so_cache_paths->len; i++)
+    {
+      const gchar *value = g_ptr_array_index (ld_so_cache_paths, i);
+      if (strchr (value, '\n') != NULL
+          || strchr (value, '\t') != NULL
+          || value[0] != '/')
+        return glnx_throw (error,
+                           "Cannot include path entry \"%s\" in ld.so.conf",
+                           value);
+
+      g_debug ("%s: Adding \"%s\" to beginning of ld.so.conf",
+               G_STRFUNC, value);
+      g_string_append (conf, value);
+      g_string_append_c (conf, '\n');
+    }
+
+  /* Ignore read error, if any */
+  if (g_file_get_contents (rt_conf_path, &contents, NULL, NULL))
+    {
+      g_debug ("%s: Appending runtime's ld.so.conf:\n%s", G_STRFUNC, contents);
+      g_string_append (conf, contents);
+    }
+
+  /* This atomically replaces conf_path, so we don't need to do the
+   * atomic bit ourselves */
+  if (!g_file_set_contents (conf_path, conf->str, -1, error))
+    return FALSE;
+
+  while (TRUE)
+    {
+      char *newline = strchr (conf->str, '\n');
+
+      if (newline != NULL)
+        *newline = '\0';
+
+      g_debug ("%s: final ld.so.conf: %s", G_STRFUNC, conf->str);
+
+      if (newline != NULL)
+        g_string_erase (conf, 0, newline + 1 - conf->str);
+      else
+        break;
+    }
+
+  /* Items in this GPtrArray are borrowed, not copied.
+   *
+   * /sbin/ldconfig might be a symlink into /run/host, or it might
+   * be from the runtime, depending which version of glibc we're
+   * using.
+   *
+   * ldconfig overwrites the file in-place rather than atomically,
+   * so we write to a new filename, and do the atomic-overwrite
+   * ourselves if ldconfig succeeds. */
+  g_ptr_array_add (argv, (char *) "/sbin/ldconfig");
+  g_ptr_array_add (argv, (char *) "-f");    /* Path to ld.so.conf */
+  g_ptr_array_add (argv, conf_path);
+  g_ptr_array_add (argv, (char *) "-C");    /* Path to new cache */
+  g_ptr_array_add (argv, new_path);
+  g_ptr_array_add (argv, (char *) "-X");    /* Don't update symlinks */
+
+  if (opt_verbose)
+    g_ptr_array_add (argv, (char *) "-v");
+
+  g_ptr_array_add (argv, NULL);
+
+  if (!run_helper_sync (dir,
+                        (const char * const *) argv->pdata,
+                        global_original_environ,
+                        &child_stdout,
+                        &child_stderr,
+                        &wait_status,
+                        error))
+    return glnx_prefix_error (error, "Cannot run /sbin/ldconfig");
+
+  if (child_stdout != NULL && child_stdout[0] != '\0')
+    g_debug ("Output:\n%s", child_stdout);
+
+  if (child_stderr != NULL && child_stderr[0] != '\0')
+    g_debug ("Diagnostic output:\n%s", child_stderr);
+
+  if (!g_spawn_check_exit_status (wait_status, error))
+    return glnx_prefix_error (error, "Unable to generate %s", new_path);
+
+  /* Atomically replace ld.so.cache with new-ld.so.cache. */
+  if (!glnx_renameat (AT_FDCWD, new_path, AT_FDCWD, replace_path, error))
+    return glnx_prefix_error (error, "Cannot move %s to %s",
+                              new_path, replace_path);
+
+  return TRUE;
+}
+
+static gboolean
 generate_locales (gchar **locpath_out,
                   GError **error)
 {
@@ -769,6 +893,23 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_generate_locales,
     "Don't generate any missing locales [default].", NULL },
 
+  { "regenerate-ld.so-cache", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_regenerate_ld_so_cache,
+    "Regenerate ld.so.cache in the given directory, incorporating "
+    "the paths from \"add-ld.so-path\", if any. An empty argument results in "
+    "not doing this [default].",
+    "PATH" },
+  { "add-ld.so-path", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_add_ld_so_cb,
+    "While regenerating the ld.so.cache, include PATH as an additional "
+    "ld.so.conf.d entry. May be repeated.",
+    "PATH" },
+  { "set-ld-library-path", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_set_ld_library_path,
+    "Set the environment variable LD_LIBRARY_PATH to VALUE before "
+    "executing COMMAND.",
+    "VALUE" },
+
   { "write", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_write,
     "Lock each subsequent lock file for write access.",
@@ -863,6 +1004,7 @@ main (int argc,
       char *argv[])
 {
   g_auto(GStrv) original_environ = NULL;
+  g_autoptr(GPtrArray) ld_so_conf_entries = NULL;
   g_autoptr(GPtrArray) locks = NULL;
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GError) local_error = NULL;
@@ -894,6 +1036,9 @@ main (int argc,
 
   original_environ = g_get_environ ();
   global_original_environ = (const char * const *) original_environ;
+
+  ld_so_conf_entries = g_ptr_array_new_with_free_func (g_free);
+  global_ld_so_conf_entries = ld_so_conf_entries;
 
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
@@ -1158,6 +1303,24 @@ main (int argc,
         }
     }
 
+  if (opt_regenerate_ld_so_cache != NULL
+      && opt_regenerate_ld_so_cache[0] != '\0')
+    {
+      if (!regenerate_ld_so_cache (global_ld_so_conf_entries, opt_regenerate_ld_so_cache,
+                                   error))
+        {
+          goto out;
+        }
+      g_debug ("Generated ld.so.cache in %s", opt_regenerate_ld_so_cache);
+    }
+
+  if (opt_set_ld_library_path != NULL)
+    {
+      g_debug ("Setting LD_LIBARY_PATH to \"%s\"", opt_set_ld_library_path);
+      flatpak_bwrap_set_env (wrapped_command, "LD_LIBRARY_PATH",
+                             opt_set_ld_library_path, TRUE);
+    }
+
   if (opt_generate_locales)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) profiling =
@@ -1309,8 +1472,10 @@ main (int argc,
     }
 
 out:
+  global_ld_so_conf_entries = NULL;
   global_locks = NULL;
   g_clear_pointer (&global_pass_fds, g_array_unref);
+  g_clear_pointer (&opt_regenerate_ld_so_cache, g_free);
 
   if (locales_temp_dir != NULL)
     _srt_rm_rf (locales_temp_dir);

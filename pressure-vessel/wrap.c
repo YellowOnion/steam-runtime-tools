@@ -1310,13 +1310,11 @@ main (int argc,
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
-  g_autofree gchar *container_ld_library_path = NULL;
   const gchar *home;
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
-  g_autofree gchar *regenerate_ld_so_cache = NULL;
   const char *steam_app_id;
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
   int result;
@@ -1930,7 +1928,6 @@ main (int argc,
                             exports,
                             bwrap_filesystem_arguments,
                             container_env,
-                            &regenerate_ld_so_cache,
                             error))
         goto out;
 
@@ -2368,10 +2365,6 @@ main (int argc,
         goto out;
     }
 
-  /* Save this value before freeing container_env */
-  container_ld_library_path = g_strdup (pv_environ_getenv (container_env,
-                                                           "LD_LIBRARY_PATH"));
-
   if (is_flatpak_env)
     {
       g_autoptr(GList) vars = NULL;
@@ -2514,39 +2507,10 @@ main (int argc,
 
       if (runtime != NULL)
         {
+          /* This includes the arguments necessary to regenerate the
+           * ld.so cache */
           if (!pv_runtime_get_adverb (runtime, adverb_argv))
             goto out;
-
-          if (regenerate_ld_so_cache != NULL)
-            {
-              g_autoptr(GString) adverb_ld_library_path = g_string_new ("");
-              g_auto(GStrv) parts = NULL;
-
-              flatpak_bwrap_add_args (adverb_argv,
-                                      "--regenerate-ld.so-cache",
-                                      regenerate_ld_so_cache,
-                                      NULL);
-
-              if (container_ld_library_path != NULL)
-                parts = g_strsplit (container_ld_library_path, ":", 0);
-
-              for (i = 0; parts != NULL && parts[i] != NULL; i++)
-                {
-                  if (g_str_has_suffix (parts[i], "/aliases"))
-                    pv_search_path_append (adverb_ld_library_path, parts[i]);
-                  else
-                    flatpak_bwrap_add_args (adverb_argv,
-                                            "--add-ld.so-path",
-                                            parts[i],
-                                            NULL);
-                }
-
-              if (adverb_ld_library_path->len > 0)
-                flatpak_bwrap_add_args (adverb_argv,
-                                        "--set-ld-library-path",
-                                        adverb_ld_library_path->str,
-                                        NULL);
-            }
         }
       else
         {

@@ -84,6 +84,7 @@ class TestInsideRuntime(BaseTest):
             self.artifacts = Path(self.tmpdir.name)
 
         self.artifacts.mkdir(exist_ok=True)
+        logger.info('Artifacts will be in %s', self.artifacts)
 
     def tearDown(self) -> None:
         super().tearDown()
@@ -149,10 +150,34 @@ class TestInsideRuntime(BaseTest):
             self.assertIsNotNone(data.get('BUILD_ID'))
 
     def test_environ(self) -> None:
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
+            logger.info('Runtime is a copy')
+        else:
+            logger.info('Runtime is not a copy')
+
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+            logger.info('Runtime is scout')
+        else:
+            logger.info('Runtime is not scout')
+
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+            logger.info('Runtime is soldier')
+        else:
+            logger.info('Runtime is not soldier')
+
         logger.info('PATH: %r', os.environ.get('PATH'))
         logger.info(
             'LD_LIBRARY_PATH: %r', os.environ.get('LD_LIBRARY_PATH')
         )
+
+        search = set()      # type: typing.Set[str]
+
+        with open('/etc/ld.so.conf', 'r') as reader:
+            for line in reader:
+                if line.startswith('/'):
+                    search.add(line.rstrip('\n'))
+
+                logger.info('/etc/ld.so.conf: %r', line)
 
         if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
             self.assertEqual(os.environ.get('STEAM_RUNTIME'), '/')
@@ -166,23 +191,56 @@ class TestInsideRuntime(BaseTest):
 
         self.assertIsNotNone(os.environ.get('LD_LIBRARY_PATH'))
 
-        parts = os.environ.get('LD_LIBRARY_PATH', '').split(':')
+        ldlp = os.environ.get('LD_LIBRARY_PATH', '').split(':')
+        search |= set(ldlp)
 
         if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
-            for path in parts:
+            # Only the aliases directories get into the LD_LIBRARY_PATH,
+            # not the directories containing SONAMEs
+            for path in ldlp:
                 self.assertTrue(path.endswith('/aliases'))
-        else:
-            if (
-                'HOST_LD_LINUX_SO_REALPATH' in os.environ
-                and Path('/usr/lib/i386-linux-gnu').is_dir()
-            ):
-                self.assertIn('/overrides/lib/i386-linux-gnu', parts)
 
-            if (
-                'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
-                and Path('/usr/lib/x86_64-linux-gnu').is_dir()
-            ):
-                self.assertIn('/overrides/lib/x86_64-linux-gnu', parts)
+        if (
+            'HOST_LD_LINUX_SO_REALPATH' in os.environ
+            and Path('/usr/lib/i386-linux-gnu').is_dir()
+        ):
+            check_dir = '/overrides/lib/i386-linux-gnu'
+
+            if not Path('/overrides').is_symlink():
+                self.assertIn(check_dir, search)
+                self.assertIn(check_dir + '/aliases', ldlp)
+
+            self.assertTrue(Path(check_dir).is_dir())
+            self.assertTrue(Path(check_dir, 'aliases').is_dir())
+
+            if check_dir not in search:
+                check_dir = '/usr/lib/pressure-vessel' + check_dir
+
+            self.assertTrue(Path(check_dir).is_dir())
+            self.assertTrue(Path(check_dir, 'aliases').is_dir())
+            self.assertIn(check_dir, search)
+            self.assertIn(check_dir + '/aliases', ldlp)
+
+        if (
+            'HOST_LD_LINUX_X86_64_SO_REALPATH' in os.environ
+            and Path('/usr/lib/x86_64-linux-gnu').is_dir()
+        ):
+            check_dir = '/overrides/lib/x86_64-linux-gnu'
+
+            if not Path('/overrides').is_symlink():
+                self.assertIn(check_dir, search)
+                self.assertIn(check_dir + '/aliases', ldlp)
+
+            self.assertTrue(Path(check_dir).is_dir())
+            self.assertTrue(Path(check_dir, 'aliases').is_dir())
+
+            if check_dir not in search:
+                check_dir = '/usr/lib/pressure-vessel' + check_dir
+
+            self.assertTrue(Path(check_dir).is_dir())
+            self.assertTrue(Path(check_dir, 'aliases').is_dir())
+            self.assertIn(check_dir, search)
+            self.assertIn(check_dir + '/aliases', ldlp)
 
     def test_overrides(self) -> None:
         if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):

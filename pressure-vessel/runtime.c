@@ -2466,6 +2466,8 @@ bind_runtime_base (PvRuntime *self,
   static const char * const dont_bind[] =
   {
     "/etc/asound.conf",
+    "/etc/ld.so.cache",
+    "/etc/ld.so.conf",
     "/etc/localtime",
     "/etc/machine-id",
     "/var/cache/ldconfig",
@@ -2601,16 +2603,6 @@ bind_runtime_base (PvRuntime *self,
 
           if (self->provider != NULL && g_strv_contains (from_provider, dest))
             continue;
-
-          if (self->mutable_sysroot != NULL)
-            {
-              /* If we have a mutable sysroot, we handle ld.so.cache
-               * separately later, because we want to set it up to be
-               * possible for the -adverb to overwrite it. */
-              if (strcmp (dest, "/etc/ld.so.cache") == 0
-                  || strcmp (dest, "/etc/ld.so.conf") == 0)
-                continue;
-            }
 
           full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],

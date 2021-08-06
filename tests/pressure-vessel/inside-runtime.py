@@ -220,7 +220,9 @@ class TestInsideRuntime(BaseTest):
             target = os.readlink('/var/cache/ldconfig/ld.so.cache')
             self.assertEqual(target, '/run/pressure-vessel/ldso/ld.so.cache')
 
-            with open('/run/pressure-vessel/ldso/runtime-ld.so.conf') as reader:
+            with open(
+                '/run/pressure-vessel/ldso/runtime-ld.so.conf'
+            ) as reader:
                 lines_originally = reader.readlines()
 
             with open('/etc/ld.so.conf') as reader:
@@ -548,13 +550,21 @@ class TestInsideRuntime(BaseTest):
             )
 
             self.assertEqual(
-                self.is_loadable_duplicated(parsed, 'vulkan', 'explicit_layers'),
-                self.is_loadable_duplicated(host_parsed, 'vulkan', 'explicit_layers'),
+                self.is_loadable_duplicated(
+                    parsed, 'vulkan', 'explicit_layers',
+                ),
+                self.is_loadable_duplicated(
+                    host_parsed, 'vulkan', 'explicit_layers',
+                ),
             )
 
             self.assertEqual(
-                self.is_loadable_duplicated(parsed, 'vulkan', 'implicit_layers'),
-                self.is_loadable_duplicated(host_parsed, 'vulkan', 'implicit_layers'),
+                self.is_loadable_duplicated(
+                    parsed, 'vulkan', 'implicit_layers',
+                ),
+                self.is_loadable_duplicated(
+                    host_parsed, 'vulkan', 'implicit_layers',
+                ),
             )
 
         for multiarch in parsed['architectures']:

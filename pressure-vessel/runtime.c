@@ -1837,6 +1837,62 @@ pv_runtime_new (const char *source,
                          NULL);
 }
 
+static void
+pv_runtime_adverb_regenerate_ld_so_cache (PvRuntime *self,
+                                          FlatpakBwrap *adverb_argv)
+{
+  g_autoptr(GString) ldlp_after_regen = g_string_new ("");
+  g_autofree gchar *regen_dir = NULL;
+  gsize i;
+
+  /* This directory was set up in bind_runtime_ld_so() */
+  if (self->is_flatpak_env)
+    {
+      const gchar *xrd;
+
+      /* As in bind_runtime_ld_so(), we expect Flatpak to provide this
+       * in practice, even if the host system does not. */
+      xrd = g_environ_getenv (self->original_environ, "XDG_RUNTIME_DIR");
+      g_return_if_fail (xrd != NULL);
+
+      regen_dir = g_build_filename (xrd, "pressure-vessel", "ldso", NULL);
+    }
+  else
+    {
+      regen_dir = g_strdup ("/run/pressure-vessel/ldso");
+    }
+
+  flatpak_bwrap_add_args (adverb_argv,
+                          "--regenerate-ld.so-cache", regen_dir,
+                          NULL);
+
+  /* This logic to build the search path matches
+   * pv_runtime_set_search_paths(), except that here, we split them up:
+   * the directories containing SONAMEs go in ld.so.conf, and only the
+   * directories containing aliases go in LD_LIBRARY_PATH. */
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
+    {
+      g_autofree gchar *ld_path = NULL;
+      g_autofree gchar *aliases = NULL;
+
+      ld_path = g_build_filename (self->overrides_in_container, "lib",
+                                  pv_multiarch_tuples[i], NULL);
+
+      aliases = g_build_filename (self->overrides_in_container, "lib",
+                                  pv_multiarch_tuples[i], "aliases", NULL);
+
+      flatpak_bwrap_add_args (adverb_argv,
+                              "--add-ld.so-path", ld_path,
+                              NULL);
+
+      pv_search_path_append (ldlp_after_regen, aliases);
+    }
+
+  flatpak_bwrap_add_args (adverb_argv,
+                          "--set-ld-library-path", ldlp_after_regen->str,
+                          NULL);
+}
+
 /* If we are using a runtime, ensure the locales to be generated,
  * pass the lock fd to the executed process,
  * and make it act as a subreaper for the game itself.
@@ -1894,6 +1950,8 @@ pv_runtime_get_adverb (PvRuntime *self,
                               "--lock-file", "/.ref",
                               NULL);
     }
+
+  pv_runtime_adverb_regenerate_ld_so_cache (self, bwrap);
 
   return TRUE;
 }
@@ -5459,7 +5517,6 @@ pv_runtime_bind (PvRuntime *self,
                  FlatpakExports *exports,
                  FlatpakBwrap *bwrap,
                  PvEnviron *container_env,
-                 gchar **regenerate_ld_so_cache,
                  GError **error)
 {
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
@@ -5613,26 +5670,6 @@ pv_runtime_bind (PvRuntime *self,
     }
 
   pv_runtime_set_search_paths (self, container_env);
-
-  if (regenerate_ld_so_cache != NULL)
-    {
-      if (self->is_flatpak_env)
-        {
-          const gchar *xrd;
-          /* As in bind_runtime_ld_so(), we expect Flatpak to provide this
-           * in practice, even if the host system does not. */
-          xrd = g_environ_getenv (self->original_environ, "XDG_RUNTIME_DIR");
-          if (xrd == NULL)
-            *regenerate_ld_so_cache = NULL;
-          else
-            *regenerate_ld_so_cache = g_build_filename (xrd, "pressure-vessel",
-                                                        "ldso", NULL);
-        }
-      else
-        {
-          *regenerate_ld_so_cache = g_strdup ("/run/pressure-vessel/ldso");
-        }
-    }
 
   return TRUE;
 }

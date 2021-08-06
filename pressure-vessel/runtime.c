@@ -1885,6 +1885,18 @@ pv_runtime_adverb_regenerate_ld_so_cache (PvRuntime *self,
                               "--add-ld.so-path", ld_path,
                               NULL);
 
+      /* If we are not operating from a mutable sysroot, then we do not
+       * have the opportunity to delete the runtime's version of overridden
+       * libraries, so ldconfig will see both the provider's version and
+       * the runtime's version. If the runtime's version has an OS ABI tag
+       * and the provider's version does not, then ldconfig will prioritize
+       * the runtime's older version. Work around this by adding the
+       * provider's version to LD_LIBRARY_PATH *as well as* regenerating
+       * the ld.so.cache - this will not work for games that incorrectly
+       * reset the LD_LIBRARY_PATH, but is better than nothing! */
+      if (self->mutable_sysroot == NULL)
+        pv_search_path_append (ldlp_after_regen, ld_path);
+
       pv_search_path_append (ldlp_after_regen, aliases);
     }
 

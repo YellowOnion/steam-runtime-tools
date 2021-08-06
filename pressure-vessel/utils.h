@@ -44,12 +44,6 @@
 #define pv_log_failure(...) \
   g_log (G_LOG_DOMAIN, PV_LOG_LEVEL_FAILURE, __VA_ARGS__)
 
-typedef struct
-{
-  const char *variable;
-  GPtrArray *values;
-} PreloadModule;
-
 void pv_get_current_dirs (gchar **cwd_p,
                           gchar **cwd_l);
 
@@ -87,12 +81,3 @@ void pv_set_up_logging (gboolean opt_verbose);
 void pv_delete_dangling_symlink (int dirfd,
                                  const char *debug_path,
                                  const char *name);
-
-void pv_append_preload_module (PreloadModule preload_modules[],
-                               gsize n_preload_modules,
-                               const char *variable,
-                               const char *value);
-
-void
-pv_preload_modules_free (PreloadModule preload_modules[],
-                         gsize n_preload_modules);

@@ -21,6 +21,7 @@
 #include "wrap-setup.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -28,6 +29,8 @@
 
 #include "bwrap.h"
 #include "flatpak-run-private.h"
+#include "flatpak-utils-private.h"
+#include "supported-architectures.h"
 
 /*
  * Use code borrowed from Flatpak to share various bits of the
@@ -329,4 +332,441 @@ pv_wrap_move_into_scope (const char *steam_app_id)
 
   if (local_error != NULL)
     g_debug ("Cannot move into a systemd scope: %s", local_error->message);
+}
+
+static void
+append_preload_internal (GPtrArray *argv,
+                         const char *option,
+                         const char *multiarch_tuple,
+                         const char *export_path,
+                         const char *original_path,
+                         GStrv env,
+                         PvAppendPreloadFlags flags,
+                         PvRuntime *runtime,
+                         FlatpakExports *exports)
+{
+  gboolean flatpak_subsandbox = ((flags & PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX) != 0);
+
+  if (runtime != NULL
+      && (g_str_has_prefix (original_path, "/usr/")
+          || g_str_has_prefix (original_path, "/lib")
+          || (flatpak_subsandbox && g_str_has_prefix (original_path, "/app/"))))
+    {
+      g_autofree gchar *adjusted_path = NULL;
+      const char *target = flatpak_subsandbox ? "/run/parent" : "/run/host";
+
+      adjusted_path = g_build_filename (target, original_path, NULL);
+      g_debug ("%s -> %s", original_path, adjusted_path);
+
+      if (multiarch_tuple != NULL)
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s:abi=%s",
+                                                option, adjusted_path,
+                                                multiarch_tuple));
+      else
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s",
+                                                option, adjusted_path));
+    }
+  else
+    {
+      g_debug ("%s -> unmodified", original_path);
+
+      if (multiarch_tuple != NULL)
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s:abi=%s",
+                                                option, original_path,
+                                                multiarch_tuple));
+      else
+        g_ptr_array_add (argv, g_strdup_printf ("%s=%s",
+                                                option, original_path));
+
+      if (exports != NULL && export_path != NULL && export_path[0] == '/')
+        {
+          const gchar *steam_path = g_environ_getenv (env, "STEAM_COMPAT_CLIENT_INSTALL_PATH");
+
+          if (steam_path != NULL
+              && flatpak_has_path_prefix (export_path, steam_path))
+            {
+              g_debug ("Skipping exposing \"%s\" because it is located "
+                       "under the Steam client install path that we "
+                       "bind by default", export_path);
+            }
+          else
+            {
+              g_debug ("%s needs adding to exports", export_path);
+              flatpak_exports_add_path_expose (exports,
+                                               FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                               export_path);
+            }
+        }
+    }
+}
+
+/*
+ * Deal with a LD_PRELOAD or LD_AUDIT module that contains tokens whose
+ * expansion we can't control or predict, such as ${ORIGIN} or future
+ * additions. We can't do much with these, because we can't assume that
+ * the dynamic string tokens will expand in the same way for us as they
+ * will for other programs.
+ *
+ * We mostly have to pass them into the container and hope for the best.
+ * We can rewrite a /usr/, /lib or /app/ prefix, and we can export the
+ * directory containing the first path component that has a dynamic
+ * string token: for example, /opt/plat-${PLATFORM}/preload.so or
+ * /opt/$PLATFORM/preload.so both have to be exported as /opt.
+ *
+ * Arguments are the same as for pv_wrap_append_preload().
+ */
+static void
+append_preload_unsupported_token (GPtrArray *argv,
+                                  const char *option,
+                                  const char *preload,
+                                  GStrv env,
+                                  PvAppendPreloadFlags flags,
+                                  PvRuntime *runtime,
+                                  FlatpakExports *exports)
+{
+  g_autofree gchar *export_path = NULL;
+  char *dollar;
+  char *slash;
+
+  g_debug ("Found $ORIGIN or unsupported token in \"%s\"",
+           preload);
+
+  if (preload[0] == '/')
+    {
+      export_path = g_strdup (preload);
+      dollar = strchr (export_path, '$');
+      g_assert (dollar != NULL);
+      /* Truncate before '$' */
+      dollar[0] = '\0';
+      slash = strrchr (export_path, '/');
+      /* It's an absolute path, so there is definitely a '/' before '$' */
+      g_assert (slash != NULL);
+      /* Truncate before last '/' before '$' */
+      slash[0] = '\0';
+
+      /* If that truncation leaves it empty, don't try to expose
+       * the whole root filesystem */
+      if (export_path[0] != '/')
+        {
+          g_debug ("Not exporting root filesystem for \"%s\"",
+                   preload);
+          g_clear_pointer (&export_path, g_free);
+        }
+      else
+        {
+          g_debug ("Exporting \"%s\" for \"%s\"",
+                   export_path, preload);
+        }
+    }
+  else
+    {
+      /* Original path was relative and contained an unsupported
+       * token like $ORIGIN. Pass it through as-is, without any extra
+       * exports (because we don't know what the token means!), and
+       * hope for the best. export_path stays NULL. */
+      g_debug ("Not exporting \"%s\": not an absolute path, or starts "
+               "with $ORIGIN",
+               preload);
+    }
+
+  append_preload_internal (argv,
+                           option,
+                           NULL,
+                           export_path,
+                           preload,
+                           env,
+                           flags,
+                           runtime,
+                           exports);
+}
+
+/*
+ * Deal with a LD_PRELOAD or LD_AUDIT module that contains tokens whose
+ * expansion is ABI-dependent but otherwise fixed. We do these by
+ * breaking it up into several ABI-dependent LD_PRELOAD modules, which
+ * are recombined by pv-adverb. We have to do this because the expansion
+ * of the ABI-dependent tokens could be different in the container, due
+ * to using a different glibc.
+ *
+ * Arguments are the same as for pv_wrap_append_preload().
+ */
+static void
+append_preload_per_architecture (GPtrArray *argv,
+                                 const char *option,
+                                 const char *preload,
+                                 GStrv env,
+                                 PvAppendPreloadFlags flags,
+                                 PvRuntime *runtime,
+                                 FlatpakExports *exports)
+{
+  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
+  gsize i;
+
+  if (system_info == NULL)
+    system_info = srt_system_info_new (NULL);
+
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
+    {
+      g_autoptr(GString) mock_path = NULL;
+      g_autoptr(SrtLibrary) details = NULL;
+      const char *path;
+
+      srt_system_info_check_library (system_info,
+                                     pv_multiarch_details[i].tuple,
+                                     preload,
+                                     &details);
+      path = srt_library_get_absolute_path (details);
+
+      if (flags & PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS)
+        {
+          /* Use mock results to get predictable behaviour in the unit
+           * tests, replacing the real result (above). This avoids needing
+           * to have real libraries in place when we do unit testing.
+           *
+           * tests/pressure-vessel/wrap-setup.c is the other side of this. */
+          g_autofree gchar *lib = NULL;
+          const char *platform = NULL;
+
+          /* As a mock ${LIB}, behave like Debian or the fdo SDK. */
+          lib = g_strdup_printf ("lib/%s", pv_multiarch_details[i].tuple);
+
+          /* As a mock ${PLATFORM}, use the first one listed. */
+          platform = pv_multiarch_details[i].platforms[0];
+
+          mock_path = g_string_new (preload);
+
+          if (strchr (preload, '/') == NULL)
+            {
+              g_string_printf (mock_path, "/path/to/%s/%s", lib, preload);
+            }
+          else
+            {
+              g_string_replace (mock_path, "$LIB", lib, 0);
+              g_string_replace (mock_path, "${LIB}", lib, 0);
+              g_string_replace (mock_path, "$PLATFORM", platform, 0);
+              g_string_replace (mock_path, "${PLATFORM}", platform, 0);
+            }
+
+          path = mock_path->str;
+
+          /* As a special case, pretend one 64-bit library failed to load,
+           * so we can exercise what happens when there's only a 32-bit
+           * library available. */
+          if (strstr (path, "only-32-bit") != NULL
+              && strcmp (pv_multiarch_details[i].tuple,
+                         SRT_ABI_I386) != 0)
+            path = NULL;
+        }
+
+      if (path != NULL)
+        {
+          g_debug ("Found %s version of %s at %s",
+                   pv_multiarch_details[i].tuple, preload, path);
+          append_preload_internal (argv,
+                                   option,
+                                   pv_multiarch_details[i].tuple,
+                                   path,
+                                   path,
+                                   env,
+                                   flags,
+                                   runtime,
+                                   exports);
+        }
+      else
+        {
+          g_info ("Unable to load %s version of %s",
+                  pv_multiarch_details[i].tuple,
+                  preload);
+        }
+    }
+}
+
+static void
+append_preload_basename (GPtrArray *argv,
+                         const char *option,
+                         const char *preload,
+                         GStrv env,
+                         PvAppendPreloadFlags flags,
+                         PvRuntime *runtime,
+                         FlatpakExports *exports)
+{
+  gboolean runtime_has_library = FALSE;
+
+  if (runtime != NULL)
+    runtime_has_library = pv_runtime_has_library (runtime, preload);
+
+  if (flags & PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS)
+    {
+      /* Mock implementation for unit tests: behave as though the
+       * container has everything except libfakeroot/libfakechroot. */
+      if (g_str_has_prefix (preload, "libfake"))
+        runtime_has_library = FALSE;
+      else
+        runtime_has_library = TRUE;
+    }
+
+  if (runtime_has_library)
+    {
+      /* If the library exists in the container runtime or in the
+       * stack we imported from the graphics provider, e.g.
+       * LD_PRELOAD=libpthread.so.0, then we certainly don't want
+       * to be loading it from the current namespace: that would
+       * bypass our logic for comparing library versions and picking
+       * the newest. Just pass through the LD_PRELOAD item into the
+       * container, and let the dynamic linker in the container choose
+       * what it means (container runtime or graphics provider as
+       * appropriate). */
+      g_debug ("Found \"%s\" in runtime or graphics stack provider, "
+               "passing %s through as-is",
+               preload, option);
+      append_preload_internal (argv,
+                               option,
+                               NULL,
+                               NULL,
+                               preload,
+                               env,
+                               flags,
+                               runtime,
+                               NULL);
+    }
+  else
+    {
+      /* There's no such library in the container runtime or in the
+       * graphics provider, so it's OK to inject the version from the
+       * current namespace. Use the same trick as for ${PLATFORM} to
+       * turn it into (up to) one absolute path per ABI. */
+      g_debug ("Did not find \"%s\" in runtime or graphics stack provider, "
+               "splitting architectures",
+               preload);
+      append_preload_per_architecture (argv,
+                                       option,
+                                       preload,
+                                       env,
+                                       flags,
+                                       runtime,
+                                       exports);
+    }
+}
+
+/**
+ * pv_wrap_append_preload:
+ * @argv: (element-type filename): Array of command-line options to populate
+ * @variable: (type filename): Environment variable from which this
+ *  preload module was taken, either `LD_AUDIT` or `LD_PRELOAD`
+ * @option: (type filename): Command-line option to add to @argv,
+ *  either `--ld-audit` or `--ld-preload`
+ * @preload: (type filename): Path of preloadable module in current
+ *  namespace, possibly including special ld.so tokens such as `$LIB`,
+ *  or basename of a preloadable module to be found in the standard
+ *  library search path
+ * @env: (array zero-terminated=1) (element-type filename): Environment
+ *  variables to be used instead of `environ`
+ * @flags: Flags to adjust behaviour
+ * @runtime: (nullable): Runtime to be used in container
+ * @exports: (nullable): Used to configure extra paths that need to be
+ *  exported into the container
+ *
+ * Adjust @preload to be valid for the container and append it
+ * to @argv.
+ */
+void
+pv_wrap_append_preload (GPtrArray *argv,
+                        const char *variable,
+                        const char *option,
+                        const char *preload,
+                        GStrv env,
+                        PvAppendPreloadFlags flags,
+                        PvRuntime *runtime,
+                        FlatpakExports *exports)
+{
+  SrtLoadableKind kind;
+  SrtLoadableFlags loadable_flags;
+
+  g_return_if_fail (argv != NULL);
+  g_return_if_fail (option != NULL);
+  g_return_if_fail (preload != NULL);
+  g_return_if_fail (runtime == NULL || PV_IS_RUNTIME (runtime));
+
+  if (strstr (preload, "gtk3-nocsd") != NULL)
+    {
+      g_warning ("Disabling gtk3-nocsd %s: it is known to cause crashes.",
+                 variable);
+      return;
+    }
+
+  if ((flags & PV_APPEND_PRELOAD_FLAGS_REMOVE_GAME_OVERLAY)
+      && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+    {
+      g_info ("Disabling Steam Overlay: %s", preload);
+      return;
+    }
+
+  kind = _srt_loadable_classify (preload, &loadable_flags);
+
+  switch (kind)
+    {
+      case SRT_LOADABLE_KIND_BASENAME:
+        /* Basenames can't have dynamic string tokens. */
+        g_warn_if_fail ((loadable_flags & SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS) == 0);
+        append_preload_basename (argv,
+                                 option,
+                                 preload,
+                                 env,
+                                 flags,
+                                 runtime,
+                                 exports);
+        break;
+
+      case SRT_LOADABLE_KIND_PATH:
+        /* Paths can have dynamic string tokens. */
+        if (loadable_flags & (SRT_LOADABLE_FLAGS_ORIGIN
+                              | SRT_LOADABLE_FLAGS_UNKNOWN_TOKENS))
+          {
+            append_preload_unsupported_token (argv,
+                                              option,
+                                              preload,
+                                              env,
+                                              flags,
+                                              runtime,
+                                              exports);
+          }
+        else if (loadable_flags & SRT_LOADABLE_FLAGS_ABI_DEPENDENT)
+          {
+            g_debug ("Found $LIB or $PLATFORM in \"%s\", splitting architectures",
+                     preload);
+            append_preload_per_architecture (argv,
+                                             option,
+                                             preload,
+                                             env,
+                                             flags,
+                                             runtime,
+                                             exports);
+          }
+        else
+          {
+            /* All dynamic tokens should be handled above, so we can
+             * assume that preload is a concrete filename */
+            g_warn_if_fail ((loadable_flags & SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS) == 0);
+            append_preload_internal (argv,
+                                     option,
+                                     NULL,
+                                     preload,
+                                     preload,
+                                     env,
+                                     flags,
+                                     runtime,
+                                     exports);
+          }
+        break;
+
+      case SRT_LOADABLE_KIND_ERROR:
+      default:
+        /* Empty string or similar syntactically invalid token:
+         * ignore with a warning. Since steam-runtime-tools!352 and
+         * steamlinuxruntime!64, the wrapper scripts don't give us
+         * an empty argument any more. */
+        g_warning ("Ignoring invalid loadable module \"%s\"", preload);
+
+        break;
+    }
 }

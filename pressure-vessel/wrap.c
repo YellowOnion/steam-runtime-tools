@@ -696,6 +696,7 @@ static gboolean opt_remove_game_overlay = FALSE;
 static gboolean opt_import_vulkan_layers = TRUE;
 static PvShell opt_shell = PV_SHELL_NONE;
 static GArray *opt_pass_fds = NULL;
+static GArray *opt_preload_modules = NULL;
 static char *opt_runtime = NULL;
 static char *opt_runtime_archive = NULL;
 static char *opt_runtime_base = NULL;
@@ -714,28 +715,50 @@ static gboolean opt_test = FALSE;
 static PvTerminal opt_terminal = PV_TERMINAL_AUTO;
 static char *opt_write_final_argv = NULL;
 
-static PreloadModule opt_preload_modules[] =
+typedef enum
 {
-  { "LD_AUDIT", NULL },
-  { "LD_PRELOAD", NULL },
-};
-static const char * const adverb_preload_options[G_N_ELEMENTS (opt_preload_modules)] =
+  PRELOAD_VARIABLE_INDEX_LD_AUDIT,
+  PRELOAD_VARIABLE_INDEX_LD_PRELOAD,
+} PreloadVariableIndex;
+
+static const struct
 {
-  /* Must be in the same order as opt_preload_modules */
-  "--ld-audit",
-  "--ld-preload",
+  const char *variable;
+  const char *adverb_option;
+} preload_options[] =
+{
+  [PRELOAD_VARIABLE_INDEX_LD_AUDIT] = { "LD_AUDIT", "--ld-audit" },
+  [PRELOAD_VARIABLE_INDEX_LD_PRELOAD] = { "LD_PRELOAD", "--ld-preload" },
 };
 
-static gboolean
-opt_host_ld_preload_cb (const gchar *option_name,
-                        const gchar *value,
-                        gpointer data,
-                        GError **error)
+typedef struct
 {
-  g_warning ("%s is deprecated, use --ld-preload=%s instead",
-             option_name, value);
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value);
+  PreloadVariableIndex which;
+  gchar *preload;
+} WrapPreloadModule;
+
+static void
+wrap_preload_module_clear (gpointer p)
+{
+  WrapPreloadModule *self = p;
+
+  g_free (self->preload);
+}
+
+static gboolean
+opt_ld_something (PreloadVariableIndex which,
+                  const char *value,
+                  GError **error)
+{
+  WrapPreloadModule module = { which, g_strdup (value) };
+
+  if (opt_preload_modules == NULL)
+    {
+      opt_preload_modules = g_array_new (FALSE, FALSE, sizeof (WrapPreloadModule));
+      g_array_set_clear_func (opt_preload_modules, wrap_preload_module_clear);
+    }
+
+  g_array_append_val (opt_preload_modules, module);
   return TRUE;
 }
 
@@ -745,9 +768,7 @@ opt_ld_audit_cb (const gchar *option_name,
                  gpointer data,
                  GError **error)
 {
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_AUDIT", value);
-  return TRUE;
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_AUDIT, value, error);
 }
 
 static gboolean
@@ -756,9 +777,18 @@ opt_ld_preload_cb (const gchar *option_name,
                    gpointer data,
                    GError **error)
 {
-  pv_append_preload_module (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules),
-                            "LD_PRELOAD", value);
-  return TRUE;
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_PRELOAD, value, error);
+}
+
+static gboolean
+opt_host_ld_preload_cb (const gchar *option_name,
+                        const gchar *value,
+                        gpointer data,
+                        GError **error)
+{
+  g_warning ("%s is deprecated, use --ld-preload=%s instead",
+             option_name, value);
+  return opt_ld_preload_cb (option_name, value, data, error);
 }
 
 static gboolean
@@ -1320,6 +1350,7 @@ main (int argc,
   const char *steam_app_id;
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
   int result;
+  PvAppendPreloadFlags append_preload_flags = PV_APPEND_PRELOAD_FLAGS_NONE;
 
   setlocale (LC_ALL, "");
 
@@ -1763,6 +1794,10 @@ main (int argc,
       bwrap_filesystem_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       exports = flatpak_exports_new ();
     }
+  else
+    {
+      append_preload_flags |= PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX;
+    }
 
   /* Invariant: we have bwrap or exports iff we also have the other */
   g_assert ((bwrap != NULL) == (exports != NULL));
@@ -2085,129 +2120,35 @@ main (int argc,
 
   adverb_preload_argv = g_ptr_array_new_with_free_func (g_free);
 
+  if (opt_remove_game_overlay)
+    append_preload_flags |= PV_APPEND_PRELOAD_FLAGS_REMOVE_GAME_OVERLAY;
+
   /* We need the LD_PRELOADs from Steam visible at the paths that were
    * used for them, which might be their physical rather than logical
    * locations. Steam doesn't generally use LD_AUDIT, but the Steam app
    * on Flathub does, and it needs similar handling. */
-  for (i = 0; i < G_N_ELEMENTS (opt_preload_modules); i++)
+  if (opt_preload_modules != NULL)
     {
-      const char *variable = opt_preload_modules[i].variable;
-      const GPtrArray *values = opt_preload_modules[i].values;
-      const char *option = adverb_preload_options[i];
-      gsize len;
       gsize j;
 
-      g_debug ("Adjusting %s...", variable);
+      g_debug ("Adjusting LD_AUDIT/LD_PRELOAD modules...");
 
-      if (values == NULL)
-        len = 0;
-      else
-        len = values->len;
-
-      for (j = 0; j < len; j++)
+      for (j = 0; j < opt_preload_modules->len; j++)
         {
-          const char *preload = g_ptr_array_index (values, j);
+          const WrapPreloadModule *module = &g_array_index (opt_preload_modules,
+                                                            WrapPreloadModule,
+                                                            j);
 
-          g_assert (preload != NULL);
-
-          if (*preload == '\0')
-            continue;
-
-          if (strstr (preload, "gtk3-nocsd") != NULL)
-            {
-              g_warning ("Disabling gtk3-nocsd %s: it is known to cause crashes.",
-                         variable);
-              continue;
-            }
-
-          if (opt_remove_game_overlay
-              && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
-            {
-              g_info ("Disabling Steam Overlay: %s", preload);
-              continue;
-            }
-
-          /* A subsandbox will just have the same LD_PRELOAD as the
-           * Flatpak itself, except that we have to redirect /usr and /app
-           * into /run/parent. */
-          if (flatpak_subsandbox != NULL)
-            {
-              if (runtime != NULL
-                  && (g_str_has_prefix (preload, "/usr/")
-                      || g_str_has_prefix (preload, "/app/")
-                      || g_str_has_prefix (preload, "/lib")))
-                {
-                  g_autofree gchar *adjusted_path = NULL;
-
-                  adjusted_path = g_build_filename ("/run/parent", preload, NULL);
-                  g_debug ("%s -> %s", preload, adjusted_path);
-                  g_ptr_array_add (adverb_preload_argv,
-                                   g_strdup_printf ("%s=%s",
-                                                    option,
-                                                    adjusted_path));
-                }
-              else
-                {
-                  g_debug ("%s -> unmodified", preload);
-                  g_ptr_array_add (adverb_preload_argv,
-                                   g_strdup_printf ("%s=%s",
-                                                    option,
-                                                    preload));
-                }
-
-              /* No FlatpakExports here: any file not in /usr or /app that
-               * is visible to our "parent" Flatpak app is also visible
-               * to us. */
-              continue;
-            }
-
-          if (g_file_test (preload, G_FILE_TEST_EXISTS))
-            {
-              if (runtime != NULL
-                  && (g_str_has_prefix (preload, "/usr/")
-                      || g_str_has_prefix (preload, "/lib")))
-                {
-                  g_autofree gchar *adjusted_path = NULL;
-
-                  adjusted_path = g_build_filename ("/run/host", preload, NULL);
-                  g_debug ("%s -> %s", preload, adjusted_path);
-                  /* When using a runtime we can't write to /usr/ or /libQUAL/,
-                   * so redirect this preloaded module to the corresponding
-                   * location in /run/host. */
-                  g_ptr_array_add (adverb_preload_argv,
-                                   g_strdup_printf ("%s=%s",
-                                                    option,
-                                                    adjusted_path));
-                }
-              else
-                {
-                  const gchar *steam_path = NULL;
-                  steam_path = g_getenv ("STEAM_COMPAT_CLIENT_INSTALL_PATH");
-
-                  if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
-                    {
-                      g_debug ("Skipping exposing \"%s\" because it is located "
-                               "under the Steam client install path that we "
-                               "bind by default", preload);
-                    }
-                  else
-                    {
-                      g_debug ("%s -> unmodified, but added to exports", preload);
-                      flatpak_exports_add_path_expose (exports,
-                                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                                       preload);
-                    }
-
-                  g_ptr_array_add (adverb_preload_argv,
-                                   g_strdup_printf ("%s=%s",
-                                                    option,
-                                                    preload));
-                }
-            }
-          else
-            {
-              g_info ("%s module '%s' does not exist", variable, preload);
-            }
+          g_assert (module->which >= 0);
+          g_assert (module->which < G_N_ELEMENTS (preload_options));
+          pv_wrap_append_preload (adverb_preload_argv,
+                                  preload_options[module->which].variable,
+                                  preload_options[module->which].adverb_option,
+                                  module->preload,
+                                  environ,
+                                  append_preload_flags,
+                                  runtime,
+                                  exports);
         }
     }
 
@@ -2787,8 +2728,7 @@ out:
   if (local_error != NULL)
     pv_log_failure ("%s", local_error->message);
 
-  pv_preload_modules_free (opt_preload_modules, G_N_ELEMENTS (opt_preload_modules));
-
+  g_clear_pointer (&opt_preload_modules, g_array_unref);
   g_clear_pointer (&adverb_preload_argv, g_ptr_array_unref);
   g_clear_pointer (&opt_env_if_host, g_strfreev);
   g_clear_pointer (&opt_freedesktop_app_id, g_free);

@@ -126,3 +126,97 @@ _srt_libdl_detect_lib (gchar **envp,
                                 "detect-lib",
                                 error);
 }
+
+SrtLoadableKind
+_srt_loadable_classify (const char *loadable,
+                        SrtLoadableFlags *flags_out)
+{
+  SrtLoadableFlags flags = SRT_LOADABLE_FLAGS_NONE;
+  SrtLoadableKind kind;
+  gsize i;
+
+  g_return_val_if_fail (loadable != NULL, SRT_LOADABLE_KIND_ERROR);
+
+  if (loadable[0] == '\0')
+    {
+      kind = SRT_LOADABLE_KIND_ERROR;
+      goto out;
+    }
+
+  if (strchr (loadable, '/') != NULL)
+    {
+      kind = SRT_LOADABLE_KIND_PATH;
+    }
+  else
+    {
+      /* Dynamic string tokens are not interpreted in a bare SONAME
+       * so we don't need to do that part. */
+      kind = SRT_LOADABLE_KIND_BASENAME;
+      goto out;
+    }
+
+  for (i = 0; loadable[i] != '\0'; i++)
+    {
+      if (loadable[i] == '$')
+        {
+          const char *token = loadable + i + 1;
+          gsize len;
+
+          flags |= SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS;
+
+          if (token[0] == '{')
+            {
+              token++;
+              len = strcspn (token, "}");
+            }
+          else
+            {
+              len = 0;
+
+              while (g_ascii_isalnum (token[len]) || token[len] == '_')
+                len++;
+            }
+
+          switch (len)
+            {
+              case 3:
+                if (strncmp ("LIB", token, len) == 0)
+                  {
+                    flags |= SRT_LOADABLE_FLAGS_ABI_DEPENDENT;
+                    continue;
+                  }
+
+                break;
+
+              case 6:
+                if (strncmp ("ORIGIN", token, len) == 0)
+                  {
+                    flags |= SRT_LOADABLE_FLAGS_ORIGIN;
+                    continue;
+                  }
+
+                break;
+
+              case 8:
+                if (strncmp ("PLATFORM", token, len) == 0)
+                  {
+                    flags |= SRT_LOADABLE_FLAGS_ABI_DEPENDENT;
+                    continue;
+                  }
+
+                break;
+
+              default:
+                break;
+            }
+
+          flags |= SRT_LOADABLE_FLAGS_UNKNOWN_TOKENS;
+        }
+    }
+
+out:
+  if (flags_out != NULL)
+    *flags_out = flags;
+
+  return kind;
+}

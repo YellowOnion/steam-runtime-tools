@@ -35,3 +35,23 @@ G_GNUC_INTERNAL gchar *_srt_libdl_detect_lib (gchar **envp,
                                               const char *helpers_path,
                                               const char *multiarch_tuple,
                                               GError **error);
+
+typedef enum
+{
+  SRT_LOADABLE_KIND_ERROR,
+  SRT_LOADABLE_KIND_BASENAME,
+  SRT_LOADABLE_KIND_PATH,
+} SrtLoadableKind;
+
+typedef enum
+{
+  SRT_LOADABLE_FLAGS_DYNAMIC_TOKENS = (1 << 0),
+  SRT_LOADABLE_FLAGS_ABI_DEPENDENT = (1 << 1),
+  SRT_LOADABLE_FLAGS_ORIGIN = (1 << 2),
+  SRT_LOADABLE_FLAGS_UNKNOWN_TOKENS = (1 << 3),
+  SRT_LOADABLE_FLAGS_NONE = 0
+} SrtLoadableFlags;
+
+G_GNUC_INTERNAL
+SrtLoadableKind _srt_loadable_classify (const char *loadable,
+                                        SrtLoadableFlags *flags_out);

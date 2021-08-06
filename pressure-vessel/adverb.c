@@ -788,18 +788,18 @@ static GOptionEntry options[] =
     NULL },
 
   { "ld-audit", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_audit_cb,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_audit_cb,
     "Add MODULE to LD_AUDIT before executing COMMAND.",
     "MODULE" },
   { "ld-preload", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
     "Add MODULE to LD_PRELOAD before executing COMMAND. Some adjustments "
     "may be performed, e.g. joining together multiple gameoverlayrenderer.so "
     "preloads into a single path by leveraging the dynamic linker token expansion",
     "MODULE" },
 
   { "lock-file", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_lock_file_cb,
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_lock_file_cb,
     "Open the given file and lock it, affected by options appearing "
     "earlier on the command-line. May be repeated.",
     NULL },

@@ -84,6 +84,7 @@ class TestInsideRuntime(BaseTest):
             self.artifacts = Path(self.tmpdir.name)
 
         self.artifacts.mkdir(exist_ok=True)
+        logger.info('Artifacts will be in %s', self.artifacts)
 
     def tearDown(self) -> None:
         super().tearDown()
@@ -149,10 +150,29 @@ class TestInsideRuntime(BaseTest):
             self.assertIsNotNone(data.get('BUILD_ID'))
 
     def test_environ(self) -> None:
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
+            logger.info('Runtime is a copy')
+        else:
+            logger.info('Runtime is not a copy')
+
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_SCOUT'):
+            logger.info('Runtime is scout')
+        else:
+            logger.info('Runtime is not scout')
+
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_SOLDIER'):
+            logger.info('Runtime is soldier')
+        else:
+            logger.info('Runtime is not soldier')
+
         logger.info('PATH: %r', os.environ.get('PATH'))
         logger.info(
             'LD_LIBRARY_PATH: %r', os.environ.get('LD_LIBRARY_PATH')
         )
+
+        with open('/etc/ld.so.conf', 'r') as reader:
+            for line in reader:
+                logger.info('/etc/ld.so.conf: %r', line)
 
         if os.environ.get('TEST_INSIDE_RUNTIME_IS_SCOUT'):
             self.assertEqual(os.environ.get('STEAM_RUNTIME'), '/')

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210806.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210806.0) scout; urgency=medium
 
   [ Ludovico de Nittis, Simon McVittie ]
   * pv-runtime: Generate a new /etc/ld.so.cache with our overridden
@@ -29,7 +29,8 @@ steam-runtime-tools (0.20210806.0) UNRELEASED; urgency=medium
   * Update libcapsule subproject to v0.20210728.0
   * pressure-vessel: Refactor handling of LD_PRELOAD and LD_AUDIT modules
   * pv-wrap, pv-launcher: Set a reasonable RLIMIT_NOFILE to avoid
-    problems with select(). (Related to steam-for-linux#7970.)
+    problems with select().
+    (Resolves: T29726; related to steam-for-linux#7970)
   * tests: Improve pressure-vessel test coverage
 
   [ Ludovico de Nittis ]
@@ -41,7 +42,7 @@ steam-runtime-tools (0.20210806.0) UNRELEASED; urgency=medium
     (versions >= 0.20210806.33) until we can get the run.sh change into a
     General Availability version of Steam.
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 06 Aug 2021 13:55:42 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 06 Aug 2021 17:51:39 +0100
 
 steam-runtime-tools (0.20210722.0) scout; urgency=medium
 

@@ -726,18 +726,6 @@ static const char * const adverb_preload_options[G_N_ELEMENTS (opt_preload_modul
   "--ld-preload",
 };
 
-/*
- * check_main_program:
- *
- * Return %TRUE if the command to execute is the main program.
- */
-static gboolean
-check_main_program (int argc,
-                    char *argv[])
-{
-  return g_getenv ("SteamAppId") != NULL;
-}
-
 static gboolean
 opt_host_ld_preload_cb (const gchar *option_name,
                         const gchar *value,
@@ -1309,9 +1297,7 @@ main (int argc,
   g_auto(GStrv) original_environ = NULL;
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
-  gboolean is_main_program;
   gboolean is_home_shared = TRUE;
-  gboolean search_cwd = FALSE;
   g_autoptr(FlatpakBwrap) flatpak_subsandbox = NULL;
   g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
@@ -1325,7 +1311,6 @@ main (int argc,
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
   const gchar *home;
-  const gchar *steam_compat_flags;
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
   g_autoptr(FILE) original_stdout = NULL;
@@ -1357,8 +1342,6 @@ main (int argc,
     }
 
   original_environ = g_get_environ ();
-
-  is_main_program = check_main_program (argc, argv);
 
   /* Set defaults */
   opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
@@ -1857,23 +1840,6 @@ main (int argc,
         }
     }
 
-  steam_compat_flags = g_getenv ("STEAM_COMPAT_FLAGS");
-  if (steam_compat_flags != NULL)
-    {
-      g_auto(GStrv) flags = g_strsplit (steam_compat_flags, ",", -1);
-      for (i = 0; flags[i] != NULL; i++)
-        {
-          if (g_strcmp0 (flags[i], "search-cwd") == 0)
-            /* This option is used to append the game install path to
-             * LD_LIBRARY_PATH for legacy purposes, to cope with games that
-             * relied on the old behaviour of LD_LIBRARY_PATH of ending with
-             * a colon, which ld.so interprets as the current working directory. */
-            search_cwd = TRUE;
-          else
-            g_info ("STEAM_COMPAT_FLAGS has the unexpected flag \"%s\"", flags[i]);
-        }
-    }
-
   if (opt_runtime != NULL || opt_runtime_archive != NULL)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
@@ -1914,12 +1880,6 @@ main (int argc,
 
       if (flatpak_subsandbox != NULL)
         flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
-
-      /* Only if we are running the main program, append the working directory
-       * of the game to LD_LIBRARY_PATH. This option is not intended for the
-       * setup phase. */
-      if (search_cwd && is_main_program)
-        flags |= PV_RUNTIME_FLAGS_SEARCH_CWD;
 
       if (opt_runtime != NULL)
         {

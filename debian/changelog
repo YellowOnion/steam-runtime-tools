@@ -1,9 +1,21 @@
-steam-runtime-tools (0.20210805.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210806.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis, Simon McVittie ]
+  * pv-runtime: Generate a new /etc/ld.so.cache with our overridden
+    libraries. This means we can now run games that clear the
+    LD_LIBRARY_PATH, such as Dead Cells, Evoland Legendary Edition and
+    Shenzhen I/O. (Resolves: steam-runtime#224, steam-runtime#268, T14481)
 
   [ Simon McVittie ]
   * pressure-vessel: Take ldd, etc. from provider if we are using its glibc,
     for better compatibility with newer glibc in host OSs like Arch Linux
     (Resolves: T29581)
+  * pressure-vessel: Improve handling of LD_PRELOAD and LD_AUDIT modules.
+    Modules that are not a literal, absolute filename are now supported
+    as far as possible. In particular, this handles two common configurations
+    for MangoHud: the convenience build script and binary builds provided by
+    upstream, and the layout used in the Debian packaging.
+    (Resolves: steam-runtime#435, T29490)
   * pv-launch: Show more explanatory message if Flatpak is using setuid
     bwrap. In particular, this should help users of recent Flatpak
     on Gentoo.
@@ -23,8 +35,13 @@ steam-runtime-tools (0.20210805.0) UNRELEASED; urgency=medium
   [ Ludovico de Nittis ]
   * pv-runtime: Delete overridden libraries from the correct "mesa" path
     to improve robustness
+  * pressure-vessel: Remove support for STEAM_COMPAT_FLAGS=search-cwd.
+    This is now handled by run.sh from the LD_LIBRARY_PATH runtime, with a
+    fallback implementation in the "Steam Linux Runtime" compat tool
+    (versions >= 0.20210806.33) until we can get the run.sh change into a
+    General Availability version of Steam.
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 05 Aug 2021 19:00:08 +0100
+ -- Simon McVittie <smcv@collabora.com>  Fri, 06 Aug 2021 13:55:42 +0100
 
 steam-runtime-tools (0.20210722.0) scout; urgency=medium
 

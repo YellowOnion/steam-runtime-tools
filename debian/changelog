@@ -1,3 +1,14 @@
+steam-runtime-tools (0.20210809.0) scout; urgency=medium
+
+  * pv-runtime: Try to create /sbin/ldconfig.real if using host glibc.
+    This fixes a regression for Ubuntu and older versions of Debian.
+    (Resolves: T29764)
+  * pv-adverb: If we cannot regenerate ld.so.cache, fall back to
+    pre-0.20210806.0 behaviour
+  * pv-adverb: Expand error message if we cannot regenerate ld.so cache
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 09 Aug 2021 16:43:21 +0100
+
 steam-runtime-tools (0.20210806.0) scout; urgency=medium
 
   [ Ludovico de Nittis, Simon McVittie ]

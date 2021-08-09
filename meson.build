@@ -35,7 +35,7 @@ add_languages('cpp')
 
 api_major = '0'
 abi_major = '0'
-abi_minor = '20210806.0'
+abi_minor = '20210809.0'
 
 pkg = import('pkgconfig')
 gnome = import('gnome')

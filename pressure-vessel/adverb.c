@@ -1326,15 +1326,28 @@ main (int argc,
   if (opt_regenerate_ld_so_cache != NULL
       && opt_regenerate_ld_so_cache[0] != '\0')
     {
-      if (!regenerate_ld_so_cache (global_ld_so_conf_entries, opt_regenerate_ld_so_cache,
-                                   error))
+      if (regenerate_ld_so_cache (global_ld_so_conf_entries, opt_regenerate_ld_so_cache,
+                                  error))
         {
-          goto out;
+          g_debug ("Generated ld.so.cache in %s", opt_regenerate_ld_so_cache);
+          g_debug ("Setting LD_LIBARY_PATH to \"%s\"", opt_set_ld_library_path);
+          flatpak_bwrap_set_env (wrapped_command, "LD_LIBRARY_PATH",
+                                 opt_set_ld_library_path, TRUE);
         }
-      g_debug ("Generated ld.so.cache in %s", opt_regenerate_ld_so_cache);
+      else
+        {
+          /* If this fails, it is not fatal - carry on anyway. However,
+           * we must not use opt_set_ld_library_path in this case, because
+           * in the case where we're not regenerating the ld.so.cache,
+           * we have to rely on the longer LD_LIBRARY_PATH with which we
+           * were invoked, which includes the library paths that were in
+           * global_ld_so_conf_entries. */
+          g_warning ("%s", local_error->message);
+          g_warning ("Recovering by keeping our previous LD_LIBRARY_PATH");
+          g_clear_error (error);
+        }
     }
-
-  if (opt_set_ld_library_path != NULL)
+  else if (opt_set_ld_library_path != NULL)
     {
       g_debug ("Setting LD_LIBARY_PATH to \"%s\"", opt_set_ld_library_path);
       flatpak_bwrap_set_env (wrapped_command, "LD_LIBRARY_PATH",

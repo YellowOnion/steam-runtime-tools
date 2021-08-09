@@ -638,6 +638,7 @@ regenerate_ld_so_cache (const GPtrArray *ld_so_cache_paths,
                         const char *dir,
                         GError **error)
 {
+  g_autoptr(GError) local_error = NULL;
   g_autoptr(GPtrArray) argv = g_ptr_array_new ();
   g_autoptr(GString) conf = g_string_new ("");
   g_autofree gchar *child_stdout = NULL;
@@ -723,14 +724,33 @@ regenerate_ld_so_cache (const GPtrArray *ld_so_cache_paths,
                         error))
     return glnx_prefix_error (error, "Cannot run /sbin/ldconfig");
 
+  if (!g_spawn_check_exit_status (wait_status, &local_error))
+    {
+      if (child_stderr != NULL && child_stderr[0] != '\0')
+        {
+          g_set_error (error, local_error->domain, local_error->code,
+                       ("Unable to generate %s: %s.\n"
+                        "Diagnostic output:\n%s"),
+                       new_path,
+                       local_error->message,
+                       child_stderr);
+        }
+      else
+        {
+          g_set_error (error, local_error->domain, local_error->code,
+                       "Unable to generate %s: %s",
+                       new_path,
+                       local_error->message);
+        }
+
+      return FALSE;
+    }
+
   if (child_stdout != NULL && child_stdout[0] != '\0')
     g_debug ("Output:\n%s", child_stdout);
 
   if (child_stderr != NULL && child_stderr[0] != '\0')
     g_debug ("Diagnostic output:\n%s", child_stderr);
-
-  if (!g_spawn_check_exit_status (wait_status, error))
-    return glnx_prefix_error (error, "Unable to generate %s", new_path);
 
   /* Atomically replace ld.so.cache with new-ld.so.cache. */
   if (!glnx_renameat (AT_FDCWD, new_path, AT_FDCWD, replace_path, error))
@@ -1306,15 +1326,28 @@ main (int argc,
   if (opt_regenerate_ld_so_cache != NULL
       && opt_regenerate_ld_so_cache[0] != '\0')
     {
-      if (!regenerate_ld_so_cache (global_ld_so_conf_entries, opt_regenerate_ld_so_cache,
-                                   error))
+      if (regenerate_ld_so_cache (global_ld_so_conf_entries, opt_regenerate_ld_so_cache,
+                                  error))
         {
-          goto out;
+          g_debug ("Generated ld.so.cache in %s", opt_regenerate_ld_so_cache);
+          g_debug ("Setting LD_LIBARY_PATH to \"%s\"", opt_set_ld_library_path);
+          flatpak_bwrap_set_env (wrapped_command, "LD_LIBRARY_PATH",
+                                 opt_set_ld_library_path, TRUE);
         }
-      g_debug ("Generated ld.so.cache in %s", opt_regenerate_ld_so_cache);
+      else
+        {
+          /* If this fails, it is not fatal - carry on anyway. However,
+           * we must not use opt_set_ld_library_path in this case, because
+           * in the case where we're not regenerating the ld.so.cache,
+           * we have to rely on the longer LD_LIBRARY_PATH with which we
+           * were invoked, which includes the library paths that were in
+           * global_ld_so_conf_entries. */
+          g_warning ("%s", local_error->message);
+          g_warning ("Recovering by keeping our previous LD_LIBRARY_PATH");
+          g_clear_error (error);
+        }
     }
-
-  if (opt_set_ld_library_path != NULL)
+  else if (opt_set_ld_library_path != NULL)
     {
       g_debug ("Setting LD_LIBARY_PATH to \"%s\"", opt_set_ld_library_path);
       flatpak_bwrap_set_env (wrapped_command, "LD_LIBRARY_PATH",

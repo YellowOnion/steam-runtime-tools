@@ -4454,6 +4454,10 @@ pv_runtime_finish_libc_family (PvRuntime *self,
     { "getent" },
     { "iconv" },
     { "ldconfig", .priority = ESSENTIAL, .target_path = "/sbin/ldconfig" },
+    /* In Ubuntu and old Debian releases (Debian 8 or older), /sbin/ldconfig
+     * is a shell script wrapper around the real binary /sbin/ldconfig.real,
+     * working around lack of dpkg trigger support in old library packages. */
+    { "ldconfig.real", .target_path = "/sbin/ldconfig.real" },
     { "ldd", .priority = IMPORTANT },
     { "locale", .priority = IMPORTANT },
     { "localedef", .priority = IMPORTANT },

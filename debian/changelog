@@ -1,3 +1,9 @@
+steam-runtime-tools (0.20210809.1) scout; urgency=medium
+
+  * Rebuild with fixed version number and CI pipeline
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 09 Aug 2021 17:25:34 +0100
+
 steam-runtime-tools (0.20210809.0) scout; urgency=medium
 
   * pv-runtime: Try to create /sbin/ldconfig.real if using host glibc.

@@ -104,3 +104,16 @@ test:archlinux:
         paths:
             - depots/*.txt
             - depots/*/VERSIONS.txt
+
+reuse:
+    stage: test
+    tags:
+        - docker
+        - linux
+    needs: []
+    image:
+        name: fsfe/reuse:latest
+        entrypoint: [""]
+    before_script: []
+    script:
+        - reuse lint

@@ -1,6 +1,11 @@
 Depot tests
 ===========
 
+<!-- This file:
+Copyright 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 Tests in this directory are designed to be run on any system that is
 meant to run Steam. In particular, they have been confirmed to work on
 SteamOS 2 'brewmaster', and should work on Debian 8 'jessie' or later

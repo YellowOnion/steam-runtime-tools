@@ -1,0 +1,7 @@
+Copyright and licensing in this project is recorded in REUSE format
+<https://reuse.software/>. See individual files or .reuse/dep5 for
+details of applicable copyright and licensing, and LICENSES/* for full
+license text.
+
+The preferred license for new files is the license identified by SPDX
+as "MIT", LICENSES/MIT.txt. That is currently the only license used here.

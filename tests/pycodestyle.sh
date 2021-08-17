@@ -15,7 +15,7 @@ fi
 
 set -- "$@" tests/depot/*.py
 
-if [ "x${PYCODESTYLE:=pycodestyle}" = xfalse ] || \
+if [ "${PYCODESTYLE:=pycodestyle}" = false ] || \
         [ -z "$(command -v "$PYCODESTYLE")" ]; then
     echo "1..0 # SKIP pycodestyle not found"
 elif "${PYCODESTYLE}" "$@" >&2; then

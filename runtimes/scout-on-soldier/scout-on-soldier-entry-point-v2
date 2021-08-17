@@ -96,7 +96,7 @@ main () {
         esac
     done
 
-    if [ "$#" -eq 0 ] || [ "x$1" = x-- ]; then
+    if [ "$#" -eq 0 ] || [ "$1" = -- ]; then
         log "Error: A command to run is required"
         usage 125
     fi

@@ -1,0 +1,27 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: SteamLinuxRuntime
+Source: https://gitlab.steamos.cloud/steamrt/steamlinuxruntime/
+
+Files:
+ README.md
+ debian/*
+ docs/*.md
+ runtimes/*/README.md
+ runtimes/*/toolmanifest.vdf
+ steampipe/*.vdf
+Copyright:
+ 2019-2021 Valve Corporation
+ 2020-2021 Collabora Ltd.
+License: MIT
+
+Files:
+ subprojects/python-vdf/*
+Copyright:
+ 2015-2020 Rossen Georgiev
+License: MIT
+
+Files:
+ tests/third-party/pycotap.py
+Copyright:
+ 2015 Remko Tronçon
+License: MIT

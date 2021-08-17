@@ -1,6 +1,11 @@
 Developer tests
 ===============
 
+<!-- This file:
+Copyright 2020 Collabora Ltd.
+SPDX-License-Identifier: MIT
+-->
+
 `tests/*.sh` carry out some basic QA checks. Run with:
 
     make check

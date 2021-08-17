@@ -1,3 +1,6 @@
+# Copyright 2020 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+
 all: scout
 
 scout:

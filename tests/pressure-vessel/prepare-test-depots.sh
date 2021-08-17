@@ -36,7 +36,7 @@ for suite in $suites; do
         --depot="$builddir/depots/$suite" \
         --include-archives \
         --no-versioned-directories \
-        --pressure-vessel "${PRESSURE_VESSEL}" \
+        --pressure-vessel-archive "${PRESSURE_VESSEL}" \
         --source-dir="$builddir/depot-template" \
         --unpack-runtimes \
         "$@" \

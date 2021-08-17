@@ -47,9 +47,9 @@ echo "1..1"
 
 if "${PYCODESTYLE}" \
     --ignore=E402,W503 \
+    ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
-    ./sysroot/*.py \
     ./tests/*/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"

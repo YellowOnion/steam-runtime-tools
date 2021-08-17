@@ -34,14 +34,14 @@ The same test can also be run against a version of pressure-vessel
 that was built against scout:
 
     export PRESSURE_VESSEL_TEST_CONTAINERS=/path/to/containers
-    ./sysroot/run-in-sysroot.py --sysroot ../scout-sysroot -- \
+    ./build-aux/run-in-sysroot.py --sysroot ../scout-sysroot -- \
         ninja -C _build-for-sysroot
     env DESTDIR="$(pwd)/_build-for-sysroot/DESTDIR" \
-        ./sysroot/run-in-sysroot.py --sysroot ../scout-sysroot -- \
+        ./build-aux/run-in-sysroot.py --sysroot ../scout-sysroot -- \
         ninja -C _build-for-sysroot install
     rm -fr "$PRESSURE_VESSEL_TEST_CONTAINERS/pressure-vessel"
     env DESTDIR="$(pwd)/_build-for-sysroot/DESTDIR" \
-        ./sysroot/run-in-sysroot.py --sysroot ../scout-sysroot -- \
+        ./build-aux/run-in-sysroot.py --sysroot ../scout-sysroot -- \
         python3.5 ./pressure-vessel/build-relocatable-install.py \
         --output="$PRESSURE_VESSEL_TEST_CONTAINERS/pressure-vessel" \
         --check-source-directory="$PRESSURE_VESSEL_TEST_CONTAINERS" \

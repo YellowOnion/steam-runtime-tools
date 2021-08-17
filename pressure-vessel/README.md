@@ -147,15 +147,15 @@ For more convenient use on a development system, if you have a
 SteamRT 1 'scout' SDK tarball or an unpacked sysroot, you can place a
 tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
 `_build/sysroot`, and prefix those commands with
-`./sysroot/run-in-sysroot.py`:
+`./build-aux/run-in-sysroot.py`:
 
-    ./sysroot/run-in-sysroot.py apt-get update
-    ./sysroot/run-in-sysroot.py meson --prefix="$(pwd)/_build/prefix" _build
-    ./sysroot/run-in-sysroot.py ninja -C _build
+    ./build-aux/run-in-sysroot.py apt-get update
+    ./build-aux/run-in-sysroot.py meson --prefix="$(pwd)/_build/prefix" _build
+    ./build-aux/run-in-sysroot.py ninja -C _build
     (etc.)
 
 (Or put them in different locations and pass the `--sysroot` and
-`--tarball` options to `./sysroot/run-in-sysroot.py`.)
+`--tarball` options to `./build-aux/run-in-sysroot.py`.)
 
 The relocatable install goes into `relocatable-install` (or
 whatever you used as the `--output`), and a compressed version ends

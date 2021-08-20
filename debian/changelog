@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20210820.0) UNRELEASED; urgency=medium
+
+  * debian: Split steam-runtime-tools-minimal package.
+    We don't want to include all of steam-runtime-tools-bin in heavy,
+    because that drags in json-glib, waffle and other libraries not
+    historically included in heavy, and we're trying to make heavy as light
+    as possible (perhaps ironically, given its name and its use to support
+    a 100M+ browser engine).
+  * tests: Update populate-depot.py from SteamLinuxRuntime v0.20210806.0
+  * tests: Don't make populate-depot.py guess what we mean
+  * build-aux: Remove redundant COPYING file
+  * build-aux: Move sysroot convenience scripts to here
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 20 Aug 2021 12:11:50 +0100
+
 steam-runtime-tools (0.20210809.1) scout; urgency=medium
 
   * Rebuild with fixed version number and CI pipeline

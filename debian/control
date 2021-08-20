@@ -180,13 +180,14 @@ Description: Steam container launcher - cross-architecture dependencies
 Package: steam-runtime-tools-bin
 Architecture: any
 Multi-Arch: foreign
-Section: libdevel
+Section: misc
 Breaks:
  libsteam-runtime-tools-0-tests (<< 0.20190806.0~),
 Replaces:
  libsteam-runtime-tools-0-tests (<< 0.20190806.0~),
 Depends:
  libsteam-runtime-tools-0-0,
+ steam-runtime-tools-minimal (= ${binary:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam Runtime utility library - command-line tools
@@ -198,3 +199,22 @@ Description: Steam Runtime utility library - command-line tools
  which summarizes everything that the libsteam-runtime-tools library
  can find out, and steam-runtime-check-requirements, which performs checks
  to ensure that the Steam client requirements are met.
+
+Package: steam-runtime-tools-minimal
+Architecture: any
+Multi-Arch: foreign
+Section: misc
+Breaks:
+ steam-runtime-tools-bin (<< 0.20210820.0~),
+Replaces:
+ steam-runtime-tools-bin (<< 0.20210820.0~),
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: Steam Runtime utility library - minimal command-line tools
+ The Steam Runtime is the library stack used to run the Steam client
+ on Linux. The Steam Runtime Tools utility library contains open-source
+ supporting code used by the Steam client to discover system information.
+ .
+ This package contains tools with minimal dependencies used during
+ Steam Runtime setup.

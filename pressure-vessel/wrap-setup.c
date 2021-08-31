@@ -80,7 +80,8 @@ find_bwrap (const char *tools_dir)
 }
 
 static gboolean
-test_bwrap_executable (const char *bwrap_executable)
+test_bwrap_executable (const char *bwrap_executable,
+                       GLogLevelFlags log_level)
 {
   const char *bwrap_test_argv[] =
   {
@@ -109,21 +110,21 @@ test_bwrap_executable (const char *bwrap_executable)
                      &wait_status,
                      error))
     {
-      pv_log_failure ("Cannot run %s: %s",
-                      bwrap_executable, local_error->message);
+      g_log (G_LOG_DOMAIN, log_level, "Cannot run %s: %s",
+             bwrap_executable, local_error->message);
       g_clear_error (&local_error);
       return FALSE;
     }
   else if (wait_status != 0)
     {
-      pv_log_failure ("Cannot run %s: wait status %d",
-                      bwrap_executable, wait_status);
+      g_log (G_LOG_DOMAIN, log_level, "Cannot run %s: wait status %d",
+             bwrap_executable, wait_status);
 
       if (child_stdout != NULL && child_stdout[0] != '\0')
-        pv_log_failure ("Output:\n%s", child_stdout);
+        g_log (G_LOG_DOMAIN, log_level, "Output:\n%s", child_stdout);
 
       if (child_stderr != NULL && child_stderr[0] != '\0')
-        pv_log_failure ("Diagnostic output:\n%s", child_stderr);
+        g_log (G_LOG_DOMAIN, log_level, "Diagnostic output:\n%s", child_stderr);
 
       return FALSE;
     }
@@ -155,7 +156,7 @@ pv_wrap_check_bwrap (const char *tools_dir,
        * right one. */
       return g_steal_pointer (&bwrap_executable);
     }
-  else if (test_bwrap_executable (bwrap_executable))
+  else if (test_bwrap_executable (bwrap_executable, PV_LOG_LEVEL_FAILURE))
     {
       return g_steal_pointer (&bwrap_executable);
     }

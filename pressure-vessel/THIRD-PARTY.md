@@ -11,6 +11,11 @@ which is licensed under [LGPL-2.1-or-later][]. Complete source code can
 be obtained from the same place as pressure-vessel, or from
 <https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
+pressure-vessel includes bubblewrap (bwrap), which is licensed under
+[LGPL-2.0-or-later][]. Complete source code can
+be obtained from the same place as pressure-vessel, or from
+<https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
+
 pressure-vessel incorporates code from GNOME libglnx, variously licensed
 under [LGPL-2.0-or-later][] and [LGPL-2.1-or-later][].
 Complete source code can be obtained from the same place as
@@ -30,8 +35,6 @@ or from <https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 Binary releases of pressure-vessel include the following third-party
 programs and libraries:
-
-- bubblewrap: [LGPL-2.0-or-later][]. See bubblewrap.txt.
 
 - libblkid.so.1, libmount.so.1 from util-linux: [LGPL-2.1-or-later][].
   See libblkid1.txt, libmount1.txt.

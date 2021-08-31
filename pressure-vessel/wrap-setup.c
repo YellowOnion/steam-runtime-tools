@@ -146,7 +146,7 @@ pv_wrap_check_bwrap (const char *tools_dir,
       return g_strdup (tmp);
     }
 
-  local_bwrap = g_build_filename (tools_dir, "bwrap", NULL);
+  local_bwrap = g_build_filename (tools_dir, "pv-bwrap", NULL);
 
   /* If our local copy works, use it. If not, keep relatively quiet
    * about it for now - we might need to use a setuid system copy, for

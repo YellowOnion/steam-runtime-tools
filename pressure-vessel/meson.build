@@ -284,6 +284,23 @@ executable(
   install_dir : pv_bindir,
 )
 
+# bubblewrap doesn't currently have a Meson build system, so instead
+# of building it as a subproject, we build our own source file that
+# #includes everything we need from it.
+executable(
+  'pv-bwrap',
+  'bwrap-main.c',
+  c_args : [
+    '-DPACKAGE_STRING="modified bubblewrap from ' + meson.project_name() + ' ' + meson.project_version() + '"',
+  ],
+  dependencies: [libcap_dep, libselinux_dep],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : pv_bindir,
+  build_rpath : pv_rpath,
+  install_rpath : pv_rpath,
+)
+
 if get_option('srcdir') != ''
   conf_data = configuration_data()
   conf_data.set('prefix', get_option('prefix'))

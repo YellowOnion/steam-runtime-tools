@@ -81,13 +81,8 @@ DEPENDENCIES = {
     'waffle-utils-multiarch': 'waffle',
     'zlib1g': 'zlib',
 }
-# program to install => binary package
-WRAPPED_PROGRAMS = {
-    'bwrap': 'bubblewrap',
-}
 # same as DEPENDENCIES
 PRIMARY_ARCH_DEPENDENCIES = {
-    'bubblewrap': 'bubblewrap',
     'libblkid1': 'util-linux',
     'libcap2': 'libcap2',
     'libffi6': 'libffi',
@@ -118,6 +113,7 @@ EXECUTABLES = [
     'pressure-vessel-launcher',
     'pressure-vessel-try-setlocale',
     'pressure-vessel-wrap',
+    'pv-bwrap',
     'steam-runtime-system-info',
 ]
 
@@ -454,62 +450,6 @@ def main():
                 install_exe(
                     path,
                     os.path.join(inst_pkglibexecdir, exe)
-                )
-
-        # For bwrap (and possibly other programs in future) we don't have
-        # a relocatable version with a RPATH/RUNPATH, so we wrap a script
-        # around it instead. The script avoids setting LD_LIBRARY_PATH
-        # because that would leak through to the programs invoked by bwrap.
-        for exe, package in WRAPPED_PROGRAMS.items():
-            path = os.path.join(args.prefix, 'bin', exe)
-
-            if not os.path.exists(path):
-                path = '/usr/bin/{}'.format(exe)
-
-            if not os.path.exists(path):
-                v_check_call([
-                    'apt-get',
-                    'download',
-                    package,
-                ], cwd=tmpdir)
-                v_check_call(
-                    'dpkg-deb -x {}_*.deb build-relocatable'.format(
-                        quote(package),
-                    ),
-                    cwd=tmpdir,
-                    shell=True,
-                )
-                path = '{}/build-relocatable/usr/bin/{}'.format(tmpdir, exe)
-
-            for arch in ARCHS:
-                if arch.name != primary_architecture:
-                    continue
-
-                install_exe(
-                    path,
-                    os.path.join(installation, 'bin', exe + '.bin'),
-                )
-
-                with open(
-                    os.path.join(tmpdir, 'build-relocatable', arch.name, exe),
-                    'w',
-                ) as writer:
-                    writer.write('#!/bin/sh\n')
-                    writer.write('set -eu\n')
-                    writer.write('here="$(dirname "$0")"\n')
-                    writer.write(
-                        'exec ${{RELOCATABLE_INSTALL_WRAPPER-}} {} '
-                        '--library-path "$here"/../lib/{} '
-                        '"$here"/{}.bin "$@"\n'.format(
-                            quote(arch.ld_so),
-                            quote(arch.multiarch),
-                            quote(exe),
-                        )
-                    )
-
-                install_exe(
-                    os.path.join(tmpdir, 'build-relocatable', arch.name, exe),
-                    os.path.join(installation, 'bin', exe),
                 )
 
         source_to_download = set()      # type: typing.Set[str]

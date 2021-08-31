@@ -115,6 +115,7 @@ test_bwrap_executable (const char *bwrap_executable,
     }
   else
     {
+      g_debug ("Successfully ran: %s --bind / / true", bwrap_executable);
       return TRUE;
     }
 }

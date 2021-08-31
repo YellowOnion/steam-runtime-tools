@@ -137,7 +137,10 @@ pv_wrap_check_bwrap (const char *tools_dir,
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
 
-  tmp = g_getenv ("BWRAP");
+  tmp = g_getenv ("PRESSURE_VESSEL_BWRAP");
+
+  if (tmp == NULL)
+    tmp = g_getenv ("BWRAP");
 
   if (tmp != NULL)
     {

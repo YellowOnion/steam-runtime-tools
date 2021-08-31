@@ -119,9 +119,9 @@ test_bwrap_executable (const char *bwrap_executable,
     }
 }
 
-gchar *
-pv_wrap_check_bwrap (const char *tools_dir,
-                     gboolean only_prepare)
+static gchar *
+check_bwrap (const char *tools_dir,
+             gboolean only_prepare)
 {
   g_autofree gchar *local_bwrap = NULL;
   g_autofree gchar *system_bwrap = NULL;
@@ -175,6 +175,24 @@ pv_wrap_check_bwrap (const char *tools_dir,
     }
 
   return NULL;
+}
+
+gchar *
+pv_wrap_check_bwrap (const char *tools_dir,
+                     gboolean only_prepare)
+{
+  g_autofree gchar *bwrap = check_bwrap (tools_dir, only_prepare);
+  const char *argv[] = { NULL, "--version", NULL };
+
+  if (bwrap == NULL)
+    return NULL;
+
+  /* We're just running this so that the output ends up in the
+   * debug log, so it's OK that the exit status and stdout are ignored. */
+  argv[0] = bwrap;
+  pv_run_sync (argv, NULL, NULL, NULL, NULL);
+
+  return g_steal_pointer (&bwrap);
 }
 
 /*

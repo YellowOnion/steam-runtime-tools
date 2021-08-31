@@ -391,6 +391,8 @@ autopkgtest:
             debian/tmp/artifacts/build/pressure-vessel-libs*.deb \
             debian/tmp/artifacts/build/steam-runtime-tools-bin_*_amd64.deb \
             debian/tmp/artifacts/build/steam-runtime-tools-bin-dbgsym_*_amd64.*deb \
+            debian/tmp/artifacts/build/steam-runtime-tools-minimal_*_amd64.deb \
+            debian/tmp/artifacts/build/steam-runtime-tools-minimal-dbgsym_*_amd64.*deb \
             ${NULL+}
             apt-get -y -f install
 

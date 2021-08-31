@@ -79,13 +79,9 @@ find_bwrap (const char *tools_dir)
   return NULL;
 }
 
-gchar *
-pv_wrap_check_bwrap (const char *tools_dir,
-                     gboolean only_prepare)
+static gboolean
+test_bwrap_executable (const char *bwrap_executable)
 {
-  g_autoptr(GError) local_error = NULL;
-  GError **error = &local_error;
-  g_autofree gchar *bwrap_executable = NULL;
   const char *bwrap_test_argv[] =
   {
     NULL,
@@ -93,6 +89,55 @@ pv_wrap_check_bwrap (const char *tools_dir,
     "true",
     NULL
   };
+  int wait_status;
+  g_autofree gchar *child_stdout = NULL;
+  g_autofree gchar *child_stderr = NULL;
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+
+  bwrap_test_argv[0] = bwrap_executable;
+
+  /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
+   * see flatpak_close_fds_workaround */
+  if (!g_spawn_sync (NULL,  /* cwd */
+                     (gchar **) bwrap_test_argv,
+                     NULL,  /* environ */
+                     G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                     flatpak_bwrap_child_setup_cb, NULL,
+                     &child_stdout,
+                     &child_stderr,
+                     &wait_status,
+                     error))
+    {
+      pv_log_failure ("Cannot run %s: %s",
+                      bwrap_executable, local_error->message);
+      g_clear_error (&local_error);
+      return FALSE;
+    }
+  else if (wait_status != 0)
+    {
+      pv_log_failure ("Cannot run %s: wait status %d",
+                      bwrap_executable, wait_status);
+
+      if (child_stdout != NULL && child_stdout[0] != '\0')
+        pv_log_failure ("Output:\n%s", child_stdout);
+
+      if (child_stderr != NULL && child_stderr[0] != '\0')
+        pv_log_failure ("Diagnostic output:\n%s", child_stderr);
+
+      return FALSE;
+    }
+  else
+    {
+      return TRUE;
+    }
+}
+
+gchar *
+pv_wrap_check_bwrap (const char *tools_dir,
+                     gboolean only_prepare)
+{
+  g_autofree gchar *bwrap_executable = NULL;
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
 
@@ -110,43 +155,9 @@ pv_wrap_check_bwrap (const char *tools_dir,
        * right one. */
       return g_steal_pointer (&bwrap_executable);
     }
-  else
+  else if (test_bwrap_executable (bwrap_executable))
     {
-      int wait_status;
-      g_autofree gchar *child_stdout = NULL;
-      g_autofree gchar *child_stderr = NULL;
-
-      bwrap_test_argv[0] = bwrap_executable;
-
-      /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-       * see flatpak_close_fds_workaround */
-      if (!g_spawn_sync (NULL,  /* cwd */
-                         (gchar **) bwrap_test_argv,
-                         NULL,  /* environ */
-                         G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                         flatpak_bwrap_child_setup_cb, NULL,
-                         &child_stdout,
-                         &child_stderr,
-                         &wait_status,
-                         error))
-        {
-          pv_log_failure ("Cannot run bwrap: %s", local_error->message);
-          g_clear_error (&local_error);
-        }
-      else if (wait_status != 0)
-        {
-          pv_log_failure ("Cannot run bwrap: wait status %d", wait_status);
-
-          if (child_stdout != NULL && child_stdout[0] != '\0')
-            pv_log_failure ("Output:\n%s", child_stdout);
-
-          if (child_stderr != NULL && child_stderr[0] != '\0')
-            pv_log_failure ("Diagnostic output:\n%s", child_stderr);
-        }
-      else
-        {
-          return g_steal_pointer (&bwrap_executable);
-        }
+      return g_steal_pointer (&bwrap_executable);
     }
 
   return NULL;

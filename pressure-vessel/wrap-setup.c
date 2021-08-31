@@ -184,6 +184,7 @@ pv_wrap_check_bwrap (const char *tools_dir,
 {
   g_autofree gchar *bwrap = check_bwrap (tools_dir, only_prepare);
   const char *argv[] = { NULL, "--version", NULL };
+  struct stat statbuf;
 
   if (bwrap == NULL)
     return NULL;
@@ -192,6 +193,16 @@ pv_wrap_check_bwrap (const char *tools_dir,
    * debug log, so it's OK that the exit status and stdout are ignored. */
   argv[0] = bwrap;
   pv_run_sync (argv, NULL, NULL, NULL, NULL);
+
+  if (stat (bwrap, &statbuf) < 0)
+    {
+      g_warning ("stat(%s): %s", bwrap, g_strerror (errno));
+    }
+  else if (statbuf.st_mode & S_ISUID)
+    {
+      g_info ("Using setuid bubblewrap executable %s (permissions: %o)",
+              bwrap, statbuf.st_mode & 07777);
+    }
 
   return g_steal_pointer (&bwrap);
 }

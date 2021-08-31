@@ -34,7 +34,7 @@
 #include "utils.h"
 
 static gchar *
-find_bwrap (const char *tools_dir)
+find_system_bwrap (void)
 {
   static const char * const flatpak_libexecdirs[] =
   {
@@ -44,8 +44,6 @@ find_bwrap (const char *tools_dir)
   };
   g_autofree gchar *candidate = NULL;
   gsize i;
-
-  g_return_val_if_fail (tools_dir != NULL, NULL);
 
   candidate = g_find_program_in_path ("bwrap");
 
@@ -62,13 +60,6 @@ find_bwrap (const char *tools_dir)
       else
         g_clear_pointer (&candidate, g_free);
     }
-
-  candidate = g_build_filename (tools_dir, "bwrap", NULL);
-
-  if (g_file_test (candidate, G_FILE_TEST_IS_EXECUTABLE))
-    return g_steal_pointer (&candidate);
-  else
-    g_clear_pointer (&candidate, g_free);
 
   return NULL;
 }
@@ -132,7 +123,8 @@ gchar *
 pv_wrap_check_bwrap (const char *tools_dir,
                      gboolean only_prepare)
 {
-  g_autofree gchar *bwrap_executable = NULL;
+  g_autofree gchar *local_bwrap = NULL;
+  g_autofree gchar *system_bwrap = NULL;
   const char *tmp;
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
@@ -154,23 +146,32 @@ pv_wrap_check_bwrap (const char *tools_dir,
       return g_strdup (tmp);
     }
 
-  bwrap_executable = find_bwrap (tools_dir);
+  local_bwrap = g_build_filename (tools_dir, "bwrap", NULL);
 
-  if (bwrap_executable == NULL)
+  /* If our local copy works, use it. If not, keep relatively quiet
+   * about it for now - we might need to use a setuid system copy, for
+   * example on Debian 10, RHEL 7, Arch linux-hardened kernel. */
+  if (only_prepare || test_bwrap_executable (local_bwrap, G_LOG_LEVEL_DEBUG))
+    return g_steal_pointer (&local_bwrap);
+
+  g_assert (!only_prepare);
+  system_bwrap = find_system_bwrap ();
+
+  /* Try the system copy: if it exists, then it should work, so print failure
+   * messages if it doesn't work. */
+  if (system_bwrap != NULL
+      && test_bwrap_executable (system_bwrap, PV_LOG_LEVEL_FAILURE))
+    return g_steal_pointer (&system_bwrap);
+
+  /* If there was no system copy, try the local copy again. We expect
+   * this to fail, and are really just doing this to print error messages
+   * at the appropriate severity - but if it somehow works, great,
+   * I suppose? */
+  if (test_bwrap_executable (local_bwrap, PV_LOG_LEVEL_FAILURE))
     {
-      pv_log_failure ("Cannot find bwrap");
-    }
-  else if (only_prepare)
-    {
-      /* With --only-prepare we don't necessarily expect to be able to run
-       * it anyway (we are probably in a Docker container that doesn't allow
-       * creation of nested user namespaces), so just assume that it's the
-       * right one. */
-      return g_steal_pointer (&bwrap_executable);
-    }
-  else if (test_bwrap_executable (bwrap_executable, PV_LOG_LEVEL_FAILURE))
-    {
-      return g_steal_pointer (&bwrap_executable);
+      g_warning ("Local bwrap executable didn't work first time but "
+                 "worked second time?");
+      return g_steal_pointer (&local_bwrap);
     }
 
   return NULL;

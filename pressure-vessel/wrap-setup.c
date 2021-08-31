@@ -42,16 +42,10 @@ find_bwrap (const char *tools_dir)
     "/usr/libexec",
     "/usr/lib/flatpak"
   };
-  const char *tmp;
   g_autofree gchar *candidate = NULL;
   gsize i;
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
-
-  tmp = g_getenv ("BWRAP");
-
-  if (tmp != NULL)
-    return g_strdup (tmp);
 
   candidate = g_find_program_in_path ("bwrap");
 
@@ -139,8 +133,23 @@ pv_wrap_check_bwrap (const char *tools_dir,
                      gboolean only_prepare)
 {
   g_autofree gchar *bwrap_executable = NULL;
+  const char *tmp;
 
   g_return_val_if_fail (tools_dir != NULL, NULL);
+
+  tmp = g_getenv ("BWRAP");
+
+  if (tmp != NULL)
+    {
+      /* If the user specified an environment variable, then we don't
+       * try anything else. */
+      g_info ("Using bubblewrap from environment: %s", tmp);
+
+      if (!only_prepare && !test_bwrap_executable (tmp, PV_LOG_LEVEL_FAILURE))
+        return NULL;
+
+      return g_strdup (tmp);
+    }
 
   bwrap_executable = find_bwrap (tools_dir);
 

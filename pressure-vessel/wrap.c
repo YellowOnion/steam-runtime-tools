@@ -92,125 +92,6 @@ find_executable_dir (GError **error)
   return g_path_get_dirname (target);
 }
 
-static gchar *
-find_bwrap (const char *tools_dir)
-{
-  static const char * const flatpak_libexecdirs[] =
-  {
-    "/usr/local/libexec",
-    "/usr/libexec",
-    "/usr/lib/flatpak"
-  };
-  const char *tmp;
-  g_autofree gchar *candidate = NULL;
-  gsize i;
-
-  g_return_val_if_fail (tools_dir != NULL, NULL);
-
-  tmp = g_getenv ("BWRAP");
-
-  if (tmp != NULL)
-    return g_strdup (tmp);
-
-  candidate = g_find_program_in_path ("bwrap");
-
-  if (candidate != NULL)
-    return g_steal_pointer (&candidate);
-
-  for (i = 0; i < G_N_ELEMENTS (flatpak_libexecdirs); i++)
-    {
-      candidate = g_build_filename (flatpak_libexecdirs[i],
-                                    "flatpak-bwrap", NULL);
-
-      if (g_file_test (candidate, G_FILE_TEST_IS_EXECUTABLE))
-        return g_steal_pointer (&candidate);
-      else
-        g_clear_pointer (&candidate, g_free);
-    }
-
-  candidate = g_build_filename (tools_dir, "bwrap", NULL);
-
-  if (g_file_test (candidate, G_FILE_TEST_IS_EXECUTABLE))
-    return g_steal_pointer (&candidate);
-  else
-    g_clear_pointer (&candidate, g_free);
-
-  return NULL;
-}
-
-static gchar *
-check_bwrap (const char *tools_dir,
-             gboolean only_prepare)
-{
-  g_autoptr(GError) local_error = NULL;
-  GError **error = &local_error;
-  g_autofree gchar *bwrap_executable = NULL;
-  const char *bwrap_test_argv[] =
-  {
-    NULL,
-    "--bind", "/", "/",
-    "true",
-    NULL
-  };
-
-  g_return_val_if_fail (tools_dir != NULL, NULL);
-
-  bwrap_executable = find_bwrap (tools_dir);
-
-  if (bwrap_executable == NULL)
-    {
-      pv_log_failure ("Cannot find bwrap");
-    }
-  else if (only_prepare)
-    {
-      /* With --only-prepare we don't necessarily expect to be able to run
-       * it anyway (we are probably in a Docker container that doesn't allow
-       * creation of nested user namespaces), so just assume that it's the
-       * right one. */
-      return g_steal_pointer (&bwrap_executable);
-    }
-  else
-    {
-      int wait_status;
-      g_autofree gchar *child_stdout = NULL;
-      g_autofree gchar *child_stderr = NULL;
-
-      bwrap_test_argv[0] = bwrap_executable;
-
-      /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
-       * see flatpak_close_fds_workaround */
-      if (!g_spawn_sync (NULL,  /* cwd */
-                         (gchar **) bwrap_test_argv,
-                         NULL,  /* environ */
-                         G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
-                         flatpak_bwrap_child_setup_cb, NULL,
-                         &child_stdout,
-                         &child_stderr,
-                         &wait_status,
-                         error))
-        {
-          pv_log_failure ("Cannot run bwrap: %s", local_error->message);
-          g_clear_error (&local_error);
-        }
-      else if (wait_status != 0)
-        {
-          pv_log_failure ("Cannot run bwrap: wait status %d", wait_status);
-
-          if (child_stdout != NULL && child_stdout[0] != '\0')
-            pv_log_failure ("Output:\n%s", child_stdout);
-
-          if (child_stderr != NULL && child_stderr[0] != '\0')
-            pv_log_failure ("Diagnostic output:\n%s", child_stderr);
-        }
-      else
-        {
-          return g_steal_pointer (&bwrap_executable);
-        }
-    }
-
-  return NULL;
-}
-
 /* Nvidia Vulkan ray-tracing requires to load the `nvidia_uvm.ko` kernel
  * module, and this is usually done in `libcuda.so.1` by running the setuid
  * binary `nvidia-modprobe`. But when we are inside a container we don't bind
@@ -1764,7 +1645,7 @@ main (int argc,
       g_debug ("Checking for bwrap...");
 
       /* if this fails, it will warn */
-      bwrap_executable = check_bwrap (tools_dir, opt_only_prepare);
+      bwrap_executable = pv_wrap_check_bwrap (tools_dir, opt_only_prepare);
 
       if (bwrap_executable == NULL)
         goto out;

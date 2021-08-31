@@ -23,6 +23,30 @@ Copyright: 2007-2017 Free Software Foundation, Inc.
 License: GPL-3.0-or-later
 
 Files:
+ subprojects/bubblewrap/*
+Copyright:
+ 2016-2017 Alexander Larsson
+ 2017-2021 Colin Walters
+ 2019-2021 Collabora Ltd.
+ 2021 Simon McVittie
+License: LGPL-2.0-or-later
+
+Files:
+ subprojects/bubblewrap/m4/attributes.m4
+Copyright:
+ 2006-2008 Diego Pettenò
+ 2012 Lucas De Marchi
+ 2006-2008 xine project
+License: GPL-2.0-or-later WITH LicenseRef-autoconf-macro-exception
+
+Files:
+ subprojects/bubblewrap/git.mk
+Copyright:
+ 2009 Red Hat, Inc.
+ 2010-2013 Behdad Esfahbod
+License: FSFAP
+
+Files:
  subprojects/libcapsule/.gitignore
  subprojects/libcapsule/AUTHORS
  subprojects/libcapsule/data/*

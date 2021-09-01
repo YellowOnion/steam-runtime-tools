@@ -6831,13 +6831,9 @@ load_vulkan_layer_json (const gchar *sysroot,
                                                          error));
     }
 
-  /* At the time of writing the latest layer manifest file version is the
-   * 1.1.2 and forward compatibility is not guaranteed */
-  if (g_strcmp0 (file_format_version, "1.0.0") == 0 ||
-      g_strcmp0 (file_format_version, "1.0.1") == 0 ||
-      g_strcmp0 (file_format_version, "1.1.0") == 0 ||
-      g_strcmp0 (file_format_version, "1.1.1") == 0 ||
-      g_strcmp0 (file_format_version, "1.1.2") == 0)
+  /* At the time of writing the latest layer manifest file version is
+   * 1.2.0 and forward compatibility is not guaranteed */
+  if (strverscmp (file_format_version, "1.2.0") <= 0)
     {
       g_debug ("file_format_version is \"%s\"", file_format_version);
     }

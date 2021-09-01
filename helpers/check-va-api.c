@@ -167,9 +167,9 @@ _do_vaapi (const char *description,
   if (va_status != VA_STATUS_SUCCESS)
     {
       fprintf (stderr, "%s failed: %s (%d)\n", description, vaErrorStr (va_status), va_status);
-      return False;
+      return false;
     }
-  return True;
+  return true;
 }
 
 int

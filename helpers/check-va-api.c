@@ -188,6 +188,7 @@ test_decode_capability (VADisplay va_display,
   VABufferID iq_matrix_buf = VA_INVALID_ID;
   VABufferID slice_param_buf = VA_INVALID_ID;
   VABufferID slice_data_buf = VA_INVALID_ID;
+  VAConfigAttrib conf_attrib;
   void *in_pic_param = NULL;
   void *in_iq_matrix = NULL;
   void *in_slice_param = NULL;
@@ -244,6 +245,15 @@ test_decode_capability (VADisplay va_display,
         break; /* not reached */
     }
 #pragma GCC diagnostic pop
+
+  conf_attrib.type = VAConfigAttribRTFormat;
+  do_vaapi_or_exit (vaGetConfigAttributes(va_display, profile, VAEntrypointVLD,
+                                          &conf_attrib, 1));
+  if ((conf_attrib.value & VA_RT_FORMAT_YUV420) == 0)
+    {
+      fprintf (stderr, "This profile doesn't support the YUV420 format\n");
+      goto out;
+    }
 
   do_vaapi_or_exit (vaCreateConfig (va_display, profile, VAEntrypointVLD,
                                     NULL, 0, &config));

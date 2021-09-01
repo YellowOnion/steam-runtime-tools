@@ -174,7 +174,6 @@ _do_vaapi (const char *description,
 
 static bool
 test_decode_capability (VADisplay va_display,
-                        VAConfigID config,
                         VAProfile profile,
                         int width,
                         int height,
@@ -183,6 +182,7 @@ test_decode_capability (VADisplay va_display,
                         VASurfaceID *surfaces,
                         int surfaces_count)
 {
+  VAConfigID config = VA_INVALID_ID;
   VAContextID context = VA_INVALID_ID;
   VABufferID pic_param_buf = VA_INVALID_ID;
   VABufferID iq_matrix_buf = VA_INVALID_ID;
@@ -245,6 +245,9 @@ test_decode_capability (VADisplay va_display,
     }
 #pragma GCC diagnostic pop
 
+  do_vaapi_or_exit (vaCreateConfig (va_display, profile, VAEntrypointVLD,
+                                    NULL, 0, &config));
+
   do_vaapi_or_exit (vaCreateBuffer (va_display, context,
                                     VAPictureParameterBufferType,
                                     in_pic_param_size, 1, in_pic_param,
@@ -286,6 +289,8 @@ test_decode_capability (VADisplay va_display,
 out:
   if (context != VA_INVALID_ID)
     vaDestroyContext (va_display, context);
+  if (config != VA_INVALID_ID)
+    vaDestroyConfig(va_display, config);
   if (pic_param_buf != VA_INVALID_ID)
     vaDestroyBuffer (va_display, pic_param_buf);
   if (iq_matrix_buf != VA_INVALID_ID)
@@ -300,7 +305,6 @@ out:
 
 static bool
 test_pp_capability (VADisplay va_display,
-                    VAConfigID config,
                     int width,
                     int height,
                     VARectangle input_region,
@@ -309,6 +313,7 @@ test_pp_capability (VADisplay va_display,
                     int surfaces_count)
 {
   bool ret = false;
+  VAConfigID config = VA_INVALID_ID;
   VAContextID context = VA_INVALID_ID;
   VABufferID misc_buf_id = VA_INVALID_ID;
   VABufferID pipeline_param_buf_id = VA_INVALID_ID;
@@ -319,6 +324,9 @@ test_pp_capability (VADisplay va_display,
 #define do_vaapi_or_exit(expr) if (! _do_vaapi (#expr, expr)) goto out;
 
   fprintf (stderr, "Testing post-processing with VAProfileNone\n");
+
+  do_vaapi_or_exit (vaCreateConfig (va_display, VAProfileNone, VAEntrypointVideoProc,
+                                    NULL, 0, &config));
 
   do_vaapi_or_exit (vaCreateContext (va_display, config, width, height, 0,
                                      surfaces, surfaces_count, &context));
@@ -361,6 +369,8 @@ test_pp_capability (VADisplay va_display,
   ret = true;
 
 out:
+  if (config != VA_INVALID_ID)
+    vaDestroyConfig(va_display, config);
   if (pipeline_param_buf_id != VA_INVALID_ID)
     vaDestroyBuffer (va_display, pipeline_param_buf_id);
   if (misc_buf_id != VA_INVALID_ID)
@@ -395,7 +405,6 @@ main (int argc,
   VASurfaceID *surfaces = NULL;
   VAImageFormat image_format;
   VAProfile *profiles = NULL;
-  VAConfigID config = VA_INVALID_ID;
   VARectangle input_region;
   VARectangle output_region;
 
@@ -523,44 +532,21 @@ main (int argc,
 
   /* We assume to have at least one of VAProfileH264Main, VAProfileMPEG2Simple
    * or VAProfileNone */
-  if (_do_vaapi ("Testing ability to decode VAProfileH264Main",
-                 vaCreateConfig (va_display, VAProfileH264Main,
-                                 VAEntrypointVLD, NULL, 0, &config)))
-    {
-      if (!test_decode_capability (va_display, config, VAProfileH264Main, width, height,
+  if (test_decode_capability (va_display, VAProfileH264Main, width, height,
+                              input_region, output_region, surfaces, surfaces_count))
+    ret = 0;
+  else if (test_decode_capability (va_display, VAProfileMPEG2Simple, width, height,
                                    input_region, output_region, surfaces, surfaces_count))
-        goto out;
-    }
-  else if (_do_vaapi ("Testing ability to decode VAProfileMPEG2Simple",
-                      vaCreateConfig (va_display, VAProfileMPEG2Simple,
-                                      VAEntrypointVLD, NULL, 0, &config)))
-    {
-      if (!test_decode_capability (va_display, config, VAProfileMPEG2Simple, width, height,
-                                   input_region, output_region, surfaces, surfaces_count))
-        goto out;
-    }
-  else if (_do_vaapi ("Testing ability to use VAProfileNone video pre/post processing",
-                      vaCreateConfig (va_display, VAProfileNone,
-                                      VAEntrypointVideoProc, NULL, 0, &config)))
-    {
-      if (!test_pp_capability (va_display, config, width, height, input_region,
+    ret = 0;
+  else if (test_pp_capability (va_display, width, height, input_region,
                                output_region, surfaces, surfaces_count))
-        goto out;
-    }
-  else
-    {
-      goto out;
-    }
-
-  ret = 0;
+    ret = 0;
 
 out:
   if (va_display)
     {
       if (img.image_id != VA_INVALID_ID)
         vaDestroyImage (va_display, img.image_id);
-      if (config != VA_INVALID_ID)
-        vaDestroyConfig(va_display, config);
       if (surfaces)
         vaDestroySurfaces (va_display, surfaces, surfaces_count);
 

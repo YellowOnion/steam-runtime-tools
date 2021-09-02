@@ -1922,10 +1922,8 @@ flatpak_run_add_font_path_args (FlatpakBwrap *bwrap)
     g_warning ("Unable to add fontconfig data snippet");
 }
 
-#if 0
-
-static void
-add_icon_path_args (FlatpakBwrap *bwrap)
+void
+flatpak_run_add_icon_path_args (FlatpakBwrap *bwrap)
 {
   g_autofree gchar *user_icons_path = NULL;
   g_autoptr(GFile) user_icons = NULL;
@@ -1946,6 +1944,8 @@ add_icon_path_args (FlatpakBwrap *bwrap)
                               NULL);
     }
 }
+
+#if 0
 
 FlatpakContext *
 flatpak_app_compute_permissions (GKeyFile *app_metadata,

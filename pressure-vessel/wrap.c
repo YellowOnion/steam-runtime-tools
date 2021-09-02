@@ -2177,8 +2177,11 @@ main (int argc,
 
   if (bwrap != NULL)
     pv_wrap_share_sockets (bwrap, container_env,
+                           original_environ,
                            (runtime != NULL),
                            is_flatpak_env);
+  else if (flatpak_subsandbox != NULL)
+    pv_wrap_set_icons_env_vars (container_env, original_environ);
 
   if (runtime != NULL)
     {

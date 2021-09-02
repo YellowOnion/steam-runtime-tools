@@ -28,7 +28,8 @@
 #include <glib/gstdio.h>
 
 void
-pv_bwrap_wrap_in_xterm (FlatpakBwrap *wrapped_command)
+pv_bwrap_wrap_in_xterm (FlatpakBwrap *wrapped_command,
+                        const char *xcursor_path)
 {
   g_return_if_fail (wrapped_command != NULL);
 
@@ -37,6 +38,13 @@ pv_bwrap_wrap_in_xterm (FlatpakBwrap *wrapped_command)
                           /* Original command will go here and become
                            * the argv of xterm -e */
                           NULL);
+
+  if (xcursor_path != NULL)
+    {
+      /* xterm unsets XCURSOR_PATH. Reinstate it for the contained shell. */
+      flatpak_bwrap_add_arg (wrapped_command, "env");
+      flatpak_bwrap_add_arg_printf (wrapped_command, "XCURSOR_PATH=%s", xcursor_path);
+    }
 }
 
 void

@@ -43,7 +43,8 @@ typedef enum
   PV_TERMINAL_XTERM,
 } PvTerminal;
 
-void pv_bwrap_wrap_in_xterm (FlatpakBwrap *wrapped_command);
+void pv_bwrap_wrap_in_xterm (FlatpakBwrap *wrapped_command,
+                             const char *xcursor_path);
 void pv_bwrap_wrap_interactive (FlatpakBwrap *wrapped_command,
                                 PvShell shell);
 gboolean pv_bwrap_wrap_tty (FlatpakBwrap *wrapped_command,

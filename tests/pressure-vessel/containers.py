@@ -214,6 +214,7 @@ class TestContainers(BaseTest):
 
             for exe in (
                 'pressure-vessel-wrap',
+                'pv-bwrap',
             ):
                 cls.copy2(
                     os.path.join(cls.top_builddir, 'pressure-vessel', exe),

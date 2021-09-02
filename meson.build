@@ -199,8 +199,29 @@ add_project_link_arguments(
   language : 'c',
 )
 
+libselinux_dep = dependency(
+  'libselinux',
+  version : '>= 2.1.9',
+  required : false,
+)
+libcap_dep = dependency(
+  'libcap',
+  required : false,
+)
+if not libcap_dep.found()
+  libcap_dep = c_compiler.find_library(
+    'cap',
+    required : get_option('pressure_vessel') and get_option('bin'),
+  )
+endif
+
 conf_data = configuration_data()
 conf_data.set_quoted('VERSION', version)
+conf_data.set('HAVE_SELINUX', libselinux_dep.found())
+conf_data.set(
+  'HAVE_SELINUX_2_3',
+  libselinux_dep.found() and libselinux_dep.version().version_compare('>=2.3'),
+)
 
 configure_file(
   input : 'config.h.in',

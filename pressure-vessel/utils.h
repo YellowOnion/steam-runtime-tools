@@ -27,17 +27,11 @@
 
 #include <glib.h>
 
+#include "missing.h"
+
 #define DBUS_NAME_DBUS "org.freedesktop.DBus"
 #define DBUS_INTERFACE_DBUS DBUS_NAME_DBUS
 #define DBUS_PATH_DBUS "/org/freedesktop/DBus"
-
-#ifndef PR_GET_CHILD_SUBREAPER
-#define PR_GET_CHILD_SUBREAPER 37
-#endif
-
-#ifndef PR_SET_CHILD_SUBREAPER
-#define PR_SET_CHILD_SUBREAPER 36
-#endif
 
 #define PV_LOG_LEVEL_FAILURE (1 << G_LOG_LEVEL_USER_SHIFT)
 

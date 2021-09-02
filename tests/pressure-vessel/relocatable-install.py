@@ -80,9 +80,7 @@ class TapTest:
 EXES = [
     'pressure-vessel-adverb',
     'pressure-vessel-wrap',
-]
-WRAPPED = [
-    'bwrap',
+    'pv-bwrap',
 ]
 HELPERS = [
     'capsule-capture-libs',
@@ -104,20 +102,11 @@ def isexec(path):
         return False
 
 
-def check_dependencies(test, relocatable_install, path, is_wrapper=False):
+def check_dependencies(test, relocatable_install, path):
     # type: (TapTest, str, str, bool) -> None
 
-    if is_wrapper:
-        argv = [
-            'env',
-            'RELOCATABLE_INSTALL_WRAPPER=env LD_TRACE_LOADED_OBJECTS=1',
-            path,
-        ]
-    else:
-        argv = ['ldd', path]
-
     subproc = subprocess.Popen(
-        argv,
+        ['ldd', path],
         stdout=subprocess.PIPE,
         universal_newlines=True,
     )
@@ -183,7 +172,7 @@ def main():
 
     test = TapTest()
 
-    for exe in EXES + WRAPPED:
+    for exe in EXES:
         path = os.path.join(relocatable_install, 'bin', exe)
 
         if subprocess.call([path, '--help'], stdout=2) == 0:
@@ -194,10 +183,6 @@ def main():
     for exe in EXES:
         path = os.path.join(relocatable_install, 'bin', exe)
         check_dependencies(test, relocatable_install, path)
-
-    for exe in WRAPPED:
-        path = os.path.join(relocatable_install, 'bin', exe)
-        check_dependencies(test, relocatable_install, path, is_wrapper=True)
 
     for basename in HELPERS:
         for multiarch, ld_so in LD_SO:

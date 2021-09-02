@@ -29,6 +29,9 @@
 #include "runtime.h"
 #include "wrap-pipewire.h"
 
+gchar *pv_wrap_check_bwrap (const char *tools_dir,
+                            gboolean only_prepare);
+
 void pv_wrap_share_sockets (FlatpakBwrap *bwrap,
                             PvEnviron *container_env,
                             gboolean using_a_runtime,

@@ -167,9 +167,228 @@ _do_vaapi (const char *description,
   if (va_status != VA_STATUS_SUCCESS)
     {
       fprintf (stderr, "%s failed: %s (%d)\n", description, vaErrorStr (va_status), va_status);
-      return False;
+      return false;
     }
-  return True;
+  return true;
+}
+
+static bool
+test_decode_capability (VADisplay va_display,
+                        VAProfile profile,
+                        int width,
+                        int height,
+                        VARectangle input_region,
+                        VARectangle output_region,
+                        VASurfaceID *surfaces,
+                        int surfaces_count)
+{
+  VAConfigID config = VA_INVALID_ID;
+  VAContextID context = VA_INVALID_ID;
+  VABufferID pic_param_buf = VA_INVALID_ID;
+  VABufferID iq_matrix_buf = VA_INVALID_ID;
+  VABufferID slice_param_buf = VA_INVALID_ID;
+  VABufferID slice_data_buf = VA_INVALID_ID;
+  VAConfigAttrib conf_attrib;
+  void *in_pic_param = NULL;
+  void *in_iq_matrix = NULL;
+  void *in_slice_param = NULL;
+  void *in_clip = NULL;
+  unsigned int in_pic_param_size = 0;
+  unsigned int in_iq_matrix_size = 0;
+  unsigned int in_slice_param_size = 0;
+  unsigned int in_clip_size = 0;
+  bool ret = false;
+
+#define do_vaapi_or_exit(expr) if (! _do_vaapi (#expr, expr)) goto out;
+
+/* There are a lot of values in VAProfile, and we just support
+ * VAProfileH264Main and VAProfileMPEG2Simple. There is no need to
+ * list them all next to our "default". */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch-enum"
+  switch (profile)
+    {
+      case VAProfileH264Main:
+        fprintf (stderr, "Testing H264Main decoding\n");
+
+        in_pic_param = &pic_param_h264;
+        in_pic_param_size = sizeof (pic_param_h264);
+
+        in_iq_matrix = &iq_matrix_h264;
+        in_iq_matrix_size = sizeof (iq_matrix_h264);
+
+        in_slice_param = &slice_param_h264;
+        in_slice_param_size = sizeof (slice_param_h264);
+
+        in_clip = clip_h264;
+        in_clip_size = CLIP_SIZE_H264;
+        break;
+
+      case VAProfileMPEG2Simple:
+        fprintf (stderr, "Testing MPEG2Simple decoding\n");
+
+        in_pic_param = &pic_param_mpeg2;
+        in_pic_param_size = sizeof (pic_param_mpeg2);
+
+        in_iq_matrix = &iq_matrix_mpeg2;
+        in_iq_matrix_size = sizeof (iq_matrix_mpeg2);
+
+        in_slice_param = &slice_param_mpeg2;
+        in_slice_param_size = sizeof (slice_param_mpeg2);
+
+        in_clip = clip_mpeg2;
+        in_clip_size = CLIP_SIZE_MPEG2;
+        break;
+
+      default:
+        exit (1);
+        break; /* not reached */
+    }
+#pragma GCC diagnostic pop
+
+  conf_attrib.type = VAConfigAttribRTFormat;
+  do_vaapi_or_exit (vaGetConfigAttributes(va_display, profile, VAEntrypointVLD,
+                                          &conf_attrib, 1));
+  if ((conf_attrib.value & VA_RT_FORMAT_YUV420) == 0)
+    {
+      fprintf (stderr, "This profile doesn't support the YUV420 format\n");
+      goto out;
+    }
+
+  do_vaapi_or_exit (vaCreateConfig (va_display, profile, VAEntrypointVLD,
+                                    NULL, 0, &config));
+
+  do_vaapi_or_exit (vaCreateBuffer (va_display, context,
+                                    VAPictureParameterBufferType,
+                                    in_pic_param_size, 1, in_pic_param,
+                                    &pic_param_buf));
+
+  do_vaapi_or_exit (vaCreateBuffer (va_display, context,
+                                    VAIQMatrixBufferType,
+                                    in_iq_matrix_size, 1, in_iq_matrix,
+                                    &iq_matrix_buf));
+
+  do_vaapi_or_exit (vaCreateBuffer (va_display, context,
+                                    VASliceParameterBufferType,
+                                    in_slice_param_size, 1, in_slice_param,
+                                    &slice_param_buf));
+
+  do_vaapi_or_exit (vaCreateBuffer (va_display, context,
+                                    VASliceDataBufferType,
+                                    in_clip_size, 1, in_clip,
+                                    &slice_data_buf));
+
+  do_vaapi_or_exit (vaCreateContext (va_display, config, width, height,
+                                     VA_PROGRESSIVE, surfaces,
+                                     surfaces_count, &context));
+
+  do_vaapi_or_exit (vaBeginPicture (va_display, context, surfaces[1]));
+  /* Send the buffers to the server */
+  do_vaapi_or_exit (vaRenderPicture (va_display, context, &pic_param_buf, 1));
+  do_vaapi_or_exit (vaRenderPicture (va_display, context, &iq_matrix_buf, 1));
+  do_vaapi_or_exit (vaRenderPicture (va_display, context, &slice_param_buf, 1));
+  do_vaapi_or_exit (vaRenderPicture (va_display, context, &slice_data_buf, 1));
+  /* We are done with the sending, now the server will start to process all
+  * pending operations */
+  do_vaapi_or_exit (vaEndPicture (va_display, context));
+  /* Blocks until all pending operations ends */
+  do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
+
+  ret = true;
+
+out:
+  if (context != VA_INVALID_ID)
+    vaDestroyContext (va_display, context);
+  if (config != VA_INVALID_ID)
+    vaDestroyConfig(va_display, config);
+  if (pic_param_buf != VA_INVALID_ID)
+    vaDestroyBuffer (va_display, pic_param_buf);
+  if (iq_matrix_buf != VA_INVALID_ID)
+    vaDestroyBuffer (va_display, iq_matrix_buf);
+  if (slice_param_buf != VA_INVALID_ID)
+    vaDestroyBuffer (va_display, slice_param_buf);
+  if (slice_data_buf != VA_INVALID_ID)
+    vaDestroyBuffer (va_display, slice_data_buf);
+
+  return ret;
+}
+
+static bool
+test_pp_capability (VADisplay va_display,
+                    int width,
+                    int height,
+                    VARectangle input_region,
+                    VARectangle output_region,
+                    VASurfaceID *surfaces,
+                    int surfaces_count)
+{
+  bool ret = false;
+  VAConfigID config = VA_INVALID_ID;
+  VAContextID context = VA_INVALID_ID;
+  VABufferID misc_buf_id = VA_INVALID_ID;
+  VABufferID pipeline_param_buf_id = VA_INVALID_ID;
+  VAEncMiscParameterBuffer *misc_param_buffer;
+  VAEncMiscParameterBufferQualityLevel *buffer_quality_level;
+  VAProcPipelineParameterBuffer pipeline_param_buf;
+
+#define do_vaapi_or_exit(expr) if (! _do_vaapi (#expr, expr)) goto out;
+
+  fprintf (stderr, "Testing post-processing with VAProfileNone\n");
+
+  do_vaapi_or_exit (vaCreateConfig (va_display, VAProfileNone, VAEntrypointVideoProc,
+                                    NULL, 0, &config));
+
+  do_vaapi_or_exit (vaCreateContext (va_display, config, width, height, 0,
+                                     surfaces, surfaces_count, &context));
+
+  /* Try to render a picture, tuning its encode quality */
+  do_vaapi_or_exit (vaCreateBuffer (va_display, context,
+                                    VAEncMiscParameterBufferType,
+                                    sizeof (VAEncMiscParameterBuffer) +
+                                      sizeof (VAEncMiscParameterBufferQualityLevel),
+                                    1, NULL, &misc_buf_id));
+  do_vaapi_or_exit (vaMapBuffer (va_display, misc_buf_id, (void **)&misc_param_buffer));
+  misc_param_buffer->type = VAEncMiscParameterTypeQualityLevel;
+  buffer_quality_level = (VAEncMiscParameterBufferQualityLevel *)misc_param_buffer->data;
+  /* 1 is always the highest possible quality level, we don't need to check
+   * VAConfigAttribEncQualityRange */
+  buffer_quality_level->quality_level = 1;
+  do_vaapi_or_exit (vaUnmapBuffer (va_display, misc_buf_id));
+  do_vaapi_or_exit (vaBeginPicture (va_display, context, surfaces[1]));
+  do_vaapi_or_exit (vaRenderPicture (va_display, context, &misc_buf_id, 1));
+  do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
+
+  /* Try to render a picture from the first surface to the second,
+   * applying a crop to it */
+  memset (&pipeline_param_buf, 0, sizeof (pipeline_param_buf));
+  pipeline_param_buf.surface = surfaces[0];
+  pipeline_param_buf.surface_region = &input_region;
+  pipeline_param_buf.output_region = &output_region;
+  /* Set a green background */
+  pipeline_param_buf.output_background_color = 0xff00ff00;
+  pipeline_param_buf.output_color_standard = VAProcColorStandardNone;
+  do_vaapi_or_exit (vaCreateBuffer (va_display, context,
+                                    VAProcPipelineParameterBufferType,
+                                    sizeof (pipeline_param_buf), 1,
+                                    &pipeline_param_buf, &pipeline_param_buf_id));
+  do_vaapi_or_exit (vaBeginPicture (va_display, context, surfaces[1]));
+  do_vaapi_or_exit (vaRenderPicture (va_display, context, &pipeline_param_buf_id, 1));
+  do_vaapi_or_exit (vaEndPicture (va_display, context));
+  do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
+
+  ret = true;
+
+out:
+  if (config != VA_INVALID_ID)
+    vaDestroyConfig(va_display, config);
+  if (pipeline_param_buf_id != VA_INVALID_ID)
+    vaDestroyBuffer (va_display, pipeline_param_buf_id);
+  if (misc_buf_id != VA_INVALID_ID)
+    vaDestroyBuffer (va_display, misc_buf_id);
+  if (context != VA_INVALID_ID)
+    vaDestroyContext (va_display, context);
+
+  return ret;
 }
 
 int
@@ -180,7 +399,6 @@ main (int argc,
 #define do_vaapi_or_exit(expr) if (! _do_vaapi (#expr, expr)) goto out;
 
   bool verbose = false;
-  bool decode_available = false;
   int opt;
   int surfaces_count = 2;
   int ret = 1;
@@ -197,17 +415,6 @@ main (int argc,
   VASurfaceID *surfaces = NULL;
   VAImageFormat image_format;
   VAProfile *profiles = NULL;
-  VAConfigID config = VA_INVALID_ID;
-  VAContextID context = VA_INVALID_ID;
-  VABufferID misc_buf_id = VA_INVALID_ID;
-  VABufferID pipeline_param_buf_id = VA_INVALID_ID;
-  VABufferID pic_param_buf = VA_INVALID_ID;
-  VABufferID iq_matrix_buf = VA_INVALID_ID;
-  VABufferID slice_param_buf = VA_INVALID_ID;
-  VABufferID slice_data_buf = VA_INVALID_ID;
-  VAEncMiscParameterBuffer *misc_param_buffer;
-  VAEncMiscParameterBufferQualityLevel *buffer_quality_level;
-  VAProcPipelineParameterBuffer pipeline_param_buf;
   VARectangle input_region;
   VARectangle output_region;
 
@@ -333,158 +540,25 @@ main (int argc,
   /* Wait for all operations to complete */
   do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
 
-
   /* We assume to have at least one of VAProfileH264Main, VAProfileMPEG2Simple
    * or VAProfileNone */
-  if (_do_vaapi ("Testing ability to decode VAProfileH264Main",
-                 vaCreateConfig (va_display, VAProfileH264Main,
-                                 VAEntrypointVLD, NULL, 0, &config)))
-    {
-      decode_available = true;
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VAPictureParameterBufferType,
-                                        sizeof (VAPictureParameterBufferH264),
-                                        1, &pic_param_h264,
-                                        &pic_param_buf));
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VAIQMatrixBufferType,
-                                        sizeof (VAIQMatrixBufferH264),
-                                        1, &iq_matrix_h264,
-                                        &iq_matrix_buf));
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VASliceParameterBufferType,
-                                        sizeof (VASliceParameterBufferH264),
-                                        1, &slice_param_h264,
-                                        &slice_param_buf));
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VASliceDataBufferType,
-                                        CLIP_SIZE_H264, 1,
-                                        clip_h264, &slice_data_buf));
-    }
-  else if (_do_vaapi ("Testing ability to decode VAProfileMPEG2Simple",
-                      vaCreateConfig (va_display, VAProfileMPEG2Simple,
-                                      VAEntrypointVLD, NULL, 0, &config)))
-    {
-      decode_available = true;
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VAPictureParameterBufferType,
-                                        sizeof (VAPictureParameterBufferMPEG2),
-                                        1, &pic_param_mpeg2,
-                                        &pic_param_buf));
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VAIQMatrixBufferType,
-                                        sizeof (VAIQMatrixBufferMPEG2),
-                                        1, &iq_matrix_mpeg2,
-                                        &iq_matrix_buf));
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VASliceParameterBufferType,
-                                        sizeof (VASliceParameterBufferMPEG2),
-                                        1, &slice_param_mpeg2,
-                                        &slice_param_buf));
-
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VASliceDataBufferType,
-                                        CLIP_SIZE_MPEG2, 1,
-                                        clip_mpeg2, &slice_data_buf));
-    }
-  else if (_do_vaapi ("Testing ability to use VAProfileNone video pre/post processing",
-                      vaCreateConfig (va_display, VAProfileNone,
-                                      VAEntrypointVideoProc, NULL, 0, &config)))
-    {
-      do_vaapi_or_exit (vaCreateContext (va_display, config, width, height, 0,
-                                         surfaces, surfaces_count, &context));
-
-      /* Try to render a picture, tuning its encode quality */
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VAEncMiscParameterBufferType,
-                                        sizeof (VAEncMiscParameterBuffer) +
-                                          sizeof (VAEncMiscParameterBufferQualityLevel),
-                                        1, NULL, &misc_buf_id));
-      do_vaapi_or_exit (vaMapBuffer (va_display, misc_buf_id, (void **)&misc_param_buffer));
-      misc_param_buffer->type = VAEncMiscParameterTypeQualityLevel;
-      buffer_quality_level = (VAEncMiscParameterBufferQualityLevel *)misc_param_buffer->data;
-      /* 1 is always the highest possible quality level, we don't need to check
-       * VAConfigAttribEncQualityRange */
-      buffer_quality_level->quality_level = 1;
-      do_vaapi_or_exit (vaUnmapBuffer (va_display, misc_buf_id));
-      do_vaapi_or_exit (vaBeginPicture (va_display, context, surfaces[1]));
-      do_vaapi_or_exit (vaRenderPicture (va_display, context, &misc_buf_id, 1));
-      do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
-
-      /* Try to render a picture from the first surface to the second,
-       * applying a crop to it */
-      memset (&pipeline_param_buf, 0, sizeof (pipeline_param_buf));
-      pipeline_param_buf.surface = surfaces[0];
-      pipeline_param_buf.surface_region = &input_region;
-      pipeline_param_buf.output_region = &output_region;
-      /* Set a green background */
-      pipeline_param_buf.output_background_color = 0xff00ff00;
-      pipeline_param_buf.output_color_standard = VAProcColorStandardNone;
-      do_vaapi_or_exit (vaCreateBuffer (va_display, context,
-                                        VAProcPipelineParameterBufferType,
-                                        sizeof (pipeline_param_buf), 1,
-                                        &pipeline_param_buf, &pipeline_param_buf_id));
-      do_vaapi_or_exit (vaBeginPicture (va_display, context, surfaces[1]));
-      do_vaapi_or_exit (vaRenderPicture (va_display, context, &pipeline_param_buf_id, 1));
-      do_vaapi_or_exit (vaEndPicture (va_display, context));
-      do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
-    }
-  else
-    {
-      goto out;
-    }
-
-  if (decode_available)
-    {
-      do_vaapi_or_exit (vaCreateContext (va_display, config, width, height,
-                                         VA_PROGRESSIVE, surfaces,
-                                         surfaces_count, &context));
-
-      do_vaapi_or_exit (vaBeginPicture (va_display, context, surfaces[1]));
-      /* Send the buffers to the server */
-      do_vaapi_or_exit (vaRenderPicture (va_display, context, &pic_param_buf, 1));
-      do_vaapi_or_exit (vaRenderPicture (va_display, context, &iq_matrix_buf, 1));
-      do_vaapi_or_exit (vaRenderPicture (va_display, context, &slice_param_buf, 1));
-      do_vaapi_or_exit (vaRenderPicture (va_display, context, &slice_data_buf, 1));
-      /* We are done with the sending, now the server will start to process all
-      * pending operations */
-      do_vaapi_or_exit (vaEndPicture (va_display, context));
-      /* Blocks until all pending operations ends */
-      do_vaapi_or_exit (vaSyncSurface (va_display, surfaces[1]));
-    }
-
-  ret = 0;
+  if (test_decode_capability (va_display, VAProfileH264Main, width, height,
+                              input_region, output_region, surfaces, surfaces_count))
+    ret = 0;
+  else if (test_decode_capability (va_display, VAProfileMPEG2Simple, width, height,
+                                   input_region, output_region, surfaces, surfaces_count))
+    ret = 0;
+  else if (test_pp_capability (va_display, width, height, input_region,
+                               output_region, surfaces, surfaces_count))
+    ret = 0;
 
 out:
   if (va_display)
     {
-      if (pipeline_param_buf_id != VA_INVALID_ID)
-        vaDestroyBuffer (va_display, pipeline_param_buf_id);
-      if (misc_buf_id != VA_INVALID_ID)
-        vaDestroyBuffer (va_display, misc_buf_id);
-      if (context != VA_INVALID_ID)
-        vaDestroyContext (va_display, context);
       if (img.image_id != VA_INVALID_ID)
         vaDestroyImage (va_display, img.image_id);
-      if (config != VA_INVALID_ID)
-        vaDestroyConfig(va_display, config);
       if (surfaces)
         vaDestroySurfaces (va_display, surfaces, surfaces_count);
-      if (pic_param_buf != VA_INVALID_ID)
-        vaDestroyBuffer (va_display, pic_param_buf);
-      if (iq_matrix_buf != VA_INVALID_ID)
-        vaDestroyBuffer (va_display, iq_matrix_buf);
-      if (slice_param_buf != VA_INVALID_ID)
-        vaDestroyBuffer (va_display, slice_param_buf);
-      if (slice_data_buf != VA_INVALID_ID)
-        vaDestroyBuffer (va_display, slice_data_buf);
 
       vaTerminate (va_display);
     }

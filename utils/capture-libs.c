@@ -349,6 +349,25 @@ fail:
     return false;
 }
 
+static bool
+library_belongs_to_glibc( const char *soname )
+{
+    unsigned int i;
+
+    for( i = 0; i < N_ELEMENTS( libc_patterns ); i++ )
+    {
+        if( libc_patterns[i] == NULL )
+            break;
+
+        assert( strstarts( libc_patterns[i], "soname:" ) );
+
+        if( strcmp( libc_patterns[i] + strlen( "soname:" ), soname ) == 0 )
+            return true;
+    }
+
+    return false;
+}
+
 static bool capture_pattern( const char *pattern,
                              const capture_options *options,
                              int *code, char **message );
@@ -436,30 +455,13 @@ capture_one( const char *soname, const capture_options *options,
 
         needed_basename = _capsule_basename( needed_name );
 
-        if( !option_glibc )
+        if( !option_glibc
+            && library_belongs_to_glibc( needed_basename ) )
         {
-            bool capture = true;
-
-            for( j = 0; j < N_ELEMENTS( libc_patterns ); j++ )
-            {
-                if( libc_patterns[j] == NULL )
-                    break;
-
-                assert( strstarts( libc_patterns[j], "soname:" ) );
-
-                if( strcmp( libc_patterns[j] + strlen( "soname:" ),
-                            needed_basename ) == 0 )
-                {
-                    DEBUG( DEBUG_TOOL,
-                           "Not capturing \"%s\" because it is part of glibc",
-                           needed_name );
-                    capture = false;
-                    break;
-                }
-            }
-
-            if( !capture )
-                continue;
+            DEBUG( DEBUG_TOOL,
+                   "Not capturing \"%s\" because it is part of glibc",
+                   needed_name );
+            continue;
         }
 
         if( fstatat( dest_fd, needed_basename, &statbuf,

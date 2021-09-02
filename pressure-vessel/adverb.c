@@ -1183,7 +1183,7 @@ main (int argc,
 
       case PV_TERMINAL_XTERM:
         g_debug ("Wrapping command with xterm");
-        pv_bwrap_wrap_in_xterm (wrapped_command);
+        pv_bwrap_wrap_in_xterm (wrapped_command, g_getenv ("XCURSOR_PATH"));
         break;
 
       case PV_TERMINAL_AUTO:

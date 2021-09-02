@@ -133,6 +133,7 @@ void     flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,
                                       GFile        *app_dir);
 GFile *flatpak_get_data_dir (const char *app_id);
 void flatpak_run_add_font_path_args (FlatpakBwrap *bwrap);
+void flatpak_run_add_icon_path_args (FlatpakBwrap *bwrap);
 
 extern const char * const *flatpak_abs_usrmerged_dirs;
 

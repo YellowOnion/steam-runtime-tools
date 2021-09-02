@@ -34,8 +34,12 @@ gchar *pv_wrap_check_bwrap (const char *tools_dir,
 
 void pv_wrap_share_sockets (FlatpakBwrap *bwrap,
                             PvEnviron *container_env,
+                            const GStrv original_environ,
                             gboolean using_a_runtime,
                             gboolean is_flatpak_env);
+
+void pv_wrap_set_icons_env_vars (PvEnviron *container_env,
+                                 const GStrv original_environ);
 
 gboolean pv_wrap_use_host_os (FlatpakExports *exports,
                               FlatpakBwrap *bwrap,

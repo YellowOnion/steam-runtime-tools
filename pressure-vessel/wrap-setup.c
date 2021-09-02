@@ -215,6 +215,7 @@ pv_wrap_check_bwrap (const char *tools_dir,
 void
 pv_wrap_share_sockets (FlatpakBwrap *bwrap,
                        PvEnviron *container_env,
+                       const GStrv original_environ,
                        gboolean using_a_runtime,
                        gboolean is_flatpak_env)
 {
@@ -236,6 +237,8 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   pv_environ_setenv (container_env, "XAUTHORITY", NULL);
 
   flatpak_run_add_font_path_args (sharing_bwrap);
+
+  flatpak_run_add_icon_path_args (sharing_bwrap);
 
   /* We need to set up IPC rendezvous points relatively late, so that
    * even if we are sharing /tmp via --filesystem=/tmp, we'll still
@@ -308,8 +311,70 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
       pv_environ_setenv (container_env, var, val);
     }
 
+  pv_wrap_set_icons_env_vars (container_env, original_environ);
+
   g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
   flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+}
+
+/*
+ * Set the environment variables XCURSOR_PATH and XDG_DATA_DIRS to
+ * support the icons from the host system.
+ */
+void
+pv_wrap_set_icons_env_vars (PvEnviron *container_env,
+                            const GStrv original_environ)
+{
+  g_autoptr(GString) new_data_dirs = g_string_new ("");
+  g_autoptr(GString) new_xcursor_path = g_string_new ("");
+  const gchar *initial_xdg_data_dirs = NULL;
+  const gchar *original_xcursor_path = NULL;
+  const gchar *container_xdg_data_home = NULL;
+  g_autofree gchar *data_home_icons = NULL;
+
+  original_xcursor_path = g_environ_getenv (original_environ, "XCURSOR_PATH");
+  /* Cursors themes are searched in a few hardcoded paths. However if "XCURSOR_PATH"
+   * is set, the user specified paths will override the hardcoded ones.
+   * In order to keep the hardcoded paths in place, if "XCURSOR_PATH" is unset, we
+   * append the default values first. Reference:
+   * https://gitlab.freedesktop.org/xorg/lib/libxcursor/-/blob/80192583/src/library.c#L32 */
+  if (original_xcursor_path == NULL)
+    {
+      /* We assume that this function is called after use_tmpfs_home() or
+       * use_fake_home(), if we are going to. */
+      container_xdg_data_home = pv_environ_getenv (container_env, "XDG_DATA_HOME");
+      if (container_xdg_data_home == NULL)
+        container_xdg_data_home = "~/.local/share";
+      data_home_icons = g_build_filename (container_xdg_data_home, "icons", NULL);
+
+      /* Note that unlike most path-searching implementations, libXcursor and
+       * the derived code in Wayland expand '~' to the home directory. */
+      pv_search_path_append (new_xcursor_path, data_home_icons);
+      pv_search_path_append (new_xcursor_path, "~/.icons");
+      pv_search_path_append (new_xcursor_path, "/usr/share/icons");
+      pv_search_path_append (new_xcursor_path, "/usr/share/pixmaps");
+      pv_search_path_append (new_xcursor_path, "/usr/X11R6/lib/X11/icons");
+    }
+  /* Finally append the binded paths from the host */
+  pv_search_path_append (new_xcursor_path, "/run/host/user-share/icons");
+  pv_search_path_append (new_xcursor_path, "/run/host/share/icons");
+  pv_environ_setenv (container_env, "XCURSOR_PATH", new_xcursor_path->str);
+
+  initial_xdg_data_dirs = pv_environ_getenv (container_env, "XDG_DATA_DIRS");
+  if (initial_xdg_data_dirs == NULL)
+    initial_xdg_data_dirs = g_environ_getenv (original_environ, "XDG_DATA_DIRS");
+
+  /* Reference:
+   * https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html */
+  if (initial_xdg_data_dirs == NULL)
+    initial_xdg_data_dirs = "/usr/local/share:/usr/share";
+
+  /* Append the host "share" directories to "XDG_DATA_DIRS".
+   * Currently this is only useful to load the provider's icons */
+  pv_search_path_append (new_data_dirs, initial_xdg_data_dirs);
+  pv_search_path_append (new_data_dirs, "/run/host/user-share");
+  pv_search_path_append (new_data_dirs, "/run/host/share");
+  pv_environ_setenv (container_env, "XDG_DATA_DIRS", new_data_dirs->str);
 }
 
 /*

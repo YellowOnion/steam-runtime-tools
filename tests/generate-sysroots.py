@@ -327,7 +327,7 @@ with open('podman-example/run/host/container-manager', 'w') as writer:
 with open('debian10/custom_path/Single-good-layer.json', 'w') as writer:
     writer.write('''\
 {
-  "file_format_version" : "1.1.0",
+  "file_format_version" : "1.2.0",
   "layer" : {
     "name" : "VK_LAYER_LUNARG_overlay",
     "type" : "INSTANCE",

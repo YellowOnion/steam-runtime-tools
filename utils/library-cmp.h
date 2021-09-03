@@ -64,6 +64,8 @@ struct _library_details
     char **public_symbols;
 };
 
+extern const library_details library_details_for_glibc;
+
 library_cmp_function *library_cmp_list_from_string( const char *spec,
                                                     const char *delimiters,
                                                     int *code,

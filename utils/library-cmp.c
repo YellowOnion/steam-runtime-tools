@@ -1493,6 +1493,44 @@ library_cmp_choose_provider( const library_details *details,
     return -1;
 }
 
+const library_cmp_function library_cmp_list_for_glibc[] =
+{
+  library_cmp_by_versions,
+  library_cmp_by_symbols,
+  library_cmp_by_name,
+  NULL
+};
+
+const char *public_symbol_versions_glibc[] =
+{
+    "!GLIBC_PRIVATE",
+    "GLIBC_*",
+    "!GCC_*",
+    "!",
+    "!*",
+    NULL,
+};
+
+const char *public_symbols_glibc[] =
+{
+    "!*@GLIBC_PRIVATE",
+    "*@GLIBC_*",
+    "!*@GCC_*",
+    "!",
+    "!*",
+    NULL,
+};
+
+const library_details library_details_for_glibc =
+{
+    /* Removing the "const" is generally not correct, but as long as
+     * we don't modify or free these values it's okay. */
+    .name = (char *) "libc.so.6",
+    .comparators = (library_cmp_function *) library_cmp_list_for_glibc,
+    .public_symbol_versions = (char **) public_symbol_versions_glibc,
+    .public_symbols = (char **) public_symbols_glibc,
+};
+
 typedef struct
 {
     const char *name;

@@ -475,6 +475,22 @@ capture_one( const char *soname, const capture_options *options,
             continue;
         }
 
+        if( option_glibc
+            && ( options->flags & CAPTURE_FLAG_EVEN_IF_OLDER ) == 0
+            && strcmp( needed_basename, "libc.so.6" ) != 0
+            && library_belongs_to_glibc( needed_basename ) )
+        {
+            /* Don't do anything with glibc sub-libraries: when glibc
+             * is version 2.34 or later, they might be stubs that are
+             * difficult to compare. Instead, wait until we process their
+             * glibc dependency later. If we choose to use the glibc from the
+             * provider, then we'll capture the rest of the glibc family,
+             * including needed_basename, as a side-effect (this time
+             * with CAPTURE_FLAG_EVEN_IF_OLDER, so this block will
+             * be skipped). */
+            continue;
+        }
+
         /* For the library we were originally looking for, we don't
          * compare with the container if we have EVEN_IF_OLDER flag.
          * For its dependencies, we ignore that flag. */
@@ -504,21 +520,32 @@ capture_one( const char *soname, const capture_options *options,
                 library_details details = {};
                 const library_details *known = NULL;
 
-                known = library_knowledge_lookup( &options->knowledge,
-                                                  needed_name );
-
-                if( known != NULL )
+                if( strcmp( needed_basename, "libc.so.6" ) == 0 )
                 {
-                    DEBUG( DEBUG_TOOL, "Found library-specific details for \"%s\"",
-                           needed_name );
-                    details = *known;
+                    /* Starting from glibc 2.34, libc.so.6 is a regular file instead of a
+                     * symbolic link. For this reason a comparison by name is not
+                     * enough anymore. Force the hard-coded glibc comparator instead
+                     * of the provided knowledge values */
+                    details = library_details_for_glibc;
                 }
+                else
+                {
+                    known = library_knowledge_lookup( &options->knowledge,
+                                                      needed_name );
 
-                /* Not const-correct, but we don't actually modify or free it */
-                details.name = (char *) needed_name;
+                    if( known != NULL )
+                    {
+                        DEBUG( DEBUG_TOOL, "Found library-specific details for \"%s\"",
+                               needed_name );
+                        details = *known;
+                    }
 
-                if( details.comparators == NULL )
-                    details.comparators = options->comparators;
+                    /* Not const-correct, but we don't actually modify or free it */
+                    details.name = (char *) needed_name;
+
+                    if( details.comparators == NULL )
+                        details.comparators = options->comparators;
+                }
 
                 decision = library_cmp_list_iterate( &details,
                                                      needed_path_in_container,

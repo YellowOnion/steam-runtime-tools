@@ -1,3 +1,9 @@
+steam-runtime-tools (0.20210906.1) steamrt; urgency=medium
+
+  * debian: Build-Depend on libcap-dev, for bubblewrap
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Sep 2021 15:36:04 +0100
+
 steam-runtime-tools (0.20210906.0) steamrt; urgency=medium
 
   [ Simon McVittie ]

@@ -1,3 +1,11 @@
+steam-runtime-tools (0.20210906.2) steamrt; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * Update libcapsule to 0.20210906.0
+    - Improve forward compatibility with glibc 2.34
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Sep 2021 17:43:10 +0100
+
 steam-runtime-tools (0.20210906.1) steamrt; urgency=medium
 
   * debian: Build-Depend on libcap-dev, for bubblewrap

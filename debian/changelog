@@ -1,3 +1,33 @@
+steam-runtime-tools (0.20210906.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pv-wrap: Use $PRESSURE_VESSEL_BWRAP in preference to $BWRAP
+  * pv-wrap: Use local copy of bwrap in preference to system copy.
+    The system copy might be older and less featureful, or might be
+    unnecessarily setuid, so let's try to use a version that is under our
+    control. If it works, great. If not, we can try a system copy, which
+    we might have to use anyway (for example on Debian 10, RHEL 7 or
+    SteamOS 2).
+  * pv-wrap: Build and use our own copy of bubblewrap 0.5.0.
+    This is considerably newer than the backport we have in scout, and
+    includes fixes relevant to pressure-vessel, particularly for users of
+    case-insensitive filesystems.
+    (Resolves: steam-runtime-tools#47, steam-runtime#326, T30017)
+  * pv-wrap: Log an info message if bwrap is setuid.
+    A setuid-root version of bwrap cannot use all of its features, so this
+    is useful information.
+  * graphics: Accept Vulkan layer manifests up to version 1.2.0.
+    Version 1.2.0 added some new fields, but nothing critical for our
+    purposes. (Resolves: steam-runtime#457)
+
+  [ Ludovico de Nittis ]
+  * check-va-api: Do not stop if one decoding profile fails.
+    This improves detection of working VA-API on Intel. (T27513)
+  * Import host's icons and cursors into the container
+    (Resolves: steam-runtime#311, T29983)
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Sep 2021 14:18:43 +0100
+
 steam-runtime-tools (0.20210820.0) steamrt; urgency=medium
 
   * debian: Split steam-runtime-tools-minimal package.

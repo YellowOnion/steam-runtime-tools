@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20210906.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20210906.0) steamrt; urgency=medium
 
   [ Simon McVittie ]
   * pv-wrap: Use $PRESSURE_VESSEL_BWRAP in preference to $BWRAP
@@ -26,7 +26,7 @@ steam-runtime-tools (0.20210906.0) UNRELEASED; urgency=medium
   * Import host's icons and cursors into the container
     (Resolves: steam-runtime#311, T29983)
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 06 Sep 2021 14:18:43 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Sep 2021 14:24:36 +0100
 
 steam-runtime-tools (0.20210820.0) steamrt; urgency=medium
 

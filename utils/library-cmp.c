@@ -1059,6 +1059,10 @@ library_cmp_by_name( const library_details *details,
  *  i.e. the elements in @list, that matches said pattern, will be removed.
  *  A pattern that is just '!' is used to separate what's known to the
  *  guessing.
+ *  If @list contains versioned symbols, i.e. "symbol@version", the pattern
+ *  will be matched only against the symbol part. However, if the pattern
+ *  contains an '@', it will be matched against the fully-qualified name
+ *  instead.
  * @list: (array zero-terminated=1): The list to filter
  * @list_number: The number of elements in @list excluding the %NULL
  *  terminator
@@ -1105,12 +1109,14 @@ library_cmp_filter_list( char ** const filters,
 
         free( buf );
         buf = xstrdup( list[i] );
-        /* If we have a versioned symbol, like "symbol@version", remove the
-         * version part because the filters are just for the symbols name. */
+        /* If we have a versioned symbol, like "symbol@version", save a copy
+         * without the version part because filters that don't include an "@"
+         * are considered to be matching only against the symbol name. */
         token = strtok_r( buf, "@", &saveptr );
 
         for( j = 0; filters[j] != NULL; j++ )
         {
+            const char *element = NULL;
             if( strcmp( filters[j], "!" ) == 0 )
             {
                 DEBUG( DEBUG_TOOL, "After this point we are just guessing" );
@@ -1118,27 +1124,32 @@ library_cmp_filter_list( char ** const filters,
                 continue;
             }
 
+            if( strchr( filters[j], '@' ) == NULL )
+                element = token;
+            else
+                element = list[i];
+
             if( filters[j][0] == '!' )
             {
-                if( fnmatch( filters[j] + 1, token, 0 ) == 0 )
+                if( fnmatch( filters[j] + 1, element, 0 ) == 0 )
                 {
                     if( guessing )
                         warnx( "warning: we are assuming \"%s\" to be private, but it's just a guess",
-                               token );
+                               element );
                     else
                         DEBUG( DEBUG_TOOL,
                                "Ignoring \"%s\" because it has been declared as private",
-                               token );
+                               element );
                     break;
                 }
             }
             else
             {
-                if( fnmatch( filters[j], token, 0 ) == 0 )
+                if( fnmatch( filters[j], element, 0 ) == 0 )
                 {
                     if( guessing )
                         warnx( "warning: we are assuming \"%s\" to be public, but it's just a guess",
-                               token );
+                               element );
 
                     ptr_list_push_ptr( filtered_list, xstrdup( list[i] ) );
                     break;

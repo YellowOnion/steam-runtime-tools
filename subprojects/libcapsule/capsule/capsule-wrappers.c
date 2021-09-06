@@ -317,7 +317,11 @@ static int address_within_main_heap (ElfW(Addr) addr)
 
     if( base == (ElfW(Addr)) NULL )
     {
-        struct mallinfo mi = mallinfo();
+        #if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
+            struct mallinfo2 mi = mallinfo2();
+        #else
+            struct mallinfo mi = mallinfo();
+        #endif
         base = top - (ElfW(Addr)) mi.arena;
     }
 

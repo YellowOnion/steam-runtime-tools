@@ -1,3 +1,19 @@
+libcapsule (0.20210906.0-0co1) upstream; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * capsule-wrappers: Avoid mallinfo() when possible, deprecated since
+    glibc 2.33
+  * capture-libs: Add a special case to support glibc 2.34+.
+    Starting from glibc 2.34, libc.so.6 is a regular file instead of a
+    symlink. Also all the symbols from its small libraries like libpthread,
+    librt etc., are now moved into libc.so.6.
+  * library-cmp: Handle filters for fully-qualified symbols name.
+    If a filter pattern has an '@' in it, it's now matched against the
+    `symbol@version` fully-qualified name; otherwise it's matched against
+    the symbol as before.
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Sep 2021 16:57:50 +0100
+
 libcapsule (0.20210728.0-0co1) upstream; urgency=medium
 
   * capture-libs: Match GLESv2 ICDs correctly.

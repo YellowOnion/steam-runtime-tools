@@ -15,12 +15,6 @@ Copyright:
 License: MIT
 
 Files:
- subprojects/python-vdf/*
-Copyright:
- 2015-2020 Rossen Georgiev
-License: MIT
-
-Files:
  tests/third-party/pycotap.py
 Copyright:
  2015 Remko Tronçon

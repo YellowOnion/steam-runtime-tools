@@ -62,15 +62,20 @@ test:bionic:
     image: ubuntu:18.04
     before_script:
         - |
+            set -eux
             export DEBIAN_FRONTEND=noninteractive
             apt-get -y update
             apt-get -y install \
                 ca-certificates \
+                git \
                 make \
                 perl \
                 python3 \
                 python3-debian \
                 ${NULL+}
+            tempdir="$(mktemp -d)"
+            git clone --branch steamrt/soldier https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-vdf.git "$tempdir/python-vdf"
+            export PYTHONPATH="$tempdir/python-vdf"
     script: make check
     artifacts:
         paths:
@@ -97,8 +102,9 @@ test:archlinux:
             ${NULL+}
             tempdir="$(mktemp -d)"
             git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-debian.git "$tempdir/python-debian"
+            git clone --branch steamrt/soldier https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-vdf.git "$tempdir/python-vdf"
             export PATH="/usr/bin/core_perl:$PATH"
-            export PYTHONPATH="$tempdir/python-debian/lib"
+            export PYTHONPATH="$tempdir/python-debian/lib:$tempdir/python-vdf"
     script: make check
     artifacts:
         paths:

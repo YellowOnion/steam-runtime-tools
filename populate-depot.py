@@ -64,18 +64,6 @@ from debian.deb822 import (
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-# git remote add --no-tags python-vdf https://github.com/ValvePython/vdf
-# Update with:
-# git subtree merge -P subprojects/python-vdf python-vdf/master
-sys.path[:0] = [
-    os.path.join(
-        HERE,
-        'subprojects',
-        'python-vdf'
-    ),
-]
-
-
 logger = logging.getLogger('populate-depot')
 
 

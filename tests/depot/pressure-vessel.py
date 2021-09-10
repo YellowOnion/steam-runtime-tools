@@ -284,13 +284,16 @@ class TestPressureVessel(unittest.TestCase):
 
                 if (
                     exe.endswith('capsule-capture-libs')
-                    and not os.path.exists(exe_path)
+                    and not os.path.exists(os.path.join(self.depot, exe_path))
                 ):
                     exe_path = os.path.join(
                         'pressure-vessel', 'libexec', 'steam-runtime-tools-0',
                         exe,
                     )
-                elif exe == 'pv-bwrap' and not os.path.exists(exe_path):
+                elif (
+                    exe == 'pv-bwrap'
+                    and not os.path.exists(os.path.join(self.depot, exe_path))
+                ):
                     exe = 'bwrap'
                     exe_path = os.path.join('pressure-vessel', 'bin', exe)
 

@@ -312,7 +312,6 @@ libglnx_dep = subproject('libglnx').get_variable('libglnx_dep')
 project_include_dirs = include_directories(
   '.',
   'subprojects',
-  'subprojects/libglnx',
 )
 
 pv_include_dirs = include_directories(

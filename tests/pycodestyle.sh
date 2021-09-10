@@ -33,7 +33,7 @@ fi
 
 cd "$G_TEST_SRCDIR/.."
 
-if [ "x${PYCODESTYLE:=pycodestyle}" = xfalse ] || \
+if [ "${PYCODESTYLE:=pycodestyle}" = false ] || \
         [ -z "$(command -v "$PYCODESTYLE")" ]; then
     echo "1..0 # SKIP pycodestyle not found"
     exit 0

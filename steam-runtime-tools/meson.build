@@ -149,7 +149,7 @@ libsteamrt = library(
     json_glib,
     libsteamrt_generated_headers_dep,
   ],
-  objects : [libsteamrt_static.extract_all_objects()],
+  objects : [libsteamrt_static.extract_all_objects(recursive : true)],
   soversion : abi_major,
   version : abi_major + '.' + abi_minor,
   install : true,

@@ -378,33 +378,31 @@ foreach arch : [
   endforeach
 endforeach
 
-test_scripts = [
+lint_scripts = [
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
   'shellcheck.sh',
 ]
 
-foreach test_name : test_scripts
-  test_args = ['-v', files(test_name)]
+foreach test_name : lint_scripts
   timeout = 30
 
-  if prove.found()
-    if dbus_run_session.found()
-      test(
-        test_name, dbus_run_session,
-        args : ['--', 'prove'] + test_args,
-        env : test_env,
-        timeout : timeout,
-      )
-    else
-      test(
-        test_name, prove,
-        args : test_args,
-        env : test_env,
-        timeout : timeout,
-      )
-    endif
+  if meson.version().version_compare('>=0.50')
+    test(
+      test_name, files(test_name),
+      env : test_env,
+      suite : 'lint',
+      protocol : 'tap',
+      timeout : timeout,
+    )
+  else
+    test(
+      test_name, files(test_name),
+      env : test_env,
+      suite : 'lint',
+      timeout : timeout,
+    )
   endif
 endforeach
 

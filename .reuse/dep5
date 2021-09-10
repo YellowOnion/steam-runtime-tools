@@ -13,6 +13,7 @@ Files:
  tests/*.json
  tests/*/*.json
  tests/*/*.symbols
+ .gitlab/issue_templates/*
 Copyright: 2019-2021 Collabora Ltd.
 License: MIT
 

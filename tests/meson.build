@@ -378,14 +378,14 @@ foreach arch : [
   endforeach
 endforeach
 
-test_scripts = [
+lint_scripts = [
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
   'shellcheck.sh',
 ]
 
-foreach test_name : test_scripts
+foreach test_name : lint_scripts
   test_args = ['-v', files(test_name)]
   timeout = 30
 
@@ -395,6 +395,7 @@ foreach test_name : test_scripts
         test_name, dbus_run_session,
         args : ['--', 'prove'] + test_args,
         env : test_env,
+        suite : 'lint',
         timeout : timeout,
       )
     else
@@ -402,6 +403,7 @@ foreach test_name : test_scripts
         test_name, prove,
         args : test_args,
         env : test_env,
+        suite : 'lint',
         timeout : timeout,
       )
     endif

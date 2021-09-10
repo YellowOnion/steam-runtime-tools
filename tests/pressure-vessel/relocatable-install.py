@@ -103,7 +103,7 @@ def isexec(path):
 
 
 def check_dependencies(test, relocatable_install, path):
-    # type: (TapTest, str, str, bool) -> None
+    # type: (TapTest, str, str) -> None
 
     subproc = subprocess.Popen(
         ['ldd', path],

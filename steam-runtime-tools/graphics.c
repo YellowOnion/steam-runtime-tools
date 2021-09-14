@@ -1043,6 +1043,35 @@ _argv_for_check_gl (const char *helpers_path,
   return argv;
 }
 
+/*
+ * Returns: (nullable) (element-type filename) (transfer container): The
+ *  initial `argv` for the capsule-capture-libs helper, with g_free() set
+ *  as the free-function, and no %NULL terminator. Free with g_ptr_array_unref()
+ *  or g_ptr_array_free().
+ */
+static GPtrArray *
+_initial_capsule_capture_libs_argv (const char *sysroot,
+                                    const char *helpers_path,
+                                    const char *multiarch_tuple,
+                                    const char *temp_dir,
+                                    GError **error)
+{
+  GPtrArray *argv = NULL;
+
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
+                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+
+  if (argv == NULL)
+    return NULL;
+
+  g_ptr_array_add (argv, g_strdup ("--dest"));
+  g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strdup ("--provider"));
+  g_ptr_array_add (argv, g_strdup (sysroot));
+
+  return argv;
+}
+
 static GPtrArray *
 _argv_for_list_vdpau_drivers (gchar **envp,
                               const char *sysroot,
@@ -1057,16 +1086,12 @@ _argv_for_list_vdpau_drivers (gchar **envp,
   g_return_val_if_fail (envp != NULL, NULL);
 
   vdpau_driver = g_environ_getenv (envp, "VDPAU_DRIVER");
-  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
-                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+  argv = _initial_capsule_capture_libs_argv (sysroot, helpers_path, multiarch_tuple,
+                                             temp_dir, error);
 
   if (argv == NULL)
     return NULL;
 
-  g_ptr_array_add (argv, g_strdup ("--dest"));
-  g_ptr_array_add (argv, g_strdup (temp_dir));
-  g_ptr_array_add (argv, g_strdup ("--provider"));
-  g_ptr_array_add (argv, g_strdup (sysroot));
   g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libvdpau_*.so"));
   /* If the driver is not in the ld.so.cache the wildcard-matching will not find it.
    * To increase our chances we specifically search for the chosen driver and some
@@ -1096,16 +1121,12 @@ _argv_for_list_glx_icds (const char *sysroot,
 {
   GPtrArray *argv;
 
-  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
-                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+  argv = _initial_capsule_capture_libs_argv (sysroot, helpers_path, multiarch_tuple,
+                                             temp_dir, error);
 
   if (argv == NULL)
     return NULL;
 
-  g_ptr_array_add (argv, g_strdup ("--dest"));
-  g_ptr_array_add (argv, g_strdup (temp_dir));
-  g_ptr_array_add (argv, g_strdup ("--provider"));
-  g_ptr_array_add (argv, g_strdup (sysroot));
   g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libGLX_*.so.0"));
   /* This one might seem redundant but it is required because "libGLX_indirect"
    * is usually a symlink to someone else's implementation and can't be found
@@ -1131,18 +1152,14 @@ _argv_for_list_glx_icds_in_path (const char *sysroot,
 {
   GPtrArray *argv;
 
-  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
-                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+  argv = _initial_capsule_capture_libs_argv (sysroot, helpers_path, multiarch_tuple,
+                                             temp_dir, error);
 
   if (argv == NULL)
     return NULL;
 
   gchar *lib_full_path = g_build_filename (base_path, "lib", multiarch_tuple, "libGLX_*.so.*", NULL);
 
-  g_ptr_array_add (argv, g_strdup ("--dest"));
-  g_ptr_array_add (argv, g_strdup (temp_dir));
-  g_ptr_array_add (argv, g_strdup ("--provider"));
-  g_ptr_array_add (argv, g_strdup (sysroot));
   g_ptr_array_add (argv, g_strjoin (NULL,
                                     "no-dependencies:if-exists:even-if-older:path-match:", lib_full_path,
                                     NULL));

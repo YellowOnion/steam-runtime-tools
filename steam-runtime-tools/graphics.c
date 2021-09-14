@@ -1045,6 +1045,7 @@ _argv_for_check_gl (const char *helpers_path,
 
 static GPtrArray *
 _argv_for_list_vdpau_drivers (gchar **envp,
+                              const char *sysroot,
                               const char *helpers_path,
                               const char *multiarch_tuple,
                               const char *temp_dir,
@@ -1064,6 +1065,8 @@ _argv_for_list_vdpau_drivers (gchar **envp,
 
   g_ptr_array_add (argv, g_strdup ("--dest"));
   g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strdup ("--provider"));
+  g_ptr_array_add (argv, g_strdup (sysroot));
   g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libvdpau_*.so"));
   /* If the driver is not in the ld.so.cache the wildcard-matching will not find it.
    * To increase our chances we specifically search for the chosen driver and some
@@ -1085,7 +1088,8 @@ _argv_for_list_vdpau_drivers (gchar **envp,
 }
 
 static GPtrArray *
-_argv_for_list_glx_icds (const char *helpers_path,
+_argv_for_list_glx_icds (const char *sysroot,
+                         const char *helpers_path,
                          const char *multiarch_tuple,
                          const char *temp_dir,
                          GError **error)
@@ -1100,6 +1104,8 @@ _argv_for_list_glx_icds (const char *helpers_path,
 
   g_ptr_array_add (argv, g_strdup ("--dest"));
   g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strdup ("--provider"));
+  g_ptr_array_add (argv, g_strdup (sysroot));
   g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libGLX_*.so.0"));
   /* This one might seem redundant but it is required because "libGLX_indirect"
    * is usually a symlink to someone else's implementation and can't be found
@@ -1116,7 +1122,8 @@ _argv_for_list_glx_icds (const char *helpers_path,
 }
 
 static GPtrArray *
-_argv_for_list_glx_icds_in_path (const char *helpers_path,
+_argv_for_list_glx_icds_in_path (const char *sysroot,
+                                 const char *helpers_path,
                                  const char *multiarch_tuple,
                                  const char *temp_dir,
                                  const char *base_path,
@@ -1134,6 +1141,8 @@ _argv_for_list_glx_icds_in_path (const char *helpers_path,
 
   g_ptr_array_add (argv, g_strdup ("--dest"));
   g_ptr_array_add (argv, g_strdup (temp_dir));
+  g_ptr_array_add (argv, g_strdup ("--provider"));
+  g_ptr_array_add (argv, g_strdup (sysroot));
   g_ptr_array_add (argv, g_strjoin (NULL,
                                     "no-dependencies:if-exists:even-if-older:path-match:", lib_full_path,
                                     NULL));
@@ -4724,7 +4733,8 @@ _srt_get_modules_full (const char *sysroot,
           g_debug ("An error occurred trying to create a temporary folder: %s", error->message);
           goto out;
         }
-      vdpau_argv = _argv_for_list_vdpau_drivers (envp, helpers_path, multiarch_tuple, tmp_dir, &error);
+      vdpau_argv = _argv_for_list_vdpau_drivers (envp, sysroot, helpers_path,
+                                                 multiarch_tuple, tmp_dir, &error);
       if (vdpau_argv == NULL)
         {
           g_debug ("An error occurred trying to capture VDPAU drivers: %s", error->message);
@@ -4800,7 +4810,8 @@ _srt_list_glx_icds (const char *sysroot,
       goto out;
     }
 
-  by_soname_argv = _argv_for_list_glx_icds (helpers_path, multiarch_tuple, by_soname_tmp_dir, &error);
+  by_soname_argv = _argv_for_list_glx_icds (sysroot, helpers_path, multiarch_tuple,
+                                            by_soname_tmp_dir, &error);
 
   if (by_soname_argv == NULL)
     {
@@ -4824,7 +4835,8 @@ _srt_list_glx_icds (const char *sysroot,
           goto out;
         }
 
-      overrides_argv = _argv_for_list_glx_icds_in_path (helpers_path, multiarch_tuple, overrides_tmp_dir, overrides_path, &error);
+      overrides_argv = _argv_for_list_glx_icds_in_path (sysroot, helpers_path, multiarch_tuple,
+                                                        overrides_tmp_dir, overrides_path, &error);
 
       if (overrides_argv == NULL)
         {

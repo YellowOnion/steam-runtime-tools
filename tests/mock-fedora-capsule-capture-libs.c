@@ -49,8 +49,9 @@ main (int argc,
   static const char *const sonames[] = { "libvdpau_r9000.so", NULL };
 #endif
 
-  g_return_val_if_fail (argc > 3, EXIT_FAILURE);
+  g_return_val_if_fail (argc > 5, EXIT_FAILURE);
   g_return_val_if_fail (g_strcmp0 (argv[1], "--dest") == 0, EXIT_FAILURE);
+  g_return_val_if_fail (g_strcmp0 (argv[3], "--provider") == 0, EXIT_FAILURE);
 
   found = g_ptr_array_new_with_free_func (g_free);
 
@@ -59,7 +60,7 @@ main (int argc,
    * results. */
   for (gsize i = 0; sonames[i] != NULL; i++)
     {
-      for (gsize j = 3; argv[j] != NULL; j++)
+      for (gsize j = 5; argv[j] != NULL; j++)
         {
           soname_match = g_strrstr (argv[j], sonames[i]);
           if (soname_match != NULL)

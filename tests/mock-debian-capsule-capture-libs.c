@@ -47,10 +47,11 @@ main (int argc,
   static const char *const sonames[] = { "libGLX_mesa.so.0", "libGLX_nvidia.so.0", NULL };
 #endif
 
-  g_return_val_if_fail (argc > 3, EXIT_FAILURE);
+  g_return_val_if_fail (argc > 5, EXIT_FAILURE);
   g_return_val_if_fail (g_strcmp0 (argv[1], "--dest") == 0, EXIT_FAILURE);
+  g_return_val_if_fail (g_strcmp0 (argv[3], "--provider") == 0, EXIT_FAILURE);
 
-  const gchar *soname_match = g_strrstr (argv[3], "libGLX_");
+  const gchar *soname_match = g_strrstr (argv[5], "libGLX_");
   /* We are using this capsule-capture-libs just for libGLX*. Discard every other request */
   if (soname_match == NULL)
     return EXIT_SUCCESS;

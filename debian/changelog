@@ -1,3 +1,16 @@
+steam-runtime-tools (0.20210906.3) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * build: Remove an unnecessary include path that triggers a meson warning.
+    Anything that needs to #include <libglnx.h> should depend on libglnx_dep.
+  * build: Use Meson's recommended behaviour for extract_all_objects()
+  * Unit test improvements
+
+  [ Ludovico de Nittis ]
+  * Create an issue template
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 16 Sep 2021 12:33:23 +0100
+
 steam-runtime-tools (0.20210906.2) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]

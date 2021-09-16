@@ -1291,7 +1291,12 @@ class Main:
             downloaded = runtime.fetch(basename, self.opener)
 
             if self.include_archives:
-                os.link(downloaded, os.path.join(self.depot, basename))
+                dest = os.path.join(self.depot, basename)
+
+                with suppress(FileNotFoundError):
+                    os.unlink(dest)
+
+                os.link(downloaded, dest)
 
         if self.include_archives:
             with open(

@@ -248,14 +248,23 @@ class Runtime:
             self.suite,
         )
 
-    def get_archives(self, include_sdk=False):
+    def get_archives(
+        self,
+        include_sdk_debug=False,
+        include_sdk_runtime=False,
+        include_sdk_sysroot=False,
+    ):
         archives = [self.tarball]
 
-        if include_sdk:
+        if include_sdk_debug:
             archives.append(self.debug_tarball)
+
+        if include_sdk_sysroot:
             archives.append(self.dockerfile)
-            archives.append(self.sdk_tarball)
             archives.append(self.sysroot_tarball)
+
+        if include_sdk_runtime:
+            archives.append(self.sdk_tarball)
 
         return archives
 
@@ -520,7 +529,9 @@ class Main:
         depot_version: str = '',
         images_uri: str = DEFAULT_IMAGES_URI,
         include_archives: bool = False,
-        include_sdk: bool = False,
+        include_sdk_debug: bool = False,
+        include_sdk_runtime: bool = False,
+        include_sdk_sysroot: bool = False,
         layered: bool = False,
         minimize: bool = False,
         pressure_vessel_archive: str = '',
@@ -592,7 +603,9 @@ class Main:
         self.depot_version = depot_version
         self.images_uri = images_uri
         self.include_archives = include_archives
-        self.include_sdk = include_sdk
+        self.include_sdk_debug = include_sdk_debug
+        self.include_sdk_runtime = include_sdk_runtime
+        self.include_sdk_sysroot = include_sdk_sysroot
         self.layered = layered
         self.minimize = minimize
         self.pressure_vessel_ssh_host = pressure_vessel_ssh_host or ssh_host
@@ -759,9 +772,13 @@ class Main:
                 'Cannot use --include-archives with --layered'
             )
 
-        if self.include_sdk:
+        if (
+            self.include_sdk_debug
+            or self.include_sdk_runtime
+            or self.include_sdk_sysroot
+        ):
             raise InvocationError(
-                'Cannot use --include-sdk with --layered'
+                'Cannot use --include-sdk-* with --layered'
             )
 
         if self.unpack_sources:
@@ -932,7 +949,11 @@ class Main:
 
             if self.include_archives:
                 runtime_files = set(
-                    runtime.get_archives(include_sdk=self.include_sdk)
+                    runtime.get_archives(
+                        include_sdk_debug=self.include_sdk_debug,
+                        include_sdk_runtime=self.include_sdk_runtime,
+                        include_sdk_sysroot=self.include_sdk_sysroot,
+                    )
                 )
             else:
                 runtime_files = set()
@@ -968,7 +989,7 @@ class Main:
 
                 self.ensure_ref(dest)
 
-                if self.include_sdk:
+                if self.include_sdk_runtime:
                     if self.versioned_directories:
                         sdk_subdir = '{}_sdk_{}'.format(runtime.name, version)
                     else:
@@ -1004,16 +1025,18 @@ class Main:
 
                     self.ensure_ref(dest)
 
-                    argv = [
-                        'tar',
-                        '-C', os.path.join(dest, 'files', 'lib', 'debug'),
-                        '--transform', r's,^\(\./\)\?files\(/\|$\),,',
-                        '-xf',
-                        os.path.join(self.cache, runtime.debug_tarball),
-                    ]
-                    logger.info('%r', argv)
-                    subprocess.run(argv, check=True)
+                    if self.include_sdk_debug:
+                        argv = [
+                            'tar',
+                            '-C', os.path.join(dest, 'files', 'lib', 'debug'),
+                            '--transform', r's,^\(\./\)\?files\(/\|$\),,',
+                            '-xf',
+                            os.path.join(self.cache, runtime.debug_tarball),
+                        ]
+                        logger.info('%r', argv)
+                        subprocess.run(argv, check=True)
 
+                if self.include_sdk_sysroot:
                     if self.versioned_directories:
                         sysroot_subdir = '{}_sysroot_{}'.format(
                             runtime.name, version,
@@ -1037,14 +1060,38 @@ class Main:
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
-                    argv = [
-                        'cp',
-                        '-al',
-                        os.path.join(dest, 'files', 'lib', 'debug'),
-                        os.path.join(sysroot, 'files', 'usr', 'lib'),
-                    ]
-                    logger.info('%r', argv)
-                    subprocess.run(argv, check=True)
+
+                    os.makedirs(
+                        os.path.join(
+                            sysroot, 'files', 'usr', 'lib', 'debug',
+                        ),
+                        exist_ok=True,
+                    )
+
+                    if self.include_sdk_debug:
+                        if self.include_sdk_sysroot:
+                            argv = [
+                                'cp',
+                                '-al',
+                                os.path.join(dest, 'files', 'lib', 'debug'),
+                                os.path.join(sysroot, 'files', 'usr', 'lib'),
+                            ]
+                            logger.info('%r', argv)
+                            subprocess.run(argv, check=True)
+                        else:
+                            argv = [
+                                'tar',
+                                '-C', os.path.join(
+                                    sysroot, 'files', 'usr', 'lib', 'debug'
+                                ),
+                                '--transform', r's,^\(\./\)\?files\(/\|$\),,',
+                                '-xf',
+                                os.path.join(
+                                    self.cache, runtime.debug_tarball,
+                                ),
+                            ]
+                            logger.info('%r', argv)
+                            subprocess.run(argv, check=True)
 
             with open(
                 os.path.join(self.depot, 'run-in-' + runtime.name), 'w'
@@ -1210,7 +1257,11 @@ class Main:
     def use_local_runtime(self, runtime: Runtime) -> None:
         assert runtime.path
 
-        for basename in runtime.get_archives(include_sdk=self.include_sdk):
+        for basename in runtime.get_archives(
+            include_sdk_debug=self.include_sdk_debug,
+            include_sdk_runtime=self.include_sdk_runtime,
+            include_sdk_sysroot=self.include_sdk_sysroot,
+        ):
             src = os.path.join(runtime.path, basename)
             dest = os.path.join(self.cache, basename)
             logger.info('Hard-linking local runtime %r to %r', src, dest)
@@ -1235,7 +1286,7 @@ class Main:
             ) as writer:
                 writer.write(f'{runtime.version}\n')
 
-            if self.include_sdk:
+            if self.include_sdk_runtime or self.include_sdk_sysroot:
                 with open(
                     os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
                 ) as writer:
@@ -1286,7 +1337,11 @@ class Main:
 
         pinned = runtime.pin_version(self.opener)
 
-        for basename in runtime.get_archives(include_sdk=self.include_sdk):
+        for basename in runtime.get_archives(
+            include_sdk_debug=self.include_sdk_debug,
+            include_sdk_runtime=self.include_sdk_runtime,
+            include_sdk_sysroot=self.include_sdk_sysroot,
+        ):
             downloaded = runtime.fetch(basename, self.opener)
 
             if self.include_archives:
@@ -1303,7 +1358,7 @@ class Main:
             ) as writer:
                 writer.write(f'{pinned}\n')
 
-            if self.include_sdk:
+            if self.include_sdk_runtime or self.include_sdk_sysroot:
                 with open(
                     os.path.join(self.depot, runtime.sdk_build_id_file), 'w',
                 ) as writer:
@@ -1742,6 +1797,18 @@ def main() -> None:
         help='Include a corresponding SDK',
     )
     parser.add_argument(
+        '--include-sdk-debug', default=False, action='store_true',
+        help='Include a corresponding SDK',
+    )
+    parser.add_argument(
+        '--include-sdk-runtime', default=False, action='store_true',
+        help='Include a corresponding SDK',
+    )
+    parser.add_argument(
+        '--include-sdk-sysroot', default=False, action='store_true',
+        help='Include a corresponding SDK',
+    )
+    parser.add_argument(
         '--layered', default=False, action='store_true',
         help='Produce a layered runtime that runs scout on soldier',
     )
@@ -1838,6 +1905,11 @@ def main() -> None:
 
     try:
         args = parser.parse_args()
+
+        args.include_sdk_debug = args.include_sdk_debug or args.include_sdk
+        args.include_sdk_runtime = args.include_sdk_runtime or args.include_sdk
+        args.include_sdk_sysroot = args.include_sdk_sysroot or args.include_sdk
+
         Main(**vars(args)).run()
     except InvocationError as e:
         parser.error(str(e))

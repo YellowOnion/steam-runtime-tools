@@ -113,7 +113,7 @@ endforeach
 
 executable(
   multiarch + '-check-gl',
-  'check-gl.cpp',
+  'check-gl.c',
   dependencies : [xlib, gl],
   include_directories : project_include_dirs,
   install : true,

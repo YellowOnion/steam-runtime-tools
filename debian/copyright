@@ -26,7 +26,7 @@ Copyright:
 License: Expat and LGPL-2+ and LGPL-2.1+ and Zlib
 
 Files:
- helpers/check-gl.cpp
+ helpers/check-gl.c
  helpers/check-vulkan.c
 Copyright:
  2012 Arvin Schnell

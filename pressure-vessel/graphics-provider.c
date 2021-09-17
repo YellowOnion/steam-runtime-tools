@@ -137,6 +137,8 @@ pv_graphics_provider_finalize (GObject *object)
   g_free (self->path_in_current_ns);
   g_free (self->path_in_host_ns);
   g_free (self->path_in_container_ns);
+
+  G_OBJECT_CLASS (pv_graphics_provider_parent_class)->finalize (object);
 }
 
 static void

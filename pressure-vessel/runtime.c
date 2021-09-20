@@ -1201,13 +1201,14 @@ enumerate_arch (gpointer data)
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating %s VDPAU drivers in thread",
                               inputs->details->tuple);
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
 
       /* We ignore the results. system_info will cache them for later
        * calls, so when we're doing the actual work, redoing this call
        * will just retrieve them */
-      srt_system_info_list_vdpau_drivers (system_info,
-                                          inputs->details->tuple,
-                                          SRT_DRIVER_FLAGS_NONE);
+      drivers = srt_system_info_list_vdpau_drivers (system_info,
+                                                    inputs->details->tuple,
+                                                    SRT_DRIVER_FLAGS_NONE);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1218,10 +1219,11 @@ enumerate_arch (gpointer data)
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating %s DRI drivers in thread",
                               inputs->details->tuple);
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
 
-      srt_system_info_list_dri_drivers (system_info,
-                                        inputs->details->tuple,
-                                        SRT_DRIVER_FLAGS_NONE);
+      drivers = srt_system_info_list_dri_drivers (system_info,
+                                                  inputs->details->tuple,
+                                                  SRT_DRIVER_FLAGS_NONE);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1232,10 +1234,11 @@ enumerate_arch (gpointer data)
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating %s VA-API drivers in thread",
                               inputs->details->tuple);
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
 
-      srt_system_info_list_va_api_drivers (system_info,
-                                           inputs->details->tuple,
-                                           SRT_DRIVER_FLAGS_NONE);
+      drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                     inputs->details->tuple,
+                                                     SRT_DRIVER_FLAGS_NONE);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1271,8 +1274,9 @@ enumerate_indep (gpointer data)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating EGL ICDs in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
 
-      srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
+      drivers = srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1282,8 +1286,9 @@ enumerate_indep (gpointer data)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
 
-      srt_system_info_list_vulkan_icds (system_info, pv_multiarch_tuples);
+      drivers = srt_system_info_list_vulkan_icds (system_info, pv_multiarch_tuples);
     }
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
@@ -1293,9 +1298,11 @@ enumerate_indep (gpointer data)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating Vulkan layers in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) exp_layers = NULL;
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) imp_layers = NULL;
 
-      srt_system_info_list_explicit_vulkan_layers (system_info);
-      srt_system_info_list_implicit_vulkan_layers (system_info);
+      exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+      imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
     }
 
 out:

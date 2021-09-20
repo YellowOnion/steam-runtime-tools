@@ -2193,7 +2193,9 @@ typedef struct
    * or (type SrtVaApiDriver) or (type SrtVulkanLayer) or
    * (type SrtDriDriver) */
   gpointer icd;
-  gchar *resolved_library;
+  /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
+   * tuple in multiarch_tuples. */
+  gchar *resolved_libraries[PV_N_SUPPORTED_ARCHITECTURES + 1];
   /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
    * tuple in multiarch_tuples. */
   IcdKind kinds[PV_N_SUPPORTED_ARCHITECTURES + 1];
@@ -2218,10 +2220,10 @@ icd_details_new (gpointer icd)
 
   self = g_slice_new0 (IcdDetails);
   self->icd = g_object_ref (icd);
-  self->resolved_library = NULL;
 
   for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES + 1; i++)
     {
+      self->resolved_libraries[i] = NULL;
       self->kinds[i] = ICD_KIND_NONEXISTENT;
       self->paths_in_container[i] = NULL;
     }
@@ -2235,10 +2237,12 @@ icd_details_free (IcdDetails *self)
   gsize i;
 
   g_object_unref (self->icd);
-  g_free (self->resolved_library);
 
   for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES + 1; i++)
-    g_free (self->paths_in_container[i]);
+    {
+      g_free (self->resolved_libraries[i]);
+      g_free (self->paths_in_container[i]);
+    }
 
   g_slice_free (IcdDetails, self);
 }
@@ -2332,8 +2336,9 @@ bind_icd (PvRuntime *self,
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (subdir != NULL, FALSE);
   g_return_val_if_fail (details != NULL, FALSE);
-  g_return_val_if_fail (details->resolved_library != NULL, FALSE);
   multiarch_index = arch->multiarch_index;
+  g_return_val_if_fail (details->resolved_libraries[multiarch_index] != NULL,
+                        FALSE);
   g_return_val_if_fail (details->kinds[multiarch_index] == ICD_KIND_NONEXISTENT,
                         FALSE);
   g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
@@ -2342,9 +2347,10 @@ bind_icd (PvRuntime *self,
   g_return_val_if_fail (dependency_patterns != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  g_info ("Capturing loadable module: %s", details->resolved_library);
+  g_info ("Capturing loadable module: %s",
+          details->resolved_libraries[multiarch_index]);
 
-  if (g_path_is_absolute (details->resolved_library))
+  if (g_path_is_absolute (details->resolved_libraries[multiarch_index]))
     {
       details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
       mode = "path";
@@ -2364,7 +2370,7 @@ bind_icd (PvRuntime *self,
     return glnx_throw_errno_prefix (error, "Unable to create %s",
                                     in_current_namespace);
 
-  base = glnx_basename (details->resolved_library);
+  base = glnx_basename (details->resolved_libraries[multiarch_index]);
 
   /* Check whether we can get away with avoiding the sequence number.
    * Depending on the type of ICD, we might want to use the sequence
@@ -2411,9 +2417,9 @@ bind_icd (PvRuntime *self,
     dir_elements_before++;
 
   pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
-                             options, mode, details->resolved_library);
+                             options, mode, details->resolved_libraries[multiarch_index]);
   dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
-                                        options, mode, details->resolved_library);
+                                        options, mode, details->resolved_libraries[multiarch_index]);
 
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
@@ -2466,7 +2472,7 @@ bind_icd (PvRuntime *self,
       details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
                                                                        subdir,
                                                                        seq_str ? seq_str : "",
-                                                                       glnx_basename (details->resolved_library),
+                                                                       glnx_basename (details->resolved_libraries[multiarch_index]),
                                                                        NULL);
     }
 
@@ -3841,6 +3847,8 @@ collect_vulkan_layers (PvRuntime *self,
       /* If we have just a SONAME, we do not want to place the library
        * under a subdir, otherwise ld.so will not be able to find it */
       const gboolean use_subdir_for_kind_soname = FALSE;
+      const char *resolved_library;
+      const gsize multiarch_index = arch->multiarch_index;
 
       if (!srt_vulkan_layer_check_error (layer, NULL))
         continue;
@@ -3848,23 +3856,25 @@ collect_vulkan_layers (PvRuntime *self,
       /* For meta-layers we don't have a library path */
       if (srt_vulkan_layer_get_library_path(layer) == NULL)
         {
-          details->kinds[arch->multiarch_index] = ICD_KIND_META_LAYER;
+          details->kinds[multiarch_index] = ICD_KIND_META_LAYER;
           continue;
         }
 
       /* If the library_path is relative to the JSON file, turn it into an
        * absolute path. If it's already absolute, or if it's a basename to be
        * looked up in the system library search path, use it as-is. */
-      details->resolved_library = srt_vulkan_layer_resolve_library_path (layer);
-      g_assert (details->resolved_library != NULL);
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_vulkan_layer_resolve_library_path (layer);
+      resolved_library = details->resolved_libraries[multiarch_index];
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
-      if (strchr (details->resolved_library, '/') != NULL &&
-          (strstr (details->resolved_library, "$ORIGIN/") != NULL ||
-           strstr (details->resolved_library, "${ORIGIN}") != NULL ||
-           strstr (details->resolved_library, "$LIB/") != NULL ||
-           strstr (details->resolved_library, "${LIB}") != NULL ||
-           strstr (details->resolved_library, "$PLATFORM/") != NULL ||
-           strstr (details->resolved_library, "${PLATFORM}") != NULL))
+      if (strchr (resolved_library, '/') != NULL &&
+          (strstr (resolved_library, "$ORIGIN/") != NULL ||
+           strstr (resolved_library, "${ORIGIN}") != NULL ||
+           strstr (resolved_library, "$LIB/") != NULL ||
+           strstr (resolved_library, "${LIB}") != NULL ||
+           strstr (resolved_library, "$PLATFORM/") != NULL ||
+           strstr (resolved_library, "${PLATFORM}") != NULL))
         {
           /* When loading a library by its absolute or relative path
            * (but not when searching the library path for its basename),
@@ -3877,7 +3887,7 @@ collect_vulkan_layers (PvRuntime *self,
           if (g_strcmp0 (self->provider->path_in_current_ns, "/") == 0)
             {
               /* It's in our current namespace, so we can dlopen it. */
-              issues = srt_check_library_presence (details->resolved_library,
+              issues = srt_check_library_presence (resolved_library,
                                                    arch->details->tuple, NULL,
                                                    SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                                    &library);
@@ -3885,12 +3895,16 @@ collect_vulkan_layers (PvRuntime *self,
                             SRT_LIBRARY_ISSUES_UNKNOWN |
                             SRT_LIBRARY_ISSUES_TIMEOUT))
                 {
-                  g_info ("Unable to load library %s: %s", details->resolved_library,
+                  g_info ("Unable to load library %s: %s", resolved_library,
                           srt_library_get_messages (library));
                   continue;
                 }
-              g_free (details->resolved_library);
-              details->resolved_library = g_strdup (srt_library_get_absolute_path (library));
+
+              /* This is "borrowed" and we are about to invalidate it */
+              resolved_library = NULL;
+
+              g_free (details->resolved_libraries[multiarch_index]);
+              details->resolved_libraries[multiarch_index] = g_strdup (srt_library_get_absolute_path (library));
             }
           else
             {
@@ -4721,6 +4735,7 @@ collect_egl_drivers (PvRuntime *self,
   /* If we have just a SONAME, we do not want to place the library
    * under a subdir, otherwise ld.so will not be able to find it */
   const gboolean use_subdir_for_kind_soname = FALSE;
+  const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Collecting %s EGL drivers from provider...",
            arch->details->tuple);
@@ -4733,8 +4748,9 @@ collect_egl_drivers (PvRuntime *self,
       if (!srt_egl_icd_check_error (icd, NULL))
         continue;
 
-      details->resolved_library = srt_egl_icd_resolve_library_path (icd);
-      g_assert (details->resolved_library != NULL);
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_egl_icd_resolve_library_path (icd);
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
       if (!bind_icd (self, arch, j, "glvnd", details,
                      &use_numbered_subdirs, use_subdir_for_kind_soname,
@@ -4765,6 +4781,7 @@ collect_vulkan_icds (PvRuntime *self,
   /* If we have just a SONAME, we do not want to place the library
    * under a subdir, otherwise ld.so will not be able to find it */
   const gboolean use_subdir_for_kind_soname = FALSE;
+  const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Collecting %s Vulkan drivers from provider...",
            arch->details->tuple);
@@ -4777,8 +4794,9 @@ collect_vulkan_icds (PvRuntime *self,
       if (!srt_vulkan_icd_check_error (icd, NULL))
         continue;
 
-      details->resolved_library = srt_vulkan_icd_resolve_library_path (icd);
-      g_assert (details->resolved_library != NULL);
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_vulkan_icd_resolve_library_path (icd);
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
       if (!bind_icd (self, arch, j, "vulkan", details,
                      &use_numbered_subdirs, use_subdir_for_kind_soname,
@@ -4810,6 +4828,7 @@ collect_vdpau_drivers (PvRuntime *self,
   const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
+  const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Enumerating %s VDPAU ICDs on provider...", arch->details->tuple);
     {
@@ -4824,9 +4843,11 @@ collect_vdpau_drivers (PvRuntime *self,
   for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
       g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
-      details->resolved_library = srt_vdpau_driver_resolve_library_path (details->icd);
-      g_assert (details->resolved_library != NULL);
-      g_assert (g_path_is_absolute (details->resolved_library));
+
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_vdpau_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
+      g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       /* In practice we won't actually use the sequence number for VDPAU
        * because they can only be located in a single directory,
@@ -4863,6 +4884,7 @@ collect_dri_drivers (PvRuntime *self,
   const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
+  const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Enumerating %s DRI drivers on provider...",
            arch->details->tuple);
@@ -4879,9 +4901,10 @@ collect_dri_drivers (PvRuntime *self,
     {
       g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
 
-      details->resolved_library = srt_dri_driver_resolve_library_path (details->icd);
-      g_assert (details->resolved_library != NULL);
-      g_assert (g_path_is_absolute (details->resolved_library));
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_dri_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
+      g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       if (!bind_icd (self, arch, j, "dri", details,
                      &use_numbered_subdirs, use_subdir_for_kind_soname,
@@ -4914,6 +4937,7 @@ collect_va_api_drivers (PvRuntime *self,
   const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
+  const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Enumerating %s VA-API drivers on provider...",
            arch->details->tuple);
@@ -4930,9 +4954,10 @@ collect_va_api_drivers (PvRuntime *self,
     {
       g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
 
-      details->resolved_library = srt_va_api_driver_resolve_library_path (details->icd);
-      g_assert (details->resolved_library != NULL);
-      g_assert (g_path_is_absolute (details->resolved_library));
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_va_api_driver_resolve_library_path (details->icd);
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
+      g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       if (!bind_icd (self, arch, j, "dri", details,
                      &use_numbered_subdirs, use_subdir_for_kind_soname,

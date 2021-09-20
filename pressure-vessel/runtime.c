@@ -1748,6 +1748,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->source);
   g_free (self->source_files);
   g_free (self->deployment);
+  g_free (self->id);
 
   if (self->runtime_lock != NULL)
     pv_bwrap_lock_free (self->runtime_lock);

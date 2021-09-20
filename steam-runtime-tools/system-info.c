@@ -554,6 +554,7 @@ srt_system_info_finalize (GObject *object)
   forget_xdg_portal (self);
 
   g_clear_pointer (&self->abis, g_ptr_array_unref);
+  g_clear_pointer (&self->multiarch_tuples, g_array_unref);
   g_free (self->expectations);
   g_free (self->helpers_path);
   g_free (self->sysroot);

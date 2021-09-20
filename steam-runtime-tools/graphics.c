@@ -3591,17 +3591,14 @@ _srt_load_egl_icds (const char *helpers_path,
 
   if (value != NULL)
     {
-      gchar **filenames = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+      g_auto(GStrv) filenames = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
 
       for (i = 0; filenames[i] != NULL; i++)
         egl_icd_load_json (sysroot, filenames[i], &ret);
-
-      g_strfreev (filenames);
     }
   else
     {
-      gchar **dirs;
-      gchar *flatpak_info = NULL;
+      g_autofree gchar *flatpak_info = NULL;
 
       value = g_environ_getenv (envp, "__EGL_VENDOR_LIBRARY_DIRS");
 
@@ -3609,10 +3606,10 @@ _srt_load_egl_icds (const char *helpers_path,
 
       if (value != NULL)
         {
-          dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+          g_auto(GStrv) dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+
           load_json_dirs (sysroot, dirs, NULL, _srt_indirect_strcmp0,
                           egl_icd_load_json_cb, &ret);
-          g_strfreev (dirs);
         }
       else if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
                && multiarch_tuples != NULL)
@@ -3621,14 +3618,13 @@ _srt_load_egl_icds (const char *helpers_path,
 
           for (i = 0; multiarch_tuples[i] != NULL; i++)
             {
-              gchar *tmp;
+              g_autofree gchar *tmp = NULL;
 
               /* freedesktop-sdk reconfigures the EGL loader to look here. */
               tmp = g_strdup_printf ("/usr/lib/%s/GL/" EGL_VENDOR_SUFFIX,
                                      multiarch_tuples[i]);
               load_json_dir (sysroot, tmp, NULL, _srt_indirect_strcmp0,
                              egl_icd_load_json_cb, &ret);
-              g_free (tmp);
             }
         }
       else
@@ -3638,8 +3634,6 @@ _srt_load_egl_icds (const char *helpers_path,
           load_json_dir (sysroot, get_glvnd_datadir (), EGL_VENDOR_SUFFIX,
                          _srt_indirect_strcmp0, egl_icd_load_json_cb, &ret);
         }
-
-      g_free (flatpak_info);
     }
 
   if (!(check_flags & SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS))
@@ -4387,12 +4381,12 @@ _srt_get_modules_full (const char *sysroot,
   const gchar *drivers_path;
   const gchar *force_elf_class = NULL;
   const gchar *ld_library_path = NULL;
-  gchar *flatpak_info;
-  gchar *tmp_dir = NULL;
-  GHashTable *drivers_set;
+  g_autofree gchar *flatpak_info = NULL;
+  g_autofree gchar *tmp_dir = NULL;
+  g_autoptr(GHashTable) drivers_set = NULL;
   gboolean is_extra = FALSE;
-  GPtrArray *vdpau_argv = NULL;
-  GError *error = NULL;
+  g_autoptr(GPtrArray) vdpau_argv = NULL;
+  g_autoptr(GError) error = NULL;
 
   g_return_if_fail (envp != NULL);
   g_return_if_fail (multiarch_tuple != NULL);
@@ -4432,8 +4426,10 @@ _srt_get_modules_full (const char *sysroot,
 
   if (drivers_path)
     {
+      g_auto(GStrv) entries = NULL;
+      char **entry;
+
       g_debug ("A driver path environment is available: %s", drivers_path);
-      gchar **entries;
       /* VDPAU_DRIVER_PATH holds just a single path and not a colon separeted
        * list of paths. Because of that we handle the VDPAU case separately to
        * avoid splitting a theoretically valid path like "/usr/lib/custom_d:r/" */
@@ -4448,7 +4444,7 @@ _srt_get_modules_full (const char *sysroot,
           entries = g_strsplit (drivers_path, ":", 0);
         }
 
-      for (gchar **entry = entries; entry != NULL && *entry != NULL; entry++)
+      for (entry = entries; entry != NULL && *entry != NULL; entry++)
         {
           if (*entry[0] == '\0')
             continue;
@@ -4460,7 +4456,6 @@ _srt_get_modules_full (const char *sysroot,
                                           FALSE, module, drivers_out);
             }
         }
-      g_strfreev (entries);
 
       /* We continue to search for libraries but we mark them all as "extra" because the
        * loader wouldn't have picked them up. */
@@ -4493,11 +4488,12 @@ _srt_get_modules_full (const char *sysroot,
    * */
   if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS))
     {
-      gchar *libdir = g_build_filename (sysroot, "usr", "lib", multiarch_tuple, NULL);
+      g_autofree gchar *libdir = g_build_filename (sysroot, "usr", "lib", multiarch_tuple, NULL);
+
       if (module == SRT_GRAPHICS_VAAPI_MODULE)
         {
-          gchar *libdir_dri = g_build_filename (libdir, "dri", NULL);
-          gchar *intel_vaapi = g_build_filename (libdir_dri, "intel-vaapi-driver", NULL);
+          g_autofree gchar *libdir_dri = g_build_filename (libdir, "dri", NULL);
+          g_autofree gchar *intel_vaapi = g_build_filename (libdir_dri, "intel-vaapi-driver", NULL);
           if (!g_hash_table_contains (drivers_set, libdir_dri))
             {
               g_hash_table_add (drivers_set, g_strdup (libdir_dri));
@@ -4510,23 +4506,19 @@ _srt_get_modules_full (const char *sysroot,
               _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, intel_vaapi,
                                           is_extra, module, drivers_out);
             }
-          g_free (libdir_dri);
-          g_free (intel_vaapi);
         }
 
       if (module == SRT_GRAPHICS_VAAPI_MODULE || module == SRT_GRAPHICS_DRI_MODULE)
         {
-          gchar *gl_lib_dri = g_build_filename (libdir, "GL", "lib", "dri", NULL);
+          g_autofree gchar *gl_lib_dri = g_build_filename (libdir, "GL", "lib", "dri", NULL);
+
           if (!g_hash_table_contains (drivers_set, gl_lib_dri))
             {
               g_hash_table_add (drivers_set, g_strdup (gl_lib_dri));
               _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, gl_lib_dri,
                                           is_extra, module, drivers_out);
             }
-          g_free (gl_lib_dri);
         }
-
-      g_free (libdir);
 
       /* We continue to search for libraries but we mark them all as "extra" because the
        * loader wouldn't have picked them up.
@@ -4543,11 +4535,10 @@ _srt_get_modules_full (const char *sysroot,
 
   for (gsize i = 0; loader_libraries[i] != NULL; i++)
     {
-      SrtLibrary *library_details = NULL;
-      char *driver_canonical_path;
-      gchar *libdir;
-      gchar *libdir_driver;
-      GList *extras = NULL;
+      g_autoptr(SrtLibrary) library_details = NULL;
+      g_autofree char *driver_canonical_path = NULL;
+      g_autofree gchar *libdir = NULL;
+      g_autofree gchar *libdir_driver = NULL;
       SrtLibraryIssues issues;
 
       issues = _srt_check_library_presence (helpers_path,
@@ -4577,7 +4568,6 @@ _srt_get_modules_full (const char *sysroot,
       if (loader_path == NULL)
         {
           g_debug ("loader path for %s is NULL", loader_libraries[i]);
-          g_object_unref (library_details);
           continue;
         }
 
@@ -4586,7 +4576,6 @@ _srt_get_modules_full (const char *sysroot,
       if (driver_canonical_path == NULL)
         {
           g_debug ("realpath(%s): %s", loader_path, g_strerror (errno));
-          g_object_unref (library_details);
           continue;
         }
       libdir = g_path_get_dirname (driver_canonical_path);
@@ -4639,6 +4628,8 @@ _srt_get_modules_full (const char *sysroot,
 
           if (driver_class != ELFCLASSNONE)
             {
+              GList *extras;
+
               extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
               for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
                 {
@@ -4650,14 +4641,9 @@ _srt_get_modules_full (const char *sysroot,
                                                   drivers_out);
                     }
                 }
-            }
 
-          free (driver_canonical_path);
-          g_free (libdir);
-          g_free (libdir_driver);
-          g_object_unref (library_details);
-          if (extras)
-            g_list_free_full (extras, g_free);
+              g_list_free_full (extras, g_free);
+            }
         }
     }
 
@@ -4668,12 +4654,13 @@ _srt_get_modules_full (const char *sysroot,
        * To cover that we search in all directories listed in LD_LIBRARY_PATH. */
       if (ld_library_path != NULL)
         {
-          gchar **entries = g_strsplit (ld_library_path, ":", 0);
+          g_auto(GStrv) entries = g_strsplit (ld_library_path, ":", 0);
           gchar **entry;
-          char *entry_realpath;
 
           for (entry = entries; entry != NULL && *entry != NULL; entry++)
             {
+              g_autofree char *entry_realpath = NULL;
+
               /* Scripts that manipulate LD_LIBRARY_PATH have a habit of
                * adding empty entries */
               if (*entry[0] == '\0')
@@ -4692,9 +4679,7 @@ _srt_get_modules_full (const char *sysroot,
                                               entry_realpath, is_extra, module,
                                               drivers_out);
                 }
-              free (entry_realpath);
             }
-          g_strfreev (entries);
         }
 
       /* Also use "capsule-capture-libs" to search for VDPAU drivers that we might have
@@ -4721,28 +4706,23 @@ _srt_get_modules_full (const char *sysroot,
            * <https://salsa.debian.org/nvidia-team/libvdpau/commit/11a3cd84>
            * Just to be sure to not miss a potentially valid library path we search on it
            * unconditionally, flagging it as extra. */
-          gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
+          g_autofree gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
+
           if (!g_hash_table_contains (drivers_set, debian_additional))
             {
               _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
                                           debian_additional, TRUE, module,
                                           drivers_out);
             }
-          g_free (debian_additional);
         }
     }
 
 out:
-  g_clear_pointer (&vdpau_argv, g_ptr_array_unref);
   if (tmp_dir)
     {
       if (!_srt_rm_rf (tmp_dir))
         g_debug ("Unable to remove the temporary directory: %s", tmp_dir);
     }
-  g_free (tmp_dir);
-  g_hash_table_unref (drivers_set);
-  g_free (flatpak_info);
-  g_clear_error (&error);
 }
 
 /*

@@ -4543,10 +4543,10 @@ _srt_get_modules_full (const char *sysroot,
 
   for (gsize i = 0; loader_libraries[i] != NULL; i++)
     {
-      SrtLibrary *library_details = NULL;
-      char *driver_canonical_path;
-      gchar *libdir;
-      gchar *libdir_driver;
+      g_autoptr(SrtLibrary) library_details = NULL;
+      g_autofree char *driver_canonical_path = NULL;
+      g_autofree gchar *libdir = NULL;
+      g_autofree gchar *libdir_driver = NULL;
       GList *extras = NULL;
       SrtLibraryIssues issues;
 
@@ -4577,7 +4577,6 @@ _srt_get_modules_full (const char *sysroot,
       if (loader_path == NULL)
         {
           g_debug ("loader path for %s is NULL", loader_libraries[i]);
-          g_object_unref (library_details);
           continue;
         }
 
@@ -4586,7 +4585,6 @@ _srt_get_modules_full (const char *sysroot,
       if (driver_canonical_path == NULL)
         {
           g_debug ("realpath(%s): %s", loader_path, g_strerror (errno));
-          g_object_unref (library_details);
           continue;
         }
       libdir = g_path_get_dirname (driver_canonical_path);
@@ -4652,10 +4650,6 @@ _srt_get_modules_full (const char *sysroot,
                 }
             }
 
-          free (driver_canonical_path);
-          g_free (libdir);
-          g_free (libdir_driver);
-          g_object_unref (library_details);
           if (extras)
             g_list_free_full (extras, g_free);
         }

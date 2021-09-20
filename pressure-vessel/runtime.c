@@ -1351,6 +1351,8 @@ enumeration_threads_clear (EnumerationThread **arr,
 
   for (i = 0; i < n; i++)
     enumeration_thread_clear (threads + i);
+
+  g_free (threads);
 }
 
 /* Must be called in main thread */

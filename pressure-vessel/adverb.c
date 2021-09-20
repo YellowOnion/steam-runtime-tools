@@ -724,7 +724,7 @@ regenerate_ld_so_cache (const GPtrArray *ld_so_cache_paths,
                         error))
     return glnx_prefix_error (error, "Cannot run /sbin/ldconfig");
 
-  if (!g_spawn_check_exit_status (wait_status, &local_error))
+  if (!g_spawn_check_wait_status (wait_status, &local_error))
     {
       if (child_stderr != NULL && child_stderr[0] != '\0')
         {
@@ -824,7 +824,7 @@ generate_locales (gchar **locpath_out,
        * missing locales at OS level. This is not an error. */
       g_info ("pressure-vessel-locale-gen created missing locales");
     }
-  else if (!g_spawn_check_exit_status (wait_status, error))
+  else if (!g_spawn_check_wait_status (wait_status, error))
     {
       if (error != NULL)
         glnx_prefix_error (error, "Unable to generate locales");

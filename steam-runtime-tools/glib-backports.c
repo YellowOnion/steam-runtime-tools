@@ -89,11 +89,11 @@ my_g_close (gint       fd,
 
 #if !GLIB_CHECK_VERSION (2, 34, 0)
 /*
- * g_spawn_check_exit_status:
- * @exit_status: An exit code as returned from g_spawn_sync()
+ * g_spawn_check_wait_status:
+ * @wait_status: An exit code as returned from g_spawn_sync()
  * @error: a #GError
  *
- * Set @error if @exit_status indicates the child exited abnormally
+ * Set @error if @wait_status indicates the child exited abnormally
  * (e.g. with a nonzero exit code, or via a fatal signal).
  *
  * The g_spawn_sync() and g_child_watch_add() family of APIs return an
@@ -102,7 +102,7 @@ my_g_close (gint       fd,
  * and on Windows it is guaranteed to be the result of GetExitCodeProcess().
  *
  * Prior to the introduction of this function in GLib 2.34, interpreting
- * @exit_status required use of platform-specific APIs, which is problematic
+ * @wait_status required use of platform-specific APIs, which is problematic
  * for software using GLib as a cross-platform layer.
  *
  * Additionally, many programs simply want to determine whether or not
@@ -114,7 +114,7 @@ my_g_close (gint       fd,
  * The @domain and @code of @error have special semantics in the case
  * where the process has an "exit code", as opposed to being killed by
  * a signal. On Unix, this happens if WIFEXITED() would be true of
- * @exit_status. On Windows, it is always the case.
+ * @wait_status. On Windows, it is always the case.
  *
  * The special semantics are that the actual exit code will be the
  * code set in @error, and the domain will be %G_SPAWN_EXIT_ERROR.
@@ -126,7 +126,7 @@ my_g_close (gint       fd,
  *
  * This function just offers convenience; you can of course also check
  * the available platform via a macro such as %G_OS_UNIX, and use
- * WIFEXITED() and WEXITSTATUS() on @exit_status directly. Do not attempt
+ * WIFEXITED() and WEXITSTATUS() on @wait_status directly. Do not attempt
  * to scan or parse the error message string; it may be translated and/or
  * change in future versions of GLib.
  *
@@ -136,33 +136,33 @@ my_g_close (gint       fd,
  * Since: 2.34
  */
 gboolean
-my_g_spawn_check_exit_status (gint      exit_status,
+my_g_spawn_check_wait_status (gint      wait_status,
                               GError  **error)
 {
   gboolean ret = FALSE;
 
-  if (WIFEXITED (exit_status))
+  if (WIFEXITED (wait_status))
     {
-      if (WEXITSTATUS (exit_status) != 0)
+      if (WEXITSTATUS (wait_status) != 0)
         {
-          g_set_error (error, G_SPAWN_EXIT_ERROR, WEXITSTATUS (exit_status),
+          g_set_error (error, G_SPAWN_EXIT_ERROR, WEXITSTATUS (wait_status),
                        _("Child process exited with code %ld"),
-                       (long) WEXITSTATUS (exit_status));
+                       (long) WEXITSTATUS (wait_status));
           goto out;
         }
     }
-  else if (WIFSIGNALED (exit_status))
+  else if (WIFSIGNALED (wait_status))
     {
       g_set_error (error, G_SPAWN_ERROR, G_SPAWN_ERROR_FAILED,
                    _("Child process killed by signal %ld"),
-                   (long) WTERMSIG (exit_status));
+                   (long) WTERMSIG (wait_status));
       goto out;
     }
-  else if (WIFSTOPPED (exit_status))
+  else if (WIFSTOPPED (wait_status))
     {
       g_set_error (error, G_SPAWN_ERROR, G_SPAWN_ERROR_FAILED,
                    _("Child process stopped by signal %ld"),
-                   (long) WSTOPSIG (exit_status));
+                   (long) WSTOPSIG (wait_status));
       goto out;
     }
   else

@@ -164,7 +164,7 @@ pv_run_sync (const char * const * argv,
 
   g_debug ("-> %s", output);
 
-  if (!g_spawn_check_exit_status (wait_status, error))
+  if (!g_spawn_check_wait_status (wait_status, error))
     return FALSE;
 
   if (output_out != NULL)

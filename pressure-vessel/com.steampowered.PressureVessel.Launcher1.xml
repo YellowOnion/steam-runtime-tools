@@ -146,7 +146,7 @@
 
         Emitted when a process started by
         com.steampowered.PressureVessel.Launcher1.Launch() exits.
-        Use g_spawn_check_exit_status(), or the macros such as
+        Use g_spawn_check_wait_status(), or the macros such as
         `WIFEXITED` documented in `waitpid(2)`, to interpret
         the @wait_status.
 

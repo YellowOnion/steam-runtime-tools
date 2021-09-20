@@ -37,7 +37,7 @@
 /**
  * G_SPAWN_EXIT_ERROR:
  *
- * Error domain used by g_spawn_check_exit_status().  The code
+ * Error domain used by g_spawn_check_wait_status().  The code
  * will be the program exit code.
  */
 #define G_SPAWN_EXIT_ERROR my_g_spawn_exit_error_quark ()
@@ -63,9 +63,12 @@ gboolean my_g_close (gint fd,
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 34, 0)
-#define g_spawn_check_exit_status my_g_spawn_check_exit_status
-gboolean my_g_spawn_check_exit_status (gint exit_status,
+#define g_spawn_check_wait_status my_g_spawn_check_wait_status
+gboolean my_g_spawn_check_wait_status (gint wait_status,
                                        GError  **error);
+#elif !GLIB_CHECK_VERSION(2, 70, 0)
+/* In GLib 2.34 to 2.68, this was available under a misleading name */
+#define g_spawn_check_wait_status g_spawn_check_exit_status
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 40, 0)

@@ -4547,7 +4547,6 @@ _srt_get_modules_full (const char *sysroot,
       g_autofree char *driver_canonical_path = NULL;
       g_autofree gchar *libdir = NULL;
       g_autofree gchar *libdir_driver = NULL;
-      GList *extras = NULL;
       SrtLibraryIssues issues;
 
       issues = _srt_check_library_presence (helpers_path,
@@ -4637,6 +4636,8 @@ _srt_get_modules_full (const char *sysroot,
 
           if (driver_class != ELFCLASSNONE)
             {
+              GList *extras;
+
               extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
               for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
                 {
@@ -4648,10 +4649,9 @@ _srt_get_modules_full (const char *sysroot,
                                                   drivers_out);
                     }
                 }
-            }
 
-          if (extras)
-            g_list_free_full (extras, g_free);
+              g_list_free_full (extras, g_free);
+            }
         }
     }
 

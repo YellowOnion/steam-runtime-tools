@@ -115,6 +115,7 @@ def main():
         '--tmpfs', '/run/host',
         '--bind', abs_srcdir, abs_srcdir,
         '--bind', real_builddir, real_builddir,
+        '--setenv', 'PATH', '/usr/lib/ccache:/usr/local/bin:/usr/bin:/bin',
     ]
 
     if (

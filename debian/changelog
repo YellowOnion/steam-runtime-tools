@@ -1,15 +1,19 @@
 steam-runtime-tools (0.20210906.3) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
-  * build: Remove an unnecessary include path that triggers a meson warning.
-    Anything that needs to #include <libglnx.h> should depend on libglnx_dep.
+  * pressure-vessel, system-info: Fix various minor memory leaks
+  * build: Remove an unnecessary include path that triggers a meson warning
   * build: Use Meson's recommended behaviour for extract_all_objects()
+  * helpers: Translate check-gl into C.
+    This doesn't actually need to be C++, and its purpose is to test whether
+    OpenGL works, not to test whether libstdc++ works.
+  * Avoid functions deprecated in GLib 2.70
   * Unit test improvements
 
   [ Ludovico de Nittis ]
   * Create an issue template
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 16 Sep 2021 12:33:23 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 22 Sep 2021 16:08:02 +0100
 
 steam-runtime-tools (0.20210906.2) steamrt; urgency=medium
 

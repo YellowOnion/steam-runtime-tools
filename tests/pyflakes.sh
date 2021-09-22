@@ -33,9 +33,18 @@ fi
 
 cd "$G_TEST_SRCDIR/.."
 
-if [ "${PYFLAKES:=pyflakes3}" = false ] || \
-        [ -z "$(command -v "$PYFLAKES")" ]; then
-    echo "1..0 # SKIP pyflakes3 not found"
+if [ -n "${PYFLAKES-}" ]; then
+    echo "# Using PYFLAKES=$PYFLAKES from environment"
+elif command -v pyflakes3 >/dev/null; then
+    PYFLAKES=pyflakes3
+elif command -v pyflakes >/dev/null; then
+    PYFLAKES=pyflakes
+else
+    PYFLAKES=false
+fi
+
+if [ "${PYFLAKES}" = false ] || [ -z "$(command -v "$PYFLAKES")" ]; then
+    echo "1..0 # SKIP pyflakes not found"
 elif "${PYFLAKES}" \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \

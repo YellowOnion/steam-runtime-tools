@@ -1538,6 +1538,59 @@ static const VulkanLayersTest vulkan_layers_test[] =
     },
   },
 
+  {
+    .description = "Special case for Flatpak",
+    .sysroot = "fake-icds-flatpak",
+    .explicit_layers =
+    {
+      /* /usr/lib/x86_64-mock-abi/GL/vulkan/explicit_layer.d/glext.json */
+      {
+        .name = "VK_LAYER_GLEXT_explicit",
+        .description = "GL extension's explicit layer",
+        .library_path = "libVkLayer_GLEXT_explicit.so",
+        .api_version = "1.1.73",
+      },
+      /* /usr/lib/x86_64-mock-abi/vulkan/explicit_layer.d/runtime.json */
+      {
+        .name = "VK_LAYER_RUNTIME_explicit",
+        .description = "Runtime's explicit layer",
+        .library_path = "libVkLayer_RUNTIME_explicit.so",
+        .api_version = "1.1.73",
+      },
+      /* /usr/lib/extensions/vulkan/share/vulkan/explicit_layer.d/mr3398.json */
+      {
+        .name = "VK_LAYER_MESA_overlay",
+        .description = "Mesa Overlay layer",
+        .library_path = "libVkLayer_MESA_overlay.so",
+        .api_version = "1.1.73",
+      },
+    },
+    .implicit_layers =
+    {
+      /* /usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d/glext.json */
+      {
+        .name = "VK_LAYER_GLEXT_implicit",
+        .description = "GL extension's implicit layer",
+        .library_path = "/usr/$LIB/GL/implicit/libLayer.so",
+        .api_version = "1.2.135",
+      },
+      /* /usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d/runtime.json */
+      {
+        .name = "VK_LAYER_RUNTIME_implicit",
+        .description = "Runtime's implicit layer",
+        .library_path = "/usr/$LIB/implicit/libLayer.so",
+        .api_version = "1.2.135",
+      },
+      /* /usr/lib/extensions/vulkan/share/vulkan/implicit_layer.d/mr3398.json */
+      {
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .library_path = "/usr/lib/extensions/vulkan/$LIB/mangohud/libMangoHud.so",
+        .api_version = "1.2.135",
+      },
+    },
+  },
+
 };
 
 static void

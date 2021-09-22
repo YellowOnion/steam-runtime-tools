@@ -6966,7 +6966,8 @@ _srt_load_vulkan_layers_extended (const char *helpers_path,
   else
     {
       search_paths = _srt_graphics_get_vulkan_search_paths (sysroot, envp,
-                                                            NULL, suffix);
+                                                            multiarch_tuples,
+                                                            suffix);
       g_debug ("SEARCH PATHS %s", search_paths[0]);
       load_json_dirs (sysroot, search_paths, NULL, _srt_indirect_strcmp0,
                       vulkan_layer_load_json_cb, &ret);

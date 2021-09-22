@@ -190,8 +190,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--srcdir', default='.')
     parser.add_argument('--builddir-parent', default='_build')
-    parser.add_argument('--sysroot', default=None)
-    parser.add_argument('--tarball', default=None)
     parser.add_argument(
         'command',
         choices=('setup', 'clean', 'build', 'test', 'all'),

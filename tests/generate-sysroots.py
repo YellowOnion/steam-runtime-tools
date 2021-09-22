@@ -81,9 +81,15 @@ fake-icds-flatpak/etc/glvnd/egl_vendor.d
 fake-icds-flatpak/etc/vulkan/icd.d
 fake-icds-flatpak/etc/xdg/vulkan/icd.d
 fake-icds-flatpak/home/.local/share/vulkan/icd.d
+fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/explicit_layer.d
+fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/implicit_layer.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/explicit_layer.d
 fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d
 fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/explicit_layer.d
 fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d
+fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d
 fake-icds-flatpak/usr/lib/i386-mock-abi
 fake-icds-flatpak/usr/local/share/vulkan/icd.d
 fake-icds-flatpak/usr/share/glvnd/egl_vendor.d
@@ -695,6 +701,82 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json'
     "file_format_version": "1.0.0"
 }''')
 
+with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/explicit_layer.d/mr3398.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version": "1.0.0",
+    "layer": {
+        "name": "VK_LAYER_MESA_overlay",
+        "type": "GLOBAL",
+        "api_version": "1.1.73",
+        "library_path": "libVkLayer_MESA_overlay.so",
+        "implementation_version": "1",
+        "description": "Mesa Overlay layer"
+    }
+}''')
+
+with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/implicit_layer.d/mr3398.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version": "1.0.0",
+    "layer": {
+        "name": "VK_LAYER_MANGOHUD_overlay",
+        "type": "GLOBAL",
+        "api_version": "1.2.135",
+        "library_path": "/usr/lib/extensions/vulkan/\$LIB/mangohud/libMangoHud.so",
+        "description": "Vulkan Hud Overlay",
+        "implementation_version": "1",
+        "functions": {
+             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr",
+             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr"
+        },
+        "enable_environment": {
+            "MANGOHUD": "1"
+        },
+        "disable_environment": {
+            "DISABLE_MANGOHUD": "1"
+        }
+    }
+}''')
+
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/explicit_layer.d/runtime.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version": "1.0.0",
+    "layer": {
+        "name": "VK_LAYER_RUNTIME_explicit",
+        "type": "GLOBAL",
+        "api_version": "1.1.73",
+        "library_path": "libVkLayer_RUNTIME_explicit.so",
+        "implementation_version": "1",
+        "description": "Runtime's explicit layer"
+    }
+}''')
+
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d/runtime.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version": "1.0.0",
+    "layer": {
+        "name": "VK_LAYER_RUNTIME_implicit",
+        "type": "GLOBAL",
+        "api_version": "1.2.135",
+        "library_path": "/usr/\$LIB/implicit/libLayer.so",
+        "description": "Runtime's implicit layer",
+        "implementation_version": "1",
+        "functions": {
+             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr",
+             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr"
+        },
+        "enable_environment": {
+            "IMPLICIT": "1"
+        },
+        "disable_environment": {
+            "DISABLE_IMPLICIT": "1"
+        }
+    }
+}''')
+
 with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json', 'w') as writer:
     writer.write('''\
 {
@@ -704,8 +786,46 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relat
     "file_format_version": "1.0.0"
 }''')
 
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/explicit_layer.d/glext.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version": "1.0.0",
+    "layer": {
+        "name": "VK_LAYER_GLEXT_explicit",
+        "type": "GLOBAL",
+        "api_version": "1.1.73",
+        "library_path": "libVkLayer_GLEXT_explicit.so",
+        "implementation_version": "1",
+        "description": "GL extension's explicit layer"
+    }
+}''')
+
 with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json', 'w') as writer:
     writer.write('''[]''')
+
+with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d/glext.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version": "1.0.0",
+    "layer": {
+        "name": "VK_LAYER_GLEXT_implicit",
+        "type": "GLOBAL",
+        "api_version": "1.2.135",
+        "library_path": "/usr/\$LIB/GL/implicit/libLayer.so",
+        "description": "GL extension's implicit layer",
+        "implementation_version": "1",
+        "functions": {
+             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr",
+             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr"
+        },
+        "enable_environment": {
+            "IMPLICIT": "1"
+        },
+        "disable_environment": {
+            "DISABLE_IMPLICIT": "1"
+        }
+    }
+}''')
 
 with open('fake-icds-flatpak/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as writer:
     writer.write('''\

@@ -5975,12 +5975,11 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
 
   /* freedesktop-sdk patches the Vulkan loader to look here for ICDs. */
-  if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS)
-      && multiarch_tuples != NULL)
+  if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS))
     {
       g_debug ("Flatpak detected: assuming freedesktop-based runtime");
 
-      for (i = 0; multiarch_tuples[i] != NULL; i++)
+      for (i = 0; multiarch_tuples != NULL && multiarch_tuples[i] != NULL; i++)
         {
           /* GL extensions */
           g_ptr_array_add (search_paths, g_build_filename ("/usr/lib",
@@ -5994,6 +5993,11 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
                                                            suffix,
                                                            NULL));
         }
+
+      /* https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/merge_requests/3398 */
+      g_ptr_array_add (search_paths, g_build_filename ("/usr/lib/extensions/vulkan/share",
+                                                       suffix,
+                                                       NULL));
     }
 
   /* The reference Vulkan loader doesn't entirely follow
@@ -6966,7 +6970,8 @@ _srt_load_vulkan_layers_extended (const char *helpers_path,
   else
     {
       search_paths = _srt_graphics_get_vulkan_search_paths (sysroot, envp,
-                                                            NULL, suffix);
+                                                            multiarch_tuples,
+                                                            suffix);
       g_debug ("SEARCH PATHS %s", search_paths[0]);
       load_json_dirs (sysroot, search_paths, NULL, _srt_indirect_strcmp0,
                       vulkan_layer_load_json_cb, &ret);

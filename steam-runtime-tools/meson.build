@@ -39,6 +39,8 @@ libsteamrt_sources = [
     'input-device.c',
     'json-glib-backports.c',
     'json-glib-backports-internal.h',
+    'json-report.c',
+    'json-report-internal.h',
     'json-utils.c',
     'json-utils-internal.h',
     'libdl-internal.h',

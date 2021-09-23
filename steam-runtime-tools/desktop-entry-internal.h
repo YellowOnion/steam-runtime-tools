@@ -29,8 +29,6 @@
 #include "steam-runtime-tools/steam-runtime-tools.h"
 #include "steam-runtime-tools/utils-internal.h"
 
-#include <json-glib/json-glib.h>
-
 /*
  * _srt_desktop_entry_new:
  * @id: (nullable)
@@ -70,5 +68,3 @@ _srt_desktop_entry_new (const gchar *id,
 
 G_GNUC_INTERNAL
 GList *_srt_list_steam_desktop_entries (void);
-
-GList *_srt_get_steam_desktop_entries_from_json_report (JsonObject *json_obj);

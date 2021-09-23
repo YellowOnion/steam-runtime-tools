@@ -34,9 +34,9 @@ executable(
 executable(
   'steam-runtime-check-requirements',
   'check-requirements.c',
-  dependencies : [glib, json_glib, gobject, libsteamrt_static_dep],
+  dependencies : [glib, gobject, libsteamrt_static_dep],
   install : true,
-  # Use the adjacent json-glib, ignoring LD_LIBRARY_PATH even if set
+  # Use the adjacent GLib, ignoring LD_LIBRARY_PATH even if set
   build_rpath : bin_rpath,
   install_rpath : bin_rpath,
 )

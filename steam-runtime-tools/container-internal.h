@@ -28,8 +28,6 @@
 
 #include "steam-runtime-tools/container.h"
 
-#include <json-glib/json-glib.h>
-
 /*
  * _srt_container_info_new:
  * @type: Type of container
@@ -67,5 +65,3 @@ _srt_container_info_new (SrtContainerType type,
 
 SrtContainerInfo *_srt_check_container (int sysroot_fd,
                                         const gchar *sysroot);
-
-SrtContainerInfo *_srt_container_info_get_from_report (JsonObject *json_obj);

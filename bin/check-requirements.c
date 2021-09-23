@@ -42,6 +42,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <steam-runtime-tools/cpu-feature-internal.h>
 #include <steam-runtime-tools/utils-internal.h>
 
 #define X86_FEATURES_REQUIRED (SRT_X86_FEATURE_X86_64 \
@@ -93,8 +94,8 @@ main (int argc,
 {
   FILE *original_stdout = NULL;
   GError *error = NULL;
-  SrtSystemInfo *info;
   SrtX86FeatureFlags x86_features = SRT_X86_FEATURE_NONE;
+  SrtX86FeatureFlags known = SRT_X86_FEATURE_NONE;
   const gchar *output = NULL;
   gchar *version = NULL;
   int opt;
@@ -143,12 +144,8 @@ main (int argc,
 
   _srt_unblock_signals ();
 
-  info = srt_system_info_new (NULL);
+  x86_features = _srt_feature_get_x86_flags (&known);
 
-  /* This might be required for unit testing */
-  srt_system_info_set_sysroot (info, g_getenv ("SRT_TEST_SYSROOT"));
-
-  x86_features = srt_system_info_get_x86_features (info);
   if (!check_x86_features (x86_features))
     {
       output = "Sorry, this computer's CPU is too old to run Steam.\n"
@@ -173,7 +170,6 @@ out:
   if (fclose (original_stdout) != 0)
     g_warning ("Unable to close stdout: %s", g_strerror (errno));
 
-  g_object_unref (info);
   g_free (version);
 
   return exit_code;

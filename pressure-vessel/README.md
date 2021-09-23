@@ -99,32 +99,14 @@ easier to be sure that all the necessary files have been selected for
 Steam Cloud Sync, because we could prevent the game writing anywhere
 that won't be synchronised, other than /tmp or similar.
 
-Building a local test version of pressure-vessel
-------------------------------------------------
+Building pressure-vessel
+------------------------
 
-pressure-vessel is a reasonably ordinary Meson project. It depends on
-GLib and libXau.
-
-If you are using it with the under-development Steam Linux Runtime,
-you will probably want to compile it with an unusual ${prefix}:
-
-    prefix="${XDG_DATA_HOME:-"$HOME/.local/share"}/Steam/steamapps/common/SteamLinuxRuntime/pressure-vessel"
-    libdir="lib/x86_64-linux-gnu"
-    meson --prefix="$prefix" --libdir="$libdir" _build
-    ninja -C _build
-    meson test -v -C _build             # optional
-    ninja -C _build install
-
-Note that this will give you a non-production version of pressure-vessel
-that is likely to depend on libraries from your host system, which is
-good for quick turnaround and debugging, but not suitable for deployment
-to the public. For that, you'll want a relocatable installation: see below.
-
-Building a relocatable install for deployment
----------------------------------------------
+Please see [../CONTRIBUTING.md](../CONTRIBUTING.md) for general
+information.
 
 The script `build-aux/many-builds.py` can be used to compile and test
-steam-runtime-tools in a convenient way. Please see
+steam-runtime-tools, including pressure-vessel. Please see
 [../build-aux/many-builds.md](../build-aux/many-builds.md) for details.
 
 Instructions for testing

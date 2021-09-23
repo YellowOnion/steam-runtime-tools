@@ -4344,6 +4344,115 @@ out:
   g_clear_error (&error);
 }
 
+/*
+ * @loader_path: absolute (but not necessarily canonicalized) path to a loader
+ *  such as libva.so.2
+ * @is_extra: If true, any modules found will be marked as "extra"
+ * @module: Which kind of loader this is, currently DRI, VA-API or VDPAU
+ * @drivers_set: Set of directories we already checked for @module.
+ *  If the @loader_path suggests looking in one of these directories, it
+ *  will not be checked again.
+ *  When this function looks in a new directory, it is added to this set.
+ * @drivers_out: (inout): Results are prepended to this list.
+ *  The type depends on @module, the same as for _srt_get_modules_from_path().
+ */
+static void
+_srt_get_modules_from_loader_library (const gchar *loader_path,
+                                      gchar **envp,
+                                      const char *helpers_path,
+                                      const char *multiarch_tuple,
+                                      SrtCheckFlags check_flags,
+                                      gboolean is_extra,
+                                      SrtGraphicsModule module,
+                                      GHashTable *drivers_set,
+                                      GList **drivers_out)
+{
+  g_autofree char *driver_canonical_path = NULL;
+  g_autofree gchar *libdir = NULL;
+  g_autofree gchar *libdir_driver = NULL;
+
+  g_return_if_fail (loader_path != NULL);
+  g_return_if_fail (drivers_set != NULL);
+
+  /* The path may be a symbolic link or it can contain ./ or ../ */
+  driver_canonical_path = realpath (loader_path, NULL);
+  if (driver_canonical_path == NULL)
+    {
+      g_debug ("realpath(%s): %s", loader_path, g_strerror (errno));
+      return;
+    }
+  libdir = g_path_get_dirname (driver_canonical_path);
+
+  if (module == SRT_GRAPHICS_VDPAU_MODULE)
+    libdir_driver = g_build_filename (libdir, "vdpau", NULL);
+  else
+    libdir_driver = g_build_filename (libdir, "dri", NULL);
+
+  if (!g_hash_table_contains (drivers_set, libdir_driver))
+    {
+      g_hash_table_add (drivers_set, g_strdup (libdir_driver));
+      _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                  libdir_driver, is_extra, module, drivers_out);
+    }
+
+  if (module == SRT_GRAPHICS_DRI_MODULE)
+    {
+      /* Used on Slackware according to
+        * https://github.com/ValveSoftware/steam-runtime/issues/318 */
+      g_autofree gchar *slackware = g_build_filename (libdir, "xorg",
+                                                      "modules", "dri",
+                                                      NULL);
+
+      if (!g_hash_table_contains (drivers_set, slackware))
+        {
+          _srt_get_modules_from_path (envp, helpers_path,
+                                      multiarch_tuple, slackware,
+                                      is_extra, module, drivers_out);
+          g_hash_table_add (drivers_set, g_steal_pointer (&slackware));
+        }
+    }
+
+  if (!(check_flags & SRT_CHECK_FLAGS_SKIP_EXTRAS))
+    {
+      const GList *this_extra_path;
+      int driver_class;
+      const gchar *force_elf_class = NULL;
+
+      force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
+
+      if (force_elf_class)
+        {
+          if (g_strcmp0 (force_elf_class, "64") == 0)
+            driver_class = ELFCLASS64;
+          else
+            driver_class = ELFCLASS32;
+        }
+      else
+        {
+          driver_class = _srt_get_library_class (driver_canonical_path);
+        }
+
+      if (driver_class != ELFCLASSNONE)
+        {
+          GList *extras;
+
+          extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
+          for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
+            {
+              if (!g_hash_table_contains (drivers_set, this_extra_path->data))
+                {
+                  g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
+                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                                              this_extra_path->data, TRUE, module,
+                                              drivers_out);
+                }
+            }
+
+          g_list_free_full (extras, g_free);
+        }
+    }
+}
+
 /**
  * _srt_get_modules_full:
  * @sysroot: (not nullable): The root directory, usually `/`
@@ -4379,7 +4488,6 @@ _srt_get_modules_full (const char *sysroot,
   static const char *const vdpau_loaders[] = { "libvdpau.so.1", NULL };
   const gchar *env_override;
   const gchar *drivers_path;
-  const gchar *force_elf_class = NULL;
   const gchar *ld_library_path = NULL;
   g_autofree gchar *flatpak_info = NULL;
   g_autofree gchar *tmp_dir = NULL;
@@ -4387,6 +4495,7 @@ _srt_get_modules_full (const char *sysroot,
   gboolean is_extra = FALSE;
   g_autoptr(GPtrArray) vdpau_argv = NULL;
   g_autoptr(GError) error = NULL;
+  gsize i;
 
   g_return_if_fail (envp != NULL);
   g_return_if_fail (multiarch_tuple != NULL);
@@ -4418,7 +4527,6 @@ _srt_get_modules_full (const char *sysroot,
     }
 
   drivers_path = g_environ_getenv (envp, env_override);
-  force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
   ld_library_path = g_environ_getenv (envp, "LD_LIBRARY_PATH");
 
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
@@ -4533,12 +4641,9 @@ _srt_get_modules_full (const char *sysroot,
         }
     }
 
-  for (gsize i = 0; loader_libraries[i] != NULL; i++)
+  for (i = 0; loader_libraries[i] != NULL; i++)
     {
       g_autoptr(SrtLibrary) library_details = NULL;
-      g_autofree char *driver_canonical_path = NULL;
-      g_autofree gchar *libdir = NULL;
-      g_autofree gchar *libdir_driver = NULL;
       SrtLibraryIssues issues;
 
       issues = _srt_check_library_presence (helpers_path,
@@ -4571,80 +4676,9 @@ _srt_get_modules_full (const char *sysroot,
           continue;
         }
 
-      /* The path might still be a symbolic link or it can contains ./ or ../ */
-      driver_canonical_path = realpath (loader_path, NULL);
-      if (driver_canonical_path == NULL)
-        {
-          g_debug ("realpath(%s): %s", loader_path, g_strerror (errno));
-          continue;
-        }
-      libdir = g_path_get_dirname (driver_canonical_path);
-
-      if (module == SRT_GRAPHICS_VDPAU_MODULE)
-        libdir_driver = g_build_filename (libdir, "vdpau", NULL);
-      else
-        libdir_driver = g_build_filename (libdir, "dri", NULL);
-
-      if (!g_hash_table_contains (drivers_set, libdir_driver))
-        {
-          g_hash_table_add (drivers_set, g_strdup (libdir_driver));
-          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
-                                      libdir_driver, is_extra, module, drivers_out);
-        }
-
-      if (module == SRT_GRAPHICS_DRI_MODULE)
-        {
-          /* Used on Slackware according to
-           * https://github.com/ValveSoftware/steam-runtime/issues/318 */
-          g_autofree gchar *slackware = g_build_filename (libdir, "xorg",
-                                                          "modules", "dri",
-                                                          NULL);
-
-          if (!g_hash_table_contains (drivers_set, slackware))
-            {
-              _srt_get_modules_from_path (envp, helpers_path,
-                                          multiarch_tuple, slackware,
-                                          is_extra, module, drivers_out);
-              g_hash_table_add (drivers_set, g_steal_pointer (&slackware));
-            }
-        }
-
-      if (!(check_flags & SRT_CHECK_FLAGS_SKIP_EXTRAS))
-        {
-          const GList *this_extra_path;
-          int driver_class;
-
-          if (force_elf_class)
-            {
-              if (g_strcmp0 (force_elf_class, "64") == 0)
-                driver_class = ELFCLASS64;
-              else
-                driver_class = ELFCLASS32;
-            }
-          else
-            {
-              driver_class = _srt_get_library_class (driver_canonical_path);
-            }
-
-          if (driver_class != ELFCLASSNONE)
-            {
-              GList *extras;
-
-              extras = _srt_get_extra_modules_directory (libdir, multiarch_tuple, driver_class);
-              for (this_extra_path = extras; this_extra_path != NULL; this_extra_path = this_extra_path->next)
-                {
-                  if (!g_hash_table_contains (drivers_set, this_extra_path->data))
-                    {
-                      g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
-                      _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
-                                                  this_extra_path->data, TRUE, module,
-                                                  drivers_out);
-                    }
-                }
-
-              g_list_free_full (extras, g_free);
-            }
-        }
+      _srt_get_modules_from_loader_library (loader_path, envp, helpers_path,
+                                            multiarch_tuple, check_flags, is_extra,
+                                            module, drivers_set, drivers_out);
     }
 
   if (module == SRT_GRAPHICS_VDPAU_MODULE)

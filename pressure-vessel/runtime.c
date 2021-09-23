@@ -4369,41 +4369,39 @@ pv_runtime_finish_lib_data (PvRuntime *self,
   /* We might have more than one data directory in the provider,
    * e.g. one for each supported multiarch tuple */
 
+  g_hash_table_iter_init (&iter, data_in_provider);
+
+  while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
     {
-      g_hash_table_iter_init (&iter, data_in_provider);
+      /* If we found a library at /foo/lib/libbar.so.0 and then found its
+       * data in /foo/share/bar, it's reasonable to expect that libbar
+       * will still be looking for /foo/share/bar in the container. */
+      if (!pv_runtime_take_from_provider (self, bwrap,
+                                          data_path, data_path,
+                                          (TAKE_FROM_PROVIDER_FLAGS_IF_DIR
+                                           | TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE),
+                                          error))
+        return FALSE;
 
-      while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
+      if (self->is_flatpak_env
+          && g_str_has_prefix (data_path, "/app/lib/"))
         {
-          /* If we found a library at /foo/lib/libbar.so.0 and then found its
-           * data in /foo/share/bar, it's reasonable to expect that libbar
-           * will still be looking for /foo/share/bar in the container. */
-          if (!pv_runtime_take_from_provider (self, bwrap,
-                                              data_path, data_path,
-                                              (TAKE_FROM_PROVIDER_FLAGS_IF_DIR
-                                               | TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE),
-                                              error))
-            return FALSE;
-
-          if (self->is_flatpak_env
-              && g_str_has_prefix (data_path, "/app/lib/"))
+          /* In a freedesktop.org runtime, for some multiarch, there is
+           * a symlink /usr/lib/${arch} that points to /app/lib/${arch}
+           * https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/blob/70cb5835/elements/multiarch/multiarch-platform.bst#L24
+           * If we have a path in /app/lib/ here, we also try to
+           * replicate the symlink in /usr/lib/ */
+          g_autofree gchar *path_in_usr = NULL;
+          path_in_usr = g_build_filename ("/usr",
+                                          data_path + strlen ("/app"),
+                                          NULL);
+          if (_srt_fstatat_is_same_file (-1, data_path, -1, path_in_usr))
             {
-              /* In a freedesktop.org runtime, for some multiarch, there is
-               * a symlink /usr/lib/${arch} that points to /app/lib/${arch}
-               * https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/blob/70cb5835/elements/multiarch/multiarch-platform.bst#L24
-               * If we have a path in /app/lib/ here, we also try to
-               * replicate the symlink in /usr/lib/ */
-              g_autofree gchar *path_in_usr = NULL;
-              path_in_usr = g_build_filename ("/usr",
-                                              data_path + strlen ("/app"),
-                                              NULL);
-              if (_srt_fstatat_is_same_file (-1, data_path, -1, path_in_usr))
-                {
-                  if (!pv_runtime_take_from_provider (self, bwrap,
-                                                      data_path, path_in_usr,
-                                                      TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
-                                                      error))
-                    return FALSE;
-                }
+              if (!pv_runtime_take_from_provider (self, bwrap,
+                                                  data_path, path_in_usr,
+                                                  TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                                  error))
+                return FALSE;
             }
         }
     }
@@ -4439,17 +4437,13 @@ pv_runtime_finish_lib_data (PvRuntime *self,
   data_path = pv_hash_table_get_arbitrary_key (data_in_provider);
 
   if (data_path != NULL)
-    {
-      return pv_runtime_take_from_provider (self, bwrap,
-                                            data_path,
-                                            canonical_path,
-                                            TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
-                                            error);
-    }
+    return pv_runtime_take_from_provider (self, bwrap,
+                                          data_path,
+                                          canonical_path,
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
+                                          error);
   else
-    {
-      return TRUE;
-    }
+    return TRUE;
 }
 
 static gboolean

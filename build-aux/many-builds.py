@@ -1,0 +1,428 @@
+#!/usr/bin/python3
+
+# Copyright © 2017-2021 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+"""
+Convenience script to build and test steam-runtime-tools and pressure-vessel
+using multiple platforms.
+
+Build directory layout:
+
+_build/
+    # meson/ninja build directories
+    # (built by default)
+    clang/                      Build for host system with clang
+    host/                       Build for host system, with pressure-vessel
+    scout-i386/                 Build for scout, i386
+    scout-x86_64/               Build for scout, x86_64, with pressure-vessel
+
+    # Non-Meson-managed
+    cache/                      Download cache for populate-depot.py
+    containers/                 Container images for testing
+        scout_sysroot/          scout sysroot for builds
+    host-artifacts/             Additional test logs
+    scout-DESTDIR/              Staging directory for scout builds
+    scout-relocatable/          Staging directory for relocatable scout builds
+
+    # Special-purpose meson/ninja build directories
+    # (not built by default)
+    coverage/                   Build for host system with coverage
+    doc/                        Build for host system with gtk-doc and pandoc
+    host-no-asan/               No AddressSanitizer, for use with valgrind
+"""
+
+import argparse
+import grp
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+from contextlib import suppress
+from pathlib import Path
+from typing import List, Union
+
+
+logger = logging.getLogger('many-builds')
+
+SCOUT_SYSROOT_TAR = (
+    'com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-sysroot.tar.gz'
+)
+
+
+class Environment:
+    def __init__(
+        self,
+        builddir_parent: Union[str, os.PathLike] = '_build',
+        docker: bool = False,
+        podman: bool = False,
+        srcdir: Union[str, os.PathLike] = '.',
+    ) -> None:
+        self.builddir_parent = Path(builddir_parent)
+        self.srcdir = Path(srcdir)
+
+        self.builddir_parent.mkdir(exist_ok=True)
+
+        self.abs_srcdir = self.srcdir.resolve()
+        self.abs_builddir_parent = self.builddir_parent.resolve()
+
+        self.podman = podman
+
+        if docker:
+            groups = set(os.getgroups())
+            groups.add(os.geteuid())
+
+            try:
+                docker_gid = grp.getgrnam('docker').gr_gid
+            except KeyError:
+                self.docker = ['sudo', 'docker']
+            else:
+                if docker_gid in groups:
+                    self.docker = ['docker']
+                else:
+                    self.docker = ['sudo', 'docker']
+        else:
+            self.docker = []
+
+        self.populate_depot = (
+            self.abs_srcdir / 'pressure-vessel' / 'populate-depot.py'
+        )
+
+        self.cache = self.abs_builddir_parent / 'cache'
+        self.containers = self.abs_builddir_parent / 'containers'
+
+        real_builddir = self.abs_builddir_parent.resolve()
+
+        oci_run_args = [
+            '--rm',
+            '-v', '/etc/passwd:/etc/passwd:ro',
+            '-v', '/etc/group:/etc/group:ro',
+            '-v', '/etc/resolv.conf:/etc/resolv.conf:ro',
+            '--tmpfs', '/tmp',
+            '--tmpfs', '/var/tmp',
+            '--tmpfs', '/home',
+            '--tmpfs', '/run',
+            '--tmpfs', '/run/host',
+            '-v', '{}:{}'.format(self.abs_srcdir, self.abs_srcdir),
+            '-v', '{}:{}'.format(real_builddir, real_builddir),
+            '-w', self.abs_srcdir,
+        ]
+
+        if real_builddir != self.abs_builddir_parent:
+            oci_run_args.extend([
+                '-v', '{}:{}'.format(
+                    real_builddir,
+                    self.abs_builddir_parent,
+                ),
+            ])
+
+        self.scout_oci = 'registry.gitlab.steamos.cloud/steamrt/scout/sdk'
+        oci_run_args.append(self.scout_oci)
+
+        if self.podman:
+            self.scout_oci_run_args = ['podman', 'run'] + oci_run_args
+        elif self.docker:
+            self.scout_oci_run_args = self.docker + [
+                'run',
+                '-e', 'HOME={}'.format(Path.home()),
+                '-u', '{}:{}'.format(os.geteuid(), os.getegid()),
+            ] + oci_run_args
+        else:
+            self.scout_oci_run_args = []
+
+    def populate_depots(self):
+        with tempfile.TemporaryDirectory() as empty_depot_template:
+            Path(empty_depot_template, 'common').mkdir()
+            subprocess.run(
+                [
+                    self.populate_depot,
+                    '--cache', self.cache,
+                    '--depot', self.containers,
+                    '--include-archives',
+                    '--include-sdk-sysroot',
+                    '--no-versioned-directories',
+                    '--source-dir', empty_depot_template,
+                    '--unpack-runtimes',
+                    '--version=latest-steam-client-public-beta',
+                    'scout',
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    self.populate_depot,
+                    '--cache', self.cache,
+                    '--depot', self.containers,
+                    '--include-archives',
+                    '--include-sdk-sysroot',
+                    '--no-versioned-directories',
+                    '--source-dir', empty_depot_template,
+                    '--unpack-runtimes',
+                    '--version=latest-container-runtime-public-beta',
+                    'soldier',
+                ],
+                check=True,
+            )
+
+    def run_in_scout(self, argv: List[str]) -> None:
+        if self.scout_oci_run_args:
+            subprocess.run(self.scout_oci_run_args + argv, check=True)
+        else:
+            scout_sysroot = self.containers / 'scout_sysroot'
+            tarball = self.containers / SCOUT_SYSROOT_TAR
+            subprocess.run(
+                [
+                    str(self.abs_srcdir / 'build-aux' / 'run-in-sysroot.py'),
+                    '--srcdir', str(self.srcdir),
+                    '--builddir', str(self.builddir_parent),
+                    '--sysroot', str(scout_sysroot),
+                    '--tarball', str(tarball),
+                    '--',
+                ] + argv,
+                check=True,
+            )
+
+    def run_scout_builds(self, verb: str, args: List[str]) -> None:
+        self.run_in_scout(
+            [
+                str(self.abs_srcdir / 'build-aux' / 'scout-builds.py'),
+                '--srcdir', str(self.srcdir),
+                '--builddir', str(self.builddir_parent),
+                verb,
+            ] + args,
+        )
+
+    def setup(self, args: List[str]) -> None:
+        self.populate_depots()
+
+        if self.podman:
+            subprocess.run(
+                [
+                    'podman',
+                    'pull',
+                    self.scout_oci,
+                ],
+                check=True,
+            )
+        elif self.docker:
+            subprocess.run(
+                self.docker + [
+                    'pull',
+                    self.scout_oci,
+                ],
+                check=True,
+            )
+
+        subprocess.run(
+            [
+                'meson',
+                str(self.abs_builddir_parent / 'host'),
+                '-Db_lundef=false',
+                '-Db_sanitize=address,undefined',
+                '-Dbin=true',
+                '-Doptimization=g',
+                '-Dprefix=/usr',
+                ('-Dtest_containers_dir='
+                 + str(self.abs_builddir_parent / 'containers')),
+                '-Dwarning_level=3',
+                '-Dwerror=true',
+            ] + args,
+            check=True,
+        )
+
+        subprocess.run(
+            [
+                'meson',
+                str(self.abs_builddir_parent / 'host-no-asan'),
+                '-Dbin=true',
+                '-Doptimization=g',
+                '-Dprefix=/usr',
+                ('-Dtest_containers_dir='
+                 + str(self.abs_builddir_parent / 'containers')),
+                '-Dwarning_level=3',
+                '-Dwerror=true',
+            ] + args,
+            check=True,
+        )
+
+        subprocess.run(
+            [
+                'meson',
+                str(self.abs_builddir_parent / 'coverage'),
+                '-Db_coverage=true',
+                '-Dbin=true',
+                '-Doptimization=g',
+                '-Dpressure_vessel=true',
+                '-Dprefix=/usr',
+                '-Dwarning_level=3',
+                '-Dwerror=true',
+            ] + args,
+            check=True,
+        )
+
+        subprocess.run(
+            [
+                'meson',
+                str(self.abs_builddir_parent / 'doc'),
+                '-Dgtk_doc=true',
+                '-Dman=true',
+            ] + args,
+            check=True,
+        )
+
+        subprocess.run(
+            [
+                'meson',
+                str(self.abs_builddir_parent / 'clang'),
+                '-Db_lundef=false',
+                '-Db_sanitize=address,undefined',
+                '-Dbin=true',
+                '-Doptimization=g',
+                '-Dprefix=/usr',
+                '-Dwarning_level=3',
+                '-Dwerror=true',
+            ] + args,
+            check=True,
+        )
+
+        self.run_scout_builds('setup', args)
+
+    def clean(self, args: List[str]) -> None:
+        for builddir in ('clang', 'host', 'coverage', 'doc', 'host-no-asan'):
+            subprocess.run(
+                [
+                    'ninja',
+                    '-C', str(self.builddir_parent / builddir),
+                    'clean',
+                ] + args,
+                check=True,
+            )
+
+        self.run_scout_builds('clean', args)
+
+    def build(self, args: List[str]) -> None:
+        for builddir in ('host', 'clang'):
+            subprocess.run(
+                [
+                    'ninja',
+                    '-C', str(self.builddir_parent / builddir),
+                ] + args,
+                check=True,
+            )
+
+        self.run_scout_builds('build', args)
+
+    def test(self, args: List[str]) -> None:
+        subprocess.run(
+            [
+                'meson', 'test',
+                '-C', str(self.builddir_parent / 'clang'),
+                '-v'
+            ] + args,
+            check=True,
+        )
+
+        self.run_scout_builds('test', args)
+
+        # We need to set up the relocatable installation before we can
+        # have full test coverage for the host build
+        self.install([])
+
+        artifacts = self.abs_builddir_parent / 'host-artifacts'
+
+        with suppress(FileNotFoundError):
+            shutil.rmtree(artifacts)
+
+        subprocess.run(
+            [
+                'env',
+                'AUTOPKGTEST_ARTIFACTS=' + str(artifacts),
+                'meson', 'test',
+                '-C', str(self.builddir_parent / 'host'),
+                '-v',
+            ] + args,
+            check=True,
+        )
+
+    def install(self, args: List[str]) -> None:
+        self.run_scout_builds('install', args)
+
+        pv = self.containers / 'pressure-vessel'
+
+        with suppress(FileNotFoundError):
+            shutil.rmtree(pv)
+
+        shutil.copytree(self.builddir_parent / 'scout-relocatable', pv)
+        print('To upload to a test machine:')
+        print(
+            'rsync -avzP --delete {}/ '
+            'machine:.../steamapps/common/'
+            'SteamLinuxRuntime_soldier/pressure-vessel/'.format(pv)
+        )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--builddir-parent', default='_build')
+    parser.add_argument('--docker', action='store_true', default=False)
+    parser.add_argument('--podman', action='store_true', default=False)
+    parser.add_argument('--srcdir', default='.')
+    parser.add_argument(
+        'command',
+        choices=('setup', 'clean', 'build', 'test', 'install', 'all'),
+    )
+    parser.add_argument('args', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    env = Environment(
+        builddir_parent=args.builddir_parent,
+        docker=args.docker,
+        podman=args.podman,
+        srcdir=args.srcdir,
+    )
+
+    if args.command == 'setup':
+        env.setup(args.args)
+    elif args.command == 'clean':
+        env.clean(args.args)
+    elif args.command == 'build':
+        env.build(args.args)
+    elif args.command == 'test':
+        env.test(args.args)
+    elif args.command == 'install':
+        env.install(args.args)
+    elif args.command == 'all':
+        env.test(args.args)
+        env.install(args.args)
+    else:
+        raise AssertionError
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+
+# vim:set sw=4 sts=4 et:

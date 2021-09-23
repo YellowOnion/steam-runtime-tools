@@ -36,7 +36,6 @@
 #include "steam-runtime-tools/container-internal.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -426,65 +425,4 @@ srt_container_info_get_flatpak_version (SrtContainerInfo *self)
     return NULL;
 
   return self->flatpak_version;
-}
-
-/**
- * _srt_system_info_get_container_info_from_report:
- * @json_obj: (not nullable): A JSON Object used to search for "container"
- *  property
- * @host_path: (not nullable): Used to return the host path
- *
- * If the provided @json_obj doesn't have a "container" member,
- * %SRT_CONTAINER_TYPE_UNKNOWN will be returned.
- * If @json_obj has some elements that we can't parse, the returned
- * #SrtContainerType will be set to %SRT_CONTAINER_TYPE_UNKNOWN.
- *
- * Returns: The found container type
- */
-SrtContainerInfo *
-_srt_container_info_get_from_report (JsonObject *json_obj)
-{
-  JsonObject *json_sub_obj;
-  JsonObject *json_host_obj = NULL;
-  const gchar *type_string = NULL;
-  const gchar *flatpak_version = NULL;
-  const gchar *host_path = NULL;
-  SrtContainerType type = SRT_CONTAINER_TYPE_UNKNOWN;
-
-  g_return_val_if_fail (json_obj != NULL, NULL);
-
-  if (json_object_has_member (json_obj, "container"))
-    {
-      json_sub_obj = json_object_get_object_member (json_obj, "container");
-
-      if (json_sub_obj == NULL)
-        goto out;
-
-      if (json_object_has_member (json_sub_obj, "type"))
-        {
-          type_string = json_object_get_string_member (json_sub_obj, "type");
-          G_STATIC_ASSERT (sizeof (SrtContainerType) == sizeof (gint));
-          if (!srt_enum_from_nick (SRT_TYPE_CONTAINER_TYPE, type_string, (gint *) &type, NULL))
-            {
-              g_debug ("The parsed container type '%s' is not a known element", type_string);
-              type = SRT_CONTAINER_TYPE_UNKNOWN;
-            }
-        }
-
-      flatpak_version = json_object_get_string_member_with_default (json_sub_obj,
-                                                                    "flatpak_version",
-                                                                    NULL);
-
-      if (json_object_has_member (json_sub_obj, "host"))
-        {
-          json_host_obj = json_object_get_object_member (json_sub_obj, "host");
-          host_path = json_object_get_string_member_with_default (json_host_obj, "path",
-                                                                  NULL);
-        }
-    }
-
-out:
-  return _srt_container_info_new (type,
-                                  flatpak_version,
-                                  host_path);
 }

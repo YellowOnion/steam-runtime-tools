@@ -28,7 +28,6 @@
 
 #include <glib.h>
 #include <glib-object.h>
-#include <json-glib/json-glib.h>
 
 typedef struct
 {
@@ -49,5 +48,3 @@ G_GNUC_INTERNAL void _srt_os_release_populate (SrtOsRelease *self,
                                                const char *sysroot,
                                                int sysroot_fd);
 G_GNUC_INTERNAL void _srt_os_release_clear (SrtOsRelease *self);
-void _srt_os_release_populate_from_report (JsonObject *json_obj,
-                                           SrtOsRelease *self);

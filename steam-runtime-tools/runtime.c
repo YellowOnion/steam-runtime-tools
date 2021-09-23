@@ -37,7 +37,6 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/utils.h"
 
 /**
@@ -464,27 +463,4 @@ out:
   g_strfreev (my_environ);
   g_clear_error (&error);
   return issues;
-}
-
-/**
- * _srt_runtime_get_issues_from_report:
- * @json_obj: (not nullable): A JSON Object used to search for "issues"
- *  property
- *
- * If the provided @json_obj doesn't have a "issues" member, or it is
- * malformed, %SRT_RUNTIME_ISSUES_UNKNOWN will be returned.
- * If @json_obj has some elements that we can't parse,
- * %SRT_RUNTIME_ISSUES_UNKNOWN will be added to the returned #SrtRuntimeIssues.
- *
- * Returns: The #SrtRuntimeIssues that has been found
- */
-SrtRuntimeIssues
-_srt_runtime_get_issues_from_report (JsonObject *json_obj)
-{
-  g_return_val_if_fail (json_obj != NULL, SRT_RUNTIME_ISSUES_UNKNOWN);
-
-  return srt_get_flags_from_json_array (SRT_TYPE_RUNTIME_ISSUES,
-                                        json_obj,
-                                        "issues",
-                                        SRT_RUNTIME_ISSUES_UNKNOWN);
 }

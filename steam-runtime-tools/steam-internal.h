@@ -30,7 +30,6 @@
 
 #include <glib.h>
 #include <glib-object.h>
-#include <json-glib/json-glib.h>
 
 /*
  * _srt_library_new:
@@ -67,5 +66,3 @@ _srt_steam_new (SrtSteamIssues issues,
 G_GNUC_INTERNAL
 SrtSteamIssues _srt_steam_check (const GStrv env,
                                  SrtSteam **more_details_out);
-
-SrtSteam *_srt_steam_get_from_report (JsonObject *json_obj);

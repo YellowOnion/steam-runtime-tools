@@ -27,8 +27,6 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/input-device-internal.h"
 
-#include <json-glib/json-glib.h>
-
 #define SRT_TYPE_SIMPLE_INPUT_DEVICE (_srt_simple_input_device_get_type ())
 
 typedef struct _SrtSimpleInputDevice SrtSimpleInputDevice;
@@ -106,5 +104,3 @@ struct _SrtSimpleInputDeviceClass
 {
   GObjectClass parent;
 };
-
-SrtSimpleInputDevice *_srt_simple_input_device_new_from_json (JsonObject *obj);

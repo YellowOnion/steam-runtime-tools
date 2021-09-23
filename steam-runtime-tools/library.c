@@ -28,13 +28,9 @@
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "steam-runtime-tools/json-glib-backports-internal.h"
-#include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
-
-#include <json-glib/json-glib.h>
 
 /**
  * SECTION:library
@@ -869,27 +865,4 @@ out:
   g_free (real_soname);
   g_clear_error (&error);
   return issues;
-}
-
-/**
- * _srt_library_get_issues_from_report:
- * @json_obj: (not nullable): A JSON Object used to search for
- *  "library-issues-summary" property
- *
- * If the provided @json_obj doesn't have a "library-issues-summary" member,
- * or it is malformed, %SRT_LIBRARY_ISSUES_UNKNOWN will be returned.
- * If @json_obj has some elements that we can't parse,
- * %SRT_LIBRARY_ISSUES_UNKNOWN will be added to the returned #SrtLibraryIssues.
- *
- * Returns: The #SrtLibraryIssues that has been found
- */
-SrtLibraryIssues
-_srt_library_get_issues_from_report (JsonObject *json_obj)
-{
-  g_return_val_if_fail (json_obj != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
-
-  return srt_get_flags_from_json_array (SRT_TYPE_LIBRARY_ISSUES,
-                                        json_obj,
-                                        "library-issues-summary",
-                                        SRT_LIBRARY_ISSUES_UNKNOWN);
 }

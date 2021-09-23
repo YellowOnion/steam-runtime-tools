@@ -37,6 +37,7 @@
 #include "steam-runtime-tools/desktop-entry-internal.h"
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/json-report-internal.h"
 #include "steam-runtime-tools/json-utils-internal.h"
 #include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/library-internal.h"

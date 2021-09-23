@@ -28,8 +28,6 @@
 
 #include "steam-runtime-tools/library.h"
 
-#include <json-glib/json-glib.h>
-
 /*
  * _srt_library_new:
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386,
@@ -106,5 +104,3 @@ SrtLibraryIssues _srt_check_library_presence (const char *helpers_path,
                                               gchar **envp,
                                               SrtLibrarySymbolsFormat symbols_format,
                                               SrtLibrary **more_details_out);
-
-SrtLibraryIssues _srt_library_get_issues_from_report (JsonObject *json_obj);

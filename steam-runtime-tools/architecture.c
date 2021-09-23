@@ -27,7 +27,6 @@
 #include "steam-runtime-tools/architecture-internal.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -214,20 +213,4 @@ srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple)
     }
 
   return NULL;
-}
-
-/**
- * _srt_architecture_can_run_from_report:
- * @json_obj: (not nullable): A JSON Object used to search for "can-run"
- *  property
- *
- * Returns: %TRUE if the provided @json_obj has the "can-run" member with a
- *  positive boolean value.
- */
-gboolean
-_srt_architecture_can_run_from_report (JsonObject *json_obj)
-{
-  g_return_val_if_fail (json_obj != NULL, FALSE);
-
-  return json_object_get_boolean_member_with_default (json_obj, "can-run", FALSE);
 }

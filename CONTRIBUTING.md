@@ -31,20 +31,37 @@ If you want to contribute code to steam-runtime-tools, please include a
 [Developer's Certificate of Origin](https://developercertificate.org/)
 terms.
 
-## Doing test-builds
+## Compiling steam-runtime-tools
 
-For quick tests during development, you can build on any reasonably
-modern Linux distribution. Ubuntu 18.04 and Debian 10 are examples of
-suitable versions.
+steam-runtime-tools uses the Meson build system. However, because Steam
+supports both 64-bit x86\_64 (amd64) and 32-bit IA32 (x86, i386), to
+get a fully functional set of diagnostic tools or a fully functional
+version of pressure-vessel that will work in all situations, it is
+necessary to build steam-runtime-tools at least twice: once for 64-bit
+x86\_64, and once for 32-bit IA32. The 32-bit build can disable
+pressure-vessel, but must include at least the "helpers" that are used
+to identify and inspect 32-bit libraries. Building for multiple
+architectures is outside the scope of the Meson build system, so we
+have to do at least two separate Meson builds and combine them.
 
-To check that everything works in the older Steam Runtime 1 'scout'
-environment, either use [Gitlab-CI][], or do a `meson dist` on a modern
-distribution and use that to build a package in the SteamRT environment.
-The Gitlab-CI does the `meson dist` in the `build` step, and builds the
-package on SteamRT in the `autopkgtest` step.
+Also, to make sure that pressure-vessel and the diagnostic tools work
+with all the operating systems and runtime environments we support,
+production builds of `steam-runtime-tools` need to be compiled in a
+Steam Runtime 1 'scout' environment.
 
-You might find [deb-build-snapshot][] useful for this. smcv uses this
-configuration for test-builds:
+The script `build-aux/many-builds.py` can be used to compile and test
+steam-runtime-tools in a convenient way. Please see
+[build-aux/many-builds.md](build-aux/many-builds.md) for details.
+
+Production builds are done by [Gitlab-CI][], which is also run to test
+proposed branches. This does not use `many-builds.py`, because it needs
+to run separate parts of the build in separate containers, but the general
+principle is the same.
+
+The diagnostic tools provided by steam-runtime-tools are shipped in
+Steam Runtime releases via a `.deb` package. We usually build `.deb`
+packages via the [deb-build-snapshot][] tool, with a command-line like
+this:
 
 ```
 LC_ALL=C.UTF-8 \
@@ -126,6 +143,77 @@ Most automated tests run in two phases:
     locations. For things that get installed next to the tests, such as
     mock implementations of helpers and mock ABI data, it should look
     in the directory containing the executable.
+
+## Automated testing for pressure-vessel
+
+Testing a new build of pressure-vessel is relatively complicated, because
+several things have to be pulled together:
+
+* We need at least one Steam Linux Runtime container to use for testing,
+    but for full test coverage, we need several containers. These can be
+    downloaded by using `pressure-vessel/populate-depot.py`, which is
+    a copy of the same script that is used to build official
+    Steam Linux Runtime releases. `build-aux/many-builds.py setup`
+    automates this, placing a suitable set of containers in
+    `_build/containers` by default.
+
+* `pressure-vessel-launcher` and `pressure-vessel-adverb` need to be
+    compiled in a way that will work both on the host system and inside
+    the test containers. The most reliable way to provide this is to build
+    them for Steam Linux Runtime 1 'scout'.
+    `build-aux/many-builds.py install` puts a complete relocatable
+    installation of pressure-vessel in `_build/containers/pressure-vessel`
+    by default.
+
+* `pressure-vessel-wrap` needs to be compiled in a way that is compatible
+    with the host system. In production builds, we use a binary that was
+    built on scout for maximum compatibility, but when debugging a problem
+    with pressure-vessel, it can be useful to build it with a newer
+    compiler to get better warnings, or to build it with debug
+    instrumentation such as AddressSanitizer or code-coverage
+    instrumentation. `build-aux/many-builds.py` compiles `_build/host`
+    with AddressSanitizer by default. It also sets up `_build/coverage`
+    to be built with code coverage instrumentation, but does not build
+    that copy by default.
+
+* The pressure-vessel integration test needs to be told where to find
+    the test containers and the relocatable build of pressure-vessel,
+    using the `test_containers_dir` Meson option. `build-aux/many-builds.py`
+    does this for the `_build/host` build by default.
+
+After putting all that together, we can run
+`tests/pressure-vessel/containers.py` as an ordinary automated test.
+`build-aux/many-builds.py test` will do that for you.
+
+## Manual testing for pressure-vessel
+
+To reproduce issues involving pressure-vessel, it's often necessary to
+run a real game in Steam.
+
+`build-aux/many-builds.py install` puts a complete relocatable
+installation of pressure-vessel in `_build/containers/pressure-vessel`
+by default. This can be copied to a Steam installation for manual
+testing, by deleting
+`steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel` and
+replacing it with a copy of `_build/containers/pressure-vessel`.
+
+If a branch under test has been built on our [Gitlab-CI][], the
+artifacts from the `relocatable-install:production` job contain a
+complete relocatable installation of pressure-vessel at
+`_build/production/pressure-vessel-bin.tar.gz`, and a similar
+installation with source code included at
+`_build/production/pressure-vessel-bin+src.tar.gz`. These can be
+downloaded from the web interface:
+
+* pipeline or merge request
+* `relocatable-install:production`
+* Job artifacts
+* Browse
+* navigate into `_build/production`
+* click on one of the filenames to view the associated artifact
+* Download
+* unpack the downloaded archive as a replacement for
+    `steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel`
 
 ## Release procedure
 

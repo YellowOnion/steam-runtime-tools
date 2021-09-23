@@ -123,43 +123,9 @@ to the public. For that, you'll want a relocatable installation: see below.
 Building a relocatable install for deployment
 ---------------------------------------------
 
-To make the built version compatible with older systems, you will need
-a SteamRT 1 'scout' environment. Then you can do:
-
-    meson --prefix="$(pwd)/_build/prefix" -Dsrcdir=src _build
-    ninja -C _build
-    meson test -v -C _build             # optional
-    ninja -C _build install
-    rm -fr _build/relocatable-install
-    _build/prefix/bin/pressure-vessel-build-relocatable-install \
-        --output _build/relocatable-install \
-        --archive .
-    ./tests/pressure-vessel/relocatable-install.py \
-        _build/relocatable-install      # optional
-
-When building a development version of `pressure-vessel` using a 'scout'
-SDK Docker image, if the `pressure-vessel-build-relocatable-install`
-script is unable to find some of the required dependencies, it might be
-necessary to add apt repositories containing development versions of
-those dependencies to `/etc/apt/sources.list`, and run `apt-get update`.
-
-For more convenient use on a development system, if you have a
-SteamRT 1 'scout' SDK tarball or an unpacked sysroot, you can place a
-tarball at `_build/sysroot.tar.gz` or unpack a sysroot into
-`_build/sysroot`, and prefix those commands with
-`./build-aux/run-in-sysroot.py`:
-
-    ./build-aux/run-in-sysroot.py apt-get update
-    ./build-aux/run-in-sysroot.py meson --prefix="$(pwd)/_build/prefix" _build
-    ./build-aux/run-in-sysroot.py ninja -C _build
-    (etc.)
-
-(Or put them in different locations and pass the `--sysroot` and
-`--tarball` options to `./build-aux/run-in-sysroot.py`.)
-
-The relocatable install goes into `relocatable-install` (or
-whatever you used as the `--output`), and a compressed version ends
-up in the directory passed as an argument to `--archive`.
+The script `build-aux/many-builds.py` can be used to compile and test
+steam-runtime-tools in a convenient way. Please see
+[../build-aux/many-builds.md](../build-aux/many-builds.md) for details.
 
 Instructions for testing
 ------------------------

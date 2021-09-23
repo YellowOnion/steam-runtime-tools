@@ -141,6 +141,7 @@ main (int argc,
         {
           g_printerr ("Failed to contact 'org.freedesktop.portal.Desktop': %s\n",
                       local_error->message);
+          g_clear_error (error);
           json_builder_add_boolean_value (builder, FALSE);
           json_builder_end_object (builder);
           ret = EXIT_FAILURE;

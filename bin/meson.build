@@ -44,7 +44,7 @@ executable(
 executable(
   'steam-runtime-identify-library-abi',
   'identify-library-abi.c',
-  dependencies : [glib, gio_unix, libelf, libglnx_dep, libsteamrt_static_dep],
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
   build_rpath : bin_rpath,

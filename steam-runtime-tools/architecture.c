@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,6 +23,9 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <gelf.h>
+#include <libelf.h>
+
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/architecture-internal.h"
 
@@ -44,6 +47,8 @@
  */
 
 G_DEFINE_QUARK (srt-architecture-error-quark, srt_architecture_error)
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(Elf, elf_end);
 
 static const SrtKnownArchitecture known_architectures[] =
 {
@@ -213,4 +218,82 @@ srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple)
     }
 
   return NULL;
+}
+
+/*
+ * @file_path: (type filename):
+ * @cls: (not optional) (out): ELF class, normally `ELFCLASS32` or `ELFCLASS64`
+ * @machine: (not optional) (out): ELF machine, for example `EM_X86_64` or
+ *  `EM_386`
+ * @error: On failure set to GIOErrorEnum, used to describe the error
+ *
+ * Returns: %TRUE on success
+ */
+static gboolean
+_srt_architecture_read_elf (const char *file_path,
+                            guint8 *cls,
+                            guint16 *machine,
+                            GError **error)
+{
+  glnx_autofd int fd = -1;
+  g_autoptr(Elf) elf = NULL;
+  GElf_Ehdr eh;
+
+  g_return_val_if_fail (file_path != NULL, FALSE);
+  g_return_val_if_fail (cls != NULL, FALSE);
+  g_return_val_if_fail (machine != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if ((fd = open (file_path, O_RDONLY | O_CLOEXEC, 0)) < 0)
+    return glnx_throw_errno_prefix (error, "Error reading \"%s\"", file_path);
+
+  if (elf_version (EV_CURRENT) == EV_NONE)
+    return glnx_throw (error, "elf_version(EV_CURRENT): %s",
+                       elf_errmsg (elf_errno ()));
+
+  if ((elf = elf_begin (fd, ELF_C_READ, NULL)) == NULL)
+    return glnx_throw (error, "Error reading library \"%s\": %s",
+                       file_path, elf_errmsg (elf_errno ()));
+
+  if (gelf_getehdr (elf, &eh) == NULL)
+    return glnx_throw (error, "Error reading \"%s\" ELF header: %s",
+                       file_path, elf_errmsg (elf_errno ()));
+
+  *cls = eh.e_ident[EI_CLASS];
+  *machine = eh.e_machine;
+
+  return TRUE;
+}
+
+/*
+ * @file_path: (type filename):
+ * @error: On failure set to GIOErrorEnum or SrtArchitectureError, used to
+ *  describe the error
+ *
+ * Returns: (nullable): The multiarch tuple or %NULL on error.
+ */
+const gchar *
+_srt_architecture_guess_from_elf (const char *file_path,
+                                  GError **error)
+{
+  guint8 cls = ELFCLASSNONE;
+  guint16 machine = EM_NONE;
+  const gchar *identifier = NULL;
+
+  g_return_val_if_fail (file_path != NULL, FALSE);
+
+  if (!_srt_architecture_read_elf (file_path, &cls, &machine, error))
+    return NULL;
+
+  if (cls == ELFCLASS32 && machine == EM_386)
+    identifier = "i386-linux-gnu";
+  else if (cls == ELFCLASS32 && machine == EM_X86_64)
+    identifier = "x86_64-linux-gnux32";
+  else if (cls == ELFCLASS64 && machine == EM_X86_64)
+    identifier = "x86_64-linux-gnu";
+  else
+    g_set_error (error, SRT_ARCHITECTURE_ERROR, SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+                 "ELF class and machine (%u,%u) are unknown", cls, machine);
+
+  return identifier;
 }

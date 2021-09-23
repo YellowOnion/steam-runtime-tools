@@ -1,6 +1,6 @@
 /*<private_header>*/
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2021 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -39,3 +39,6 @@ G_GNUC_INTERNAL const SrtKnownArchitecture *_srt_architecture_get_known (void);
 G_GNUC_INTERNAL gboolean _srt_architecture_can_run (gchar **envp,
                                                     const char *helpers_path,
                                                     const char *multiarch);
+
+const gchar *_srt_architecture_guess_from_elf (const char *file_path,
+                                               GError **error);

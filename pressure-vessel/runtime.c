@@ -4347,8 +4347,9 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                             GHashTable *data_in_provider,
                             GError **error)
 {
-  g_autofree gchar *best_data_in_provider = NULL;
   g_autofree gchar *canonical_path = NULL;
+  GHashTableIter iter;
+  const gchar *data_path = NULL;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
@@ -4365,27 +4366,26 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                  lib_name, dir_basename);
     }
 
-  if (self->is_flatpak_env)
-    {
-      /* In a Flatpak environment is normal to have more than one data
-       * directory from provider, e.g. one for every multiarch */
-      GHashTableIter iter;
-      const gchar *data_path = NULL;
+  /* We might have more than one data directory in the provider,
+   * e.g. one for each supported multiarch tuple */
 
+    {
       g_hash_table_iter_init (&iter, data_in_provider);
+
       while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
         {
-          /* If we are in a Flatpak environment we bind the lib data in the
-           * same path as the one in the provider because
-           * /usr/share/${dir_basename} is not expected to be in the library
-           * search path. */
+          /* If we found a library at /foo/lib/libbar.so.0 and then found its
+           * data in /foo/share/bar, it's reasonable to expect that libbar
+           * will still be looking for /foo/share/bar in the container. */
           if (!pv_runtime_take_from_provider (self, bwrap,
                                               data_path, data_path,
-                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                              (TAKE_FROM_PROVIDER_FLAGS_IF_DIR
+                                               | TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE),
                                               error))
             return FALSE;
 
-          if (g_str_has_prefix (data_path, "/app/lib/"))
+          if (self->is_flatpak_env
+              && g_str_has_prefix (data_path, "/app/lib/"))
             {
               /* In a freedesktop.org runtime, for some multiarch, there is
                * a symlink /usr/lib/${arch} that points to /app/lib/${arch}
@@ -4406,32 +4406,42 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                 }
             }
         }
-
-      return TRUE;
     }
 
-  if (g_hash_table_size (data_in_provider) == 1)
-    {
-      best_data_in_provider = g_strdup (
-        pv_hash_table_get_arbitrary_key (data_in_provider));
-    }
-  else if (g_hash_table_size (data_in_provider) > 1)
+  /* In the common case where data_in_provider contains canonical_path,
+   * we have already made it available at canonical_path in the container.
+   * Nothing more to do here. */
+  if (g_hash_table_contains (data_in_provider, canonical_path))
+    return TRUE;
+
+  /* In the uncommon case where data_in_provider *does not* contain
+   * canonical_path - for example data_in_provider = { /usr/local/share/drirc.d }
+   * but canonical_path is /usr/share/drirc.d - we'll mount it over
+   * canonical_path as well, just in case something has hard-coded
+   * that path and is expecting to find something consistent there.
+   *
+   * If data_in_provider contains more than one - for example if we
+   * found the x86_64 library in /usr/lib/x86_64-linux-gnu but the
+   * i386 library in /app/lib/i386-linux-gnu, as we do in Flatpak -
+   * then we don't have a great way to choose between them, so just
+   * pick one and hope for the best. In Flatpak, it is normal for
+   * this to happen because of the way multiarch has been implemented,
+   * but we know that both are very likely to be up-to-date, so we
+   * can pick either one and be happy. Otherwise, we'll warn in this
+   * case. */
+  if (!self->is_flatpak_env
+      && g_hash_table_size (data_in_provider) > 1)
     {
       g_warning ("Found more than one possible %s data directory from provider",
                  dir_basename);
-      /* Prioritize "/usr/share/{dir_basename}" if available. Otherwise randomly pick
-       * the first directory in the hash table */
-      if (g_hash_table_contains (data_in_provider, canonical_path))
-        best_data_in_provider = g_strdup (canonical_path);
-      else
-        best_data_in_provider = g_strdup (
-          pv_hash_table_get_arbitrary_key (data_in_provider));
     }
 
-  if (best_data_in_provider != NULL)
+  data_path = pv_hash_table_get_arbitrary_key (data_in_provider);
+
+  if (data_path != NULL)
     {
       return pv_runtime_take_from_provider (self, bwrap,
-                                            best_data_in_provider,
+                                            data_path,
                                             canonical_path,
                                             TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE,
                                             error);

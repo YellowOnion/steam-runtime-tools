@@ -128,7 +128,7 @@ class Environment:
             '--tmpfs', '/run/host',
             '-v', '{}:{}'.format(self.abs_srcdir, self.abs_srcdir),
             '-v', '{}:{}'.format(real_builddir, real_builddir),
-            '-w', self.abs_srcdir,
+            '-w', str(self.abs_srcdir),
         ]
 
         if real_builddir != self.abs_builddir_parent:

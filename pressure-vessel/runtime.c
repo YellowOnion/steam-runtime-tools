@@ -4271,13 +4271,10 @@ typedef enum
  * @arch: Architecture of @lib_symlink
  * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
  * @lib_symlink: The symlink created by capsule-capture-libs.
- *  Its target is either @provider_in_container_namespace_guarded
+ *  Its target is either `self->provider->path_in_container_ns`
  *  followed by the path to a library in the graphics stack provider
  *  namespace, or the path to a library in a non-standard directory such
  *  as /opt with no special prefix.
- * @provider_in_container_namespace_guarded: The path at which the
- *  graphics stack provider will be mounted in the final container,
- *  with "/" appended
  * @flags: Flags
  * @data_in_provider: Map { owned string => itself } representing the set
  *  of data directories discovered
@@ -4287,7 +4284,6 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                              RuntimeArchitecture *arch,
                              const char *dir_basename,
                              const char *lib_symlink,
-                             const char *provider_in_container_namespace_guarded,
                              PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
@@ -4310,6 +4306,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
       g_autofree gchar *lib_multiarch = NULL;
       g_autofree gchar *dir_in_provider = NULL;
       g_autofree gchar *dir_in_provider_usr_share = NULL;
+      const char *target_in_provider;
 
       /* If we are unable to find the lib data in the provider, we try as
        * a last resort `/usr/share`. This should help for example Exherbo
@@ -4335,8 +4332,6 @@ pv_runtime_collect_lib_data (PvRuntime *self,
           return;
         }
 
-      dir = g_path_get_dirname (target);
-
       /* There are two possibilities for a symlink created by
        * capsule-capture-libs.
        *
@@ -4353,11 +4348,19 @@ pv_runtime_collect_lib_data (PvRuntime *self,
        * path in both the graphics stack provider and the final container.
        * In practice this is unlikely to happen unless the graphics stack
        * provider is the same as the current namespace. We do not remove
-       * any prefix in this case. */
-      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-        memmove (dir,
-                 dir + strlen (self->provider->path_in_container_ns),
-                 strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
+       * any prefix in this case.
+       *
+       * Note that after this, target_in_provider can either be absolute,
+       * or relative to the root of the provider. */
+
+      target_in_provider = _srt_get_path_after (target,
+                                                self->provider->path_in_container_ns);
+
+      if (target_in_provider == NULL)
+        target_in_provider = target;
+
+      /* Either absolute, or relative to the root of the provider */
+      dir = g_path_get_dirname (target_in_provider);
 
       /* Try to walk up the directory hierarchy from the library directory
        * to find the ${exec_prefix}. We assume that the library directory is
@@ -4378,6 +4381,13 @@ pv_runtime_collect_lib_data (PvRuntime *self,
               /* dir might be /usr/lib64 or /lib64:
                * truncate to /usr or empty. */
               dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
+              break;
+            }
+
+          if (g_strcmp0 (dir, libdir_suffixes[i] + 1))
+            {
+              /* dir is something like lib64: truncate to empty. */
+              dir[0] = '\0';
               break;
             }
         }
@@ -5394,7 +5404,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm_amdgpu,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_NONE,
                                            libdrm_data_in_provider);
             }
@@ -5407,7 +5416,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           else if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_NONE,
                                            libdrm_data_in_provider);
             }
@@ -5425,7 +5433,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "drirc.d", libglx_mesa,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_NONE,
                                            drirc_data_in_provider);
             }
@@ -5444,7 +5451,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           if (g_file_test (libglx_nvidia, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "nvidia", libglx_nvidia,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
                                            nvidia_data_in_provider);
             }

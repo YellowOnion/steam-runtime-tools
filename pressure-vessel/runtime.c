@@ -4330,6 +4330,11 @@ pv_runtime_collect_lib_data (PvRuntime *self,
 
       dir = g_path_get_dirname (target);
 
+      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
+        memmove (dir,
+                 dir + strlen (self->provider->path_in_container_ns),
+                 strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
+
       lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
       if (g_str_has_suffix (dir, lib_multiarch))
         dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
@@ -4339,11 +4344,6 @@ pv_runtime_collect_lib_data (PvRuntime *self,
         dir[strlen (dir) - strlen ("/lib32")] = '\0';
       else if (g_str_has_suffix (dir, "/lib"))
         dir[strlen (dir) - strlen ("/lib")] = '\0';
-
-      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-        memmove (dir,
-                 dir + strlen (self->provider->path_in_container_ns),
-                 strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
 
       dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
 

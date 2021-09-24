@@ -4330,11 +4330,37 @@ pv_runtime_collect_lib_data (PvRuntime *self,
 
       dir = g_path_get_dirname (target);
 
+      /* There are two possibilities for a symlink created by
+       * capsule-capture-libs.
+       *
+       * If capsule-capture-libs found a library in /app, /usr
+       * or /lib* (as configured by --remap-link-prefix in
+       * pv_runtime_get_capsule_capture_libs()), then the symlink will
+       * point to something like /run/host/lib/libfoo.so or
+       * /run/gfx/usr/lib64/libbar.so. To find the corresponding path
+       * in the graphics stack provider, we can remove the /run/host
+       * or /run/gfx prefix.
+       *
+       * If capsule-capture-libs found a library elsewhere, for example
+       * in $HOME or /opt, then we assume it will be visible at the same
+       * path in both the graphics stack provider and the final container.
+       * In practice this is unlikely to happen unless the graphics stack
+       * provider is the same as the current namespace. We do not remove
+       * any prefix in this case. */
       if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
         memmove (dir,
                  dir + strlen (self->provider->path_in_container_ns),
                  strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
 
+      /* Try to walk up the directory hierarchy from the library directory
+       * to find the ${exec_prefix}. We assume that the library directory is
+       * either ${exec_prefix}/lib/${multiarch_tuple}, ${exec_prefix}/lib64,
+       * ${exec_prefix}/lib32, or ${exec_prefix}/lib.
+       *
+       * Note that if the library is in /lib, /lib64, etc., this will
+       * leave dir empty, but that's OK: dir_in_provider will become
+       * something like "share/drirc.d" which will be looked up in the
+       * provider namespace. */
       lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
       if (g_str_has_suffix (dir, lib_multiarch))
         dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
@@ -4345,6 +4371,13 @@ pv_runtime_collect_lib_data (PvRuntime *self,
       else if (g_str_has_suffix (dir, "/lib"))
         dir[strlen (dir) - strlen ("/lib")] = '\0';
 
+      /* If ${prefix} and ${exec_prefix} are different, we have no way
+       * to predict what the ${prefix} really is; so we are also assuming
+       * that the ${exec_prefix} is the same as the ${prefix}.
+       *
+       * Go back down from the ${prefix} to the data directory,
+       * which we assume is ${prefix}/share. (If it isn't, then we have
+       * no way to predict what it would be.) */
       dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
 
       if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,

@@ -4105,11 +4105,28 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
                                       soname_globs[i]));
 }
 
+/*
+ * pv_runtime_collect_libc_family:
+ * @self: The runtime
+ * @arch: Architecture of @libc_symlink
+ * @bwrap:
+ * @libc_symlink: The symlink created by capsule-capture-libs.
+ *  Its target is either @provider_in_container_namespace_guarded
+ *  followed by the path to glibc in the graphics stack provider
+ *  namespace, or the path to glibc in a non-standard directory such
+ *  as /opt with no special prefix.
+ * @provider_in_container_namespace_guarded: The path at which the
+ *  graphics stack provider will be mounted in the final container,
+ *  with "/" appended if necessary
+ * @gconv_in_provider: Map { owned string => itself } representing a set
+ *  of paths to /usr/lib/gconv or equivalent in the graphics stack provider
+ * @error: Used to raise an error on failure
+ */
 static gboolean
 pv_runtime_collect_libc_family (PvRuntime *self,
                                 RuntimeArchitecture *arch,
                                 FlatpakBwrap *bwrap,
-                                const char *libc,
+                                const char *libc_symlink,
                                 const char *ld_so_in_runtime,
                                 const char *provider_in_container_namespace_guarded,
                                 GHashTable *gconv_in_provider,
@@ -4145,7 +4162,7 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 
   g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-  libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
+  libc_target = glnx_readlinkat_malloc (-1, libc_symlink, NULL, NULL);
   if (libc_target != NULL)
     {
       g_autofree gchar *dir = NULL;
@@ -4232,23 +4249,51 @@ pv_runtime_collect_libc_family (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * PvRuntimeDataFlags:
+ * @PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST: If set, look in /usr/share
+ *  before attempting to derive a data directory from ${libdir}.
+ *  Use this for drivers like the NVIDIA proprietary driver that hard-code
+ *  /usr/share rather than having a build-time-configurable prefix.
+ * @PV_RUNTIME_DATA_FLAGS_NONE: None of the above.
+ *
+ * Flags affecting pv_runtime_collect_lib_data().
+ */
 typedef enum
 {
   PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST = (1 << 0),
   PV_RUNTIME_DATA_FLAGS_NONE = 0
 } PvRuntimeDataFlags;
 
+/*
+ * pv_runtime_collect_lib_data:
+ * @self: The runtime
+ * @arch: Architecture of @lib_symlink
+ * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
+ * @lib_symlink: The symlink created by capsule-capture-libs.
+ *  Its target is either @provider_in_container_namespace_guarded
+ *  followed by the path to a library in the graphics stack provider
+ *  namespace, or the path to a library in a non-standard directory such
+ *  as /opt with no special prefix.
+ * @provider_in_container_namespace_guarded: The path at which the
+ *  graphics stack provider will be mounted in the final container,
+ *  with "/" appended
+ * @flags: Flags
+ * @data_in_provider: Map { owned string => itself } representing the set
+ *  of data directories discovered
+ */
 static void
 pv_runtime_collect_lib_data (PvRuntime *self,
                              RuntimeArchitecture *arch,
                              const char *dir_basename,
-                             const char *lib_path,
+                             const char *lib_symlink,
                              const char *provider_in_container_namespace_guarded,
                              PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
   g_autofree char *target = NULL;
-  target = glnx_readlinkat_malloc (-1, lib_path, NULL, NULL);
+
+  target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
 
   g_return_if_fail (self->provider != NULL);
 
@@ -5192,7 +5237,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(GPtrArray) dirs = NULL;
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
-          g_autofree gchar *libc = NULL;
+          g_autofree gchar *libc_symlink = NULL;
           /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
@@ -5274,14 +5319,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                              patterns, error))
             return FALSE;
 
-          libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
+          libc_symlink = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
            * then we have to use its ld.so too. */
-          if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
+          if (g_file_test (libc_symlink, G_FILE_TEST_IS_SYMLINK))
             {
               if (!pv_runtime_collect_libc_family (self, arch, bwrap,
-                                                   libc, ld_so_in_runtime,
+                                                   libc_symlink, ld_so_in_runtime,
                                                    provider_in_container_namespace_guarded,
                                                    gconv_in_provider,
                                                    error))

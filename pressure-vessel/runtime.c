@@ -4210,7 +4210,7 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       gboolean found = FALSE;
       const char *target_in_provider;
 
-      /* As with pv_runtime_collect_lib_data(), we need to remove the
+      /* As with pv_runtime_collect_lib_symlink_data(), we need to remove the
        * provider prefix if present. Note that after this, target_in_provider
        * can either be absolute, or relative to the root of the provider. */
       target_in_provider = _srt_get_path_after (libc_target,
@@ -4316,13 +4316,10 @@ typedef enum
 /*
  * pv_runtime_collect_lib_data:
  * @self: The runtime
- * @arch: Architecture of @lib_symlink
+ * @arch: Architecture of @lib_in_provider
  * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
- * @lib_symlink: The symlink created by capsule-capture-libs.
- *  Its target is either `self->provider->path_in_container_ns`
- *  followed by the path to a library in the graphics stack provider
- *  namespace, or the path to a library in a non-standard directory such
- *  as /opt with no special prefix.
+ * @lib_in_provider: A library in the graphics stack provider, either
+ *  absolute or relative to the root of the provider namespace
  * @flags: Flags
  * @data_in_provider: Map { owned string => itself } representing the set
  *  of data directories discovered
@@ -4331,17 +4328,12 @@ static void
 pv_runtime_collect_lib_data (PvRuntime *self,
                              RuntimeArchitecture *arch,
                              const char *dir_basename,
-                             const char *lib_symlink,
+                             const char *lib_in_provider,
                              PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
-  g_autofree char *target = NULL;
-
-  target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
-
   g_return_if_fail (self->provider != NULL);
 
-  if (target != NULL)
     {
       const char *libdir_suffixes[] =
       {
@@ -4354,7 +4346,6 @@ pv_runtime_collect_lib_data (PvRuntime *self,
       g_autofree gchar *lib_multiarch = NULL;
       g_autofree gchar *dir_in_provider = NULL;
       g_autofree gchar *dir_in_provider_usr_share = NULL;
-      const char *target_in_provider;
 
       /* If we are unable to find the lib data in the provider, we try as
        * a last resort `/usr/share`. This should help for example Exherbo
@@ -4380,35 +4371,8 @@ pv_runtime_collect_lib_data (PvRuntime *self,
           return;
         }
 
-      /* There are two possibilities for a symlink created by
-       * capsule-capture-libs.
-       *
-       * If capsule-capture-libs found a library in /app, /usr
-       * or /lib* (as configured by --remap-link-prefix in
-       * pv_runtime_get_capsule_capture_libs()), then the symlink will
-       * point to something like /run/host/lib/libfoo.so or
-       * /run/gfx/usr/lib64/libbar.so. To find the corresponding path
-       * in the graphics stack provider, we can remove the /run/host
-       * or /run/gfx prefix.
-       *
-       * If capsule-capture-libs found a library elsewhere, for example
-       * in $HOME or /opt, then we assume it will be visible at the same
-       * path in both the graphics stack provider and the final container.
-       * In practice this is unlikely to happen unless the graphics stack
-       * provider is the same as the current namespace. We do not remove
-       * any prefix in this case.
-       *
-       * Note that after this, target_in_provider can either be absolute,
-       * or relative to the root of the provider. */
-
-      target_in_provider = _srt_get_path_after (target,
-                                                self->provider->path_in_container_ns);
-
-      if (target_in_provider == NULL)
-        target_in_provider = target;
-
       /* Either absolute, or relative to the root of the provider */
-      dir = g_path_get_dirname (target_in_provider);
+      dir = g_path_get_dirname (lib_in_provider);
 
       /* Try to walk up the directory hierarchy from the library directory
        * to find the ${exec_prefix}. We assume that the library directory is
@@ -4483,6 +4447,73 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                 "be located in \"%s\" or \"%s\", but instead it is missing",
                 dir_basename, dir_in_provider, dir_in_provider_usr_share);
     }
+}
+
+/*
+ * pv_runtime_collect_lib_symlink_data:
+ * @self: The runtime
+ * @arch: Architecture of @lib_symlink
+ * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
+ * @lib_symlink: The symlink created by capsule-capture-libs.
+ *  Its target is either `self->provider->path_in_container_ns`
+ *  followed by the path to a library in the graphics stack provider
+ *  namespace, or the path to a library in a non-standard directory such
+ *  as /opt with no special prefix.
+ * @flags: Flags
+ * @data_in_provider: Map { owned string => itself } representing the set
+ *  of data directories discovered
+ *
+ * Returns: %TRUE if @lib_symlink exists and is a symlink
+ */
+static gboolean
+pv_runtime_collect_lib_symlink_data (PvRuntime *self,
+                                     RuntimeArchitecture *arch,
+                                     const char *dir_basename,
+                                     const char *lib_symlink,
+                                     PvRuntimeDataFlags flags,
+                                     GHashTable *data_in_provider)
+{
+  g_autofree char *target = NULL;
+  const char *target_in_provider;
+
+  g_return_val_if_fail (self->provider != NULL, FALSE);
+
+  target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
+
+  if (target == NULL)
+    return FALSE;
+
+  /* There are two possibilities for a symlink created by
+   * capsule-capture-libs.
+   *
+   * If capsule-capture-libs found a library in /app, /usr
+   * or /lib* (as configured by --remap-link-prefix in
+   * pv_runtime_get_capsule_capture_libs()), then the symlink will
+   * point to something like /run/host/lib/libfoo.so or
+   * /run/gfx/usr/lib64/libbar.so. To find the corresponding path
+   * in the graphics stack provider, we can remove the /run/host
+   * or /run/gfx prefix.
+   *
+   * If capsule-capture-libs found a library elsewhere, for example
+   * in $HOME or /opt, then we assume it will be visible at the same
+   * path in both the graphics stack provider and the final container.
+   * In practice this is unlikely to happen unless the graphics stack
+   * provider is the same as the current namespace. We do not remove
+   * any prefix in this case.
+   *
+   * Note that after this, target_in_provider can either be absolute,
+   * or relative to the root of the provider. */
+
+  target_in_provider = _srt_get_path_after (target,
+                                            self->provider->path_in_container_ns);
+
+  if (target_in_provider == NULL)
+    target_in_provider = target;
+
+  pv_runtime_collect_lib_data (self, arch, dir_basename,
+                               target_in_provider, flags,
+                               data_in_provider);
+  return TRUE;
 }
 
 static gboolean
@@ -5440,25 +5471,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
            * ${prefix}/share/libdrm from the provider. ${prefix} is derived from
            * the absolute path of libdrm_amdgpu.so.1 */
-          if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm_amdgpu,
-                                           PV_RUNTIME_DATA_FLAGS_NONE,
-                                           libdrm_data_in_provider);
-            }
-          /* As a fallback we also try libdrm.so.2 because libdrm_amdgpu.so.1
-           * might not be available in all providers.
-           * It's important to check for libdrm_amdgpu.so.1 first, because
-           * the freedesktop.org GL runtime doesn't provide libdrm.so.2, and if
-           * we check for it first we would end up looking for the "libdrm"
-           * directory in the wrong path */
-          else if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
-                                           PV_RUNTIME_DATA_FLAGS_NONE,
-                                           libdrm_data_in_provider);
-            }
-          else
+          if (!pv_runtime_collect_lib_symlink_data (self, arch, "libdrm",
+                                                    libdrm_amdgpu,
+                                                    PV_RUNTIME_DATA_FLAGS_NONE,
+                                                    libdrm_data_in_provider)
+              && !pv_runtime_collect_lib_symlink_data (self, arch, "libdrm",
+                                                       libdrm,
+                                                       PV_RUNTIME_DATA_FLAGS_NONE,
+                                                       libdrm_data_in_provider))
             {
               /* For at least a single architecture, libdrm is newer in the container */
               all_libdrm_from_provider = FALSE;
@@ -5469,13 +5489,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* If we have libGLX_mesa.so.0 in overrides we also want to mount
            * ${prefix}/share/drirc.d from the provider. ${prefix} is derived from
            * the absolute path of libGLX_mesa.so.0 */
-          if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "drirc.d", libglx_mesa,
-                                           PV_RUNTIME_DATA_FLAGS_NONE,
-                                           drirc_data_in_provider);
-            }
-          else
+          if (!pv_runtime_collect_lib_symlink_data (self, arch, "drirc.d",
+                                                    libglx_mesa,
+                                                    PV_RUNTIME_DATA_FLAGS_NONE,
+                                                    drirc_data_in_provider))
             {
               /* For at least a single architecture, libGLX_mesa is newer in the container */
               all_libglx_from_provider = FALSE;
@@ -5487,12 +5504,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * /usr/share/nvidia from the provider. In this case it's
            * /usr/share/nvidia that is the preferred path, with
            * ${prefix}/share/nvidia as a fallback. */
-          if (g_file_test (libglx_nvidia, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "nvidia", libglx_nvidia,
-                                           PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
-                                           nvidia_data_in_provider);
-            }
+          pv_runtime_collect_lib_symlink_data (self, arch, "nvidia",
+                                               libglx_nvidia,
+                                               PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
+                                               nvidia_data_in_provider);
 
           dirs = pv_multiarch_details_get_libdirs (arch->details,
                                                    PV_MULTIARCH_LIBDIRS_FLAGS_NONE);

@@ -4111,13 +4111,10 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
  * @arch: Architecture of @libc_symlink
  * @bwrap:
  * @libc_symlink: The symlink created by capsule-capture-libs.
- *  Its target is either @provider_in_container_namespace_guarded
+ *  Its target is either `self->provider->path_in_container_ns`
  *  followed by the path to glibc in the graphics stack provider
  *  namespace, or the path to glibc in a non-standard directory such
  *  as /opt with no special prefix.
- * @provider_in_container_namespace_guarded: The path at which the
- *  graphics stack provider will be mounted in the final container,
- *  with "/" appended if necessary
  * @gconv_in_provider: Map { owned string => itself } representing a set
  *  of paths to /usr/lib/gconv or equivalent in the graphics stack provider
  * @error: Used to raise an error on failure
@@ -4128,7 +4125,6 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                 FlatpakBwrap *bwrap,
                                 const char *libc_symlink,
                                 const char *ld_so_in_runtime,
-                                const char *provider_in_container_namespace_guarded,
                                 GHashTable *gconv_in_provider,
                                 GError **error)
 {
@@ -4168,13 +4164,19 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       g_autofree gchar *dir = NULL;
       g_autofree gchar *gconv_dir_in_provider = NULL;
       gboolean found = FALSE;
+      const char *target_in_provider;
 
-      dir = g_path_get_dirname (libc_target);
+      /* As with pv_runtime_collect_lib_data(), we need to remove the
+       * provider prefix if present. Note that after this, target_in_provider
+       * can either be absolute, or relative to the root of the provider. */
+      target_in_provider = _srt_get_path_after (libc_target,
+                                                self->provider->path_in_container_ns);
 
-      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-        memmove (dir,
-                 dir + strlen (self->provider->path_in_container_ns),
-                 strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
+      if (target_in_provider == NULL)
+        target_in_provider = libc_target;
+
+      /* Either absolute, or relative to the root of the provider */
+      dir = g_path_get_dirname (target_in_provider);
 
       /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
        * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
@@ -4185,11 +4187,13 @@ pv_runtime_collect_libc_family (PvRuntime *self,
        * and that could cause issues. */
       if (g_str_has_prefix (dir, "/usr/"))
         memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
+      else if (g_str_has_prefix (dir, "usr/"))
+        memmove (dir, dir + strlen ("usr"), strlen (dir) - strlen ("usr") + 1);
 
       /* If it starts with "/app/" we don't prepend "/usr/" because we don't
        * expect "/usr/app/" to be available */
-      if (g_str_has_prefix (dir, "/app/"))
-        gconv_dir_in_provider = g_build_filename (dir, "gconv", NULL);
+      if (g_str_has_prefix (dir, "/app/") || g_str_has_prefix (dir, "app/"))
+        gconv_dir_in_provider = g_build_filename ("/", dir, "gconv", NULL);
       else
         gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
@@ -5114,7 +5118,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                      g_free, NULL);
-  g_autofree gchar *provider_in_container_namespace_guarded = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -5125,13 +5128,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   timer = _srt_profiling_start ("Using graphics stack from %s",
                                 self->provider->path_in_current_ns);
-
-  if (g_str_has_suffix (self->provider->path_in_container_ns, "/"))
-    provider_in_container_namespace_guarded =
-      g_strdup (self->provider->path_in_container_ns);
-  else
-    provider_in_container_namespace_guarded =
-      g_strdup_printf ("%s/", self->provider->path_in_container_ns);
 
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
@@ -5381,7 +5377,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               if (!pv_runtime_collect_libc_family (self, arch, bwrap,
                                                    libc_symlink, ld_so_in_runtime,
-                                                   provider_in_container_namespace_guarded,
                                                    gconv_in_provider,
                                                    error))
                 return FALSE;

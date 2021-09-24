@@ -4299,6 +4299,13 @@ pv_runtime_collect_lib_data (PvRuntime *self,
 
   if (target != NULL)
     {
+      const char *libdir_suffixes[] =
+      {
+        "/lib/<multiarch>",   /* placeholder, will be replaced */
+        "/lib64",
+        "/lib32",
+        "/lib",
+      };
       g_autofree gchar *dir = NULL;
       g_autofree gchar *lib_multiarch = NULL;
       g_autofree gchar *dir_in_provider = NULL;
@@ -4362,14 +4369,18 @@ pv_runtime_collect_lib_data (PvRuntime *self,
        * something like "share/drirc.d" which will be looked up in the
        * provider namespace. */
       lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
-      if (g_str_has_suffix (dir, lib_multiarch))
-        dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
-      else if (g_str_has_suffix (dir, "/lib64"))
-        dir[strlen (dir) - strlen ("/lib64")] = '\0';
-      else if (g_str_has_suffix (dir, "/lib32"))
-        dir[strlen (dir) - strlen ("/lib32")] = '\0';
-      else if (g_str_has_suffix (dir, "/lib"))
-        dir[strlen (dir) - strlen ("/lib")] = '\0';
+      libdir_suffixes[0] = lib_multiarch;
+
+      for (gsize i = 0; i < G_N_ELEMENTS (libdir_suffixes); i++)
+        {
+          if (g_str_has_suffix (dir, libdir_suffixes[i]))
+            {
+              /* dir might be /usr/lib64 or /lib64:
+               * truncate to /usr or empty. */
+              dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
+              break;
+            }
+        }
 
       /* If ${prefix} and ${exec_prefix} are different, we have no way
        * to predict what the ${prefix} really is; so we are also assuming

@@ -116,7 +116,11 @@ foreach test_name : tests
     if dbus_run_session.found()
       test(
         test_name, dbus_run_session,
-        args : ['--', 'prove'] + test_args,
+        args : [
+          '--config-file', no_activation_session_conf,
+          '--',
+          'prove',
+        ] + test_args,
         env : test_env,
         suite : ['pressure-vessel'],
         timeout : timeout,

@@ -27,6 +27,8 @@ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'helpers'))
 test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
+no_activation_session_conf = files('session.conf')
+
 tests = [
   {'name': 'architecture'},
   {'name': 'container'},

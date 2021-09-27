@@ -340,11 +340,11 @@ foreach helper : [
   'x86_64-mock-debian-inspect-library',
   'i386-mock-debian-inspect-library',
   'x86_64-mock-fedora-inspect-library',
+  'x86_64-mock-ubuntu-inspect-library',
   'i386-mock-fedora-inspect-library',
   'mock-good-wflinfo',
   'mock-mixed-check-gl',
   'mock-software-wflinfo',
-  'mock-ubuntu-64-bit-inspect-library',
 ]
   executable(
     helper,
@@ -365,13 +365,38 @@ foreach arch : [
   foreach helper : [
     'mock-abi-inspect-library',
     'mock-container-capsule-capture-libs',
-    'mock-debian-capsule-capture-libs',
-    'mock-fedora-capsule-capture-libs',
   ]
     executable(
       arch + '-' + helper,
       helper + '.c',
       c_args : ['-DMOCK_ARCHITECTURE_' + arch],
+      dependencies : [glib, gio, test_utils_dep],
+      include_directories : project_include_dirs,
+      install: true,
+      install_dir: tests_dir
+    )
+  endforeach
+endforeach
+
+# i386 and x86_64 capsule-capture-libs helpers that differ only by
+# compile time args
+foreach arch : [
+  'i386',
+  'x86_64',
+]
+  foreach distro : [
+    'abi',
+    'debian',
+    'fedora',
+    'ubuntu',
+  ]
+    executable(
+      arch + '-mock-' + distro + '-capsule-capture-libs',
+      'mock-capsule-capture-libs.c',
+      c_args : [
+        '-DMOCK_ARCHITECTURE_' + arch,
+        '-DMOCK_DISTRO_' + distro.to_upper(),
+      ],
       dependencies : [glib, gio, test_utils_dep],
       include_directories : project_include_dirs,
       install: true,

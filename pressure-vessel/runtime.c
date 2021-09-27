@@ -2193,7 +2193,8 @@ typedef struct
    * or (type SrtVaApiDriver) or (type SrtVulkanLayer) or
    * (type SrtDriDriver) */
   gpointer icd;
-  /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
+  /* Either SONAME, or absolute path in the provider's namespace.
+   * Last entry is always NONEXISTENT; keyed by the index of a multiarch
    * tuple in multiarch_tuples. */
   gchar *resolved_libraries[PV_N_SUPPORTED_ARCHITECTURES + 1];
   /* Last entry is always NONEXISTENT; keyed by the index of a multiarch

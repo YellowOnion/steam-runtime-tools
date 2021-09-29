@@ -4105,13 +4105,26 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
                                       soname_globs[i]));
 }
 
+/*
+ * pv_runtime_collect_libc_family:
+ * @self: The runtime
+ * @arch: Architecture of @libc_symlink
+ * @bwrap:
+ * @libc_symlink: The symlink created by capsule-capture-libs.
+ *  Its target is either `self->provider->path_in_container_ns`
+ *  followed by the path to glibc in the graphics stack provider
+ *  namespace, or the path to glibc in a non-standard directory such
+ *  as /opt with no special prefix.
+ * @gconv_in_provider: Map { owned string => itself } representing a set
+ *  of paths to /usr/lib/gconv or equivalent in the graphics stack provider
+ * @error: Used to raise an error on failure
+ */
 static gboolean
 pv_runtime_collect_libc_family (PvRuntime *self,
                                 RuntimeArchitecture *arch,
                                 FlatpakBwrap *bwrap,
-                                const char *libc,
+                                const char *libc_symlink,
                                 const char *ld_so_in_runtime,
-                                const char *provider_in_container_namespace_guarded,
                                 GHashTable *gconv_in_provider,
                                 GError **error)
 {
@@ -4145,19 +4158,25 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 
   g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-  libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
+  libc_target = glnx_readlinkat_malloc (-1, libc_symlink, NULL, NULL);
   if (libc_target != NULL)
     {
       g_autofree gchar *dir = NULL;
       g_autofree gchar *gconv_dir_in_provider = NULL;
       gboolean found = FALSE;
+      const char *target_in_provider;
 
-      dir = g_path_get_dirname (libc_target);
+      /* As with pv_runtime_collect_lib_data(), we need to remove the
+       * provider prefix if present. Note that after this, target_in_provider
+       * can either be absolute, or relative to the root of the provider. */
+      target_in_provider = _srt_get_path_after (libc_target,
+                                                self->provider->path_in_container_ns);
 
-      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-        memmove (dir,
-                 dir + strlen (self->provider->path_in_container_ns),
-                 strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
+      if (target_in_provider == NULL)
+        target_in_provider = libc_target;
+
+      /* Either absolute, or relative to the root of the provider */
+      dir = g_path_get_dirname (target_in_provider);
 
       /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
        * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
@@ -4168,11 +4187,13 @@ pv_runtime_collect_libc_family (PvRuntime *self,
        * and that could cause issues. */
       if (g_str_has_prefix (dir, "/usr/"))
         memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
+      else if (g_str_has_prefix (dir, "usr/"))
+        memmove (dir, dir + strlen ("usr"), strlen (dir) - strlen ("usr") + 1);
 
       /* If it starts with "/app/" we don't prepend "/usr/" because we don't
        * expect "/usr/app/" to be available */
-      if (g_str_has_prefix (dir, "/app/"))
-        gconv_dir_in_provider = g_build_filename (dir, "gconv", NULL);
+      if (g_str_has_prefix (dir, "/app/") || g_str_has_prefix (dir, "app/"))
+        gconv_dir_in_provider = g_build_filename ("/", dir, "gconv", NULL);
       else
         gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
 
@@ -4232,32 +4253,64 @@ pv_runtime_collect_libc_family (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * PvRuntimeDataFlags:
+ * @PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST: If set, look in /usr/share
+ *  before attempting to derive a data directory from ${libdir}.
+ *  Use this for drivers like the NVIDIA proprietary driver that hard-code
+ *  /usr/share rather than having a build-time-configurable prefix.
+ * @PV_RUNTIME_DATA_FLAGS_NONE: None of the above.
+ *
+ * Flags affecting pv_runtime_collect_lib_data().
+ */
 typedef enum
 {
   PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST = (1 << 0),
   PV_RUNTIME_DATA_FLAGS_NONE = 0
 } PvRuntimeDataFlags;
 
+/*
+ * pv_runtime_collect_lib_data:
+ * @self: The runtime
+ * @arch: Architecture of @lib_symlink
+ * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
+ * @lib_symlink: The symlink created by capsule-capture-libs.
+ *  Its target is either `self->provider->path_in_container_ns`
+ *  followed by the path to a library in the graphics stack provider
+ *  namespace, or the path to a library in a non-standard directory such
+ *  as /opt with no special prefix.
+ * @flags: Flags
+ * @data_in_provider: Map { owned string => itself } representing the set
+ *  of data directories discovered
+ */
 static void
 pv_runtime_collect_lib_data (PvRuntime *self,
                              RuntimeArchitecture *arch,
                              const char *dir_basename,
-                             const char *lib_path,
-                             const char *provider_in_container_namespace_guarded,
+                             const char *lib_symlink,
                              PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
   g_autofree char *target = NULL;
-  target = glnx_readlinkat_malloc (-1, lib_path, NULL, NULL);
+
+  target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
 
   g_return_if_fail (self->provider != NULL);
 
   if (target != NULL)
     {
+      const char *libdir_suffixes[] =
+      {
+        "/lib/<multiarch>",   /* placeholder, will be replaced */
+        "/lib64",
+        "/lib32",
+        "/lib",
+      };
       g_autofree gchar *dir = NULL;
       g_autofree gchar *lib_multiarch = NULL;
       g_autofree gchar *dir_in_provider = NULL;
       g_autofree gchar *dir_in_provider_usr_share = NULL;
+      const char *target_in_provider;
 
       /* If we are unable to find the lib data in the provider, we try as
        * a last resort `/usr/share`. This should help for example Exherbo
@@ -4283,23 +4336,73 @@ pv_runtime_collect_lib_data (PvRuntime *self,
           return;
         }
 
-      dir = g_path_get_dirname (target);
+      /* There are two possibilities for a symlink created by
+       * capsule-capture-libs.
+       *
+       * If capsule-capture-libs found a library in /app, /usr
+       * or /lib* (as configured by --remap-link-prefix in
+       * pv_runtime_get_capsule_capture_libs()), then the symlink will
+       * point to something like /run/host/lib/libfoo.so or
+       * /run/gfx/usr/lib64/libbar.so. To find the corresponding path
+       * in the graphics stack provider, we can remove the /run/host
+       * or /run/gfx prefix.
+       *
+       * If capsule-capture-libs found a library elsewhere, for example
+       * in $HOME or /opt, then we assume it will be visible at the same
+       * path in both the graphics stack provider and the final container.
+       * In practice this is unlikely to happen unless the graphics stack
+       * provider is the same as the current namespace. We do not remove
+       * any prefix in this case.
+       *
+       * Note that after this, target_in_provider can either be absolute,
+       * or relative to the root of the provider. */
 
+      target_in_provider = _srt_get_path_after (target,
+                                                self->provider->path_in_container_ns);
+
+      if (target_in_provider == NULL)
+        target_in_provider = target;
+
+      /* Either absolute, or relative to the root of the provider */
+      dir = g_path_get_dirname (target_in_provider);
+
+      /* Try to walk up the directory hierarchy from the library directory
+       * to find the ${exec_prefix}. We assume that the library directory is
+       * either ${exec_prefix}/lib/${multiarch_tuple}, ${exec_prefix}/lib64,
+       * ${exec_prefix}/lib32, or ${exec_prefix}/lib.
+       *
+       * Note that if the library is in /lib, /lib64, etc., this will
+       * leave dir empty, but that's OK: dir_in_provider will become
+       * something like "share/drirc.d" which will be looked up in the
+       * provider namespace. */
       lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
-      if (g_str_has_suffix (dir, lib_multiarch))
-        dir[strlen (dir) - strlen (lib_multiarch)] = '\0';
-      else if (g_str_has_suffix (dir, "/lib64"))
-        dir[strlen (dir) - strlen ("/lib64")] = '\0';
-      else if (g_str_has_suffix (dir, "/lib32"))
-        dir[strlen (dir) - strlen ("/lib32")] = '\0';
-      else if (g_str_has_suffix (dir, "/lib"))
-        dir[strlen (dir) - strlen ("/lib")] = '\0';
+      libdir_suffixes[0] = lib_multiarch;
 
-      if (g_str_has_prefix (dir, provider_in_container_namespace_guarded))
-        memmove (dir,
-                 dir + strlen (self->provider->path_in_container_ns),
-                 strlen (dir) - strlen (self->provider->path_in_container_ns) + 1);
+      for (gsize i = 0; i < G_N_ELEMENTS (libdir_suffixes); i++)
+        {
+          if (g_str_has_suffix (dir, libdir_suffixes[i]))
+            {
+              /* dir might be /usr/lib64 or /lib64:
+               * truncate to /usr or empty. */
+              dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
+              break;
+            }
 
+          if (g_strcmp0 (dir, libdir_suffixes[i] + 1))
+            {
+              /* dir is something like lib64: truncate to empty. */
+              dir[0] = '\0';
+              break;
+            }
+        }
+
+      /* If ${prefix} and ${exec_prefix} are different, we have no way
+       * to predict what the ${prefix} really is; so we are also assuming
+       * that the ${exec_prefix} is the same as the ${prefix}.
+       *
+       * Go back down from the ${prefix} to the data directory,
+       * which we assume is ${prefix}/share. (If it isn't, then we have
+       * no way to predict what it would be.) */
       dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
 
       if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
@@ -5015,7 +5118,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                                      g_free, NULL);
-  g_autofree gchar *provider_in_container_namespace_guarded = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -5026,13 +5128,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   timer = _srt_profiling_start ("Using graphics stack from %s",
                                 self->provider->path_in_current_ns);
-
-  if (g_str_has_suffix (self->provider->path_in_container_ns, "/"))
-    provider_in_container_namespace_guarded =
-      g_strdup (self->provider->path_in_container_ns);
-  else
-    provider_in_container_namespace_guarded =
-      g_strdup_printf ("%s/", self->provider->path_in_container_ns);
 
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
@@ -5192,7 +5287,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autoptr(GPtrArray) dirs = NULL;
           g_autofree gchar *this_dri_path_in_container = g_build_filename (arch->libdir_in_container,
                                                                            "dri", NULL);
-          g_autofree gchar *libc = NULL;
+          g_autofree gchar *libc_symlink = NULL;
           /* Can either be relative to the sysroot, or absolute */
           g_autofree gchar *ld_so_in_runtime = NULL;
           g_autofree gchar *libdrm = NULL;
@@ -5274,15 +5369,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                              patterns, error))
             return FALSE;
 
-          libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
+          libc_symlink = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
            * then we have to use its ld.so too. */
-          if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
+          if (g_file_test (libc_symlink, G_FILE_TEST_IS_SYMLINK))
             {
               if (!pv_runtime_collect_libc_family (self, arch, bwrap,
-                                                   libc, ld_so_in_runtime,
-                                                   provider_in_container_namespace_guarded,
+                                                   libc_symlink, ld_so_in_runtime,
                                                    gconv_in_provider,
                                                    error))
                 return FALSE;
@@ -5305,7 +5399,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm_amdgpu,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_NONE,
                                            libdrm_data_in_provider);
             }
@@ -5318,7 +5411,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           else if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_NONE,
                                            libdrm_data_in_provider);
             }
@@ -5336,7 +5428,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "drirc.d", libglx_mesa,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_NONE,
                                            drirc_data_in_provider);
             }
@@ -5355,7 +5446,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           if (g_file_test (libglx_nvidia, G_FILE_TEST_IS_SYMLINK))
             {
               pv_runtime_collect_lib_data (self, arch, "nvidia", libglx_nvidia,
-                                           provider_in_container_namespace_guarded,
                                            PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
                                            nvidia_data_in_provider);
             }

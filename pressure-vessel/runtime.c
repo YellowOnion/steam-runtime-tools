@@ -3136,7 +3136,9 @@ pv_runtime_take_from_provider (PvRuntime *self,
           target = g_build_filename ("/", source_in_provider, NULL);
         }
 
+      /* By now, all code paths should have ensured it starts with '/' */
       g_return_val_if_fail (target != NULL, FALSE);
+      g_return_val_if_fail (target[0] == '/', FALSE);
 
       if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
         return glnx_throw_errno_prefix (error,

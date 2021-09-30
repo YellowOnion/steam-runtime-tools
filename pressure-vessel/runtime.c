@@ -3084,13 +3084,9 @@ pv_runtime_take_from_provider (PvRuntime *self,
             {
               glnx_autofd int file_fd = -1;
               glnx_autofd int dest_fd = -1;
-              glnx_autofd int sysroot_fd = -1;
 
-              if (!glnx_opendirat (-1, self->provider->path_in_current_ns,
-                                   FALSE, &sysroot_fd, error))
-                return FALSE;
-
-              file_fd = _srt_resolve_in_sysroot (sysroot_fd, source_in_provider,
+              file_fd = _srt_resolve_in_sysroot (self->provider->fd,
+                                                 source_in_provider,
                                                  SRT_RESOLVE_FLAGS_READABLE,
                                                  NULL, error);
               if (file_fd < 0)

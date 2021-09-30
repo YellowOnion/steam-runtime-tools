@@ -4338,7 +4338,12 @@ pv_runtime_collect_lib_data (PvRuntime *self,
   g_autofree gchar *dir_in_provider = NULL;
   g_autofree gchar *dir_in_provider_usr_share = NULL;
 
+  g_return_if_fail (PV_IS_RUNTIME (self));
   g_return_if_fail (self->provider != NULL);
+  g_return_if_fail (runtime_architecture_check_valid (arch));
+  g_return_if_fail (dir_basename != NULL);
+  g_return_if_fail (lib_in_provider != NULL);
+  g_return_if_fail (data_in_provider != NULL);
 
   /* If we are unable to find the lib data in the provider, we try as
    * a last resort `/usr/share`. This should help for example Exherbo
@@ -4468,7 +4473,12 @@ pv_runtime_collect_lib_symlink_data (PvRuntime *self,
   g_autofree char *target = NULL;
   const char *target_in_provider;
 
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->provider != NULL, FALSE);
+  g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
+  g_return_val_if_fail (dir_basename != NULL, FALSE);
+  g_return_val_if_fail (lib_symlink != NULL, FALSE);
+  g_return_val_if_fail (data_in_provider != NULL, FALSE);
 
   target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
 

@@ -2092,19 +2092,19 @@ test_dri_ubuntu16 (Fixture *f,
   g_autofree gchar *sysroot = NULL;
   GList *dri;
   GList *va_api;
-  const gchar *multiarch_tuples[] = {"mock-ubuntu-64-bit", NULL};
+  const gchar *multiarch_tuples[] = {"x86_64-mock-ubuntu", NULL};
   const gchar *dri_suffixes[] = {NULL};
   const gchar *dri_suffixes_extra[] = {"/lib/dri/radeonsi_dri.so",
-                                       "/lib/mock-ubuntu-64-bit/dri/i965_dri.so",
-                                       "/lib/mock-ubuntu-64-bit/dri/radeon_dri.so",
+                                       "/lib/x86_64-mock-ubuntu/dri/i965_dri.so",
+                                       "/lib/x86_64-mock-ubuntu/dri/radeon_dri.so",
                                        NULL};
-  const gchar *va_api_suffixes[] = {"/lib/mock-ubuntu-64-bit/dri/radeonsi_drv_video.so",
+  const gchar *va_api_suffixes[] = {"/lib/x86_64-mock-ubuntu/dri/radeonsi_drv_video.so",
                                     NULL};
 
   sysroot = g_build_filename (f->sysroots, "ubuntu16", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
-  envp = g_environ_setenv (envp, "SRT_TEST_FORCE_ELF", "64", TRUE);
+  envp = g_environ_setenv (envp, "SRT_TEST_ELF_CLASS_FROM_PATH", "1", TRUE);
   envp = g_environ_unsetenv (envp, "LIBGL_DRIVERS_PATH");
   envp = g_environ_unsetenv (envp, "LIBVA_DRIVERS_PATH");
 
@@ -2137,34 +2137,34 @@ test_dri_with_env (Fixture *f,
   g_autoptr(SrtSystemInfo) info = NULL;
   g_auto(GStrv) envp = NULL;
   g_autofree gchar *sysroot = NULL;
-  g_autofree gchar *libgl = NULL;
-  g_autofree gchar *libgl2 = NULL;
-  g_autofree gchar *libgl3 = NULL;
-  g_autofree gchar *libva = NULL;
-  g_autofree gchar *libva2 = NULL;
-  g_autofree gchar *libva3 = NULL;
+  const gchar *libgl = NULL;
+  const gchar *libgl2 = NULL;
+  const gchar *libgl3 = NULL;
+  const gchar *libva = NULL;
+  const gchar *libva2 = NULL;
+  const gchar *libva3 = NULL;
   g_autofree gchar *libgl_combined = NULL;
   g_autofree gchar *libva_combined = NULL;
   GList *dri;
   GList *va_api;
   const gchar *multiarch_tuples[] = {"i386-mock-fedora", NULL};
-  const gchar *dri_suffixes[] = {"/custom_path32/dri/r600_dri.so",
-                                 "/custom_path32/dri/radeon_dri.so",
-                                 "/custom_path32_2/dri/r300_dri.so",
+  const gchar *dri_suffixes[] = {"custom_path32/dri/r600_dri.so",
+                                 "custom_path32/dri/radeon_dri.so",
+                                 "custom_path32_2/dri/r300_dri.so",
                                  NULL};
-  const gchar *dri_suffixes_with_extras[] = {"/custom_path32/dri/r600_dri.so",
-                                             "/custom_path32/dri/radeon_dri.so",
-                                             "/custom_path32_2/dri/r300_dri.so",
+  const gchar *dri_suffixes_with_extras[] = {"custom_path32/dri/r600_dri.so",
+                                             "custom_path32/dri/radeon_dri.so",
+                                             "custom_path32_2/dri/r300_dri.so",
                                              "/usr/lib/dri/i965_dri.so",
                                              "/usr/lib/dri/radeonsi_dri.so",
                                              NULL};
-  const gchar *va_api_suffixes[] = {"/custom_path32/va/r600_drv_video.so",
-                                    "/custom_path32/va/radeonsi_drv_video.so",
-                                    "/custom_path32_2/va/nouveau_drv_video.so",
+  const gchar *va_api_suffixes[] = {"custom_path32/va/r600_drv_video.so",
+                                    "custom_path32/va/radeonsi_drv_video.so",
+                                    "custom_path32_2/va/nouveau_drv_video.so",
                                     NULL};
-  const gchar *va_api_suffixes_with_extras[] = {"/custom_path32/va/r600_drv_video.so",
-                                                "/custom_path32/va/radeonsi_drv_video.so",
-                                                "/custom_path32_2/va/nouveau_drv_video.so",
+  const gchar *va_api_suffixes_with_extras[] = {"custom_path32/va/r600_drv_video.so",
+                                                "custom_path32/va/radeonsi_drv_video.so",
+                                                "custom_path32_2/va/nouveau_drv_video.so",
                                                 "/usr/lib/dri/r600_drv_video.so",
                                                 NULL};
 
@@ -2176,15 +2176,15 @@ test_dri_with_env (Fixture *f,
 
   sysroot = g_build_filename (f->sysroots, "no-os-release", NULL);
 
-  libgl = g_build_filename (sysroot, "custom_path32", "dri", NULL);
-  libva = g_build_filename (sysroot, "custom_path32", "va", NULL);
-  libgl2 = g_build_filename (sysroot, "custom_path32_2", "dri", NULL);
-  libva2 = g_build_filename (sysroot, "custom_path32_2", "va", NULL);
+  libgl = "/custom_path32/dri";
+  libva = "/custom_path32/va";
+  libgl2 = "/custom_path32_2/dri";
+  libva2 = "/custom_path32_2/va";
   /* We have these two 64bit directories but we are using only one mock 32bit executable.
    * So we expect to not receive the content of these directories because we should
    * find 32bit only libraries. */
-  libgl3 = g_build_filename (sysroot, "custom_path64", "dri", NULL);
-  libva3 = g_build_filename (sysroot, "custom_path64", "va", NULL);
+  libgl3 = "/custom_path64/dri";
+  libva3 = "/custom_path64/va";
 
   libgl_combined = g_strjoin (":", libgl, libgl2, libgl3, NULL);
   libva_combined = g_strjoin (":", libva, libva2, libva3, NULL);
@@ -2202,11 +2202,13 @@ test_dri_with_env (Fixture *f,
   /* The output is guaranteed to be in aphabetical order */
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
+  check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
   /* The output is guaranteed to be in aphabetical order */
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
+  check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
   /* Do it again, this time including the extras */
@@ -2214,35 +2216,26 @@ test_dri_with_env (Fixture *f,
   check_list_suffixes (dri, dri_suffixes_with_extras, SRT_GRAPHICS_DRI_MODULE);
   /* Minus one to not count the NULL terminator */
   check_list_extra (dri, G_N_ELEMENTS(dri_suffixes)-1, SRT_GRAPHICS_DRI_MODULE);
+  check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes_with_extras, SRT_GRAPHICS_VAAPI_MODULE);
   /* Minus one to not count the NULL terminator */
   check_list_extra (va_api, G_N_ELEMENTS(va_api_suffixes)-1, SRT_GRAPHICS_VAAPI_MODULE);
+  check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
   /* Test relative path.
    * Move to the sysroots path because otherwise we can't use the
    * relative paths */
-  if (g_chdir (global_sysroots) != 0)
-    g_error ("chdir %s: %s", global_sysroots, g_strerror (errno));
-  g_free (libgl);
-  g_free (libgl2);
-  g_free (libgl3);
-  g_free (libva);
-  g_free (libva2);
-  g_free (libva3);
+  if (g_chdir (sysroot) != 0)
+    g_error ("chdir %s: %s", sysroot, g_strerror (errno));
   g_free (libgl_combined);
   g_free (libva_combined);
-  libgl = g_build_filename ("no-os-release", "custom_path32", "dri", NULL);
-  libgl2 = g_build_filename ("no-os-release", "custom_path32_2", "dri", NULL);
-  libgl3 = g_build_filename ("no-os-release", "custom_path64", "dri", NULL);
-  libva = g_build_filename ("no-os-release", "custom_path32", "va", NULL);
-  libva2 = g_build_filename ("no-os-release", "custom_path32_2", "va", NULL);
-  libva3 = g_build_filename ("no-os-release", "custom_path64", "va", NULL);
-  libgl_combined = g_strjoin (":", libgl, libgl2, libgl3, NULL);
-  libva_combined = g_strjoin (":", libva, libva2, libva3, NULL);
+  /* Plus one to remove the leading "/" */
+  libgl_combined = g_strjoin (":", libgl + 1, libgl2 + 1, libgl3 + 1, NULL);
+  libva_combined = g_strjoin (":", libva + 1, libva2 + 1, libva3 + 1, NULL);
   envp = g_environ_setenv (envp, "LIBGL_DRIVERS_PATH", libgl_combined, TRUE);
   envp = g_environ_setenv (envp, "LIBVA_DRIVERS_PATH", libva_combined, TRUE);
   srt_system_info_set_environ (info, envp);
@@ -2398,8 +2391,8 @@ static const VdpauTest vdpau_test[] =
     .sysroot = "no-os-release",
     .vdpau_suffixes =
     {
-      "/custom_path32/vdpau/libvdpau_r600.so.1",
-      "/custom_path32/vdpau/libvdpau_radeonsi.so.1",
+      "custom_path32/vdpau/libvdpau_r600.so.1",
+      "custom_path32/vdpau/libvdpau_radeonsi.so.1",
       NULL
     },
     .vdpau_suffixes_extra =
@@ -2413,7 +2406,7 @@ static const VdpauTest vdpau_test[] =
     },
     .vdpau_path_env = "custom_path32",
     .vdpau_driver_env = "r9000",
-    .ld_library_path_env = "another_custom_path",
+    .ld_library_path_env = "/another_custom_path",
   },
 
   {
@@ -2438,7 +2431,6 @@ test_vdpau (Fixture *f,
       g_autoptr(SrtSystemInfo) info = NULL;
       g_auto(GStrv) envp = NULL;
       g_autofree gchar *sysroot = NULL;
-      g_autofree gchar *ld_library_path = NULL;
       g_autofree gchar *vdpau_path = NULL;
       g_autofree gchar *vdpau_relative_path = NULL;
       GList *vdpau;
@@ -2454,9 +2446,9 @@ test_vdpau (Fixture *f,
         }
       else
         {
-          vdpau_path = g_build_filename (sysroot, test->vdpau_path_env, "vdpau", NULL);
-          vdpau_relative_path = g_build_filename (test->sysroot, test->vdpau_path_env,
-                                                  "vdpau", NULL);
+          g_assert_cmpint (test->vdpau_path_env[0], !=, '/');
+          vdpau_path = g_build_filename ("/", test->vdpau_path_env, "vdpau", NULL);
+          vdpau_relative_path = g_build_filename (test->vdpau_path_env, "vdpau", NULL);
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_path, TRUE);
         }
 
@@ -2466,14 +2458,9 @@ test_vdpau (Fixture *f,
         envp = g_environ_setenv (envp, "VDPAU_DRIVER", test->vdpau_driver_env, TRUE);
 
       if (test->ld_library_path_env == NULL)
-        {
-          envp = g_environ_unsetenv (envp, "LD_LIBRARY_PATH");
-        }
+        envp = g_environ_unsetenv (envp, "LD_LIBRARY_PATH");
       else
-        {
-          ld_library_path = g_build_filename (sysroot, test->ld_library_path_env, NULL);
-          envp = g_environ_setenv (envp, "LD_LIBRARY_PATH", ld_library_path, TRUE);
-        }
+        envp = g_environ_setenv (envp, "LD_LIBRARY_PATH", test->ld_library_path_env, TRUE);
 
       info = srt_system_info_new (NULL);
       srt_system_info_set_environ (info, envp);
@@ -2504,8 +2491,8 @@ test_vdpau (Fixture *f,
         {
           envp = g_environ_setenv (envp, "VDPAU_DRIVER_PATH", vdpau_relative_path, TRUE);
           /* Move to the build directory because otherwise we can't use the relative sysroots path */
-          if (g_chdir (global_sysroots) != 0)
-            g_error ("chdir %s: %s", global_sysroots, g_strerror (errno));
+          if (g_chdir (sysroot) != 0)
+            g_error ("chdir %s: %s", sysroot, g_strerror (errno));
 
           srt_system_info_set_environ (info, envp);
           vdpau = srt_system_info_list_vdpau_drivers (info, test->multiarch_tuple, SRT_DRIVER_FLAGS_NONE);

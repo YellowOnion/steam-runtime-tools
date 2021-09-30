@@ -139,9 +139,9 @@ steamrt-unofficial/etc
 steamrt-unofficial/usr/lib
 steamrt-unofficial/proc/1
 ubuntu16/usr/lib/dri
-ubuntu16/usr/lib/mock-ubuntu-64-bit/dri
-ubuntu16/usr/lib/mock-ubuntu-64-bit/mesa
-ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau
+ubuntu16/usr/lib/x86_64-mock-ubuntu/dri
+ubuntu16/usr/lib/x86_64-mock-ubuntu/mesa
+ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau
 '''.split():
     os.makedirs(name, mode=0o755, exist_ok=True)
 
@@ -152,6 +152,8 @@ debian10/usr/lib/i386-linux-gnu/dri/r300_dri.so
 debian10/usr/lib/i386-linux-gnu/dri/r600_drv_video.so
 debian10/usr/lib/i386-linux-gnu/dri/radeonsi_dri.so
 debian10/usr/lib/i386-linux-gnu/libEGL_mesa.so.0
+debian10/usr/lib/i386-linux-gnu/libGLX_mesa.so.0
+debian10/usr/lib/i386-linux-gnu/libGLX_nvidia.so.0
 debian10/usr/lib/i386-linux-gnu/libva.so.2
 debian10/usr/lib/i386-linux-gnu/libvdpau.so.1
 debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_r600.so
@@ -164,6 +166,7 @@ debian10/usr/lib/x86_64-linux-gnu/dri/radeon_dri.so
 debian10/usr/lib/x86_64-linux-gnu/dri/radeonsi_drv_video.so
 debian10/usr/lib/x86_64-linux-gnu/libEGL_mesa.so.0
 debian10/usr/lib/x86_64-linux-gnu/libGL.so.1
+debian10/usr/lib/x86_64-linux-gnu/libGLX_mesa.so.0
 debian10/usr/lib/x86_64-linux-gnu/libva.so.2
 debian10/usr/lib/x86_64-linux-gnu/libvdpau.so.1
 debian10/usr/lib/x86_64-linux-gnu/vdpau/libvdpau_r600.so.1.0.0
@@ -253,13 +256,13 @@ steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/bin/.keep
 steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/i386-linux-gnu/.keep
 ubuntu16/lib64/ld-linux-x86-64.so.2
 ubuntu16/usr/lib/dri/radeonsi_dri.so
-ubuntu16/usr/lib/mock-ubuntu-64-bit/dri/i965_dri.so
-ubuntu16/usr/lib/mock-ubuntu-64-bit/dri/radeon_dri.so
-ubuntu16/usr/lib/mock-ubuntu-64-bit/dri/radeonsi_drv_video.so
-ubuntu16/usr/lib/mock-ubuntu-64-bit/libva.so.1
-ubuntu16/usr/lib/mock-ubuntu-64-bit/mesa/libGL.so.1
-ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau/libvdpau_r600.so.1.0.0
-ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau/libvdpau_radeonsi.so.1.0.0
+ubuntu16/usr/lib/x86_64-mock-ubuntu/dri/i965_dri.so
+ubuntu16/usr/lib/x86_64-mock-ubuntu/dri/radeon_dri.so
+ubuntu16/usr/lib/x86_64-mock-ubuntu/dri/radeonsi_drv_video.so
+ubuntu16/usr/lib/x86_64-mock-ubuntu/libva.so.1
+ubuntu16/usr/lib/x86_64-mock-ubuntu/mesa/libGL.so.1
+ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_r600.so.1.0.0
+ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_radeonsi.so.1.0.0
 '''.split():
     os.makedirs(os.path.dirname(name), mode=0o755, exist_ok=True)
     open(name, 'w').close()
@@ -300,11 +303,11 @@ for name, target in {
         '/run/host/usr/lib/libgcc_s.so.1',
     'steamrt-unofficial/etc/os-release':
         '../usr/lib/os-release',
-    'ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau/libvdpau_r600.so.1':
+    'ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_r600.so.1':
         'libvdpau_r600.so.1.0.0',
-    'ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau/libvdpau_radeonsi.so':
+    'ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_radeonsi.so':
         'libvdpau_radeonsi.so.1.0.0',
-    'ubuntu16/usr/lib/mock-ubuntu-64-bit/vdpau/libvdpau_radeonsi.so.1':
+    'ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_radeonsi.so.1':
         'libvdpau_radeonsi.so.1.0.0',
 }.items():
     os.makedirs(os.path.dirname(name), mode=0o755, exist_ok=True)

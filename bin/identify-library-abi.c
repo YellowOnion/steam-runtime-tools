@@ -26,8 +26,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
-#include <gelf.h>
-#include <libelf.h>
 #include <sysexits.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -36,10 +34,10 @@
 
 #include <glib.h>
 
+#include <steam-runtime-tools/architecture.h>
+#include <steam-runtime-tools/architecture-internal.h>
 #include <steam-runtime-tools/glib-backports-internal.h>
 #include <steam-runtime-tools/utils-internal.h>
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(Elf, elf_end);
 
 /* nftw() doesn't have a user_data argument so we need to use a global
  * variable */
@@ -89,44 +87,20 @@ print_library_details (const gchar *library_path,
                        const gchar separator,
                        FILE *original_stdout)
 {
-  glnx_autofd int fd = -1;
-  g_autoptr(Elf) elf = NULL;
-  int class = ELFCLASSNONE;
   const gchar *identifier = NULL;
+  g_autoptr(GError) error = NULL;
 
-  GElf_Ehdr eh;
+  identifier = _srt_architecture_guess_from_elf (AT_FDCWD, library_path, &error);
 
-  if ((fd = open (library_path, O_RDONLY | O_CLOEXEC, 0)) < 0)
+  if (identifier == NULL)
     {
-      int saved_errno = errno;
-      g_debug ("Error reading \"%s\": %s\n",
-               library_path, strerror (saved_errno));
-      return;
+      g_debug ("%s", error->message);
+
+      if (error->domain == SRT_ARCHITECTURE_ERROR)
+        identifier = "?";
+      else
+        return;
     }
-
-    if ((elf = elf_begin (fd, ELF_C_READ, NULL)) == NULL)
-      {
-        g_debug ("Error reading the library ELF: %s", elf_errmsg (elf_errno ()));
-        return;
-      }
-
-    if (gelf_getehdr(elf, &eh) == NULL)
-      {
-        g_debug ("Error reading the library ELF header: %s",
-                 elf_errmsg (elf_errno ()));
-        return;
-      }
-
-    class = gelf_getclass (elf);
-
-    if (class == ELFCLASS32 && eh.e_machine == EM_386)
-      identifier = "i386-linux-gnu";
-    else if (class == ELFCLASS32 && eh.e_machine == EM_X86_64)
-      identifier = "x86_64-linux-gnux32";
-    else if (class == ELFCLASS64 && eh.e_machine == EM_X86_64)
-      identifier = "x86_64-linux-gnu";
-    else
-      identifier = "?";
 
     fprintf (original_stdout, "%s=%s%c", library_path, identifier, separator);
 }
@@ -155,9 +129,6 @@ run (int argc,
 
   if (opt_print0)
     separator = '\0';
-
-  if (elf_version (EV_CURRENT) == EV_NONE)
-    return glnx_throw (error, "elf_version(EV_CURRENT): %s", elf_errmsg (elf_errno ()));
 
   if (opt_ldconfig)
     {

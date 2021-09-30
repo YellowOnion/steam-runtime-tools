@@ -42,10 +42,10 @@ main (int argc,
    * the "mesa" subfolder */
   if (g_strcmp0 (argv[2], "libGL.so.1") == 0)
     path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib",
-                             "mock-ubuntu-64-bit", "mesa", argv[2], NULL);
+                             "x86_64-mock-ubuntu", "mesa", argv[2], NULL);
   else
     path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib",
-                             "mock-ubuntu-64-bit", argv[2], NULL);
+                             "x86_64-mock-ubuntu", argv[2], NULL);
 
   /* Return as if we found the given SONAME */
   printf ("requested=%s\n", argv[2]);

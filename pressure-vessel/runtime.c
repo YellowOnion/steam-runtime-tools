@@ -2193,7 +2193,8 @@ typedef struct
    * or (type SrtVaApiDriver) or (type SrtVulkanLayer) or
    * (type SrtDriDriver) */
   gpointer icd;
-  /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
+  /* Either SONAME, or absolute path in the provider's namespace.
+   * Last entry is always NONEXISTENT; keyed by the index of a multiarch
    * tuple in multiarch_tuples. */
   gchar *resolved_libraries[PV_N_SUPPORTED_ARCHITECTURES + 1];
   /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
@@ -3561,7 +3562,6 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
 {
   glnx_autofd int path_fd = -1;
   g_autofree gchar *ld_so_relative_to_provider = NULL;
-  g_autofree gchar *ld_so_in_provider = NULL;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
@@ -3579,9 +3579,6 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
       return FALSE;
     }
 
-  ld_so_in_provider = g_build_filename (self->provider->path_in_host_ns,
-                                        ld_so_relative_to_provider, NULL);
-
   g_debug ("Provider path: %s -> %s", arch->ld_so, ld_so_relative_to_provider);
   /* Might be either absolute, or relative to the root */
   g_debug ("Container path: %s -> %s", arch->ld_so, ld_so_in_runtime);
@@ -3593,7 +3590,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
    * having to dereference a long chain of symlinks every time we run
    * an executable. */
   if (self->mutable_sysroot != NULL &&
-      !pv_runtime_take_from_provider (self, bwrap, ld_so_in_provider,
+      !pv_runtime_take_from_provider (self, bwrap, ld_so_relative_to_provider,
                                       arch->ld_so,
                                       TAKE_FROM_PROVIDER_FLAGS_NONE, error))
     return FALSE;
@@ -3612,7 +3609,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
    * non-standard path), that's pretty much a disaster, because it will
    * just crash. However, all of those (chains of) non-standard symlinks
    * will end up pointing to ld_so_in_runtime. */
-  return pv_runtime_take_from_provider (self, bwrap, ld_so_in_provider,
+  return pv_runtime_take_from_provider (self, bwrap, ld_so_relative_to_provider,
                                         ld_so_in_runtime,
                                         TAKE_FROM_PROVIDER_FLAGS_NONE, error);
 }

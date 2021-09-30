@@ -3375,6 +3375,7 @@ _srt_system_info_list_graphics_modules (SrtSystemInfo *self,
   if (!abi->graphics_modules[which].available && !self->immutable_values)
     {
       abi->graphics_modules[which].modules = _srt_list_graphics_modules (self->sysroot,
+                                                                         self->sysroot_fd,
                                                                          self->env,
                                                                          self->helpers_path,
                                                                          multiarch_tuple,

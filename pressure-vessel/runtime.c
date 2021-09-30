@@ -3011,6 +3011,23 @@ typedef enum
   TAKE_FROM_PROVIDER_FLAGS_NONE = 0
 } TakeFromProviderFlags;
 
+/*
+ * pv_runtime_take_from_provider:
+ * @self: the runtime
+ * @bwrap: bubblewrap arguments
+ * @source_in_provider: source path in the graphics stack provider's
+ *  namespace, either absolute or relative to the root
+ * @dest_in_container: destination path in the container we are creating,
+ *  either absolute or relative to the root
+ * @flags: flags affecting how we do it
+ * @error: used to report error
+ *
+ * Try to arrange for @source_in_provider to be made available at the
+ * path @dest_in_container in the container we are creating.
+ *
+ * Note that neither @source_in_provider nor @dest_in_container is
+ * guaranteed to be an absolute path.
+ */
 static gboolean
 pv_runtime_take_from_provider (PvRuntime *self,
                                FlatpakBwrap *bwrap,
@@ -3148,29 +3165,54 @@ pv_runtime_take_from_provider (PvRuntime *self,
     }
   else
     {
+      g_autofree gchar *source_in_current_ns = NULL;
+      g_autofree gchar *realpath_in_provider = NULL;
+      g_autofree gchar *abs_dest = NULL;
+      glnx_autofd int source_fd = -1;
+
       /* We can't edit the runtime in-place, so tell bubblewrap to mount
        * a new version over the top */
       g_assert (bwrap != NULL);
 
+      source_fd = _srt_resolve_in_sysroot (self->provider->fd,
+                                           source_in_provider,
+                                           SRT_RESOLVE_FLAGS_NONE,
+                                           &realpath_in_provider, error);
+
+      if (source_fd < 0)
+        return FALSE;
+
       if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE)
         {
           g_autofree gchar *dest = NULL;
+          struct stat stat_buf;
 
           if (g_str_has_prefix (dest_in_container, "/usr/"))
             dest = g_build_filename (self->runtime_usr,
                                      dest_in_container + strlen ("/usr/"),
+                                     NULL);
+          else if (g_str_has_prefix (dest_in_container, "usr/"))
+            dest = g_build_filename (self->runtime_usr,
+                                     dest_in_container + strlen ("usr/"),
                                      NULL);
           else
             dest = g_build_filename (self->runtime_files,
                                      dest_in_container,
                                      NULL);
 
-          if (g_file_test (source_in_provider, G_FILE_TEST_IS_DIR))
+          if (fstat (source_fd, &stat_buf) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "fstat \"%s/%s\"",
+                                            self->provider->path_in_current_ns,
+                                            realpath_in_provider);
+
+          if (S_ISDIR (stat_buf.st_mode))
             {
               if (!g_file_test (dest, G_FILE_TEST_IS_DIR))
                 {
-                  g_warning ("Not mounting \"%s\" over non-directory file or "
-                             "nonexistent path \"%s\"",
+                  g_warning ("Not mounting \"%s/%s\" over "
+                             "non-directory file or nonexistent path \"%s\"",
+                             self->provider->path_in_current_ns,
                              source_in_provider, dest);
                   return TRUE;
                 }
@@ -3180,16 +3222,23 @@ pv_runtime_take_from_provider (PvRuntime *self,
               if (g_file_test (dest, G_FILE_TEST_IS_DIR) ||
                   !g_file_test (dest, G_FILE_TEST_EXISTS))
                 {
-                  g_warning ("Not mounting \"%s\" over directory or "
+                  g_warning ("Not mounting \"%s/%s\" over directory or "
                              "nonexistent path \"%s\"",
+                             self->provider->path_in_current_ns,
                              source_in_provider, dest);
                   return TRUE;
                 }
             }
         }
 
+      /* This is not 100% robust against the provider sysroot being
+       * modified while we're looking at it, but it's the best we can do. */
+      source_in_current_ns = g_build_filename (self->provider->path_in_current_ns,
+                                               realpath_in_provider,
+                                               NULL);
+      abs_dest = g_build_filename ("/", dest_in_container, NULL);
       flatpak_bwrap_add_args (bwrap,
-                              "--ro-bind", source_in_provider, dest_in_container,
+                              "--ro-bind", source_in_current_ns, abs_dest,
                               NULL);
     }
 

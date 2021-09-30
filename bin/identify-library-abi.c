@@ -90,7 +90,7 @@ print_library_details (const gchar *library_path,
   const gchar *identifier = NULL;
   g_autoptr(GError) error = NULL;
 
-  identifier = _srt_architecture_guess_from_elf (library_path, &error);
+  identifier = _srt_architecture_guess_from_elf (AT_FDCWD, library_path, &error);
 
   if (identifier == NULL)
     {

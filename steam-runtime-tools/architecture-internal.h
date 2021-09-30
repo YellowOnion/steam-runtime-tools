@@ -40,5 +40,6 @@ G_GNUC_INTERNAL gboolean _srt_architecture_can_run (gchar **envp,
                                                     const char *helpers_path,
                                                     const char *multiarch);
 
-const gchar *_srt_architecture_guess_from_elf (const char *file_path,
+const gchar *_srt_architecture_guess_from_elf (int dfd,
+                                               const char *file_path,
                                                GError **error);

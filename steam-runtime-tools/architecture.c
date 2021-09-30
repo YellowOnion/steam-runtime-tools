@@ -221,6 +221,7 @@ srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple)
 }
 
 /*
+ * @dfd: a directory file descriptor, `AT_FDCWD` or -1
  * @file_path: (type filename):
  * @cls: (not optional) (out): ELF class, normally `ELFCLASS32` or `ELFCLASS64`
  * @machine: (not optional) (out): ELF machine, for example `EM_X86_64` or
@@ -230,7 +231,8 @@ srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple)
  * Returns: %TRUE on success
  */
 static gboolean
-_srt_architecture_read_elf (const char *file_path,
+_srt_architecture_read_elf (int dfd,
+                            const char *file_path,
                             guint8 *cls,
                             guint16 *machine,
                             GError **error)
@@ -244,7 +246,9 @@ _srt_architecture_read_elf (const char *file_path,
   g_return_val_if_fail (machine != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if ((fd = open (file_path, O_RDONLY | O_CLOEXEC, 0)) < 0)
+  dfd = glnx_dirfd_canonicalize (dfd);
+
+  if ((fd = openat (dfd, file_path, O_RDONLY | O_CLOEXEC, 0)) < 0)
     return glnx_throw_errno_prefix (error, "Error reading \"%s\"", file_path);
 
   if (elf_version (EV_CURRENT) == EV_NONE)
@@ -266,6 +270,7 @@ _srt_architecture_read_elf (const char *file_path,
 }
 
 /*
+ * @dfd: a directory file descriptor, `AT_FDCWD` or -1
  * @file_path: (type filename):
  * @error: On failure set to GIOErrorEnum or SrtArchitectureError, used to
  *  describe the error
@@ -273,7 +278,8 @@ _srt_architecture_read_elf (const char *file_path,
  * Returns: (nullable): The multiarch tuple or %NULL on error.
  */
 const gchar *
-_srt_architecture_guess_from_elf (const char *file_path,
+_srt_architecture_guess_from_elf (int dfd,
+                                  const char *file_path,
                                   GError **error)
 {
   guint8 cls = ELFCLASSNONE;
@@ -282,7 +288,7 @@ _srt_architecture_guess_from_elf (const char *file_path,
 
   g_return_val_if_fail (file_path != NULL, FALSE);
 
-  if (!_srt_architecture_read_elf (file_path, &cls, &machine, error))
+  if (!_srt_architecture_read_elf (dfd, file_path, &cls, &machine, error))
     return NULL;
 
   if (cls == ELFCLASS32 && machine == EM_386)

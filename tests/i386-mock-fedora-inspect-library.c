@@ -35,21 +35,29 @@ main (int argc,
   g_return_val_if_fail (argc == 3, EXIT_FAILURE);
   g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
 
+  gchar *real_path = realpath (argv[2], NULL);
+
+  if (real_path == NULL)
+    return EXIT_FAILURE;
+
   /* We assume the argument to be a path for a library loader.
    * Because the loaders are mock objects we just check if they are located in
    * the expected locations. */
-  if (g_strstr_len (argv[2], -1, "/lib/i386-linux-gnu/") != NULL ||
-      g_strstr_len (argv[2], -1, "/lib32/dri/") != NULL ||
-      g_strstr_len (argv[2], -1, "/lib/dri/") != NULL ||
-      g_strstr_len (argv[2], -1, "/lib/vdpau/") != NULL ||
-      g_strstr_len (argv[2], -1, "/another_custom_path/") != NULL ||
-      g_strstr_len (argv[2], -1, "/custom_path32/") != NULL ||
-      g_strstr_len (argv[2], -1, "/custom_path32_2/") != NULL)
+  if (g_strstr_len (real_path, -1, "/lib/i386-linux-gnu/") != NULL ||
+      g_strstr_len (real_path, -1, "/lib32/dri/") != NULL ||
+      g_strstr_len (real_path, -1, "/lib/dri/") != NULL ||
+      g_strstr_len (real_path, -1, "/lib/vdpau/") != NULL ||
+      g_strstr_len (real_path, -1, "/another_custom_path/") != NULL ||
+      g_strstr_len (real_path, -1, "/custom_path32/") != NULL ||
+      g_strstr_len (real_path, -1, "/custom_path32_2/") != NULL)
     {
       printf ("requested=%s\n", argv[2]);
-      printf ("path=%s\n", argv[2]);
+      printf ("path=%s\n", real_path);
+      g_free (real_path);
       return EXIT_SUCCESS;
     }
+
+  g_free (real_path);
 
   /* In all the other cases, e.g. if a 64bit directory was requested, we return
    * an exit failure */

@@ -293,6 +293,7 @@ GList *_srt_load_vulkan_icds (const char *helpers_path,
 
 G_GNUC_INTERNAL
 GList *_srt_list_graphics_modules (const gchar *sysroot,
+                                   int sysroot_fd,
                                    gchar **envp,
                                    const char *helpers_path,
                                    const char *multiarch_tuple,

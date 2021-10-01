@@ -4332,121 +4332,119 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                              PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
+  const char *libdir_suffixes[] =
+  {
+    "/lib/<multiarch>",   /* placeholder, will be replaced */
+    "/lib64",
+    "/lib32",
+    "/lib",
+  };
+  g_autofree gchar *dir = NULL;
+  g_autofree gchar *lib_multiarch = NULL;
+  g_autofree gchar *dir_in_provider = NULL;
+  g_autofree gchar *dir_in_provider_usr_share = NULL;
+
   g_return_if_fail (self->provider != NULL);
 
+  /* If we are unable to find the lib data in the provider, we try as
+   * a last resort `/usr/share`. This should help for example Exherbo
+   * that uses the unusual `/usr/${gnu_tuple}/lib` path for shared
+   * libraries.
+   *
+   * Some libraries, like the NVIDIA proprietary driver, hard-code
+   * /usr/share even if they are installed in some other location.
+   * For these libraries, we look in this /usr/share-based path
+   * *first*. */
+  dir_in_provider_usr_share = g_build_filename ("/usr", "share", dir_basename, NULL);
+
+  if ((flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+      && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                    self->provider->fd,
+                                    dir_in_provider_usr_share,
+                                    G_FILE_TEST_IS_DIR))
     {
-      const char *libdir_suffixes[] =
-      {
-        "/lib/<multiarch>",   /* placeholder, will be replaced */
-        "/lib64",
-        "/lib32",
-        "/lib",
-      };
-      g_autofree gchar *dir = NULL;
-      g_autofree gchar *lib_multiarch = NULL;
-      g_autofree gchar *dir_in_provider = NULL;
-      g_autofree gchar *dir_in_provider_usr_share = NULL;
-
-      /* If we are unable to find the lib data in the provider, we try as
-       * a last resort `/usr/share`. This should help for example Exherbo
-       * that uses the unusual `/usr/${gnu_tuple}/lib` path for shared
-       * libraries.
-       *
-       * Some libraries, like the NVIDIA proprietary driver, hard-code
-       * /usr/share even if they are installed in some other location.
-       * For these libraries, we look in this /usr/share-based path
-       * *first*. */
-      dir_in_provider_usr_share = g_build_filename ("/usr", "share", dir_basename, NULL);
-
-      if ((flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
-          && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                        self->provider->fd,
-                                        dir_in_provider_usr_share,
-                                        G_FILE_TEST_IS_DIR))
-        {
-          g_debug ("Using %s based on hard-coded /usr/share",
-                   dir_in_provider_usr_share);
-          g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider_usr_share));
-          return;
-        }
-
-      /* Either absolute, or relative to the root of the provider */
-      dir = g_path_get_dirname (lib_in_provider);
-
-      /* Try to walk up the directory hierarchy from the library directory
-       * to find the ${exec_prefix}. We assume that the library directory is
-       * either ${exec_prefix}/lib/${multiarch_tuple}, ${exec_prefix}/lib64,
-       * ${exec_prefix}/lib32, or ${exec_prefix}/lib.
-       *
-       * Note that if the library is in /lib, /lib64, etc., this will
-       * leave dir empty, but that's OK: dir_in_provider will become
-       * something like "share/drirc.d" which will be looked up in the
-       * provider namespace. */
-      lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
-      libdir_suffixes[0] = lib_multiarch;
-
-      for (gsize i = 0; i < G_N_ELEMENTS (libdir_suffixes); i++)
-        {
-          if (g_str_has_suffix (dir, libdir_suffixes[i]))
-            {
-              /* dir might be /usr/lib64 or /lib64:
-               * truncate to /usr or empty. */
-              dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
-              break;
-            }
-
-          if (g_strcmp0 (dir, libdir_suffixes[i] + 1) == 0)
-            {
-              /* dir is something like lib64: truncate to empty. */
-              dir[0] = '\0';
-              break;
-            }
-        }
-
-      /* If ${prefix} and ${exec_prefix} are different, we have no way
-       * to predict what the ${prefix} really is; so we are also assuming
-       * that the ${exec_prefix} is the same as the ${prefix}.
-       *
-       * Go back down from the ${prefix} to the data directory,
-       * which we assume is ${prefix}/share. (If it isn't, then we have
-       * no way to predict what it would be.) */
-      dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
-
-      if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                     self->provider->fd,
-                                     dir_in_provider,
-                                     G_FILE_TEST_IS_DIR))
-        {
-          g_debug ("Using %s based on library path %s",
-                   dir_in_provider, dir);
-          g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider));
-          return;
-        }
-
-      if (!(flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
-          && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                        self->provider->fd,
-                                        dir_in_provider_usr_share,
-                                        G_FILE_TEST_IS_DIR))
-        {
-          g_debug ("Using %s based on fallback to /usr/share",
-                   dir_in_provider_usr_share);
-          g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider_usr_share));
-          return;
-        }
-
-      if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
-        g_info ("We were expecting the %s directory in the provider to "
-                "be located in \"%s\", but instead it is missing",
-                dir_basename, dir_in_provider);
-      else
-        g_info ("We were expecting the %s directory in the provider to "
-                "be located in \"%s\" or \"%s\", but instead it is missing",
-                dir_basename, dir_in_provider, dir_in_provider_usr_share);
+      g_debug ("Using %s based on hard-coded /usr/share",
+               dir_in_provider_usr_share);
+      g_hash_table_add (data_in_provider,
+                        g_steal_pointer (&dir_in_provider_usr_share));
+      return;
     }
+
+  /* Either absolute, or relative to the root of the provider */
+  dir = g_path_get_dirname (lib_in_provider);
+
+  /* Try to walk up the directory hierarchy from the library directory
+   * to find the ${exec_prefix}. We assume that the library directory is
+   * either ${exec_prefix}/lib/${multiarch_tuple}, ${exec_prefix}/lib64,
+   * ${exec_prefix}/lib32, or ${exec_prefix}/lib.
+   *
+   * Note that if the library is in /lib, /lib64, etc., this will
+   * leave dir empty, but that's OK: dir_in_provider will become
+   * something like "share/drirc.d" which will be looked up in the
+   * provider namespace. */
+  lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
+  libdir_suffixes[0] = lib_multiarch;
+
+  for (gsize i = 0; i < G_N_ELEMENTS (libdir_suffixes); i++)
+    {
+      if (g_str_has_suffix (dir, libdir_suffixes[i]))
+        {
+          /* dir might be /usr/lib64 or /lib64:
+           * truncate to /usr or empty. */
+          dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
+          break;
+        }
+
+      if (g_strcmp0 (dir, libdir_suffixes[i] + 1) == 0)
+        {
+          /* dir is something like lib64: truncate to empty. */
+          dir[0] = '\0';
+          break;
+        }
+    }
+
+  /* If ${prefix} and ${exec_prefix} are different, we have no way
+   * to predict what the ${prefix} really is; so we are also assuming
+   * that the ${exec_prefix} is the same as the ${prefix}.
+   *
+   * Go back down from the ${prefix} to the data directory,
+   * which we assume is ${prefix}/share. (If it isn't, then we have
+   * no way to predict what it would be.) */
+  dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
+
+  if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                 self->provider->fd,
+                                 dir_in_provider,
+                                 G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Using %s based on library path %s",
+               dir_in_provider, dir);
+      g_hash_table_add (data_in_provider,
+                        g_steal_pointer (&dir_in_provider));
+      return;
+    }
+
+  if (!(flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+      && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                    self->provider->fd,
+                                    dir_in_provider_usr_share,
+                                    G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Using %s based on fallback to /usr/share",
+               dir_in_provider_usr_share);
+      g_hash_table_add (data_in_provider,
+                        g_steal_pointer (&dir_in_provider_usr_share));
+      return;
+    }
+
+  if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
+    g_info ("We were expecting the %s directory in the provider to "
+            "be located in \"%s\", but instead it is missing",
+            dir_basename, dir_in_provider);
+  else
+    g_info ("We were expecting the %s directory in the provider to "
+            "be located in \"%s\" or \"%s\", but instead it is missing",
+            dir_basename, dir_in_provider, dir_in_provider_usr_share);
 }
 
 /*

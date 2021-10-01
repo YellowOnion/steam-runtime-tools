@@ -4421,8 +4421,15 @@ pv_runtime_collect_lib_data (PvRuntime *self,
    *
    * Go back down from the ${prefix} to the data directory,
    * which we assume is ${prefix}/share. (If it isn't, then we have
-   * no way to predict what it would be.) */
-  dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
+   * no way to predict what it would be.)
+   *
+   * As a special exception, if ${exec_prefix} is / then assume the
+   * ${datadir} is /usr/share, because there is no /share in the FHS. */
+  if (strcmp (dir, "") == 0)
+    dir_in_provider = g_build_filename ("usr", "share", dir_basename, NULL);
+  else
+    dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
+
   g_return_if_fail (dir_in_provider[0] != '/');
 
   if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,

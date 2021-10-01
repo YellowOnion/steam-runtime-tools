@@ -4432,7 +4432,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
               break;
             }
 
-          if (g_strcmp0 (dir, libdir_suffixes[i] + 1))
+          if (g_strcmp0 (dir, libdir_suffixes[i] + 1) == 0)
             {
               /* dir is something like lib64: truncate to empty. */
               dir[0] = '\0';

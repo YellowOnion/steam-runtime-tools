@@ -4431,7 +4431,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                                  G_FILE_TEST_IS_DIR))
     {
       g_debug ("Using \"/%s\" based on library path \"/%s\"",
-               dir_in_provider, dir);
+               dir_in_provider, lib_in_provider);
       g_hash_table_add (data_in_provider,
                         g_steal_pointer (&dir_in_provider));
       return;
@@ -4443,8 +4443,9 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                                     dir_in_provider_usr_share,
                                     G_FILE_TEST_IS_DIR))
     {
-      g_debug ("Using \"/%s\" based on fallback to /usr/share",
-               dir_in_provider_usr_share);
+      g_debug ("Using \"/%s\" based on fallback to /usr/share, because "
+               "\"/%s\" based on \"/%s\" is not a directory",
+               dir_in_provider_usr_share, dir_in_provider, lib_in_provider);
       g_hash_table_add (data_in_provider,
                         g_steal_pointer (&dir_in_provider_usr_share));
       return;
@@ -4452,12 +4453,14 @@ pv_runtime_collect_lib_data (PvRuntime *self,
 
   if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
     g_info ("We were expecting the %s directory in the provider to "
-            "be located in \"/%s\", but instead it is missing",
-            dir_basename, dir_in_provider);
+            "be located in \"/%s\" based on \"/%s\", but instead it is missing",
+            dir_basename, dir_in_provider, lib_in_provider);
   else
     g_info ("We were expecting the %s directory in the provider to "
-            "be located in \"/%s\" or \"/%s\", but instead it is missing",
-            dir_basename, dir_in_provider, dir_in_provider_usr_share);
+            "be located in \"/%s\" or \"/%s\" based on \"/%s\", but "
+            "instead it is missing",
+            dir_basename, dir_in_provider, dir_in_provider_usr_share,
+            lib_in_provider);
 }
 
 /*

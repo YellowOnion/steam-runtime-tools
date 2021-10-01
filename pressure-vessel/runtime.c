@@ -4315,8 +4315,10 @@ typedef enum
  * @lib_in_provider: A library in the graphics stack provider, either
  *  absolute or relative to the root of the provider namespace
  * @flags: Flags
- * @data_in_provider: Map { owned string => itself } representing the set
- *  of data directories discovered
+ * @data_in_provider: (element-type filename ignored): A map
+ *  `{ owned string => itself }` representing the set
+ *  of data directories discovered. Each directory is represented
+ *  as relative to the root of the provider, e.g. `usr/share/drirc.d`.
  */
 static void
 pv_runtime_collect_lib_data (PvRuntime *self,
@@ -4346,15 +4348,15 @@ pv_runtime_collect_lib_data (PvRuntime *self,
   g_return_if_fail (data_in_provider != NULL);
 
   /* If we are unable to find the lib data in the provider, we try as
-   * a last resort `/usr/share`. This should help for example Exherbo
-   * that uses the unusual `/usr/${gnu_tuple}/lib` path for shared
+   * a last resort `usr/share`. This should help for example Exherbo
+   * that uses the unusual `usr/${gnu_tuple}/lib` path for shared
    * libraries.
    *
    * Some libraries, like the NVIDIA proprietary driver, hard-code
    * /usr/share even if they are installed in some other location.
    * For these libraries, we look in this /usr/share-based path
    * *first*. */
-  dir_in_provider_usr_share = g_build_filename ("/usr", "share", dir_basename, NULL);
+  dir_in_provider_usr_share = g_build_filename ("usr", "share", dir_basename, NULL);
 
   if ((flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
       && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
@@ -4362,15 +4364,27 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                                     dir_in_provider_usr_share,
                                     G_FILE_TEST_IS_DIR))
     {
-      g_debug ("Using %s based on hard-coded /usr/share",
+      g_debug ("Using \"/%s\" based on hard-coded /usr/share",
                dir_in_provider_usr_share);
       g_hash_table_add (data_in_provider,
                         g_steal_pointer (&dir_in_provider_usr_share));
       return;
     }
 
-  /* Either absolute, or relative to the root of the provider */
+  /* lib_in_provider can either be absolute, or relative to the root of
+   * the provider: normalize it to relative so we only have to deal with
+   * one code path. */
+  while (lib_in_provider[0] == '/')
+    lib_in_provider++;
+
+  /* Always relative to the root of the provider */
   dir = g_path_get_dirname (lib_in_provider);
+  g_return_if_fail (dir[0] != '/');
+
+  /* The logic below works a bit better if we represent the root of the
+   * provider (unlikely, but possible) as the empty string */
+  if (G_UNLIKELY (strcmp (dir, ".") == 0))
+    dir[0] = '\0';
 
   /* Try to walk up the directory hierarchy from the library directory
    * to find the ${exec_prefix}. We assume that the library directory is
@@ -4388,8 +4402,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
     {
       if (g_str_has_suffix (dir, libdir_suffixes[i]))
         {
-          /* dir might be /usr/lib64 or /lib64:
-           * truncate to /usr or empty. */
+          /* dir might be usr/lib64: truncate to usr. */
           dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
           break;
         }
@@ -4410,13 +4423,14 @@ pv_runtime_collect_lib_data (PvRuntime *self,
    * which we assume is ${prefix}/share. (If it isn't, then we have
    * no way to predict what it would be.) */
   dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
+  g_return_if_fail (dir_in_provider[0] != '/');
 
   if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                  self->provider->fd,
                                  dir_in_provider,
                                  G_FILE_TEST_IS_DIR))
     {
-      g_debug ("Using %s based on library path %s",
+      g_debug ("Using \"/%s\" based on library path \"/%s\"",
                dir_in_provider, dir);
       g_hash_table_add (data_in_provider,
                         g_steal_pointer (&dir_in_provider));
@@ -4429,7 +4443,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                                     dir_in_provider_usr_share,
                                     G_FILE_TEST_IS_DIR))
     {
-      g_debug ("Using %s based on fallback to /usr/share",
+      g_debug ("Using \"/%s\" based on fallback to /usr/share",
                dir_in_provider_usr_share);
       g_hash_table_add (data_in_provider,
                         g_steal_pointer (&dir_in_provider_usr_share));
@@ -4438,11 +4452,11 @@ pv_runtime_collect_lib_data (PvRuntime *self,
 
   if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
     g_info ("We were expecting the %s directory in the provider to "
-            "be located in \"%s\", but instead it is missing",
+            "be located in \"/%s\", but instead it is missing",
             dir_basename, dir_in_provider);
   else
     g_info ("We were expecting the %s directory in the provider to "
-            "be located in \"%s\" or \"%s\", but instead it is missing",
+            "be located in \"/%s\" or \"/%s\", but instead it is missing",
             dir_basename, dir_in_provider, dir_in_provider_usr_share);
 }
 
@@ -4518,6 +4532,28 @@ pv_runtime_collect_lib_symlink_data (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * pv_runtime_finish_lib_data:
+ * @self: The runtime
+ * @bwrap: Arguments for bubblewrap
+ * @dir_basename: Name of a data directory below ${datadir}, such as
+ *  `drirc.d`
+ * @lib_name: Library we used to populate @data_in_provider, only used
+ *  in diagnostic messages
+ * @all_from_provider: %TRUE if the instances of @lib_name for all
+ *  architectures came from the graphics stack provider
+ * @data_in_provider: (element-type filename ignored): A set of
+ *  filenames for @dir_basename relative to the root of the graphics
+ *  stack provider, for example `{ "usr/share/drirc.d", "app/share/drirc.d" }`
+ * @error: Used to raise an error on failure
+ *
+ * Make each path in @data_in_provider available in the final container
+ * at the same path.
+ *
+ * Additionally, make one of them available at `usr/share/` + @dir_basename.
+ *
+ * Returns: %TRUE on success
+ */
 static gboolean
 pv_runtime_finish_lib_data (PvRuntime *self,
                             FlatpakBwrap *bwrap,
@@ -4535,7 +4571,7 @@ pv_runtime_finish_lib_data (PvRuntime *self,
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
   g_return_val_if_fail (dir_basename != NULL, FALSE);
 
-  canonical_path = g_build_filename ("/usr", "share", dir_basename, NULL);
+  canonical_path = g_build_filename ("usr", "share", dir_basename, NULL);
 
   if (g_hash_table_size (data_in_provider) > 0 && !all_from_provider)
     {
@@ -4553,9 +4589,11 @@ pv_runtime_finish_lib_data (PvRuntime *self,
 
   while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
     {
-      /* If we found a library at /foo/lib/libbar.so.0 and then found its
-       * data in /foo/share/bar, it's reasonable to expect that libbar
-       * will still be looking for /foo/share/bar in the container. */
+      g_warn_if_fail (data_path != NULL && data_path[0] != '/');
+
+      /* If we found a library at foo/lib/libbar.so.0 and then found its
+       * data in foo/share/bar, it's reasonable to expect that libbar
+       * will still be looking for foo/share/bar in the container. */
       if (!pv_runtime_take_from_provider (self, bwrap,
                                           data_path, data_path,
                                           (TAKE_FROM_PROVIDER_FLAGS_IF_DIR
@@ -4564,16 +4602,16 @@ pv_runtime_finish_lib_data (PvRuntime *self,
         return FALSE;
 
       if (self->is_flatpak_env
-          && g_str_has_prefix (data_path, "/app/lib/"))
+          && g_str_has_prefix (data_path, "app/lib/"))
         {
           /* In a freedesktop.org runtime, for some multiarch, there is
-           * a symlink /usr/lib/${arch} that points to /app/lib/${arch}
+           * a symlink usr/lib/${arch} that points to app/lib/${arch}
            * https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/blob/70cb5835/elements/multiarch/multiarch-platform.bst#L24
-           * If we have a path in /app/lib/ here, we also try to
-           * replicate the symlink in /usr/lib/ */
+           * If we have a path in app/lib/ here, we also try to
+           * replicate the symlink in usr/lib/ */
           g_autofree gchar *path_in_usr = NULL;
-          path_in_usr = g_build_filename ("/usr",
-                                          data_path + strlen ("/app"),
+          path_in_usr = g_build_filename ("usr",
+                                          data_path + strlen ("app"),
                                           NULL);
           if (_srt_fstatat_is_same_file (-1, data_path, -1, path_in_usr))
             {
@@ -4593,14 +4631,14 @@ pv_runtime_finish_lib_data (PvRuntime *self,
     return TRUE;
 
   /* In the uncommon case where data_in_provider *does not* contain
-   * canonical_path - for example data_in_provider = { /usr/local/share/drirc.d }
-   * but canonical_path is /usr/share/drirc.d - we'll mount it over
+   * canonical_path - for example data_in_provider = { usr/local/share/drirc.d }
+   * but canonical_path is usr/share/drirc.d - we'll mount it over
    * canonical_path as well, just in case something has hard-coded
    * that path and is expecting to find something consistent there.
    *
    * If data_in_provider contains more than one - for example if we
-   * found the x86_64 library in /usr/lib/x86_64-linux-gnu but the
-   * i386 library in /app/lib/i386-linux-gnu, as we do in Flatpak -
+   * found the x86_64 library in usr/lib/x86_64-linux-gnu but the
+   * i386 library in app/lib/i386-linux-gnu, as we do in Flatpak -
    * then we don't have a great way to choose between them, so just
    * pick one and hope for the best. In Flatpak, it is normal for
    * this to happen because of the way multiarch has been implemented,

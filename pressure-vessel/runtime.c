@@ -2295,9 +2295,6 @@ pv_runtime_capture_libraries (PvRuntime *self,
  * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
  *  numbered subdirectory per ICD, for the rare case where not all
  *  drivers have a unique basename or where order matters
- * @use_subdir_for_kind_soname: if %TRUE, the @requested_subdir will be always
- *  used. If %FALSE, the @requested_subdir will not be used when the provided
- *  library is of the kind "ICD_KIND_SONAME".
  * @dependency_patterns: (inout) (not nullable): array of patterns for
  *  capsule-capture-libs
  * @search_path: (nullable): Add the parent directory of the resulting
@@ -2313,7 +2310,6 @@ bind_icd (PvRuntime *self,
           const char *requested_subdir,
           IcdDetails *details,
           gboolean *use_numbered_subdirs,
-          gboolean use_subdir_for_kind_soname,
           GPtrArray *dependency_patterns,
           GString *search_path,
           GError **error)
@@ -2360,8 +2356,9 @@ bind_icd (PvRuntime *self,
     {
       details->kinds[multiarch_index] = ICD_KIND_SONAME;
       mode = "soname";
-      if (!use_subdir_for_kind_soname)
-        subdir = "";
+      /* If we have just a SONAME, we do not want to place the library
+       * under a subdir, otherwise ld.so will not be able to find it */
+      subdir = "";
     }
 
   in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
@@ -3888,9 +3885,6 @@ collect_vulkan_layers (PvRuntime *self,
        * filename collisions, because the order of the JSON manifests
        * might matter, but the order of the actual libraries does not. */
       gboolean use_numbered_subdirs = FALSE;
-      /* If we have just a SONAME, we do not want to place the library
-       * under a subdir, otherwise ld.so will not be able to find it */
-      const gboolean use_subdir_for_kind_soname = FALSE;
       const char *resolved_library;
       const gsize multiarch_index = arch->multiarch_index;
 
@@ -3960,7 +3954,7 @@ collect_vulkan_layers (PvRuntime *self,
         }
 
       if (!bind_icd (self, arch, j, dir_name, details, &use_numbered_subdirs,
-                     use_subdir_for_kind_soname, dependency_patterns, NULL, error))
+                     dependency_patterns, NULL, error))
         return FALSE;
     }
 
@@ -4912,9 +4906,6 @@ collect_egl_drivers (PvRuntime *self,
   /* As with Vulkan layers, the order of the manifests matters
    * but the order of the actual libraries does not. */
   gboolean use_numbered_subdirs = FALSE;
-  /* If we have just a SONAME, we do not want to place the library
-   * under a subdir, otherwise ld.so will not be able to find it */
-  const gboolean use_subdir_for_kind_soname = FALSE;
   const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Collecting %s EGL drivers from provider...",
@@ -4933,8 +4924,7 @@ collect_egl_drivers (PvRuntime *self,
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
       if (!bind_icd (self, arch, j, "glvnd", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, NULL, error))
+                     &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
 
@@ -4958,9 +4948,6 @@ collect_vulkan_icds (PvRuntime *self,
   /* As with Vulkan layers, the order of the manifests matters
    * but the order of the actual libraries does not. */
   gboolean use_numbered_subdirs = FALSE;
-  /* If we have just a SONAME, we do not want to place the library
-   * under a subdir, otherwise ld.so will not be able to find it */
-  const gboolean use_subdir_for_kind_soname = FALSE;
   const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Collecting %s Vulkan drivers from provider...",
@@ -4979,8 +4966,7 @@ collect_vulkan_icds (PvRuntime *self,
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
       if (!bind_icd (self, arch, j, "vulkan", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, NULL, error))
+                     &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
 
@@ -5003,9 +4989,6 @@ collect_vdpau_drivers (PvRuntime *self,
   /* The VDPAU loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
-  /* These libraries are always expected to be located under the
-   * "vdpau" subdir */
-  const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
   const gsize multiarch_index = arch->multiarch_index;
@@ -5034,9 +5017,12 @@ collect_vdpau_drivers (PvRuntime *self,
        * so by definition we can't have collisions. Anything that
        * ends up in a numbered subdirectory won't get used. */
       if (!bind_icd (self, arch, j, "vdpau", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, NULL, error))
+                     &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
+
+      /* Because the path is always absolute, ICD_KIND_SONAME makes
+       * no sense */
+      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
     }
 
   return TRUE;
@@ -5059,9 +5045,6 @@ collect_dri_drivers (PvRuntime *self,
   /* The DRI loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
-  /* These libraries are always expected to be located under the
-   * "dri" subdir */
-  const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
   const gsize multiarch_index = arch->multiarch_index;
@@ -5087,9 +5070,12 @@ collect_dri_drivers (PvRuntime *self,
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       if (!bind_icd (self, arch, j, "dri", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, dri_path, error))
+                     &use_numbered_subdirs, patterns, dri_path, error))
         return FALSE;
+
+      /* Because the path is always absolute, ICD_KIND_SONAME makes
+       * no sense */
+      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
     }
 
   return TRUE;
@@ -5112,9 +5098,6 @@ collect_va_api_drivers (PvRuntime *self,
   /* The VA-API loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
-  /* These libraries are always expected to be located under the
-   * "dri" subdir */
-  const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
   const gsize multiarch_index = arch->multiarch_index;
@@ -5140,9 +5123,12 @@ collect_va_api_drivers (PvRuntime *self,
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       if (!bind_icd (self, arch, j, "dri", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, va_api_path, error))
+                     &use_numbered_subdirs, patterns, va_api_path, error))
         return FALSE;
+
+      /* Because the path is always absolute, ICD_KIND_SONAME makes
+       * no sense */
+      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
     }
 
   return TRUE;

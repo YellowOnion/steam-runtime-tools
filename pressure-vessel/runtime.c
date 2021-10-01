@@ -4438,6 +4438,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
     }
 
   if (!(flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+      && strcmp (dir_in_provider, dir_in_provider_usr_share) != 0
       && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                     self->provider->fd,
                                     dir_in_provider_usr_share,

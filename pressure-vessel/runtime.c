@@ -4297,6 +4297,9 @@ pv_runtime_collect_libc_family (PvRuntime *self,
  *  before attempting to derive a data directory from ${libdir}.
  *  Use this for drivers like the NVIDIA proprietary driver that hard-code
  *  /usr/share rather than having a build-time-configurable prefix.
+ * @PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING: Don't log warnings if we can't
+ *  find the data. Use this for Vulkan drivers, for which we don't know
+ *  which ones came from Mesa.
  * @PV_RUNTIME_DATA_FLAGS_NONE: None of the above.
  *
  * Flags affecting pv_runtime_collect_lib_data().
@@ -4304,6 +4307,7 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 typedef enum
 {
   PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST = (1 << 0),
+  PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING = (1 << 1),
   PV_RUNTIME_DATA_FLAGS_NONE = 0
 } PvRuntimeDataFlags;
 
@@ -4314,6 +4318,8 @@ typedef enum
  * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
  * @lib_in_provider: A library in the graphics stack provider, either
  *  absolute or relative to the root of the provider namespace
+ * @extra_suffix: (nullable): Subdirectory of ${libdir} where we expect
+ *  the library to be located, e.g. `/dri`, or %NULL if none
  * @flags: Flags
  * @data_in_provider: (element-type filename ignored): A map
  *  `{ owned string => itself }` representing the set
@@ -4325,6 +4331,7 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                              RuntimeArchitecture *arch,
                              const char *dir_basename,
                              const char *lib_in_provider,
+                             const char *extra_suffix,
                              PvRuntimeDataFlags flags,
                              GHashTable *data_in_provider)
 {
@@ -4385,6 +4392,10 @@ pv_runtime_collect_lib_data (PvRuntime *self,
    * provider (unlikely, but possible) as the empty string */
   if (G_UNLIKELY (strcmp (dir, ".") == 0))
     dir[0] = '\0';
+
+  /* Go up from something like ${libdir}/dri to ${libdir} if necessary */
+  if (extra_suffix != NULL && g_str_has_suffix (dir, extra_suffix))
+    dir[strlen (dir) - strlen (extra_suffix)] = '\0';
 
   /* Try to walk up the directory hierarchy from the library directory
    * to find the ${exec_prefix}. We assume that the library directory is
@@ -4456,6 +4467,13 @@ pv_runtime_collect_lib_data (PvRuntime *self,
                dir_in_provider_usr_share, dir_in_provider, lib_in_provider);
       g_hash_table_add (data_in_provider,
                         g_steal_pointer (&dir_in_provider_usr_share));
+      return;
+    }
+
+  if (flags & PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING)
+    {
+      g_debug ("Did not find %s adjacent to \"%s\", probably not a problem",
+               dir_basename, lib_in_provider);
       return;
     }
 
@@ -4538,9 +4556,128 @@ pv_runtime_collect_lib_symlink_data (PvRuntime *self,
     target_in_provider = target;
 
   pv_runtime_collect_lib_data (self, arch, dir_basename,
-                               target_in_provider, flags,
+                               target_in_provider, NULL, flags,
                                data_in_provider);
   return TRUE;
+}
+
+static void
+collect_one_mesa_drirc (PvRuntime *self,
+                        RuntimeArchitecture *arch,
+                        const IcdDetails *details,
+                        PvRuntimeDataFlags flags,
+                        GHashTable *drirc_data_in_provider)
+{
+  g_autofree gchar *symlink = NULL;
+  const gsize multiarch_index = arch->multiarch_index;
+  const char *resolved;
+
+  /* This is assumed to be called after collecting ICDs */
+  resolved = details->resolved_libraries[multiarch_index];
+
+  switch (details->kinds[multiarch_index])
+    {
+      case ICD_KIND_ABSOLUTE:
+        g_return_if_fail (resolved != NULL);
+        pv_runtime_collect_lib_data (self, arch, "drirc.d", resolved,
+                                     NULL, flags, drirc_data_in_provider);
+        break;
+
+      case ICD_KIND_SONAME:
+        /* We already created a symlink in /overrides pointing to the
+         * path in the container namespace, which is the same as the
+         * path in the provider namespace, but with an optional prefix
+         * that we already know how to remove (/run/host or /run/gfx). */
+        g_return_if_fail (resolved != NULL);
+        symlink = g_build_filename (arch->libdir_in_current_namespace,
+                                    glnx_basename (resolved), NULL);
+        pv_runtime_collect_lib_symlink_data (self, arch, "drirc.d", symlink,
+                                             flags, drirc_data_in_provider);
+        break;
+
+      case ICD_KIND_NONEXISTENT:
+      case ICD_KIND_META_LAYER:
+      default:
+        /* Nothing to do - we can't know the path because there is none */
+        break;
+    }
+}
+
+/*
+ * For each driver provided by Mesa, other than GLX which is handled
+ * elsewhere, look for share/drirc.d nearby.
+ *
+ * This currently means:
+ * - The EGL ICD described in 50_mesa.json (libEGL_mesa.so.0), assumed
+ *   to be in ${libdir}
+ * - All Vulkan ICDs (we cannot tell which ones came from Mesa!)
+ * - All DRI drivers (which are all implicitly from Mesa)
+ */
+static void
+collect_mesa_drirc (PvRuntime *self,
+                    RuntimeArchitecture *arch,
+                    GPtrArray *egl_icd_details,
+                    GPtrArray *vulkan_icd_details,
+                    SrtSystemInfo *system_info,
+                    GHashTable *drirc_data_in_provider)
+{
+  g_autoptr(SrtObjectList) dri_drivers = NULL;
+
+  for (guint i = 0; i < egl_icd_details->len; i++)
+    {
+      IcdDetails *details = g_ptr_array_index (egl_icd_details, i);
+      const gsize multiarch_index = arch->multiarch_index;
+      const char *resolved;
+      const char *base;
+
+      /* This is assumed to be called after collecting ICDs */
+      resolved = details->resolved_libraries[multiarch_index];
+
+      if (resolved == NULL)
+        continue;
+
+      base = glnx_basename (resolved);
+
+      if (strstr (base, "libEGL_mesa.so") != NULL)
+        collect_one_mesa_drirc (self, arch, details,
+                                PV_RUNTIME_DATA_FLAGS_NONE,
+                                drirc_data_in_provider);
+      else
+        g_debug ("Assuming \"%s\" is not from Mesa", resolved);
+    }
+
+  for (guint i = 0; i < vulkan_icd_details->len; i++)
+    {
+      IcdDetails *details = g_ptr_array_index (vulkan_icd_details, i);
+
+      /* We don't know which Vulkan ICDs are from Mesa (currently
+       * libvulkan_intel.so, libvulkan_lvp.so and libvulkan_radeon.so,
+       * but there could be more in future), so we have to assume
+       * that all of them are *potentially* Mesa. */
+      collect_one_mesa_drirc (self, arch, details,
+                              PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING,
+                              drirc_data_in_provider);
+    }
+
+  /* We assume that by the time we get here, this is already cached,
+   * so its time cost will be trivial and therefore there's no need to
+   * do additional profiling */
+  dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                  arch->details->tuple,
+                                                  SRT_DRIVER_FLAGS_NONE);
+
+  for (const GList *icd_iter = dri_drivers;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next)
+    {
+      g_autofree gchar *resolved = NULL;
+
+      resolved = srt_dri_driver_resolve_library_path (icd_iter->data);
+      g_return_if_fail (g_path_is_absolute (resolved));
+      pv_runtime_collect_lib_data (self, arch, "drirc.d", resolved,
+                                   "/dri", PV_RUNTIME_DATA_FLAGS_NONE,
+                                   drirc_data_in_provider);
+    }
 }
 
 /*
@@ -5540,6 +5677,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               /* For at least a single architecture, libGLX_mesa is newer in the container */
               all_libglx_from_provider = FALSE;
             }
+
+          collect_mesa_drirc (self, arch,
+                              egl_icd_details, vulkan_icd_details, system_info,
+                              drirc_data_in_provider);
 
           libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
 

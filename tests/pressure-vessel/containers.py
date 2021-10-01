@@ -274,7 +274,12 @@ class TestContainers(BaseTest):
                 )
 
             for multiarch in ('i386-linux-gnu', 'x86_64-linux-gnu'):
-                for tool in ('inspect-library', 'capsule-capture-libs'):
+                for tool in (
+                    'capsule-capture-libs',
+                    'detect-lib',
+                    'detect-platform',
+                    'inspect-library',
+                ):
                     exe = multiarch + '-' + tool
                     tool_path = os.path.join(
                         cls.pv_dir,

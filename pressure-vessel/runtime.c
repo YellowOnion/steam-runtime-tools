@@ -2295,9 +2295,6 @@ pv_runtime_capture_libraries (PvRuntime *self,
  * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
  *  numbered subdirectory per ICD, for the rare case where not all
  *  drivers have a unique basename or where order matters
- * @use_subdir_for_kind_soname: if %TRUE, the @requested_subdir will be always
- *  used. If %FALSE, the @requested_subdir will not be used when the provided
- *  library is of the kind "ICD_KIND_SONAME".
  * @dependency_patterns: (inout) (not nullable): array of patterns for
  *  capsule-capture-libs
  * @search_path: (nullable): Add the parent directory of the resulting
@@ -2313,7 +2310,6 @@ bind_icd (PvRuntime *self,
           const char *requested_subdir,
           IcdDetails *details,
           gboolean *use_numbered_subdirs,
-          gboolean use_subdir_for_kind_soname,
           GPtrArray *dependency_patterns,
           GString *search_path,
           GError **error)
@@ -2360,8 +2356,9 @@ bind_icd (PvRuntime *self,
     {
       details->kinds[multiarch_index] = ICD_KIND_SONAME;
       mode = "soname";
-      if (!use_subdir_for_kind_soname)
-        subdir = "";
+      /* If we have just a SONAME, we do not want to place the library
+       * under a subdir, otherwise ld.so will not be able to find it */
+      subdir = "";
     }
 
   in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
@@ -3888,9 +3885,6 @@ collect_vulkan_layers (PvRuntime *self,
        * filename collisions, because the order of the JSON manifests
        * might matter, but the order of the actual libraries does not. */
       gboolean use_numbered_subdirs = FALSE;
-      /* If we have just a SONAME, we do not want to place the library
-       * under a subdir, otherwise ld.so will not be able to find it */
-      const gboolean use_subdir_for_kind_soname = FALSE;
       const char *resolved_library;
       const gsize multiarch_index = arch->multiarch_index;
 
@@ -3960,7 +3954,7 @@ collect_vulkan_layers (PvRuntime *self,
         }
 
       if (!bind_icd (self, arch, j, dir_name, details, &use_numbered_subdirs,
-                     use_subdir_for_kind_soname, dependency_patterns, NULL, error))
+                     dependency_patterns, NULL, error))
         return FALSE;
     }
 
@@ -4210,7 +4204,7 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       gboolean found = FALSE;
       const char *target_in_provider;
 
-      /* As with pv_runtime_collect_lib_data(), we need to remove the
+      /* As with pv_runtime_collect_lib_symlink_data(), we need to remove the
        * provider prefix if present. Note that after this, target_in_provider
        * can either be absolute, or relative to the root of the provider. */
       target_in_provider = _srt_get_path_after (libc_target,
@@ -4303,6 +4297,9 @@ pv_runtime_collect_libc_family (PvRuntime *self,
  *  before attempting to derive a data directory from ${libdir}.
  *  Use this for drivers like the NVIDIA proprietary driver that hard-code
  *  /usr/share rather than having a build-time-configurable prefix.
+ * @PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING: Don't log warnings if we can't
+ *  find the data. Use this for Vulkan drivers, for which we don't know
+ *  which ones came from Mesa.
  * @PV_RUNTIME_DATA_FLAGS_NONE: None of the above.
  *
  * Flags affecting pv_runtime_collect_lib_data().
@@ -4310,11 +4307,190 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 typedef enum
 {
   PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST = (1 << 0),
+  PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING = (1 << 1),
   PV_RUNTIME_DATA_FLAGS_NONE = 0
 } PvRuntimeDataFlags;
 
 /*
  * pv_runtime_collect_lib_data:
+ * @self: The runtime
+ * @arch: Architecture of @lib_in_provider
+ * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
+ * @lib_in_provider: A library in the graphics stack provider, either
+ *  absolute or relative to the root of the provider namespace
+ * @extra_suffix: (nullable): Subdirectory of ${libdir} where we expect
+ *  the library to be located, e.g. `/dri`, or %NULL if none
+ * @flags: Flags
+ * @data_in_provider: (element-type filename ignored): A map
+ *  `{ owned string => itself }` representing the set
+ *  of data directories discovered. Each directory is represented
+ *  as relative to the root of the provider, e.g. `usr/share/drirc.d`.
+ */
+static void
+pv_runtime_collect_lib_data (PvRuntime *self,
+                             RuntimeArchitecture *arch,
+                             const char *dir_basename,
+                             const char *lib_in_provider,
+                             const char *extra_suffix,
+                             PvRuntimeDataFlags flags,
+                             GHashTable *data_in_provider)
+{
+  const char *libdir_suffixes[] =
+  {
+    "/lib/<multiarch>",   /* placeholder, will be replaced */
+    "/lib64",
+    "/lib32",
+    "/lib",
+  };
+  g_autofree gchar *dir = NULL;
+  g_autofree gchar *lib_multiarch = NULL;
+  g_autofree gchar *dir_in_provider = NULL;
+  g_autofree gchar *dir_in_provider_usr_share = NULL;
+
+  g_return_if_fail (PV_IS_RUNTIME (self));
+  g_return_if_fail (self->provider != NULL);
+  g_return_if_fail (runtime_architecture_check_valid (arch));
+  g_return_if_fail (dir_basename != NULL);
+  g_return_if_fail (lib_in_provider != NULL);
+  g_return_if_fail (data_in_provider != NULL);
+
+  /* If we are unable to find the lib data in the provider, we try as
+   * a last resort `usr/share`. This should help for example Exherbo
+   * that uses the unusual `usr/${gnu_tuple}/lib` path for shared
+   * libraries.
+   *
+   * Some libraries, like the NVIDIA proprietary driver, hard-code
+   * /usr/share even if they are installed in some other location.
+   * For these libraries, we look in this /usr/share-based path
+   * *first*. */
+  dir_in_provider_usr_share = g_build_filename ("usr", "share", dir_basename, NULL);
+
+  if ((flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+      && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                    self->provider->fd,
+                                    dir_in_provider_usr_share,
+                                    G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Using \"/%s\" based on hard-coded /usr/share",
+               dir_in_provider_usr_share);
+      g_hash_table_add (data_in_provider,
+                        g_steal_pointer (&dir_in_provider_usr_share));
+      return;
+    }
+
+  /* lib_in_provider can either be absolute, or relative to the root of
+   * the provider: normalize it to relative so we only have to deal with
+   * one code path. */
+  while (lib_in_provider[0] == '/')
+    lib_in_provider++;
+
+  /* Always relative to the root of the provider */
+  dir = g_path_get_dirname (lib_in_provider);
+  g_return_if_fail (dir[0] != '/');
+
+  /* The logic below works a bit better if we represent the root of the
+   * provider (unlikely, but possible) as the empty string */
+  if (G_UNLIKELY (strcmp (dir, ".") == 0))
+    dir[0] = '\0';
+
+  /* Go up from something like ${libdir}/dri to ${libdir} if necessary */
+  if (extra_suffix != NULL && g_str_has_suffix (dir, extra_suffix))
+    dir[strlen (dir) - strlen (extra_suffix)] = '\0';
+
+  /* Try to walk up the directory hierarchy from the library directory
+   * to find the ${exec_prefix}. We assume that the library directory is
+   * either ${exec_prefix}/lib/${multiarch_tuple}, ${exec_prefix}/lib64,
+   * ${exec_prefix}/lib32, or ${exec_prefix}/lib.
+   *
+   * Note that if the library is in /lib, /lib64, etc., this will
+   * leave dir empty, but that's OK: dir_in_provider will become
+   * something like "share/drirc.d" which will be looked up in the
+   * provider namespace. */
+  lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
+  libdir_suffixes[0] = lib_multiarch;
+
+  for (gsize i = 0; i < G_N_ELEMENTS (libdir_suffixes); i++)
+    {
+      if (g_str_has_suffix (dir, libdir_suffixes[i]))
+        {
+          /* dir might be usr/lib64: truncate to usr. */
+          dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
+          break;
+        }
+
+      if (g_strcmp0 (dir, libdir_suffixes[i] + 1) == 0)
+        {
+          /* dir is something like lib64: truncate to empty. */
+          dir[0] = '\0';
+          break;
+        }
+    }
+
+  /* If ${prefix} and ${exec_prefix} are different, we have no way
+   * to predict what the ${prefix} really is; so we are also assuming
+   * that the ${exec_prefix} is the same as the ${prefix}.
+   *
+   * Go back down from the ${prefix} to the data directory,
+   * which we assume is ${prefix}/share. (If it isn't, then we have
+   * no way to predict what it would be.)
+   *
+   * As a special exception, if ${exec_prefix} is / then assume the
+   * ${datadir} is /usr/share, because there is no /share in the FHS. */
+  if (strcmp (dir, "") == 0)
+    dir_in_provider = g_build_filename ("usr", "share", dir_basename, NULL);
+  else
+    dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
+
+  g_return_if_fail (dir_in_provider[0] != '/');
+
+  if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                 self->provider->fd,
+                                 dir_in_provider,
+                                 G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Using \"/%s\" based on library path \"/%s\"",
+               dir_in_provider, lib_in_provider);
+      g_hash_table_add (data_in_provider,
+                        g_steal_pointer (&dir_in_provider));
+      return;
+    }
+
+  if (!(flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
+      && strcmp (dir_in_provider, dir_in_provider_usr_share) != 0
+      && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                    self->provider->fd,
+                                    dir_in_provider_usr_share,
+                                    G_FILE_TEST_IS_DIR))
+    {
+      g_debug ("Using \"/%s\" based on fallback to /usr/share, because "
+               "\"/%s\" based on \"/%s\" is not a directory",
+               dir_in_provider_usr_share, dir_in_provider, lib_in_provider);
+      g_hash_table_add (data_in_provider,
+                        g_steal_pointer (&dir_in_provider_usr_share));
+      return;
+    }
+
+  if (flags & PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING)
+    {
+      g_debug ("Did not find %s adjacent to \"%s\", probably not a problem",
+               dir_basename, lib_in_provider);
+      return;
+    }
+
+  if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
+    g_info ("We were expecting the %s directory in the provider to "
+            "be located in \"/%s\" based on \"/%s\", but instead it is missing",
+            dir_basename, dir_in_provider, lib_in_provider);
+  else
+    g_info ("We were expecting the %s directory in the provider to "
+            "be located in \"/%s\" or \"/%s\" based on \"/%s\", but "
+            "instead it is missing",
+            dir_basename, dir_in_provider, dir_in_provider_usr_share,
+            lib_in_provider);
+}
+
+/*
+ * pv_runtime_collect_lib_symlink_data:
  * @self: The runtime
  * @arch: Architecture of @lib_symlink
  * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
@@ -4326,165 +4502,206 @@ typedef enum
  * @flags: Flags
  * @data_in_provider: Map { owned string => itself } representing the set
  *  of data directories discovered
+ *
+ * Returns: %TRUE if @lib_symlink exists and is a symlink
  */
-static void
-pv_runtime_collect_lib_data (PvRuntime *self,
-                             RuntimeArchitecture *arch,
-                             const char *dir_basename,
-                             const char *lib_symlink,
-                             PvRuntimeDataFlags flags,
-                             GHashTable *data_in_provider)
+static gboolean
+pv_runtime_collect_lib_symlink_data (PvRuntime *self,
+                                     RuntimeArchitecture *arch,
+                                     const char *dir_basename,
+                                     const char *lib_symlink,
+                                     PvRuntimeDataFlags flags,
+                                     GHashTable *data_in_provider)
 {
   g_autofree char *target = NULL;
+  const char *target_in_provider;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->provider != NULL, FALSE);
+  g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
+  g_return_val_if_fail (dir_basename != NULL, FALSE);
+  g_return_val_if_fail (lib_symlink != NULL, FALSE);
+  g_return_val_if_fail (data_in_provider != NULL, FALSE);
 
   target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
 
-  g_return_if_fail (self->provider != NULL);
+  if (target == NULL)
+    return FALSE;
 
-  if (target != NULL)
+  /* There are two possibilities for a symlink created by
+   * capsule-capture-libs.
+   *
+   * If capsule-capture-libs found a library in /app, /usr
+   * or /lib* (as configured by --remap-link-prefix in
+   * pv_runtime_get_capsule_capture_libs()), then the symlink will
+   * point to something like /run/host/lib/libfoo.so or
+   * /run/gfx/usr/lib64/libbar.so. To find the corresponding path
+   * in the graphics stack provider, we can remove the /run/host
+   * or /run/gfx prefix.
+   *
+   * If capsule-capture-libs found a library elsewhere, for example
+   * in $HOME or /opt, then we assume it will be visible at the same
+   * path in both the graphics stack provider and the final container.
+   * In practice this is unlikely to happen unless the graphics stack
+   * provider is the same as the current namespace. We do not remove
+   * any prefix in this case.
+   *
+   * Note that after this, target_in_provider can either be absolute,
+   * or relative to the root of the provider. */
+
+  target_in_provider = _srt_get_path_after (target,
+                                            self->provider->path_in_container_ns);
+
+  if (target_in_provider == NULL)
+    target_in_provider = target;
+
+  pv_runtime_collect_lib_data (self, arch, dir_basename,
+                               target_in_provider, NULL, flags,
+                               data_in_provider);
+  return TRUE;
+}
+
+static void
+collect_one_mesa_drirc (PvRuntime *self,
+                        RuntimeArchitecture *arch,
+                        const IcdDetails *details,
+                        PvRuntimeDataFlags flags,
+                        GHashTable *drirc_data_in_provider)
+{
+  g_autofree gchar *symlink = NULL;
+  const gsize multiarch_index = arch->multiarch_index;
+  const char *resolved;
+
+  /* This is assumed to be called after collecting ICDs */
+  resolved = details->resolved_libraries[multiarch_index];
+
+  switch (details->kinds[multiarch_index])
     {
-      const char *libdir_suffixes[] =
-      {
-        "/lib/<multiarch>",   /* placeholder, will be replaced */
-        "/lib64",
-        "/lib32",
-        "/lib",
-      };
-      g_autofree gchar *dir = NULL;
-      g_autofree gchar *lib_multiarch = NULL;
-      g_autofree gchar *dir_in_provider = NULL;
-      g_autofree gchar *dir_in_provider_usr_share = NULL;
-      const char *target_in_provider;
+      case ICD_KIND_ABSOLUTE:
+        g_return_if_fail (resolved != NULL);
+        pv_runtime_collect_lib_data (self, arch, "drirc.d", resolved,
+                                     NULL, flags, drirc_data_in_provider);
+        break;
 
-      /* If we are unable to find the lib data in the provider, we try as
-       * a last resort `/usr/share`. This should help for example Exherbo
-       * that uses the unusual `/usr/${gnu_tuple}/lib` path for shared
-       * libraries.
-       *
-       * Some libraries, like the NVIDIA proprietary driver, hard-code
-       * /usr/share even if they are installed in some other location.
-       * For these libraries, we look in this /usr/share-based path
-       * *first*. */
-      dir_in_provider_usr_share = g_build_filename ("/usr", "share", dir_basename, NULL);
+      case ICD_KIND_SONAME:
+        /* We already created a symlink in /overrides pointing to the
+         * path in the container namespace, which is the same as the
+         * path in the provider namespace, but with an optional prefix
+         * that we already know how to remove (/run/host or /run/gfx). */
+        g_return_if_fail (resolved != NULL);
+        symlink = g_build_filename (arch->libdir_in_current_namespace,
+                                    glnx_basename (resolved), NULL);
+        pv_runtime_collect_lib_symlink_data (self, arch, "drirc.d", symlink,
+                                             flags, drirc_data_in_provider);
+        break;
 
-      if ((flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
-          && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                        self->provider->fd,
-                                        dir_in_provider_usr_share,
-                                        G_FILE_TEST_IS_DIR))
-        {
-          g_debug ("Using %s based on hard-coded /usr/share",
-                   dir_in_provider_usr_share);
-          g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider_usr_share));
-          return;
-        }
-
-      /* There are two possibilities for a symlink created by
-       * capsule-capture-libs.
-       *
-       * If capsule-capture-libs found a library in /app, /usr
-       * or /lib* (as configured by --remap-link-prefix in
-       * pv_runtime_get_capsule_capture_libs()), then the symlink will
-       * point to something like /run/host/lib/libfoo.so or
-       * /run/gfx/usr/lib64/libbar.so. To find the corresponding path
-       * in the graphics stack provider, we can remove the /run/host
-       * or /run/gfx prefix.
-       *
-       * If capsule-capture-libs found a library elsewhere, for example
-       * in $HOME or /opt, then we assume it will be visible at the same
-       * path in both the graphics stack provider and the final container.
-       * In practice this is unlikely to happen unless the graphics stack
-       * provider is the same as the current namespace. We do not remove
-       * any prefix in this case.
-       *
-       * Note that after this, target_in_provider can either be absolute,
-       * or relative to the root of the provider. */
-
-      target_in_provider = _srt_get_path_after (target,
-                                                self->provider->path_in_container_ns);
-
-      if (target_in_provider == NULL)
-        target_in_provider = target;
-
-      /* Either absolute, or relative to the root of the provider */
-      dir = g_path_get_dirname (target_in_provider);
-
-      /* Try to walk up the directory hierarchy from the library directory
-       * to find the ${exec_prefix}. We assume that the library directory is
-       * either ${exec_prefix}/lib/${multiarch_tuple}, ${exec_prefix}/lib64,
-       * ${exec_prefix}/lib32, or ${exec_prefix}/lib.
-       *
-       * Note that if the library is in /lib, /lib64, etc., this will
-       * leave dir empty, but that's OK: dir_in_provider will become
-       * something like "share/drirc.d" which will be looked up in the
-       * provider namespace. */
-      lib_multiarch = g_build_filename ("/lib", arch->details->tuple, NULL);
-      libdir_suffixes[0] = lib_multiarch;
-
-      for (gsize i = 0; i < G_N_ELEMENTS (libdir_suffixes); i++)
-        {
-          if (g_str_has_suffix (dir, libdir_suffixes[i]))
-            {
-              /* dir might be /usr/lib64 or /lib64:
-               * truncate to /usr or empty. */
-              dir[strlen (dir) - strlen (libdir_suffixes[i])] = '\0';
-              break;
-            }
-
-          if (g_strcmp0 (dir, libdir_suffixes[i] + 1) == 0)
-            {
-              /* dir is something like lib64: truncate to empty. */
-              dir[0] = '\0';
-              break;
-            }
-        }
-
-      /* If ${prefix} and ${exec_prefix} are different, we have no way
-       * to predict what the ${prefix} really is; so we are also assuming
-       * that the ${exec_prefix} is the same as the ${prefix}.
-       *
-       * Go back down from the ${prefix} to the data directory,
-       * which we assume is ${prefix}/share. (If it isn't, then we have
-       * no way to predict what it would be.) */
-      dir_in_provider = g_build_filename (dir, "share", dir_basename, NULL);
-
-      if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                     self->provider->fd,
-                                     dir_in_provider,
-                                     G_FILE_TEST_IS_DIR))
-        {
-          g_debug ("Using %s based on library path %s",
-                   dir_in_provider, dir);
-          g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider));
-          return;
-        }
-
-      if (!(flags & PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST)
-          && _srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                        self->provider->fd,
-                                        dir_in_provider_usr_share,
-                                        G_FILE_TEST_IS_DIR))
-        {
-          g_debug ("Using %s based on fallback to /usr/share",
-                   dir_in_provider_usr_share);
-          g_hash_table_add (data_in_provider,
-                            g_steal_pointer (&dir_in_provider_usr_share));
-          return;
-        }
-
-      if (g_strcmp0 (dir_in_provider, dir_in_provider_usr_share) == 0)
-        g_info ("We were expecting the %s directory in the provider to "
-                "be located in \"%s\", but instead it is missing",
-                dir_basename, dir_in_provider);
-      else
-        g_info ("We were expecting the %s directory in the provider to "
-                "be located in \"%s\" or \"%s\", but instead it is missing",
-                dir_basename, dir_in_provider, dir_in_provider_usr_share);
+      case ICD_KIND_NONEXISTENT:
+      case ICD_KIND_META_LAYER:
+      default:
+        /* Nothing to do - we can't know the path because there is none */
+        break;
     }
 }
 
+/*
+ * For each driver provided by Mesa, other than GLX which is handled
+ * elsewhere, look for share/drirc.d nearby.
+ *
+ * This currently means:
+ * - The EGL ICD described in 50_mesa.json (libEGL_mesa.so.0), assumed
+ *   to be in ${libdir}
+ * - All Vulkan ICDs (we cannot tell which ones came from Mesa!)
+ * - All DRI drivers (which are all implicitly from Mesa)
+ */
+static void
+collect_mesa_drirc (PvRuntime *self,
+                    RuntimeArchitecture *arch,
+                    GPtrArray *egl_icd_details,
+                    GPtrArray *vulkan_icd_details,
+                    SrtSystemInfo *system_info,
+                    GHashTable *drirc_data_in_provider)
+{
+  g_autoptr(SrtObjectList) dri_drivers = NULL;
+
+  for (guint i = 0; i < egl_icd_details->len; i++)
+    {
+      IcdDetails *details = g_ptr_array_index (egl_icd_details, i);
+      const gsize multiarch_index = arch->multiarch_index;
+      const char *resolved;
+      const char *base;
+
+      /* This is assumed to be called after collecting ICDs */
+      resolved = details->resolved_libraries[multiarch_index];
+
+      if (resolved == NULL)
+        continue;
+
+      base = glnx_basename (resolved);
+
+      if (strstr (base, "libEGL_mesa.so") != NULL)
+        collect_one_mesa_drirc (self, arch, details,
+                                PV_RUNTIME_DATA_FLAGS_NONE,
+                                drirc_data_in_provider);
+      else
+        g_debug ("Assuming \"%s\" is not from Mesa", resolved);
+    }
+
+  for (guint i = 0; i < vulkan_icd_details->len; i++)
+    {
+      IcdDetails *details = g_ptr_array_index (vulkan_icd_details, i);
+
+      /* We don't know which Vulkan ICDs are from Mesa (currently
+       * libvulkan_intel.so, libvulkan_lvp.so and libvulkan_radeon.so,
+       * but there could be more in future), so we have to assume
+       * that all of them are *potentially* Mesa. */
+      collect_one_mesa_drirc (self, arch, details,
+                              PV_RUNTIME_DATA_FLAGS_IGNORE_MISSING,
+                              drirc_data_in_provider);
+    }
+
+  /* We assume that by the time we get here, this is already cached,
+   * so its time cost will be trivial and therefore there's no need to
+   * do additional profiling */
+  dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                  arch->details->tuple,
+                                                  SRT_DRIVER_FLAGS_NONE);
+
+  for (const GList *icd_iter = dri_drivers;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next)
+    {
+      g_autofree gchar *resolved = NULL;
+
+      resolved = srt_dri_driver_resolve_library_path (icd_iter->data);
+      g_return_if_fail (g_path_is_absolute (resolved));
+      pv_runtime_collect_lib_data (self, arch, "drirc.d", resolved,
+                                   "/dri", PV_RUNTIME_DATA_FLAGS_NONE,
+                                   drirc_data_in_provider);
+    }
+}
+
+/*
+ * pv_runtime_finish_lib_data:
+ * @self: The runtime
+ * @bwrap: Arguments for bubblewrap
+ * @dir_basename: Name of a data directory below ${datadir}, such as
+ *  `drirc.d`
+ * @lib_name: Library we used to populate @data_in_provider, only used
+ *  in diagnostic messages
+ * @all_from_provider: %TRUE if the instances of @lib_name for all
+ *  architectures came from the graphics stack provider
+ * @data_in_provider: (element-type filename ignored): A set of
+ *  filenames for @dir_basename relative to the root of the graphics
+ *  stack provider, for example `{ "usr/share/drirc.d", "app/share/drirc.d" }`
+ * @error: Used to raise an error on failure
+ *
+ * Make each path in @data_in_provider available in the final container
+ * at the same path.
+ *
+ * Additionally, make one of them available at `usr/share/` + @dir_basename.
+ *
+ * Returns: %TRUE on success
+ */
 static gboolean
 pv_runtime_finish_lib_data (PvRuntime *self,
                             FlatpakBwrap *bwrap,
@@ -4502,7 +4719,7 @@ pv_runtime_finish_lib_data (PvRuntime *self,
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
   g_return_val_if_fail (dir_basename != NULL, FALSE);
 
-  canonical_path = g_build_filename ("/usr", "share", dir_basename, NULL);
+  canonical_path = g_build_filename ("usr", "share", dir_basename, NULL);
 
   if (g_hash_table_size (data_in_provider) > 0 && !all_from_provider)
     {
@@ -4520,9 +4737,11 @@ pv_runtime_finish_lib_data (PvRuntime *self,
 
   while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
     {
-      /* If we found a library at /foo/lib/libbar.so.0 and then found its
-       * data in /foo/share/bar, it's reasonable to expect that libbar
-       * will still be looking for /foo/share/bar in the container. */
+      g_warn_if_fail (data_path != NULL && data_path[0] != '/');
+
+      /* If we found a library at foo/lib/libbar.so.0 and then found its
+       * data in foo/share/bar, it's reasonable to expect that libbar
+       * will still be looking for foo/share/bar in the container. */
       if (!pv_runtime_take_from_provider (self, bwrap,
                                           data_path, data_path,
                                           (TAKE_FROM_PROVIDER_FLAGS_IF_DIR
@@ -4531,16 +4750,16 @@ pv_runtime_finish_lib_data (PvRuntime *self,
         return FALSE;
 
       if (self->is_flatpak_env
-          && g_str_has_prefix (data_path, "/app/lib/"))
+          && g_str_has_prefix (data_path, "app/lib/"))
         {
           /* In a freedesktop.org runtime, for some multiarch, there is
-           * a symlink /usr/lib/${arch} that points to /app/lib/${arch}
+           * a symlink usr/lib/${arch} that points to app/lib/${arch}
            * https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/blob/70cb5835/elements/multiarch/multiarch-platform.bst#L24
-           * If we have a path in /app/lib/ here, we also try to
-           * replicate the symlink in /usr/lib/ */
+           * If we have a path in app/lib/ here, we also try to
+           * replicate the symlink in usr/lib/ */
           g_autofree gchar *path_in_usr = NULL;
-          path_in_usr = g_build_filename ("/usr",
-                                          data_path + strlen ("/app"),
+          path_in_usr = g_build_filename ("usr",
+                                          data_path + strlen ("app"),
                                           NULL);
           if (_srt_fstatat_is_same_file (-1, data_path, -1, path_in_usr))
             {
@@ -4560,14 +4779,14 @@ pv_runtime_finish_lib_data (PvRuntime *self,
     return TRUE;
 
   /* In the uncommon case where data_in_provider *does not* contain
-   * canonical_path - for example data_in_provider = { /usr/local/share/drirc.d }
-   * but canonical_path is /usr/share/drirc.d - we'll mount it over
+   * canonical_path - for example data_in_provider = { usr/local/share/drirc.d }
+   * but canonical_path is usr/share/drirc.d - we'll mount it over
    * canonical_path as well, just in case something has hard-coded
    * that path and is expecting to find something consistent there.
    *
    * If data_in_provider contains more than one - for example if we
-   * found the x86_64 library in /usr/lib/x86_64-linux-gnu but the
-   * i386 library in /app/lib/i386-linux-gnu, as we do in Flatpak -
+   * found the x86_64 library in usr/lib/x86_64-linux-gnu but the
+   * i386 library in app/lib/i386-linux-gnu, as we do in Flatpak -
    * then we don't have a great way to choose between them, so just
    * pick one and hope for the best. In Flatpak, it is normal for
    * this to happen because of the way multiarch has been implemented,
@@ -4883,9 +5102,6 @@ collect_egl_drivers (PvRuntime *self,
   /* As with Vulkan layers, the order of the manifests matters
    * but the order of the actual libraries does not. */
   gboolean use_numbered_subdirs = FALSE;
-  /* If we have just a SONAME, we do not want to place the library
-   * under a subdir, otherwise ld.so will not be able to find it */
-  const gboolean use_subdir_for_kind_soname = FALSE;
   const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Collecting %s EGL drivers from provider...",
@@ -4904,8 +5120,7 @@ collect_egl_drivers (PvRuntime *self,
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
       if (!bind_icd (self, arch, j, "glvnd", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, NULL, error))
+                     &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
 
@@ -4929,9 +5144,6 @@ collect_vulkan_icds (PvRuntime *self,
   /* As with Vulkan layers, the order of the manifests matters
    * but the order of the actual libraries does not. */
   gboolean use_numbered_subdirs = FALSE;
-  /* If we have just a SONAME, we do not want to place the library
-   * under a subdir, otherwise ld.so will not be able to find it */
-  const gboolean use_subdir_for_kind_soname = FALSE;
   const gsize multiarch_index = arch->multiarch_index;
 
   g_debug ("Collecting %s Vulkan drivers from provider...",
@@ -4950,8 +5162,7 @@ collect_vulkan_icds (PvRuntime *self,
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
       if (!bind_icd (self, arch, j, "vulkan", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, NULL, error))
+                     &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
 
@@ -4974,9 +5185,6 @@ collect_vdpau_drivers (PvRuntime *self,
   /* The VDPAU loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
-  /* These libraries are always expected to be located under the
-   * "vdpau" subdir */
-  const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
   const gsize multiarch_index = arch->multiarch_index;
@@ -5005,9 +5213,12 @@ collect_vdpau_drivers (PvRuntime *self,
        * so by definition we can't have collisions. Anything that
        * ends up in a numbered subdirectory won't get used. */
       if (!bind_icd (self, arch, j, "vdpau", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, NULL, error))
+                     &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
+
+      /* Because the path is always absolute, ICD_KIND_SONAME makes
+       * no sense */
+      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
     }
 
   return TRUE;
@@ -5030,9 +5241,6 @@ collect_dri_drivers (PvRuntime *self,
   /* The DRI loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
-  /* These libraries are always expected to be located under the
-   * "dri" subdir */
-  const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
   const gsize multiarch_index = arch->multiarch_index;
@@ -5058,9 +5266,12 @@ collect_dri_drivers (PvRuntime *self,
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       if (!bind_icd (self, arch, j, "dri", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, dri_path, error))
+                     &use_numbered_subdirs, patterns, dri_path, error))
         return FALSE;
+
+      /* Because the path is always absolute, ICD_KIND_SONAME makes
+       * no sense */
+      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
     }
 
   return TRUE;
@@ -5083,9 +5294,6 @@ collect_va_api_drivers (PvRuntime *self,
   /* The VA-API loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
-  /* These libraries are always expected to be located under the
-   * "dri" subdir */
-  const gboolean use_subdir_for_kind_soname = TRUE;
   const GList *icd_iter;
   gsize j;
   const gsize multiarch_index = arch->multiarch_index;
@@ -5111,9 +5319,12 @@ collect_va_api_drivers (PvRuntime *self,
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
       if (!bind_icd (self, arch, j, "dri", details,
-                     &use_numbered_subdirs, use_subdir_for_kind_soname,
-                     patterns, va_api_path, error))
+                     &use_numbered_subdirs, patterns, va_api_path, error))
         return FALSE;
+
+      /* Because the path is always absolute, ICD_KIND_SONAME makes
+       * no sense */
+      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
     }
 
   return TRUE;
@@ -5440,25 +5651,14 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
            * ${prefix}/share/libdrm from the provider. ${prefix} is derived from
            * the absolute path of libdrm_amdgpu.so.1 */
-          if (g_file_test (libdrm_amdgpu, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm_amdgpu,
-                                           PV_RUNTIME_DATA_FLAGS_NONE,
-                                           libdrm_data_in_provider);
-            }
-          /* As a fallback we also try libdrm.so.2 because libdrm_amdgpu.so.1
-           * might not be available in all providers.
-           * It's important to check for libdrm_amdgpu.so.1 first, because
-           * the freedesktop.org GL runtime doesn't provide libdrm.so.2, and if
-           * we check for it first we would end up looking for the "libdrm"
-           * directory in the wrong path */
-          else if (g_file_test (libdrm, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "libdrm", libdrm,
-                                           PV_RUNTIME_DATA_FLAGS_NONE,
-                                           libdrm_data_in_provider);
-            }
-          else
+          if (!pv_runtime_collect_lib_symlink_data (self, arch, "libdrm",
+                                                    libdrm_amdgpu,
+                                                    PV_RUNTIME_DATA_FLAGS_NONE,
+                                                    libdrm_data_in_provider)
+              && !pv_runtime_collect_lib_symlink_data (self, arch, "libdrm",
+                                                       libdrm,
+                                                       PV_RUNTIME_DATA_FLAGS_NONE,
+                                                       libdrm_data_in_provider))
             {
               /* For at least a single architecture, libdrm is newer in the container */
               all_libdrm_from_provider = FALSE;
@@ -5469,17 +5669,18 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           /* If we have libGLX_mesa.so.0 in overrides we also want to mount
            * ${prefix}/share/drirc.d from the provider. ${prefix} is derived from
            * the absolute path of libGLX_mesa.so.0 */
-          if (g_file_test (libglx_mesa, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "drirc.d", libglx_mesa,
-                                           PV_RUNTIME_DATA_FLAGS_NONE,
-                                           drirc_data_in_provider);
-            }
-          else
+          if (!pv_runtime_collect_lib_symlink_data (self, arch, "drirc.d",
+                                                    libglx_mesa,
+                                                    PV_RUNTIME_DATA_FLAGS_NONE,
+                                                    drirc_data_in_provider))
             {
               /* For at least a single architecture, libGLX_mesa is newer in the container */
               all_libglx_from_provider = FALSE;
             }
+
+          collect_mesa_drirc (self, arch,
+                              egl_icd_details, vulkan_icd_details, system_info,
+                              drirc_data_in_provider);
 
           libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
 
@@ -5487,12 +5688,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * /usr/share/nvidia from the provider. In this case it's
            * /usr/share/nvidia that is the preferred path, with
            * ${prefix}/share/nvidia as a fallback. */
-          if (g_file_test (libglx_nvidia, G_FILE_TEST_IS_SYMLINK))
-            {
-              pv_runtime_collect_lib_data (self, arch, "nvidia", libglx_nvidia,
-                                           PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
-                                           nvidia_data_in_provider);
-            }
+          pv_runtime_collect_lib_symlink_data (self, arch, "nvidia",
+                                               libglx_nvidia,
+                                               PV_RUNTIME_DATA_FLAGS_USR_SHARE_FIRST,
+                                               nvidia_data_in_provider);
 
           dirs = pv_multiarch_details_get_libdirs (arch->details,
                                                    PV_MULTIARCH_LIBDIRS_FLAGS_NONE);

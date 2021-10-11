@@ -282,6 +282,33 @@ populate_ld_preload (Fixture *f,
   g_test_message ("argv->len: %" G_GSIZE_FORMAT, i);
 }
 
+static const char * const expected_preload_paths[] =
+{
+  "/app/lib/libpreloadA.so",
+  "/platform/plat-" MOCK_PLATFORM_64 "/libpreloadP.so:abi=" SRT_ABI_X86_64,
+  "/platform/plat-" MOCK_PLATFORM_32 "/libpreloadP.so:abi=" SRT_ABI_I386,
+  "/opt/" MOCK_LIB_64 "/libpreloadL.so:abi=" SRT_ABI_X86_64,
+  "/opt/" MOCK_LIB_32 "/libpreloadL.so:abi=" SRT_ABI_I386,
+  "/lib/libpreload-rootfs.so",
+  "/usr/lib/libpreloadU.so",
+  "/home/me/libpreloadH.so",
+  "/steam/lib/gameoverlayrenderer.so",
+  "/overlay/libs/${ORIGIN}/../lib/libpreloadO.so",
+  "/future/libs-$FUTURE/libpreloadF.so",
+  "/in-root-plat-i686-only-32-bit.so:abi=i386-linux-gnu",
+  "/in-root-${FUTURE}.so",
+  "./${RELATIVE}.so",
+  "./relative.so",
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libfakeroot is not in the runtime or graphics stack provider, only
+   * the current namespace */
+  "/path/to/" MOCK_LIB_64 "/libfakeroot.so:abi=" SRT_ABI_X86_64,
+  "/path/to/" MOCK_LIB_32 "/libfakeroot.so:abi=" SRT_ABI_I386,
+  /* Our mock implementation of pv_runtime_has_library() behaves as though
+   * libpthread.so.0 *is* in the runtime, as we would expect */
+  "libpthread.so.0",
+};
+
 static void
 test_remap_ld_preload (Fixture *f,
                        gconstpointer context)
@@ -293,113 +320,23 @@ test_remap_ld_preload (Fixture *f,
 
   populate_ld_preload (f, argv, PV_APPEND_PRELOAD_FLAGS_NONE, runtime, exports);
 
-  i = 0;
+  g_assert_cmpuint (argv->len, ==, G_N_ELEMENTS (expected_preload_paths));
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/app/lib/libpreloadA.so");
+  for (i = 0; i < argv->len; i++)
+    {
+      char *argument = g_ptr_array_index (argv, i);
+      g_assert_true (g_str_has_prefix (argument, "--ld-preload="));
+      argument += strlen("--ld-preload=");
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_64
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_X86_64));
+      if (g_str_has_prefix (expected_preload_paths[i], "/lib/")
+          || g_str_has_prefix (expected_preload_paths[i], "/usr/lib/"))
+        {
+          g_assert_true (g_str_has_prefix (argument, "/run/host/"));
+          argument += strlen("/run/host");
+        }
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_32
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_64
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_X86_64));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_32
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/run/host/lib/libpreload-rootfs.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/run/host/usr/lib/libpreloadU.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/home/me/libpreloadH.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/steam/lib/gameoverlayrenderer.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/in-root-plat-"
-                    MOCK_PLATFORM_32
-                    "-only-32-bit.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/in-root-${FUTURE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./${RELATIVE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./relative.so");
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libfakeroot is not in the runtime or graphics stack provider, only
-   * the current namespace */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_64
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_X86_64));
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_32
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_I386));
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libpthread.so.0 *is* in the runtime, as we would expect */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=libpthread.so.0");
-
-  g_assert_cmpuint (argv->len, ==, i);
+      g_assert_cmpstr (argument, ==, expected_preload_paths[i]);
+    }
 
   /* FlatpakExports never exports /app */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/app"));
@@ -464,113 +401,24 @@ test_remap_ld_preload_flatpak (Fixture *f,
   populate_ld_preload (f, argv, PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX,
                        runtime, NULL);
 
-  i = 0;
+  g_assert_cmpuint (argv->len, ==, G_N_ELEMENTS (expected_preload_paths));
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/run/parent/app/lib/libpreloadA.so");
+  for (i = 0; i < argv->len; i++)
+    {
+      char *argument = g_ptr_array_index (argv, i);
+      g_assert_true (g_str_has_prefix (argument, "--ld-preload="));
+      argument += strlen("--ld-preload=");
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_64
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_X86_64));
+      if (g_str_has_prefix (expected_preload_paths[i], "/app/")
+          || g_str_has_prefix (expected_preload_paths[i], "/lib/")
+          || g_str_has_prefix (expected_preload_paths[i], "/usr/lib/"))
+        {
+          g_assert_true (g_str_has_prefix (argument, "/run/parent/"));
+          argument += strlen("/run/parent");
+        }
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_32
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_64
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_X86_64));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_32
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/run/parent/lib/libpreload-rootfs.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/run/parent/usr/lib/libpreloadU.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/home/me/libpreloadH.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/steam/lib/gameoverlayrenderer.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/in-root-plat-"
-                    MOCK_PLATFORM_32
-                    "-only-32-bit.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/in-root-${FUTURE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./${RELATIVE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./relative.so");
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libfakeroot is not in the runtime or graphics stack provider, only
-   * the current namespace */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_64
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_X86_64));
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_32
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_I386));
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libpthread.so.0 *is* in the runtime, as we would expect */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=libpthread.so.0");
-
-  g_assert_cmpuint (argv->len, ==, i);
+      g_assert_cmpstr (argument, ==, expected_preload_paths[i]);
+    }
 }
 
 /*
@@ -584,117 +432,30 @@ test_remap_ld_preload_no_runtime (Fixture *f,
 {
   g_autoptr(GPtrArray) argv = g_ptr_array_new_with_free_func (g_free);
   g_autoptr(FlatpakExports) exports = fixture_create_exports (f);
-  gsize i;
+  gsize i, j;
 
   populate_ld_preload (f, argv, PV_APPEND_PRELOAD_FLAGS_REMOVE_GAME_OVERLAY,
                        NULL, exports);
 
-  i = 0;
+  g_assert_cmpuint (argv->len, ==, G_N_ELEMENTS (expected_preload_paths) - 1);
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/app/lib/libpreloadA.so");
+  for (i = 0, j = 0; i < argv->len; i++, j++)
+    {
+      char *argument = g_ptr_array_index (argv, i);
+      g_assert_true (g_str_has_prefix (argument, "--ld-preload="));
+      argument += strlen("--ld-preload=");
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_64
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_X86_64));
+      /* /steam/lib/gameoverlayrenderer.so is missing because we used the
+       * REMOVE_GAME_OVERLAY flag */
+      if (g_str_has_suffix (expected_preload_paths[j], "/gameoverlayrenderer.so"))
+        {
+          /* We expect to skip only one element */
+          g_assert_cmpint (i, ==, j);
+          j++;
+        }
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_32
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_64
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_X86_64));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_32
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/lib/libpreload-rootfs.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/usr/lib/libpreloadU.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/home/me/libpreloadH.so");
-
-  /* /steam/lib/gameoverlayrenderer.so is missing because we used the
-   * REMOVE_GAME_OVERLAY flag */
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/in-root-plat-"
-                    MOCK_PLATFORM_32
-                    "-only-32-bit.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/in-root-${FUTURE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./${RELATIVE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./relative.so");
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libfakeroot is not in the runtime or graphics stack provider, only
-   * the current namespace */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_64
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_X86_64));
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_32
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_I386));
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libpthread.so.0 *is* in the runtime, as we would expect */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=libpthread.so.0");
-
-  g_assert_cmpuint (argv->len, ==, i);
+      g_assert_cmpstr (argument, ==, expected_preload_paths[j]);
+    }
 
   /* FlatpakExports never exports /app */
   g_assert_false (flatpak_exports_path_is_visible (exports, "/app"));
@@ -753,113 +514,16 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
   populate_ld_preload (f, argv, PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX,
                        NULL, NULL);
 
-  i = 0;
+  g_assert_cmpuint (argv->len, ==, G_N_ELEMENTS (expected_preload_paths));
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/app/lib/libpreloadA.so");
+  for (i = 0; i < argv->len; i++)
+    {
+      char *argument = g_ptr_array_index (argv, i);
+      g_assert_true (g_str_has_prefix (argument, "--ld-preload="));
+      argument += strlen("--ld-preload=");
 
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_64
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_X86_64));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/platform/plat-"
-                    MOCK_PLATFORM_32
-                    "/libpreloadP.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_64
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_X86_64));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/opt/"
-                    MOCK_LIB_32
-                    "/libpreloadL.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/lib/libpreload-rootfs.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/usr/lib/libpreloadU.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/home/me/libpreloadH.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/steam/lib/gameoverlayrenderer.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/overlay/libs/${ORIGIN}/../lib/libpreloadO.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/future/libs-$FUTURE/libpreloadF.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/in-root-plat-"
-                    MOCK_PLATFORM_32
-                    "-only-32-bit.so:abi="
-                    SRT_ABI_I386));
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=/in-root-${FUTURE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./${RELATIVE}.so");
-
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=./relative.so");
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libfakeroot is not in the runtime or graphics stack provider, only
-   * the current namespace */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_64
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_X86_64));
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==,
-                   ("--ld-preload=/path/to/"
-                    MOCK_LIB_32
-                    "/libfakeroot.so:abi="
-                    SRT_ABI_I386));
-
-  /* Our mock implementation of pv_runtime_has_library() behaves as though
-   * libpthread.so.0 *is* in the runtime, as we would expect */
-  g_assert_cmpuint (argv->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (argv, i++),
-                   ==, "--ld-preload=libpthread.so.0");
-
-  g_assert_cmpuint (argv->len, ==, i);
+      g_assert_cmpstr (argument, ==, expected_preload_paths[i]);
+    }
 }
 
 int

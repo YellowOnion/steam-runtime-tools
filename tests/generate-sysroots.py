@@ -26,6 +26,7 @@
 import os
 import argparse
 import shutil
+import textwrap
 
 parser = argparse.ArgumentParser()
 parser.add_argument("path")
@@ -47,15 +48,25 @@ except FileNotFoundError:
 os.makedirs(full_path, mode=0o755, exist_ok=True)
 os.chdir(full_path)
 
+supported_abis = ['i386-linux-gnu', 'x86_64-linux-gnu']
+
+dirs = ''
+
 # Only the leaf directories need to be listed here.
-for name in '''
+for abi in supported_abis:
+    dirs = dirs + textwrap.dedent('''\
+        debian10/usr/lib/{0}/dri
+        debian10/usr/lib/{0}/vdpau
+        fake-steam-runtime/usr/lib/steamrt/expectations/{0}
+        steamrt/overrides/lib/{0}
+        steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/{0}
+        ''').format(abi)
+
+
+dirs = dirs + '''
 debian10/custom_path
 debian10/expectations
 debian10/home/debian/.local/share/vulkan/implicit_layer.d
-debian10/usr/lib/i386-linux-gnu/dri
-debian10/usr/lib/i386-linux-gnu/vdpau
-debian10/usr/lib/x86_64-linux-gnu/dri
-debian10/usr/lib/x86_64-linux-gnu/vdpau
 debian10/usr/local/etc/vulkan/explicit_layer.d
 debian10/usr/share/vulkan/implicit_layer.d
 debian10/run/systemd
@@ -94,8 +105,6 @@ fake-icds-flatpak/usr/lib/i386-mock-abi
 fake-icds-flatpak/usr/local/share/vulkan/icd.d
 fake-icds-flatpak/usr/share/glvnd/egl_vendor.d
 fake-icds-flatpak/usr/share/vulkan/icd.d
-fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu
-fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu
 fedora/custom_path
 fedora/custom_path2
 fedora/custom_path3
@@ -126,14 +135,10 @@ no-os-release/usr/lib/vdpau
 podman-example/run/host
 steamrt/etc
 steamrt/overrides/bin
-steamrt/overrides/lib/x86_64-linux-gnu
-steamrt/overrides/lib/i386-linux-gnu
 steamrt/usr/lib
 steamrt/run/pressure-vessel
 steamrt-overrides-issues/etc
 steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/bin
-steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/i386-linux-gnu
-steamrt-overrides-issues/usr/lib/pressure-vessel/overrides/lib/x86_64-linux-gnu
 steamrt-overrides-issues/usr/lib
 steamrt-unofficial/etc
 steamrt-unofficial/usr/lib
@@ -142,35 +147,35 @@ ubuntu16/usr/lib/dri
 ubuntu16/usr/lib/x86_64-mock-ubuntu/dri
 ubuntu16/usr/lib/x86_64-mock-ubuntu/mesa
 ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau
-'''.split():
+'''
+
+for name in dirs.split():
     os.makedirs(name, mode=0o755, exist_ok=True)
 
-for name in '''
-debian10/usr/lib/i386-linux-gnu/ld.so
-debian10/usr/lib/i386-linux-gnu/dri/i965_dri.so
+files = ''
+
+for abi in supported_abis:
+    files = files + textwrap.dedent('''\
+        debian10/usr/lib/{0}/ld.so
+        debian10/usr/lib/{0}/dri/i965_dri.so
+        debian10/usr/lib/{0}/dri/r600_drv_video.so
+        debian10/usr/lib/{0}/libEGL_mesa.so.0
+        debian10/usr/lib/{0}/libGLX_mesa.so.0
+        debian10/usr/lib/{0}/libva.so.2
+        debian10/usr/lib/{0}/libvdpau.so.1
+        debian10/usr/lib/{0}/vdpau/libvdpau_radeonsi.so.1.0.0
+        ''').format(abi)
+
+files = files + '''
 debian10/usr/lib/i386-linux-gnu/dri/r300_dri.so
-debian10/usr/lib/i386-linux-gnu/dri/r600_drv_video.so
 debian10/usr/lib/i386-linux-gnu/dri/radeonsi_dri.so
-debian10/usr/lib/i386-linux-gnu/libEGL_mesa.so.0
-debian10/usr/lib/i386-linux-gnu/libGLX_mesa.so.0
 debian10/usr/lib/i386-linux-gnu/libGLX_nvidia.so.0
-debian10/usr/lib/i386-linux-gnu/libva.so.2
-debian10/usr/lib/i386-linux-gnu/libvdpau.so.1
 debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_r600.so
-debian10/usr/lib/i386-linux-gnu/vdpau/libvdpau_radeonsi.so.1.0.0
-debian10/usr/lib/x86_64-linux-gnu/ld.so
-debian10/usr/lib/x86_64-linux-gnu/dri/i965_dri.so
 debian10/usr/lib/x86_64-linux-gnu/dri/r600_dri.so
-debian10/usr/lib/x86_64-linux-gnu/dri/r600_drv_video.so
 debian10/usr/lib/x86_64-linux-gnu/dri/radeon_dri.so
 debian10/usr/lib/x86_64-linux-gnu/dri/radeonsi_drv_video.so
-debian10/usr/lib/x86_64-linux-gnu/libEGL_mesa.so.0
 debian10/usr/lib/x86_64-linux-gnu/libGL.so.1
-debian10/usr/lib/x86_64-linux-gnu/libGLX_mesa.so.0
-debian10/usr/lib/x86_64-linux-gnu/libva.so.2
-debian10/usr/lib/x86_64-linux-gnu/libvdpau.so.1
 debian10/usr/lib/x86_64-linux-gnu/vdpau/libvdpau_r600.so.1.0.0
-debian10/usr/lib/x86_64-linux-gnu/vdpau/libvdpau_radeonsi.so.1.0.0
 debian-unstable/.dockerenv
 fake-icds/egl1/a.json
 fake-icds/egl1/b.json
@@ -263,7 +268,9 @@ ubuntu16/usr/lib/x86_64-mock-ubuntu/libva.so.1
 ubuntu16/usr/lib/x86_64-mock-ubuntu/mesa/libGL.so.1
 ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_r600.so.1.0.0
 ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_radeonsi.so.1.0.0
-'''.split():
+'''
+
+for name in files.split():
     os.makedirs(os.path.dirname(name), mode=0o755, exist_ok=True)
     open(name, 'w').close()
 
@@ -859,67 +866,40 @@ with open('fake-icds-flatpak/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w')
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu/libglib2.0-0.symbols', 'w') as writer:
-    writer.write('''\
-# Cut-down version of libglib2.0-0:amd64.symbols, to illustrate what we expect
-# to find here
-libgio-2.0.so.0 libglib2.0-0 #MINVER#
-* Build-Depends-Package: libglib2.0-dev
- g_action_activate@Base 2.28.0
- g_action_change_state@Base 2.30.0
-libglib-2.0.so.0 libglib2.0-0 #MINVER#
-* Build-Depends-Package: libglib2.0-dev
- g_access@Base 2.12.0
- g_allocator_free@Base 2.12.0
- g_allocator_new@Base 2.12.0
-''')
+for abi in supported_abis:
+    symbols = 'fake-steam-runtime/usr/lib/steamrt/expectations/{}/libglib2.0-0.symbols'.format(abi)
+    with open(symbols, 'w') as writer:
+        writer.write(textwrap.dedent('''\
+            # Cut-down version of libglib2.0-0:amd64.symbols, to illustrate what we expect
+            # to find here
+            libgio-2.0.so.0 libglib2.0-0 #MINVER#
+            * Build-Depends-Package: libglib2.0-dev
+             g_action_activate@Base 2.28.0
+             g_action_change_state@Base 2.30.0
+            libglib-2.0.so.0 libglib2.0-0 #MINVER#
+            * Build-Depends-Package: libglib2.0-dev
+             g_access@Base 2.12.0
+             g_allocator_free@Base 2.12.0
+             g_allocator_new@Base 2.12.0
+            '''))
 
-with open('fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu/libtheora0.symbols', 'w') as writer:
-    writer.write('''\
-# Cut-down version of libtheora0:amd64.symbols, to illustrate what we expect
-# to find here
-libtheoraenc.so.1 libtheora0 #MINVER#
-# No symbols listed here yet
-''')
+    symbols = 'fake-steam-runtime/usr/lib/steamrt/expectations/{}/libtheora0.symbols'.format(abi)
+    with open(symbols, 'w') as writer:
+        writer.write(textwrap.dedent('''\
+            # Cut-down version of libtheora0:amd64.symbols, to illustrate what we expect
+            # to find here
+            libtheoraenc.so.1 libtheora0 #MINVER#
+            # No symbols listed here yet
+            '''))
 
-with open('fake-steam-runtime/usr/lib/steamrt/expectations/x86_64-linux-gnu/zlib1g.symbols', 'w') as writer:
-    writer.write('''\
-# Cut-down version of zlib1g:amd64.symbols, to illustrate what we expect
-# to find here
-libz.so.1 zlib1g #MINVER#
- adler32@Base 1:1.1.4
-''')
-
-with open('fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu/libglib2.0-0.symbols', 'w') as writer:
-    writer.write('''\
-# Cut-down version of libglib2.0-0:amd64.symbols, to illustrate what we expect
-# to find here
-libgio-2.0.so.0 libglib2.0-0 #MINVER#
-* Build-Depends-Package: libglib2.0-dev
- g_action_activate@Base 2.28.0
- g_action_change_state@Base 2.30.0
-libglib-2.0.so.0 libglib2.0-0 #MINVER#
-* Build-Depends-Package: libglib2.0-dev
- g_access@Base 2.12.0
- g_allocator_free@Base 2.12.0
- g_allocator_new@Base 2.12.0
-''')
-
-with open('fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu/libtheora0.symbols', 'w') as writer:
-    writer.write('''\
-# Cut-down version of libtheora0:i386.symbols, to illustrate what we expect
-# to find here
-libtheoraenc.so.1 libtheora0 #MINVER#
-# No symbols listed here yet
-''')
-
-with open('fake-steam-runtime/usr/lib/steamrt/expectations/i386-linux-gnu/zlib1g.symbols', 'w') as writer:
-    writer.write('''\
-# Cut-down version of zlib1g:amd64.symbols, to illustrate what we expect
-# to find here
-libz.so.1 zlib1g #MINVER#
- adler32@Base 1:1.1.4
-''')
+    symbols = 'fake-steam-runtime/usr/lib/steamrt/expectations/{}/zlib1g.symbols'.format(abi)
+    with open(symbols, 'w') as writer:
+        writer.write(textwrap.dedent('''\
+            # Cut-down version of zlib1g:amd64.symbols, to illustrate what we expect
+            # to find here
+            libz.so.1 zlib1g #MINVER#
+             adler32@Base 1:1.1.4
+            '''))
 
 with open('fake-steam-runtime/usr/lib/steamrt/steam-runtime-abi.json', 'w') as writer:
     writer.write('''\

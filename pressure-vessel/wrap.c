@@ -560,6 +560,7 @@ typedef enum
 
 static gboolean opt_batch = FALSE;
 static gboolean opt_copy_runtime = FALSE;
+static gboolean opt_devel = FALSE;
 static char **opt_env_if_host = NULL;
 static char *opt_fake_home = NULL;
 static char **opt_filesystems = NULL;
@@ -929,6 +930,12 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_FILENAME|G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
     &opt_copy_runtime_into_cb,
     "Deprecated alias for --copy-runtime and --variable-dir", "DIR" },
+  { "devel", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_devel,
+    "Use a more permissive configuration that is helpful during development "
+    "but not intended for production use. "
+    "[Default if $PRESSURE_VESSEL_DEVEL is 1]",
+    NULL },
   { "env-if-host", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME_ARRAY, &opt_env_if_host,
     "Set VAR=VAL if COMMAND is run with /usr from the host system, "
@@ -1265,6 +1272,7 @@ main (int argc,
                             NULL, NULL);
   opt_copy_runtime = pv_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
                                              opt_copy_runtime);
+  opt_devel = pv_boolean_environment ("PRESSURE_VESSEL_DEVEL", FALSE);
   opt_runtime_id = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ID"));
 
     {
@@ -1687,6 +1695,8 @@ main (int argc,
 
   if (bwrap != NULL)
     {
+      FlatpakFilesystemMode sysfs_mode = FLATPAK_FILESYSTEM_MODE_READ_ONLY;
+
       g_assert (exports != NULL);
       g_assert (bwrap_filesystem_arguments != NULL);
 
@@ -1703,7 +1713,10 @@ main (int argc,
 
       /* Start with just the root tmpfs (which appears automatically)
        * and the standard API filesystems */
-      pv_bwrap_add_api_filesystems (bwrap_filesystem_arguments);
+      if (opt_devel)
+        sysfs_mode = FLATPAK_FILESYSTEM_MODE_READ_WRITE;
+
+      pv_bwrap_add_api_filesystems (bwrap_filesystem_arguments, sysfs_mode);
 
       /* The FlatpakExports will populate /run/host for us */
       flatpak_exports_add_host_etc_expose (exports,

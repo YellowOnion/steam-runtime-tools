@@ -25,6 +25,7 @@
 #include "libglnx/libglnx.h"
 
 #include "flatpak-bwrap-private.h"
+#include "flatpak-exports-private.h"
 #include "steam-runtime-tools/glib-backports-internal.h"
 
 gboolean pv_bwrap_run_sync (FlatpakBwrap *bwrap,
@@ -41,7 +42,8 @@ gboolean pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
 void pv_bwrap_copy_tree (FlatpakBwrap *bwrap,
                          const char *source,
                          const char *dest);
-void pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap);
+void pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap,
+                                   FlatpakFilesystemMode sysfs_mode);
 
 static inline gboolean
 pv_bwrap_was_finished (FlatpakBwrap *bwrap)

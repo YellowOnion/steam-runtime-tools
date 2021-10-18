@@ -344,19 +344,31 @@ pv_bwrap_copy_tree (FlatpakBwrap *bwrap,
 /**
  * pv_bwrap_add_api_filesystems:
  * @bwrap: The #FlatpakBwrap
+ * @sysfs_mode: Mode for /sys
  *
  * Make basic API filesystems available.
  */
 void
-pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap)
+pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap,
+                              FlatpakFilesystemMode sysfs_mode)
 {
   g_autofree char *link = NULL;
+
+  g_return_if_fail (sysfs_mode >= FLATPAK_FILESYSTEM_MODE_READ_ONLY);
 
   flatpak_bwrap_add_args (bwrap,
                           "--dev-bind", "/dev", "/dev",
                           "--proc", "/proc",
-                          "--ro-bind", "/sys", "/sys",
                           NULL);
+
+  if (sysfs_mode >= FLATPAK_FILESYSTEM_MODE_READ_WRITE)
+    flatpak_bwrap_add_args (bwrap,
+                            "--bind", "/sys", "/sys",
+                            NULL);
+  else
+    flatpak_bwrap_add_args (bwrap,
+                            "--ro-bind", "/sys", "/sys",
+                            NULL);
 
   link = glnx_readlinkat_malloc (AT_FDCWD, "/dev/shm", NULL, NULL);
 

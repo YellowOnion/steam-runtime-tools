@@ -98,9 +98,17 @@ pv_wrap_check_flatpak (const char *tools_dir,
       /* This might be used for an additional check in the future */
       G_GNUC_UNUSED g_auto(GStrv) filesystems = NULL;
 
-      g_warning ("Using experimental Flatpak sub-sandboxing "
-                 "(requires Flatpak 1.11.x commit 1.10.1-80-gcb47d83b "
-                 "or later)");
+      g_info ("Using Flatpak sub-sandboxing (Flatpak 1.12.x required)");
+
+      /* We try to continue even after printing this message, because we
+       * might as well; Flatpak 1.11.x have a known security vulnerability,
+       * but that's orthogonal to the new sub-sandboxing features we need
+       * (the headline feature from 1.11.x/1.12.x), which worked fine */
+      if (strverscmp (flatpak_version, "1.12.0") < 0)
+        g_warning ("Flatpak 1.11.x was an unstable development branch and "
+                   "is no longer supported. Please upgrade to Flatpak "
+                   "1.12.1 or later.");
+
       subsandbox = get_subsandbox_adverb (launch_executable);
 
       devices = g_key_file_get_string_list (info,
@@ -141,7 +149,7 @@ pv_wrap_check_flatpak (const char *tools_dir,
     {
       return glnx_throw (error,
                          "pressure-vessel (SteamLinuxRuntime) cannot be run "
-                         "in a Flatpak environment. For Proton 5.13+, "
+                         "in Flatpak 1.10.x or older. For Proton 5.13+, "
                          "unofficial community builds that do not use "
                          "pressure-vessel are available.");
     }

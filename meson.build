@@ -205,6 +205,20 @@ conf_data.set(
   'HAVE_SELINUX_2_3',
   libselinux_dep.found() and libselinux_dep.version().version_compare('>=2.3'),
 )
+conf_data.set('api_major', api_major)
+conf_data.set('abi_major', abi_major)
+
+if get_option('multiarch_tuple') != ''
+  multiarch = get_option('multiarch_tuple')
+elif host_machine.cpu_family() == 'x86_64'
+  multiarch = 'x86_64-linux-gnu'
+elif host_machine.cpu_family() == 'x86'
+  multiarch = 'i386-linux-gnu'
+else
+  multiarch = ''
+endif
+
+conf_data.set_quoted('_SRT_MULTIARCH', multiarch)
 
 configure_file(
   input : 'config.h.in',
@@ -322,16 +336,6 @@ pkglibexecdir = join_paths(
 # 'libexec'), so that ../../ gets us from pkglibexecdir to the prefix,
 # and that libdir is relative
 pkglibexec_rpath = '${ORIGIN}/../../' + pkglibdir
-
-if get_option('multiarch_tuple') != ''
-  multiarch = get_option('multiarch_tuple')
-elif host_machine.cpu_family() == 'x86_64'
-  multiarch = 'x86_64-linux-gnu'
-elif host_machine.cpu_family() == 'x86'
-  multiarch = 'i386-linux-gnu'
-else
-  multiarch = ''
-endif
 
 subdir('steam-runtime-tools')
 

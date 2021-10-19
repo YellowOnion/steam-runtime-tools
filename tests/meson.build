@@ -67,7 +67,6 @@ test_utils = static_library(
     'test-utils.c',
   ],
   c_args : [
-    '-D_SRT_MULTIARCH="' + multiarch + '"',
     '-D_SRT_PYTHON="' + python.path() + '"',
   ],
   dependencies : [
@@ -170,9 +169,6 @@ foreach test_info : tests
   exe = executable(
     'test-' + test_name,
     sources,
-    c_args : [
-      '-D_SRT_MULTIARCH="' + multiarch + '"',
-    ],
     dependencies : deps,
     include_directories : project_include_dirs,
     install : get_option('installed_tests'),
@@ -205,9 +201,6 @@ foreach helper : [
   executable(
     helper,
     files(helper + '.c'),
-    c_args : [
-      '-D_SRT_MULTIARCH="' + multiarch + '"',
-    ],
     dependencies : [
       glib,
       gobject,

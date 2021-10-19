@@ -1577,7 +1577,7 @@ main (int argc,
     g_warning ("Unable to set normal resource limits: %s",
                g_strerror (-result));
 
-  if (opt_terminal != PV_TERMINAL_TTY)
+  if (opt_terminal != PV_TERMINAL_TTY && !opt_devel)
     {
       int fd;
 
@@ -1708,7 +1708,7 @@ main (int argc,
       /* Protect the controlling terminal from the app/game, unless we are
        * running an interactive shell in which case that would break its
        * job control. */
-      if (opt_terminal != PV_TERMINAL_TTY)
+      if (opt_terminal != PV_TERMINAL_TTY && !opt_devel)
         flatpak_bwrap_add_arg (bwrap, "--new-session");
 
       /* Start with just the root tmpfs (which appears automatically)

@@ -49,8 +49,10 @@ _srt_libdl_run_helper (gchar **envp,
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
+#if defined(_SRT_MULTIARCH)
   if (multiarch_tuple == NULL)
     multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   argv = _srt_get_helper (helpers_path, multiarch_tuple, helper_name,
                           SRT_HELPER_FLAGS_NONE, error);

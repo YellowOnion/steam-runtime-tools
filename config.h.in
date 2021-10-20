@@ -2,8 +2,11 @@
  * Copyright 2019-2020 Collabora Ltd.
  * SPDX-License-Identifier: MIT
  */
+#define _SRT_API_MAJOR "@api_major@"
 #define _SRT_COMPILATION
+#define _SRT_SONAME "libsteam-runtime-tools-@api_major@.so.@abi_major"
 #define _GNU_SOURCE 1
+#mesondefine _SRT_MULTIARCH
 #mesondefine VERSION
 
 /* Allow using stuff from Flatpak with minimal modifications */

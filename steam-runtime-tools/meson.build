@@ -104,9 +104,6 @@ install_headers(
 
 conf_data = configuration_data()
 conf_data.set('project_name', meson.project_name())
-conf_data.set('api_major', api_major)
-conf_data.set('abi_major', abi_major)
-conf_data.set('multiarch', multiarch)
 
 configure_file(
   input : 'config.h.in',

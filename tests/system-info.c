@@ -359,17 +359,19 @@ libraries_presence (Fixture *f,
   gchar *expectations_in = NULL;
   GList *libraries = NULL;
   SrtLibraryIssues issues;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   info = srt_system_info_new (expectations_in);
   issues = srt_system_info_check_libraries (info,
-                                            _SRT_MULTIARCH,
+                                            multiarch_tuple,
                                             &libraries);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
   check_libraries_result (libraries);
@@ -378,7 +380,7 @@ libraries_presence (Fixture *f,
 
   /* Do the check again, this time using the cache */
   issues = srt_system_info_check_libraries (info,
-                                            _SRT_MULTIARCH,
+                                            multiarch_tuple,
                                             &libraries);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
   check_libraries_result (libraries);
@@ -401,12 +403,14 @@ auto_expectations (Fixture *f,
   GList *libraries = NULL;
   SrtLibraryIssues issues;
   gchar **env;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   env = g_get_environ ();
   steam_runtime = g_build_filename (f->sysroots, "fake-steam-runtime", NULL);
@@ -415,7 +419,7 @@ auto_expectations (Fixture *f,
   info = srt_system_info_new (NULL);
   srt_system_info_set_environ (info, env);
   issues = srt_system_info_check_libraries (info,
-                                            _SRT_MULTIARCH,
+                                            multiarch_tuple,
                                             &libraries);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
   check_libraries_result (libraries);
@@ -472,18 +476,20 @@ library_presence (Fixture *f,
   gchar *expectations_in = NULL;
   SrtLibrary *library = NULL;
   SrtLibraryIssues issues;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   info = srt_system_info_new (expectations_in);
 
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libz.so.1",
                                           &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
@@ -493,7 +499,7 @@ library_presence (Fixture *f,
   g_clear_pointer (&library, g_object_unref);
   /* Do the check again, this time using the cache */
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libz.so.1",
                                           &library);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
@@ -622,17 +628,19 @@ libraries_missing (Fixture *f,
   gchar *expectations_in = NULL;
   GList *libraries = NULL;
   SrtLibraryIssues issues;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   expectations_in = g_build_filename (f->srcdir, "expectations_with_missings", NULL);
   info = srt_system_info_new (expectations_in);
   issues = srt_system_info_check_libraries (info,
-                                            _SRT_MULTIARCH,
+                                            multiarch_tuple,
                                             &libraries);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD, !=, 0);
@@ -643,7 +651,7 @@ libraries_missing (Fixture *f,
 
   /* Do the check again, this time using the cache */
   issues = srt_system_info_check_libraries (info,
-                                            _SRT_MULTIARCH,
+                                            multiarch_tuple,
                                             &libraries);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD, !=, 0);
@@ -691,19 +699,21 @@ library_missing (Fixture *f,
   gchar *expectations_in = NULL;
   SrtLibrary *library = NULL;
   SrtLibraryIssues issues;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   expectations_in = g_build_filename (f->srcdir, "expectations_with_missings", NULL);
   info = srt_system_info_new (expectations_in);
 
   /* Check a present library that has a missing symbol */
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libz.so.1",
                                           &library);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
@@ -713,7 +723,7 @@ library_missing (Fixture *f,
   g_clear_pointer (&library, g_object_unref);
   /* Do the check again, this time using the cache */
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libz.so.1",
                                           &library);
   g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
@@ -723,7 +733,7 @@ library_missing (Fixture *f,
   g_clear_pointer (&library, g_object_unref);
   /* Check for a library that isn't listed in any of the .symbols files */
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libMISSING.so.62",
                                           &library);
   g_assert_cmpint (issues, ==,
@@ -734,7 +744,7 @@ library_missing (Fixture *f,
   g_clear_pointer (&library, g_object_unref);
   /* Do the check again, this time using the cache */
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libMISSING.so.62",
                                           &library);
   g_assert_cmpint (issues, ==,
@@ -756,24 +766,26 @@ wrong_expectations (Fixture *f,
 {
   SrtSystemInfo *info;
   SrtLibraryIssues issues;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   /* Set the expectations folder to one that does not contain the
    * necessary files. We expect the library checks to fail. */
   info = srt_system_info_new ("/dev");
 
   issues = srt_system_info_check_libraries (info,
-                                            _SRT_MULTIARCH,
+                                            multiarch_tuple,
                                             NULL);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS);
 
   issues = srt_system_info_check_library (info,
-                                          _SRT_MULTIARCH,
+                                          multiarch_tuple,
                                           "libz.so.1",
                                           NULL);
   g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS);
@@ -795,10 +807,11 @@ multiarch_tuples_handling (Fixture *f,
 
   g_assert_cmpstr (srt_system_info_get_primary_multiarch_tuple (info), ==, tuples_list[0]);
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    g_assert_cmpstr (tuples_list[0], ==, "UNKNOWN");
-  else
-    g_assert_cmpstr (tuples_list[0], ==, _SRT_MULTIARCH);
+#ifndef _SRT_MULTIARCH
+  g_assert_cmpstr (tuples_list[0], ==, "UNKNOWN");
+#else
+  g_assert_cmpstr (tuples_list[0], ==, _SRT_MULTIARCH);
+#endif
 
   g_assert_cmpstr (tuples_list[1], ==, NULL);
 

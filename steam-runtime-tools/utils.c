@@ -152,8 +152,13 @@ _srt_check_not_setuid (void)
   return !is_setuid;
 }
 
+#ifndef _SRT_MULTIARCH
+#define MULTIARCH_LIBDIR "/lib/"
+#else
 #define MULTIARCH_LIBDIR \
   "/lib/" _SRT_MULTIARCH
+#endif
+
 #define RELOCATABLE_PKGLIBDIR \
   MULTIARCH_LIBDIR "/steam-runtime-tools-" _SRT_API_MAJOR
 #define PKGLIBEXECDIR \

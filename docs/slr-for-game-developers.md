@@ -498,11 +498,24 @@ $ /path/to/steamlibrary/steamapps/common/SteamLinuxRuntime_soldier/run \
 Exporting `PRESSURE_VESSEL_DEVEL=1` is equivalent to using the `--devel`
 option.
 
-At the moment, this option mounts `/sys` read-write instead of read-only,
-so that game developers can use advanced profiling and debugging mechanisms
-that might require writing to `/sys/kernel` or similar pseudo-filesystems.
+Currently, the features enabled by this option are:
 
-It is likely to do more in future pressure-vessel releases.
+  * The standard input file descriptor is inherited from the parent
+    process, the same as `--terminal=tty`.
+    This is useful when running an interactive shell like `bash`, or a
+    game that accepts developer console commands on standard input.
+
+  * `/sys` is mounted read-write instead of read-only, so that game
+    developers can use advanced profiling and debugging mechanisms that
+    might require writing to `/sys/kernel` or similar pseudo-filesystems.
+
+This option is a recent addition and is not present in all container
+runtimes yet.
+If it is not available in your current version of the Steam Linux Runtime,
+one option is to [upgrade pressure-vessel][Upgrading pressure-vessel]
+to a version that has this option.
+
+This option is likely to have more effects in future pressure-vessel releases.
 
 ## Running in a SDK environment
 
@@ -550,6 +563,8 @@ You will find that tools like `gdb` and `strace` are available in the SDK
 environment.
 
 ## Upgrading pressure-vessel
+
+[Upgrading pressure-vessel]: #upgrading-pressure-vessel
 
 The recommended version of `pressure-vessel` is the one that is included
 in the *Steam Linux Runtime - soldier* depot, and other versions are

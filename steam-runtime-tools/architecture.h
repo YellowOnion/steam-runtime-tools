@@ -49,6 +49,15 @@
  */
 #define SRT_ABI_X86_64 "x86_64-linux-gnu"
 
+/**
+ * SRT_ABI_AARCH64:
+ *
+ * The multiarch tuple for the aarch64 ABI normally used on
+ * 64-bit ARM Linux, used here as a proof-of-concept for
+ * non-x86 support.
+ */
+#define SRT_ABI_AARCH64 "aarch64-linux-gnu"
+
 _SRT_PUBLIC
 gboolean srt_architecture_can_run_i386 (void);
 _SRT_PUBLIC

@@ -48,7 +48,7 @@ except FileNotFoundError:
 os.makedirs(full_path, mode=0o755, exist_ok=True)
 os.chdir(full_path)
 
-supported_abis = ['i386-linux-gnu', 'x86_64-linux-gnu']
+supported_abis = ['aarch64-linux-gnu', 'i386-linux-gnu', 'x86_64-linux-gnu']
 
 dirs = ''
 

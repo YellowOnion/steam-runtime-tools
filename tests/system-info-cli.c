@@ -44,8 +44,16 @@
 #include "test-utils.h"
 #include "fake-home.h"
 
+#if defined(__i386__) || defined(__x86_64__)
+  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
+#elif defined(_SRT_MULTIARCH)
+  static const char * const multiarch_tuples[] = { _SRT_MULTIARCH };
+#else
+#warning Unknown architecture, assuming x86
+  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
+#endif
+
 static const char *argv0;
-static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
 
 typedef struct
 {
@@ -700,8 +708,10 @@ json_parsing (Fixture *f,
 
       g_test_message ("%s: input=%s output=%s", test->description, test->input_name, test->output_name);
 
-      input_json = g_build_filename (f->srcdir, "json-report", test->input_name, NULL);
-      output_json = g_build_filename (f->srcdir, "json-report", test->output_name, NULL);
+      input_json = g_build_filename (f->srcdir, "json-report", multiarch_tuples[0],
+                                     test->input_name, NULL);
+      output_json = g_build_filename (f->srcdir, "json-report", multiarch_tuples[0],
+                                      test->output_name, NULL);
 
       parser = json_parser_new ();
       json_parser_load_from_file (parser, output_json, &error);

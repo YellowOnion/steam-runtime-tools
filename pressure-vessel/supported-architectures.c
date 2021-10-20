@@ -31,8 +31,18 @@
  */
 const char * const pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES + 1] =
 {
+  /* The conditional branches here need to be kept in sync with
+   * pv_multiarch_details and PV_N_SUPPORTED_ARCHITECTURES */
+#if defined(__i386__) || defined(__x86_64__)
   "x86_64-linux-gnu",
   "i386-linux-gnu",
+#elif defined(__aarch64__)
+  "aarch64-linux-gnu",
+#elif defined(_SRT_MULTIARCH)
+  _SRT_MULTIARCH,
+#else
+#error Architecture not supported by pressure-vessel
+#endif
   NULL
 };
 
@@ -41,6 +51,9 @@ const char * const pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES + 1] =
  */
 const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
 {
+  /* The conditional branches here need to be kept in sync with
+   * pv_multiarch_tuples and PV_N_SUPPORTED_ARCHITECTURES */
+#if defined(__i386__) || defined(__x86_64__)
   {
     .tuple = "x86_64-linux-gnu",
     .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
@@ -55,6 +68,20 @@ const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
     .platforms = { "i686", "i586", "i486", "i386", NULL },
     .gameoverlayrenderer_dir = "ubuntu12_32",
   },
+#elif defined(__aarch64__)
+  {
+    .tuple = "aarch64-linux-gnu",
+    .multilib = { "aarch64-unknown-linux-gnueabi/lib", "lib64", NULL },
+    .other_ld_so_cache = { "ld-aarch64-unknown-linux-gnueabi.cache", NULL },
+    .platforms = { "aarch64", NULL },
+  },
+#elif defined(_SRT_MULTIARCH)
+  {
+    .tuple = _SRT_MULTIARCH,
+  },
+#else
+#error Architecture not supported by pressure-vessel
+#endif
 };
 
 /* Architecture-independent ld.so.cache filenames, other than the

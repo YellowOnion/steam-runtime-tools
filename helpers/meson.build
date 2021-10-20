@@ -215,7 +215,7 @@ elif multiarch == 'x86_64-linux-gnu'
   subdir('xeon_phi')
 endif
 
-if multiarch == 'i386-linux-gnu' or multiarch == 'x86_64-linux-gnu'
+if multiarch != ''
   if meson.version().version_compare('>=0.58.0')
     # replaces deprecated source_root()
     libcapsule_srcdir = meson.global_source_root() / 'subprojects' / 'libcapsule'

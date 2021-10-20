@@ -4309,7 +4309,7 @@ srt_system_info_dup_libdl_lib (SrtSystemInfo *self,
  * expansion of this token.
  *
  * Typical values look like `x86_64`, `haswell`, `xeon_phi`, `i386`, `i486`,
- * `i586`, or `i686`.
+ * `i586`, `i686`, or `aarch64`.
  *
  * Returns: (transfer full) (type filename) (nullable): A filename, or %NULL.
  */

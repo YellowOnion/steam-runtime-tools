@@ -214,6 +214,8 @@ elif host_machine.cpu_family() == 'x86_64'
   multiarch = 'x86_64-linux-gnu'
 elif host_machine.cpu_family() == 'x86'
   multiarch = 'i386-linux-gnu'
+elif host_machine.cpu_family() == 'aarch64' and host_machine.endian() == 'little'
+  multiarch = 'aarch64-linux-gnu'
 else
   multiarch = ''
 endif

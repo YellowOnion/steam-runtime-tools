@@ -844,7 +844,16 @@ main (int argc,
   gchar **messages = NULL;
   gchar **values = NULL;
   int opt;
+
+#if defined(__i386__) || defined(__x86_64__)
   static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
+#elif defined(_SRT_MULTIARCH)
+  static const char * const multiarch_tuples[] = { _SRT_MULTIARCH, NULL };
+#else
+#warning Unknown architecture, steam-runtime-system-info will assume x86
+  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64, NULL };
+#endif
+
   GList *icds;
   GList *desktop_entries;
   const GList *icd_iter;

@@ -50,6 +50,11 @@ G_DEFINE_QUARK (srt-architecture-error-quark, srt_architecture_error)
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(Elf, elf_end);
 
+/* Backport the ARM 64 bit definition to support older toolchains */
+#ifndef EM_AARCH64
+#define EM_AARCH64	183	/* ARM AARCH64 */
+#endif
+
 static const SrtKnownArchitecture known_architectures[] =
 {
     {
@@ -65,6 +70,11 @@ static const SrtKnownArchitecture known_architectures[] =
     {
       .multiarch_tuple = "x86_64-linux-gnux32",
       .interoperable_runtime_linker = "/libx32/ld-linux-x32.so.2",
+    },
+
+    {
+      .multiarch_tuple = SRT_ABI_AARCH64,
+      .interoperable_runtime_linker = "/lib/ld-linux-aarch64.so.1",
     },
 
     { NULL }
@@ -224,6 +234,8 @@ srt_architecture_get_expected_runtime_linker (const char *multiarch_tuple)
  * @dfd: a directory file descriptor, `AT_FDCWD` or -1
  * @file_path: (type filename):
  * @cls: (not optional) (out): ELF class, normally `ELFCLASS32` or `ELFCLASS64`
+ * @data_encoding: (not optional) (out): ELF data encoding, normally
+ *  `ELFDATA2LSB` or `ELFDATA2MSB`
  * @machine: (not optional) (out): ELF machine, for example `EM_X86_64` or
  *  `EM_386`
  * @error: On failure set to GIOErrorEnum, used to describe the error
@@ -234,6 +246,7 @@ static gboolean
 _srt_architecture_read_elf (int dfd,
                             const char *file_path,
                             guint8 *cls,
+                            guint8 *data_encoding,
                             guint16 *machine,
                             GError **error)
 {
@@ -264,6 +277,7 @@ _srt_architecture_read_elf (int dfd,
                        file_path, elf_errmsg (elf_errno ()));
 
   *cls = eh.e_ident[EI_CLASS];
+  *data_encoding = eh.e_ident[EI_DATA];
   *machine = eh.e_machine;
 
   return TRUE;
@@ -283,12 +297,13 @@ _srt_architecture_guess_from_elf (int dfd,
                                   GError **error)
 {
   guint8 cls = ELFCLASSNONE;
+  guint8 data_encoding = ELFDATANONE;
   guint16 machine = EM_NONE;
   const gchar *identifier = NULL;
 
   g_return_val_if_fail (file_path != NULL, FALSE);
 
-  if (!_srt_architecture_read_elf (dfd, file_path, &cls, &machine, error))
+  if (!_srt_architecture_read_elf (dfd, file_path, &cls, &data_encoding, &machine, error))
     return NULL;
 
   if (cls == ELFCLASS32 && machine == EM_386)
@@ -297,9 +312,12 @@ _srt_architecture_guess_from_elf (int dfd,
     identifier = "x86_64-linux-gnux32";
   else if (cls == ELFCLASS64 && machine == EM_X86_64)
     identifier = "x86_64-linux-gnu";
+  else if (cls == ELFCLASS64 && machine == EM_AARCH64 && data_encoding == ELFDATA2LSB)
+    identifier = "aarch64-linux-gnu";
   else
     g_set_error (error, SRT_ARCHITECTURE_ERROR, SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
-                 "ELF class and machine (%u,%u) are unknown", cls, machine);
+                 "ELF class, data encoding and machine (%u,%u,%u) are unknown",
+                 cls, data_encoding, machine);
 
   return identifier;
 }

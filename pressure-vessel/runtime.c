@@ -4829,8 +4829,12 @@ pv_runtime_finish_libc_family (PvRuntime *self,
    * arbitrarily prefer to use "x86_64-pc-linux-gnu" over the 32-bit couterpart */
   const gchar *lib_locale_path[] = {
     "/usr/lib/locale",
+#if defined(__i386__) || defined(__x86_64__)
     "/usr/x86_64-pc-linux-gnu/lib/locale",
     "/usr/i686-pc-linux-gnu/lib/locale",
+#elif defined(__aarch64__)
+    "/usr/aarch64-unknown-linux-gnueabi/lib/locale",
+#endif
     NULL
   };
   static const struct

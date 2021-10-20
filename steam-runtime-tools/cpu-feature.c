@@ -29,7 +29,9 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#if defined(__x86_64__) || defined(__i386__)
 #include <cpuid.h>
+#endif
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils.h"
@@ -54,15 +56,17 @@
 SrtX86FeatureFlags
 _srt_feature_get_x86_flags (SrtX86FeatureFlags *known)
 {
-  guint eax = 0;
-  guint ebx = 0;
-  guint ecx = 0;
-  guint edx = 0;
   SrtX86FeatureFlags present = SRT_X86_FEATURE_NONE;
 
   g_return_val_if_fail (known != NULL, SRT_X86_FEATURE_NONE);
 
   *known = SRT_X86_FEATURE_NONE;
+
+#if defined(__x86_64__) || defined(__i386__)
+  guint eax = 0;
+  guint ebx = 0;
+  guint ecx = 0;
+  guint edx = 0;
 
   /* Get the list of basic features (leaf 1) */
   if (__get_cpuid (1, &eax, &ebx, &ecx, &edx) == 1)
@@ -94,6 +98,7 @@ _srt_feature_get_x86_flags (SrtX86FeatureFlags *known)
       g_debug ("Something went wrong trying to list extended supported x86 features");
       return present;
     }
+#endif
 
   return present;
 }

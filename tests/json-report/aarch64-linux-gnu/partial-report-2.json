@@ -1,0 +1,50 @@
+{
+  "steam-installation" : {
+    "path" : "/home/me/.local/share/Steam",
+    "steamscript_path" : null,
+    "steamscript_version" : null
+  },
+  "runtime" : {
+    "path" : "/home/me/.steam/root/ubuntu12_32/steam-runtime",
+    "issues" : [
+    ],
+    "pinned_libs_32" : {
+    },
+    "pinned_libs_64" : {
+      "list" : [
+      ]
+    }
+  },
+  "os-release" : {
+    "id" : "arch"
+  },
+  "container" : {
+    "type" : "docker"
+  },
+  "architectures" : {
+    "aarch64-linux-gnu" : {
+      "can-run" : true,
+      "runtime-linker": {
+        "path": "/foobar",
+        "resolved": "/foo/bar"
+      },
+      "graphics-details" : {
+        "x11/vulkan" : {
+        }
+      },
+      "dri_drivers" : [
+      ]
+    }
+  },
+  "locales" : {
+    "<default>" : {
+      "resulting-name" : "en_US.UTF-8"
+    }
+  },
+  "egl" : {
+    "icds" : [
+    ]
+  },
+  "vulkan" : {
+  }
+}

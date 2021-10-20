@@ -45,7 +45,8 @@ pairs of `library_path=library_ABI` separated by a null character, with the opti
 **--print0**, or by newlines.
 Where `library_ABI` follows the Debian-style multiarch tuples convention and
 currently can have the following values: `i386-linux-gnu`, `x86_64-linux-gnu`,
-`x86_64-linux-gnux32`, or `?` that groups all the other possible ABIs.
+`x86_64-linux-gnux32`, `aarch64-linux-gnu`, or `?` that groups all the other
+possible ABIs.
 
 # EXIT STATUS
 

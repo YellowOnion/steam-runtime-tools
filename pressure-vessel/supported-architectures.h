@@ -21,7 +21,13 @@
 
 #include <glib.h>
 
+#if defined(__i386__) || defined(__x86_64__)
 #define PV_N_SUPPORTED_ARCHITECTURES 2
+#else
+/* x86 is a special case where we have a biarch setup. For all the other
+ * cases we expect a single supported architecture */
+#define PV_N_SUPPORTED_ARCHITECTURES 1
+#endif
 
 extern const char * const pv_multiarch_tuples[PV_N_SUPPORTED_ARCHITECTURES + 1];
 

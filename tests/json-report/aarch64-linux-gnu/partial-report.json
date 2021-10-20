@@ -1,0 +1,108 @@
+{
+  "container" : {
+    "type" : "flatpak",
+    "flatpak_version" : "1.10.2",
+    "host" : {
+      "path" : null
+    }
+  },
+  "driver_environment" : [
+    "LIBVA_DRIVER_NAME=vava",
+    5,
+    "MESA_LOADER_DRIVER_OVERRIDE=radeonsi"
+  ],
+  "architectures" : {
+    "aarch64-linux-gnu" : {
+      "can-run" : false,
+      "runtime-linker": {
+        "error": "We just don't know"
+      },
+      "graphics-details" : {
+        "x11/vulkan" : {
+          "renderer" : "AMD RADV NAVI10 (ACO)",
+          "version" : "1.2.145 (device 0x1002:0x731f) (driver 20.3.3)",
+          "devices" : [
+            {
+              "name" : "AMD RADV NAVI10 (ACO)",
+              "api-version" : "1.2.145",
+              "driver-version" : "20.3.3",
+              "type" : "discrete-gpu",
+              "messages" : [
+                "vkWaitForFences (dev_props->device, 1, &dev_props->in_flight_fences[dev_props->current_frame], VK_TRUE, 1) failed: TIMEOUT (2)"
+              ],
+              "issues" : [
+                "cannot-draw"
+              ]
+            }
+          ]
+        },
+        "x11/vdpau" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",
+          "library-vendor" : "futuristic"
+        },
+        "x12/missing" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 5.0\n"
+        }
+      }
+    }
+  },
+  "locales" : {
+    "<default>" : {
+      "resulting-name" : "en_US.UTF-8",
+      "charset" : "UTF-8",
+      "is_utf8" : true
+    }
+  },
+  "vulkan" : {
+    "icds" : [
+      {
+        "json_path" : "/usr/share/vulkan/icd.d/amd_icd64.json",
+        "error" : "Something went wrong",
+        "issues" : [
+          "cannot-load"
+        ]
+      }
+    ],
+    "explicit_layers" : [
+      {
+        "json_path" : "/usr/share/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json",
+        "name": "VK_LAYER_MESA_overlay",
+        "description": "Mesa Overlay layer",
+        "type": "GLOBAL",
+        "api_version" : "1.1.73",
+        "implementation_version": "1",
+        "library_path" : "libVkLayer_MESA_overlay.so",
+        "issues" : [
+          "duplicated"
+        ]
+      },
+      {
+        "json_path" : "/usr/share/vulkan/explicit_layer.d/VkLayer_new.json",
+        "name": "VK_LAYER_MESA_overlay",
+        "description": "Mesa Overlay layer",
+        "type": "GLOBAL",
+        "api_version" : "1.1.73",
+        "implementation_version": "1",
+        "library_path" : "/usr/lib/libVkLayer_MESA_overlay.so",
+        "issues" : [
+          "duplicated"
+        ]
+      }
+    ],
+    "implicit_layers" : [
+      {
+        "json_path" : "/usr/share/vulkan/implicit_layer.d/MangoHud.json",
+        "error": "Something went wrong",
+        "issues" : [
+          "cannot-load"
+        ]
+      }
+    ]
+  },
+  "xdg-portals" : {
+    "issues" : [
+      "timeout"
+    ],
+    "messages" : "timeout: failed to run command ‘aarch64-linux-gnu-check-xdg-portal’: No such file or directory\n"
+  }
+}

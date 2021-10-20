@@ -3,7 +3,7 @@
     "type" : "better_docker"
   },
   "architectures" : {
-    "i386-linux-gnu" : {
+    "aarch64-linux-gnu" : {
       "can-run" : false,
       "library-issues-summary" : [
         "cannot-load",
@@ -24,12 +24,5 @@
   "locale-issues" : [
     "c-utf8-missing",
     "future-missing"
-  ],
-  "cpu-features" : {
-    "x86-64" : true,
-    "sse3" : true,
-    "cmpxchg16b" : false,
-    "sse9000" : true,
-    "sse9001" : false
-  }
+  ]
 }

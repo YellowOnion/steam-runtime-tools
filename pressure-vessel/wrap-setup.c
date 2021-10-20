@@ -749,29 +749,36 @@ append_preload_per_architecture (GPtrArray *argv,
     {
       g_autoptr(GString) mock_path = NULL;
       g_autoptr(SrtLibrary) details = NULL;
-      const char *path;
+      const gchar *multiarch_tuple = pv_multiarch_details[i].tuple;
+      const char *path = NULL;
 
-      srt_system_info_check_library (system_info,
-                                     pv_multiarch_details[i].tuple,
-                                     preload,
-                                     &details);
-      path = srt_library_get_absolute_path (details);
-
-      if (flags & PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS)
+      if (!(flags & PV_APPEND_PRELOAD_FLAGS_IN_UNIT_TESTS))
+        {
+          srt_system_info_check_library (system_info,
+                                         pv_multiarch_details[i].tuple,
+                                         preload,
+                                         &details);
+          path = srt_library_get_absolute_path (details);
+        }
+      else
         {
           /* Use mock results to get predictable behaviour in the unit
-           * tests, replacing the real result (above). This avoids needing
-           * to have real libraries in place when we do unit testing.
+           * tests. This avoids needing to have real libraries in place
+           * when we do unit testing.
            *
            * tests/pressure-vessel/wrap-setup.c is the other side of this. */
           g_autofree gchar *lib = NULL;
           const char *platform = NULL;
 
-          /* As a mock ${LIB}, behave like Debian or the fdo SDK. */
-          lib = g_strdup_printf ("lib/%s", pv_multiarch_details[i].tuple);
-
+#if defined(__i386__) || defined(__x86_64__)
           /* As a mock ${PLATFORM}, use the first one listed. */
           platform = pv_multiarch_details[i].platforms[0];
+#else
+          multiarch_tuple = "mock-multiarch-tuple";
+          platform = "mock";
+#endif
+          /* As a mock ${LIB}, behave like Debian or the fdo SDK. */
+          lib = g_strdup_printf ("lib/%s", multiarch_tuple);
 
           mock_path = g_string_new (preload);
 
@@ -793,18 +800,17 @@ append_preload_per_architecture (GPtrArray *argv,
            * so we can exercise what happens when there's only a 32-bit
            * library available. */
           if (strstr (path, "only-32-bit") != NULL
-              && strcmp (pv_multiarch_details[i].tuple,
-                         SRT_ABI_I386) != 0)
+              && strcmp (multiarch_tuple, SRT_ABI_I386) != 0)
             path = NULL;
         }
 
       if (path != NULL)
         {
           g_debug ("Found %s version of %s at %s",
-                   pv_multiarch_details[i].tuple, preload, path);
+                   multiarch_tuple, preload, path);
           append_preload_internal (argv,
                                    option,
-                                   pv_multiarch_details[i].tuple,
+                                   multiarch_tuple,
                                    path,
                                    path,
                                    env,
@@ -815,8 +821,7 @@ append_preload_per_architecture (GPtrArray *argv,
       else
         {
           g_info ("Unable to load %s version of %s",
-                  pv_multiarch_details[i].tuple,
-                  preload);
+                  multiarch_tuple, preload);
         }
     }
 }

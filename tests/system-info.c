@@ -45,6 +45,15 @@
 #include "test-utils.h"
 #include "fake-home.h"
 
+#if defined(__i386__) || defined(__x86_64__)
+  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
+#elif defined(_SRT_MULTIARCH)
+  static const char * const multiarch_tuples[] = { _SRT_MULTIARCH };
+#else
+#warning Unknown architecture, assuming x86
+  static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
+#endif
+
 static const char *argv0;
 static gchar *fake_home_path;
 static gchar *global_sysroots;
@@ -1877,8 +1886,8 @@ overrides (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  /* The overrides folder contains 4 folders, plus 4 files, plus one ".keep" file */
-  g_assert_cmpint (i, ==, 9);
+  /* The overrides folder contains 5 folders, plus 4 files, plus one ".keep" file */
+  g_assert_cmpint (i, ==, 10);
   g_assert_true (seen_link);
   g_strfreev (output);
 
@@ -1893,7 +1902,7 @@ overrides (Fixture *f,
       if (strstr (output[i], "/run/host/usr/lib/libgcc_s.so.1") != NULL)
         seen_link = TRUE;
     }
-  g_assert_cmpint (i, ==, 9);
+  g_assert_cmpint (i, ==, 10);
   g_assert_true (seen_link);
   g_strfreev (output);
 
@@ -2408,8 +2417,6 @@ assert_equal_strings_arrays (const gchar * const *array1,
   g_assert_cmpstr (array2[i], ==, NULL);
 }
 
-static const char * const multiarch_tuples[] = { SRT_ABI_I386, SRT_ABI_X86_64 };
-
 typedef enum
 {
   LIBDL_TOKEN_SKIP = 0,
@@ -2603,7 +2610,7 @@ typedef struct
   SrtX86FeatureFlags x86_known;
 } JsonTest;
 
-static const JsonTest json_test[] =
+static JsonTest json_test[] =
 {
   { /* Begin Full JSON report */
     .description = "full JSON parsing",
@@ -2623,17 +2630,10 @@ static const JsonTest json_test[] =
       .path = "/home/me/.steam/root/ubuntu12_32/steam-runtime",
       .version = "0.20200123.4",
       .issues = SRT_RUNTIME_ISSUES_NONE,
-      .pinned_libs_32 =
-      {
-        "pinned_libs_32/has_pins",
-        "pinned_libs_32/libdbusmenu-gtk.so.4 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13",
-        "pinned_libs_32/system_libGLU.so.1",
-        NULL,
-      },
       .pinned_libs_64 =
       {
         "pinned_libs_64/has_pins",
-        "pinned_libs_64/libjack.so.0 -> /home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0",
+        "pinned_libs_64/libjack.so.0",
         "pinned_libs_64/system_libGLU.so.1",
         NULL,
       },
@@ -2657,112 +2657,6 @@ static const JsonTest json_test[] =
     .architecture =
     {
       {
-        .can_run = FALSE,
-        .libdl =
-        {
-          {
-            .libdl_token = LIBDL_TOKEN_LIB,
-            .expansion_value = "lib32",
-          },
-          {
-            .libdl_token = LIBDL_TOKEN_PLATFORM,
-            .error_domain = "g-io-error-quark",
-            .error_code = G_IO_ERROR_NOT_FOUND,
-            .error_message = "Unable to find the library: ${ORIGIN}/i386-linux-gnu/${PLATFORM}/libidentify-platform.so: "
-                             "cannot open shared object file: No such file or directory",
-          },
-        },
-        .runtime_linker =
-        {
-          .path = "/lib/ld-linux.so.2",
-          .error_domain = "g-io-error-quark",
-          .error_code = G_IO_ERROR_NOT_FOUND,
-          .error_message = "No such file or directory",
-        },
-        .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
-        .graphics =
-        {
-          {
-            .window_system = SRT_WINDOW_SYSTEM_X11,
-            .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
-            .messages = "ERROR: [Loader Message] Code 0 : /usr/lib/amdvlk64.so: wrong ELF class: ELFCLASS64\nCannot create Vulkan instance.\n",
-            .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD | SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
-            .exit_status = 1,
-            .is_available = TRUE,
-          },
-          {
-            .window_system = SRT_WINDOW_SYSTEM_X11,
-            .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
-            .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
-            .is_available = TRUE,
-          },
-          {
-            .window_system = SRT_WINDOW_SYSTEM_X11,
-            .rendering_interface = SRT_RENDERING_INTERFACE_VAAPI,
-            .renderer = "Mesa Gallium driver 20.0.5 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)\n",
-            .is_available = TRUE,
-          },
-          {
-            .window_system = SRT_WINDOW_SYSTEM_GLX,
-            .rendering_interface = SRT_RENDERING_INTERFACE_GL,
-            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
-            .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
-            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
-            .is_available = TRUE,
-          },
-          {
-            .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
-            .rendering_interface = SRT_RENDERING_INTERFACE_GL,
-            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
-            .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
-            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
-            .is_available = TRUE,
-          },
-          {
-            .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
-            .rendering_interface = SRT_RENDERING_INTERFACE_GLESV2,
-            .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
-            .version = "OpenGL ES 3.2 Mesa 20.0.5",
-            .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
-            .is_available = TRUE,
-          },
-        },
-        .dri_drivers =
-        {
-          {
-            .library_path = "/usr/lib32/dri/radeonsi_dri.so",
-          },
-          {
-            .library_path = "/usr/lib32/dri/vmwgfx_dri.so",
-          },
-        },
-        .va_api_drivers =
-        {
-          {
-            .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/dri/dummy_drv_video.so",
-          },
-        },
-        .vdpau_drivers =
-        {
-          {
-            .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/vdpau/libvdpau_trace.so.1",
-            .library_link = "libvdpau_trace.so.1.0.0",
-          },
-        },
-        .glx_drivers =
-        {
-          {
-            .library_soname = "libGLX_indirect.so.0",
-            .library_path = "/usr/lib32/libGLX_mesa.so.0.0.0",
-          },
-          {
-            .library_soname = "libGLX_mesa.so.0",
-            .library_path = "/usr/lib32/libGLX_mesa.so.0.0.0",
-          },
-        },
-      },
-
-      {
         .can_run = TRUE,
         .libdl =
         {
@@ -2772,13 +2666,13 @@ static const JsonTest json_test[] =
           },
           {
             .libdl_token = LIBDL_TOKEN_PLATFORM,
-            .expansion_value = "x86_64",
+            .expansion_value = "mock",
           },
         },
         .runtime_linker =
         {
-          .path = "/lib64/ld-linux-x86-64.so.2",
-          .resolved = "/lib/x86_64-linux-gnu/ld-2.31.so",
+          .path = "/lib64/ld-linux-mock.so.2",
+          .resolved = "/usr/lib/ld-2.31.so",
         },
         .graphics =
         {
@@ -2861,9 +2755,6 @@ static const JsonTest json_test[] =
         {
           {
             .library_path = "/usr/lib/dri/vdpau_drv_video.so",
-          },
-          {
-            .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/dri/dummy_drv_video.so",
           },
         },
         .vdpau_drivers =
@@ -3001,10 +2892,6 @@ static const JsonTest json_test[] =
         },
       },
     },
-
-    .x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_CMPXCHG16B,
-    .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B,
-
   }, /* End Full JSON report */
 
   { /* Begin Partial JSON report */
@@ -3035,7 +2922,7 @@ static const JsonTest json_test[] =
         .can_run = FALSE,
         .runtime_linker =
         {
-          .path = "/lib/ld-linux.so.2",
+          .path = "/lib64/ld-linux-mock.so.2",
           /* Error domain and code are missing from the report, so we
            * make something up */
           .error_domain = "srt-architecture-error-quark",
@@ -3071,17 +2958,6 @@ static const JsonTest json_test[] =
             .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
             .is_available = TRUE,
           },
-        },
-      },
-      {
-        .can_run = TRUE,
-        .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
-        .runtime_linker =
-        {
-          .path = "/lib64/ld-linux-x86-64.so.2",
-          .error_domain = "srt-architecture-error-quark",
-          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
-          .error_message = "Runtime linker for \"x86_64-linux-gnu\" not included in report",
         },
       },
     },
@@ -3146,10 +3022,8 @@ static const JsonTest json_test[] =
     .xdg_portal =
     {
       .issues = SRT_XDG_PORTAL_ISSUES_TIMEOUT,
-      .messages = "timeout: failed to run command ‘x86_64-linux-gnu-check-xdg-portal’: No such file or directory\n",
+      .messages = "timeout: failed to run command ‘mock-linux-gnu-check-xdg-portal’: No such file or directory\n",
     },
-    .x86_features = SRT_X86_FEATURE_NONE,
-    .x86_known = SRT_X86_FEATURE_NONE,
   }, /* End Partial JSON report */
 
   { /* Begin Partial-2 JSON report */
@@ -3175,27 +3049,15 @@ static const JsonTest json_test[] =
     .architecture =
     {
       {
-        /* i386 */
-        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
-        .runtime_linker =
-        {
-          .path = "/lib/ld-linux.so.2",
-          /* i386 is completely missing from this report */
-          .error_domain = "srt-architecture-error-quark",
-          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
-          .error_message = "ABI \"i386-linux-gnu\" not included in report",
-        },
-      },
-      {
         .can_run = TRUE,
         .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
         .runtime_linker =
         {
-          .path = "/lib64/ld-linux-x86-64.so.2",
+          .path = "/lib64/ld-linux-mock.so.2",
           /* We don't have the expected ld.so in the report */
           .error_domain = "srt-architecture-error-quark",
           .error_code = SRT_ARCHITECTURE_ERROR_INTERNAL_ERROR,
-          .error_message = "Expected \"/lib64/ld-linux-x86-64.so.2\" in report, but got \"/foobar\"",
+          .error_message = "Expected \"/lib64/ld-linux-mock.so.2\" in report, but got \"/foobar\"",
         },
       },
     },
@@ -3214,8 +3076,6 @@ static const JsonTest json_test[] =
     {
       .issues = SRT_XDG_PORTAL_ISSUES_UNKNOWN,
     },
-    .x86_features = SRT_X86_FEATURE_NONE,
-    .x86_known = SRT_X86_FEATURE_NONE,
   }, /* End Partial-2 JSON report */
 
   { /* Begin Empty JSON report */
@@ -3238,20 +3098,10 @@ static const JsonTest json_test[] =
       {
         .runtime_linker =
         {
-          .path = "/lib/ld-linux.so.2",
+          .path = "/lib64/ld-linux-mock.so.2",
           .error_domain = "srt-architecture-error-quark",
           .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
-          .error_message = "ABI \"i386-linux-gnu\" not included in report",
-        },
-        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
-      },
-      {
-        .runtime_linker =
-        {
-          .path = "/lib64/ld-linux-x86-64.so.2",
-          .error_domain = "srt-architecture-error-quark",
-          .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
-          .error_message = "ABI \"x86_64-linux-gnu\" not included in report",
+          .error_message = "ABI \"mock-linux-gnu\" not included in report",
         },
         .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
       },
@@ -3261,8 +3111,6 @@ static const JsonTest json_test[] =
     {
       .issues = SRT_XDG_PORTAL_ISSUES_UNKNOWN,
     },
-    .x86_features = SRT_X86_FEATURE_NONE,
-    .x86_known = SRT_X86_FEATURE_NONE,
   }, /* End Empty JSON report */
 
   { /* Begin Newer JSON report */
@@ -3297,20 +3145,149 @@ static const JsonTest json_test[] =
           },
         },
       },
-      {
-        /* x86_64 */
-        .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
-      }
     },
     .locale_issues = SRT_LOCALE_ISSUES_C_UTF8_MISSING | SRT_LOCALE_ISSUES_UNKNOWN,
     .xdg_portal =
     {
       .issues = SRT_XDG_PORTAL_ISSUES_UNKNOWN,
     },
-    .x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_UNKNOWN,
-    .x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_UNKNOWN,
   }, /* End Newer JSON report */
 };
+
+#if defined(__i386__) || defined(__x86_64__) || !defined(_SRT_MULTIARCH)
+static const ArchitectureTest i386_architecture_full =
+{
+  .can_run = FALSE,
+  .libdl =
+  {
+    {
+      .libdl_token = LIBDL_TOKEN_LIB,
+      .expansion_value = "lib32",
+    },
+    {
+      .libdl_token = LIBDL_TOKEN_PLATFORM,
+      .error_domain = "g-io-error-quark",
+      .error_code = G_IO_ERROR_NOT_FOUND,
+      .error_message = "Unable to find the library: ${ORIGIN}/i386-linux-gnu/${PLATFORM}/libidentify-platform.so: "
+                        "cannot open shared object file: No such file or directory",
+    },
+  },
+  .runtime_linker =
+  {
+    .path = "/lib/ld-linux.so.2",
+    .error_domain = "g-io-error-quark",
+    .error_code = G_IO_ERROR_NOT_FOUND,
+    .error_message = "No such file or directory",
+  },
+  .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+  .graphics =
+  {
+    {
+      .window_system = SRT_WINDOW_SYSTEM_X11,
+      .rendering_interface = SRT_RENDERING_INTERFACE_VULKAN,
+      .messages = "ERROR: [Loader Message] Code 0 : /usr/lib/amdvlk64.so: wrong ELF class: ELFCLASS64\nCannot create Vulkan instance.\n",
+      .issues = SRT_GRAPHICS_ISSUES_CANNOT_LOAD | SRT_GRAPHICS_ISSUES_CANNOT_DRAW,
+      .exit_status = 1,
+      .is_available = TRUE,
+    },
+    {
+      .window_system = SRT_WINDOW_SYSTEM_X11,
+      .rendering_interface = SRT_RENDERING_INTERFACE_VDPAU,
+      .renderer = "G3DVL VDPAU Driver Shared Library version 1.0\n",
+      .is_available = TRUE,
+    },
+    {
+      .window_system = SRT_WINDOW_SYSTEM_X11,
+      .rendering_interface = SRT_RENDERING_INTERFACE_VAAPI,
+      .renderer = "Mesa Gallium driver 20.0.5 for AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)\n",
+      .is_available = TRUE,
+    },
+    {
+      .window_system = SRT_WINDOW_SYSTEM_GLX,
+      .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+      .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+      .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
+      .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+      .is_available = TRUE,
+    },
+    {
+      .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
+      .rendering_interface = SRT_RENDERING_INTERFACE_GL,
+      .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+      .version = "4.6 (Compatibility Profile) Mesa 20.0.5",
+      .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+      .is_available = TRUE,
+    },
+    {
+      .window_system = SRT_WINDOW_SYSTEM_EGL_X11,
+      .rendering_interface = SRT_RENDERING_INTERFACE_GLESV2,
+      .renderer = "AMD Radeon RX 5700 XT (NAVI10, DRM 3.36.0, 5.6.7-arch1-1, LLVM 10.0.0)",
+      .version = "OpenGL ES 3.2 Mesa 20.0.5",
+      .library_vendor = SRT_GRAPHICS_LIBRARY_VENDOR_GLVND,
+      .is_available = TRUE,
+    },
+  },
+  .dri_drivers =
+  {
+    {
+      .library_path = "/usr/lib32/dri/radeonsi_dri.so",
+    },
+    {
+      .library_path = "/usr/lib32/dri/vmwgfx_dri.so",
+    },
+  },
+  .va_api_drivers =
+  {
+    {
+      .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/dri/dummy_drv_video.so",
+    },
+  },
+  .vdpau_drivers =
+  {
+    {
+      .library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/vdpau/libvdpau_trace.so.1",
+      .library_link = "libvdpau_trace.so.1.0.0",
+    },
+  },
+  .glx_drivers =
+  {
+    {
+      .library_soname = "libGLX_indirect.so.0",
+      .library_path = "/usr/lib32/libGLX_mesa.so.0.0.0",
+    },
+    {
+      .library_soname = "libGLX_mesa.so.0",
+      .library_path = "/usr/lib32/libGLX_mesa.so.0.0.0",
+    },
+  },
+};
+
+static const ArchitectureTest i386_architecture_partial =
+{
+  .can_run = TRUE,
+  .issues = SRT_LIBRARY_ISSUES_UNKNOWN,
+  .runtime_linker =
+  {
+    .path = "/lib/ld-linux.so.2",
+    .error_domain = "srt-architecture-error-quark",
+    .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+    .error_message = "Runtime linker for \"i386-linux-gnu\" not included in report",
+  },
+};
+
+static const ArchitectureTest i386_architecture_missing =
+{
+  /* i386 is completely missing from this report */
+  .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD,
+  .runtime_linker =
+  {
+    .path = "/lib/ld-linux.so.2",
+    .error_domain = "srt-architecture-error-quark",
+    .error_code = SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+    .error_message = "ABI \"i386-linux-gnu\" not included in report",
+  },
+};
+#endif
 
 static void
 assert_expected_runtime_linker (SrtSystemInfo *info,
@@ -3406,6 +3383,70 @@ static void
 json_parsing (Fixture *f,
               gconstpointer context)
 {
+  /* Keep this in sync with the json_test declared above. These are the
+   * architecture-specific changes compared to the general json_test defined
+   * before. */
+  g_assert_cmpint (G_N_ELEMENTS (json_test), ==, 5);
+#if defined(__i386__) || defined(__x86_64__) || !defined(_SRT_MULTIARCH)
+  JsonTest *jt = &json_test[0];  /* full good report */
+  jt->runtime.pinned_libs_32[0] = "pinned_libs_32/has_pins";
+  jt->runtime.pinned_libs_32[1] = "pinned_libs_32/libdbusmenu-gtk.so.4 -> "
+                                  "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/i386-linux-gnu/libdbusmenu-gtk.so.4.0.13";
+  jt->runtime.pinned_libs_32[2] = "pinned_libs_32/system_libGLU.so.1";
+  jt->runtime.pinned_libs_64[1] = "pinned_libs_64/libjack.so.0 -> "
+                                  "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/libjack.so.0.1.0";
+  jt->architecture[1] = jt->architecture[0];
+  jt->architecture[0] = i386_architecture_full;
+  jt->architecture[1].libdl[1].expansion_value = "x86_64";
+  jt->architecture[1].runtime_linker.path = "/lib64/ld-linux-x86-64.so.2";
+  jt->architecture[1].runtime_linker.resolved = "/lib/x86_64-linux-gnu/ld-2.31.so";
+  jt->architecture[1].va_api_drivers[1].library_path = "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/dri/dummy_drv_video.so";
+  jt->x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_CMPXCHG16B;
+  jt->x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B;
+
+  jt = &json_test[1];  /* partial report */
+  jt->architecture[1] = jt->architecture[0];
+  jt->architecture[0] = i386_architecture_partial;
+  jt->architecture[1].runtime_linker.path = "/lib64/ld-linux-x86-64.so.2";
+  jt->xdg_portal.messages = "timeout: failed to run command ‘x86_64-linux-gnu-check-xdg-portal’: No such file or directory\n",
+
+  jt = &json_test[2];  /* partial-2 report */
+  jt->architecture[1] = jt->architecture[0];
+  jt->architecture[0] = i386_architecture_missing;
+  jt->architecture[1].runtime_linker.path = "/lib64/ld-linux-x86-64.so.2";
+  jt->architecture[1].runtime_linker.error_message = "Expected \"/lib64/ld-linux-x86-64.so.2\" in report, but got \"/foobar\"",
+
+  jt = &json_test[3];  /* empty report */
+  jt->architecture[1] = jt->architecture[0];
+  jt->architecture[0] = i386_architecture_missing;
+  jt->architecture[1].runtime_linker.path = "/lib64/ld-linux-x86-64.so.2";
+  jt->architecture[1].runtime_linker.error_message = "ABI \"x86_64-linux-gnu\" not included in report";
+
+  jt = &json_test[4];  /* newer report */
+  jt->architecture[1] = jt->architecture[0];
+  jt->architecture[0] = i386_architecture_missing;
+  jt->x86_features = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_UNKNOWN;
+  jt->x86_known = SRT_X86_FEATURE_X86_64 | SRT_X86_FEATURE_SSE3 | SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_UNKNOWN;
+
+#elif defined(__aarch64__)
+  JsonTest *jt = &json_test[0];  /* full good report */
+  jt->architecture[0].libdl[1].expansion_value = "aarch64";
+  jt->architecture[0].runtime_linker.path = "/lib/ld-linux-aarch64.so.1";
+  jt->architecture[0].dri_drivers[0].library_path = "/usr/lib/dri/mediatek_dri.so";
+
+  jt = &json_test[1];  /* partial report */
+  jt->architecture[0].runtime_linker.path = "/lib/ld-linux-aarch64.so.1";
+  jt->xdg_portal.messages = "timeout: failed to run command ‘aarch64-linux-gnu-check-xdg-portal’: No such file or directory\n";
+
+  jt = &json_test[2];  /* partial-2 report */
+  jt->architecture[0].runtime_linker.path = "/lib/ld-linux-aarch64.so.1";
+  jt->architecture[0].runtime_linker.error_message = "Expected \"/lib/ld-linux-aarch64.so.1\" in report, but got \"/foobar\"";
+
+  jt = &json_test[3];  /* empty report */
+  jt->architecture[0].runtime_linker.path = "/lib/ld-linux-aarch64.so.1";
+  jt->architecture[0].runtime_linker.error_message = "ABI \"aarch64-linux-gnu\" not included in report";
+#endif
+
   for (gsize i = 0; i < G_N_ELEMENTS (json_test); i++)
     {
       const JsonTest *t = &json_test[i];
@@ -3445,7 +3486,8 @@ json_parsing (Fixture *f,
 
       g_test_message ("%s: %s", t->input_name, t->description);
 
-      input_json = g_build_filename (f->srcdir, "json-report", t->input_name, NULL);
+      input_json = g_build_filename (f->srcdir, "json-report", multiarch_tuples[0],
+                                     t->input_name, NULL);
 
       info = srt_system_info_new_from_json (input_json, &error);
 

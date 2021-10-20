@@ -609,8 +609,13 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
         {
           /* In unit tests it isn't straightforward to find the real
            * ${PLATFORM}, so we use a predictable mock implementation:
-           * whichever platform happens to be listed first. */
+           * for x86 we use whichever platform happens to be listed first
+           * and for all the other cases we simply use "mock". */
+#if defined(__i386__) || defined(__x86_64__)
           libdl_platform = g_strdup (pv_multiarch_details[abi].platforms[0]);
+#else
+          libdl_platform = g_strdup("mock");
+#endif
         }
       else
         {

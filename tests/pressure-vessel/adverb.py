@@ -46,6 +46,7 @@ class TestAdverb(BaseTest):
 
     def setUp(self) -> None:
         super().setUp()
+        self.uname = os.uname()
 
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             self.adverb = self.command_prefix + [
@@ -73,10 +74,14 @@ class TestAdverb(BaseTest):
         else:
             self.skipTest('Not available as an installed-test')
 
+        self.multiarch = os.environ.get('PRESSURE_VESSEL_MULTIARCH')
+        if not self.multiarch:
+            self.skipTest('No multiarch tuple has been set')
+
     def test_ld_preload(self) -> None:
-        completed = run_subprocess(
-            self.adverb + [
-                '--ld-audit=/nonexistent/libaudit.so',
+        if (self.multiarch == 'x86_64-linux-gnu' or
+                self.multiarch == 'i386-linux-gnu'):
+            preloads = [
                 '--ld-preload=/nonexistent/libpreload.so',
                 '--ld-preload=/nonexistent/ubuntu12_32/gameoverlayrenderer.so',
                 '--ld-preload=/nonexistent/ubuntu12_64/gameoverlayrenderer.so',
@@ -89,22 +94,12 @@ class TestAdverb(BaseTest):
                 ('--ld-preload'
                  '=/nonexistent/lib64/64-bit-only.so'
                  ':abi=x86_64-linux-gnu'),
-                '--',
-                'sh', '-euc',
-                # The hard-coded i686 and xeon_phi here must match up with
-                # pv_multiarch_details[i].platforms[0], which is what is used
-                # as a mock implementation under
-                # PRESSURE_VESSEL_TEST_STANDARDIZE_PLATFORM=1.
-                r'''
-                ld_audit="$LD_AUDIT"
-                ld_preload="$LD_PRELOAD"
-                unset LD_AUDIT
-                unset LD_PRELOAD
-
-                echo "LD_AUDIT=$ld_audit"
-                echo "LD_PRELOAD=$ld_preload"
-
-                IFS=:
+            ]
+            # The hard-coded i686 and xeon_phi here must match up with
+            # pv_multiarch_details[i].platforms[0], which is what is used
+            # as a mock implementation under
+            # PRESSURE_VESSEL_TEST_STANDARDIZE_PLATFORM=1.
+            script_for_loop = r'''
                 for item in $ld_preload; do
                     case "$item" in
                         (*\$\{PLATFORM\}*)
@@ -122,7 +117,48 @@ class TestAdverb(BaseTest):
                             ;;
                     esac
                 done
-                ''',
+            '''
+        else:
+            preloads = [
+                '--ld-preload=/nonexistent/libpreload.so',
+                '--ld-preload=/nonexistent/lib64/libMangoHud.so:abi=' +
+                self.multiarch,
+                '--ld-preload=/nonexistent/lib64/64-bit-only.so:abi=' +
+                self.multiarch,
+            ]
+            script_for_loop = r'''
+                for item in $ld_preload; do
+                    case "$item" in
+                        (*\$\{PLATFORM\}*)
+                            mock="$(echo "$item" |
+                                sed -e 's/[$]{PLATFORM}/mock/g')"
+                            printf "mock: symlink to "
+                            readlink "$mock" || echo "(nothing)"
+                            ;;
+                        (*)
+                            echo "literal $item"
+                            ;;
+                    esac
+                done
+            '''
+
+        completed = run_subprocess(
+            self.adverb + [
+                '--ld-audit=/nonexistent/libaudit.so',
+                ] + preloads + [
+                '--',
+                'sh', '-euc',
+                r'''
+                ld_audit="$LD_AUDIT"
+                ld_preload="$LD_PRELOAD"
+                unset LD_AUDIT
+                unset LD_PRELOAD
+
+                echo "LD_AUDIT=$ld_audit"
+                echo "LD_PRELOAD=$ld_preload"
+
+                IFS=:
+                ''' + script_for_loop,
             ],
             check=True,
             stdin=subprocess.PIPE,
@@ -138,44 +174,67 @@ class TestAdverb(BaseTest):
             lines[0],
             'LD_AUDIT=/nonexistent/libaudit.so',
         )
-        self.assertEqual(
-            re.sub(r':/[^:]*?/pressure-vessel-libs-....../',
-                   r':/tmp/pressure-vessel-libs-XXXXXX/',
-                   lines[1]),
-            ('LD_PRELOAD=/nonexistent/libpreload.so'
-             ':/tmp/pressure-vessel-libs-XXXXXX/'
-             '${PLATFORM}/gameoverlayrenderer.so'
-             ':/tmp/pressure-vessel-libs-XXXXXX/'
-             '${PLATFORM}/libMangoHud.so'
-             ':/tmp/pressure-vessel-libs-XXXXXX/'
-             '${PLATFORM}/64-bit-only.so')
-        )
-        self.assertEqual(lines[2], 'literal /nonexistent/libpreload.so')
-        self.assertEqual(
-            lines[3],
-            'i686: symlink to /nonexistent/ubuntu12_32/gameoverlayrenderer.so',
-        )
-        self.assertEqual(
-            lines[4],
-            ('xeon_phi: symlink to '
-             '/nonexistent/ubuntu12_64/gameoverlayrenderer.so'),
-        )
-        self.assertEqual(
-            lines[5],
-            'i686: symlink to /nonexistent/lib32/libMangoHud.so',
-        )
-        self.assertEqual(
-            lines[6],
-            'xeon_phi: symlink to /nonexistent/lib64/libMangoHud.so',
-        )
-        self.assertEqual(
-            lines[7],
-            'i686: symlink to (nothing)',
-        )
-        self.assertEqual(
-            lines[8],
-            'xeon_phi: symlink to /nonexistent/lib64/64-bit-only.so',
-        )
+
+        if (self.multiarch == 'x86_64-linux-gnu' or
+                self.multiarch == 'i386-linux-gnu'):
+            self.assertEqual(
+                re.sub(r':/[^:]*?/pressure-vessel-libs-....../',
+                       r':/tmp/pressure-vessel-libs-XXXXXX/',
+                       lines[1]),
+                ('LD_PRELOAD=/nonexistent/libpreload.so'
+                 ':/tmp/pressure-vessel-libs-XXXXXX/'
+                 '${PLATFORM}/gameoverlayrenderer.so'
+                 ':/tmp/pressure-vessel-libs-XXXXXX/'
+                 '${PLATFORM}/libMangoHud.so'
+                 ':/tmp/pressure-vessel-libs-XXXXXX/'
+                 '${PLATFORM}/64-bit-only.so')
+            )
+            self.assertEqual(lines[2], 'literal /nonexistent/libpreload.so')
+            self.assertEqual(
+                lines[3],
+                'i686: symlink to /nonexistent/ubuntu12_32/gameoverlayrenderer.so',
+            )
+            self.assertEqual(
+                lines[4],
+                ('xeon_phi: symlink to '
+                 '/nonexistent/ubuntu12_64/gameoverlayrenderer.so'),
+            )
+            self.assertEqual(
+                lines[5],
+                'i686: symlink to /nonexistent/lib32/libMangoHud.so',
+            )
+            self.assertEqual(
+                lines[6],
+                'xeon_phi: symlink to /nonexistent/lib64/libMangoHud.so',
+            )
+            self.assertEqual(
+                lines[7],
+                'i686: symlink to (nothing)',
+            )
+            self.assertEqual(
+                lines[8],
+                'xeon_phi: symlink to /nonexistent/lib64/64-bit-only.so',
+            )
+        else:
+            self.assertEqual(
+                re.sub(r':/[^:]*?/pressure-vessel-libs-....../',
+                       r':/tmp/pressure-vessel-libs-XXXXXX/',
+                       lines[1]),
+                ('LD_PRELOAD=/nonexistent/libpreload.so'
+                 ':/tmp/pressure-vessel-libs-XXXXXX/'
+                 '${PLATFORM}/libMangoHud.so'
+                 ':/tmp/pressure-vessel-libs-XXXXXX/'
+                 '${PLATFORM}/64-bit-only.so')
+            )
+            self.assertEqual(lines[2], 'literal /nonexistent/libpreload.so')
+            self.assertEqual(
+                lines[3],
+                'mock: symlink to /nonexistent/lib64/libMangoHud.so',
+            )
+            self.assertEqual(
+                lines[4],
+                'mock: symlink to /nonexistent/lib64/64-bit-only.so',
+            )
 
     def test_stdio_passthrough(self) -> None:
         proc = subprocess.Popen(

@@ -29,6 +29,9 @@ test_env.set(
   get_option('test_containers_dir'),
 )
 test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
+if multiarch != ''
+  test_env.set('PRESSURE_VESSEL_MULTIARCH', multiarch)
+endif
 
 tests = [
   'adverb.py',

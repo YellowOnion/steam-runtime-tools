@@ -1,0 +1,35 @@
+{
+  "container" : {
+    "type" : "better_docker"
+  },
+  "architectures" : {
+    "x86_64-linux-gnu" : {
+      "can-run" : false,
+      "library-issues-summary" : [
+        "cannot-load",
+        "future-issue"
+      ],
+      "graphics-details" : {
+        "x11/vdpau" : {
+          "renderer" : "G3DVL VDPAU Driver Shared Library version 1.0\n",
+          "library-vendor" : "futuristic",
+          "issues" : [
+            "cannot-draw",
+            "another-future-issue"
+          ]
+        }
+      }
+    }
+  },
+  "locale-issues" : [
+    "c-utf8-missing",
+    "future-missing"
+  ],
+  "cpu-features" : {
+    "x86-64" : true,
+    "sse3" : true,
+    "cmpxchg16b" : false,
+    "sse9000" : true,
+    "sse9001" : false
+  }
+}

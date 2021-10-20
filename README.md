@@ -10,9 +10,9 @@ The steam-runtime-tools library provides low-level Unix-specific tools
 and functionality for the Steam client, including the pressure-vessel
 tool that runs Steam games in containers.
 
-To support multiple architectures (currently only `i386` and `x86_64`
-are supported), you will need to build it once for each architecture and
-install at least the helper tools in `/usr/libexec/steam-runtime-tools-0`
+To support multiple architectures (currently only `i386`, `x86_64` and
+`aarch64` are supported), you will need to build it once for each architecture
+and install at least the helper tools in `/usr/libexec/steam-runtime-tools-0`
 (the `libsteam-runtime-tools-0-helpers` package) for every architecture
 in parallel.
 

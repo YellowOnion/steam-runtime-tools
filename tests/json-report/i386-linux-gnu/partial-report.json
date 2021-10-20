@@ -13,6 +13,9 @@
   ],
   "architectures" : {
     "i386-linux-gnu" : {
+      "can-run" : true
+    },
+    "x86_64-linux-gnu" : {
       "can-run" : false,
       "runtime-linker": {
         "error": "We just don't know"
@@ -44,9 +47,6 @@
           "renderer" : "G3DVL VDPAU Driver Shared Library version 5.0\n"
         }
       }
-    },
-    "x86_64-linux-gnu" : {
-      "can-run" : true
     }
   },
   "locales" : {

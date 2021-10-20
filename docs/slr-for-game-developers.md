@@ -549,6 +549,33 @@ $ /path/to/steamlibrary/steamapps/common/SteamLinuxRuntime_soldier/run \
 You will find that tools like `gdb` and `strace` are available in the SDK
 environment.
 
+## Upgrading pressure-vessel
+
+The recommended version of `pressure-vessel` is the one that is included
+in the *Steam Linux Runtime - soldier* depot, and other versions are
+not necessarily compatible with the container runtime and scripts in
+the depot.
+However, it can sometimes be useful for developers and testers to upgrade
+their version of the `pressure-vessel` container tool, so that they can
+make use of new features or try out new bug-fixes.
+
+To do this, you can download an archive named `pressure-vessel-bin.tar.gz`
+or `pressure-vessel-bin+src.tar.gz`, unpack it, and use it to replace the
+`steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel/` directory.
+
+Official releases of pressure-vessel are available from
+<https://repo.steampowered.com/pressure-vessel/snapshots/>.
+If you are comfortable with using untested pre-release software, it is
+also possible to download unofficial builds of pressure-vessel from our
+continuous-integration system; the steps to do this are deliberately not
+documented here.
+
+To return to the recommended version of `pressure-vessel`, simply delete
+the `steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel/`
+directory and use Steam's [Verify integrity][] feature to re-download it.
+
+[Verify integrity]: https://help.steampowered.com/en/faqs/view/0C48-FCBD-DA71-93EB
+
 ## Attaching a debugger by using gdbserver
 
 The Platform runtime does not contain a full version of the `gdb` debugger,

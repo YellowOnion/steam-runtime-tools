@@ -353,11 +353,12 @@ static void
 srt_system_info_init (SrtSystemInfo *self)
 {
   GQuark primary;
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    /* This won't *work* but at least it's non-empty... */
-    primary = g_quark_from_static_string ("UNKNOWN");
-  else
-    primary = g_quark_from_static_string (_SRT_MULTIARCH);
+#ifndef _SRT_MULTIARCH
+  /* This won't *work* but at least has some value... */
+  primary = g_quark_from_static_string ("UNKNOWN");
+#else
+  primary = g_quark_from_static_string (_SRT_MULTIARCH);
+#endif
 
   self->multiarch_tuples = g_array_sized_new (TRUE, TRUE, sizeof (GQuark), 1);
   g_array_prepend_val (self->multiarch_tuples, primary);
@@ -2765,11 +2766,17 @@ srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
   forget_locales (self);
 
   if (tuple)
-    primary = g_quark_from_string (tuple);
-  else if (strcmp (_SRT_MULTIARCH, "") == 0)
-    primary = g_quark_from_static_string ("UNKNOWN");
+    {
+      primary = g_quark_from_string (tuple);
+    }
   else
-    primary = g_quark_from_static_string (_SRT_MULTIARCH);
+    {
+#ifndef _SRT_MULTIARCH
+      primary = g_quark_from_static_string ("UNKNOWN");
+#else
+      primary = g_quark_from_static_string (_SRT_MULTIARCH);
+#endif
+    }
 
   for (gsize i = 0; i < self->multiarch_tuples->len; i++)
     {
@@ -2840,10 +2847,11 @@ srt_system_info_set_multiarch_tuples (SrtSystemInfo *self,
   if (tuples == NULL || *tuples == NULL)
     {
       GQuark primary;
-      if (strcmp (_SRT_MULTIARCH, "") == 0)
-        primary = g_quark_from_static_string ("UNKNOWN");
-      else
-        primary = g_quark_from_static_string (_SRT_MULTIARCH);
+#ifndef _SRT_MULTIARCH
+      primary = g_quark_from_static_string ("UNKNOWN");
+#else
+      primary = g_quark_from_static_string (_SRT_MULTIARCH);
+#endif
 
       g_array_prepend_val (self->multiarch_tuples, primary);
     }

@@ -223,8 +223,10 @@ _srt_check_locale (gchar **envp,
   g_return_val_if_fail (requested_name != NULL, NULL);
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
 
+#if defined(_SRT_MULTIARCH)
   if (multiarch_tuple == NULL)
     multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   argv = _srt_get_helper (helpers_path, multiarch_tuple, "check-locale",
                           SRT_HELPER_FLAGS_NONE, error);

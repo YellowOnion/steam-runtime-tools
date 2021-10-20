@@ -246,15 +246,17 @@ test_presence (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   const char * const *dependencies;
+  const char *multiarch_tuple = NULL;
   int fd;
   gboolean seen_libc;
   GError *error = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
@@ -271,7 +273,7 @@ test_presence (Fixture *f,
   g_assert_true (result);
 
   issues = srt_check_library_presence ("libz.so.1",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        tmp_file,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
@@ -338,14 +340,16 @@ test_deb_symbols (Fixture *f,
   SrtLibrary *library = NULL;
   SrtLibraryIssues issues;
   const char * const *missing_symbols;
+  const char *multiarch_tuple = NULL;
   int fd;
   GError *error = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
@@ -357,7 +361,7 @@ test_deb_symbols (Fixture *f,
   g_assert_true (result);
 
   issues = srt_check_library_presence ("libz.so.1",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        tmp_file,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
                                        &library);
@@ -394,14 +398,16 @@ test_empty_line (Fixture *f,
   SrtLibraryIssues issues;
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
+  const char *multiarch_tuple = NULL;
   int fd;
   GError *error = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
@@ -420,7 +426,7 @@ test_empty_line (Fixture *f,
   g_assert_true (result);
 
   issues = srt_check_library_presence ("libz.so.1",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        tmp_file,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
@@ -456,15 +462,17 @@ test_missing_symbols (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   const char * const *dependencies;
+  const char *multiarch_tuple = NULL;
   int fd;
   gboolean seen_libc;
   GError *error = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
@@ -480,7 +488,7 @@ test_missing_symbols (Fixture *f,
   g_assert_true (result);
 
   issues = srt_check_library_presence ("libz.so.1",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        tmp_file,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
@@ -537,15 +545,17 @@ test_misversioned_symbols (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   const char * const *dependencies;
+  const char *multiarch_tuple = NULL;
   int fd;
   gboolean seen_libc;
   GError *error = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
@@ -559,7 +569,7 @@ test_misversioned_symbols (Fixture *f,
   g_assert_true (result);
 
   issues = srt_check_library_presence ("libz.so.1",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        tmp_file,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
@@ -615,15 +625,17 @@ test_missing_symbols_and_versions (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   const char * const *dependencies;
+  const char *multiarch_tuple = NULL;
   int fd;
   gboolean seen_libc;
   GError *error = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
@@ -640,7 +652,7 @@ test_missing_symbols_and_versions (Fixture *f,
   g_assert_true (result);
 
   issues = srt_check_library_presence ("libz.so.1",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        tmp_file,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);
@@ -696,15 +708,17 @@ test_missing_library (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   const char * const *dependencies;
+  const char *multiarch_tuple = NULL;
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#else
+  multiarch_tuple = _SRT_MULTIARCH;
+#endif
 
   issues = srt_check_library_presence ("libMISSING.so.62",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        NULL,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        NULL);
@@ -713,7 +727,7 @@ test_missing_library (Fixture *f,
                     SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
 
   issues = srt_check_library_presence ("libMISSING.so.62",
-                                       _SRT_MULTIARCH,
+                                       multiarch_tuple,
                                        NULL,
                                        SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                        &library);

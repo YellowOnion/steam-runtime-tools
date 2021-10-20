@@ -2168,11 +2168,10 @@ test_dri_with_env (Fixture *f,
                                                 "/usr/lib/dri/r600_drv_video.so",
                                                 NULL};
 
-  if (strcmp (_SRT_MULTIARCH, "") == 0)
-    {
-      g_test_skip ("Unsupported architecture");
-      return;
-    }
+#ifndef _SRT_MULTIARCH
+  g_test_skip ("Unsupported architecture");
+  return;
+#endif
 
   sysroot = g_build_filename (f->sysroots, "no-os-release", NULL);
 

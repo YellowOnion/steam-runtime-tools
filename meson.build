@@ -218,7 +218,9 @@ else
   multiarch = ''
 endif
 
-conf_data.set_quoted('_SRT_MULTIARCH', multiarch)
+if multiarch != ''
+  conf_data.set_quoted('_SRT_MULTIARCH', multiarch)
+endif
 
 configure_file(
   input : 'config.h.in',

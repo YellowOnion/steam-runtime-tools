@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: 1.8.2
+ * Taken from Flatpak, last updated: 1.12.2
  * Copyright © 2015 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -50,6 +50,7 @@ typedef enum {
   FLATPAK_RUN_FLAG_DO_NOT_REAP        = (1 << 18),
   FLATPAK_RUN_FLAG_NO_PROC            = (1 << 19),
   FLATPAK_RUN_FLAG_PARENT_EXPOSE_PIDS = (1 << 20),
+  FLATPAK_RUN_FLAG_PARENT_SHARE_PIDS  = (1 << 21),
 } FlatpakRunFlags;
 
 typedef struct FlatpakDir          FlatpakDir;

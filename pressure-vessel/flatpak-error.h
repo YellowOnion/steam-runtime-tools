@@ -1,5 +1,5 @@
 /* flatpak-error.c
- * Adapted from Flatpak, last update: 1.8.2
+ * Adapted from Flatpak, last update: 1.12.2
  *
  * Copyright (C) 2015 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.0-or-later
@@ -31,7 +31,7 @@ G_BEGIN_DECLS
 /* NOTE: If you add an error code below, also update the list in common/flatpak-utils.c */
 /**
  * FlatpakError:
- * @FLATPAK_ERROR_ALREADY_INSTALLED: App/runtime is already installed
+ * @FLATPAK_ERROR_ALREADY_INSTALLED: App/runtime/remote is already installed
  * @FLATPAK_ERROR_NOT_INSTALLED: App/runtime is not installed
  * @FLATPAK_ERROR_ONLY_PULLED: App/runtime was only pulled into the local
  *                             repository but not installed.

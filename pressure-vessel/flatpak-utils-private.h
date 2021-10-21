@@ -24,6 +24,8 @@
 #ifndef __FLATPAK_UTILS_H__
 #define __FLATPAK_UTILS_H__
 
+#include <string.h>
+
 #include "libglnx/libglnx.h"
 #include <flatpak-common-types-private.h>
 #include <gio/gio.h>
@@ -66,9 +68,66 @@ gboolean  flatpak_has_path_prefix (const char *str,
                                    const char *prefix);
 
 
+
+#if !GLIB_CHECK_VERSION (2, 56, 0)
+typedef void (* GClearHandleFunc) (guint handle_id);
+
+static inline void
+g_clear_handle_id (guint            *tag_ptr,
+                   GClearHandleFunc  clear_func)
+{
+  guint _handle_id;
+
+  _handle_id = *tag_ptr;
+  if (_handle_id > 0)
+    {
+      *tag_ptr = 0;
+      clear_func (_handle_id);
+    }
+}
+#endif
+
+
+#if !GLIB_CHECK_VERSION (2, 58, 0)
+static inline gboolean
+g_hash_table_steal_extended (GHashTable    *hash_table,
+                             gconstpointer  lookup_key,
+                             gpointer      *stolen_key,
+                             gpointer      *stolen_value)
+{
+  if (g_hash_table_lookup_extended (hash_table, lookup_key, stolen_key, stolen_value))
+    {
+      g_hash_table_steal (hash_table, lookup_key);
+      return TRUE;
+    }
+  else
+      return FALSE;
+}
+#endif
+
 gboolean flatpak_g_ptr_array_contains_string (GPtrArray  *array,
                                               const char *str);
 
+/* Returns the first string in subset that is not in strv */
+static inline const gchar *
+g_strv_subset (const gchar * const *strv,
+               const gchar * const *subset)
+{
+  int i;
+
+  for (i = 0; subset[i]; i++)
+    {
+      const char *key;
+
+      key = subset[i];
+      if (!g_strv_contains (strv, key))
+        return key;
+    }
+
+  return NULL;
+}
+
+gboolean flatpak_argument_needs_quoting (const char *arg);
 char * flatpak_quote_argv (const char *argv[],
                            gssize      len);
 

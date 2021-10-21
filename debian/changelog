@@ -1,19 +1,45 @@
-steam-runtime-tools (0.20210906.3) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20211021.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
+  * pv-runtime: Improve support for locating data associated with host
+    libraries
+    - In particular take drirc.d from OS, even if using Mesa in a
+      non-standard location (Resolves: steam-runtime-tools#77)
+  * graphics: Improve support for Vulkan layers in a Flatpak environment
+  * pv-wrap: Add --devel option for "developer mode"
+    - Mount /sys read/write so developers can access debugfs, event tracing
+      or similar facilities, if allowed by filesystem permissions on host
+    - Don't detach from standard input (like --terminal=tty)
+    - More developer-mode tweaks are likely to be added in future versions
+  * pv-wrap: Update messages that refer to Flatpak versions
+    - Users of 1.11.x should upgrade to at least 1.12.1 to fix an unrelated
+      security issue in Flatpak
   * pressure-vessel, system-info: Fix various minor memory leaks
-  * build: Remove an unnecessary include path that triggers a meson warning
-  * build: Use Meson's recommended behaviour for extract_all_objects()
-  * helpers: Translate check-gl into C.
-    This doesn't actually need to be C++, and its purpose is to test whether
-    OpenGL works, not to test whether libstdc++ works.
-  * Avoid functions deprecated in GLib 2.70
+  * helpers: Translate check-gl from C++ into C
+  * library: Move most JSON report parsing to its own translation unit
+  * check-xdg-portal: Avoid a crash if no interfaces can be found
+  * pv-runtime: Refactoring
+  * Build system improvements
   * Unit test improvements
+  * Avoid functions deprecated in GLib 2.70
+  * Add some game-developer-oriented documentation
+    (Resolves: steamrt/tasks#6)
 
   [ Ludovico de Nittis ]
+  * pv-runtime: Use correct ld.so from graphics stack provider
+  * graphics: Respect graphics-stack provider sysroot (if not the host)
+    when loading graphics libraries
+  * Add proof-of-concept support for non-x86 architectures.
+    Steam is x86-specific, but the majority of steam-runtime-tools is
+    architecture-agnostic; make it work on aarch64 (e.g. Raspberry Pi 4)
+    to get an idea of how much work is required to support each new
+    architecture.
+  * graphics: Refactoring
+  * Build system improvements
+  * Unit test improvements
   * Create an issue template
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 22 Sep 2021 16:08:02 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 20 Oct 2021 16:05:26 +0100
 
 steam-runtime-tools (0.20210906.2) steamrt; urgency=medium
 

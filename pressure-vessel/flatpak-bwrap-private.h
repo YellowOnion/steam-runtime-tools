@@ -1,6 +1,6 @@
 /*
  * Taken from Flatpak
- * Last updated: Flatpak 1.6.1
+ * Last updated: Flatpak 1.12.2
  *
  * Copyright © 2014-2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -31,6 +31,7 @@ typedef struct
   GArray    *noinherit_fds; /* Just keep these open while the bwrap lives */
   GArray    *fds;
   GStrv      envp;
+  GPtrArray *runtime_dir_members;
 } FlatpakBwrap;
 
 extern char *flatpak_bwrap_empty_env[1];
@@ -47,6 +48,8 @@ void          flatpak_bwrap_unset_env (FlatpakBwrap *bwrap,
                                        const char   *variable);
 void          flatpak_bwrap_add_arg (FlatpakBwrap *bwrap,
                                      const char   *arg);
+void          flatpak_bwrap_take_arg (FlatpakBwrap *bwrap,
+                                      char         *arg);
 void          flatpak_bwrap_add_noinherit_fd (FlatpakBwrap *bwrap,
                                               int           fd);
 void          flatpak_bwrap_add_fd (FlatpakBwrap *bwrap,
@@ -78,11 +81,18 @@ void          flatpak_bwrap_add_bind_arg (FlatpakBwrap *bwrap,
                                           const char   *src,
                                           const char   *dest);
 void          flatpak_bwrap_sort_envp (FlatpakBwrap *bwrap);
+void          flatpak_bwrap_envp_to_args (FlatpakBwrap *bwrap);
 gboolean      flatpak_bwrap_bundle_args (FlatpakBwrap *bwrap,
                                          int           start,
                                          int           end,
                                          gboolean      one_arg,
                                          GError      **error);
+#if 0
+void          flatpak_bwrap_add_runtime_dir_member (FlatpakBwrap *bwrap,
+                                                    const char *name);
+void          flatpak_bwrap_populate_runtime_dir (FlatpakBwrap *bwrap,
+                                                  const char *shared_xdg_runtime_dir);
+#endif
 
 void          flatpak_bwrap_child_setup_cb (gpointer user_data);
 void          flatpak_bwrap_child_setup (GArray *fd_array,

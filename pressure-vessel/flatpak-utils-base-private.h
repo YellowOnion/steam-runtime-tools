@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: Flatpak 1.6.1
+ * Taken from Flatpak, last updated: Flatpak 1.12.2
  * Copyright © 2019 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -24,6 +24,12 @@
 #define __FLATPAK_UTILS_BASE_H__
 
 #include <glib.h>
+#include <gio/gio.h>
+
+#ifndef G_DBUS_METHOD_INVOCATION_HANDLED
+# define G_DBUS_METHOD_INVOCATION_HANDLED TRUE
+# define G_DBUS_METHOD_INVOCATION_UNHANDLED FALSE
+#endif
 
 char *flatpak_get_timezone (void);
 

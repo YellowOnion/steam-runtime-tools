@@ -87,12 +87,10 @@ gboolean      flatpak_bwrap_bundle_args (FlatpakBwrap *bwrap,
                                          int           end,
                                          gboolean      one_arg,
                                          GError      **error);
-#if 0
 void          flatpak_bwrap_add_runtime_dir_member (FlatpakBwrap *bwrap,
                                                     const char *name);
 void          flatpak_bwrap_populate_runtime_dir (FlatpakBwrap *bwrap,
                                                   const char *shared_xdg_runtime_dir);
-#endif
 
 void          flatpak_bwrap_child_setup_cb (gpointer user_data);
 void          flatpak_bwrap_child_setup (GArray *fd_array,

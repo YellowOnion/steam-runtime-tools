@@ -407,11 +407,9 @@ flatpak_bwrap_bundle_args (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
-#if 0
-
 /*
  * Remember that we need to arrange for $XDG_RUNTIME_DIR/$name to be
- * a symlink to /run/flatpak/$name.
+ * a symlink to /run/pressure-vessel/$name.
  */
 void
 flatpak_bwrap_add_runtime_dir_member (FlatpakBwrap *bwrap,
@@ -455,6 +453,7 @@ void
 flatpak_bwrap_populate_runtime_dir (FlatpakBwrap *bwrap,
                                     const char *shared_xdg_runtime_dir)
 {
+#if 0
   if (shared_xdg_runtime_dir != NULL)
     {
       g_autofree char *host_path = g_build_filename (shared_xdg_runtime_dir,
@@ -468,6 +467,7 @@ flatpak_bwrap_populate_runtime_dir (FlatpakBwrap *bwrap,
       flatpak_bwrap_add_arg (bwrap, "../../../.flatpak-info");
       flatpak_bwrap_add_arg_printf (bwrap, "/run/user/%d/flatpak-info", getuid ());
     }
+#endif
 
   if (bwrap->runtime_dir_members != NULL)
     {
@@ -476,7 +476,7 @@ flatpak_bwrap_populate_runtime_dir (FlatpakBwrap *bwrap,
       for (i = 0; i < bwrap->runtime_dir_members->len; i++)
         {
           const char *member = g_ptr_array_index (bwrap->runtime_dir_members, i);
-          g_autofree char *target = g_strdup_printf ("../../flatpak/%s", member);
+          g_autofree char *target = g_strdup_printf ("../../pressure-vessel/%s", member);
 
           if (shared_xdg_runtime_dir != NULL)
             {
@@ -494,8 +494,6 @@ flatpak_bwrap_populate_runtime_dir (FlatpakBwrap *bwrap,
         }
     }
 }
-
-#endif
 
 void
 flatpak_bwrap_child_setup (GArray *fd_array,

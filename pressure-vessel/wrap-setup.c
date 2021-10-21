@@ -270,6 +270,8 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
       pv_wrap_add_pipewire_args (sharing_bwrap, container_env);
     }
 
+  flatpak_bwrap_populate_runtime_dir (sharing_bwrap, NULL);
+
   envp = pv_bwrap_steal_envp (sharing_bwrap);
 
   for (i = 0; envp[i] != NULL; i++)

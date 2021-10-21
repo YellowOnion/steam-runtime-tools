@@ -328,7 +328,7 @@ flatpak_run_add_wayland_args (FlatpakBwrap *bwrap)
       flatpak_bwrap_set_env (bwrap, "WAYLAND_DISPLAY", wayland_display, TRUE);
     }
 
-  sandbox_wayland_socket = g_strdup_printf ("/run/user/%d/%s", getuid (), wayland_display);
+  sandbox_wayland_socket = g_strdup_printf ("/run/pressure-vessel/%s", wayland_display);
 
   if (stat (wayland_socket, &statbuf) == 0 &&
       (statbuf.st_mode & S_IFMT) == S_IFSOCK)
@@ -337,6 +337,7 @@ flatpak_run_add_wayland_args (FlatpakBwrap *bwrap)
       flatpak_bwrap_add_args (bwrap,
                               "--ro-bind", wayland_socket, sandbox_wayland_socket,
                               NULL);
+      flatpak_bwrap_add_runtime_dir_member (bwrap, wayland_display);
     }
   return res;
 }
@@ -748,11 +749,11 @@ flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap)
 
   if (pulseaudio_socket && g_file_test (pulseaudio_socket, G_FILE_TEST_EXISTS))
     {
+      static const char sandbox_socket_path[] = "/run/pressure-vessel/pulse/native";
+      static const char pulse_server[] = "unix:/run/pressure-vessel/pulse/native";
+      static const char config_path[] = "/run/pressure-vessel/pulse/config";
       gboolean share_shm = FALSE; /* TODO: When do we add this? */
       g_autofree char *client_config = g_strdup_printf ("enable-shm=%s\n", share_shm ? "yes" : "no");
-      g_autofree char *sandbox_socket_path = g_strdup_printf ("/run/user/%d/pulse/native", getuid ());
-      g_autofree char *pulse_server = g_strdup_printf ("unix:/run/user/%d/pulse/native", getuid ());
-      g_autofree char *config_path = g_strdup_printf ("/run/user/%d/pulse/config", getuid ());
 
       /* FIXME - error handling */
       if (!flatpak_bwrap_add_args_data (bwrap, "pulseaudio", client_config, -1, config_path, NULL))
@@ -764,6 +765,7 @@ flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap)
 
       flatpak_bwrap_set_env (bwrap, "PULSE_SERVER", pulse_server, TRUE);
       flatpak_bwrap_set_env (bwrap, "PULSE_CLIENTCONFIG", config_path, TRUE);
+      flatpak_bwrap_add_runtime_dir_member (bwrap, "pulse");
     }
   else
     g_debug ("Could not find pulseaudio socket");
@@ -832,15 +834,23 @@ create_proxy_socket (char *template)
 gboolean
 flatpak_run_add_system_dbus_args (FlatpakBwrap   *app_bwrap)
 {
+  gboolean unrestricted;
   const char *dbus_address = g_getenv ("DBUS_SYSTEM_BUS_ADDRESS");
+#if 0
+  g_autofree char *real_dbus_address = NULL;
+#endif
   g_autofree char *dbus_system_socket = NULL;
+
+  unrestricted = TRUE;
+  if (unrestricted)
+    g_debug ("Allowing system-dbus access");
 
   if (dbus_address != NULL)
     dbus_system_socket = extract_unix_path_from_dbus_address (dbus_address);
   else if (g_file_test ("/var/run/dbus/system_bus_socket", G_FILE_TEST_EXISTS))
     dbus_system_socket = g_strdup ("/var/run/dbus/system_bus_socket");
 
-  if (dbus_system_socket != NULL)
+  if (dbus_system_socket != NULL && unrestricted)
     {
       flatpak_bwrap_add_args (app_bwrap,
                               "--ro-bind", dbus_system_socket, "/run/dbus/system_bus_socket",
@@ -849,7 +859,35 @@ flatpak_run_add_system_dbus_args (FlatpakBwrap   *app_bwrap)
 
       return TRUE;
     }
+#if 0
+  else if (!no_proxy && flatpak_context_get_needs_system_bus_proxy (context))
+    {
+      g_autofree char *proxy_socket = create_proxy_socket ("system-bus-proxy-XXXXXX");
 
+      if (proxy_socket == NULL)
+        return FALSE;
+
+      if (dbus_address)
+        real_dbus_address = g_strdup (dbus_address);
+      else
+        real_dbus_address = g_strdup_printf ("unix:path=%s", dbus_system_socket);
+
+      flatpak_bwrap_add_args (proxy_arg_bwrap, real_dbus_address, proxy_socket, NULL);
+
+      if (!unrestricted)
+        flatpak_context_add_bus_filters (context, NULL, FALSE, flags & FLATPAK_RUN_FLAG_SANDBOX, proxy_arg_bwrap);
+
+      if ((flags & FLATPAK_RUN_FLAG_LOG_SYSTEM_BUS) != 0)
+        flatpak_bwrap_add_args (proxy_arg_bwrap, "--log", NULL);
+
+      flatpak_bwrap_add_args (app_bwrap,
+                              "--ro-bind", proxy_socket, "/run/dbus/system_bus_socket",
+                              NULL);
+      flatpak_bwrap_set_env (app_bwrap, "DBUS_SYSTEM_BUS_ADDRESS", "unix:path=/run/dbus/system_bus_socket", TRUE);
+
+      return TRUE;
+    }
+#endif
   return FALSE;
 }
 
@@ -857,10 +895,13 @@ flatpak_run_add_system_dbus_args (FlatpakBwrap   *app_bwrap)
 gboolean
 flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
 {
+  static const char sandbox_socket_path[] = "/run/pressure-vessel/bus";
+  static const char sandbox_dbus_address[] = "unix:path=/run/pressure-vessel/bus";
+  gboolean unrestricted;
   const char *dbus_address = g_getenv ("DBUS_SESSION_BUS_ADDRESS");
   g_autofree char *dbus_session_socket = NULL;
-  g_autofree char *sandbox_socket_path = g_strdup_printf ("/run/user/%d/bus", getuid ());
-  g_autofree char *sandbox_dbus_address = g_strdup_printf ("unix:path=/run/user/%d/bus", getuid ());
+
+  unrestricted = TRUE;
 
   if (dbus_address != NULL)
     {
@@ -879,15 +920,52 @@ flatpak_run_add_session_dbus_args (FlatpakBwrap   *app_bwrap)
         return FALSE;
     }
 
-  if (dbus_session_socket != NULL)
+  if (unrestricted)
+    g_debug ("Allowing session-dbus access");
+
+  if (dbus_session_socket != NULL && unrestricted)
     {
       flatpak_bwrap_add_args (app_bwrap,
                               "--ro-bind", dbus_session_socket, sandbox_socket_path,
                               NULL);
       flatpak_bwrap_set_env (app_bwrap, "DBUS_SESSION_BUS_ADDRESS", sandbox_dbus_address, TRUE);
+      flatpak_bwrap_add_runtime_dir_member (app_bwrap, "bus");
 
       return TRUE;
     }
+#if 0
+  else if (!no_proxy && dbus_address != NULL)
+    {
+      g_autofree char *proxy_socket = create_proxy_socket ("session-bus-proxy-XXXXXX");
+
+      if (proxy_socket == NULL)
+        return FALSE;
+
+      flatpak_bwrap_add_args (proxy_arg_bwrap, dbus_address, proxy_socket, NULL);
+
+      if (!unrestricted)
+        {
+          flatpak_context_add_bus_filters (context, app_id, TRUE, flags & FLATPAK_RUN_FLAG_SANDBOX, proxy_arg_bwrap);
+
+          /* Allow calling any interface+method on all portals, but only receive broadcasts under /org/desktop/portal */
+          flatpak_bwrap_add_arg (proxy_arg_bwrap,
+                                 "--call=org.freedesktop.portal.*=*");
+          flatpak_bwrap_add_arg (proxy_arg_bwrap,
+                                 "--broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*");
+        }
+
+      if ((flags & FLATPAK_RUN_FLAG_LOG_SESSION_BUS) != 0)
+        flatpak_bwrap_add_args (proxy_arg_bwrap, "--log", NULL);
+
+      flatpak_bwrap_add_args (app_bwrap,
+                              "--ro-bind", proxy_socket, sandbox_socket_path,
+                              NULL);
+      flatpak_bwrap_set_env (app_bwrap, "DBUS_SESSION_BUS_ADDRESS", sandbox_dbus_address, TRUE);
+      flatpak_bwrap_add_runtime_dir_member (app_bwrap, "bus");
+
+      return TRUE;
+    }
+#endif
 
   return FALSE;
 }

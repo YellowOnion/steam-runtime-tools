@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: 1.11.2-15-gc392e5ad
+ * Taken from Flatpak, last updated: 1.12.2
  * Copyright © 2014-2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *

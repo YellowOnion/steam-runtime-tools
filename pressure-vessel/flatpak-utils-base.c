@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: Flatpak 1.6.1
+ * Taken from Flatpak, last updated: Flatpak 1.12.2
  * Copyright © 2019 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -40,10 +40,7 @@ flatpak_get_timezone (void)
   g_autofree gchar *symlink = NULL;
   gchar *etc_timezone = NULL;
   const gchar *tzdir;
-
-  tzdir = getenv ("TZDIR");
-  if (tzdir == NULL)
-    tzdir = "/usr/share/zoneinfo";
+  const gchar *default_tzdir = "/usr/share/zoneinfo";
 
   symlink = flatpak_resolve_link ("/etc/localtime", NULL);
   if (symlink != NULL)
@@ -53,9 +50,20 @@ flatpak_get_timezone (void)
       char *canonical_suffix;
 
       /* Strip the prefix and slashes if possible. */
-      if (g_str_has_prefix (canonical, tzdir))
+
+      tzdir = getenv ("TZDIR");
+      if (tzdir != NULL && g_str_has_prefix (canonical, tzdir))
         {
           canonical_suffix = canonical + strlen (tzdir);
+          while (*canonical_suffix == '/')
+            canonical_suffix++;
+
+          return g_strdup (canonical_suffix);
+        }
+
+      if (g_str_has_prefix (canonical, default_tzdir))
+        {
+          canonical_suffix = canonical + strlen (default_tzdir);
           while (*canonical_suffix == '/')
             canonical_suffix++;
 
@@ -98,6 +106,12 @@ flatpak_resolve_link (const char *path,
   return g_build_filename (dirname, link, NULL);
 }
 
+/*
+ * Syntactically canonicalize a filename, similar to
+ * g_canonicalize_filename() in newer GLib.
+ *
+ * This function does not do I/O.
+ */
 char *
 flatpak_canonicalize_filename (const char *path)
 {

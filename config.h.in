@@ -10,6 +10,7 @@
 #mesondefine VERSION
 
 /* Allow using stuff from Flatpak with minimal modifications */
+#define ENABLE_XAUTH
 #define FLATPAK_EXTERN extern
 #define _(s) s
 #define C_(context, s) s

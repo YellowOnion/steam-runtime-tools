@@ -476,7 +476,9 @@ capture_one( const char *soname, const capture_options *options,
         }
 
         if( option_glibc
-            && ( options->flags & CAPTURE_FLAG_EVEN_IF_OLDER ) == 0
+            /* CAPTURE_FLAG_EVEN_IF_OLDER only applies to the library itself,
+             * not its dependencies */
+            && ( i != 0 || ( options->flags & CAPTURE_FLAG_EVEN_IF_OLDER ) == 0 )
             && strcmp( needed_basename, "libc.so.6" ) != 0
             && library_belongs_to_glibc( needed_basename ) )
         {

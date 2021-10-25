@@ -24,8 +24,12 @@ steam-runtime-tools (0.20211021.0) UNRELEASED; urgency=medium
   * Avoid functions deprecated in GLib 2.70
   * Add some game-developer-oriented documentation
     (Resolves: steamrt/tasks#6)
+  * Update shared code from Flatpak 1.12.2
 
   [ Ludovico de Nittis ]
+  * capture-libs: Fix dependency resolution with host glibc <= 2.33 and
+    container runtime glibc >= 2.34
+    (libcapsule!49, Resolves: steamrt/tasks#13)
   * pv-runtime: Use correct ld.so from graphics stack provider
   * graphics: Respect graphics-stack provider sysroot (if not the host)
     when loading graphics libraries
@@ -39,7 +43,7 @@ steam-runtime-tools (0.20211021.0) UNRELEASED; urgency=medium
   * Unit test improvements
   * Create an issue template
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 20 Oct 2021 16:05:26 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 25 Oct 2021 15:23:49 +0100
 
 steam-runtime-tools (0.20210906.2) steamrt; urgency=medium
 

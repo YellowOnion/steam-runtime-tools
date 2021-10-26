@@ -1,3 +1,14 @@
+libcapsule (0.20211026.0-0co1) upstream; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * capture-libs: Ignore CAPTURE_FLAG_EVEN_IF_OLDER for dependencies.
+    This fixes an issue when capturing libraries with the pattern gl:,
+    while using an host system with glibc <= 2.33 and a container with
+    glibc >= 2.34. In this situation we were wrongly choosing
+    libpthread.so.0 from the provider and libc.so.6 from the container.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 26 Oct 2021 15:39:06 +0100
+
 libcapsule (0.20210906.0-0co1) upstream; urgency=medium
 
   [ Ludovico de Nittis ]

@@ -43,9 +43,12 @@ License: GPL-2.0-or-later WITH LicenseRef-autoconf-macro-exception
 
 Files:
  subprojects/bubblewrap/git.mk
+ subprojects/libcapsule/m4/ax_is_release.m4
 Copyright:
  2009 Red Hat, Inc.
  2010-2013 Behdad Esfahbod
+ 2015 Philip Withnall
+ 2016 Collabora Ltd.
 License: FSFAP
 
 Files:

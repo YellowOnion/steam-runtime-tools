@@ -47,9 +47,9 @@ fi
 log () {
     if [ -n "$use_timestamp" ]; then
         timestamp=$(date +'%H:%M:%S.%6N')
-        printf '%s\n' "${timestamp}: ${me}[$$]: $*" >&2
+        printf '%s\n' "${timestamp}: ${me}[$$]: $*" >&2 || :
     else
-        printf '%s\n' "${me}[$$]: $*" >&2
+        printf '%s\n' "${me}[$$]: $*" >&2 || :
     fi
 }
 

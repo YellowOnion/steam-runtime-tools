@@ -13,7 +13,7 @@ me="$(readlink -f "$0")"
 here="${me%/*}"
 
 log () {
-    printf '%s\n' "${me}[$$]: $*" >&2
+    printf '%s\n' "${me}[$$]: $*" >&2 || :
 }
 
 usage () {

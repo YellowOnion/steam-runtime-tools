@@ -80,18 +80,6 @@ static const char* unsecure_environment_variables[] = {
   NULL,
 };
 
-static gchar *
-find_executable_dir (GError **error)
-{
-  g_autofree gchar *target = glnx_readlinkat_malloc (-1, "/proc/self/exe",
-                                                     NULL, error);
-
-  if (target == NULL)
-    return glnx_prefix_error_null (error, "Unable to resolve /proc/self/exe");
-
-  return g_path_get_dirname (target);
-}
-
 /* Nvidia Vulkan ray-tracing requires to load the `nvidia_uvm.ko` kernel
  * module, and this is usually done in `libcuda.so.1` by running the setuid
  * binary `nvidia-modprobe`. But when we are inside a container we don't bind
@@ -1635,7 +1623,7 @@ main (int argc,
         }
     }
 
-  tools_dir = find_executable_dir (error);
+  tools_dir = _srt_find_executable_dir (error);
 
   if (tools_dir == NULL)
     goto out;

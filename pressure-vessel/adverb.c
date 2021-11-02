@@ -775,7 +775,6 @@ generate_locales (gchar **locpath_out,
   g_autofree gchar *child_stdout = NULL;
   g_autofree gchar *child_stderr = NULL;
   g_autofree gchar *pvlg = NULL;
-  g_autofree gchar *this_path = NULL;
   g_autofree gchar *this_dir = NULL;
   gboolean ret = FALSE;
   const char *locale_gen_argv[] =
@@ -789,8 +788,11 @@ generate_locales (gchar **locpath_out,
   g_return_val_if_fail (locpath_out != NULL && *locpath_out == NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  this_path = g_file_read_link ("/proc/self/exe", NULL);
-  this_dir = g_path_get_dirname (this_path);
+  this_dir = _srt_find_executable_dir (error);
+
+  if (this_dir == NULL)
+    goto out;
+
   pvlg = g_build_filename (this_dir, "pressure-vessel-locale-gen", NULL);
   locale_gen_argv[0] = pvlg;
 

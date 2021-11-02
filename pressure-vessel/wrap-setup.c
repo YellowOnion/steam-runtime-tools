@@ -1017,3 +1017,34 @@ pv_wrap_append_preload (GPtrArray *argv,
         break;
     }
 }
+
+/*
+ * Nvidia Vulkan ray-tracing requires to load the `nvidia_uvm.ko` kernel
+ * module, and this is usually done in `libcuda.so.1` by running the setuid
+ * binary `nvidia-modprobe`. But when we are inside a container we don't bind
+ * `nvidia-modprobe` and, even if we did, its setuid would not be effective
+ * because we have `PR_SET_NO_NEW_PRIVS` and we don't have `CAP_SYS_MODULE` in
+ * our capability bounding set.
+ * For this reason if the current system is using the proprietary Nvidia
+ * drivers, and `nvidia_uvm.ko` has not been already loaded, we should execute
+ * `nvidia-modprobe` before entering in the container environment.
+ */
+gboolean
+pv_wrap_maybe_load_nvidia_modules (GError **error)
+{
+  const char *nvidia_modprobe_argv[] =
+  {
+    "nvidia-modprobe",
+    "-u",
+    "-c=0",
+    NULL
+  };
+
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (g_file_test ("/sys/module/nvidia/version", G_FILE_TEST_IS_REGULAR)
+      && !g_file_test ("/sys/module/nvidia_uvm", G_FILE_TEST_IS_DIR))
+    return pv_run_sync (nvidia_modprobe_argv, NULL, NULL, NULL, error);
+
+  return TRUE;
+}

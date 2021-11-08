@@ -43,51 +43,15 @@
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
+#include "flatpak-portal.h"
+#include "flatpak-session-helper.h"
 #include "launcher.h"
 #include "utils.h"
-
-#define FLATPAK_SESSION_HELPER_BUS_NAME "org.freedesktop.Flatpak"
-#define FLATPAK_SESSION_HELPER_PATH_DEVELOPMENT "/org/freedesktop/Flatpak/Development"
-#define FLATPAK_SESSION_HELPER_INTERFACE_DEVELOPMENT "org.freedesktop.Flatpak.Development"
-
-#define FLATPAK_PORTAL_BUS_NAME "org.freedesktop.portal.Flatpak"
-#define FLATPAK_PORTAL_PATH "/org/freedesktop/portal/Flatpak"
-#define FLATPAK_PORTAL_INTERFACE FLATPAK_PORTAL_BUS_NAME
-
-typedef enum {
-  FLATPAK_SPAWN_FLAGS_CLEAR_ENV = 1 << 0,
-  FLATPAK_SPAWN_FLAGS_LATEST_VERSION = 1 << 1,
-  FLATPAK_SPAWN_FLAGS_SANDBOX = 1 << 2,
-  FLATPAK_SPAWN_FLAGS_NO_NETWORK = 1 << 3,
-  FLATPAK_SPAWN_FLAGS_WATCH_BUS = 1 << 4, /* Since 1.2 */
-  FLATPAK_SPAWN_FLAGS_EXPOSE_PIDS = 1 << 5, /* Since 1.6, optional */
-  FLATPAK_SPAWN_FLAGS_NOTIFY_START = 1 << 6,
-  FLATPAK_SPAWN_FLAGS_SHARE_PIDS = 1 << 7,
-  FLATPAK_SPAWN_FLAGS_EMPTY_APP = 1 << 8,
-} FlatpakSpawnFlags;
 
 typedef enum {
   FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV = 1 << 0,
   FLATPAK_HOST_COMMAND_FLAGS_WATCH_BUS = 1 << 1, /* Since 1.2 */
 } FlatpakHostCommandFlags;
-
-/* Since 1.6 */
-typedef enum {
-  FLATPAK_SPAWN_SANDBOX_FLAGS_SHARE_DISPLAY = 1 << 0,
-  FLATPAK_SPAWN_SANDBOX_FLAGS_SHARE_SOUND = 1 << 1,
-  FLATPAK_SPAWN_SANDBOX_FLAGS_SHARE_GPU = 1 << 2,
-  FLATPAK_SPAWN_SANDBOX_FLAGS_ALLOW_DBUS = 1 << 3,
-  FLATPAK_SPAWN_SANDBOX_FLAGS_ALLOW_A11Y = 1 << 4,
-} FlatpakSpawnSandboxFlags;
-
-/* Since 1.6 */
-typedef enum {
-  FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS = 1 << 0,
-} FlatpakSpawnSupportFlags;
-
-/* The same flag is reused: this feature is available under the same
- * circumstances */
-#define FLATPAK_SPAWN_SUPPORT_FLAGS_SHARE_PIDS FLATPAK_SPAWN_SUPPORT_FLAGS_EXPOSE_PIDS
 
 typedef struct
 {

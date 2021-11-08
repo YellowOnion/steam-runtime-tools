@@ -79,8 +79,10 @@ class TestAdverb(BaseTest):
             self.skipTest('No multiarch tuple has been set')
 
     def test_ld_preload(self) -> None:
-        if (self.multiarch == 'x86_64-linux-gnu' or
-                self.multiarch == 'i386-linux-gnu'):
+        if (
+            self.multiarch == 'x86_64-linux-gnu'
+            or self.multiarch == 'i386-linux-gnu'
+        ):
             preloads = [
                 '--ld-preload=/nonexistent/libpreload.so',
                 '--ld-preload=/nonexistent/ubuntu12_32/gameoverlayrenderer.so',
@@ -121,10 +123,10 @@ class TestAdverb(BaseTest):
         else:
             preloads = [
                 '--ld-preload=/nonexistent/libpreload.so',
-                '--ld-preload=/nonexistent/lib64/libMangoHud.so:abi=' +
-                self.multiarch,
-                '--ld-preload=/nonexistent/lib64/64-bit-only.so:abi=' +
-                self.multiarch,
+                ('--ld-preload=/nonexistent/lib64/libMangoHud.so:abi='
+                 + self.multiarch),
+                ('--ld-preload=/nonexistent/lib64/64-bit-only.so:abi='
+                 + self.multiarch),
             ]
             script_for_loop = r'''
                 for item in $ld_preload; do
@@ -145,7 +147,7 @@ class TestAdverb(BaseTest):
         completed = run_subprocess(
             self.adverb + [
                 '--ld-audit=/nonexistent/libaudit.so',
-                ] + preloads + [
+            ] + preloads + [
                 '--',
                 'sh', '-euc',
                 r'''
@@ -175,8 +177,10 @@ class TestAdverb(BaseTest):
             'LD_AUDIT=/nonexistent/libaudit.so',
         )
 
-        if (self.multiarch == 'x86_64-linux-gnu' or
-                self.multiarch == 'i386-linux-gnu'):
+        if (
+            self.multiarch == 'x86_64-linux-gnu'
+            or self.multiarch == 'i386-linux-gnu'
+        ):
             self.assertEqual(
                 re.sub(r':/[^:]*?/pressure-vessel-libs-....../',
                        r':/tmp/pressure-vessel-libs-XXXXXX/',
@@ -192,7 +196,8 @@ class TestAdverb(BaseTest):
             self.assertEqual(lines[2], 'literal /nonexistent/libpreload.so')
             self.assertEqual(
                 lines[3],
-                'i686: symlink to /nonexistent/ubuntu12_32/gameoverlayrenderer.so',
+                ('i686: symlink to '
+                 '/nonexistent/ubuntu12_32/gameoverlayrenderer.so'),
             )
             self.assertEqual(
                 lines[4],

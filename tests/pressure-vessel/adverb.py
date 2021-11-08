@@ -121,12 +121,15 @@ class TestAdverb(BaseTest):
                 done
             '''
         else:
+            multiarch = self.multiarch
+            # If it was None, we would have skipped the test during setup
+            assert multiarch is not None
             preloads = [
                 '--ld-preload=/nonexistent/libpreload.so',
                 ('--ld-preload=/nonexistent/lib64/libMangoHud.so:abi='
-                 + self.multiarch),
+                 + multiarch),
                 ('--ld-preload=/nonexistent/lib64/64-bit-only.so:abi='
-                 + self.multiarch),
+                 + multiarch),
             ]
             script_for_loop = r'''
                 for item in $ld_preload; do

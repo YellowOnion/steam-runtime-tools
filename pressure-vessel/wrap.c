@@ -80,47 +80,6 @@ static const char* unsecure_environment_variables[] = {
   NULL,
 };
 
-static gchar *
-find_executable_dir (GError **error)
-{
-  g_autofree gchar *target = glnx_readlinkat_malloc (-1, "/proc/self/exe",
-                                                     NULL, error);
-
-  if (target == NULL)
-    return glnx_prefix_error_null (error, "Unable to resolve /proc/self/exe");
-
-  return g_path_get_dirname (target);
-}
-
-/* Nvidia Vulkan ray-tracing requires to load the `nvidia_uvm.ko` kernel
- * module, and this is usually done in `libcuda.so.1` by running the setuid
- * binary `nvidia-modprobe`. But when we are inside a container we don't bind
- * `nvidia-modprobe` and, even if we did, its setuid would not be effective
- * because we have `PR_SET_NO_NEW_PRIVS` and we don't have `CAP_SYS_MODULE` in
- * our capability bounding set.
- * For this reason if the current system is using the proprietary Nvidia
- * drivers, and `nvidia_uvm.ko` has not been already loaded, we should execute
- * `nvidia-modprobe` before entering in the container environment. */
-static gboolean
-maybe_load_nvidia_modules (GError **error)
-{
-  const char *nvidia_modprobe_argv[] =
-  {
-    "nvidia-modprobe",
-    "-u",
-    "-c=0",
-    NULL
-  };
-
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  if (g_file_test ("/sys/module/nvidia/version", G_FILE_TEST_IS_REGULAR)
-      && !g_file_test ("/sys/module/nvidia_uvm", G_FILE_TEST_IS_DIR))
-    return pv_run_sync (nvidia_modprobe_argv, NULL, NULL, NULL, error);
-
-  return TRUE;
-}
-
 typedef enum
 {
   ENV_MOUNT_FLAGS_COLON_DELIMITED = (1 << 0),
@@ -1635,7 +1594,7 @@ main (int argc,
         }
     }
 
-  tools_dir = find_executable_dir (error);
+  tools_dir = _srt_find_executable_dir (error);
 
   if (tools_dir == NULL)
     goto out;
@@ -2567,7 +2526,7 @@ main (int argc,
 
   if (!is_flatpak_env)
     {
-      if (!maybe_load_nvidia_modules (error))
+      if (!pv_wrap_maybe_load_nvidia_modules (error))
         {
           g_debug ("Cannot load nvidia modules: %s", local_error->message);
           g_clear_error (&local_error);

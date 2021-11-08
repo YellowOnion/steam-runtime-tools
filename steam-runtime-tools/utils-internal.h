@@ -54,6 +54,7 @@ G_GNUC_INTERNAL gchar *_srt_filter_gameoverlayrenderer (const gchar *input);
 G_GNUC_INTERNAL gchar **_srt_filter_gameoverlayrenderer_from_envp (gchar **envp);
 G_GNUC_INTERNAL const char *_srt_find_myself (const char **helpers_path_out,
                                               GError **error);
+G_GNUC_INTERNAL gchar *_srt_find_executable_dir (GError **error);
 
 G_GNUC_INTERNAL gboolean _srt_process_timeout_wait_status (int wait_status,
                                                            int *exit_status,

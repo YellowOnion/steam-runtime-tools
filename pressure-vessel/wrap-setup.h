@@ -74,3 +74,5 @@ void pv_wrap_append_preload (GPtrArray *argv,
                              PvAppendPreloadFlags flags,
                              PvRuntime *runtime,
                              FlatpakExports *exports);
+
+gboolean pv_wrap_maybe_load_nvidia_modules (GError **error);

@@ -54,12 +54,10 @@ class Architecture:
         self,
         name,           # type: str
         multiarch,      # type: str
-        ld_so           # type: str
     ):
         # type: (...) -> None
         self.name = name
         self.multiarch = multiarch
-        self.ld_so = ld_so
 
 
 # Debian architecture => Debian multiarch tuple
@@ -67,12 +65,10 @@ ARCHS = [
     Architecture(
         name='amd64',
         multiarch='x86_64-linux-gnu',
-        ld_so='/lib64/ld-linux-x86-64.so.2',
     ),
     Architecture(
         name='i386',
         multiarch='i386-linux-gnu',
-        ld_so='/lib/ld-linux.so.2',
     ),
 ]
 # package to install from => source package for copyright information

@@ -79,8 +79,6 @@ endif
 
 override_dh_auto_install:
 	DESTDIR=$(DESTDIR) ninja -C _build install
-	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-vulkaninfo \
-		$(DESTDIR)/usr/$(pkglibexecdir)/
 	ln -s ../../bin/$(DEB_HOST_MULTIARCH)-wflinfo \
 		$(DESTDIR)/usr/$(pkglibexecdir)/
 	set -e; for x in $(DESTDIR)/usr/libexec/installed-tests/steam-runtime-tools-0/*; do \

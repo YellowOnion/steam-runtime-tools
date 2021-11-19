@@ -89,7 +89,6 @@ Section: misc
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
- waffle-utils-multiarch,
 Description:
  The Steam Runtime is the library stack used to run the Steam client
  on Linux. The Steam Runtime Tools utility library contains open-source
@@ -156,7 +155,6 @@ Architecture: amd64
 Multi-Arch: foreign
 Depends:
  libsteam-runtime-tools-0-helpers,
- waffle-utils-multiarch,
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam container launcher - cross-architecture dependencies
@@ -170,7 +168,6 @@ Architecture: i386
 Multi-Arch: foreign
 Depends:
  libsteam-runtime-tools-0-helpers,
- waffle-utils-multiarch,
  ${misc:Depends},
  ${shlibs:Depends},
 Description: Steam container launcher - cross-architecture dependencies

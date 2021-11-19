@@ -20,6 +20,7 @@ variables:
         libva-dev
         libvdpau-dev
         libvulkan-dev
+        libwaffle-dev
         libx11-dev
         libxau-dev
         libxcb1-dev

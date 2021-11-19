@@ -169,6 +169,14 @@ silence_gdbus_codegen_warnings = c_compiler.get_supported_arguments([
   '-Wno-write-strings',
 ])
 
+# Our vendored copy of wflinfo is not completely warnings-clean either
+silence_wflinfo_warnings = c_compiler.get_supported_arguments([
+  '-Wno-error=jump-misses-init',
+  '-Wno-error=switch-default',
+  '-Wno-jump-misses-init',
+  '-Wno-switch-default',
+])
+
 add_project_link_arguments(
   c_compiler.get_supported_link_arguments(
     '-Wl,-z,origin',
@@ -198,6 +206,10 @@ if not libcap_dep.found()
   )
 endif
 
+waffle_dep = dependency(
+  'waffle-1',
+)
+
 conf_data = configuration_data()
 conf_data.set_quoted('VERSION', version)
 conf_data.set('HAVE_SELINUX', libselinux_dep.found())
@@ -207,6 +219,14 @@ conf_data.set(
 )
 conf_data.set('api_major', api_major)
 conf_data.set('abi_major', abi_major)
+conf_data.set(
+  'HAVE_WAFFLE_SURFACELESS_EGL',
+  waffle_dep.found() and waffle_dep.version().version_compare('>=1.6'),
+)
+conf_data.set(
+  'HAVE_WAFFLE_TEARDOWN',
+  waffle_dep.found() and waffle_dep.version().version_compare('>=1.6'),
+)
 
 if get_option('multiarch_tuple') != ''
   multiarch = get_option('multiarch_tuple')

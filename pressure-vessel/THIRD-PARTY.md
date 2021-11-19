@@ -28,10 +28,11 @@ same place as pressure-vessel, or from
 <https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 pressure-vessel includes the steam-runtime-tools library and utilities,
-which contain code licensed under the [Apache-2.0][], [LGPL-2.1-or-later][]
-and [MIT][] licenses. See steam-runtime-tools.txt.
-Complete source code can be obtained from the same place as pressure-vessel,
-or from <https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
+which contain code licensed under the [Apache-2.0][], [BSD-2-Clause][],
+[LGPL-2.1-or-later][], [MIT][] and [Zlib][] licenses. See
+steam-runtime-tools.txt. Complete source code can be obtained from the
+same place as pressure-vessel, or from
+<https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/>.
 
 Binary releases of pressure-vessel include the following third-party
 programs and libraries:
@@ -65,7 +66,7 @@ programs and libraries:
 - libjson-glib-1.0.so.0 from json-glib: [LGPL-2.0-or-later][]. See
   json-glib.txt.
 
-- wflinfo from waffle: [BSD-2-clause][]. See waffle.txt.
+- libwaffle-1.so.0 from waffle: [BSD-2-Clause][]. See waffle.txt.
 
 Complete source code can be obtained from the same place as
 pressure-vessel, or from <https://repo.steampowered.com/steamrt/>

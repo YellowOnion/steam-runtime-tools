@@ -78,7 +78,7 @@ ARCHS = [
 # package to install from => source package for copyright information
 DEPENDENCIES = {
     'libelf1': 'elfutils',
-    'waffle-utils-multiarch': 'waffle',
+    'libwaffle-1-0': 'waffle',
     'zlib1g': 'zlib',
 }
 # same as DEPENDENCIES
@@ -92,10 +92,6 @@ PRIMARY_ARCH_DEPENDENCIES = {
     'libpcre3': 'pcre3',
     'libselinux1': 'libselinux',
     'libxau6': 'libxau',
-}
-# executable => binary package in DEPENDENCIES
-HELPERS = {
-    'wflinfo': 'waffle-utils-multiarch',
 }
 # Packages where different binary packages can have different copyright
 # files
@@ -365,6 +361,7 @@ def main():
                 ),
                 '--no-glibc',
                 'soname:libelf.so.1',
+                'soname:libwaffle-1.so.0',
                 'soname:libz.so.1',
             ])
 
@@ -421,35 +418,6 @@ def main():
                         'steam-runtime-tools-0',
                         os.path.basename(so)
                     )
-                )
-
-            for helper, package in HELPERS.items():
-                exe = arch.multiarch + '-' + helper
-                path = os.path.join(args.prefix, 'bin', exe)
-
-                if not os.path.exists(path):
-                    path = '/usr/bin/{}'.format(exe)
-
-                if not os.path.exists(path):
-                    v_check_call([
-                        'apt-get',
-                        'download',
-                        package,
-                    ], cwd=tmpdir)
-                    v_check_call(
-                        'dpkg-deb -x {}_*.deb build-relocatable'.format(
-                            quote(package),
-                        ),
-                        cwd=tmpdir,
-                        shell=True,
-                    )
-                    path = '{}/build-relocatable/usr/bin/{}'.format(
-                        tmpdir, exe,
-                    )
-
-                install_exe(
-                    path,
-                    os.path.join(inst_pkglibexecdir, exe)
                 )
 
         source_to_download = set()      # type: typing.Set[str]

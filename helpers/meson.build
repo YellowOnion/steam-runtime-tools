@@ -124,6 +124,19 @@ executable(
 )
 
 executable(
+  multiarch + '-wflinfo',
+  'wflinfo.c',
+  c_args : silence_wflinfo_warnings,
+  dependencies : [waffle_dep],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : pkglibexecdir,
+  # Use the adjacent libwaffle
+  build_rpath : pkglibexec_rpath,
+  install_rpath : pkglibexec_rpath,
+)
+
+executable(
   multiarch + '-check-xdg-portal',
   'check-xdg-portal.c',
   include_directories : project_include_dirs,

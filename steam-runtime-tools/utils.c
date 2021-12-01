@@ -398,8 +398,8 @@ _srt_get_helper (const char *helpers_path,
       return NULL;
     }
 
-  /* For helpers that are not part of steam-runtime-tools, such as
-   * *-wflinfo, we fall back to searching $PATH */
+  /* For helpers that are not part of steam-runtime-tools
+   * (historically this included *-wflinfo), we fall back to searching $PATH */
   g_free (path);
 
   if (multiarch == NULL)

@@ -1,3 +1,23 @@
+steam-runtime-tools (0.20211201.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * build: Include our own copy of wflinfo.
+    This was the last remaining third-party executable used for our
+    diagnostic checks that needed its packaging to be forked to build a
+    multiarch-qualified version. If we avoid needing that, then we can use
+    dependencies from an ordinary Linux distribution, making development
+    outside a Steam Runtime environment easier.
+  * pv-adverb: Improve error-checking
+  * pv-launch: Use headers from Flatpak 1.12.2 for many constants
+  * tests: Coding style adjustments
+  * tests: Fix mypy warnings
+  * pressure-vessel: Refactoring
+
+  [ Ludovico de Nittis ]
+  * d/rules: Remove unused vulkaninfo symlink
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 01 Dec 2021 12:04:34 +0000
+
 steam-runtime-tools (0.20211027.0) steamrt; urgency=medium
 
   [ Simon McVittie ]

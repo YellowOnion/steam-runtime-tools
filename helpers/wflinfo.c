@@ -304,12 +304,8 @@ static const struct enum_map platform_map[] = {
     {WAFFLE_PLATFORM_WAYLAND,   "wayland"       },
     {WAFFLE_PLATFORM_WGL,       "wgl"           },
     {WAFFLE_PLATFORM_X11_EGL,   "x11_egl"       },
-// SRT: Make it possible to link with older waffle
-#ifdef HAVE_WAFFLE_SURFACELESS_EGL
     {WAFFLE_PLATFORM_SURFACELESS_EGL,   "surfaceless_egl" },
     {WAFFLE_PLATFORM_SURFACELESS_EGL,   "sl"              },
-#endif
-// /SRT
     {0,                         0               },
 };
 
@@ -1336,13 +1332,9 @@ main(int argc, char **argv)
     if (!ok)
         error_waffle();
 
-// SRT: Make it possible to link with older waffle
-#ifdef HAVE_WAFFLE_TEARDOWN
     ok = waffle_teardown();
     if (!ok)
         error_waffle();
-#endif
-// /SRT
 
     #ifdef __APPLE__
         cocoa_finish();

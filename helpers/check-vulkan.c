@@ -161,6 +161,8 @@ typedef struct _SwapChainSupportDetails SwapChainSupportDetails;
 
 typedef struct
 {
+  struct xcb_connection_t *xcb_connection;
+  uint32_t xcb_window;
   VkInstance instance;
   VkPhysicalDevice physical_device;
   VkCommandBuffer *command_buffers;
@@ -253,15 +255,14 @@ static gboolean
 create_surface (Renderer *renderer,
                 GError **error)
 {
-  xcb_connection_t *xcb_connection;
   xcb_screen_iterator_t iter;
   static const char title[] = "Vulkan Test";
 
-  xcb_connection = xcb_connect (0, 0);
-  if (xcb_connection_has_error (xcb_connection))
+  renderer->xcb_connection = xcb_connect (0, 0);
+  if (xcb_connection_has_error (renderer->xcb_connection))
     return glnx_throw (error, "Unable to initialize xcb connection");
 
-  uint32_t xcb_window = xcb_generate_id (xcb_connection);
+  renderer->xcb_window = xcb_generate_id (renderer->xcb_connection);
 
   uint32_t window_values[] = {
     XCB_EVENT_MASK_EXPOSURE |
@@ -269,11 +270,11 @@ create_surface (Renderer *renderer,
     XCB_EVENT_MASK_KEY_PRESS
   };
 
-  iter = xcb_setup_roots_iterator (xcb_get_setup (xcb_connection));
+  iter = xcb_setup_roots_iterator (xcb_get_setup (renderer->xcb_connection));
 
-  xcb_create_window (xcb_connection,
+  xcb_create_window (renderer->xcb_connection,
                      XCB_COPY_FROM_PARENT,
-                     xcb_window,
+                     renderer->xcb_window,
                      iter.data->root,
                      0, 0,
                      WIDTH,
@@ -283,29 +284,29 @@ create_surface (Renderer *renderer,
                      iter.data->root_visual,
                      XCB_CW_EVENT_MASK, window_values);
 
-  xcb_atom_t atom_wm_protocols = get_atom (xcb_connection, "WM_PROTOCOLS");
-  xcb_atom_t atom_wm_delete_window = get_atom (xcb_connection, "WM_DELETE_WINDOW");
-  xcb_change_property (xcb_connection,
+  xcb_atom_t atom_wm_protocols = get_atom (renderer->xcb_connection, "WM_PROTOCOLS");
+  xcb_atom_t atom_wm_delete_window = get_atom (renderer->xcb_connection, "WM_DELETE_WINDOW");
+  xcb_change_property (renderer->xcb_connection,
                        XCB_PROP_MODE_REPLACE,
-                       xcb_window,
+                       renderer->xcb_window,
                        atom_wm_protocols,
                        XCB_ATOM_ATOM,
                        32,
                        1, &atom_wm_delete_window);
 
-  xcb_change_property (xcb_connection,
+  xcb_change_property (renderer->xcb_connection,
                        XCB_PROP_MODE_REPLACE,
-                       xcb_window,
-                       get_atom (xcb_connection, "_NET_WM_NAME"),
-                       get_atom (xcb_connection, "UTF8_STRING"),
+                       renderer->xcb_window,
+                       get_atom (renderer->xcb_connection, "_NET_WM_NAME"),
+                       get_atom (renderer->xcb_connection, "UTF8_STRING"),
                        8,
                        strlen (title), title);
 
   // we don't normally want this test to be visible to the user
   if (opt_visible)
-    xcb_map_window (xcb_connection, xcb_window);
+    xcb_map_window (renderer->xcb_connection, renderer->xcb_window);
 
-  xcb_flush (xcb_connection);
+  xcb_flush (renderer->xcb_connection);
 
   PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR get_xcb_presentation_support =
     (PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)
@@ -315,15 +316,15 @@ create_surface (Renderer *renderer,
     vkGetInstanceProcAddr (renderer->instance, "vkCreateXcbSurfaceKHR");
 
   if (!get_xcb_presentation_support (renderer->physical_device, 0,
-                                     xcb_connection,
+                                     renderer->xcb_connection,
                                      iter.data->root_visual))
     return glnx_throw (error, "Vulkan not supported on given X window");
 
   VkXcbSurfaceCreateInfoKHR createSurfaceInfo =
   {
     .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-    .connection = xcb_connection,
-    .window = xcb_window,
+    .connection = renderer->xcb_connection,
+    .window = renderer->xcb_window,
   };
 
   if (!do_vk (create_xcb_surface (renderer->instance, &createSurfaceInfo, NULL, &renderer->surface),
@@ -353,7 +354,10 @@ get_physical_devices (VkInstance instance,
 
   if (!do_vk (vkEnumeratePhysicalDevices (instance, physical_device_count, *physical_devices),
               error))
-    return FALSE;
+    {
+      g_clear_pointer (physical_devices, g_free);
+      return FALSE;
+    }
 
   return TRUE;
 }
@@ -371,8 +375,7 @@ create_logical_device (Renderer *renderer,
     indices.graphicsFamily,
     indices.presentFamily
   };
-  VkDeviceQueueCreateInfo *queueCreateInfos = g_new0 (VkDeviceQueueCreateInfo,
-                                                      G_N_ELEMENTS (unique_queue_families));
+  VkDeviceQueueCreateInfo queueCreateInfos[G_N_ELEMENTS (unique_queue_families)];
   float queuePriority = 1.0f;
 
   g_return_val_if_fail (renderer != NULL, FALSE);
@@ -555,6 +558,9 @@ create_swapchain (Renderer *renderer,
     .clipped = VK_TRUE,
     .oldSwapchain = VK_NULL_HANDLE,
   };
+
+  g_clear_pointer (&swapchain_support.formats, g_free);
+  g_clear_pointer (&swapchain_support.present_modes, g_free);
 
   QueueFamilyIndices indices = find_queue_families (renderer);
   uint32_t queueFamilyIndices[] = {indices.graphicsFamily, indices.presentFamily};
@@ -1071,10 +1077,10 @@ find_queue_families (Renderer *renderer)
 
   uint32_t i;
   uint32_t queue_family_count = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties (renderer->physical_device, &queue_family_count, NULL);
+  g_autofree VkQueueFamilyProperties *queue_families = NULL;
 
-  VkQueueFamilyProperties *queue_families = g_new0 (VkQueueFamilyProperties,
-                                                    queue_family_count);
+  vkGetPhysicalDeviceQueueFamilyProperties (renderer->physical_device, &queue_family_count, NULL);
+  queue_families = g_new0 (VkQueueFamilyProperties, queue_family_count);
   vkGetPhysicalDeviceQueueFamilyProperties (renderer->physical_device, &queue_family_count, queue_families);
 
   for (i = 0; i < queue_family_count; i++)
@@ -1174,6 +1180,11 @@ out:
               && renderer.in_flight_fences[i] != VK_NULL_HANDLE)
             vkDestroyFence (renderer.device, renderer.in_flight_fences[i], NULL);
         }
+
+      g_free (renderer.render_finished_semaphores);
+      g_free (renderer.image_available_semaphores);
+      g_free (renderer.in_flight_fences);
+
       for (i = 0; i < renderer.framebuffer_size; i++)
         {
           if (renderer.swapchain_framebuffers != NULL
@@ -1183,6 +1194,19 @@ out:
               && renderer.swapchain_image_views[i] != VK_NULL_HANDLE)
           vkDestroyImageView (renderer.device, renderer.swapchain_image_views[i], NULL);
         }
+
+      g_free (renderer.swapchain_framebuffers);
+      g_free (renderer.swapchain_image_views);
+      g_free (renderer.swapchain_images);
+
+      if (renderer.command_buffers != NULL)
+        {
+          vkFreeCommandBuffers (renderer.device, renderer.command_pool,
+                                renderer.framebuffer_size,
+                                renderer.command_buffers);
+          g_free (renderer.command_buffers);
+        }
+
       vkDestroyCommandPool (renderer.device, renderer.command_pool, NULL);
       if (renderer.graphics_pipeline != VK_NULL_HANDLE)
         vkDestroyPipeline (renderer.device, renderer.graphics_pipeline, NULL);
@@ -1196,6 +1220,14 @@ out:
 
   if (renderer.instance != VK_NULL_HANDLE)
     vkDestroySurfaceKHR (renderer.instance, renderer.surface, NULL);
+
+  if (renderer.xcb_window && renderer.xcb_connection != NULL)
+    xcb_destroy_window (renderer.xcb_connection, renderer.xcb_window);
+
+  if (renderer.xcb_connection != NULL)
+    xcb_flush (renderer.xcb_connection);
+
+  g_clear_pointer (&renderer.xcb_connection, xcb_disconnect);
 
   return ret;
 }

@@ -58,12 +58,12 @@
       "graphics-details" : {
         "x11/vulkan" : {
           "renderer" : "AMD RADV NAVI10 (ACO)",
-          "version" : "1.2.145 (device 0x1002:0x731f) (driver 20.3.3)",
+          "version" : "1.2.145 (device 0x1002:0x731f) (driver 0x5003003)",
           "devices" : [
             {
               "name" : "AMD RADV NAVI10 (ACO)",
               "api-version" : "1.2.145",
-              "driver-version" : "20.3.3",
+              "driver-version" : "0x5003003",
               "vendor-id" : "0x1002",
               "device-id" : "0x731f",
               "type" : "discrete-gpu"
@@ -71,7 +71,7 @@
             {
               "name" : "llvmpipe (LLVM 8.0, 256 bits)",
               "api-version" : "1.0.2",
-              "driver-version" : "0.0.1",
+              "driver-version" : "0x1",
               "vendor-id" : "0x10005",
               "device-id" : "0",
               "type" : "cpu"

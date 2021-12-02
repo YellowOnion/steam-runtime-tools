@@ -1300,10 +1300,7 @@ print_physical_device_info (VkPhysicalDevice physical_device,
   json_builder_add_string_value (builder, api_version);
 
   json_builder_set_member_name (builder, "driver-version");
-  driver_version = g_strdup_printf ("%u.%u.%u",
-                                    VK_VERSION_MAJOR (device_properties.driverVersion),
-                                    VK_VERSION_MINOR (device_properties.driverVersion),
-                                    VK_VERSION_PATCH (device_properties.driverVersion));
+  driver_version = g_strdup_printf ("%#x", device_properties.driverVersion);
   json_builder_add_string_value (builder, driver_version);
 
   json_builder_set_member_name (builder, "vendor-id");

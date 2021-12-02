@@ -2687,7 +2687,7 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
-                .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+                .driver_version = G_STRINGIFY (SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION_HEX),
                 .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
                 .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
                 .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
@@ -2695,7 +2695,7 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
-                .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
+                .driver_version = G_STRINGIFY (SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION_HEX),
                 .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
                 .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
                 .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
@@ -2943,7 +2943,7 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
-                .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
+                .driver_version = G_STRINGIFY (SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION_HEX),
                 .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
                 /* A trailing newline is added by
                  * _srt_json_object_dup_array_of_lines_member() */

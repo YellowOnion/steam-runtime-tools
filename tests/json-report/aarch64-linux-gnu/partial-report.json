@@ -20,12 +20,12 @@
       "graphics-details" : {
         "x11/vulkan" : {
           "renderer" : "AMD RADV NAVI10 (ACO)",
-          "version" : "1.2.145 (device 0x1002:0x731f) (driver 20.3.3)",
+          "version" : "1.2.145 (device 0x1002:0x731f) (driver 0x5003003)",
           "devices" : [
             {
               "name" : "AMD RADV NAVI10 (ACO)",
               "api-version" : "1.2.145",
-              "driver-version" : "20.3.3",
+              "driver-version" : "0x5003003",
               "type" : "discrete-gpu",
               "messages" : [
                 "vkWaitForFences (dev_props->device, 1, &dev_props->in_flight_fences[dev_props->current_frame], VK_TRUE, 1) failed: TIMEOUT (2)"

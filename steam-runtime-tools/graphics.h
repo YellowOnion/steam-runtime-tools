@@ -205,6 +205,10 @@ const char *srt_graphics_device_get_name (SrtGraphicsDevice *self);
 _SRT_PUBLIC
 const char *srt_graphics_device_get_api_version (SrtGraphicsDevice *self);
 _SRT_PUBLIC
+guint32 srt_graphics_device_get_vulkan_driver_id (SrtGraphicsDevice *self);
+_SRT_PUBLIC
+const char *srt_graphics_device_get_driver_name (SrtGraphicsDevice *self);
+_SRT_PUBLIC
 const char *srt_graphics_device_get_driver_version (SrtGraphicsDevice *self);
 _SRT_PUBLIC
 const char *srt_graphics_device_get_vendor_id (SrtGraphicsDevice *self);

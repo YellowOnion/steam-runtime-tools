@@ -342,3 +342,64 @@ _srt_json_builder_add_string_force_utf8 (JsonBuilder *builder,
 
   json_builder_add_string_value (builder, valid);
 }
+
+/*
+ * _srt_json_object_get_hex_uint32_member:
+ * @object: A JSON object
+ * @member_name: A member of @object
+ * @value_out: (out) (optional): Used to return the value
+ *  of `object[member_name]`
+ *
+ * Try to parse `object[member_name]` as a 32-bit unsigned integer in
+ * hexadecimal, with an optional `0x` prefix.
+ *
+ * Returns: %TRUE if `object[member_name]` can be parsed; %FALSE without
+ *  altering `*value_out` if not
+ */
+gboolean
+_srt_json_object_get_hex_uint32_member (JsonObject *object,
+                                        const gchar *member_name,
+                                        guint32 *value_out)
+{
+  JsonNode *node;
+  guint64 ret;
+  gchar *endptr;
+  const char *tmp;
+
+  g_return_val_if_fail (object != NULL, 0);
+  g_return_val_if_fail (member_name != NULL, 0);
+
+  node = json_object_get_member (object, member_name);
+
+  if (node == NULL)
+    return FALSE;
+
+  if (JSON_NODE_HOLDS_NULL (node))
+    return FALSE;
+
+  if (JSON_NODE_TYPE (node) != JSON_NODE_VALUE)
+    return FALSE;
+
+  tmp = json_node_get_string (node);
+
+  if (tmp == NULL)
+    return FALSE;
+
+  if (tmp[0] == '0' && (tmp[1] == 'x' || tmp[1] == 'X'))
+    tmp += 2;
+
+  if (tmp[0] == '\0')
+    return FALSE;
+
+  ret = g_ascii_strtoull (tmp, &endptr, 16);
+
+  if (endptr == NULL
+      || (*endptr != '\0' && *endptr != '\n')
+      || ret > G_MAXUINT32)
+    return FALSE;
+
+  if (value_out != NULL)
+    *value_out = (guint32) ret;
+
+  return TRUE;
+}

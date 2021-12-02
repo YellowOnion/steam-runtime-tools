@@ -2473,6 +2473,8 @@ typedef struct
   SrtGraphicsIssues issues;
   const gchar *name;
   const gchar *api_version;
+  guint32 vulkan_driver_id;
+  const gchar *driver_name;
   const gchar *driver_version;
   const gchar *vendor_id;
   const gchar *device_id;
@@ -2687,7 +2689,9 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
-                .driver_version = G_STRINGIFY (SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION_HEX),
+                .vulkan_driver_id = SRT_TEST_GOOD_GRAPHICS_DRIVER_ID,
+                .driver_name = SRT_TEST_GOOD_GRAPHICS_DRIVER_NAME,
+                .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
                 .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
                 .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
                 .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
@@ -2695,7 +2699,7 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_SOFTWARE_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION,
-                .driver_version = G_STRINGIFY (SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION_HEX),
+                .driver_version = SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION,
                 .vendor_id = SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID,
                 .device_id = SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID,
                 .type = SRT_VK_PHYSICAL_DEVICE_TYPE_CPU,
@@ -2943,7 +2947,7 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
-                .driver_version = G_STRINGIFY (SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION_HEX),
+                .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
                 .type = SRT_VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
                 /* A trailing newline is added by
                  * _srt_json_object_dup_array_of_lines_member() */
@@ -3597,6 +3601,10 @@ json_parsing (Fixture *f,
                                    this_device_test.name);
                   g_assert_cmpstr (srt_graphics_device_get_api_version (iter->data), ==,
                                    this_device_test.api_version);
+                  g_assert_cmpuint (srt_graphics_device_get_vulkan_driver_id (iter->data), ==,
+                                    this_device_test.vulkan_driver_id);
+                  g_assert_cmpstr (srt_graphics_device_get_driver_name (iter->data), ==,
+                                   this_device_test.driver_name);
                   g_assert_cmpstr (srt_graphics_device_get_driver_version (iter->data), ==,
                                    this_device_test.driver_version);
                   g_assert_cmpstr (srt_graphics_device_get_vendor_id (iter->data), ==,

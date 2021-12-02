@@ -66,6 +66,8 @@ static inline SrtGraphics *_srt_graphics_new (const char *multiarch_tuple,
  * _srt_graphics_device_new:
  * @name: Device name, also referred as renderer name
  * @api_version: API version used by this device
+ * @vulkan_driver_id: Driver used by this device
+ * @driver_name: Driver used by this device
  * @driver_version: Driver version used by this device
  * @vendor_id: Device vendor ID
  * @device_id: Device ID
@@ -80,6 +82,8 @@ static inline SrtGraphics *_srt_graphics_new (const char *multiarch_tuple,
  */
 static inline SrtGraphicsDevice *_srt_graphics_device_new (const gchar *name,
                                                            const gchar *api_version,
+                                                           guint32 vulkan_driver_id,
+                                                           const gchar *driver_name,
                                                            const gchar *driver_version,
                                                            const gchar *vendor_id,
                                                            const gchar *device_id,
@@ -142,6 +146,8 @@ _srt_graphics_new (const char *multiarch_tuple,
 static inline SrtGraphicsDevice *
 _srt_graphics_device_new (const gchar *name,
                           const gchar *api_version,
+                          guint32 vulkan_driver_id,
+                          const gchar *driver_name,
                           const gchar *driver_version,
                           const gchar *vendor_id,
                           const gchar *device_id,
@@ -151,6 +157,8 @@ _srt_graphics_device_new (const gchar *name,
   return g_object_new (SRT_TYPE_GRAPHICS_DEVICE,
                        "name", name,
                        "api-version", api_version,
+                       "vulkan-driver-id", vulkan_driver_id,
+                       "driver-name", driver_name,
                        "driver-version", driver_version,
                        "vendor-id", vendor_id,
                        "device-id", device_id,

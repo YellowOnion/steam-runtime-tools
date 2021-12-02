@@ -32,6 +32,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/json-glib-backports-internal.h"
 #include "steam-runtime-tools/json-utils-internal.h"
+#include "test-utils.h"
 
 typedef struct
 {
@@ -133,6 +134,54 @@ test_dup_strv_member (Fixture *f,
   g_assert_cmpstr (without_placeholder[3], ==, NULL);
 }
 
+static void
+test_get_hex_uint32_member (Fixture *f,
+                            gconstpointer context)
+{
+  g_autoptr(JsonArray) arr = json_array_new ();
+  g_autoptr(JsonNode) arr_node = json_node_alloc ();
+  g_autoptr(JsonObject) obj = json_object_new ();
+  guint32 value;
+
+  json_object_set_string_member (obj, "zero", "0");
+  json_object_set_string_member (obj, "fortytwo", "0x2a");
+  json_object_set_string_member (obj, "twentythree", "0X17");
+  json_object_set_string_member (obj, "out-of-range", "0x12345678abcdef");
+  json_object_set_string_member (obj, "empty", "");
+  json_object_set_string_member (obj, "nil", NULL);
+  json_object_set_double_member (obj, "not-string", 42.0);
+  json_node_init_array (arr_node, arr);
+  json_object_set_member (obj, "arr", g_steal_pointer (&arr_node));
+
+  g_assert_true (_srt_json_object_get_hex_uint32_member (obj, "zero", NULL));
+  g_assert_true (_srt_json_object_get_hex_uint32_member (obj, "zero", &value));
+  g_assert_cmpuint (value, ==, 0);
+  g_assert_true (_srt_json_object_get_hex_uint32_member (obj, "fortytwo", &value));
+  g_assert_cmpuint (value, ==, 42);
+  g_assert_true (_srt_json_object_get_hex_uint32_member (obj, "twentythree", &value));
+  g_assert_cmpuint (value, ==, 23);
+
+  value = 99;
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "missing", NULL));
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "missing", &value));
+  g_assert_cmpuint (value, ==, 99);
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "out-of-range", NULL));
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "out-of-range", &value));
+  g_assert_cmpuint (value, ==, 99);
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "empty", NULL));
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "empty", &value));
+  g_assert_cmpuint (value, ==, 99);
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "nil", NULL));
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "nil", &value));
+  g_assert_cmpuint (value, ==, 99);
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "not-string", NULL));
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "not-string", &value));
+  g_assert_cmpuint (value, ==, 99);
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "arr", NULL));
+  g_assert_false (_srt_json_object_get_hex_uint32_member (obj, "arr", &value));
+  g_assert_cmpuint (value, ==, 99);
+}
+
 int
 main (int argc,
       char **argv)
@@ -142,6 +191,8 @@ main (int argc,
               setup, test_dup_array_of_lines_member, teardown);
   g_test_add ("/json-utils/dup-strv-member", Fixture, NULL,
               setup, test_dup_strv_member, teardown);
+  g_test_add ("/json-utils/get-hex-uint32-member", Fixture, NULL,
+              setup, test_get_hex_uint32_member, teardown);
 
   return g_test_run ();
 }

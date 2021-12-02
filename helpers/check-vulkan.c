@@ -218,6 +218,9 @@ static gboolean
 create_instance (VkInstance *vk_instance,
                  GError **error)
 {
+  PFN_vkEnumerateInstanceVersion enumerate_instance_version = NULL;
+  uint32_t api_version = VK_API_VERSION_1_0;
+
   g_return_val_if_fail (vk_instance != NULL, FALSE);
 
   *vk_instance = VK_NULL_HANDLE;
@@ -228,7 +231,7 @@ create_instance (VkInstance *vk_instance,
     VK_KHR_SURFACE_EXTENSION_NAME,
   };
 
-  const VkApplicationInfo app =
+  VkApplicationInfo app =
   {
     .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
     .pApplicationName = argv0,
@@ -247,6 +250,17 @@ create_instance (VkInstance *vk_instance,
     .enabledExtensionCount = G_N_ELEMENTS (required_extensions),
     .ppEnabledExtensionNames = required_extensions,
   };
+
+  /* We want to use newer functionality if we can */
+  enumerate_instance_version = GET_INSTANCE_PROC (NULL, vkEnumerateInstanceVersion);
+
+  if (enumerate_instance_version != NULL)
+    enumerate_instance_version (&api_version);
+
+  /* Since Vulkan 1.1, it is valid to pass in a higher API version and
+   * the implementation will use MIN(what it supports, what we ask for). */
+  if (api_version >= VK_API_VERSION_1_1)
+    app.apiVersion = VK_API_VERSION_1_2;
 
   if (!do_vk (vkCreateInstance (&inst_info, NULL, vk_instance), error))
     return FALSE;

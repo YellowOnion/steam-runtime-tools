@@ -224,7 +224,6 @@ relocatable-install:production:
         - *prepare_scout
         - |
             apt-get -y --no-install-recommends install \
-            bubblewrap \
             libglib2.0-dev:amd64 \
             libglib2.0-dev:i386 \
             libxau-dev:amd64 \

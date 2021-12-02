@@ -136,7 +136,6 @@ Section: games
 Architecture: amd64 i386
 Multi-Arch: foreign
 Depends:
- bubblewrap,
  python3 (>= 3.5) | python3.5,
  steam-runtime-tools-bin,
  ${misc:Depends},

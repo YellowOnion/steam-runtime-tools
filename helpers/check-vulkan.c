@@ -159,7 +159,7 @@ struct _SwapChainSupportDetails
 
 typedef struct _SwapChainSupportDetails SwapChainSupportDetails;
 
-struct _VulkanPhysicalDeviceProperties
+typedef struct
 {
   VkCommandBuffer *command_buffers;
   VkCommandPool command_pool;
@@ -181,9 +181,7 @@ struct _VulkanPhysicalDeviceProperties
   uint32_t framebuffer_size;
   uint32_t current_frame;
   VkFramebuffer *swapchain_framebuffers;
-};
-
-typedef struct _VulkanPhysicalDeviceProperties VulkanPhysicalDeviceProperties;
+} Renderer;
 
 static gboolean
 queue_family_indices_is_complete (QueueFamilyIndices indices)
@@ -252,7 +250,7 @@ create_instance (VkInstance *vk_instance,
 static gboolean
 create_surface (VkInstance vk_instance,
                 VkPhysicalDevice physical_device,
-                VulkanPhysicalDeviceProperties *dev_props,
+                Renderer *renderer,
                 GError **error)
 {
   xcb_connection_t *xcb_connection;
@@ -328,7 +326,7 @@ create_surface (VkInstance vk_instance,
     .window = xcb_window,
   };
 
-  if (!do_vk (create_xcb_surface (vk_instance, &createSurfaceInfo, NULL, &dev_props->surface),
+  if (!do_vk (create_xcb_surface (vk_instance, &createSurfaceInfo, NULL, &renderer->surface),
               error))
     return FALSE;
 
@@ -365,11 +363,11 @@ QueueFamilyIndices find_queue_families (VkPhysicalDevice dev,
 
 static gboolean
 create_logical_device (VkPhysicalDevice physical_device,
-                       VulkanPhysicalDeviceProperties *dev_props,
+                       Renderer *renderer,
                        GError **error)
 {
   uint32_t i;
-  QueueFamilyIndices indices = find_queue_families (physical_device, dev_props->surface);
+  QueueFamilyIndices indices = find_queue_families (physical_device, renderer->surface);
   uint32_t unique_queue_families[] =
   {
     indices.graphicsFamily,
@@ -379,7 +377,7 @@ create_logical_device (VkPhysicalDevice physical_device,
                                                       G_N_ELEMENTS (unique_queue_families));
   float queuePriority = 1.0f;
 
-  g_return_val_if_fail (dev_props != NULL, FALSE);
+  g_return_val_if_fail (renderer != NULL, FALSE);
 
   for (i = 0; i < G_N_ELEMENTS (unique_queue_families); i++)
     {
@@ -406,11 +404,11 @@ create_logical_device (VkPhysicalDevice physical_device,
     .enabledLayerCount = 0,
   };
 
-  if (!do_vk (vkCreateDevice (physical_device, &createInfo, NULL, &dev_props->device), error))
+  if (!do_vk (vkCreateDevice (physical_device, &createInfo, NULL, &renderer->device), error))
     return FALSE;
 
-  vkGetDeviceQueue (dev_props->device, indices.graphicsFamily, 0, &dev_props->graphics_queue);
-  vkGetDeviceQueue (dev_props->device, indices.presentFamily, 0, &dev_props->present_queue);
+  vkGetDeviceQueue (renderer->device, indices.graphicsFamily, 0, &renderer->graphics_queue);
+  vkGetDeviceQueue (renderer->device, indices.presentFamily, 0, &renderer->present_queue);
 
   return TRUE;
 }
@@ -526,29 +524,29 @@ create_image_view (VkDevice device,
 
 static gboolean
 create_swapchain (VkPhysicalDevice physical_device,
-                  VulkanPhysicalDeviceProperties *dev_props,
+                  Renderer *renderer,
                   GError **error)
 {
   uint32_t i;
 
   SwapChainSupportDetails swapchain_support = query_swapchain_support (physical_device,
-                                                                       dev_props->surface);
+                                                                       renderer->surface);
   VkSurfaceFormatKHR surface_format = choose_swap_surface_format (swapchain_support.formats,
                                                                   swapchain_support.format_count);
   VkPresentModeKHR present_mode = choose_swap_present_mode (swapchain_support.present_modes,
                                                             swapchain_support.mode_count);
   VkExtent2D extent = choose_swap_extent (swapchain_support.capabilities);
 
-  dev_props->framebuffer_size = swapchain_support.capabilities.minImageCount + 1;
+  renderer->framebuffer_size = swapchain_support.capabilities.minImageCount + 1;
   if (swapchain_support.capabilities.maxImageCount > 0
-      && dev_props->framebuffer_size > swapchain_support.capabilities.maxImageCount)
-    dev_props->framebuffer_size = swapchain_support.capabilities.maxImageCount;
+      && renderer->framebuffer_size > swapchain_support.capabilities.maxImageCount)
+    renderer->framebuffer_size = swapchain_support.capabilities.maxImageCount;
 
   VkSwapchainCreateInfoKHR create_info =
   {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-    .surface = dev_props->surface,
-    .minImageCount = dev_props->framebuffer_size,
+    .surface = renderer->surface,
+    .minImageCount = renderer->framebuffer_size,
     .imageFormat = surface_format.format,
     .imageColorSpace = surface_format.colorSpace,
     .imageExtent = extent,
@@ -561,7 +559,7 @@ create_swapchain (VkPhysicalDevice physical_device,
     .oldSwapchain = VK_NULL_HANDLE,
   };
 
-  QueueFamilyIndices indices = find_queue_families (physical_device, dev_props->surface);
+  QueueFamilyIndices indices = find_queue_families (physical_device, renderer->surface);
   uint32_t queueFamilyIndices[] = {indices.graphicsFamily, indices.presentFamily};
 
   if (indices.graphicsFamily != indices.presentFamily)
@@ -575,25 +573,25 @@ create_swapchain (VkPhysicalDevice physical_device,
       create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
 
-  if (!do_vk (vkCreateSwapchainKHR (dev_props->device, &create_info, NULL,
-                                    &dev_props->swapchain), error))
+  if (!do_vk (vkCreateSwapchainKHR (renderer->device, &create_info, NULL,
+                                    &renderer->swapchain), error))
     return FALSE;
 
-  vkGetSwapchainImagesKHR (dev_props->device, dev_props->swapchain,
-                           &dev_props->framebuffer_size, NULL);
-  dev_props->swapchain_images = g_new0 (VkImage, dev_props->framebuffer_size);
-  vkGetSwapchainImagesKHR (dev_props->device, dev_props->swapchain,
-                           &dev_props->framebuffer_size, dev_props->swapchain_images);
+  vkGetSwapchainImagesKHR (renderer->device, renderer->swapchain,
+                           &renderer->framebuffer_size, NULL);
+  renderer->swapchain_images = g_new0 (VkImage, renderer->framebuffer_size);
+  vkGetSwapchainImagesKHR (renderer->device, renderer->swapchain,
+                           &renderer->framebuffer_size, renderer->swapchain_images);
 
-  dev_props->swapchain_image_format = surface_format.format;
-  dev_props->swapchain_extent = extent;
+  renderer->swapchain_image_format = surface_format.format;
+  renderer->swapchain_extent = extent;
 
-  dev_props->swapchain_image_views = g_new0 (VkImageView, dev_props->framebuffer_size);
-  for (i = 0; i < dev_props->framebuffer_size; i++)
+  renderer->swapchain_image_views = g_new0 (VkImageView, renderer->framebuffer_size);
+  for (i = 0; i < renderer->framebuffer_size; i++)
     {
-      if (!create_image_view (dev_props->device, dev_props->swapchain_images[i],
-                              dev_props->swapchain_image_format,
-                              &dev_props->swapchain_image_views[i],
+      if (!create_image_view (renderer->device, renderer->swapchain_images[i],
+                              renderer->swapchain_image_format,
+                              &renderer->swapchain_image_views[i],
                               error))
         return FALSE;
     }
@@ -602,12 +600,12 @@ create_swapchain (VkPhysicalDevice physical_device,
 }
 
 static gboolean
-create_render_pass (VulkanPhysicalDeviceProperties *dev_props,
+create_render_pass (Renderer *renderer,
                     GError **error)
 {
   VkAttachmentDescription color_attachment =
   {
-    .format = dev_props->swapchain_image_format,
+    .format = renderer->swapchain_image_format,
     .samples = VK_SAMPLE_COUNT_1_BIT,
     .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
     .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -651,8 +649,8 @@ create_render_pass (VulkanPhysicalDeviceProperties *dev_props,
     .pDependencies = &dependency,
   };
 
-  if (!do_vk (vkCreateRenderPass (dev_props->device, &render_pass_info, NULL,
-                                  &dev_props->render_pass), error))
+  if (!do_vk (vkCreateRenderPass (renderer->device, &render_pass_info, NULL,
+                                  &renderer->render_pass), error))
     return FALSE;
 
   return TRUE;
@@ -687,14 +685,14 @@ create_shader_module (VkDevice device,
 }
 
 static gboolean
-create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
+create_graphics_pipeline (Renderer *renderer,
                           GError **error)
 {
   g_autofree gchar *vert_path = NULL;
   g_autofree gchar *frag_path = NULL;
   g_autofree gchar *base_path = NULL;
 
-  g_return_val_if_fail (dev_props != NULL, FALSE);
+  g_return_val_if_fail (renderer != NULL, FALSE);
 
   base_path = g_strdup (getenv ("SRT_DATA_PATH"));
   if (base_path == NULL)
@@ -705,9 +703,9 @@ create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
 
   VkShaderModule vert_shader_module;
   VkShaderModule frag_shader_module;
-  if (!create_shader_module (dev_props->device, vert_path, &vert_shader_module, error))
+  if (!create_shader_module (renderer->device, vert_path, &vert_shader_module, error))
     return FALSE;
-  if (!create_shader_module (dev_props->device, frag_path, &frag_shader_module, error))
+  if (!create_shader_module (renderer->device, frag_path, &frag_shader_module, error))
     return FALSE;
 
   VkPipelineShaderStageCreateInfo vert_shader_stage_info =
@@ -750,8 +748,8 @@ create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
   {
     .x = 0.0f,
     .y = 0.0f,
-    .width = (float) dev_props->swapchain_extent.width,
-    .height = (float) dev_props->swapchain_extent.height,
+    .width = (float) renderer->swapchain_extent.width,
+    .height = (float) renderer->swapchain_extent.height,
     .minDepth = 0.0f,
     .maxDepth = 1.0f,
   };
@@ -759,7 +757,7 @@ create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
   VkRect2D scissor =
   {
     .offset = {0, 0},
-    .extent = dev_props->swapchain_extent,
+    .extent = renderer->swapchain_extent,
   };
 
   VkPipelineViewportStateCreateInfo viewport_state =
@@ -817,8 +815,8 @@ create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
     .pushConstantRangeCount = 0,
   };
 
-  if (!do_vk (vkCreatePipelineLayout (dev_props->device, &pipeline_layout_info, NULL,
-                                      &dev_props->pipeline_layout), error))
+  if (!do_vk (vkCreatePipelineLayout (renderer->device, &pipeline_layout_info, NULL,
+                                      &renderer->pipeline_layout), error))
     return FALSE;
 
   VkGraphicsPipelineCreateInfo pipeline_info =
@@ -832,51 +830,51 @@ create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
     .pRasterizationState = &rasterizer,
     .pMultisampleState = &multisampling,
     .pColorBlendState = &color_blending,
-    .layout = dev_props->pipeline_layout,
-    .renderPass = dev_props->render_pass,
+    .layout = renderer->pipeline_layout,
+    .renderPass = renderer->render_pass,
     .subpass = 0,
     .basePipelineHandle = VK_NULL_HANDLE,
   };
 
-  if (!do_vk (vkCreateGraphicsPipelines (dev_props->device, VK_NULL_HANDLE, 1,
+  if (!do_vk (vkCreateGraphicsPipelines (renderer->device, VK_NULL_HANDLE, 1,
                                          &pipeline_info, NULL,
-                                         &dev_props->graphics_pipeline), error))
+                                         &renderer->graphics_pipeline), error))
     return FALSE;
 
-  vkDestroyShaderModule (dev_props->device, frag_shader_module, NULL);
-  vkDestroyShaderModule (dev_props->device, vert_shader_module, NULL);
+  vkDestroyShaderModule (renderer->device, frag_shader_module, NULL);
+  vkDestroyShaderModule (renderer->device, vert_shader_module, NULL);
 
   return TRUE;
 }
 
 static gboolean
-create_framebuffers (VulkanPhysicalDeviceProperties *dev_props,
+create_framebuffers (Renderer *renderer,
                      GError **error)
 {
   uint32_t i = 0;
-  dev_props->swapchain_framebuffers = g_new0 (VkFramebuffer, dev_props->framebuffer_size);
+  renderer->swapchain_framebuffers = g_new0 (VkFramebuffer, renderer->framebuffer_size);
 
-  g_return_val_if_fail (dev_props != NULL, FALSE);
+  g_return_val_if_fail (renderer != NULL, FALSE);
 
-  for (i = 0; i < dev_props->framebuffer_size; i++)
+  for (i = 0; i < renderer->framebuffer_size; i++)
     {
       VkImageView attachments[] = {
-        dev_props->swapchain_image_views[i]
+        renderer->swapchain_image_views[i]
       };
 
       VkFramebufferCreateInfo framebuffer_info =
       {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = dev_props->render_pass,
+        .renderPass = renderer->render_pass,
         .attachmentCount = 1,
         .pAttachments = attachments,
-        .width = dev_props->swapchain_extent.width,
-        .height = dev_props->swapchain_extent.height,
+        .width = renderer->swapchain_extent.width,
+        .height = renderer->swapchain_extent.height,
         .layers = 1,
       };
 
-      if (!do_vk (vkCreateFramebuffer (dev_props->device, &framebuffer_info, NULL,
-                                       &dev_props->swapchain_framebuffers[i]), error))
+      if (!do_vk (vkCreateFramebuffer (renderer->device, &framebuffer_info, NULL,
+                                       &renderer->swapchain_framebuffers[i]), error))
         return FALSE;
     }
 
@@ -885,11 +883,11 @@ create_framebuffers (VulkanPhysicalDeviceProperties *dev_props,
 
 static gboolean
 create_command_pool (VkPhysicalDevice physical_device,
-                     VulkanPhysicalDeviceProperties *dev_props,
+                     Renderer *renderer,
                      GError **error)
 {
   QueueFamilyIndices queue_family_indices = find_queue_families (physical_device,
-                                                                 dev_props->surface);
+                                                                 renderer->surface);
 
   VkCommandPoolCreateInfo pool_info =
   {
@@ -897,64 +895,64 @@ create_command_pool (VkPhysicalDevice physical_device,
     .queueFamilyIndex = queue_family_indices.graphicsFamily,
   };
 
-  if (!do_vk (vkCreateCommandPool (dev_props->device, &pool_info, NULL,
-                                   &dev_props->command_pool), error))
+  if (!do_vk (vkCreateCommandPool (renderer->device, &pool_info, NULL,
+                                   &renderer->command_pool), error))
     return FALSE;
 
   return TRUE;
 }
 
 static gboolean
-create_command_buffers (VulkanPhysicalDeviceProperties *dev_props,
+create_command_buffers (Renderer *renderer,
                         GError **error)
 {
   uint32_t i;
 
-  g_return_val_if_fail (dev_props != NULL, FALSE);
+  g_return_val_if_fail (renderer != NULL, FALSE);
 
   VkCommandBufferAllocateInfo alloc_info =
   {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool = dev_props->command_pool,
+    .commandPool = renderer->command_pool,
     .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    .commandBufferCount = dev_props->framebuffer_size,
+    .commandBufferCount = renderer->framebuffer_size,
   };
 
-  dev_props->command_buffers = g_new0 (VkCommandBuffer, dev_props->framebuffer_size);
+  renderer->command_buffers = g_new0 (VkCommandBuffer, renderer->framebuffer_size);
 
-  if (!do_vk (vkAllocateCommandBuffers (dev_props->device, &alloc_info,
-                                        dev_props->command_buffers), error))
+  if (!do_vk (vkAllocateCommandBuffers (renderer->device, &alloc_info,
+                                        renderer->command_buffers), error))
     return FALSE;
 
-  for (i = 0; i < dev_props->framebuffer_size; i++)
+  for (i = 0; i < renderer->framebuffer_size; i++)
     {
       VkCommandBufferBeginInfo begin_info =
       {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       };
 
-      if (!do_vk (vkBeginCommandBuffer (dev_props->command_buffers[i], &begin_info), error))
+      if (!do_vk (vkBeginCommandBuffer (renderer->command_buffers[i], &begin_info), error))
         return FALSE;
 
       VkClearValue clear_color = { { {0.0f, 0.0f, 0.0f, 1.0f} } };
       VkRenderPassBeginInfo render_pass_info =
       {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = dev_props->render_pass,
-        .framebuffer = dev_props->swapchain_framebuffers[i],
+        .renderPass = renderer->render_pass,
+        .framebuffer = renderer->swapchain_framebuffers[i],
         .renderArea.offset = {0, 0},
-        .renderArea.extent = dev_props->swapchain_extent,
+        .renderArea.extent = renderer->swapchain_extent,
         .clearValueCount = 1,
         .pClearValues = &clear_color,
       };
 
-      vkCmdBeginRenderPass (dev_props->command_buffers[i], &render_pass_info,
+      vkCmdBeginRenderPass (renderer->command_buffers[i], &render_pass_info,
                             VK_SUBPASS_CONTENTS_INLINE);
-      vkCmdBindPipeline (dev_props->command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
-                         dev_props->graphics_pipeline);
-      vkCmdDraw (dev_props->command_buffers[i], 3, 1, 0, 0);
-      vkCmdEndRenderPass (dev_props->command_buffers[i]);
-      if (!do_vk (vkEndCommandBuffer (dev_props->command_buffers[i]), error))
+      vkCmdBindPipeline (renderer->command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
+                         renderer->graphics_pipeline);
+      vkCmdDraw (renderer->command_buffers[i], 3, 1, 0, 0);
+      vkCmdEndRenderPass (renderer->command_buffers[i]);
+      if (!do_vk (vkEndCommandBuffer (renderer->command_buffers[i]), error))
         return FALSE;
     }
 
@@ -962,16 +960,16 @@ create_command_buffers (VulkanPhysicalDeviceProperties *dev_props,
 }
 
 static gboolean
-create_sync_objects (VulkanPhysicalDeviceProperties *dev_props,
+create_sync_objects (Renderer *renderer,
                      GError **error)
 {
   uint32_t i;
 
-  g_return_val_if_fail (dev_props != NULL, FALSE);
+  g_return_val_if_fail (renderer != NULL, FALSE);
 
-  dev_props->image_available_semaphores = g_new0 (VkSemaphore, MAX_FRAMES_IN_FLIGHT);
-  dev_props->render_finished_semaphores = g_new0 (VkSemaphore, MAX_FRAMES_IN_FLIGHT);
-  dev_props->in_flight_fences = g_new0 (VkFence, MAX_FRAMES_IN_FLIGHT);
+  renderer->image_available_semaphores = g_new0 (VkSemaphore, MAX_FRAMES_IN_FLIGHT);
+  renderer->render_finished_semaphores = g_new0 (VkSemaphore, MAX_FRAMES_IN_FLIGHT);
+  renderer->in_flight_fences = g_new0 (VkFence, MAX_FRAMES_IN_FLIGHT);
 
   VkSemaphoreCreateInfo semaphore_info =
   {
@@ -986,49 +984,49 @@ create_sync_objects (VulkanPhysicalDeviceProperties *dev_props,
 
   for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-      if (!do_vk (vkCreateSemaphore (dev_props->device, &semaphore_info, NULL,
-                                     (&dev_props->image_available_semaphores[i])), error))
+      if (!do_vk (vkCreateSemaphore (renderer->device, &semaphore_info, NULL,
+                                     (&renderer->image_available_semaphores[i])), error))
         return FALSE;
-      if (!do_vk (vkCreateSemaphore (dev_props->device, &semaphore_info, NULL,
-                                     (&dev_props->render_finished_semaphores[i])), error))
+      if (!do_vk (vkCreateSemaphore (renderer->device, &semaphore_info, NULL,
+                                     (&renderer->render_finished_semaphores[i])), error))
         return FALSE;
-      if (!do_vk (vkCreateFence (dev_props->device, &fence_info, NULL,
-                                 (&dev_props->in_flight_fences[i])), error))
+      if (!do_vk (vkCreateFence (renderer->device, &fence_info, NULL,
+                                 (&renderer->in_flight_fences[i])), error))
         return FALSE;
     }
   return TRUE;
 }
 
 static gboolean
-draw_frame (VulkanPhysicalDeviceProperties *dev_props,
+draw_frame (Renderer *renderer,
             GError **error)
 {
-  g_return_val_if_fail (dev_props != NULL, FALSE);
+  g_return_val_if_fail (renderer != NULL, FALSE);
 
-  if (!do_vk (vkWaitForFences (dev_props->device, 1,
-                               &dev_props->in_flight_fences[dev_props->current_frame],
+  if (!do_vk (vkWaitForFences (renderer->device, 1,
+                               &renderer->in_flight_fences[renderer->current_frame],
                                VK_TRUE, UINT64_MAX), error))
     return FALSE;
 
-  if (!do_vk (vkResetFences (dev_props->device, 1,
-                             &dev_props->in_flight_fences[dev_props->current_frame]),
+  if (!do_vk (vkResetFences (renderer->device, 1,
+                             &renderer->in_flight_fences[renderer->current_frame]),
                              error))
     return FALSE;
 
   uint32_t image_index;
-  if (!do_vk (vkAcquireNextImageKHR (dev_props->device, dev_props->swapchain, UINT64_MAX,
-                                     dev_props->image_available_semaphores[dev_props->current_frame],
+  if (!do_vk (vkAcquireNextImageKHR (renderer->device, renderer->swapchain, UINT64_MAX,
+                                     renderer->image_available_semaphores[renderer->current_frame],
                                      VK_NULL_HANDLE, &image_index), error))
     return FALSE;
 
   VkSemaphore wait_semaphores[] =
   {
-    dev_props->image_available_semaphores[dev_props->current_frame],
+    renderer->image_available_semaphores[renderer->current_frame],
   };
   VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
   VkSemaphore signal_semaphores[] =
   {
-    dev_props->render_finished_semaphores[dev_props->current_frame],
+    renderer->render_finished_semaphores[renderer->current_frame],
   };
 
   VkSubmitInfo submit_info =
@@ -1038,16 +1036,16 @@ draw_frame (VulkanPhysicalDeviceProperties *dev_props,
     .pWaitSemaphores = wait_semaphores,
     .pWaitDstStageMask = wait_stages,
     .commandBufferCount = 1,
-    .pCommandBuffers = &dev_props->command_buffers[image_index],
+    .pCommandBuffers = &renderer->command_buffers[image_index],
     .signalSemaphoreCount = 1,
     .pSignalSemaphores = signal_semaphores,
   };
 
-  if (!do_vk (vkQueueSubmit (dev_props->graphics_queue, 1, &submit_info,
-                             dev_props->in_flight_fences[dev_props->current_frame]), error))
+  if (!do_vk (vkQueueSubmit (renderer->graphics_queue, 1, &submit_info,
+                             renderer->in_flight_fences[renderer->current_frame]), error))
     return FALSE;
 
-  VkSwapchainKHR swapchains[] = {dev_props->swapchain};
+  VkSwapchainKHR swapchains[] = {renderer->swapchain};
   VkPresentInfoKHR present_info =
   {
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -1058,10 +1056,10 @@ draw_frame (VulkanPhysicalDeviceProperties *dev_props,
     .pImageIndices = &image_index,
   };
 
-  if (!do_vk (vkQueuePresentKHR (dev_props->present_queue, &present_info), error))
+  if (!do_vk (vkQueuePresentKHR (renderer->present_queue, &present_info), error))
     return FALSE;
 
-  dev_props->current_frame = (dev_props->current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+  renderer->current_frame = (renderer->current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 
   return TRUE;
 }
@@ -1111,10 +1109,10 @@ find_queue_families (VkPhysicalDevice dev,
 }
 
 static gboolean
-device_wait_idle (VulkanPhysicalDeviceProperties *dev_props,
+device_wait_idle (Renderer *renderer,
                   GError **error)
 {
-  if (!do_vk (vkDeviceWaitIdle (dev_props->device), error))
+  if (!do_vk (vkDeviceWaitIdle (renderer->device), error))
     return FALSE;
 
   return TRUE;
@@ -1128,78 +1126,78 @@ draw_test_triangle (VkInstance vk_instance,
   gsize i;
   gboolean ret = FALSE;
 
-  VulkanPhysicalDeviceProperties dev_props = { .framebuffer_size = 0, };
+  Renderer renderer = { .framebuffer_size = 0, };
 
-  if (!create_surface (vk_instance, physical_device, &dev_props, error))
+  if (!create_surface (vk_instance, physical_device, &renderer, error))
     goto out;
-  if (!create_logical_device (physical_device, &dev_props, error))
+  if (!create_logical_device (physical_device, &renderer, error))
     goto out;
-  if (!create_swapchain (physical_device, &dev_props, error))
+  if (!create_swapchain (physical_device, &renderer, error))
     goto out;
-  if (!create_render_pass (&dev_props, error))
+  if (!create_render_pass (&renderer, error))
     goto out;
-  if (!create_graphics_pipeline (&dev_props, error))
+  if (!create_graphics_pipeline (&renderer, error))
     goto out;
-  if (!create_framebuffers (&dev_props, error))
+  if (!create_framebuffers (&renderer, error))
     goto out;
-  if (!create_command_pool (physical_device, &dev_props, error))
+  if (!create_command_pool (physical_device, &renderer, error))
     goto out;
-  if (!create_command_buffers (&dev_props, error))
+  if (!create_command_buffers (&renderer, error))
     goto out;
-  if (!create_sync_objects (&dev_props, error))
+  if (!create_sync_objects (&renderer, error))
     goto out;
 
-  dev_props.current_frame = 0;
+  renderer.current_frame = 0;
 
   for (i = 0; i < (opt_visible ? 10000 : 10); i++)
     {
-      if (!draw_frame (&dev_props, error))
+      if (!draw_frame (&renderer, error))
         goto out;
     }
 
-  if (!device_wait_idle (&dev_props, error))
+  if (!device_wait_idle (&renderer, error))
     goto out;
 
   ret = TRUE;
 
 out:
   /* Cleanup */
-  if (dev_props.device != VK_NULL_HANDLE)
+  if (renderer.device != VK_NULL_HANDLE)
     {
       for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
-          if (dev_props.render_finished_semaphores != NULL
-              && dev_props.render_finished_semaphores[i] != VK_NULL_HANDLE)
-            vkDestroySemaphore (dev_props.device, dev_props.render_finished_semaphores[i], NULL);
-          if (dev_props.image_available_semaphores != NULL
-              && dev_props.image_available_semaphores[i] != VK_NULL_HANDLE)
-            vkDestroySemaphore (dev_props.device, dev_props.image_available_semaphores[i], NULL);
-          if (dev_props.in_flight_fences != NULL
-              && dev_props.in_flight_fences[i] != VK_NULL_HANDLE)
-            vkDestroyFence (dev_props.device, dev_props.in_flight_fences[i], NULL);
+          if (renderer.render_finished_semaphores != NULL
+              && renderer.render_finished_semaphores[i] != VK_NULL_HANDLE)
+            vkDestroySemaphore (renderer.device, renderer.render_finished_semaphores[i], NULL);
+          if (renderer.image_available_semaphores != NULL
+              && renderer.image_available_semaphores[i] != VK_NULL_HANDLE)
+            vkDestroySemaphore (renderer.device, renderer.image_available_semaphores[i], NULL);
+          if (renderer.in_flight_fences != NULL
+              && renderer.in_flight_fences[i] != VK_NULL_HANDLE)
+            vkDestroyFence (renderer.device, renderer.in_flight_fences[i], NULL);
         }
-      for (i = 0; i < dev_props.framebuffer_size; i++)
+      for (i = 0; i < renderer.framebuffer_size; i++)
         {
-          if (dev_props.swapchain_framebuffers != NULL
-              && dev_props.swapchain_framebuffers[i] != VK_NULL_HANDLE)
-            vkDestroyFramebuffer (dev_props.device, dev_props.swapchain_framebuffers[i], NULL);
-          if (dev_props.swapchain_image_views != NULL
-              && dev_props.swapchain_image_views[i] != VK_NULL_HANDLE)
-          vkDestroyImageView (dev_props.device, dev_props.swapchain_image_views[i], NULL);
+          if (renderer.swapchain_framebuffers != NULL
+              && renderer.swapchain_framebuffers[i] != VK_NULL_HANDLE)
+            vkDestroyFramebuffer (renderer.device, renderer.swapchain_framebuffers[i], NULL);
+          if (renderer.swapchain_image_views != NULL
+              && renderer.swapchain_image_views[i] != VK_NULL_HANDLE)
+          vkDestroyImageView (renderer.device, renderer.swapchain_image_views[i], NULL);
         }
-      vkDestroyCommandPool (dev_props.device, dev_props.command_pool, NULL);
-      if (dev_props.graphics_pipeline != VK_NULL_HANDLE)
-        vkDestroyPipeline (dev_props.device, dev_props.graphics_pipeline, NULL);
-      if (dev_props.pipeline_layout != VK_NULL_HANDLE)
-        vkDestroyPipelineLayout (dev_props.device, dev_props.pipeline_layout, NULL);
-      if (dev_props.render_pass != VK_NULL_HANDLE)
-        vkDestroyRenderPass (dev_props.device, dev_props.render_pass, NULL);
-      vkDestroySwapchainKHR (dev_props.device, dev_props.swapchain, NULL);
-      vkDestroyDevice (dev_props.device, NULL);
+      vkDestroyCommandPool (renderer.device, renderer.command_pool, NULL);
+      if (renderer.graphics_pipeline != VK_NULL_HANDLE)
+        vkDestroyPipeline (renderer.device, renderer.graphics_pipeline, NULL);
+      if (renderer.pipeline_layout != VK_NULL_HANDLE)
+        vkDestroyPipelineLayout (renderer.device, renderer.pipeline_layout, NULL);
+      if (renderer.render_pass != VK_NULL_HANDLE)
+        vkDestroyRenderPass (renderer.device, renderer.render_pass, NULL);
+      vkDestroySwapchainKHR (renderer.device, renderer.swapchain, NULL);
+      vkDestroyDevice (renderer.device, NULL);
     }
 
   if (vk_instance != VK_NULL_HANDLE)
-    vkDestroySurfaceKHR (vk_instance, dev_props.surface, NULL);
+    vkDestroySurfaceKHR (vk_instance, renderer.surface, NULL);
 
   return ret;
 }

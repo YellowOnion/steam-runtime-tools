@@ -165,6 +165,7 @@ def main():
     # type: () -> None
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--multiarch-tuple', default=None)
     parser.add_argument('path')
     args = parser.parse_args()
 
@@ -186,6 +187,12 @@ def main():
 
     for basename in HELPERS:
         for multiarch, ld_so in LD_SO:
+            if (
+                args.multiarch_tuple is not None
+                and multiarch != args.multiarch_tuple
+            ):
+                continue
+
             exe = '{}-{}'.format(multiarch, basename)
             path = os.path.join(
                 relocatable_install,

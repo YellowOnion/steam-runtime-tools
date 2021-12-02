@@ -54,25 +54,21 @@ class Architecture:
         self,
         name,           # type: str
         multiarch,      # type: str
-        ld_so           # type: str
     ):
         # type: (...) -> None
         self.name = name
         self.multiarch = multiarch
-        self.ld_so = ld_so
 
 
 # Debian architecture => Debian multiarch tuple
-ARCHS = [
+X86_ARCHS = [
     Architecture(
         name='amd64',
         multiarch='x86_64-linux-gnu',
-        ld_so='/lib64/ld-linux-x86-64.so.2',
     ),
     Architecture(
         name='i386',
         multiarch='i386-linux-gnu',
-        ld_so='/lib/ld-linux.so.2',
     ),
 ]
 # package to install from => source package for copyright information
@@ -144,7 +140,24 @@ def v_check_output(command, **kwargs):
 def main():
     # type: () -> None
 
+    architectures = []           # type: typing.List[Architecture]
+
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--architecture-name', default=None,
+        help=(
+            'Debian dpkg architecture to use. Typical values are "amd64", '
+            '"i386", "arm64" etc. [default: "amd64" and "i386"]'
+        ),
+    )
+    parser.add_argument(
+        '--architecture-multiarch', default=None,
+        help=(
+            'Debian multiarch tuple to use. Typical values are '
+            '"x86_64-linux-gnu", "i386-linux-gnu", "aarch64-linux-gnu", etc.'
+            '[default: "x86_64-linux-gnu" and "i386-linux-gnu"]'
+        ),
+    )
     parser.add_argument(
         '--destdir', default=os.getenv('DESTDIR'),
         help=(
@@ -243,6 +256,24 @@ def main():
     if args.archive is None and args.output is None:
         parser.error('Either --archive or --output is required')
 
+    if args.architecture_name and args.architecture_multiarch is None:
+        parser.error('When using --architecture-name, also '
+                     '--architecture-multiarch is required')
+
+    if args.architecture_multiarch and args.architecture_name is None:
+        parser.error('When using --architecture-multiarch, also '
+                     '--architecture-name is required')
+
+    if args.architecture_name:
+        architectures.append(
+            Architecture(
+                name=args.architecture_name,
+                multiarch=args.architecture_multiarch,
+            ),
+        )
+    else:
+        architectures += X86_ARCHS
+
     if args.version is None:
         with open(os.path.join(args.srcdir, '.tarball-version')) as reader:
             args.version = reader.read().strip()
@@ -260,7 +291,7 @@ def main():
         os.makedirs(os.path.join(installation, 'libexec'), exist_ok=True)
         os.makedirs(os.path.join(installation, 'metadata'), exist_ok=True)
 
-        for arch in ARCHS:
+        for arch in architectures:
             os.makedirs(
                 os.path.join(installation, 'lib', arch.multiarch),
                 exist_ok=True,
@@ -295,7 +326,7 @@ def main():
             'steam-runtime-tools-0',
         )
 
-        for arch in ARCHS:
+        for arch in architectures:
             path = os.path.join(
                 args.prefix, 'libexec', 'steam-runtime-tools-0',
             )
@@ -344,7 +375,7 @@ def main():
             'dpkg', '--print-architecture',
         ]).decode('utf-8').strip()
 
-        for arch in ARCHS:
+        for arch in architectures:
             os.makedirs(
                 os.path.join(tmpdir, 'build-relocatable', arch.name, 'lib'),
                 exist_ok=True,
@@ -613,15 +644,20 @@ def main():
             else:
                 tail = ''
 
+            if args.architecture_name is None:
+                bin_arch = 'bin'
+            else:
+                bin_arch = args.architecture_name
+
             bin_tar = os.path.join(
                 args.archive,
-                'pressure-vessel{}-bin.tar.gz'.format(tail),
+                'pressure-vessel{}-{}.tar.gz'.format(tail, bin_arch),
             )
 
             if args.check_source_directory is None:
                 src_tar = os.path.join(
                     args.archive,
-                    'pressure-vessel{}-bin+src.tar.gz'.format(tail),
+                    'pressure-vessel{}-{}+src.tar.gz'.format(tail, bin_arch),
                 )
                 subprocess.check_call([
                     'tar',

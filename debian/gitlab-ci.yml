@@ -211,6 +211,45 @@ build:clang:
 
         mkdir -p _build/scout
 
+relocatable-install:i386:
+    stage: relocatable-install
+    needs:
+        - package:i386
+    tags:
+        - docker
+        - linux
+    image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_I386_DOCKER_IMAGE}"
+    script:
+        - *prepare_scout
+        - |
+            apt-get -y --no-install-recommends install \
+            libglib2.0-dev:i386 \
+            libxau-dev:i386 \
+            meson \
+            ${NULL+}
+
+            dpkg -i \
+            debian/tmp/artifacts/build/*_i386.*deb \
+            ${NULL+}
+
+            rm -fr _build/i386/relocatable-install
+            mkdir -p _build/i386
+            /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+              --output _build/i386/relocatable-install \
+              --archive "$(pwd)/_build/i386" \
+              --no-archive-versions \
+              --architecture-name i386 \
+              --architecture-multiarch i386-linux-gnu \
+              ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
+              ${NULL+}
+            prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
+              --multiarch-tuple=i386-linux-gnu \
+              "$(pwd)/_build/i386/relocatable-install"
+    artifacts:
+        paths:
+            - _build/i386/pressure-vessel-i386.tar.gz
+        when: on_success
+
 relocatable-install:production:
     stage: relocatable-install
     needs:
@@ -224,14 +263,11 @@ relocatable-install:production:
         - *prepare_scout
         - |
             apt-get -y --no-install-recommends install \
-            bubblewrap \
             libglib2.0-dev:amd64 \
             libglib2.0-dev:i386 \
             libxau-dev:amd64 \
             libxau-dev:i386 \
             meson \
-            waffle-utils-multiarch:amd64 \
-            waffle-utils-multiarch:i386 \
             ${NULL+}
 
             dpkg -i \

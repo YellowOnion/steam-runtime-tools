@@ -161,6 +161,8 @@ typedef struct _SwapChainSupportDetails SwapChainSupportDetails;
 
 typedef struct
 {
+  VkInstance instance;
+  VkPhysicalDevice physical_device;
   VkCommandBuffer *command_buffers;
   VkCommandPool command_pool;
   VkFence *in_flight_fences;
@@ -248,9 +250,7 @@ create_instance (VkInstance *vk_instance,
 }
 
 static gboolean
-create_surface (VkInstance vk_instance,
-                VkPhysicalDevice physical_device,
-                Renderer *renderer,
+create_surface (Renderer *renderer,
                 GError **error)
 {
   xcb_connection_t *xcb_connection;
@@ -309,12 +309,12 @@ create_surface (VkInstance vk_instance,
 
   PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR get_xcb_presentation_support =
     (PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)
-    vkGetInstanceProcAddr (vk_instance, "vkGetPhysicalDeviceXcbPresentationSupportKHR");
+    vkGetInstanceProcAddr (renderer->instance, "vkGetPhysicalDeviceXcbPresentationSupportKHR");
   PFN_vkCreateXcbSurfaceKHR create_xcb_surface =
     (PFN_vkCreateXcbSurfaceKHR)
-    vkGetInstanceProcAddr (vk_instance, "vkCreateXcbSurfaceKHR");
+    vkGetInstanceProcAddr (renderer->instance, "vkCreateXcbSurfaceKHR");
 
-  if (!get_xcb_presentation_support (physical_device, 0,
+  if (!get_xcb_presentation_support (renderer->physical_device, 0,
                                      xcb_connection,
                                      iter.data->root_visual))
     return glnx_throw (error, "Vulkan not supported on given X window");
@@ -326,7 +326,7 @@ create_surface (VkInstance vk_instance,
     .window = xcb_window,
   };
 
-  if (!do_vk (create_xcb_surface (vk_instance, &createSurfaceInfo, NULL, &renderer->surface),
+  if (!do_vk (create_xcb_surface (renderer->instance, &createSurfaceInfo, NULL, &renderer->surface),
               error))
     return FALSE;
 
@@ -358,16 +358,14 @@ get_physical_devices (VkInstance instance,
   return TRUE;
 }
 
-QueueFamilyIndices find_queue_families (VkPhysicalDevice dev,
-                                        VkSurfaceKHR surface);
+QueueFamilyIndices find_queue_families (Renderer *renderer);
 
 static gboolean
-create_logical_device (VkPhysicalDevice physical_device,
-                       Renderer *renderer,
+create_logical_device (Renderer *renderer,
                        GError **error)
 {
   uint32_t i;
-  QueueFamilyIndices indices = find_queue_families (physical_device, renderer->surface);
+  QueueFamilyIndices indices = find_queue_families (renderer);
   uint32_t unique_queue_families[] =
   {
     indices.graphicsFamily,
@@ -404,7 +402,7 @@ create_logical_device (VkPhysicalDevice physical_device,
     .enabledLayerCount = 0,
   };
 
-  if (!do_vk (vkCreateDevice (physical_device, &createInfo, NULL, &renderer->device), error))
+  if (!do_vk (vkCreateDevice (renderer->physical_device, &createInfo, NULL, &renderer->device), error))
     return FALSE;
 
   vkGetDeviceQueue (renderer->device, indices.graphicsFamily, 0, &renderer->graphics_queue);
@@ -523,13 +521,12 @@ create_image_view (VkDevice device,
 }
 
 static gboolean
-create_swapchain (VkPhysicalDevice physical_device,
-                  Renderer *renderer,
+create_swapchain (Renderer *renderer,
                   GError **error)
 {
   uint32_t i;
 
-  SwapChainSupportDetails swapchain_support = query_swapchain_support (physical_device,
+  SwapChainSupportDetails swapchain_support = query_swapchain_support (renderer->physical_device,
                                                                        renderer->surface);
   VkSurfaceFormatKHR surface_format = choose_swap_surface_format (swapchain_support.formats,
                                                                   swapchain_support.format_count);
@@ -559,7 +556,7 @@ create_swapchain (VkPhysicalDevice physical_device,
     .oldSwapchain = VK_NULL_HANDLE,
   };
 
-  QueueFamilyIndices indices = find_queue_families (physical_device, renderer->surface);
+  QueueFamilyIndices indices = find_queue_families (renderer);
   uint32_t queueFamilyIndices[] = {indices.graphicsFamily, indices.presentFamily};
 
   if (indices.graphicsFamily != indices.presentFamily)
@@ -882,12 +879,10 @@ create_framebuffers (Renderer *renderer,
 }
 
 static gboolean
-create_command_pool (VkPhysicalDevice physical_device,
-                     Renderer *renderer,
+create_command_pool (Renderer *renderer,
                      GError **error)
 {
-  QueueFamilyIndices queue_family_indices = find_queue_families (physical_device,
-                                                                 renderer->surface);
+  QueueFamilyIndices queue_family_indices = find_queue_families (renderer);
 
   VkCommandPoolCreateInfo pool_info =
   {
@@ -1066,8 +1061,7 @@ draw_frame (Renderer *renderer,
 
 
 QueueFamilyIndices
-find_queue_families (VkPhysicalDevice dev,
-                     VkSurfaceKHR surface)
+find_queue_families (Renderer *renderer)
 {
   QueueFamilyIndices indices =
   {
@@ -1077,11 +1071,11 @@ find_queue_families (VkPhysicalDevice dev,
 
   uint32_t i;
   uint32_t queue_family_count = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties (dev, &queue_family_count, NULL);
+  vkGetPhysicalDeviceQueueFamilyProperties (renderer->physical_device, &queue_family_count, NULL);
 
   VkQueueFamilyProperties *queue_families = g_new0 (VkQueueFamilyProperties,
                                                     queue_family_count);
-  vkGetPhysicalDeviceQueueFamilyProperties (dev, &queue_family_count, queue_families);
+  vkGetPhysicalDeviceQueueFamilyProperties (renderer->physical_device, &queue_family_count, queue_families);
 
   for (i = 0; i < queue_family_count; i++)
     {
@@ -1093,7 +1087,7 @@ find_queue_families (VkPhysicalDevice dev,
         }
 
       VkBool32 presentSupport = VK_FALSE;
-      vkGetPhysicalDeviceSurfaceSupportKHR (dev, i, surface, &presentSupport);
+      vkGetPhysicalDeviceSurfaceSupportKHR (renderer->physical_device, i, renderer->surface, &presentSupport);
 
       if (queue_family.queueCount > 0 && presentSupport)
         {
@@ -1125,14 +1119,18 @@ draw_test_triangle (VkInstance vk_instance,
 {
   gsize i;
   gboolean ret = FALSE;
+  Renderer renderer =
+  {
+    .instance = vk_instance,
+    .physical_device = physical_device,
+    .framebuffer_size = 0,
+  };
 
-  Renderer renderer = { .framebuffer_size = 0, };
-
-  if (!create_surface (vk_instance, physical_device, &renderer, error))
+  if (!create_surface (&renderer, error))
     goto out;
-  if (!create_logical_device (physical_device, &renderer, error))
+  if (!create_logical_device (&renderer, error))
     goto out;
-  if (!create_swapchain (physical_device, &renderer, error))
+  if (!create_swapchain (&renderer, error))
     goto out;
   if (!create_render_pass (&renderer, error))
     goto out;
@@ -1140,7 +1138,7 @@ draw_test_triangle (VkInstance vk_instance,
     goto out;
   if (!create_framebuffers (&renderer, error))
     goto out;
-  if (!create_command_pool (physical_device, &renderer, error))
+  if (!create_command_pool (&renderer, error))
     goto out;
   if (!create_command_buffers (&renderer, error))
     goto out;
@@ -1196,8 +1194,8 @@ out:
       vkDestroyDevice (renderer.device, NULL);
     }
 
-  if (vk_instance != VK_NULL_HANDLE)
-    vkDestroySurfaceKHR (vk_instance, renderer.surface, NULL);
+  if (renderer.instance != VK_NULL_HANDLE)
+    vkDestroySurfaceKHR (renderer.instance, renderer.surface, NULL);
 
   return ret;
 }

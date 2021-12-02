@@ -644,15 +644,20 @@ def main():
             else:
                 tail = ''
 
+            if args.architecture_name is None:
+                bin_arch = 'bin'
+            else:
+                bin_arch = args.architecture_name
+
             bin_tar = os.path.join(
                 args.archive,
-                'pressure-vessel{}-bin.tar.gz'.format(tail),
+                'pressure-vessel{}-{}.tar.gz'.format(tail, bin_arch),
             )
 
             if args.check_source_directory is None:
                 src_tar = os.path.join(
                     args.archive,
-                    'pressure-vessel{}-bin+src.tar.gz'.format(tail),
+                    'pressure-vessel{}-{}+src.tar.gz'.format(tail, bin_arch),
                 )
                 subprocess.check_call([
                     'tar',

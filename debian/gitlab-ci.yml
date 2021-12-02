@@ -247,7 +247,7 @@ relocatable-install:i386:
               "$(pwd)/_build/i386/relocatable-install"
     artifacts:
         paths:
-            - _build/i386/pressure-vessel-bin.tar.gz
+            - _build/i386/pressure-vessel-i386.tar.gz
         when: on_success
 
 relocatable-install:production:

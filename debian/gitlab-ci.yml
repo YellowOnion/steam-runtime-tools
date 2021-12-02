@@ -230,8 +230,6 @@ relocatable-install:production:
             libxau-dev:amd64 \
             libxau-dev:i386 \
             meson \
-            waffle-utils-multiarch:amd64 \
-            waffle-utils-multiarch:i386 \
             ${NULL+}
 
             dpkg -i \

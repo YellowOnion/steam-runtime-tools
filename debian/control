@@ -83,7 +83,7 @@ Description: Steam Runtime utility library - documentation
  This package contains documentation.
 
 Package: libsteam-runtime-tools-0-helpers
-Architecture: amd64 i386
+Architecture: any
 Multi-Arch: same
 Section: misc
 Depends:
@@ -98,7 +98,7 @@ Description:
  available for each architecture.
 
 Package: libsteam-runtime-tools-0-relocatable-libs
-Architecture: amd64 i386
+Architecture: any
 Multi-Arch: same
 Section: misc
 Depends:
@@ -133,7 +133,7 @@ Description:
 
 Package: pressure-vessel-relocatable
 Section: games
-Architecture: amd64 i386
+Architecture: any
 Multi-Arch: foreign
 Depends:
  python3 (>= 3.5) | python3.5,
@@ -141,8 +141,8 @@ Depends:
  ${misc:Depends},
  ${shlibs:Depends},
 Recommends:
- pressure-vessel-libs-amd64,
- pressure-vessel-libs-i386,
+ pressure-vessel-libs-amd64 [amd64 i386],
+ pressure-vessel-libs-i386 [amd64 i386],
 Description: Steam container launcher
  pressure-vessel puts Steam games in containers.
  .

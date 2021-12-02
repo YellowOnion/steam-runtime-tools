@@ -52,6 +52,9 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 
 static const char *argv0;
 
+#define GET_INSTANCE_PROC(instance, name) \
+  ((PFN_ ## name) vkGetInstanceProcAddr (instance, #name))
+
 #define do_vk(expr, error) (_do_vk (#expr, expr, error))
 
 static const char *
@@ -309,11 +312,9 @@ create_surface (Renderer *renderer,
   xcb_flush (renderer->xcb_connection);
 
   PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR get_xcb_presentation_support =
-    (PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)
-    vkGetInstanceProcAddr (renderer->instance, "vkGetPhysicalDeviceXcbPresentationSupportKHR");
+    GET_INSTANCE_PROC (renderer->instance, vkGetPhysicalDeviceXcbPresentationSupportKHR);
   PFN_vkCreateXcbSurfaceKHR create_xcb_surface =
-    (PFN_vkCreateXcbSurfaceKHR)
-    vkGetInstanceProcAddr (renderer->instance, "vkCreateXcbSurfaceKHR");
+    GET_INSTANCE_PROC (renderer->instance, vkCreateXcbSurfaceKHR);
 
   if (!get_xcb_presentation_support (renderer->physical_device, 0,
                                      renderer->xcb_connection,

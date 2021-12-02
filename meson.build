@@ -208,6 +208,7 @@ endif
 
 waffle_dep = dependency(
   'waffle-1',
+  version : '>= 1.6',
 )
 
 conf_data = configuration_data()
@@ -219,14 +220,6 @@ conf_data.set(
 )
 conf_data.set('api_major', api_major)
 conf_data.set('abi_major', abi_major)
-conf_data.set(
-  'HAVE_WAFFLE_SURFACELESS_EGL',
-  waffle_dep.found() and waffle_dep.version().version_compare('>=1.6'),
-)
-conf_data.set(
-  'HAVE_WAFFLE_TEARDOWN',
-  waffle_dep.found() and waffle_dep.version().version_compare('>=1.6'),
-)
 
 if get_option('multiarch_tuple') != ''
   multiarch = get_option('multiarch_tuple')

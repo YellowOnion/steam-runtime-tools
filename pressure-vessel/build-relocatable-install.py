@@ -392,8 +392,8 @@ def main():
                 ),
                 '--no-glibc',
                 'soname:libelf.so.1',
-                'soname:libwaffle-1.so.0',
                 'soname:libz.so.1',
+                'no-dependencies:soname:libwaffle-1.so.0',
             ])
 
             if arch.name == primary_architecture:

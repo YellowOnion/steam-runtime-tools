@@ -25,7 +25,7 @@
 
 #include <stdio.h>
 
-#include "../steam-runtime-tools/graphics-test-defines.h"
+#include "graphics-test-defines.h"
 
 int
 main (int argc,

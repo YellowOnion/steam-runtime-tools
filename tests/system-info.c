@@ -25,7 +25,6 @@
 
 #include <libglnx.h>
 
-#include "steam-runtime-tools/graphics-test-defines.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -42,6 +41,7 @@
 #include <unistd.h>
 #include <ftw.h>
 
+#include "graphics-test-defines.h"
 #include "test-utils.h"
 #include "fake-home.h"
 

@@ -392,21 +392,11 @@ def main():
                 ),
                 '--no-glibc',
                 'soname:libelf.so.1',
-                'soname:libwaffle-1.so.0',
                 'soname:libz.so.1',
+                'no-dependencies:soname:libwaffle-1.so.0',
             ])
 
             if arch.name == primary_architecture:
-                path = os.path.join(
-                    args.prefix, 'lib', arch.multiarch,
-                    'libsteam-runtime-tools-0.so.0',
-                )
-
-                if os.path.exists(path):
-                    libsrt_pattern = 'path:' + path
-                else:
-                    libsrt_pattern = 'soname:libsteam-runtime-tools-0.so.0'
-
                 v_check_call([
                     '{}/{}-capsule-capture-libs'.format(
                         inst_pkglibexecdir,
@@ -423,7 +413,6 @@ def main():
                     'soname:libjson-glib-1.0.so.0',
                     'soname:libpcre.so.3',
                     'soname:libselinux.so.1',
-                    libsrt_pattern,
                 ])
 
             for so in glob.glob(

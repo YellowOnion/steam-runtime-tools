@@ -79,7 +79,7 @@ executable(
 executable(
   multiarch + '-check-vulkan',
   'check-vulkan.c',
-  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib, vulkan, xcb],
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep, json_glib, vulkan, xcb],
   include_directories : project_include_dirs,
   install : true,
   install_dir : pkglibexecdir,
@@ -140,7 +140,7 @@ executable(
   multiarch + '-check-xdg-portal',
   'check-xdg-portal.c',
   include_directories : project_include_dirs,
-  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib],
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep, json_glib],
   install : true,
   install_dir : pkglibexecdir,
   # Use the adjacent libsteam-runtime-tools and json-glib, ignoring

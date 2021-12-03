@@ -1268,7 +1268,8 @@ print_json_builder (JsonBuilder *builder,
 }
 
 static void
-print_physical_device_info (VkPhysicalDevice physical_device,
+print_physical_device_info (VkInstance instance,
+                            VkPhysicalDevice physical_device,
                             FILE *original_stdout)
 {
   g_autoptr(JsonBuilder) builder = NULL;
@@ -1276,7 +1277,9 @@ print_physical_device_info (VkPhysicalDevice physical_device,
   g_autofree gchar *driver_version = NULL;
   g_autofree gchar *vendor_id = NULL;
   g_autofree gchar *device_id = NULL;
-  VkPhysicalDeviceProperties device_properties;
+  VkPhysicalDeviceProperties2 device_properties = {};
+  VkPhysicalDeviceVulkan12Properties props12 = {};
+  PFN_vkGetPhysicalDeviceProperties2 get_props2 = NULL;
 
   builder = json_builder_new ();
   json_builder_begin_object (builder);
@@ -1284,31 +1287,71 @@ print_physical_device_info (VkPhysicalDevice physical_device,
   json_builder_set_member_name (builder, "device-info");
   json_builder_begin_object (builder);
 
-  vkGetPhysicalDeviceProperties (physical_device, &device_properties);
+  /* This looks weird, but I promise it works!
+   * The extensible VkPhysicalDeviceProperties2 struct contains the
+   * equivalent "version 1" struct as a member, so we can read the
+   * "version 1" data into a member of a zero-filled "version 2" struct.
+   * If the device implements Vulkan 1.2, then we re-read the whole struct,
+   * overwriting this. */
+  vkGetPhysicalDeviceProperties (physical_device, &device_properties.properties);
+
+  if (device_properties.properties.apiVersion >= VK_API_VERSION_1_2)
+    {
+      /* Vulkan 1.2: we can get the driver name and info (version) from the
+       * Vulkan 1.2 properties. */
+      device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+      props12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+      device_properties.pNext = &props12;
+
+      get_props2 = GET_INSTANCE_PROC (instance, vkGetPhysicalDeviceProperties2);
+
+      if (get_props2 != NULL)
+        get_props2 (physical_device, &device_properties);
+      else
+        g_warning ("Unable to find vkGetPhysicalDeviceProperties2");
+    }
 
   json_builder_set_member_name (builder, "device-name");
-  json_builder_add_string_value (builder, device_properties.deviceName);
+  json_builder_add_string_value (builder, device_properties.properties.deviceName);
 
   json_builder_set_member_name (builder, "device-type");
-  json_builder_add_int_value (builder, device_properties.deviceType);
+  json_builder_add_int_value (builder, device_properties.properties.deviceType);
 
   json_builder_set_member_name (builder, "api-version");
   api_version = g_strdup_printf ("%u.%u.%u",
-                                 VK_VERSION_MAJOR (device_properties.apiVersion),
-                                 VK_VERSION_MINOR (device_properties.apiVersion),
-                                 VK_VERSION_PATCH (device_properties.apiVersion));
+                                 VK_VERSION_MAJOR (device_properties.properties.apiVersion),
+                                 VK_VERSION_MINOR (device_properties.properties.apiVersion),
+                                 VK_VERSION_PATCH (device_properties.properties.apiVersion));
   json_builder_add_string_value (builder, api_version);
 
   json_builder_set_member_name (builder, "driver-version");
-  driver_version = g_strdup_printf ("%#x", device_properties.driverVersion);
+  driver_version = g_strdup_printf ("%#x", device_properties.properties.driverVersion);
   json_builder_add_string_value (builder, driver_version);
 
+  if (props12.driverID != 0)
+    {
+      json_builder_set_member_name (builder, "driver-id");
+      json_builder_add_int_value (builder, props12.driverID);
+    }
+
+  if (props12.driverName[0] != '\0')
+    {
+      json_builder_set_member_name (builder, "driver-name");
+      json_builder_add_string_value (builder, props12.driverName);
+    }
+
+  if (props12.driverInfo[0] != '\0')
+    {
+      json_builder_set_member_name (builder, "driver-info");
+      json_builder_add_string_value (builder, props12.driverInfo);
+    }
+
   json_builder_set_member_name (builder, "vendor-id");
-  vendor_id = g_strdup_printf ("%#x", device_properties.vendorID);
+  vendor_id = g_strdup_printf ("%#x", device_properties.properties.vendorID);
   json_builder_add_string_value (builder, vendor_id);
 
   json_builder_set_member_name (builder, "device-id");
-  device_id = g_strdup_printf ("%#x", device_properties.deviceID);
+  device_id = g_strdup_printf ("%#x", device_properties.properties.deviceID);
   json_builder_add_string_value (builder, device_id);
 
   json_builder_end_object (builder);
@@ -1412,7 +1455,7 @@ int main (int argc,
     goto out;
 
   for (i = 0; i < physical_device_count; i++)
-    print_physical_device_info (physical_devices[i], original_stdout);
+    print_physical_device_info (vk_instance, physical_devices[i], original_stdout);
 
   for (i = 0; i < physical_device_count; i++)
     {

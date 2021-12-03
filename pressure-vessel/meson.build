@@ -32,7 +32,7 @@ configure_file(
 
 pv_dir = 'lib/pressure-vessel/relocatable'
 pv_bindir = pv_dir + '/bin'
-pv_rpath = bin_rpath + ':${ORIGIN}/../' + get_option('libdir')
+pv_rpath = bin_rpath
 
 pv_c_args = ['-include', '_pressure-vessel-config.h']
 

@@ -439,13 +439,6 @@ def main():
                     so,
                     os.path.join(
                         installation, 'lib', arch.multiarch,
-                        os.path.basename(so)
-                    )
-                )
-                install(
-                    so,
-                    os.path.join(
-                        installation, 'lib', arch.multiarch,
                         'steam-runtime-tools-0',
                         os.path.basename(so)
                     )

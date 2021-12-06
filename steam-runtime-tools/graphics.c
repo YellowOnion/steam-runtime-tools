@@ -85,11 +85,13 @@ struct _SrtGraphicsDevice
   SrtGraphicsIssues issues;
   gchar *name;
   gchar *api_version;
+  gchar *driver_name;
   gchar *driver_version;
   gchar *vendor_id;
   gchar *device_id;
   gchar *messages;
   SrtVkPhysicalDeviceType type;
+  guint32 vulkan_driver_id;
 };
 
 struct _SrtGraphicsDeviceClass
@@ -104,6 +106,8 @@ enum
   GRAPHICS_DEVICE_PROP_ISSUES,
   GRAPHICS_DEVICE_PROP_NAME,
   GRAPHICS_DEVICE_PROP_API_VERSION,
+  GRAPHICS_DEVICE_PROP_VULKAN_DRIVER_ID,
+  GRAPHICS_DEVICE_PROP_DRIVER_NAME,
   GRAPHICS_DEVICE_PROP_DRIVER_VERSION,
   GRAPHICS_DEVICE_PROP_VENDOR_ID,
   GRAPHICS_DEVICE_PROP_DEVICE_ID,
@@ -138,6 +142,14 @@ srt_graphics_device_get_property (GObject *object,
 
       case GRAPHICS_DEVICE_PROP_API_VERSION:
         g_value_set_string (value, self->api_version);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_VULKAN_DRIVER_ID:
+        g_value_set_uint (value, self->vulkan_driver_id);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_DRIVER_NAME:
+        g_value_set_string (value, self->driver_name);
         break;
 
       case GRAPHICS_DEVICE_PROP_DRIVER_VERSION:
@@ -189,6 +201,18 @@ srt_graphics_device_set_property (GObject *object,
         self->api_version = g_value_dup_string (value);
         break;
 
+      case GRAPHICS_DEVICE_PROP_VULKAN_DRIVER_ID:
+        /* Construct only */
+        g_return_if_fail (self->vulkan_driver_id == 0);
+        self->vulkan_driver_id = g_value_get_uint (value);
+        break;
+
+      case GRAPHICS_DEVICE_PROP_DRIVER_NAME:
+        /* Construct only */
+        g_return_if_fail (self->driver_name == NULL);
+        self->driver_name = g_value_dup_string (value);
+        break;
+
       case GRAPHICS_DEVICE_PROP_DRIVER_VERSION:
         /* Construct only */
         g_return_if_fail (self->driver_version == NULL);
@@ -225,6 +249,7 @@ srt_graphics_device_finalize (GObject *object)
 
   g_free (self->name);
   g_free (self->api_version);
+  g_free (self->driver_name);
   g_free (self->driver_version);
   g_free (self->vendor_id);
   g_free (self->device_id);
@@ -260,6 +285,20 @@ srt_graphics_device_class_init (SrtGraphicsDeviceClass *cls)
   graphics_device_properties[GRAPHICS_DEVICE_PROP_API_VERSION] =
     g_param_spec_string ("api-version", "API version",
                          "Which API version is in use.",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_VULKAN_DRIVER_ID] =
+    g_param_spec_uint ("vulkan-driver-id", "Vulkan driver ID",
+                         "Which device driver is in use, numerically equal to a VkDriverId.",
+                         0, G_MAXUINT32, 0,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  graphics_device_properties[GRAPHICS_DEVICE_PROP_DRIVER_NAME] =
+    g_param_spec_string ("driver-name", "Driver name",
+                         "Which device driver is in use.",
                          NULL,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);
@@ -337,6 +376,37 @@ srt_graphics_device_get_api_version (SrtGraphicsDevice *self)
 {
   g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
   return self->api_version;
+}
+
+/**
+ * srt_graphics_device_get_vulkan_driver_id:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the `VkDriverId` of the driver used by @self, or 0 if unknown.
+ *
+ * Returns: An integer numerically equal to a `VkDriverId`, indicating
+ *  the driver in use, or 0 if unknown.
+ */
+guint32
+srt_graphics_device_get_vulkan_driver_id (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), 0);
+  return self->vulkan_driver_id;
+}
+
+/**
+ * srt_graphics_device_get_driver_name:
+ * @self: a SrtGraphicsDevice object
+ *
+ * Return the name of the driver used by @self, or %NULL if it's not known.
+ *
+ * Returns (nullable): A string indicating the driver version.
+ */
+const char *
+srt_graphics_device_get_driver_name (SrtGraphicsDevice *self)
+{
+  g_return_val_if_fail (SRT_IS_GRAPHICS_DEVICE (self), NULL);
+  return self->driver_name;
 }
 
 /**
@@ -821,15 +891,19 @@ _srt_process_check_vulkan_info (JsonNode *node,
                                 gchar **version_string,
                                 SrtGraphicsDevice **device)
 {
+  g_autoptr(GString) buf = NULL;
   JsonObject *object = NULL;
   JsonObject *sub_object = NULL;
   JsonNode *sub_node = NULL;
   const gchar *device_name = NULL;
   const gchar *api_version = NULL;
-  const gchar *driver_version = NULL;
+  guint32 driver_version = 0;
   const gchar *vendor_id = NULL;
   const gchar *device_id = NULL;
+  const char *driver_name;
+  const char *driver_info;
   SrtVkPhysicalDeviceType device_type;
+  gint64 driver_id;
 
   /* Until we parse the drawing test results, we assume that we are not
    * able to draw with this device */
@@ -847,23 +921,53 @@ _srt_process_check_vulkan_info (JsonNode *node,
   device_name = json_object_get_string_member_with_default (sub_object, "device-name",
                                                             NULL);
   device_type = json_object_get_int_member_with_default (sub_object, "device-type", 0);
+  driver_id = json_object_get_int_member_with_default (sub_object, "driver-id", 0);
   api_version = json_object_get_string_member_with_default (sub_object, "api-version",
                                                             NULL);
-  driver_version = json_object_get_string_member_with_default (sub_object, "driver-version",
-                                                               NULL);
+
+  if (!_srt_json_object_get_hex_uint32_member (sub_object, "driver-version", &driver_version))
+    driver_version = 0;
+
+  /* Typical values: "NVIDIA", "radv", "Intel open-source Mesa driver" */
+  driver_name = json_object_get_string_member_with_default (sub_object, "driver-name",
+                                                            NULL);
+  /* Typical values: "470.86" for Nvidia, "Mesa 21.0.3 (ACO)" for Mesa */
+  driver_info = json_object_get_string_member_with_default (sub_object, "driver-info",
+                                                            NULL);
   vendor_id = json_object_get_string_member_with_default (sub_object, "vendor-id",
                                                           NULL);
   device_id = json_object_get_string_member_with_default (sub_object, "device-id",
                                                           NULL);
 
-  *version_string = g_strdup_printf ("%s (device %s:%s) (driver %s)",
-                                     api_version, vendor_id, device_id, driver_version);
+  if (driver_id < 0 || driver_id > G_MAXUINT32)
+    driver_id = 0;
+
+  buf = g_string_new ("");
+
+  if (driver_info != NULL)
+    {
+      /* Vulkan 1.2 drivers can report their real version number in the
+       * driver info, and in practice Mesa and Nvidia both do. */
+      g_string_append (buf, driver_info);
+    }
+  else
+    {
+      /* For older drivers, hope it's the same encoding as apiVersion,
+       * as it is in Mesa */
+      g_string_append_printf (buf, "%#x (%u.%u.%u?)",
+                              driver_version,
+                              VK_VERSION_MAJOR (driver_version),
+                              VK_VERSION_MINOR (driver_version),
+                              VK_VERSION_PATCH (driver_version));
+    }
 
   if (device_type == SRT_VK_PHYSICAL_DEVICE_TYPE_CPU)
     issues |= SRT_GRAPHICS_ISSUES_SOFTWARE_RENDERING;
 
-  *device = _srt_graphics_device_new (device_name, api_version, driver_version,
+  *device = _srt_graphics_device_new (device_name, api_version,
+                                      (guint32) driver_id, driver_name, buf->str,
                                       vendor_id, device_id, device_type, issues);
+  *version_string = g_string_free (g_steal_pointer (&buf), FALSE);
 
   return issues;
 }
@@ -2133,18 +2237,26 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
                   SrtGraphicsDevice *device = NULL;
                   const gchar *name;
                   const gchar *api_version;
+                  const gchar *driver_name;
                   const gchar *driver_version;
                   const gchar *vendor_id;
                   const gchar *device_id;
                   g_autofree gchar *dev_messages = NULL;
                   SrtVkPhysicalDeviceType type = SRT_VK_PHYSICAL_DEVICE_TYPE_OTHER;
                   SrtGraphicsIssues issues = SRT_GRAPHICS_ISSUES_NONE;
+                  gint64 driver_id;
 
                   JsonObject *device_obj = json_array_get_object_element (array, j);
                   name = json_object_get_string_member_with_default (device_obj, "name",
                                                                      NULL);
                   api_version = json_object_get_string_member_with_default (device_obj,
                                                                             "api-version",
+                                                                            NULL);
+                  driver_id = json_object_get_int_member_with_default (device_obj,
+                                                                       "vulkan-driver-id",
+                                                                       0);
+                  driver_name = json_object_get_string_member_with_default (device_obj,
+                                                                            "driver-name",
                                                                             NULL);
                   driver_version = json_object_get_string_member_with_default (device_obj,
                                                                                "driver-version",
@@ -2171,7 +2283,13 @@ _srt_graphics_get_from_report (JsonObject *json_obj,
                   dev_messages = _srt_json_object_dup_array_of_lines_member (device_obj,
                                                                              "messages");
 
-                  device = _srt_graphics_device_new (name, api_version, driver_version,
+                  if (driver_id < 0 || driver_id > G_MAXUINT32)
+                    driver_id = 0;
+
+                  device = _srt_graphics_device_new (name, api_version,
+                                                     (guint32) driver_id,
+                                                     driver_name,
+                                                     driver_version,
                                                      vendor_id, device_id, type,
                                                      issues);
                   _srt_graphics_device_set_messages (device, dev_messages);

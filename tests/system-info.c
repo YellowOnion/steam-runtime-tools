@@ -25,7 +25,6 @@
 
 #include <libglnx.h>
 
-#include "steam-runtime-tools/graphics-test-defines.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
 #include "steam-runtime-tools/utils-internal.h"
 
@@ -42,6 +41,7 @@
 #include <unistd.h>
 #include <ftw.h>
 
+#include "graphics-test-defines.h"
 #include "test-utils.h"
 #include "fake-home.h"
 
@@ -2473,6 +2473,8 @@ typedef struct
   SrtGraphicsIssues issues;
   const gchar *name;
   const gchar *api_version;
+  guint32 vulkan_driver_id;
+  const gchar *driver_name;
   const gchar *driver_version;
   const gchar *vendor_id;
   const gchar *device_id;
@@ -2687,6 +2689,8 @@ static JsonTest json_test[] =
               {
                 .name = SRT_TEST_GOOD_GRAPHICS_RENDERER,
                 .api_version = SRT_TEST_GOOD_GRAPHICS_API_VERSION,
+                .vulkan_driver_id = SRT_TEST_GOOD_GRAPHICS_DRIVER_ID,
+                .driver_name = SRT_TEST_GOOD_GRAPHICS_DRIVER_NAME,
                 .driver_version = SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION,
                 .vendor_id = SRT_TEST_GOOD_GRAPHICS_VENDOR_ID,
                 .device_id = SRT_TEST_GOOD_GRAPHICS_DEVICE_ID,
@@ -3597,6 +3601,10 @@ json_parsing (Fixture *f,
                                    this_device_test.name);
                   g_assert_cmpstr (srt_graphics_device_get_api_version (iter->data), ==,
                                    this_device_test.api_version);
+                  g_assert_cmpuint (srt_graphics_device_get_vulkan_driver_id (iter->data), ==,
+                                    this_device_test.vulkan_driver_id);
+                  g_assert_cmpstr (srt_graphics_device_get_driver_name (iter->data), ==,
+                                   this_device_test.driver_name);
                   g_assert_cmpstr (srt_graphics_device_get_driver_version (iter->data), ==,
                                    this_device_test.driver_version);
                   g_assert_cmpstr (srt_graphics_device_get_vendor_id (iter->data), ==,

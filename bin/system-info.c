@@ -401,6 +401,9 @@ print_graphics_details(JsonBuilder *builder,
             {
               for (iter = devices; iter != NULL; iter = iter->next)
                 {
+                  const char *name;
+                  guint32 id;
+
                   json_builder_begin_object (builder);
                   json_builder_set_member_name (builder, "name");
                   json_builder_add_string_value (builder,
@@ -408,6 +411,23 @@ print_graphics_details(JsonBuilder *builder,
                   json_builder_set_member_name (builder, "api-version");
                   json_builder_add_string_value (builder,
                                                  srt_graphics_device_get_api_version (iter->data));
+
+                  id = srt_graphics_device_get_vulkan_driver_id (iter->data);
+
+                  if (id != 0)
+                    {
+                      json_builder_set_member_name (builder, "vulkan-driver-id");
+                      json_builder_add_int_value (builder, id);
+                    }
+
+                  name = srt_graphics_device_get_driver_name (iter->data);
+
+                  if (name != NULL)
+                    {
+                      json_builder_set_member_name (builder, "driver-name");
+                      json_builder_add_string_value (builder, name);
+                    }
+
                   json_builder_set_member_name (builder, "driver-version");
                   json_builder_add_string_value (builder,
                                                  srt_graphics_device_get_driver_version (iter->data));

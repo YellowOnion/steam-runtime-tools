@@ -268,17 +268,29 @@ foreach helper : [
   'mock-bad-check-xdg-portal',
   'mock-good-check-va-api',
   'mock-good-check-vdpau',
-  'mock-good-check-vulkan',
   'mock-good-check-xdg-portal',
   'mock-good-flatpak-check-xdg-portal',
   'mock-hanging-check-xdg-portal',
   'mock-hanging-wflinfo',
-  'mock-mixed-check-vulkan',
   'mock-sigusr-wflinfo',
 ]
   executable(
     helper,
     helper + '.c',
+    include_directories : project_include_dirs,
+    install: true,
+    install_dir: tests_dir
+  )
+endforeach
+
+foreach helper : [
+  'mock-good-check-vulkan',
+  'mock-mixed-check-vulkan',
+]
+  executable(
+    helper,
+    helper + '.c',
+    dependencies : [glib],
     include_directories : project_include_dirs,
     install: true,
     install_dir: tests_dir

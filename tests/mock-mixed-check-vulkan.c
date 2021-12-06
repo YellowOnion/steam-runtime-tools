@@ -24,8 +24,9 @@
  */
 
 #include <stdio.h>
+#include <glib.h>
 
-#include "../steam-runtime-tools/graphics-test-defines.h"
+#include "graphics-test-defines.h"
 
 int
 main (int argc,
@@ -37,14 +38,17 @@ main (int argc,
           "\"device-name\":\"" SRT_TEST_GOOD_GRAPHICS_RENDERER "\","
           "\"device-type\":2,"
           "\"api-version\":\"" SRT_TEST_GOOD_GRAPHICS_API_VERSION "\","
-          "\"driver-version\":\"" SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION "\","
+          "\"driver-id\":" G_STRINGIFY (SRT_TEST_GOOD_GRAPHICS_DRIVER_ID) ","
+          "\"driver-name\":\"" SRT_TEST_GOOD_GRAPHICS_DRIVER_NAME "\","
+          "\"driver-info\":\"" SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION "\","
+          "\"driver-version\":\"" G_STRINGIFY (SRT_TEST_GOOD_GRAPHICS_DRIVER_VERSION_HEX) "\","
           "\"vendor-id\":\"" SRT_TEST_GOOD_GRAPHICS_VENDOR_ID "\","
           "\"device-id\":\"" SRT_TEST_GOOD_GRAPHICS_DEVICE_ID "\"}}\n"
           "{\"device-info\":{"
           "\"device-name\":\"" SRT_TEST_SOFTWARE_GRAPHICS_RENDERER "\","
           "\"device-type\":4,"
           "\"api-version\":\"" SRT_TEST_SOFTWARE_GRAPHICS_API_VERSION "\","
-          "\"driver-version\":\"" SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION "\","
+          "\"driver-version\":\"" G_STRINGIFY (SRT_TEST_SOFTWARE_GRAPHICS_DRIVER_VERSION_HEX) "\","
           "\"vendor-id\":\"" SRT_TEST_SOFTWARE_GRAPHICS_VENDOR_ID "\","
           "\"device-id\":\"" SRT_TEST_SOFTWARE_GRAPHICS_DEVICE_ID "\"}}\n"
           "{\"test\":{"

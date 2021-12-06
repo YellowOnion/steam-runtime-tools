@@ -61,3 +61,7 @@ void _srt_json_builder_add_error_members (JsonBuilder *builder,
 void _srt_json_builder_add_string_force_utf8 (JsonBuilder *builder,
                                               const char *key,
                                               const char *value);
+
+gboolean _srt_json_object_get_hex_uint32_member (JsonObject *object,
+                                                 const gchar *member_name,
+                                                 guint32 *value_out);

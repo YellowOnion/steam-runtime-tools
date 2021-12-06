@@ -39,9 +39,9 @@
 #include <glib/gstdio.h>
 
 #include "steam-runtime-tools/graphics-internal.h"
-#include "steam-runtime-tools/graphics-test-defines.h"
 #include "steam-runtime-tools/system-info.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "graphics-test-defines.h"
 #include "test-utils.h"
 
 static const char *argv0;

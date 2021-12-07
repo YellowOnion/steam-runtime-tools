@@ -2019,6 +2019,10 @@ main (int argc,
       flatpak_exports_add_path_expose (exports,
                                        FLATPAK_FILESYSTEM_MODE_READ_ONLY,
                                        "/nix");
+      /* Same, but for Guix */
+      flatpak_exports_add_path_expose (exports,
+                                       FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                       "/gnu/store");
 
       /* Make arbitrary filesystems available. This is not as complete as
        * Flatpak yet. */

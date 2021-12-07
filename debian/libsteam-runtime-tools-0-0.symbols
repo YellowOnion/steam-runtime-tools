@@ -44,12 +44,14 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_graphics_device_get_api_version@Base 0.20210201.0
  srt_graphics_device_get_device_id@Base 0.20210201.0
  srt_graphics_device_get_device_type@Base 0.20210201.0
+ srt_graphics_device_get_driver_name@Base 0.20211207.0
  srt_graphics_device_get_driver_version@Base 0.20210201.0
  srt_graphics_device_get_issues@Base 0.20210201.0
  srt_graphics_device_get_messages@Base 0.20210201.0
  srt_graphics_device_get_name@Base 0.20210201.0
  srt_graphics_device_get_type@Base 0.20210201.0
  srt_graphics_device_get_vendor_id@Base 0.20210201.0
+ srt_graphics_device_get_vulkan_driver_id@Base 0.20211207.0
  srt_graphics_dup_parameters_string@Base 0.20190822.0
  srt_graphics_get_devices@Base 0.20210201.0
  srt_graphics_get_exit_status@Base 0.20191209.0

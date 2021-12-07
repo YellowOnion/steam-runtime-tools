@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20211206.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20211207.0) steamrt; urgency=medium
 
   [ Simon McVittie ]
   * build: Include our own copy of wflinfo, depending on libwaffle 1.6.
@@ -28,7 +28,7 @@ steam-runtime-tools (0.20211206.0) UNRELEASED; urgency=medium
   * d/rules: Remove unused vulkaninfo symlink
   * build-relocatable-install: Remove unused ld.so value
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 06 Dec 2021 17:19:34 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 07 Dec 2021 16:15:56 +0000
 
 steam-runtime-tools (0.20211027.0) steamrt; urgency=medium
 

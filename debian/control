@@ -19,6 +19,7 @@ Build-Depends:
  libva-dev,
  libvdpau-dev,
  libvulkan-dev,
+ libwaffle-dev (>= 1.6),
  libx11-dev,
  libxau-dev,
  libxcb1-dev,

@@ -3549,6 +3549,9 @@ ensure_driver_environment (SrtSystemInfo *self)
       static const gchar * const drivers_env[] =
       {
         "ALSA_CONFIG_PATH",
+        "AMDVLK_ENABLE_DEVELOPING_EXT",
+        "AMD_CONFIG_DIR",
+        "AMD_SHADER_DISK_CACHE_PATH",
         "AMD_VULKAN_ICD",
         "AUDIODEV",
         "BUMBLEBEE_SOCKET",

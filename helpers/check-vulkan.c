@@ -260,7 +260,11 @@ create_instance (VkInstance *vk_instance,
   /* Since Vulkan 1.1, it is valid to pass in a higher API version and
    * the implementation will use MIN(what it supports, what we ask for). */
   if (api_version >= VK_API_VERSION_1_1)
+#if VK_HEADER_VERSION >= 131
     app.apiVersion = VK_API_VERSION_1_2;
+#else
+    app.apiVersion = VK_API_VERSION_1_1;
+#endif
 
   if (!do_vk (vkCreateInstance (&inst_info, NULL, vk_instance), error))
     return FALSE;
@@ -1278,8 +1282,10 @@ print_physical_device_info (VkInstance instance,
   g_autofree gchar *vendor_id = NULL;
   g_autofree gchar *device_id = NULL;
   VkPhysicalDeviceProperties2 device_properties = {};
+#if VK_HEADER_VERSION >= 131
   VkPhysicalDeviceVulkan12Properties props12 = {};
   PFN_vkGetPhysicalDeviceProperties2 get_props2 = NULL;
+#endif
 
   builder = json_builder_new ();
   json_builder_begin_object (builder);
@@ -1295,6 +1301,7 @@ print_physical_device_info (VkInstance instance,
    * overwriting this. */
   vkGetPhysicalDeviceProperties (physical_device, &device_properties.properties);
 
+#if VK_HEADER_VERSION >= 131
   if (device_properties.properties.apiVersion >= VK_API_VERSION_1_2)
     {
       /* Vulkan 1.2: we can get the driver name and info (version) from the
@@ -1310,6 +1317,7 @@ print_physical_device_info (VkInstance instance,
       else
         g_warning ("Unable to find vkGetPhysicalDeviceProperties2");
     }
+#endif
 
   json_builder_set_member_name (builder, "device-name");
   json_builder_add_string_value (builder, device_properties.properties.deviceName);
@@ -1328,6 +1336,7 @@ print_physical_device_info (VkInstance instance,
   driver_version = g_strdup_printf ("%#x", device_properties.properties.driverVersion);
   json_builder_add_string_value (builder, driver_version);
 
+#if VK_HEADER_VERSION >= 131
   if (props12.driverID != 0)
     {
       json_builder_set_member_name (builder, "driver-id");
@@ -1345,6 +1354,7 @@ print_physical_device_info (VkInstance instance,
       json_builder_set_member_name (builder, "driver-info");
       json_builder_add_string_value (builder, props12.driverInfo);
     }
+#endif
 
   json_builder_set_member_name (builder, "vendor-id");
   vendor_id = g_strdup_printf ("%#x", device_properties.properties.vendorID);

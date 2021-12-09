@@ -147,6 +147,12 @@ path_visible_in_container_namespace (PvRuntimeFlags flags,
       && (path[3] == '\0' || path[3] == '/'))
     return TRUE;
 
+  /* Similar, but for Guix */
+  if (!(flags & PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX)
+      && g_str_has_prefix (path, "gnu/store")
+      && (path[9] == '\0' || path[9] == '/'))
+    return TRUE;
+
   return FALSE;
 }
 
@@ -3086,7 +3092,7 @@ pv_runtime_take_from_provider (PvRuntime *self,
                                      source_in_provider, NULL);
         }
       /* A few paths are always available as-is in the container, such
-       * as /nix */
+       * as /nix and /gnu/store */
       else if (path_visible_in_container_namespace (self->flags,
                                                     source_in_provider))
         {

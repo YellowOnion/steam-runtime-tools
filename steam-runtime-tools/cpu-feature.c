@@ -48,8 +48,8 @@
 
 /**
  * _srt_feature_get_x86_flags:
- * @known: (not optional): Used to return the #SrtX86FeatureFlags that have
- *  been checked
+ * @known: (out) (not optional): Used to return the #SrtX86FeatureFlags
+ *  that have been checked
  *
  * Returns: A #SrtX86FeatureFlags with the available X86 CPU flags.
  */

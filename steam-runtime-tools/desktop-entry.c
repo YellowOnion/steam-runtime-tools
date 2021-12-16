@@ -281,7 +281,7 @@ srt_desktop_entry_is_default_handler (SrtDesktopEntry *self)
 }
 
 /**
- * srt_desktop_entry_is_default_handler:
+ * srt_desktop_entry_is_steam_handler:
  * @self: The #SrtDesktopEntry object
  *
  * Returns: %TRUE if @self can handle `steam:` URIs

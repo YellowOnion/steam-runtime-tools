@@ -91,7 +91,6 @@ GType srt_steam_get_type (void);
  * @SRT_STEAM_ISSUES_UNEXPECTED_STEAM_COMPAT_CLIENT_INSTALL_PATH: If the
  *  environment `STEAM_COMPAT_CLIENT_INSTALL_PATH` is set, its realpath() is
  *  not the equivalent of `~/.steam/root`.
- * @SRT_STEAM_ISSUES_UNKNOWN: The Steam problems are not known
  *
  * A bitfield with flags representing problems with the Steam
  * installation, or %SRT_STEAM_ISSUES_NONE (which is numerically zero)

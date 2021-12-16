@@ -889,8 +889,6 @@ srt_input_device_dup_usb_device_uevent (SrtInputDevice *device)
 /**
  * srt_input_device_get_usb_device_identity:
  * @device: An object implementing #SrtInputDeviceInterface
- * @bus_type: (out): Used to return the bus type from `<linux/input.h>`,
- *  usually `BUS_USB` or `BUS_BLUETOOTH`
  * @vendor_id: (out): Used to return the vendor ID, namespaced by
  *  the @bus_type, or 0 if unavailable
  * @product_id: (out): Used to return the product ID, namespaced by
@@ -1209,7 +1207,7 @@ try_udev (SrtInputDeviceMonitorFlags flags,
  * Take additional references with g_object_ref(), release references
  * with g_object_unref().
  *
- * Returns: the input device monitor
+ * Returns: (transfer full): the input device monitor
  */
 SrtInputDeviceMonitor *
 srt_input_device_monitor_new (SrtInputDeviceMonitorFlags flags)
@@ -1252,7 +1250,7 @@ srt_input_device_monitor_default_do_nothing (SrtInputDeviceMonitor *monitor)
 
 /**
  * srt_input_device_monitor_get_flags:
- * @device: An object implementing #SrtInputDeviceMonitorInterface
+ * @monitor: An object implementing #SrtInputDeviceMonitorInterface
  *
  * Return flags describing the input device monitor.
  *

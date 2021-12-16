@@ -266,7 +266,7 @@ SrtXdgPortalIssues srt_system_info_get_xdg_portal_issues (SrtSystemInfo *self,
 _SRT_PUBLIC
 gboolean srt_system_info_check_runtime_linker (SrtSystemInfo *self,
                                                const char *multiarch_tuple,
-                                               gchar **real_path,
+                                               gchar **resolved,
                                                GError **error);
 
 _SRT_PUBLIC

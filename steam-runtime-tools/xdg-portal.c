@@ -46,16 +46,12 @@
  * @short_description: Get information about system's XDG portals support
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *
- * #SrtXdgPortal is an opaque object representing the XDG portals support.
- * This is a reference-counted object: use g_object_ref() and
- * g_object_unref() to manage its lifecycle.
- *
  * #SrtXdgPortalBackend is an opaque object representing an XDG portal
  * backend. This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
  *
  * #SrtXdgPortalInterface is an opaque object representing an XDG portal
- * inerface. This is a reference-counted object: use g_object_ref() and
+ * interface. This is a reference-counted object: use g_object_ref() and
  * g_object_unref() to manage its lifecycle.
  */
 

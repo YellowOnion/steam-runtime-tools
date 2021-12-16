@@ -1,4 +1,4 @@
-/*< internal_header >*/
+/*<private_header>*/
 /*
  * Copyright © 2019-2021 Collabora Ltd.
  *

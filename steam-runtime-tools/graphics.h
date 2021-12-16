@@ -406,8 +406,11 @@ SrtLoadableIssues srt_vulkan_layer_get_issues (SrtVulkanLayer *self);
 _SRT_PUBLIC
 SrtVulkanLayer *srt_vulkan_layer_new_replace_library_path (SrtVulkanLayer *self,
                                                            const char *path);
-_SRT_PUBLIC G_DEPRECATED_FOR (srt_system_info_list_explicit_vulkan_layers or
+#ifndef __GTK_DOC_IGNORE__
+_SRT_PUBLIC
+G_DEPRECATED_FOR (srt_system_info_list_explicit_vulkan_layers or
 srt_system_info_list_implicit_vulkan_layers)
+#endif
 GList *_srt_load_vulkan_layers (const char *sysroot,
                                 gchar **envp,
                                 gboolean explicit);

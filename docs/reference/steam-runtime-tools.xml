@@ -23,13 +23,18 @@ SPDX-License-Identifier: MIT
   <chapter id="ch-specific">
     <title>Specific system information</title>
     <xi:include href="xml/architecture.xml"/>
+    <xi:include href="xml/container.xml"/>
     <xi:include href="xml/cpu-feature.xml"/>
     <xi:include href="xml/desktop-entry.xml"/>
+    <xi:include href="xml/enums.xml"/>
     <xi:include href="xml/graphics.xml"/>
+    <xi:include href="xml/input-device.xml"/>
     <xi:include href="xml/library.xml"/>
     <xi:include href="xml/locale.xml"/>
     <xi:include href="xml/runtime.xml"/>
     <xi:include href="xml/steam.xml"/>
+    <xi:include href="xml/utils.xml"/>
+    <xi:include href="xml/xdg-portal.xml"/>
   </chapter>
 
   <xi:include href="xml/annotation-glossary.xml"><xi:fallback /></xi:include>

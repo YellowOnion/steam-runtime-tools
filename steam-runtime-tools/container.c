@@ -41,7 +41,7 @@
 #include "steam-runtime-tools/utils-internal.h"
 
 /**
- * SECTION:container-info
+ * SECTION:container
  * @title: Container info
  * @short_description: Information about the eventual container that is currently in use
  * @include: steam-runtime-tools/steam-runtime-tools.h

@@ -1,3 +1,4 @@
+/*<private_header>*/
 /*
  * libudev-based input device monitor, loosely based on SDL code.
  *

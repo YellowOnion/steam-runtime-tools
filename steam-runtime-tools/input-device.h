@@ -60,6 +60,7 @@
  *  the IBM/Lenovo Trackpoint (udev ID_INPUT_POINTINGSTICK)
  * @SRT_INPUT_DEVICE_TYPE_FLAGS_SWITCH: A switch, such as a laptop lid being
  *  opened (udev ID_INPUT_SWITCH)
+ * @SRT_INPUT_DEVICE_TYPE_FLAGS_NONE: None of the above
  *
  * Flags describing a type of input device. An input device can fall into
  * one or more of these categories.
@@ -90,6 +91,7 @@ typedef enum
  *  openable in read-only mode
  * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_READ_WRITE: Only report device nodes that appear to be
  *  openable in read/write mode
+ * @SRT_INPUT_DEVICE_INTERFACE_FLAGS_NONE: None of the above
  *
  * Flags describing the interface offered by an input device.
  */

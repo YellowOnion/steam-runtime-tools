@@ -571,7 +571,7 @@ srt_input_device_default_peek_event_capabilities (SrtInputDevice *device)
 /**
  * srt_input_device_has_event_type:
  * @device: An object implementing #SrtInputDeviceInterface
- * @type: %EV_KEY, %EV_ABS, %EV_REL, %EV_FF or another evdev event type
+ * @type: `EV_KEY`, `EV_ABS`, `EV_REL`, `EV_FF` or another evdev event type
  *
  * If the @device is an evdev device implementing the given event
  * type, return %TRUE. Otherwise return %FALSE.
@@ -1341,6 +1341,7 @@ srt_input_device_monitor_request_evdev (SrtInputDeviceMonitor *monitor)
 /**
  * srt_input_device_monitor_start:
  * @monitor: The input device monitor
+ * @error: Used to report an error on failure
  *
  * Start to watch for input devices.
  *
@@ -1350,8 +1351,8 @@ srt_input_device_monitor_request_evdev (SrtInputDeviceMonitor *monitor)
  *
  * The SrtInputDeviceMonitor::added signal will be emitted when
  * a matching input device is detected.
- * If the monitor is watching for both %SRT_INPUT_DEVICE_FLAGS_EVENT
- * and %SRT_INPUT_DEVICE_FLAGS_RAW_HID devices, one signal will be
+ * If the monitor is watching for both %SRT_INPUT_DEVICE_INTERFACE_FLAGS_EVENT
+ * and %SRT_INPUT_DEVICE_INTERFACE_FLAGS_RAW_HID devices, one signal will be
  * emitted for each one.
  *
  * The SrtInputDeviceMonitor::removed signal will be emitted when

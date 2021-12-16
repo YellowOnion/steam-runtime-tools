@@ -1,3 +1,4 @@
+/*<private_header>*/
 /*
  * Functions backported and adapted from GLib
  *

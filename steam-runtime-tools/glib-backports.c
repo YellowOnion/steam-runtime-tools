@@ -589,7 +589,7 @@ my_g_ptr_array_find_with_equal_func (GPtrArray     *haystack,
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 68, 0)
-/**
+/*
  * g_string_replace:
  * @string: a #GString
  * @find: the string to find in @string

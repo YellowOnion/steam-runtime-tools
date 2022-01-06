@@ -780,7 +780,7 @@ generate_locales (gchar **locpath_out,
   const char *locale_gen_argv[] =
   {
     NULL,   /* placeholder for /path/to/pressure-vessel-locale-gen */
-    "--output-dir", temp_dir,
+    "--output-dir", NULL,
     "--verbose",
     NULL
   };
@@ -797,6 +797,7 @@ generate_locales (gchar **locpath_out,
   locale_gen_argv[0] = pvlg;
 
   temp_dir = g_dir_make_tmp ("pressure-vessel-locales-XXXXXX", error);
+  locale_gen_argv[2] = temp_dir;
 
   if (temp_dir == NULL)
     {

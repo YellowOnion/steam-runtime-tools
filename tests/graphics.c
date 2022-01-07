@@ -110,6 +110,8 @@ setup (Fixture *f,
   if (config != NULL && config->icd_mode == ICD_MODE_XDG_DIRS)
     {
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "XDG_CONFIG_HOME", "/confhome", TRUE);
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
                                             "XDG_CONFIG_DIRS", "/confdir", TRUE);
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
                                             "XDG_DATA_HOME", "/datahome", TRUE);
@@ -118,6 +120,8 @@ setup (Fixture *f,
     }
   else
     {
+      f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
+                                              "XDG_CONFIG_HOME");
       f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
                                               "XDG_CONFIG_DIRS");
       f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
@@ -1152,129 +1156,13 @@ assert_vulkan_icds (const SrtObjectList *icds,
       iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/usr/local/share/vulkan/icd.d/intel_icd.i686.json");
-      assert_vulkan_icd_no_error (iter->data);
-      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/i386-mock-abi/libvulkan_intel.so");
-      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
-      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
-      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-mock-abi/libvulkan_intel.so");
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_NONE);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/usr/share/vulkan/icd.d/intel_icd.x86_64.json");
-      assert_vulkan_icd_no_error (iter->data);
-      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "/usr/lib/x86_64-mock-abi/libvulkan_intel.so");
-      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_NONE);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
                        "/home/.local/share/vulkan/icd.d/relative_new.json");
       assert_vulkan_icd_no_error (iter->data);
-      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==,
                        "/usr/lib/x86_64-mock-abi/vulkan/icd.d/../libvulkan_relative.so");
       g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
                        SRT_LOADABLE_ISSUES_DUPLICATED);
-
-      iter = iter->next;
-      g_assert_null (iter);
-    }
-  else if (config != NULL && config->icd_mode == ICD_MODE_XDG_DIRS)
-    {
-      iter = icds;
-      g_assert_nonnull (iter);
-      /* We load $XDG_CONFIG_DIRS instead of /etc/xdg */
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/confdir/vulkan/icd.d/invalid.json");
-      /* Not format 1.0.x, so we can't be confident that we're reading
-       * it correctly */
-      assert_vulkan_icd_has_error (iter->data);
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      /* /etc is unaffected by XDG variables */
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/etc/vulkan/icd.d/basename.json");
-      assert_vulkan_icd_no_error (iter->data);
-      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "libvulkan_basename.so");
-      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
-      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
-      g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_NONE);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      /* We load $XDG_DATA_DIRS instead of /usr/local/share:/usr/share.
-       * In this case it only has one item. */
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/datadir/vulkan/icd.d/invalid.json");
-      /* Not format 1.0.x, so we can't be confident that we're reading
-       * it correctly */
-      assert_vulkan_icd_has_error (iter->data);
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      /* We load $XDG_DATA_DIRS *before* $XDG_DATA_HOME for
-       * some reason. This is weird, but it matches the reference
-       * Vulkan loader. */
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/datahome/vulkan/icd.d/invalid.json");
-      /* Missing API version */
-      assert_vulkan_icd_has_error (iter->data);
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      /* We load $XDG_DATA_HOME *as well as* ~/.local/share for some
-       * reason. This is weird, but it matches the reference Vulkan
-       * loader. */
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/home/.local/share/vulkan/icd.d/invalid.json");
-      /* This one lacks the required format version */
-      assert_vulkan_icd_has_error (iter->data);
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
-
-      iter = iter->next;
-      g_assert_null (iter);
-    }
-  else
-    {
-      iter = icds;
-      g_assert_nonnull (iter);
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/etc/xdg/vulkan/icd.d/invalid.json");
-      /* This is not valid JSON (it's an empty file) so loading it fails */
-      assert_vulkan_icd_has_error (iter->data);
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
-
-      iter = iter->next;
-      g_assert_nonnull (iter);
-      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
-                       "/etc/vulkan/icd.d/basename.json");
-      assert_vulkan_icd_no_error (iter->data);
-      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
-                       "libvulkan_basename.so");
-      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
-      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
-      g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
-      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
-                       SRT_LOADABLE_ISSUES_NONE);
       g_free (resolved);
 
       iter = iter->next;
@@ -1302,6 +1190,117 @@ assert_vulkan_icds (const SrtObjectList *icds,
                        SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
+      g_assert_null (iter);
+    }
+  else if (config != NULL && config->icd_mode == ICD_MODE_XDG_DIRS)
+    {
+      iter = icds;
+      /* Vulkan-Loader >= 1.2.198 respects XDG_CONFIG_HOME */
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/confhome/vulkan/icd.d/invalid.json");
+      /* Not format 1.0.x, so we can't be confident that we're reading
+       * it correctly */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/confdir/vulkan/icd.d/invalid.json");
+      /* Not format 1.0.x, so we can't be confident that we're reading
+       * it correctly */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      /* /etc is unaffected by XDG variables */
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/etc/vulkan/icd.d/basename.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "libvulkan_basename.so");
+      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
+      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/datahome/vulkan/icd.d/invalid.json");
+      /* Missing API version */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      /* We load $XDG_DATA_HOME *as well as* ~/.local/share.
+       * This was originally based on a mis-reading of the reference
+       * Vulkan loader, but it's desirable to keep this until
+       * https://github.com/ValveSoftware/steam-for-linux/issues/8337
+       * gets fixed. */
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/home/.local/share/vulkan/icd.d/invalid.json");
+      /* This one lacks the required format version */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      /* We load $XDG_DATA_DIRS instead of /usr/local/share:/usr/share.
+       * In this case it only has one item. */
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/datadir/vulkan/icd.d/invalid.json");
+      /* Not format 1.0.x, so we can't be confident that we're reading
+       * it correctly */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
+
+      iter = iter->next;
+      g_assert_null (iter);
+    }
+  else
+    {
+      iter = icds;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/home/.config/vulkan/icd.d/invalid.json");
+      /* This one lacks the required format version */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/etc/xdg/vulkan/icd.d/invalid.json");
+      /* This is not valid JSON (it's an empty file) so loading it fails */
+      assert_vulkan_icd_has_error (iter->data);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/etc/vulkan/icd.d/basename.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "libvulkan_basename.so");
+      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.2.3");
+      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==, "libvulkan_basename.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+      g_free (resolved);
+
+      iter = iter->next;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
                        "/home/.local/share/vulkan/icd.d/invalid.json");
@@ -1309,6 +1308,30 @@ assert_vulkan_icds (const SrtObjectList *icds,
       assert_vulkan_icd_has_error (iter->data);
       g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
                        SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/usr/local/share/vulkan/icd.d/intel_icd.i686.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "/usr/lib/i386-mock-abi/libvulkan_intel.so");
+      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
+      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==, "/usr/lib/i386-mock-abi/libvulkan_intel.so");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/usr/share/vulkan/icd.d/intel_icd.x86_64.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "/usr/lib/x86_64-mock-abi/libvulkan_intel.so");
+      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==, "1.1.102");
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
       g_assert_null (iter);
@@ -1440,6 +1463,13 @@ static const VulkanLayersTest vulkan_layers_test[] =
     .implicit_layers =
     {
       {
+        .name = "VK_LAYER_VALVE_steam_overlay_64",
+        .description = "Steam Overlay Layer",
+        .library_path = "/home/debian/.local/share/Steam/ubuntu12_64/steamoverlayvulkanlayer.so",
+        .api_version = "1.2.136",
+        .json_to_compare = "home/debian/.local/share/vulkan/implicit_layer.d/steamoverlay_x86_64.json",
+      },
+      {
         .name = "VK_LAYER_first",
         .description = "Vulkan first layer",
         .library_path = "libFirst.so",
@@ -1452,13 +1482,6 @@ static const VulkanLayersTest vulkan_layers_test[] =
         .library_path = "libSecond.so",
         .api_version = "1.0.13",
         .json_to_compare = "expectations/MultiLayers_part2.json",
-      },
-      {
-        .name = "VK_LAYER_VALVE_steam_overlay_64",
-        .description = "Steam Overlay Layer",
-        .library_path = "/home/debian/.local/share/Steam/ubuntu12_64/steamoverlayvulkanlayer.so",
-        .api_version = "1.2.136",
-        .json_to_compare = "home/debian/.local/share/vulkan/implicit_layer.d/steamoverlay_x86_64.json",
       },
     },
   },

@@ -108,7 +108,7 @@ foreach test_name : tests
   endif
 
   if test_name in ['test-locale-gen.sh', 'launcher.py']
-    timeout = 60
+    timeout = 90
   endif
 
   if test_name in ['containers.py']

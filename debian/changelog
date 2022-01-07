@@ -1,16 +1,19 @@
-steam-runtime-tools (0.20220104.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220107.0) steamrt; urgency=medium
 
   * pressure-vessel: Make /gnu/store available read-only, if it exists.
     This is necessary but not sufficient for Guix support; the rest of
     the necessary setup (notably a glibc configured to read /etc/ld.so.cache)
     is provided by the FHS-style container that Guix uses to run Steam.
+    (steam-runtime-tools!406, steam-runtime#478)
   * build: Fix build with Vulkan 1.1 headers, in particular on
-    Steam Runtime 1½ 'heavy'
+    Steam Runtime 1½ 'heavy' (steam-runtime-tools!407)
   * build: Fix GObject-Introspection build by separating public headers
   * Fix some GObject-Introspection warnings
   * API documentation fixes
+  * pv-adverb: Fix regression in generation of required locales
+    (steam-runtime-tools!408)
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 04 Jan 2022 16:47:29 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 07 Jan 2022 11:58:26 +0000
 
 steam-runtime-tools (0.20211207.0) steamrt; urgency=medium
 

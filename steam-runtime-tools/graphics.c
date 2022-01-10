@@ -6565,12 +6565,9 @@ _srt_load_vulkan_icds (const char *helpers_path,
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail (envp != NULL, NULL);
 
-  /* See
-   * https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
-   * for more details of the search order - but beware that the
-   * documentation is not completely up to date (as of September 2019)
-   * so you should also look at the reference implementation. */
-
+  /* Reference:
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderDriverInterface.md#overriding-the-default-driver-discovery
+   */
   value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
 
   if (value != NULL)

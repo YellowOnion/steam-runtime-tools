@@ -2428,8 +2428,8 @@ srt_loadable_resolve_library_path (const SrtLoadable *self)
    * specifies a relative pathname, it is relative to the path of the
    * JSON manifest file. If "library_path" specifies a filename, the
    * library must live in the system's shared object search path.
-   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
-   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#layer-manifest-file-format
+   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderDriverInterface.md#driver-manifest-file-format
+   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderLayerInterface.md#layer-manifest-file-format
    *
    * In GLVND, EGL ICDs with relative pathnames are currently passed
    * directly to dlopen(), which will interpret them as relative to
@@ -7450,7 +7450,8 @@ _srt_load_vulkan_layers_extended (const char *helpers_path,
 
   /* As in the Vulkan-Loader implementation, implicit layers are not
    * overridden by "VK_LAYER_PATH"
-   * https://github.com/KhronosGroup/Vulkan-Loader/blob/f8a8762/loader/loader.c#L4743
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderApplicationInterface.md#forcing-layer-source-folders
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/loader/loader.c#L3559
    */
   if (value != NULL && explicit)
     {

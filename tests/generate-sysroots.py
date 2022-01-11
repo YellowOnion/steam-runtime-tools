@@ -71,9 +71,11 @@ debian10/usr/local/etc/vulkan/explicit_layer.d
 debian10/usr/share/vulkan/implicit_layer.d
 debian10/run/systemd
 debian-unstable/etc
+fake-icds/home/.config/vulkan/icd.d
 fake-icds/home/.local/share/vulkan/icd.d
 fake-icds/egl2
 fake-icds/confdir/vulkan/icd.d
+fake-icds/confhome/vulkan/icd.d
 fake-icds/etc/glvnd/egl_vendor.d
 fake-icds/etc/vulkan/icd.d
 fake-icds/etc/xdg/vulkan/icd.d
@@ -559,6 +561,16 @@ with open('fake-icds/confdir/vulkan/icd.d/invalid.json', 'w') as writer:
     "file_format_version": "1.1.0"
 }''')
 
+with open('fake-icds/confhome/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "/usr/lib/x86_64-mock-abi/libvulkan_intel.so"
+    },
+    "file_format_version": "1.1.0"
+}''')
+
 with open('fake-icds/datadir/vulkan/icd.d/invalid.json', 'w') as writer:
     writer.write('''\
 {
@@ -577,6 +589,9 @@ with open('fake-icds/datahome/vulkan/icd.d/invalid.json', 'w') as writer:
     },
     "file_format_version": "1.0.0"
 }''')
+
+with open('fake-icds/home/.config/vulkan/icd.d/invalid.json', 'w') as writer:
+    writer.write('''{ }''')
 
 with open('fake-icds/home/.local/share/vulkan/icd.d/invalid.json', 'w') as writer:
     writer.write('''{ }''')

@@ -2428,8 +2428,8 @@ srt_loadable_resolve_library_path (const SrtLoadable *self)
    * specifies a relative pathname, it is relative to the path of the
    * JSON manifest file. If "library_path" specifies a filename, the
    * library must live in the system's shared object search path.
-   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
-   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#layer-manifest-file-format
+   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderDriverInterface.md#driver-manifest-file-format
+   * — https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderLayerInterface.md#layer-manifest-file-format
    *
    * In GLVND, EGL ICDs with relative pathnames are currently passed
    * directly to dlopen(), which will interpret them as relative to
@@ -6398,6 +6398,13 @@ get_vulkan_sysconfdir (void)
   return "/etc";
 }
 
+/* Reference:
+ * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderLayerInterface.md#linux-layer-discovery
+ * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderDriverInterface.md#driver-discovery-on-linux
+ *
+ * ICDs (drivers) and loaders are currently exactly the same, except for
+ * the suffix used. If they diverge in future, this function will need more
+ * parameters. */
 gchar **
 _srt_graphics_get_vulkan_search_paths (const char *sysroot,
                                        gchar **envp,
@@ -6407,13 +6414,24 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
   GPtrArray *search_paths = g_ptr_array_new ();
   g_auto(GStrv) dirs = NULL;
   g_autofree gchar *flatpak_info = NULL;
+  const char *home;
   const gchar *value;
   gsize i;
 
-  /* The reference Vulkan loader doesn't entirely follow
-   * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
-   * it skips XDG_CONFIG_HOME and goes directly to XDG_CONFIG_DIRS.
-   * https://github.com/KhronosGroup/Vulkan-Loader/issues/246 */
+  home = g_environ_getenv (envp, "HOME");
+
+  if (home == NULL)
+    home = g_get_home_dir ();
+
+  /* 1. $XDG_CONFIG_HOME or $HOME/.config (since 1.2.198) */
+  value = g_environ_getenv (envp, "XDG_CONFIG_HOME");
+
+  if (value != NULL)
+    g_ptr_array_add (search_paths, g_build_filename (value, suffix, NULL));
+  else if (home != NULL)
+    g_ptr_array_add (search_paths, g_build_filename (home, ".config", suffix, NULL));
+
+  /* 1a. $XDG_CONFIG_DIRS or /etc/xdg */
   value = g_environ_getenv (envp, "XDG_CONFIG_DIRS");
 
   /* Constant and non-configurable fallback, as per
@@ -6427,10 +6445,12 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
 
   g_clear_pointer (&dirs, g_strfreev);
 
+  /* 2. SYSCONFDIR */
   value = get_vulkan_sysconfdir ();
   g_ptr_array_add (search_paths, g_build_filename (value, suffix, NULL));
 
-  /* This is hard-coded in the reference loader: if its own sysconfdir
+  /* 3. EXTRASYSCONFDIR.
+   * This is hard-coded in the reference loader: if its own sysconfdir
    * is not /etc, it searches /etc afterwards. (In practice this
    * won't trigger at the moment, because we assume the Vulkan
    * loader's sysconfdir *is* /etc.) */
@@ -6439,7 +6459,9 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
 
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
 
-  /* freedesktop-sdk patches the Vulkan loader to look here for ICDs. */
+  /* freedesktop-sdk patches the Vulkan loader to look here for ICDs,
+   * after EXTRASYSCONFDIR but before XDG_DATA_HOME.
+   * https://gitlab.com/freedesktop-sdk/freedesktop-sdk/-/blob/master/patches/vulkan/vulkan-libdir-path.patch */
   if (g_file_test (flatpak_info, G_FILE_TEST_EXISTS))
     {
       g_debug ("Flatpak detected: assuming freedesktop-based runtime");
@@ -6465,12 +6487,29 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
                                                        NULL));
     }
 
-  /* The reference Vulkan loader doesn't entirely follow
-   * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html:
-   * it searches XDG_DATA_HOME *after* XDG_DATA_DIRS, and it still
-   * searches ~/.local/share even if XDG_DATA_HOME is set.
-   * https://github.com/KhronosGroup/Vulkan-Loader/issues/245 */
+  /* 4. $XDG_DATA_HOME or $HOME/.local/share.
+   * In previous versions of steam-runtime-tools, we misinterpreted the
+   * Vulkan-Loader code and thought it was loading $XDG_DATA_HOME *and*
+   * $HOME/.local/share (inconsistent with the basedir spec). This was
+   * incorrect: it only used $HOME/.local/share as a fallback, consistent
+   * with the basedir spec.
+   *
+   * Unfortunately, Steam currently relies on layers in $HOME/.local/share
+   * being found, even if $XDG_DATA_HOME is set to something else:
+   * https://github.com/ValveSoftware/steam-for-linux/issues/8337
+   * So for now we continue to follow the misinterpretation, to make the
+   * Steam Overlay more likely to work in pressure-vessel containers. */
+  value = g_environ_getenv (envp, "XDG_DATA_HOME");
 
+  if (value != NULL)
+    g_ptr_array_add (search_paths, g_build_filename (value, suffix, NULL));
+
+  /* When steam-for-linux#8337 has been fixed, this should become an 'else if' */
+  if (home != NULL)
+    g_ptr_array_add (search_paths,
+                     g_build_filename (home, ".local", "share", suffix, NULL));
+
+  /* 5. $XDG_DATA_DIRS or /usr/local/share:/usr/share */
   value = g_environ_getenv (envp, "XDG_DATA_DIRS");
 
   /* Constant and non-configurable fallback, as per
@@ -6481,22 +6520,6 @@ _srt_graphics_get_vulkan_search_paths (const char *sysroot,
   dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
   for (i = 0; dirs[i] != NULL; i++)
     g_ptr_array_add (search_paths, g_build_filename (dirs[i], suffix, NULL));
-
-  /* I don't know why this is searched *after* XDG_DATA_DIRS in the
-   * reference loader, but we match that behaviour. */
-  value = g_environ_getenv (envp, "XDG_DATA_HOME");
-  if (value != NULL)
-    g_ptr_array_add (search_paths, g_build_filename (value, suffix, NULL));
-
-  /* libvulkan searches this unconditionally, even if XDG_DATA_HOME
-   * is set. */
-  value = g_environ_getenv (envp, "HOME");
-
-  if (value == NULL)
-    value = g_get_home_dir ();
-
-  g_ptr_array_add (search_paths, g_build_filename (value, ".local", "share",
-                                                   suffix, NULL));
 
   g_ptr_array_add (search_paths, NULL);
 
@@ -6542,12 +6565,9 @@ _srt_load_vulkan_icds (const char *helpers_path,
   g_return_val_if_fail (_srt_check_not_setuid (), NULL);
   g_return_val_if_fail (envp != NULL, NULL);
 
-  /* See
-   * https://github.com/KhronosGroup/Vulkan-Loader/blob/master/loader/LoaderAndLayerInterface.md#icd-manifest-file-format
-   * for more details of the search order - but beware that the
-   * documentation is not completely up to date (as of September 2019)
-   * so you should also look at the reference implementation. */
-
+  /* Reference:
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderDriverInterface.md#overriding-the-default-driver-discovery
+   */
   value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
 
   if (value != NULL)
@@ -7427,7 +7447,8 @@ _srt_load_vulkan_layers_extended (const char *helpers_path,
 
   /* As in the Vulkan-Loader implementation, implicit layers are not
    * overridden by "VK_LAYER_PATH"
-   * https://github.com/KhronosGroup/Vulkan-Loader/blob/f8a8762/loader/loader.c#L4743
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderApplicationInterface.md#forcing-layer-source-folders
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/loader/loader.c#L3559
    */
   if (value != NULL && explicit)
     {

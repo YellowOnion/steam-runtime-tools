@@ -1,3 +1,12 @@
+steam-runtime-tools (0.20220111.0) steamrt; urgency=medium
+
+  * graphics: Load ICDs and layers to match Vulkan-Loader >= 1.2.198
+  * graphics: Improve Vulkan-Loader reference URLs
+  * tests: Expand timeout for test-locale-gen.sh.
+    This can take more than 60s on heavily loaded autobuilders.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 11 Jan 2022 14:02:44 +0000
+
 steam-runtime-tools (0.20220107.0) steamrt; urgency=medium
 
   * pressure-vessel: Make /gnu/store available read-only, if it exists.

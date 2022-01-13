@@ -30,8 +30,8 @@
 
 /**
  * SECTION:graphics-drivers-vdpau
- * @title: Graphics driver enumeration
- * @short_description: Get information about system's VDPAU drivers
+ * @title: VDPAU graphics driver enumeration
+ * @short_description: Get information about the system's VDPAU drivers
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *
  * #SrtVdpauDriver is an opaque object representing the metadata describing

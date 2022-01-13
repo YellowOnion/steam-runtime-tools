@@ -31,7 +31,7 @@
 
 /**
  * SECTION:graphics-drivers-egl
- * @title: Graphics driver enumeration
+ * @title: EGL graphics driver enumeration
  * @short_description: Get information about the system's EGL drivers
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *

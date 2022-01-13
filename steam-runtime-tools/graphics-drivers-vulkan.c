@@ -33,7 +33,7 @@
 
 /**
  * SECTION:graphics-drivers-vulkan
- * @title: Graphics driver enumeration - Vulkan
+ * @title: Vulkan graphics driver and layer enumeration
  * @short_description: Get information about the system's Vulkan drivers
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *

@@ -23,14 +23,15 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "steam-runtime-tools/graphics-drivers-dri.h"
+
+#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
 
-#include "steam-runtime-tools/glib-backports-internal.h"
-
 /**
  * SECTION:graphics-drivers-dri
- * @title: Graphics driver enumeration - DRI
+ * @title: Mesa DRI graphics driver enumeration
  * @short_description: Get information about DRI drivers
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *

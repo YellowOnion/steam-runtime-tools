@@ -30,7 +30,7 @@
 
 /**
  * SECTION:graphics-drivers-vaapi
- * @title: Graphics driver enumeration - VA-API
+ * @title: VA-API graphics driver enumeration
  * @short_description: Get information about the system's VA-API drivers
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *

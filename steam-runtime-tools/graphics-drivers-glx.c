@@ -30,7 +30,7 @@
 
 /**
  * SECTION:graphics-drivers-glx
- * @title: Graphics driver enumeration - GLX
+ * @title: GLX graphics driver enumeration
  * @short_description: Get information about the system's GLX graphics drivers
  * @include: steam-runtime-tools/steam-runtime-tools.h
  *

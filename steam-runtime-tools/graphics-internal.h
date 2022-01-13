@@ -348,3 +348,29 @@ SrtVdpauDriver *srt_vdpau_driver_new (const gchar *library_path,
                                       gboolean is_extra);
 SrtVaApiDriver *srt_va_api_driver_new (const gchar *library_path,
                                        gboolean is_extra);
+
+SrtEglIcd *srt_egl_icd_new_error (const gchar *json_path,
+                                  SrtLoadableIssues issues,
+                                  const GError *error);
+SrtEglIcd *srt_egl_icd_new (const gchar *json_path,
+                            const gchar *library_path,
+                            SrtLoadableIssues issues);
+SrtVulkanIcd *srt_vulkan_icd_new_error (const gchar *json_path,
+                                        SrtLoadableIssues issues,
+                                        const GError *error);
+SrtVulkanIcd *srt_vulkan_icd_new (const gchar *json_path,
+                                  const gchar *api_version,
+                                  const gchar *library_path,
+                                  SrtLoadableIssues issues);
+SrtVulkanLayer *srt_vulkan_layer_new_error (const gchar *json_path,
+                                            SrtLoadableIssues issues,
+                                            const GError *error);
+SrtVulkanLayer *srt_vulkan_layer_new (const gchar *json_path,
+                                      const gchar *name,
+                                      const gchar *type,
+                                      const gchar *library_path,
+                                      const gchar *api_version,
+                                      const gchar *implementation_version,
+                                      const gchar *description,
+                                      GStrv component_layers,
+                                      SrtLoadableIssues issues);

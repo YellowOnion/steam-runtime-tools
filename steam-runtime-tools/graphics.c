@@ -3084,7 +3084,7 @@ srt_egl_icd_class_init (SrtEglIcdClass *cls)
                                      egl_icd_properties);
 }
 
-/**
+/*
  * srt_egl_icd_new:
  * @json_path: (transfer none): the absolute path to the JSON file
  * @library_path: (transfer none): the path to the library
@@ -3092,7 +3092,7 @@ srt_egl_icd_class_init (SrtEglIcdClass *cls)
  *
  * Returns: (transfer full): a new ICD
  */
-static SrtEglIcd *
+SrtEglIcd *
 srt_egl_icd_new (const gchar *json_path,
                  const gchar *library_path,
                  SrtLoadableIssues issues)
@@ -3107,14 +3107,14 @@ srt_egl_icd_new (const gchar *json_path,
                        NULL);
 }
 
-/**
+/*
  * srt_egl_icd_new_error:
  * @issues: problems with this ICD
  * @error: (transfer none): Error that occurred when loading the ICD
  *
  * Returns: (transfer full): a new ICD
  */
-static SrtEglIcd *
+SrtEglIcd *
 srt_egl_icd_new_error (const gchar *json_path,
                        SrtLoadableIssues issues,
                        const GError *error)
@@ -3668,24 +3668,6 @@ _srt_load_egl_icds (const char *helpers_path,
   return g_list_reverse (ret);
 }
 
-static GList *
-get_driver_loadables_from_json_report (JsonObject *json_obj,
-                                       GType which,
-                                       gboolean explicit);
-
-/**
- * _srt_get_egl_from_json_report:
- * @json_obj: (not nullable): A JSON Object used to search for "egl" property
- *
- * Returns: A list of #SrtEglIcd that have been found, or %NULL if none
- *  has been found.
- */
-GList *
-_srt_get_egl_from_json_report (JsonObject *json_obj)
-{
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_EGL_ICD, FALSE);
-}
-
 /**
  * SrtVulkanIcd:
  *
@@ -3907,7 +3889,7 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
                                      vulkan_icd_properties);
 }
 
-/**
+/*
  * srt_vulkan_icd_new:
  * @json_path: (transfer none): the absolute path to the JSON file
  * @api_version: (transfer none): the API version
@@ -3916,7 +3898,7 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
  *
  * Returns: (transfer full): a new ICD
  */
-static SrtVulkanIcd *
+SrtVulkanIcd *
 srt_vulkan_icd_new (const gchar *json_path,
                     const gchar *api_version,
                     const gchar *library_path,
@@ -3934,14 +3916,14 @@ srt_vulkan_icd_new (const gchar *json_path,
                        NULL);
 }
 
-/**
+/*
  * srt_vulkan_icd_new_error:
  * @issues: problems with this ICD
  * @error: (transfer none): Error that occurred when loading the ICD
  *
  * Returns: (transfer full): a new ICD
  */
-static SrtVulkanIcd *
+SrtVulkanIcd *
 srt_vulkan_icd_new_error (const gchar *json_path,
                           SrtLoadableIssues issues,
                           const GError *error)
@@ -4412,19 +4394,6 @@ _srt_load_vulkan_icds (const char *helpers_path,
 }
 
 /**
- * _srt_get_vulkan_from_json_report:
- * @json_obj: (not nullable): A JSON Object used to search for "vulkan" property
- *
- * Returns: A list of #SrtVulkanIcd that have been found, or %NULL if none
- *  has been found.
- */
-GList *
-_srt_get_vulkan_from_json_report (JsonObject *json_obj)
-{
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_ICD, FALSE);
-}
-
-/**
  * SrtVulkanLayer:
  *
  * Opaque object representing a Vulkan layer.
@@ -4732,7 +4701,7 @@ srt_vulkan_layer_class_init (SrtVulkanLayerClass *cls)
                                      vulkan_layer_properties);
 }
 
-/**
+/*
  * srt_vulkan_layer_new:
  * @json_path: (transfer none): the absolute path to the JSON file
  * @name: (transfer none): the layer unique name
@@ -4751,7 +4720,7 @@ srt_vulkan_layer_class_init (SrtVulkanLayerClass *cls)
  *
  * Returns: (transfer full): a new SrtVulkanLayer
  */
-static SrtVulkanLayer *
+SrtVulkanLayer *
 srt_vulkan_layer_new (const gchar *json_path,
                       const gchar *name,
                       const gchar *type,
@@ -4788,7 +4757,7 @@ srt_vulkan_layer_new (const gchar *json_path,
                        NULL);
 }
 
-/**
+/*
  * srt_vulkan_layer_new_error:
  * @json_path: (transfer none): the absolute path to the JSON file
  * @issues: problems with this layer
@@ -4796,7 +4765,7 @@ srt_vulkan_layer_new (const gchar *json_path,
  *
  * Returns: (transfer full): a new SrtVulkanLayer
  */
-static SrtVulkanLayer *
+SrtVulkanLayer *
 srt_vulkan_layer_new_error (const gchar *json_path,
                             SrtLoadableIssues issues,
                             const GError *error)
@@ -5664,236 +5633,4 @@ srt_vulkan_layer_check_error (const SrtVulkanLayer *self,
     *error = g_error_copy (self->layer.error);
 
   return (self->layer.error == NULL);
-}
-
-/**
- * _srt_get_explicit_vulkan_layers_from_json_report:
- * @json_obj: (not nullable): A JSON Object used to search for
- *  "explicit_layers" property in "vulkan"
- *
- * Returns: A list of explicit #SrtVulkanLayer that have been found, or %NULL
- *  if none has been found.
- */
-GList *
-_srt_get_explicit_vulkan_layers_from_json_report (JsonObject *json_obj)
-{
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_LAYER, TRUE);
-}
-
-/**
- * _srt_get_implicit_vulkan_layers_from_json_report:
- * @json_obj: (not nullable): A JSON Object used to search for
- *  "implicit_layers" property in "vulkan"
- *
- * Returns: A list of implicit #SrtVulkanLayer that have been found, or %NULL
- *  if none has been found.
- */
-GList *
-_srt_get_implicit_vulkan_layers_from_json_report (JsonObject *json_obj)
-{
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_VULKAN_LAYER, FALSE);
-}
-
-/**
- * get_driver_loadables_from_json_report:
- * @json_obj: (not nullable): A JSON Object used to search for Icd or Layer
- *  properties
- * @which: Used to choose which loadable to search, it can be
- *  %SRT_TYPE_EGL_ICD, %SRT_TYPE_VULKAN_ICD or %SRT_TYPE_VULKAN_LAYER
- * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
- *  Currently this value is used only if @which is %SRT_TYPE_VULKAN_LAYER
- *
- * Returns: A list of #SrtEglIcd (if @which is %SRT_TYPE_EGL_ICD) or
- *  #SrtVulkanIcd (if @which is %SRT_TYPE_VULKAN_ICD) or #SrtVulkanLayer (if
- *  @which is %SRT_TYPE_VULKAN_LAYER) that have been found, or
- *  %NULL if none has been found.
- */
-static GList *
-get_driver_loadables_from_json_report (JsonObject *json_obj,
-                                       GType which,
-                                       gboolean explicit)
-{
-  const gchar *member;
-  const gchar *sub_member;
-  JsonObject *json_sub_obj;
-  JsonArray *array;
-  GList *driver_info = NULL;
-
-  g_return_val_if_fail (json_obj != NULL, NULL);
-
-  if (which == SRT_TYPE_EGL_ICD)
-    {
-      member = "egl";
-      sub_member = "icds";
-    }
-  else if (which == SRT_TYPE_VULKAN_ICD)
-    {
-      member = "vulkan";
-      sub_member = "icds";
-    }
-  else if (which == SRT_TYPE_VULKAN_LAYER)
-    {
-      member = "vulkan";
-      if (explicit)
-        sub_member = "explicit_layers";
-      else
-        sub_member = "implicit_layers";
-    }
-  else
-    {
-      g_return_val_if_reached (NULL);
-    }
-
-  if (json_object_has_member (json_obj, member))
-    {
-      json_sub_obj = json_object_get_object_member (json_obj, member);
-
-      /* We are expecting an object here */
-      if (json_sub_obj == NULL)
-        {
-          g_debug ("'%s' is not a JSON object as expected", member);
-          goto out;
-        }
-
-      if (json_object_has_member (json_sub_obj, sub_member))
-        {
-          array = json_object_get_array_member (json_sub_obj, sub_member);
-
-          /* We are expecting an array of icds here */
-          if (array == NULL)
-            {
-              g_debug ("'%s' is not an array as expected", sub_member);
-              goto out;
-            }
-
-          for (guint i = 0; i < json_array_get_length (array); i++)
-            {
-              const gchar *json_path = NULL;
-              const gchar *name = NULL;
-              const gchar *type = NULL;
-              const gchar *description = NULL;
-              const gchar *library_path = NULL;
-              const gchar *api_version = NULL;
-              const gchar *implementation_version = NULL;
-              g_auto(GStrv) component_layers = NULL;
-              SrtVulkanLayer *layer = NULL;
-              SrtLoadableIssues issues;
-              GQuark error_domain;
-              gint error_code;
-              const gchar *error_message;
-              GError *error = NULL;
-              JsonObject *json_elem_obj = json_array_get_object_element (array, i);
-              if (json_object_has_member (json_elem_obj, "json_path"))
-                {
-                  json_path = json_object_get_string_member (json_elem_obj, "json_path");
-                }
-              else
-                {
-                  g_debug ("The parsed '%s' member is missing the expected 'json_path' member, skipping...",
-                           sub_member);
-                  continue;
-                }
-
-              if (which == SRT_TYPE_VULKAN_LAYER)
-                {
-                  name = json_object_get_string_member_with_default (json_elem_obj, "name", NULL);
-                  type = json_object_get_string_member_with_default (json_elem_obj, "type", NULL);
-                  implementation_version = json_object_get_string_member_with_default (json_elem_obj,
-                                                                                       "implementation_version",
-                                                                                       NULL);
-                  description = json_object_get_string_member_with_default (json_elem_obj,
-                                                                            "description",
-                                                                            NULL);
-
-                  component_layers = _srt_json_object_dup_strv_member (json_elem_obj,
-                                                                       "component_layers",
-                                                                       NULL);
-
-                  /* Don't distinguish between absent, and present with empty value */
-                  if (component_layers != NULL && component_layers[0] == NULL)
-                    g_clear_pointer (&component_layers, g_free);
-                }
-
-              library_path = json_object_get_string_member_with_default (json_elem_obj,
-                                                                         "library_path",
-                                                                         NULL);
-              api_version = json_object_get_string_member_with_default (json_elem_obj,
-                                                                        "api_version",
-                                                                        NULL);
-              issues = srt_get_flags_from_json_array (SRT_TYPE_LOADABLE_ISSUES,
-                                                      json_elem_obj,
-                                                      "issues",
-                                                      SRT_LOADABLE_ISSUES_UNKNOWN);
-              error_domain = g_quark_from_string (json_object_get_string_member_with_default (json_elem_obj,
-                                                                                              "error-domain",
-                                                                                              NULL));
-              error_code = json_object_get_int_member_with_default (json_elem_obj, "error-code", -1);
-              error_message = json_object_get_string_member_with_default (json_elem_obj,
-                                                                          "error",
-                                                                          "(missing error message)");
-
-              if (which == SRT_TYPE_VULKAN_LAYER &&
-                  (name != NULL &&
-                   type != NULL &&
-                   api_version != NULL &&
-                   implementation_version != NULL &&
-                   description != NULL &&
-                   ( (library_path != NULL && component_layers == NULL) ||
-                     (library_path == NULL && component_layers != NULL) )))
-                {
-                  layer = srt_vulkan_layer_new (json_path, name, type,
-                                                library_path, api_version,
-                                                implementation_version,
-                                                description, component_layers,
-                                                issues);
-                  driver_info = g_list_prepend (driver_info, layer);
-                }
-              else if ((which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD) &&
-                       library_path != NULL)
-                {
-                  if (which == SRT_TYPE_EGL_ICD)
-                    driver_info = g_list_prepend (driver_info, srt_egl_icd_new (json_path,
-                                                                                library_path,
-                                                                                issues));
-                  else if (which == SRT_TYPE_VULKAN_ICD)
-                    driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new (json_path,
-                                                                                   api_version,
-                                                                                   library_path,
-                                                                                   issues));
-                  else
-                    g_return_val_if_reached (NULL);
-                }
-              else
-                {
-                  if (error_domain == 0)
-                    {
-                      error_domain = G_IO_ERROR;
-                      error_code = G_IO_ERROR_FAILED;
-                    }
-                  g_set_error_literal (&error,
-                                       error_domain,
-                                       error_code,
-                                       error_message);
-                  if (which == SRT_TYPE_EGL_ICD)
-                    driver_info = g_list_prepend (driver_info, srt_egl_icd_new_error (json_path,
-                                                                                      issues,
-                                                                                      error));
-                  else if (which == SRT_TYPE_VULKAN_ICD)
-                    driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new_error (json_path,
-                                                                                         issues,
-                                                                                         error));
-                  else if (which == SRT_TYPE_VULKAN_LAYER)
-                    driver_info = g_list_prepend (driver_info, srt_vulkan_layer_new_error (json_path,
-                                                                                           issues,
-                                                                                           error));
-                  else
-                    g_return_val_if_reached (NULL);
-
-                  g_clear_error (&error);
-                }
-            }
-        }
-    }
-out:
-  return g_list_reverse (driver_info);
 }

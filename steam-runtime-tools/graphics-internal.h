@@ -338,3 +338,39 @@ gchar ** _srt_graphics_get_vulkan_search_paths (const char *sysroot,
 #define _SRT_GRAPHICS_EXPLICIT_VULKAN_LAYER_SUFFIX "vulkan/explicit_layer.d"
 #define _SRT_GRAPHICS_IMPLICIT_VULKAN_LAYER_SUFFIX "vulkan/implicit_layer.d"
 #define _SRT_GRAPHICS_VULKAN_ICD_SUFFIX "vulkan/icd.d"
+
+SrtDriDriver *srt_dri_driver_new (const gchar *library_path,
+                                  gboolean is_extra);
+SrtGlxIcd *srt_glx_icd_new (const gchar *library_soname,
+                            const gchar *library_path);
+SrtVdpauDriver *srt_vdpau_driver_new (const gchar *library_path,
+                                      const gchar *library_link,
+                                      gboolean is_extra);
+SrtVaApiDriver *srt_va_api_driver_new (const gchar *library_path,
+                                       gboolean is_extra);
+
+SrtEglIcd *srt_egl_icd_new_error (const gchar *json_path,
+                                  SrtLoadableIssues issues,
+                                  const GError *error);
+SrtEglIcd *srt_egl_icd_new (const gchar *json_path,
+                            const gchar *library_path,
+                            SrtLoadableIssues issues);
+SrtVulkanIcd *srt_vulkan_icd_new_error (const gchar *json_path,
+                                        SrtLoadableIssues issues,
+                                        const GError *error);
+SrtVulkanIcd *srt_vulkan_icd_new (const gchar *json_path,
+                                  const gchar *api_version,
+                                  const gchar *library_path,
+                                  SrtLoadableIssues issues);
+SrtVulkanLayer *srt_vulkan_layer_new_error (const gchar *json_path,
+                                            SrtLoadableIssues issues,
+                                            const GError *error);
+SrtVulkanLayer *srt_vulkan_layer_new (const gchar *json_path,
+                                      const gchar *name,
+                                      const gchar *type,
+                                      const gchar *library_path,
+                                      const gchar *api_version,
+                                      const gchar *implementation_version,
+                                      const gchar *description,
+                                      GStrv component_layers,
+                                      SrtLoadableIssues issues);

@@ -28,6 +28,12 @@ SPDX-License-Identifier: MIT
     <xi:include href="xml/desktop-entry.xml"/>
     <xi:include href="xml/enums.xml"/>
     <xi:include href="xml/graphics.xml"/>
+    <xi:include href="xml/graphics-drivers-dri.xml"/>
+    <xi:include href="xml/graphics-drivers-egl.xml"/>
+    <xi:include href="xml/graphics-drivers-glx.xml"/>
+    <xi:include href="xml/graphics-drivers-vaapi.xml"/>
+    <xi:include href="xml/graphics-drivers-vdpau.xml"/>
+    <xi:include href="xml/graphics-drivers-vulkan.xml"/>
     <xi:include href="xml/input-device.xml"/>
     <xi:include href="xml/library.xml"/>
     <xi:include href="xml/locale.xml"/>

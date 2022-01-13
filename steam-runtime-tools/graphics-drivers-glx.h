@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -25,28 +25,32 @@
 
 #pragma once
 
-#define _SRT_IN_SINGLE_HEADER
+#if !defined(_SRT_IN_SINGLE_HEADER) && !defined(_SRT_COMPILATION)
+#error "Do not include directly, use <steam-runtime-tools/steam-runtime-tools.h>"
+#endif
 
-#include <steam-runtime-tools/architecture.h>
-#include <steam-runtime-tools/container.h>
-#include <steam-runtime-tools/cpu-feature.h>
-#include <steam-runtime-tools/desktop-entry.h>
-#include <steam-runtime-tools/enums.h>
-#include <steam-runtime-tools/graphics.h>
-#include <steam-runtime-tools/graphics-drivers-dri.h>
-#include <steam-runtime-tools/graphics-drivers-egl.h>
-#include <steam-runtime-tools/graphics-drivers-glx.h>
-#include <steam-runtime-tools/graphics-drivers-vaapi.h>
-#include <steam-runtime-tools/graphics-drivers-vdpau.h>
-#include <steam-runtime-tools/graphics-drivers-vulkan.h>
-#include <steam-runtime-tools/input-device.h>
-#include <steam-runtime-tools/library.h>
-#include <steam-runtime-tools/locale.h>
+#include <glib.h>
+#include <glib-object.h>
+
 #include <steam-runtime-tools/macros.h>
-#include <steam-runtime-tools/runtime.h>
-#include <steam-runtime-tools/steam.h>
-#include <steam-runtime-tools/system-info.h>
-#include <steam-runtime-tools/utils.h>
-#include <steam-runtime-tools/xdg-portal.h>
 
-#undef _SRT_IN_SINGLE_HEADER
+typedef struct _SrtGlxIcd SrtGlxIcd;
+typedef struct _SrtGlxIcdClass SrtGlxIcdClass;
+
+#define SRT_TYPE_GLX_ICD (srt_glx_icd_get_type ())
+#define SRT_GLX_ICD(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_GLX_ICD, SrtGlxIcd))
+#define SRT_GLX_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_GLX_ICD, SrtGlxIcdClass))
+#define SRT_IS_GLX_ICD(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_GLX_ICD))
+#define SRT_IS_GLX_ICD_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_GLX_ICD))
+#define SRT_GLX_ICD_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_GLX_ICD, SrtGlxIcdClass)
+_SRT_PUBLIC
+GType srt_glx_icd_get_type (void);
+
+_SRT_PUBLIC
+const gchar *srt_glx_icd_get_library_soname (SrtGlxIcd *self);
+_SRT_PUBLIC
+const gchar *srt_glx_icd_get_library_path (SrtGlxIcd *self);
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtGlxIcd, g_object_unref)
+#endif

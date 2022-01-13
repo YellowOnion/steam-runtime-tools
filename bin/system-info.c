@@ -1291,6 +1291,53 @@ main (int argc,
 
   g_list_free_full (icds, g_object_unref);
   json_builder_end_array (builder);   // egl.icds
+  json_builder_set_member_name (builder, "external_platforms");
+  json_builder_begin_array (builder);
+  icds = srt_system_info_list_egl_external_platforms (info, multiarch_tuples);
+
+  for (icd_iter = icds; icd_iter != NULL; icd_iter = icd_iter->next)
+    {
+      json_builder_begin_object (builder);
+      json_builder_set_member_name (builder, "json_path");
+      json_builder_add_string_value (builder,
+                                     srt_egl_external_platform_get_json_path (icd_iter->data));
+
+      if (srt_egl_external_platform_check_error (icd_iter->data, &error))
+        {
+          const gchar *library;
+          gchar *tmp;
+
+          library = srt_egl_external_platform_get_library_path (icd_iter->data);
+          json_builder_set_member_name (builder, "library_path");
+          json_builder_add_string_value (builder, library);
+
+          tmp = srt_egl_external_platform_resolve_library_path (icd_iter->data);
+
+          if (g_strcmp0 (library, tmp) != 0)
+            {
+              json_builder_set_member_name (builder, "dlopen");
+              json_builder_add_string_value (builder, tmp);
+            }
+
+          g_free (tmp);
+        }
+      else
+        {
+          _srt_json_builder_add_error_members (builder, error);
+          g_clear_error (&error);
+        }
+
+      json_builder_set_member_name (builder, "issues");
+      json_builder_begin_array (builder);
+      loadable_issues = srt_egl_external_platform_get_issues (icd_iter->data);
+      jsonify_loadable_issues (builder, loadable_issues);
+      json_builder_end_array (builder);
+
+      json_builder_end_object (builder);
+    }
+
+  g_list_free_full (icds, g_object_unref);
+  json_builder_end_array (builder);   // egl.external_platforms
   json_builder_end_object (builder);  // egl
 
   json_builder_set_member_name (builder, "vulkan");

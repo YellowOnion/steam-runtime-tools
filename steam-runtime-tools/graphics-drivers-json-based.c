@@ -131,7 +131,11 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   gpointer value;
   const GList *l;
 
-  if (which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD)
+  /* EGL external platforms have { "ICD": ... } in their JSON file,
+   * even though you might have expected a different string. */
+  if (which == SRT_TYPE_EGL_ICD
+      || which == SRT_TYPE_VULKAN_ICD
+      || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
     member = "ICD";
   else if (which == SRT_TYPE_VULKAN_LAYER)
     member = "layer";
@@ -149,7 +153,9 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   builder = json_builder_new ();
   json_builder_begin_object (builder);
     {
-      if (which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD)
+      if (which == SRT_TYPE_EGL_ICD
+          || which == SRT_TYPE_VULKAN_ICD
+          || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
         {
           json_builder_set_member_name (builder, "file_format_version");
           /* We parse and store all the information defined in file format
@@ -167,7 +173,7 @@ srt_loadable_write_to_file (const SrtLoadable *self,
               json_builder_set_member_name (builder, "library_path");
               json_builder_add_string_value (builder, self->library_path);
 
-              /* In the EGL case we don't have the "api_version" field. */
+              /* In the EGL cases, we don't have the "api_version" field. */
               if (which == SRT_TYPE_VULKAN_ICD)
                 {
                   json_builder_set_member_name (builder, "api_version");
@@ -375,6 +381,12 @@ _update_duplicated_value (GType which,
           _srt_egl_icd_set_is_duplicated (egl_icd, TRUE);
           _srt_egl_icd_set_is_duplicated (loadable_to_check, TRUE);
         }
+      else if (which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+        {
+          SrtEglExternalPlatform *egl_ext = g_hash_table_lookup (loadable_seen, key);
+          _srt_egl_external_platform_set_is_duplicated (egl_ext, TRUE);
+          _srt_egl_external_platform_set_is_duplicated (loadable_to_check, TRUE);
+        }
       else if (which == SRT_TYPE_VULKAN_LAYER)
         {
           SrtVulkanLayer *vulkan_layer = g_hash_table_lookup (loadable_seen, key);
@@ -419,6 +431,7 @@ _srt_loadable_flag_duplicates (GType which,
 
   g_return_if_fail (which == SRT_TYPE_VULKAN_ICD
                     || which == SRT_TYPE_EGL_ICD
+                    || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM
                     || which == SRT_TYPE_VULKAN_LAYER);
 
   loadable_seen = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -428,12 +441,16 @@ _srt_loadable_flag_duplicates (GType which,
       g_autofree gchar *resolved_path = NULL;
       const gchar *name = NULL;
 
-      if (which == SRT_TYPE_VULKAN_ICD || which == SRT_TYPE_EGL_ICD)
+      if (which == SRT_TYPE_VULKAN_ICD
+          || which == SRT_TYPE_EGL_ICD
+          || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
         {
           if (which == SRT_TYPE_VULKAN_ICD)
             resolved_path = srt_vulkan_icd_resolve_library_path (l->data);
-          else
+          else if (which == SRT_TYPE_EGL_ICD)
             resolved_path = srt_egl_icd_resolve_library_path (l->data);
+          else
+            resolved_path = srt_egl_external_platform_resolve_library_path (l->data);
 
           if (resolved_path == NULL)
             continue;
@@ -674,7 +691,7 @@ load_json_dirs (const char *sysroot,
 
 /*
  * load_json:
- * @type: %SRT_TYPE_EGL_ICD or %SRT_TYPE_VULKAN_ICD
+ * @type: %SRT_TYPE_EGL_ICD or %SRT_TYPE_EGL_EXTERNAL_PLATFORM or %SRT_TYPE_VULKAN_ICD
  * @path: (type filename) (transfer none): Path of JSON file
  * @api_version_out: (out) (type utf8) (transfer full): Used to return
  *  API version for %SRT_TYPE_VULKAN_ICD
@@ -709,7 +726,8 @@ load_json (GType type,
   SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
 
   g_return_val_if_fail (type == SRT_TYPE_VULKAN_ICD
-                        || type == SRT_TYPE_EGL_ICD,
+                        || type == SRT_TYPE_EGL_ICD
+                        || type == SRT_TYPE_EGL_EXTERNAL_PLATFORM,
                         FALSE);
   g_return_val_if_fail (path != NULL, FALSE);
   g_return_val_if_fail (api_version_out == NULL || *api_version_out == NULL,
@@ -786,11 +804,13 @@ load_json (GType type,
     }
   else
     {
-      g_assert (type == SRT_TYPE_EGL_ICD);
+      g_assert (type == SRT_TYPE_EGL_ICD || type == SRT_TYPE_EGL_EXTERNAL_PLATFORM);
       /*
        * For EGL, all 1.0.x versions are officially backwards compatible
        * with 1.0.0.
        * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+       * There's no specification or public loader for external platforms,
+       * but we assume the same is true for those.
        */
       if (!g_str_has_prefix (file_format_version, "1.0."))
         {

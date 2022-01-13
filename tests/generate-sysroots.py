@@ -76,6 +76,7 @@ fake-icds/home/.local/share/vulkan/icd.d
 fake-icds/egl2
 fake-icds/confdir/vulkan/icd.d
 fake-icds/confhome/vulkan/icd.d
+fake-icds/etc/egl/egl_external_platform.d
 fake-icds/etc/glvnd/egl_vendor.d
 fake-icds/etc/vulkan/icd.d
 fake-icds/etc/xdg/vulkan/icd.d
@@ -88,6 +89,7 @@ fake-icds/usr/lib/x86_64-mock-abi/vulkan/icd.d
 fake-icds/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d
 fake-icds/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d
 fake-icds/usr/local/share/vulkan/icd.d
+fake-icds/usr/share/egl/egl_external_platform.d
 fake-icds/usr/share/glvnd/egl_vendor.d
 fake-icds/usr/share/vulkan/icd.d
 fake-icds-flatpak/etc/glvnd/egl_vendor.d
@@ -182,6 +184,7 @@ debian-unstable/.dockerenv
 fake-icds/egl1/a.json
 fake-icds/egl1/b.json
 fake-icds/egl1/BBB.json
+fake-icds/etc/egl/egl_external_platform.d/invalid.json
 fake-icds/etc/glvnd/egl_vendor.d/invalid.json
 fake-icds/etc/xdg/vulkan/icd.d/invalid.json
 fake-icds/etc/xdg/vulkan/icd.d/invalid.txt
@@ -672,6 +675,15 @@ with open('fake-icds/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as 
         "library_path": "/usr/lib/i386-mock-abi/libvulkan_intel.so"
     },
     "file_format_version": "1.0.0"
+}''')
+
+with open('fake-icds/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json', 'w') as writer:
+    writer.write('''\
+{
+    "file_format_version" : "1.0.0",
+    "ICD" : {
+        "library_path" : "libnvidia-egl-wayland.so.1"
+    }
 }''')
 
 with open('fake-icds/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as writer:

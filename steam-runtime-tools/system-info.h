@@ -132,6 +132,9 @@ _SRT_PUBLIC
 GList *srt_system_info_list_egl_icds (SrtSystemInfo *self,
                                       const char * const *multiarch_tuples);
 _SRT_PUBLIC
+GList *srt_system_info_list_egl_external_platforms (SrtSystemInfo *self,
+                                                    const char * const *multiarch_tuples);
+_SRT_PUBLIC
 GList *srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
                                          const char * const *multiarch_tuples);
 _SRT_PUBLIC

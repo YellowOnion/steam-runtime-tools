@@ -139,6 +139,8 @@ gboolean load_json (GType type,
                     SrtLoadableIssues *issues_out,
                     GError **error);
 
+void _srt_egl_external_platform_set_is_duplicated (SrtEglExternalPlatform *self,
+                                                   gboolean is_duplicated);
 void _srt_egl_icd_set_is_duplicated (SrtEglIcd *self,
                                      gboolean is_duplicated);
 void _srt_vulkan_icd_set_is_duplicated (SrtVulkanIcd *self,

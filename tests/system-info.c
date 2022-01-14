@@ -2603,6 +2603,7 @@ typedef struct
   SrtLocaleIssues locale_issues;
   LocaleTest locale[5];
   IcdTest egl_icd[3];
+  IcdTest egl_ext_platform[3];
   IcdTest vulkan_icd[3];
   LayerTest vulkan_explicit_layer[3];
   LayerTest vulkan_implicit_layer[3];
@@ -2820,6 +2821,14 @@ static JsonTest json_test[] =
       {
         .json_path = "/usr/share/glvnd/egl_vendor.d/51_mesa.json",
         .library_path = "libEGL_mesa.so.0",
+      },
+    },
+
+    .egl_ext_platform =
+    {
+      {
+        .json_path = "/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json",
+        .library_path = "libnvidia-egl-wayland.so.1",
       },
     },
 
@@ -3715,6 +3724,26 @@ json_parsing (Fixture *f,
                                g_quark_to_string (error->domain));
               g_assert_cmpint (t->egl_icd[j].error_code, ==, error->code);
               g_assert_cmpstr (t->egl_icd[j].error_message, ==, error->message);
+            }
+          g_clear_error (&error);
+        }
+      g_list_free_full (icds, g_object_unref);
+
+      icds = srt_system_info_list_egl_external_platforms (info, multiarch_tuples);
+      for (j = 0, iter = icds; iter != NULL; iter = iter->next, j++)
+        {
+          error = NULL;
+          g_assert_cmpstr (t->egl_ext_platform[j].json_path, ==, srt_egl_external_platform_get_json_path (iter->data));
+          if (srt_egl_external_platform_check_error (iter->data, &error))
+            {
+              g_assert_cmpstr (t->egl_ext_platform[j].library_path, ==, srt_egl_external_platform_get_library_path (iter->data));
+            }
+          else
+            {
+              g_assert_cmpstr (t->egl_ext_platform[j].error_domain, ==,
+                               g_quark_to_string (error->domain));
+              g_assert_cmpint (t->egl_ext_platform[j].error_code, ==, error->code);
+              g_assert_cmpstr (t->egl_ext_platform[j].error_message, ==, error->message);
             }
           g_clear_error (&error);
         }

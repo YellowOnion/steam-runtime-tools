@@ -141,6 +141,11 @@ setup (Fixture *f,
                                             "/no-library.json",
                                             TRUE);
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES",
+                                            "/not-a-file:"
+                                            "/no-library.json",
+                                            TRUE);
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
                                             "VK_ICD_FILENAMES",
                                             "/not-a-file:"
                                             "/null.json:"
@@ -159,6 +164,11 @@ setup (Fixture *f,
                                             "fake-icds/null.json:"
                                             "fake-icds/false.json:"
                                             "fake-icds/str.json:"
+                                            "fake-icds/no-library.json",
+                                            TRUE);
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES",
+                                            "fake-icds/not-a-file:"
                                             "fake-icds/no-library.json",
                                             TRUE);
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
@@ -186,11 +196,17 @@ setup (Fixture *f,
                                             "__EGL_VENDOR_LIBRARY_DIRS",
                                             "/egl1:/egl2",
                                             TRUE);
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS",
+                                            "/egl1",
+                                            TRUE);
     }
   else
     {
       f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
                                               "__EGL_VENDOR_LIBRARY_DIRS");
+      f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
+                                              "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS");
     }
 }
 
@@ -523,6 +539,97 @@ assert_egl_icd_no_error (SrtEglIcd *icd)
 }
 
 /*
+ * Assert that @module is internally consistent.
+ */
+static void
+assert_egl_external_platform (SrtEglExternalPlatform *module)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GError) error_property = NULL;
+  SrtLoadableIssues issues;
+  g_autofree gchar *json_path = NULL;
+  g_autofree gchar *library_path = NULL;
+  g_autofree gchar *resolved = NULL;
+  g_autofree gchar *resolved_property = NULL;
+
+  g_assert_true (SRT_IS_EGL_EXTERNAL_PLATFORM (module));
+
+  g_object_get (module,
+                "error", &error_property,
+                "issues", &issues,
+                "json-path", &json_path,
+                "library-path", &library_path,
+                "resolved-library-path", &resolved_property,
+                NULL);
+  resolved = srt_egl_external_platform_resolve_library_path (module);
+
+  g_assert_cmpstr (json_path, !=, NULL);
+  g_assert_cmpstr (json_path, ==, srt_egl_external_platform_get_json_path (module));
+  g_assert_true (g_path_is_absolute (json_path));
+
+  /* These are invariants, even if they're NULL */
+  g_assert_cmpstr (library_path, ==, srt_egl_external_platform_get_library_path (module));
+  g_assert_cmpstr (resolved_property, ==, resolved);
+  g_assert_cmpint (issues, ==, srt_egl_external_platform_get_issues (module));
+
+  if (error_property == NULL)
+    {
+      srt_egl_external_platform_check_error (module, &error);
+      g_assert_no_error (error);
+      g_assert_true (srt_egl_external_platform_check_error (module, NULL));
+      g_assert_true (srt_egl_external_platform_check_error (module, &error));
+      g_assert_no_error (error);
+      g_assert_no_error (error_property);
+      g_assert_cmpstr (library_path, !=, NULL);
+      g_assert_cmpstr (resolved, !=, NULL);
+      g_assert_cmpstr (resolved_property, !=, NULL);
+
+      if (strchr (resolved, '/') == NULL)
+        {
+          g_assert_cmpstr (resolved, ==, library_path);
+        }
+      else
+        {
+          g_assert_true (g_path_is_absolute (resolved));
+        }
+    }
+  else
+    {
+      g_assert_false (srt_egl_external_platform_check_error (module, NULL));
+      g_assert_false (srt_egl_external_platform_check_error (module, &error));
+      g_assert_nonnull (error);
+      g_assert_error (error, error_property->domain, error_property->code);
+      g_assert_cmpstr (error->message, ==, error_property->message);
+      g_assert_cmpstr (library_path, ==, NULL);
+      g_assert_cmpstr (resolved, ==, NULL);
+      g_assert_cmpstr (resolved_property, ==, NULL);
+    }
+}
+
+/*
+ * Assert that @module is internally consistent and in a failed state.
+ */
+static void
+assert_egl_external_platform_has_error (SrtEglExternalPlatform *module)
+{
+  g_assert_false (srt_egl_external_platform_check_error (module, NULL));
+  assert_egl_external_platform (module);
+}
+
+/*
+ * Assert that @module is internally consistent and in a successful state.
+ */
+static void
+assert_egl_external_platform_no_error (SrtEglExternalPlatform *module)
+{
+  GError *error = NULL;
+
+  srt_egl_external_platform_check_error (module, &error);
+  g_assert_no_error (error);
+  assert_egl_external_platform (module);
+}
+
+/*
  * We don't assert that filenames are literally the same, because they
  * might canonicalize differently in the presence of symlinks: we just
  * assert that they are the same file.
@@ -824,6 +931,175 @@ test_icd_egl (Fixture *f,
       resolved = srt_egl_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libEGL_mesa.so.0");
       g_assert_cmpint (srt_egl_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+
+      iter = iter->next;
+      g_assert_null (iter);
+    }
+}
+
+static void
+test_egl_external_platform (Fixture *f,
+                            gconstpointer context)
+{
+  const Config *config = context;
+  g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
+  g_autoptr(SrtObjectList) exts = NULL;
+  g_autofree gchar *resolved = NULL;
+  const GList *iter;
+  const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  srt_system_info_set_environ (info, f->fake_icds_envp);
+  srt_system_info_set_sysroot (info, f->sysroot);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  exts = srt_system_info_list_egl_external_platforms (info, multiarchs);
+
+  for (iter = exts; iter != NULL; iter = iter->next)
+    {
+      GError *error = NULL;
+
+      g_test_message ("External platform: %s", srt_egl_external_platform_get_json_path (iter->data));
+
+      if (srt_egl_external_platform_check_error (iter->data, &error))
+        {
+          g_test_message ("\tlibrary: %s",
+                          srt_egl_external_platform_get_library_path (iter->data));
+        }
+      else
+        {
+          g_test_message ("\terror: %s", error->message);
+          g_clear_error (&error);
+        }
+    }
+
+  if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
+    {
+      iter = exts;
+      g_assert_null (iter);
+    }
+  else if (config != NULL && config->icd_mode == ICD_MODE_EXPLICIT_DIRS)
+    {
+      iter = exts;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/egl1/AAA.json");
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      /* We sort lexicographically with strcmp(), so BBB comes before a. */
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/egl1/BBB.json");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/egl1/a.json");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/egl1/b.json");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/egl1/soname_zlib_dup.json");
+      /* In the ECL ICDs test case, this shows up as a duplicate, but since
+       * we're not looking in /egl2 here, it does not */
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+      assert_egl_external_platform_no_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/egl1/z.json");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_UNSUPPORTED);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_null (iter);
+    }
+  else if (config != NULL && config->icd_mode == ICD_MODE_RELATIVE_FILENAMES)
+    {
+      const char *path;
+
+      iter = exts;
+      g_assert_nonnull (iter);
+      path = srt_egl_external_platform_get_json_path (iter->data);
+      g_assert_true (g_str_has_suffix (path, "/fake-icds/not-a-file"));
+      g_assert_true (g_path_is_absolute (path));
+      assert_egl_external_platform_has_error (iter->data);
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      path = srt_egl_external_platform_get_json_path (iter->data);
+      g_assert_true (g_str_has_suffix (path, "/fake-icds/no-library.json"));
+      g_assert_true (g_path_is_absolute (path));
+      assert_same_file ("fake-icds/no-library.json", path);
+      assert_egl_external_platform_has_error (iter->data);
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+
+      iter = iter->next;
+      g_assert_null (iter);
+    }
+  else if (config != NULL && config->icd_mode == ICD_MODE_EXPLICIT_FILENAMES)
+    {
+      iter = exts;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==, "/not-a-file");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==, "/no-library.json");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_null (iter);
+    }
+  else
+    {
+      /* EGL external platforms don't respect the XDG variables, so XDG_DIRS
+       * is the same as NORMAL. */
+      iter = exts;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/etc/egl/egl_external_platform.d/invalid.json");
+      /* This one is invalid. */
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_CANNOT_LOAD);
+      assert_egl_external_platform_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_egl_external_platform_get_json_path (iter->data), ==,
+                       "/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json");
+      assert_egl_external_platform_no_error (iter->data);
+      g_assert_cmpstr (srt_egl_external_platform_get_library_path (iter->data), ==,
+                       "libnvidia-egl-wayland.so.1");
+      resolved = srt_egl_external_platform_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==, "libnvidia-egl-wayland.so.1");
+      g_assert_cmpint (srt_egl_external_platform_get_issues (iter->data), ==,
                        SRT_LOADABLE_ISSUES_NONE);
 
       iter = iter->next;
@@ -2982,6 +3258,14 @@ main (int argc,
               setup, test_icd_egl, teardown);
   g_test_add ("/graphics/icd/egl/xdg", Fixture, &xdg_config,
               setup, test_icd_egl, teardown);
+  g_test_add ("/graphics/icd/egl_external_platform/basic", Fixture, NULL,
+              setup, test_egl_external_platform, teardown);
+  g_test_add ("/graphics/icd/egl_external_platform/dirs", Fixture, &dir_config,
+              setup, test_egl_external_platform, teardown);
+  g_test_add ("/graphics/icd/egl_external_platform/filenames", Fixture, &filename_config,
+              setup, test_egl_external_platform, teardown);
+  g_test_add ("/graphics/icd/egl_external_platform/relative", Fixture, &relative_config,
+              setup, test_egl_external_platform, teardown);
   g_test_add ("/graphics/icd/vulkan_exp/basic", Fixture, NULL,
               setup, test_icd_vulkan_explicit_multiarch, teardown);
   g_test_add ("/graphics/icd/vulkan_exp/filenames", Fixture, &filename_config,

@@ -140,6 +140,11 @@ struct _SrtSystemInfo
   } runtime;
   struct
   {
+    GList *list;
+    gboolean have;
+  } egl_ext_platform;
+  struct
+  {
     GList *egl;
     GList *vulkan;
     gboolean have_egl;
@@ -478,10 +483,10 @@ forget_steam (SrtSystemInfo *self)
 }
 
 /*
- * Forget any cached information about ICDs.
+ * Forget any cached information about ICDs and layers.
  */
 static void
-forget_icds (SrtSystemInfo *self)
+forget_drivers (SrtSystemInfo *self)
 {
   self->icds.have_egl = FALSE;
   g_list_free_full (self->icds.egl, g_object_unref);
@@ -489,14 +494,10 @@ forget_icds (SrtSystemInfo *self)
   self->icds.have_vulkan = FALSE;
   g_list_free_full (self->icds.vulkan, g_object_unref);
   self->icds.vulkan = NULL;
-}
 
-/*
- * Forget any cached information about layers.
- */
-static void
-forget_layers (SrtSystemInfo *self)
-{
+  self->egl_ext_platform.have = FALSE;
+  g_list_free_full (g_steal_pointer (&self->egl_ext_platform.list), g_object_unref);
+
   self->layers.have_vulkan_explicit = FALSE;
   self->layers.have_vulkan_implicit = FALSE;
   g_list_free_full (self->layers.vulkan_explicit, g_object_unref);
@@ -545,8 +546,7 @@ srt_system_info_finalize (GObject *object)
 
   forget_desktop_entries (self);
   forget_container_info (self);
-  forget_icds (self);
-  forget_layers (self);
+  forget_drivers (self);
   forget_locales (self);
   forget_os (self);
   forget_overrides (self);
@@ -942,7 +942,10 @@ srt_system_info_new_from_json (const char *path,
     }
 
   info->icds.have_egl = TRUE;
-  info->icds.egl = _srt_get_egl_from_json_report (json_obj);
+  info->icds.egl = _srt_get_egl_from_json_report (SRT_TYPE_EGL_ICD, json_obj);
+  info->egl_ext_platform.have = TRUE;
+  info->egl_ext_platform.list = _srt_get_egl_from_json_report (SRT_TYPE_EGL_EXTERNAL_PLATFORM,
+                                                               json_obj);
 
   info->icds.have_vulkan = TRUE;
   info->icds.vulkan = _srt_get_vulkan_from_json_report (json_obj);
@@ -2705,7 +2708,7 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
   forget_graphics_modules (self);
   forget_libraries (self);
   forget_graphics_results (self);
-  forget_layers (self);
+  forget_drivers (self);
   forget_locales (self);
   free (self->helpers_path);
   self->helpers_path = g_strdup (path);
@@ -2761,8 +2764,7 @@ srt_system_info_set_primary_multiarch_tuple (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
-  forget_icds (self);
-  forget_layers (self);
+  forget_drivers (self);
   forget_locales (self);
 
   if (tuple)
@@ -2838,8 +2840,7 @@ srt_system_info_set_multiarch_tuples (SrtSystemInfo *self,
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
   g_return_if_fail (!self->immutable_values);
 
-  forget_icds (self);
-  forget_layers (self);
+  forget_drivers (self);
   forget_locales (self);
 
   g_array_set_size (self->multiarch_tuples, 0);
@@ -3069,8 +3070,7 @@ _srt_system_info_set_check_flags (SrtSystemInfo *self,
   /* SKIP_EXTRAS affects e.g. VDPAU modules.
    * SKIP_SLOW_CHECKS affects Vulkan and EGL modules */
   forget_graphics_modules (self);
-  forget_icds (self);
-  forget_layers (self);
+  forget_drivers (self);
 }
 
 /**
@@ -3140,18 +3140,88 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
       g_auto(GStrv) stored_multiarch_tuples = NULL;
 
       if (multiarch_tuples == NULL)
-        stored_multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
+        {
+          stored_multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
+          multiarch_tuples = (const char * const *) stored_multiarch_tuples;
+        }
 
-      self->icds.egl = _srt_load_egl_icds (self->helpers_path, self->sysroot,
-                                           self->env,
-                                           multiarch_tuples == NULL ?
-                                             (const char * const *) stored_multiarch_tuples :
+      self->icds.egl = _srt_load_egl_things (SRT_TYPE_EGL_ICD,
+                                             self->helpers_path,
+                                             self->sysroot,
+                                             self->env,
                                              multiarch_tuples,
-                                           self->check_flags);
+                                             self->check_flags);
       self->icds.have_egl = TRUE;
     }
 
   for (iter = self->icds.egl; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_egl_external_platforms:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuples: (nullable) (array zero-terminated=1) (element-type utf8):
+ *  Force the usage of the provided multiarch tuples like %SRT_ABI_I386,
+ *  representing ABIs. If %NULL, the multiarch list stored in @self will
+ *  be used instead.
+ *
+ * List the available EGL external platform modules, using the same
+ * search paths as the NVIDIA proprietary driver `libEGL_nvidia.so.0`.
+ *
+ * This function is not architecture-specific and may return a mixture
+ * of modules for more than one architecture or ABI, because the way this
+ * loader appears to work is to read a single search path for metadata
+ * describing modules, then filter out the ones that are for the wrong
+ * architecture at load time.
+ *
+ * Some of the entries in the result might describe a bare SONAME in the
+ * standard library search path, which might exist for any or all
+ * architectures simultaneously (this is the most common approach for EGL).
+ * Other entries might describe the relative or absolute path to a
+ * specific library, which will only be usable for the architecture for
+ * which it was compiled.
+ *
+ * Duplicated modules are searched by their absolute path, obtained
+ * using "inspect-library" in @multiarch_tuples, or
+ * `srt_system_info_dup_multiarch_tuples()` if %NULL.
+ *
+ * Returns: (transfer full) (element-type SrtEglExternalPlatform): A list of
+ *  opaque #SrtEglExternalPlatform objects. Free with
+ *  `g_list_free_full(list, srt_egl_icd_unref)`.
+ */
+GList *
+srt_system_info_list_egl_external_platforms (SrtSystemInfo *self,
+                                             const char * const *multiarch_tuples)
+{
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (!self->egl_ext_platform.have && !self->immutable_values)
+    {
+      g_assert (self->egl_ext_platform.list == NULL);
+      g_auto(GStrv) stored_multiarch_tuples = NULL;
+
+      if (multiarch_tuples == NULL)
+        {
+          stored_multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
+          multiarch_tuples = (const char * const *) stored_multiarch_tuples;
+        }
+
+      self->egl_ext_platform.list = _srt_load_egl_things (SRT_TYPE_EGL_EXTERNAL_PLATFORM,
+                                                          self->helpers_path,
+                                                          self->sysroot,
+                                                          self->env,
+                                                          multiarch_tuples,
+                                                          self->check_flags);
+      self->egl_ext_platform.have = TRUE;
+    }
+
+  for (iter = self->egl_ext_platform.list; iter != NULL; iter = iter->next)
     ret = g_list_prepend (ret, g_object_ref (iter->data));
 
   return g_list_reverse (ret);
@@ -3665,6 +3735,8 @@ ensure_driver_environment (SrtSystemInfo *self)
         "WINE_FULLSCREEN_INTEGER_SCALING",
         "WINE_HIDE_NVIDIA_GPU",
         "XDG_RUNTIME_DIR",
+        "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS",
+        "__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES",
         "__EGL_VENDOR_LIBRARY_DIRS",
         "__EGL_VENDOR_LIBRARY_FILENAMES",
         "__GLX_VENDOR_LIBRARY_NAME",

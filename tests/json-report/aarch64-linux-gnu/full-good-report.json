@@ -182,6 +182,13 @@
         "library_path" : "libEGL_mesa.so.0",
         "issues" : []
       }
+    ],
+    "external_platforms" : [
+      {
+        "json_path" : "/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json",
+        "library_path" : "libnvidia-egl-wayland.so.1",
+        "issues" : []
+      }
     ]
   },
   "vulkan" : {

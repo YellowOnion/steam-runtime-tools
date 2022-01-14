@@ -220,13 +220,12 @@ out:
  * @json_obj: (not nullable): A JSON Object used to search for Icd or Layer
  *  properties
  * @which: Used to choose which loadable to search, it can be
- *  %SRT_TYPE_EGL_ICD, %SRT_TYPE_VULKAN_ICD or %SRT_TYPE_VULKAN_LAYER
+ *  %SRT_TYPE_EGL_ICD, %SRT_TYPE_VULKAN_ICD, %SRT_TYPE_VULKAN_LAYER or
+ *  %SRT_TYPE_EGL_EXTERNAL_PLATFORM
  * @explicit: If %TRUE, load explicit layers, otherwise load implicit layers.
  *  Currently this value is used only if @which is %SRT_TYPE_VULKAN_LAYER
  *
- * Returns: A list of #SrtEglIcd (if @which is %SRT_TYPE_EGL_ICD) or
- *  #SrtVulkanIcd (if @which is %SRT_TYPE_VULKAN_ICD) or #SrtVulkanLayer (if
- *  @which is %SRT_TYPE_VULKAN_LAYER) that have been found, or
+ * Returns: A list of objects of type @which, or
  *  %NULL if none has been found.
  */
 static GList *
@@ -246,6 +245,11 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
     {
       member = "egl";
       sub_member = "icds";
+    }
+  else if (which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+    {
+      member = "egl";
+      sub_member = "external_platforms";
     }
   else if (which == SRT_TYPE_VULKAN_ICD)
     {
@@ -369,13 +373,19 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                                                 issues);
                   driver_info = g_list_prepend (driver_info, layer);
                 }
-              else if ((which == SRT_TYPE_EGL_ICD || which == SRT_TYPE_VULKAN_ICD) &&
+              else if ((which == SRT_TYPE_EGL_ICD
+                        || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM
+                        || which == SRT_TYPE_VULKAN_ICD) &&
                        library_path != NULL)
                 {
                   if (which == SRT_TYPE_EGL_ICD)
                     driver_info = g_list_prepend (driver_info, srt_egl_icd_new (json_path,
                                                                                 library_path,
                                                                                 issues));
+                  else if (which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+                    driver_info = g_list_prepend (driver_info, srt_egl_external_platform_new (json_path,
+                                                                                              library_path,
+                                                                                              issues));
                   else if (which == SRT_TYPE_VULKAN_ICD)
                     driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new (json_path,
                                                                                    api_version,
@@ -399,6 +409,10 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                     driver_info = g_list_prepend (driver_info, srt_egl_icd_new_error (json_path,
                                                                                       issues,
                                                                                       error));
+                  else if (which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+                    driver_info = g_list_prepend (driver_info, srt_egl_external_platform_new_error (json_path,
+                                                                                                    issues,
+                                                                                                    error));
                   else if (which == SRT_TYPE_VULKAN_ICD)
                     driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new_error (json_path,
                                                                                          issues,
@@ -427,9 +441,12 @@ out:
  *  has been found.
  */
 GList *
-_srt_get_egl_from_json_report (JsonObject *json_obj)
+_srt_get_egl_from_json_report (GType which, JsonObject *json_obj)
 {
-  return get_driver_loadables_from_json_report (json_obj, SRT_TYPE_EGL_ICD, FALSE);
+  g_return_val_if_fail (which == SRT_TYPE_EGL_ICD
+                        || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM,
+                        NULL);
+  return get_driver_loadables_from_json_report (json_obj, which, FALSE);
 }
 
 /*

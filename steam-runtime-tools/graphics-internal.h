@@ -287,11 +287,12 @@ typedef enum
 } SrtGraphicsModule;
 
 G_GNUC_INTERNAL
-GList *_srt_load_egl_icds (const char *helpers_path,
-                           const char *sysroot,
-                           gchar **envp,
-                           const char * const *multiarch_tuples,
-                           SrtCheckFlags check_flags);
+GList *_srt_load_egl_things (GType which,
+                             const char *helpers_path,
+                             const char *sysroot,
+                             gchar **envp,
+                             const char * const *multiarch_tuples,
+                             SrtCheckFlags check_flags);
 G_GNUC_INTERNAL
 GList *_srt_load_vulkan_icds (const char *helpers_path,
                               const char *sysroot,
@@ -320,7 +321,7 @@ void _srt_graphics_get_from_report (JsonObject *json_obj,
                                     const gchar *multiarch_tuple,
                                     GHashTable **cached_graphics);
 
-GList *_srt_get_egl_from_json_report (JsonObject *json_obj);
+GList *_srt_get_egl_from_json_report (GType type, JsonObject *json_obj);
 GList *_srt_get_vulkan_from_json_report (JsonObject *json_obj);
 GList *_srt_get_explicit_vulkan_layers_from_json_report (JsonObject *json_obj);
 GList *_srt_get_implicit_vulkan_layers_from_json_report (JsonObject *json_obj);
@@ -355,6 +356,12 @@ SrtEglIcd *srt_egl_icd_new_error (const gchar *json_path,
 SrtEglIcd *srt_egl_icd_new (const gchar *json_path,
                             const gchar *library_path,
                             SrtLoadableIssues issues);
+SrtEglExternalPlatform *srt_egl_external_platform_new_error (const gchar *json_path,
+                                                             SrtLoadableIssues issues,
+                                                             const GError *error);
+SrtEglExternalPlatform *srt_egl_external_platform_new (const gchar *json_path,
+                                                       const gchar *library_path,
+                                                       SrtLoadableIssues issues);
 SrtVulkanIcd *srt_vulkan_icd_new_error (const gchar *json_path,
                                         SrtLoadableIssues issues,
                                         const GError *error);

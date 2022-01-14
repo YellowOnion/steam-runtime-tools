@@ -1291,6 +1291,18 @@ enumerate_indep (gpointer data)
   if (TRUE)
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating EGL external platforms in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_egl_external_platforms (system_info, pv_multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (inputs->cancellable))
+    goto out;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
       G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
 
@@ -2219,6 +2231,7 @@ icd_details_new (gpointer icd)
   g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
   g_return_val_if_fail (SRT_IS_DRI_DRIVER (icd) ||
                         SRT_IS_EGL_ICD (icd) ||
+                        SRT_IS_EGL_EXTERNAL_PLATFORM (icd) ||
                         SRT_IS_VULKAN_ICD (icd) ||
                         SRT_IS_VULKAN_LAYER (icd) ||
                         SRT_IS_VDPAU_DRIVER (icd) ||
@@ -3693,6 +3706,7 @@ setup_json_manifest (PvRuntime *self,
   SrtVulkanLayer *layer = NULL;
   SrtVulkanIcd *icd = NULL;
   SrtEglIcd *egl = NULL;
+  SrtEglExternalPlatform *ext_platform = NULL;
   gboolean need_provider_json = FALSE;
   gsize i;
 
@@ -3705,6 +3719,8 @@ setup_json_manifest (PvRuntime *self,
     icd = SRT_VULKAN_ICD (details->icd);
   else if (SRT_IS_EGL_ICD (details->icd))
     egl = SRT_EGL_ICD (details->icd);
+  else if (SRT_IS_EGL_EXTERNAL_PLATFORM (details->icd))
+    ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
   else
     g_return_val_if_reached (FALSE);
 
@@ -3717,6 +3733,11 @@ setup_json_manifest (PvRuntime *self,
   else if (egl != NULL)
     {
       if (!srt_egl_icd_check_error (egl, NULL))
+        return TRUE;
+    }
+  else if (ext_platform != NULL)
+    {
+      if (!srt_egl_external_platform_check_error (ext_platform, NULL))
         return TRUE;
     }
   else
@@ -3765,6 +3786,16 @@ setup_json_manifest (PvRuntime *self,
                                               error))
                 return FALSE;
             }
+          else if (ext_platform != NULL)
+            {
+              g_autoptr(SrtEglExternalPlatform) replacement = NULL;
+
+              replacement = srt_egl_external_platform_new_replace_library_path (ext_platform,
+                                                                                details->paths_in_container[i]);
+
+              if (!srt_egl_external_platform_write_to_file (replacement, write_to_file, error))
+                return FALSE;
+            }
           else
             {
               g_autoptr(SrtVulkanIcd) replacement = NULL;
@@ -3793,6 +3824,8 @@ setup_json_manifest (PvRuntime *self,
         json_in_provider = srt_vulkan_layer_get_json_path (layer);
       else if (egl != NULL)
         json_in_provider = srt_egl_icd_get_json_path (egl);
+      else if (ext_platform != NULL)
+        json_in_provider = srt_egl_external_platform_get_json_path (ext_platform);
       else
         json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
@@ -5138,6 +5171,48 @@ collect_egl_drivers (PvRuntime *self,
 }
 
 /*
+ * @egl_ext_platform_details: (element-type IcdDetails):
+ * @patterns: (element-type filename):
+ */
+static gboolean
+collect_egl_ext_platforms (PvRuntime *self,
+                           RuntimeArchitecture *arch,
+                           GPtrArray *egl_ext_platform_details,
+                           GPtrArray *patterns,
+                           GError **error)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
+    _srt_profiling_start ("Collecting EGL external platforms");
+  gsize j;
+  /* As with Vulkan layers, the order of the manifests matters
+   * but the order of the actual libraries does not. */
+  gboolean use_numbered_subdirs = FALSE;
+  const gsize multiarch_index = arch->multiarch_index;
+
+  g_debug ("Collecting %s EGL external platforms from provider...",
+           arch->details->tuple);
+
+  for (j = 0; j < egl_ext_platform_details->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (egl_ext_platform_details, j);
+      SrtEglExternalPlatform *ext = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
+
+      if (!srt_egl_external_platform_check_error (ext, NULL))
+        continue;
+
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+      details->resolved_libraries[multiarch_index] = srt_egl_external_platform_resolve_library_path (ext);
+      g_assert (details->resolved_libraries[multiarch_index] != NULL);
+
+      if (!bind_icd (self, arch, j, "egl_external_platform", details,
+                     &use_numbered_subdirs, patterns, NULL, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+/*
  * @vulkan_icd_details: (element-type IcdDetails):
  * @patterns: (element-type filename):
  */
@@ -5349,6 +5424,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   gsize i, j;
   g_autoptr(GString) dri_path = g_string_new ("");
   g_autoptr(GString) egl_path = g_string_new ("");
+  g_autoptr(GString) egl_ext_platform_path = g_string_new ("");
   g_autoptr(GString) vulkan_path = g_string_new ("");
   /* We are currently using the explicit and implicit Vulkan layer paths
    * only to check if we binded at least a single layer */
@@ -5358,16 +5434,19 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   gboolean any_architecture_works = FALSE;
   g_autoptr(SrtSystemInfo) system_info = NULL;
   g_autoptr(SrtObjectList) egl_icds = NULL;
+  g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_explicit_layers = NULL;
   g_autoptr(SrtObjectList) vulkan_implicit_layers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
+  g_autoptr(GPtrArray) egl_ext_platform_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
   guint n_egl_icds;
+  guint n_egl_ext_platforms;
   guint n_vulkan_icds;
   const GList *icd_iter;
   gboolean all_libglx_from_provider = TRUE;
@@ -5430,6 +5509,39 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               j, path, srt_egl_icd_get_library_path (icd));
 
       g_ptr_array_add (egl_icd_details, icd_details_new (icd));
+    }
+
+  g_clear_pointer (&part_timer, _srt_profiling_end);
+
+  part_timer = _srt_profiling_start ("Enumerating EGL external platforms");
+  g_debug ("Enumerating EGL external platforms on provider system...");
+  egl_ext_platforms = srt_system_info_list_egl_external_platforms (system_info,
+                                                                   pv_multiarch_tuples);
+  n_egl_ext_platforms = g_list_length (egl_ext_platforms);
+
+  egl_ext_platform_details = g_ptr_array_new_full (n_egl_ext_platforms,
+                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = egl_ext_platforms, j = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, j++)
+    {
+      SrtEglExternalPlatform *ext = icd_iter->data;
+      const gchar *path = srt_egl_external_platform_get_json_path (ext);
+      GError *local_error = NULL;
+
+      if (!srt_egl_external_platform_check_error (ext, &local_error))
+        {
+          g_info ("Failed to load EGL external platform #%" G_GSIZE_FORMAT  " from %s: %s",
+                  j, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_info ("EGL external platform #%" G_GSIZE_FORMAT " at %s: %s",
+              j, path, srt_egl_external_platform_get_library_path (ext));
+
+      g_ptr_array_add (egl_ext_platform_details, icd_details_new (ext));
     }
 
   g_clear_pointer (&part_timer, _srt_profiling_end);
@@ -5594,6 +5706,10 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           if (!collect_egl_drivers (self, arch, egl_icd_details, patterns,
                                     error))
+            return FALSE;
+
+          if (!collect_egl_ext_platforms (self, arch, egl_ext_platform_details,
+                                          patterns, error))
             return FALSE;
 
           if (!collect_vulkan_icds (self, arch, vulkan_icd_details,
@@ -5816,6 +5932,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                  egl_icd_details, egl_path, error))
     return FALSE;
 
+  if (!setup_each_json_manifest (self, bwrap, "egl/egl_external_platform.d",
+                                 egl_ext_platform_details,
+                                 egl_ext_platform_path, error))
+    return FALSE;
+
   g_debug ("Setting up Vulkan ICD JSON...");
   if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
                                  vulkan_icd_details, vulkan_path, error))
@@ -5849,6 +5970,15 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                        NULL);
 
   pv_environ_setenv (container_env, "__EGL_VENDOR_LIBRARY_DIRS", NULL);
+
+  if (egl_ext_platform_path->len != 0)
+    pv_environ_setenv (container_env, "__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES",
+                       egl_ext_platform_path->str);
+  else
+    pv_environ_setenv (container_env, "__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES",
+                       NULL);
+
+  pv_environ_setenv (container_env, "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS", NULL);
 
   if (vulkan_path->len != 0)
     pv_environ_setenv (container_env, "VK_ICD_FILENAMES", vulkan_path->str);

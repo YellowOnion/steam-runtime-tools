@@ -34,6 +34,37 @@
 
 #include <steam-runtime-tools/macros.h>
 
+typedef struct _SrtEglExternalPlatform SrtEglExternalPlatform;
+typedef struct _SrtEglExternalPlatformClass SrtEglExternalPlatformClass;
+
+#define SRT_TYPE_EGL_EXTERNAL_PLATFORM (srt_egl_external_platform_get_type ())
+#define SRT_EGL_EXTERNAL_PLATFORM(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), SRT_TYPE_EGL_EXTERNAL_PLATFORM, SrtEglExternalPlatform))
+#define SRT_EGL_EXTERNAL_PLATFORM_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), SRT_TYPE_EGL_EXTERNAL_PLATFORM, SrtEglExternalPlatformClass))
+#define SRT_IS_EGL_EXTERNAL_PLATFORM(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SRT_TYPE_EGL_EXTERNAL_PLATFORM))
+#define SRT_IS_EGL_EXTERNAL_PLATFORM_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), SRT_TYPE_EGL_EXTERNAL_PLATFORM))
+#define SRT_EGL_EXTERNAL_PLATFORM_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), SRT_TYPE_EGL_EXTERNAL_PLATFORM, SrtEglExternalPlatformClass)
+_SRT_PUBLIC
+GType srt_egl_external_platform_get_type (void);
+
+_SRT_PUBLIC
+gboolean srt_egl_external_platform_check_error (SrtEglExternalPlatform *self,
+                                                GError **error);
+_SRT_PUBLIC
+const gchar *srt_egl_external_platform_get_json_path (SrtEglExternalPlatform *self);
+_SRT_PUBLIC
+const gchar *srt_egl_external_platform_get_library_path (SrtEglExternalPlatform *self);
+_SRT_PUBLIC
+SrtLoadableIssues srt_egl_external_platform_get_issues (SrtEglExternalPlatform *self);
+_SRT_PUBLIC
+gchar *srt_egl_external_platform_resolve_library_path (SrtEglExternalPlatform *self);
+_SRT_PUBLIC
+SrtEglExternalPlatform *srt_egl_external_platform_new_replace_library_path (SrtEglExternalPlatform *self,
+                                                                            const char *path);
+_SRT_PUBLIC
+gboolean srt_egl_external_platform_write_to_file (SrtEglExternalPlatform *self,
+                                                  const char *path,
+                                                  GError **error);
+
 typedef struct _SrtEglIcd SrtEglIcd;
 typedef struct _SrtEglIcdClass SrtEglIcdClass;
 
@@ -66,5 +97,6 @@ gboolean srt_egl_icd_write_to_file (SrtEglIcd *self,
                                     GError **error);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglExternalPlatform, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtEglIcd, g_object_unref)
 #endif

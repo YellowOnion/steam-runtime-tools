@@ -1,3 +1,15 @@
+steam-runtime-tools (0.20220118.0) UNRELEASED; urgency=medium
+
+  * graphics: Add support for enumerating EGL external platforms.
+    These are used by the NVIDIA proprietary driver for integration with
+    non-X11 display technologies such as Wayland and gbm.
+  * pressure-vessel: Collect EGL external platforms from graphics stack.
+    This should allow the NVIDIA proprietary EGL driver to operate on Wayland,
+    if it is a sufficiently new version.
+  * graphics: Refactoring
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 18 Jan 2022 20:33:20 +0000
+
 steam-runtime-tools (0.20220111.0) steamrt; urgency=medium
 
   * graphics: Load ICDs and layers to match Vulkan-Loader >= 1.2.198

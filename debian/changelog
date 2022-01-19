@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220118.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220119.0) steamrt; urgency=medium
 
   * graphics: Add support for enumerating EGL external platforms.
     These are used by the NVIDIA proprietary driver for integration with
@@ -8,7 +8,7 @@ steam-runtime-tools (0.20220118.0) UNRELEASED; urgency=medium
     if it is a sufficiently new version.
   * graphics: Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 18 Jan 2022 20:33:20 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 19 Jan 2022 11:35:32 +0000
 
 steam-runtime-tools (0.20220111.0) steamrt; urgency=medium
 

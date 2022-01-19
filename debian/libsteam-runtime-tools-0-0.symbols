@@ -27,14 +27,14 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_dri_driver_is_extra@Base 0.20200109.0
  srt_dri_driver_resolve_library_path@Base 0.20200331.1
  srt_driver_flags_get_type@Base 0.20200109.0
- srt_egl_external_platform_check_error@Base 0.20220118.0
- srt_egl_external_platform_get_issues@Base 0.20220118.0
- srt_egl_external_platform_get_json_path@Base 0.20220118.0
- srt_egl_external_platform_get_library_path@Base 0.20220118.0
- srt_egl_external_platform_get_type@Base 0.20220118.0
- srt_egl_external_platform_new_replace_library_path@Base 0.20220118.0
- srt_egl_external_platform_resolve_library_path@Base 0.20220118.0
- srt_egl_external_platform_write_to_file@Base 0.20220118.0
+ srt_egl_external_platform_check_error@Base 0.20220119.0
+ srt_egl_external_platform_get_issues@Base 0.20220119.0
+ srt_egl_external_platform_get_json_path@Base 0.20220119.0
+ srt_egl_external_platform_get_library_path@Base 0.20220119.0
+ srt_egl_external_platform_get_type@Base 0.20220119.0
+ srt_egl_external_platform_new_replace_library_path@Base 0.20220119.0
+ srt_egl_external_platform_resolve_library_path@Base 0.20220119.0
+ srt_egl_external_platform_write_to_file@Base 0.20220119.0
  srt_egl_icd_check_error@Base 0.20190926.0
  srt_egl_icd_get_issues@Base 0.20210305.0
  srt_egl_icd_get_json_path@Base 0.20190926.0
@@ -189,7 +189,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_list_desktop_entries@Base 0.20200415.0
  srt_system_info_list_dri_drivers@Base 0.20200109.0
  srt_system_info_list_driver_environment@Base 0.20200306.0
- srt_system_info_list_egl_external_platforms@Base 0.20220118.0
+ srt_system_info_list_egl_external_platforms@Base 0.20220119.0
  srt_system_info_list_egl_icds@Base 0.20190926.0
  srt_system_info_list_explicit_vulkan_layers@Base 0.20201124.0
  srt_system_info_list_glx_icds@Base 0.20200306.0

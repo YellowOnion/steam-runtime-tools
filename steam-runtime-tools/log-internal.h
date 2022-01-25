@@ -1,5 +1,6 @@
+/*<private_header>*/
 /*
- * Copyright © 2021 Collabora Ltd.
+ * Copyright © 2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,41 +24,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/*
- * Stub Steam executable that tries to directly pass the given commands to
- * the running Steam client.
- */
-
-#include <libglnx.h>
+#pragma once
 
 #include <glib.h>
-#include <glib-object.h>
 
-#include <steam-runtime-tools/log-internal.h>
-#include <steam-runtime-tools/utils-internal.h>
+#include <steam-runtime-tools/macros.h>
 
-int
-main (int argc,
-      const char **argv)
-{
-  static const char *default_argv[] = {"steam", "-foreground", NULL};
-  g_autoptr(GError) error = NULL;
-
-  _srt_util_set_up_logging ("steam-runtime-steam-remote");
-
-  if (argc <= 1)
-    {
-      /* If we don't have arguments, Steam is expected to send the command
-       * "-foreground" by default */
-      argv = default_argv;
-      argc = 2;
-    }
-
-  if (!_srt_steam_command_via_pipe (argv + 1, argc - 1, &error))
-    {
-      g_printerr ("steam-runtime-steam-remote: %s\n", error->message);
-      return EXIT_FAILURE;
-    }
-
-  return EXIT_SUCCESS;
-}
+void _srt_util_set_up_logging (const char *identifier);

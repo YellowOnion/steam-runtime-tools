@@ -155,3 +155,6 @@ _srt_is_same_file (const gchar *a,
 }
 
 int _srt_set_compatible_resource_limits (pid_t pid);
+
+gboolean _srt_boolean_environment (const gchar *name,
+                                   gboolean def);

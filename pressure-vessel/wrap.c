@@ -1222,16 +1222,16 @@ main (int argc,
   original_environ = g_get_environ ();
 
   /* Set defaults */
-  opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+  opt_batch = _srt_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
   opt_copy_runtime = is_flatpak_env;
   /* Process COPY_RUNTIME_INFO first so that COPY_RUNTIME and VARIABLE_DIR
    * can override it */
   opt_copy_runtime_into_cb ("$PRESSURE_VESSEL_COPY_RUNTIME_INTO",
                             g_getenv ("PRESSURE_VESSEL_COPY_RUNTIME_INTO"),
                             NULL, NULL);
-  opt_copy_runtime = pv_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
-                                             opt_copy_runtime);
-  opt_devel = pv_boolean_environment ("PRESSURE_VESSEL_DEVEL", FALSE);
+  opt_copy_runtime = _srt_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
+                                               opt_copy_runtime);
+  opt_devel = _srt_boolean_environment ("PRESSURE_VESSEL_DEVEL", FALSE);
   opt_runtime_id = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ID"));
 
     {
@@ -1254,22 +1254,22 @@ main (int argc,
   if (opt_home != NULL && opt_home[0] == '\0')
     g_clear_pointer (&opt_home, g_free);
 
-  opt_remove_game_overlay = pv_boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
-                                                    FALSE);
-  opt_systemd_scope = pv_boolean_environment ("PRESSURE_VESSEL_SYSTEMD_SCOPE",
-                                              opt_systemd_scope);
-  opt_import_vulkan_layers = pv_boolean_environment ("PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS",
-                                                     TRUE);
+  opt_remove_game_overlay = _srt_boolean_environment ("PRESSURE_VESSEL_REMOVE_GAME_OVERLAY",
+                                                      FALSE);
+  opt_systemd_scope = _srt_boolean_environment ("PRESSURE_VESSEL_SYSTEMD_SCOPE",
+                                                opt_systemd_scope);
+  opt_import_vulkan_layers = _srt_boolean_environment ("PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS",
+                                                       TRUE);
 
   opt_share_home = tristate_environment ("PRESSURE_VESSEL_SHARE_HOME");
-  opt_gc_legacy_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_LEGACY_RUNTIMES", FALSE);
-  opt_gc_runtimes = pv_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
-  opt_generate_locales = pv_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
+  opt_gc_legacy_runtimes = _srt_boolean_environment ("PRESSURE_VESSEL_GC_LEGACY_RUNTIMES", FALSE);
+  opt_gc_runtimes = _srt_boolean_environment ("PRESSURE_VESSEL_GC_RUNTIMES", TRUE);
+  opt_generate_locales = _srt_boolean_environment ("PRESSURE_VESSEL_GENERATE_LOCALES", TRUE);
 
-  opt_share_pid = pv_boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
-  opt_single_thread = pv_boolean_environment ("PRESSURE_VESSEL_SINGLE_THREAD",
-                                              opt_single_thread);
-  opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
+  opt_share_pid = _srt_boolean_environment ("PRESSURE_VESSEL_SHARE_PID", TRUE);
+  opt_single_thread = _srt_boolean_environment ("PRESSURE_VESSEL_SINGLE_THREAD",
+                                                opt_single_thread);
+  opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!opt_shell_cb ("$PRESSURE_VESSEL_SHELL",
                      g_getenv ("PRESSURE_VESSEL_SHELL"), NULL, error))

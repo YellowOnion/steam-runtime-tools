@@ -751,7 +751,7 @@ main (int argc,
   g_option_context_add_main_entries (context, options, NULL);
   opt_env = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
   opt_unsetenv = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
+  opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;

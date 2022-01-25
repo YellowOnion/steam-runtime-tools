@@ -24,6 +24,7 @@
 executable(
   'steam-runtime-system-info',
   'system-info.c',
+  c_args : srt_c_args,
   dependencies : [gio_unix, glib, json_glib, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use the adjacent json-glib, ignoring LD_LIBRARY_PATH even if set
@@ -34,6 +35,7 @@ executable(
 executable(
   'steam-runtime-check-requirements',
   'check-requirements.c',
+  c_args : srt_c_args,
   dependencies : [glib, gobject, libsteamrt_static_dep],
   install : true,
   # Use the adjacent GLib, ignoring LD_LIBRARY_PATH even if set
@@ -44,6 +46,7 @@ executable(
 executable(
   'steam-runtime-identify-library-abi',
   'identify-library-abi.c',
+  c_args : srt_c_args,
   dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
@@ -54,6 +57,7 @@ executable(
 executable(
   'steam-runtime-input-monitor',
   'input-monitor.c',
+  c_args : srt_c_args,
   dependencies : [gio_unix, glib, gobject, json_glib, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use the adjacent json-glib, ignoring LD_LIBRARY_PATH even if set
@@ -64,6 +68,7 @@ executable(
 executable(
   'steam-runtime-steam-remote',
   'steam-remote.c',
+  c_args : srt_c_args,
   dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH
@@ -74,6 +79,7 @@ executable(
 executable(
   'steam-runtime-urlopen',
   'urlopen.c',
+  c_args : srt_c_args,
   dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use GLib from the adjacent libdir, ignoring LD_LIBRARY_PATH

@@ -130,7 +130,7 @@ configure_file(
   configuration : conf_data,
 )
 
-srt_c_args = ['-include', '_srt-config.h']
+srt_c_args = ['-include', 'steam-runtime-tools/_srt-config.h']
 
 libsteamrt_generated_headers_dep = declare_dependency(
   include_directories : project_include_dirs,

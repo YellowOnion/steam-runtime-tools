@@ -1,5 +1,6 @@
 /*
  * A cut-down version of common/flatpak-utils from Flatpak
+ * Last updated: Flatpak 1.12.4
  *
  * Copyright © 2014 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later

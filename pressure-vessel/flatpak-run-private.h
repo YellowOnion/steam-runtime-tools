@@ -1,6 +1,6 @@
 /*
  * Cut-down version of common/flatpak-run-private.h from Flatpak
- * Last updated: Flatpak 1.12.2
+ * Last updated: Flatpak 1.12.4
  *
  * Copyright © 2017-2021 Collabora Ltd.
  * Copyright © 2014-2021 Red Hat, Inc

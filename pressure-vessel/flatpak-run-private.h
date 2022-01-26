@@ -231,8 +231,9 @@ gboolean flatpak_run_parse_x11_display (const char  *display,
 int open_namespace_fd_if_needed (const char *path,
                                  const char *other_path);
 
-void flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
-                               gboolean      allowed);
+void flatpak_run_add_x11_args (FlatpakBwrap         *bwrap,
+                               gboolean              allowed,
+                               FlatpakContextShares  shares);
 gboolean flatpak_run_add_wayland_args (FlatpakBwrap *bwrap);
 void flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap);
 void flatpak_run_add_resolved_args (FlatpakBwrap *bwrap);

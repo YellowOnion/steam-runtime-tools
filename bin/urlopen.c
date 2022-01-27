@@ -180,6 +180,12 @@ main (int argc,
 
   scheme = g_uri_parse_scheme (uri);
 
+  /* For steam: and steamlink: URLs, we never want to go via
+   * xdg-desktop-portal and the desktop environment's URL-handling
+   * machinery, because there's a chance that they will choose the wrong
+   * copy of Steam, for example if we have both native and Flatpak versions
+   * of Steam installed. We want to use whichever one is actually running,
+   * via the ~/.steam/steam.pipe in the current execution environment. */
   if (scheme != NULL && (g_ascii_strcasecmp (scheme, "steamlink") == 0
                          || g_ascii_strcasecmp (scheme, "steam") == 0))
     {

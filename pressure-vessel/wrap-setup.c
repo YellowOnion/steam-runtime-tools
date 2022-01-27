@@ -271,6 +271,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
       flatpak_run_add_session_dbus_args (sharing_bwrap);
       flatpak_run_add_system_dbus_args (sharing_bwrap);
       flatpak_run_add_resolved_args (sharing_bwrap);
+      flatpak_run_add_journal_args (bwrap);
       pv_wrap_add_pipewire_args (sharing_bwrap, container_env);
     }
 

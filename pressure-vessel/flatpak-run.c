@@ -942,8 +942,7 @@ flatpak_run_add_resolved_args (FlatpakBwrap *bwrap)
     flatpak_bwrap_add_args (bwrap, "--bind", resolved_socket, resolved_socket, NULL);
 }
 
-#if 0
-static void
+void
 flatpak_run_add_journal_args (FlatpakBwrap *bwrap)
 {
   g_autofree char *journal_socket_socket = g_strdup ("/run/systemd/journal/socket");
@@ -963,6 +962,7 @@ flatpak_run_add_journal_args (FlatpakBwrap *bwrap)
     }
 }
 
+#if 0
 static char *
 create_proxy_socket (char *template)
 {

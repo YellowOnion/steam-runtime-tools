@@ -147,6 +147,7 @@ main (int argc,
   const gchar *uri;
   g_autofree gchar *scheme = NULL;
   g_autoptr(GOptionContext) option_context = NULL;
+  g_autoptr(GError) pipe_error = NULL;
   g_autoptr(GError) portal_error = NULL;
   g_autoptr(GError) error = NULL;
 
@@ -190,9 +191,9 @@ main (int argc,
                          || g_ascii_strcasecmp (scheme, "steam") == 0))
     {
       g_debug ("Passing the URL '%s' to the Steam pipe", uri);
-      if (!_srt_steam_command_via_pipe (&uri, 1, &error))
+      if (!_srt_steam_command_via_pipe (&uri, 1, &pipe_error))
         {
-          g_printerr ("%s: %s\n", g_get_prgname (), error->message);
+          g_printerr ("%s: %s\n", g_get_prgname (), pipe_error->message);
           return 4;
         }
 
@@ -209,9 +210,9 @@ main (int argc,
       steam_url = g_strjoin ("/", "steam://openurl", uri, NULL);
 
       g_debug ("Passing the URL '%s' to the Steam pipe", steam_url);
-      if (!_srt_steam_command_via_pipe ((const gchar **) &steam_url, 1, &error))
+      if (!_srt_steam_command_via_pipe ((const gchar **) &steam_url, 1, &pipe_error))
         {
-          g_printerr ("%s: %s\n", g_get_prgname (), error->message);
+          g_printerr ("%s: %s\n", g_get_prgname (), pipe_error->message);
           return 4;
         }
 

@@ -150,6 +150,7 @@ main (int argc,
   g_autoptr(GError) pipe_error = NULL;
   g_autoptr(GError) portal_error = NULL;
   g_autoptr(GError) error = NULL;
+  gboolean prefer_steam;
 
   g_set_prgname ("steam-runtime-urlopen");
 
@@ -197,7 +198,9 @@ main (int argc,
         goto fail;
     }
 
-  if (open_with_portal (uri, &portal_error))
+  prefer_steam = _srt_boolean_environment ("SRT_URLOPEN_PREFER_STEAM", FALSE);
+
+  if (!prefer_steam && open_with_portal (uri, &portal_error))
     return EXIT_SUCCESS;
 
   if (scheme != NULL && (g_ascii_strcasecmp (scheme, "http") == 0
@@ -210,6 +213,13 @@ main (int argc,
       if (_srt_steam_command_via_pipe ((const gchar **) &steam_url, 1, &pipe_error))
         return EXIT_SUCCESS;
     }
+
+  /* If we haven't tried xdg-desktop-portal yet because we were hoping
+   * to go via Steam, try it now - going by the less-preferred route is
+   * better than nothing, and in particular we can't go via Steam for
+   * non-web URLs like mailto: */
+  if (portal_error == NULL && open_with_portal (uri, &portal_error))
+    return EXIT_SUCCESS;
 
 fail:
   g_printerr ("%s: Unable to open URL\n", g_get_prgname ());

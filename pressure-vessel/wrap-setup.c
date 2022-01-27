@@ -260,7 +260,9 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
         }
       else
         {
-          flatpak_run_add_x11_args (sharing_bwrap, TRUE);
+          flatpak_run_add_x11_args (sharing_bwrap, TRUE,
+                                    (FLATPAK_CONTEXT_SHARED_IPC
+                                     | FLATPAK_CONTEXT_SHARED_NETWORK));
         }
 
       flatpak_run_add_pulseaudio_args (sharing_bwrap,
@@ -314,6 +316,11 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
 
       pv_environ_setenv (container_env, var, val);
     }
+
+  /* flatpak_run_add_x11_args assumes that the default is to inherit
+   * the caller's DISPLAY */
+  if (pv_environ_getenv (container_env, "DISPLAY") == NULL)
+    pv_environ_inherit_env (container_env, "DISPLAY");
 
   pv_wrap_set_icons_env_vars (container_env, original_environ);
 

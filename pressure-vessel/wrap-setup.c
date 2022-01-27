@@ -263,7 +263,9 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
           flatpak_run_add_x11_args (sharing_bwrap, TRUE);
         }
 
-      flatpak_run_add_pulseaudio_args (sharing_bwrap);
+      flatpak_run_add_pulseaudio_args (sharing_bwrap,
+                                       (FLATPAK_CONTEXT_SHARED_IPC
+                                        | FLATPAK_CONTEXT_SHARED_NETWORK));
       flatpak_run_add_session_dbus_args (sharing_bwrap);
       flatpak_run_add_system_dbus_args (sharing_bwrap);
       flatpak_run_add_resolved_args (sharing_bwrap);

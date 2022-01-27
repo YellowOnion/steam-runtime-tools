@@ -227,7 +227,8 @@ int open_namespace_fd_if_needed (const char *path,
 void flatpak_run_add_x11_args (FlatpakBwrap *bwrap,
                                gboolean      allowed);
 gboolean flatpak_run_add_wayland_args (FlatpakBwrap *bwrap);
-void flatpak_run_add_pulseaudio_args (FlatpakBwrap *bwrap);
+void flatpak_run_add_pulseaudio_args (FlatpakBwrap         *bwrap,
+                                      FlatpakContextShares  shares);
 void flatpak_run_add_resolved_args (FlatpakBwrap *bwrap);
 gboolean flatpak_run_add_system_dbus_args (FlatpakBwrap *app_bwrap);
 gboolean flatpak_run_add_session_dbus_args (FlatpakBwrap *app_bwrap);

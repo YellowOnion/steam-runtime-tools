@@ -1,3 +1,15 @@
+steam-runtime-tools (0.20220127.0) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Handle X11 over local abstract or TCP sockets
+    (steam-runtime#486)
+  * pressure-vessel: Allow remapping Xauthority entries for remote or
+    forwarded X11 (related to steam-runtime#486)
+  * pressure-vessel: Interpret tcp: addresses for PulseAudio
+  * pressure-vessel: Update Flatpak-based code to Flatpak 1.12.4
+    - Support more variations of PulseAudio server strings
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 27 Jan 2022 18:12:51 +0000
+
 steam-runtime-tools (0.20220119.0) steamrt; urgency=medium
 
   * graphics: Add support for enumerating EGL external platforms.

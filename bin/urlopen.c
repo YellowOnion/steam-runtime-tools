@@ -147,8 +147,10 @@ main (int argc,
   const gchar *uri;
   g_autofree gchar *scheme = NULL;
   g_autoptr(GOptionContext) option_context = NULL;
+  g_autoptr(GError) pipe_error = NULL;
   g_autoptr(GError) portal_error = NULL;
   g_autoptr(GError) error = NULL;
+  gboolean prefer_steam;
 
   g_set_prgname ("steam-runtime-urlopen");
 
@@ -180,20 +182,25 @@ main (int argc,
 
   scheme = g_uri_parse_scheme (uri);
 
+  /* For steam: and steamlink: URLs, we never want to go via
+   * xdg-desktop-portal and the desktop environment's URL-handling
+   * machinery, because there's a chance that they will choose the wrong
+   * copy of Steam, for example if we have both native and Flatpak versions
+   * of Steam installed. We want to use whichever one is actually running,
+   * via the ~/.steam/steam.pipe in the current execution environment. */
   if (scheme != NULL && (g_ascii_strcasecmp (scheme, "steamlink") == 0
                          || g_ascii_strcasecmp (scheme, "steam") == 0))
     {
       g_debug ("Passing the URL '%s' to the Steam pipe", uri);
-      if (!_srt_steam_command_via_pipe (&uri, 1, &error))
-        {
-          g_printerr ("%s: %s\n", g_get_prgname (), error->message);
-          return 4;
-        }
-
-      return EXIT_SUCCESS;
+      if (_srt_steam_command_via_pipe (&uri, 1, &pipe_error))
+        return EXIT_SUCCESS;
+      else
+        goto fail;
     }
 
-  if (open_with_portal (uri, &portal_error))
+  prefer_steam = _srt_boolean_environment ("SRT_URLOPEN_PREFER_STEAM", FALSE);
+
+  if (!prefer_steam && open_with_portal (uri, &portal_error))
     return EXIT_SUCCESS;
 
   if (scheme != NULL && (g_ascii_strcasecmp (scheme, "http") == 0
@@ -203,15 +210,27 @@ main (int argc,
       steam_url = g_strjoin ("/", "steam://openurl", uri, NULL);
 
       g_debug ("Passing the URL '%s' to the Steam pipe", steam_url);
-      if (!_srt_steam_command_via_pipe ((const gchar **) &steam_url, 1, &error))
-        {
-          g_printerr ("%s: %s\n", g_get_prgname (), error->message);
-          return 4;
-        }
-
-      return EXIT_SUCCESS;
+      if (_srt_steam_command_via_pipe ((const gchar **) &steam_url, 1, &pipe_error))
+        return EXIT_SUCCESS;
     }
 
-  g_printerr ("%s: %s\n", g_get_prgname (), portal_error->message);
+  /* If we haven't tried xdg-desktop-portal yet because we were hoping
+   * to go via Steam, try it now - going by the less-preferred route is
+   * better than nothing, and in particular we can't go via Steam for
+   * non-web URLs like mailto: */
+  if (portal_error == NULL && open_with_portal (uri, &portal_error))
+    return EXIT_SUCCESS;
+
+fail:
+  g_printerr ("%s: Unable to open URL\n", g_get_prgname ());
+
+  if (pipe_error != NULL)
+    g_printerr ("%s: tried using steam.pipe, received error: %s\n",
+                g_get_prgname (), pipe_error->message);
+
+  if (portal_error != NULL)
+    g_printerr ("%s: tried using xdg-desktop-portal, received error: %s\n",
+                g_get_prgname (), portal_error->message);
+
   return 4;
 }

@@ -1082,8 +1082,8 @@ main (int argc,
 
   g_option_context_add_main_entries (context, options, NULL);
 
-  opt_batch = pv_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
-  opt_verbose = pv_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
+  opt_batch = _srt_boolean_environment ("PRESSURE_VESSEL_BATCH", FALSE);
+  opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     {

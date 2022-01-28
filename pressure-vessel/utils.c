@@ -190,24 +190,6 @@ pv_hash_table_get_arbitrary_key (GHashTable *table)
     return NULL;
 }
 
-gboolean
-pv_boolean_environment (const gchar *name,
-                        gboolean def)
-{
-  const gchar *value = g_getenv (name);
-
-  if (g_strcmp0 (value, "1") == 0)
-    return TRUE;
-
-  if (g_strcmp0 (value, "") == 0 || g_strcmp0 (value, "0") == 0)
-    return FALSE;
-
-  if (value != NULL)
-    g_warning ("Unrecognised value \"%s\" for $%s", value, name);
-
-  return def;
-}
-
 /**
  * pv_async_signal_safe_error:
  * @message: A human-readable message
@@ -905,9 +887,9 @@ pv_set_up_logging (gboolean opt_verbose)
                                | PV_LOG_LEVEL_FAILURE
                                | G_LOG_LEVEL_WARNING
                                | G_LOG_LEVEL_MESSAGE);
-  gboolean opt_timestamp = pv_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
-                                                   FALSE);
-  gboolean opt_info = pv_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
+  gboolean opt_timestamp = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
+                                                     FALSE);
+  gboolean opt_info = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
 
   my_pid = getpid ();
   my_prgname = g_get_prgname ();

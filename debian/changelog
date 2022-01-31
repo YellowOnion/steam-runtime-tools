@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220127.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220131.0) UNRELEASED; urgency=medium
 
   * pressure-vessel: Handle X11 over local abstract or TCP sockets
     (steam-runtime#486)
@@ -7,8 +7,13 @@ steam-runtime-tools (0.20220127.0) UNRELEASED; urgency=medium
   * pressure-vessel: Interpret tcp: addresses for PulseAudio
   * pressure-vessel: Update Flatpak-based code to Flatpak 1.12.4
     - Support more variations of PulseAudio server strings
+  * pressure-vessel: Expose systemd journal sockets inside container
+  * urlopen: Improve error handling
+  * urlopen: Allow steam.pipe to be tried either before or after x-d-p
+  * Use steam-runtime-tools log domain for non-pressure-vessel CLI tools
+  * urlopen, steam-remote: Optionally log to the systemd Journal
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 27 Jan 2022 18:12:51 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 31 Jan 2022 12:57:02 +0000
 
 steam-runtime-tools (0.20220119.0) steamrt; urgency=medium
 

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220131.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220131.0) steamrt; urgency=medium
 
   * pressure-vessel: Handle X11 over local abstract or TCP sockets
     (steam-runtime#486)
@@ -13,7 +13,7 @@ steam-runtime-tools (0.20220131.0) UNRELEASED; urgency=medium
   * Use steam-runtime-tools log domain for non-pressure-vessel CLI tools
   * urlopen, steam-remote: Optionally log to the systemd Journal
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 31 Jan 2022 12:57:02 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 31 Jan 2022 13:00:06 +0000
 
 steam-runtime-tools (0.20220119.0) steamrt; urgency=medium
 

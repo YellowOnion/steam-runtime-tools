@@ -36,6 +36,7 @@
 #include <glib-object.h>
 #include <gio/gunixfdlist.h>
 
+#include <steam-runtime-tools/log-internal.h>
 #include <steam-runtime-tools/utils-internal.h>
 
 typedef GUnixFDList AutoUnixFDList;
@@ -152,7 +153,7 @@ main (int argc,
   g_autoptr(GError) error = NULL;
   gboolean prefer_steam;
 
-  g_set_prgname ("steam-runtime-urlopen");
+  _srt_util_set_up_logging ("steam-runtime-urlopen");
 
   option_context = g_option_context_new ("{ file | URL }");
   g_option_context_add_main_entries (option_context, option_entries, NULL);

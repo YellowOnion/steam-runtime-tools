@@ -91,6 +91,8 @@ libsteamrt_internals = [
     'libdl.c',
     'library-internal.h',
     'locale-internal.h',
+    'log-internal.h',
+    'log.c',
     'os-internal.h',
     'os.c',
     'profiling-internal.h',

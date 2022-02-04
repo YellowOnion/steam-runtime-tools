@@ -232,6 +232,14 @@ There are two ways this can happen:
     - more paths can be added if necessary,
         [contact the maintainers](https://github.com/ValveSoftware/steam-runtime/issues)
 
+As a result of implementation limitations in
+[libcapsule](https://gitlab.collabora.com/vivek/libcapsule), the
+container runtime does not currently support following the `DT_RUNPATH`
+and `DT_RPATH` ELF headers.
+On operating systems that make extensive use of these headers, such as
+NixOS, it will be necessary to copy or symlink the required libraries into
+a location that appears in the search path.
+
 The shared libraries found in those locations need to include at least:
 
 * glibc itself

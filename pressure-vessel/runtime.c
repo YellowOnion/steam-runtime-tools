@@ -4141,6 +4141,7 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
     "libGLX_indirect.so.*",
     "libGLdispatch.so.*",
     "libOpenGL.so.*",
+    "libXNVCtrl.so.*",
     "libcuda.so.*",
     "libglx.so.*",
     "libnvidia-cbl.so.*",

@@ -44,6 +44,7 @@ main () {
     local runtime
     local src
     local theirs
+    local theirs_should_be
     local verbose=
 
     if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
@@ -124,12 +125,42 @@ main () {
     if [ -d "${here}/steam-runtime" ]; then
         src="${here}/steam-runtime"
         [ -z "$verbose" ] || log "Using local scout runtime ${src}"
+        rm -fr "${here}/var/unpack"
     elif [ -n "${STEAM_RUNTIME_SCOUT-}" ] && [ -d "${STEAM_RUNTIME_SCOUT-}" ]; then
         src="${STEAM_RUNTIME_SCOUT}"
         [ -z "$verbose" ] || log "Using specified scout runtime ${src}"
+        rm -fr "${here}/var/unpack"
     else
         src="${STEAM_COMPAT_CLIENT_INSTALL_PATH:-"$HOME/.steam/root"}/ubuntu12_32/steam-runtime"
-        [ -z "$verbose" ] || log "Using default scout runtime ${src}"
+
+        theirs="$(cat "$src/checksum" || echo none)"
+        theirs_should_be="$(cat "${src}.checksum")"
+
+        if [ "$theirs" = "$theirs_should_be" ]; then
+            [ -z "$verbose" ] || log "Using default scout runtime ${src}"
+            rm -fr "${here}/var/unpack"
+        else
+            log "warning: $src is not the expected version"
+            log "warning: expected: $theirs_should_be"
+            log "warning: found:    $theirs"
+
+            if [ -d "${here}/var/unpack" ]; then
+                ours="$(cat "${here}/var/unpack/steam-runtime/checksum" || echo none)"
+            else
+                ours=none
+            fi
+
+            if [ "$theirs_should_be" != "$ours" ]; then
+                # Recover by unpacking a copy locally.
+                log "Recovering by unpacking $src.tar.xz* into ${here}/var/unpack..."
+                mkdir -p "${here}/var/unpack"
+                cat "$src.tar.xz".* | tar -C "${here}/var/unpack" -Jxf-
+                echo "$theirs_should_be" > "${here}/var/unpack/steam-runtime/checksum"
+            fi
+
+            src="${here}/var/unpack/steam-runtime"
+            [ -z "$verbose" ] || log "Falling back to using ${src}"
+        fi
     fi
 
     # Note that this only works because run.sh does not take the

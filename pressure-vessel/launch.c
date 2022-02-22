@@ -26,7 +26,6 @@
  */
 
 #include "config.h"
-#include "subprojects/libglnx/config.h"
 
 #include <fnmatch.h>
 #include <locale.h>

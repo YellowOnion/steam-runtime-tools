@@ -17,5 +17,3 @@
 #define N_(s) s
 #define NC_(s) s
 #define Q_(s) g_strip_context (s, s)
-
-#include "subprojects/libglnx/config.h"

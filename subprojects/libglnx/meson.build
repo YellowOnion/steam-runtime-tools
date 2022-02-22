@@ -1,7 +1,16 @@
-project('libglnx', 'c')
+# Copyright 2019 Endless OS Foundation LLC
+# Copyright 2019 Collabora Ltd.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+project(
+  'libglnx',
+  'c',
+  default_options : [
+    'c_std=gnu99',
+  ],
+)
 
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
-add_project_arguments('-std=gnu99', language: 'c')
 add_project_arguments('-Wno-unused-local-typedefs', language: 'c')
 
 cc = meson.get_compiler('c')
@@ -35,7 +44,7 @@ foreach check_function : check_functions
   conf.set10('HAVE_DECL_' + check_function.underscorify().to_upper(), have_it)
 endforeach
 config_h = configure_file(
-  output : 'config.h',
+  output : 'libglnx-config.h',
   configuration : conf,
 )
 

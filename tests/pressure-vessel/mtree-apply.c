@@ -23,7 +23,6 @@
  */
 
 #include "config.h"
-#include "subprojects/libglnx/config.h"
 
 #include <locale.h>
 #include <sysexits.h>

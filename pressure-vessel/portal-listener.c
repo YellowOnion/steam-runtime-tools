@@ -25,7 +25,6 @@
  */
 
 #include "config.h"
-#include "subprojects/libglnx/config.h"
 
 #include <errno.h>
 #include <locale.h>

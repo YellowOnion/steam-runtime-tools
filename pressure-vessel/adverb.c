@@ -22,7 +22,6 @@
  */
 
 #include "config.h"
-#include "subprojects/libglnx/config.h"
 
 #include <fcntl.h>
 #include <locale.h>

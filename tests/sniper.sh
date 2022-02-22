@@ -31,12 +31,6 @@ elif [ -n "${IMAGES_SSH_HOST-}" ] && [ -n "${IMAGES_SSH_PATH-}" ]; then
         --ssh-path "${IMAGES_SSH_PATH}" \
     )
 else
-    # There's no public release of sniper yet, so this won't actually work
-    # without supplying a URL and credentials for the non-public version
-    echo "1..0 # SKIP no public release of sniper available"
-    exit 0
-
-    # When there's a public release, this will probably work
     populate_depot_args=( \
         "${populate_depot_args[@]}" \
         --version latest-container-runtime-public-beta \

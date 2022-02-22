@@ -63,17 +63,3 @@ Files:
  subprojects/libcapsule/tests/*/*.symbols
 Copyright: 2017-2020 Collabora Ltd.
 License: LGPL-2.1-or-later
-
-Files: subprojects/libglnx/*
-Copyright:
- 1995-1997 Josh MacDonald
- 1995-1997 Peter Mattis
- 1995-1997 Spencer Kimball
- 2010-2011 Lennart Poettering
- 2012-2021 Colin Walters
- 2015 Canonical Ltd.
- 2016 Zbigniew Jędrzejewski-Szmek
- 2017-2019 Endless OS Foundation LLC
- 2017 Red Hat, Inc.
- 2019 Collabora Ltd.
-License: LGPL-2.1-or-later AND FSFAP AND MIT

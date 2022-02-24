@@ -840,6 +840,8 @@ which are suitable.
 
 For best results, compile Linux-native games in the official
 [Steam Runtime SDK Docker container][] using [Docker][] or [Podman][].
+The [SDK documentation][Steam Runtime SDK Docker container] has more
+information about this.
 
 [Steam Runtime SDK Docker container]: https://gitlab.steamos.cloud/steamrt/scout/sdk/-/blob/master/README.md
 [Docker]: https://www.docker.com/

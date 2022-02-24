@@ -215,6 +215,22 @@ downloaded from the web interface:
 * unpack the downloaded archive as a replacement for
     `steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel`
 
+Developer-oriented information for testing various configurations
+is available in the [guide for game developers](docs/slr-for-game-developers.md).
+
+Convenient choices for a reasonably small free-to-play game on various
+engines include:
+
+  - Floating Point (game ID 302380)
+      - very small/quick to install, works OK on weak hardware
+      - UnityPlayer 4.3.4f1
+  - Life is Strange, episode 1 (game ID 319630)
+      - Unreal Engine 3
+  - Team Fortress 2 (game ID 440)
+      - Source engine
+  - Unturned (game ID 304930)
+      - UnityPlayer 5.5.3f1
+
 ## Release procedure
 
 * The version number is *EPOCH*.*YYYYMMDD*.*MICRO* where:

@@ -11,7 +11,9 @@ SPDX-License-Identifier: MIT
 
 This document describes some assumptions that are known to be made by
 the Steam Runtime, the Steam container runtime framework
-(Steam Linux Runtime, pressure-vessel), and/or Steam itself.
+([Steam Linux Runtime](container-runtime.md),
+[pressure-vessel](pressure-vessel.md)),
+and/or Steam itself.
 
 As a general, high-level rule of thumb, if something is true in all of
 Arch Linux, Ubuntu and Fedora, then Steam or Steam games are likely to
@@ -23,7 +25,8 @@ available to use as a reference for how it normally fits together.
 There are two main components involved in providing libraries to Steam and
 Steam games:
 
-- The traditional Steam Runtime, implemented in terms of `LD_LIBRARY_PATH`.
+- The [traditional Steam Runtime](ld-library-path-runtime.md),
+    implemented in terms of `LD_LIBRARY_PATH`.
     Instances of this can be found in
     `~/.steam/root/ubuntu12_32/steam-runtime` and
     `~/.steam/root/ubuntu12_64/steam-runtime-heavy` in a working Steam
@@ -35,8 +38,8 @@ Steam games:
     [Steam Runtime 1½ 'heavy'](https://gitlab.steamos.cloud/steamrt/steamrt/-/blob/steamrt/heavy/README.md),
     based on Debian 8.
 
-- The container runtime framework, implemented in terms of containers
-    launched by the pressure-vessel tool.
+- The [container runtime framework](container-runtime.md),
+    implemented in terms of containers launched by the pressure-vessel tool.
     Instances of this can be found in
     `.../steamapps/common/SteamLinuxRuntime_soldier` and perhaps
     `.../steamapps/common/SteamLinuxRuntime_sniper`.

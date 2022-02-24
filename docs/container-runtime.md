@@ -84,6 +84,10 @@ This is not a stable situation: a game that happened to work in Ubuntu
 
 The *Steam Linux Runtime* compatibility tool, app ID 1070560, uses the
 same container technology as `soldier` to mitigate this problem.
+It will automatically be downloaded to your Steam library as
+`steamapps/common/SteamLinuxRuntime` if it is selected to run a particular
+game, or if a game requires it.
+
 It is implemented by entering a `soldier` container, and then setting up
 a `scout` `LD_LIBRARY_PATH` runtime inside that container.
 
@@ -96,7 +100,7 @@ hopefully become available in future.
 
 Steam Runtime 3, `sniper`, is another newer runtime based on Debian 11
 (released in 2021).
-It is very similar to `sniper`, except for its base distribution being
+It is very similar to `soldier`, except for its base distribution being
 2 years newer: this means its core libraries and compiler are also
 approximately 2 years newer.
 

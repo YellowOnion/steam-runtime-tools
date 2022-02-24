@@ -8,7 +8,7 @@ SPDX-License-Identifier: MIT
 The Steam container runtime framework, often referred to as
 *Steam Linux Runtime*, is a collection of container environments
 which can be used to run Steam games on Linux in a relatively predictable
-container environment.
+container environment, even when running on an arbitrary Linux
 distribution which might be old, new or unusually set up.
 
 Instead of forming a `LD_LIBRARY_PATH` that merges the host OS's shared

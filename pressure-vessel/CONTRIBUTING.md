@@ -6,8 +6,9 @@ Copyright © 2019-2021 Collabora Ltd.
 SPDX-License-Identifier: MIT
 -->
 
-See [README.md](README.md) for general information about
-`pressure-vessel`, and for information about building and testing it.
+See [documentation](../docs/pressure-vessel.md) for general information about
+`pressure-vessel`,
+and [README](README.md) for information about building and testing it.
 
 More extensive notes should go here eventually, but aren't
 available yet. Sorry!

@@ -509,12 +509,6 @@ Currently, the features enabled by this option are:
     developers can use advanced profiling and debugging mechanisms that
     might require writing to `/sys/kernel` or similar pseudo-filesystems.
 
-This option is a recent addition and is not present in all container
-runtimes yet.
-If it is not available in your current version of the Steam Linux Runtime,
-one option is to [upgrade pressure-vessel][Upgrading pressure-vessel]
-to a version that has this option.
-
 This option is likely to have more effects in future pressure-vessel releases.
 
 ## Running in a SDK environment

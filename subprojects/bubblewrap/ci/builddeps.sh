@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2021 Simon McVittie
 # SPDX-License-Identifier: LGPL-2.0-or-later
 
 set -eux
 set -o pipefail
 
-usage () {
+usage() {
     if [ "${1-2}" -ne 0 ]; then
         exec >&2
     fi
@@ -64,6 +64,7 @@ if dpkg-vendor --derives-from Debian; then
         libcap-dev \
         libselinux1-dev \
         libtool \
+        meson \
         pkg-config \
         python3 \
         xsltproc \
@@ -92,6 +93,7 @@ if command -v yum; then
         libubsan \
         libxslt \
         make \
+        meson \
         redhat-rpm-config \
         rsync \
         ${NULL+}

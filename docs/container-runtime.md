@@ -62,6 +62,9 @@ The *Steam Linux Runtime - soldier* compatibility tool, app ID 1391110,
 is automatically downloaded to your Steam library as
 `steamapps/common/SteamLinuxRuntime_soldier` when you select a version
 of Proton that requires it.
+It can also be installed by running this command:
+
+    steam steam://install/1391110
 
 Documentation in the `steamrt` "metapackage" provides
 [more information about soldier](https://gitlab.steamos.cloud/steamrt/steamrt/-/blob/steamrt/soldier/README.md).
@@ -87,6 +90,9 @@ same container technology as `soldier` to mitigate this problem.
 It will automatically be downloaded to your Steam library as
 `steamapps/common/SteamLinuxRuntime` if it is selected to run a particular
 game, or if a game requires it.
+It can also be installed by running this command:
+
+    steam steam://install/1070560
 
 It is implemented by entering a `soldier` container, and then setting up
 a `scout` `LD_LIBRARY_PATH` runtime inside that container.
@@ -110,6 +116,9 @@ This will hopefully become possible in future.
 The *Steam Linux Runtime - sniper* compatibility tool, app ID 1628350,
 will automatically be downloaded to your Steam library as
 `steamapps/common/SteamLinuxRuntime_sniper` if a game requires it.
+It can also be installed by running this command:
+
+    steam steam://install/1628350
 
 Documentation in the `steamrt` "metapackage" provides
 [more information about sniper](https://gitlab.steamos.cloud/steamrt/steamrt/-/blob/steamrt/sniper/README.md).

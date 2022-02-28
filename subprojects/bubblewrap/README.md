@@ -6,7 +6,7 @@ etc. focus on providing infrastructure for system administrators and
 orchestration tools (e.g. Kubernetes) to run containers.
 
 These tools are not suitable to give to unprivileged users, because it
-is trivial to turn such access into to a fully privileged root shell
+is trivial to turn such access into a fully privileged root shell
 on the host.
 
 User namespaces
@@ -117,7 +117,7 @@ Seccomp filters: You can pass in seccomp filters that limit which syscalls can b
 Related project comparison: Firejail
 ------------------------------------
 
-[Firejail](https://github.com/netblue30/firejail/tree/master/src/firejail)
+[Firejail](https://github.com/netblue30/firejail/tree/HEAD/src/firejail)
 is similar to Flatpak before bubblewrap was split out in that it combines
 a setuid tool with a lot of desktop-specific sandboxing features.  For
 example, Firejail knows about Pulseaudio, whereas bubblewrap does not.

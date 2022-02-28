@@ -284,9 +284,8 @@ executable(
   install_dir : pv_bindir,
 )
 
-# bubblewrap doesn't currently have a Meson build system, so instead
-# of building it as a subproject, we build our own source file that
-# #includes everything we need from it.
+# We'd like to use bubblewrap as a Meson subproject, but then we wouldn't
+# be able to set its RPATH, which we need...
 executable(
   'pv-bwrap',
   'bwrap-main.c',

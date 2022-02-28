@@ -113,11 +113,12 @@ The main prefix for operating system libraries is assumed to be `/usr`.
 The container runtime framework assumes that libraries are found in one
 of the following sets of paths:
 
-* `/lib64` (`x86_64`) and `/lib` (`i386`)
-* `/lib` (`x86_64`) and `/lib32` (`i386`)
-* `/lib/x86_64-linux-gnu` and `/lib/i386-linux-gnu`
-* any of the above with `/usr` prepended
-* `/usr/x86_64-pc-linux-gnu/lib` and `/usr/i686-pc-linux-gnu/lib`
+* `/usr/lib64` (`x86_64`) and `/usr/lib` (`i386`), as used on Fedora
+* `/usr/lib` (`x86_64`) and `/usr/lib32` (`i386`), as used on Arch Linux
+* `/usr/lib/x86_64-linux-gnu` and `/usr/lib/i386-linux-gnu`, as used on Debian
+* any of the above with the `/usr` prefix removed
+* `/usr/x86_64-pc-linux-gnu/lib` and `/usr/i686-pc-linux-gnu/lib`,
+    as used on Exherbo
 * more paths can be added if necessary,
     [contact the maintainers](https://github.com/ValveSoftware/steam-runtime/issues)
 
@@ -129,7 +130,8 @@ The glibc locale data conventionally stored in `/usr/lib/locale` is
 assumed to be found in one of the following paths:
 
 * `/usr/lib/locale` (preferred)
-* `/usr/x86_64-pc-linux-gnu/lib/locale` and/or `/usr/i686-pc-linux-gnu/lib/locale`
+* `/usr/x86_64-pc-linux-gnu/lib/locale` and/or
+    `/usr/i686-pc-linux-gnu/lib/locale`, as used on Exherbo
 * more paths can be added if necessary,
     [contact the maintainers](https://github.com/ValveSoftware/steam-runtime/issues)
 
@@ -196,7 +198,8 @@ Higher 32-bit functionality levels like `i686-linux-gnu` are
 backwards-compatible with `i386-linux-gnu`, and in practice modern
 distributions are usually compiled for `i586` or higher, which is preferred.
 
-The dynamic linker needs to be available at its interoperable paths:
+The dynamic linker needs to be available at its interoperable paths,
+as used on most distributions:
 
 * `i386-linux-gnu` compatible: `/lib/ld-linux.so.2`
 * `x86_64-linux-gnu`: `/lib64/ld-linux-x86-64.so.2`
@@ -211,9 +214,9 @@ the operating system will have one of the following paths set as their
 ELF interpreter:
 
 * The interoperable paths above (strongly preferred)
-* `/usr/lib/ld-linux-x86-64.so.2`
-* `/usr/x86_64-pc-linux-gnu/lib/ld-linux-x86-64.so.2`
-* `/usr/i686-pc-linux-gnu/lib/ld-linux.so.2`
+* `/usr/lib/ld-linux-x86-64.so.2`, as used on Arch Linux in a few cases
+* `/usr/x86_64-pc-linux-gnu/lib/ld-linux-x86-64.so.2`, as used on Exherbo
+* `/usr/i686-pc-linux-gnu/lib/ld-linux.so.2`, as used on Exherbo
 * A path below `/gnu/store` or `/nix`
 * more paths can be added if necessary,
     [contact the maintainers](https://github.com/ValveSoftware/steam-runtime/issues)
@@ -230,8 +233,9 @@ There are two ways this can happen:
 2. (preferred) They can be listed in the `ld.so` cache, with one of the
     following filenames:
     - `/etc/ld.so.cache` (glibc default, preferred)
-    - `/var/cache/ldconfig/ld.so.cache`
-    - `/etc/ld-x86_64-pc-linux-gnu.cache` or `/etc/ld-i686-pc-linux-gnu.cache`
+    - `/var/cache/ldconfig/ld.so.cache`, as used on Clear Linux
+    - `/etc/ld-x86_64-pc-linux-gnu.cache` or
+        `/etc/ld-i686-pc-linux-gnu.cache`, as used on Exherbo
     - more paths can be added if necessary,
         [contact the maintainers](https://github.com/ValveSoftware/steam-runtime/issues)
 
@@ -291,7 +295,8 @@ supportable way, because this would break games' expectations.
 The operating system should not attempt to force use of a shared library
 that is an older version than the one in the Steam Runtime.
 
-The container runtime will usually *not* use newer shared libraries,
+In constrast to the `LD_LIBRARY_PATH`-based runtime,
+the container runtime will usually *not* use newer shared libraries,
 unless they happen to be part of the dependency stack of a graphics driver.
 This is intentional, and is done to provide a predictable environment
 across distributions.

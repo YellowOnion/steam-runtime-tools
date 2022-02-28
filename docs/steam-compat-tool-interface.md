@@ -162,6 +162,10 @@ Shortcuts for non-Steam games do not currently implement the special
 handling for `%command%`: the configured launch options are simply
 appended to the command-line, regardless of whether they contain
 `%command%` or not.
+Feature request [steam-for-linux#6046][] is a request for this
+limitation to be removed.
+
+[steam-for-linux#6046]: https://github.com/ValveSoftware/steam-for-linux/issues/6046
 
 Please note that not all invocations of compatibility tools take the
 user-specified launch options into account: they are used when running
@@ -419,4 +423,6 @@ Steam Linux Runtime (pressure-vessel) containers will not work as expected
 unless this is set to the game's top-level directory.
 
 Launch options are appended to the command-line. The special token
-`%command%` in Steam games' launch options is not used here.
+`%command%` in Steam games' launch options is not currently used here,
+but feature request [steam-for-linux#6046][] is a request for this
+limitation to be removed.

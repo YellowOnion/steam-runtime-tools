@@ -1,6 +1,6 @@
 /*
  * Taken from Flatpak
- * Last updated: Flatpak 1.12.4
+ * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
  *
  * Copyright © 2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later

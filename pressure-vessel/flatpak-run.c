@@ -1,9 +1,9 @@
 /*
  * Cut-down version of common/flatpak-run.c from Flatpak
- * Last updated: Flatpak 1.12.4
+ * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
  *
- * Copyright © 2017-2019 Collabora Ltd.
- * Copyright © 2014-2019 Red Hat, Inc
+ * Copyright © 2017-2022 Collabora Ltd.
+ * Copyright © 2014-2022 Red Hat, Inc
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -439,7 +439,10 @@ flatpak_run_add_wayland_args (FlatpakBwrap *bwrap)
   if (!wayland_display)
     wayland_display = "wayland-0";
 
-  wayland_socket = g_build_filename (user_runtime_dir, wayland_display, NULL);
+  if (wayland_display[0] == '/')
+    wayland_socket = g_strdup (wayland_display);
+  else
+    wayland_socket = g_build_filename (user_runtime_dir, wayland_display, NULL);
 
   if (!g_str_has_prefix (wayland_display, "wayland-") ||
       strchr (wayland_display, '/') != NULL)
@@ -1272,6 +1275,10 @@ add_bwrap_wrapper (FlatpakBwrap *bwrap,
 
   /* This is a file rather than a bind mount, because it will then
      not be unmounted from the namespace when the namespace dies. */
+#if 0
+  /* pressure-vessel change: avoid bwrap 0.5.0 dependency */
+  flatpak_bwrap_add_args (bwrap, "--perms", "0600", NULL);
+#endif
   flatpak_bwrap_add_args_data_fd (bwrap, "--file", glnx_steal_fd (&app_info_fd), "/.flatpak-info");
 
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
@@ -1852,6 +1859,18 @@ static const ExportData default_exports[] = {
   {"PERLLIB", NULL},
   {"PERL5LIB", NULL},
   {"XCURSOR_PATH", NULL},
+  {"GST_PLUGIN_PATH_1_0", NULL},
+  {"GST_REGISTRY", NULL},
+  {"GST_REGISTRY_1_0", NULL},
+  {"GST_PLUGIN_PATH", NULL},
+  {"GST_PLUGIN_SYSTEM_PATH", NULL},
+  {"GST_PLUGIN_SCANNER", NULL},
+  {"GST_PLUGIN_SCANNER_1_0", NULL},
+  {"GST_PLUGIN_SYSTEM_PATH_1_0", NULL},
+  {"GST_PRESET_PATH", NULL},
+  {"GST_PTP_HELPER", NULL},
+  {"GST_PTP_HELPER_1_0", NULL},
+  {"GST_INSTALL_PLUGINS_HELPER", NULL},
 };
 
 static const ExportData no_ld_so_cache_exports[] = {
@@ -1998,13 +2017,19 @@ flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,
   g_autoptr(GFile) app_dir_data = NULL;
   g_autoptr(GFile) app_dir_config = NULL;
   g_autoptr(GFile) app_dir_cache = NULL;
+  g_autoptr(GFile) app_dir_state = NULL;
 
   app_dir_data = g_file_get_child (app_dir, "data");
   app_dir_config = g_file_get_child (app_dir, "config");
   app_dir_cache = g_file_get_child (app_dir, "cache");
+  /* Yes, this is inconsistent with data, config and cache. However, using
+   * this path lets apps provide backwards-compatibility with older Flatpak
+   * versions by using `--persist=.local/state --unset-env=XDG_STATE_DIR`. */
+  app_dir_state = g_file_get_child (app_dir, ".local/state");
   flatpak_bwrap_set_env (bwrap, "XDG_DATA_HOME", flatpak_file_get_path_cached (app_dir_data), TRUE);
   flatpak_bwrap_set_env (bwrap, "XDG_CONFIG_HOME", flatpak_file_get_path_cached (app_dir_config), TRUE);
   flatpak_bwrap_set_env (bwrap, "XDG_CACHE_HOME", flatpak_file_get_path_cached (app_dir_cache), TRUE);
+  flatpak_bwrap_set_env (bwrap, "XDG_STATE_HOME", flatpak_file_get_path_cached (app_dir_state), TRUE);
 
   if (g_getenv ("XDG_DATA_HOME"))
     flatpak_bwrap_set_env (bwrap, "HOST_XDG_DATA_HOME", g_getenv ("XDG_DATA_HOME"), TRUE);
@@ -2012,6 +2037,8 @@ flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,
     flatpak_bwrap_set_env (bwrap, "HOST_XDG_CONFIG_HOME", g_getenv ("XDG_CONFIG_HOME"), TRUE);
   if (g_getenv ("XDG_CACHE_HOME"))
     flatpak_bwrap_set_env (bwrap, "HOST_XDG_CACHE_HOME", g_getenv ("XDG_CACHE_HOME"), TRUE);
+  if (g_getenv ("XDG_STATE_HOME"))
+    flatpak_bwrap_set_env (bwrap, "HOST_XDG_STATE_HOME", g_getenv ("XDG_STATE_HOME"), TRUE);
 }
 
 #if 0
@@ -2058,6 +2085,7 @@ flatpak_ensure_data_dir (GFile        *app_id_dir,
   g_autoptr(GFile) fontconfig_cache_dir = g_file_get_child (cache_dir, "fontconfig");
   g_autoptr(GFile) tmp_dir = g_file_get_child (cache_dir, "tmp");
   g_autoptr(GFile) config_dir = g_file_get_child (app_id_dir, "config");
+  g_autoptr(GFile) state_dir = g_file_get_child (app_id_dir, ".local/state");
 
   if (!flatpak_mkdir_p (data_dir, cancellable, error))
     return FALSE;
@@ -2072,6 +2100,9 @@ flatpak_ensure_data_dir (GFile        *app_id_dir,
     return FALSE;
 
   if (!flatpak_mkdir_p (config_dir, cancellable, error))
+    return FALSE;
+
+  if (!flatpak_mkdir_p (state_dir, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -2225,7 +2256,7 @@ flatpak_run_add_font_path_args (FlatpakBwrap *bwrap)
 
   g_string_append (xml_snippet,
                    "<?xml version=\"1.0\"?>\n"
-                   "<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n"
+                   "<!DOCTYPE fontconfig SYSTEM \"urn:fontconfig:fonts.dtd\">\n"
                    "<fontconfig>\n");
 
   if (g_file_test (SYSTEM_FONTS_DIR, G_FILE_TEST_EXISTS))
@@ -2790,6 +2821,10 @@ flatpak_run_add_app_info_args (FlatpakBwrap       *bwrap,
       return FALSE;
     }
 
+#if 0
+  /* pressure-vessel change: avoid bwrap 0.5.0 dependency */
+  flatpak_bwrap_add_args (bwrap, "--perms", "0600", NULL);
+#endif
   flatpak_bwrap_add_args_data_fd (bwrap,
                                   "--file", fd, "/.flatpak-info");
   flatpak_bwrap_add_args_data_fd (bwrap,
@@ -3463,6 +3498,10 @@ flatpak_run_setup_base_argv (FlatpakBwrap   *bwrap,
                           "--dir", "/tmp",
                           "--dir", "/var/tmp",
                           "--dir", "/run/host",
+#if 0
+  /* pressure-vessel change: avoid bwrap 0.5.0 dependency */
+                          "--perms", "0700",
+#endif
                           "--dir", run_dir,
                           "--setenv", "XDG_RUNTIME_DIR", run_dir,
                           "--symlink", "../run", "/var/run",
@@ -4042,26 +4081,6 @@ open_namespace_fd_if_needed (const char *path,
 }
 
 #if 0
-static gboolean
-check_sudo (GError **error)
-{
-  const char *sudo_command_env = g_getenv ("SUDO_COMMAND");
-  g_auto(GStrv) split_command = NULL;
-
-  /* This check exists to stop accidental usage of `sudo flatpak run`
-     and is not to prevent running as root.
-   */
-
-  if (!sudo_command_env)
-    return TRUE;
-
-  /* SUDO_COMMAND could be a value like `/usr/bin/flatpak run foo` */
-  split_command = g_strsplit (sudo_command_env, " ", 2);
-  if (g_str_has_suffix (split_command[0], "flatpak"))
-    return flatpak_fail_error (error, FLATPAK_ERROR, _("\"flatpak run\" is not intended to be run as `sudo flatpak run`, use `sudo -i` or `su -l` instead and invoke \"flatpak run\" from inside the new shell"));
-
-  return TRUE;
-}
 
 gboolean
 flatpak_run_app (FlatpakDecomposed *app_ref,
@@ -4134,8 +4153,14 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
 
   g_return_val_if_fail (app_ref != NULL, FALSE);
 
-  if (!check_sudo (error))
-    return FALSE;
+  /* This check exists to stop accidental usage of `sudo flatpak run`
+     and is not to prevent running as root.
+   */
+  if (running_under_sudo ())
+    return flatpak_fail_error (error, FLATPAK_ERROR,
+                               _("\"flatpak run\" is not intended to be run as `sudo flatpak run`. "
+                                 "Use `sudo -i` or `su -l` instead and invoke \"flatpak run\" from "
+                                 "inside the new shell."));
 
   app_id = flatpak_decomposed_dup_id (app_ref);
   g_return_val_if_fail (app_id != NULL, FALSE);
@@ -4669,7 +4694,8 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
   commandline = flatpak_quote_argv ((const char **) bwrap->argv->pdata, -1);
   g_debug ("Running '%s'", commandline);
 
-  if ((flags & FLATPAK_RUN_FLAG_BACKGROUND) != 0)
+  if ((flags & (FLATPAK_RUN_FLAG_BACKGROUND)) != 0 ||
+      g_getenv ("FLATPAK_TEST_COVERAGE") != NULL)
     {
       GPid child_pid;
       char pid_str[64];
@@ -4677,7 +4703,8 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
       GSpawnFlags spawn_flags;
 
       spawn_flags = G_SPAWN_SEARCH_PATH;
-      if (flags & FLATPAK_RUN_FLAG_DO_NOT_REAP)
+      if (flags & FLATPAK_RUN_FLAG_DO_NOT_REAP ||
+          (flags & FLATPAK_RUN_FLAG_BACKGROUND) == 0)
         spawn_flags |= G_SPAWN_DO_NOT_REAP_CHILD;
 
       /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see flatpak_close_fds_workaround */
@@ -4701,6 +4728,22 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
       g_snprintf (pid_str, sizeof (pid_str), "%d", child_pid);
       pid_path = g_build_filename (instance_id_host_dir, "pid", NULL);
       g_file_set_contents (pid_path, pid_str, -1, NULL);
+
+      if ((flags & (FLATPAK_RUN_FLAG_BACKGROUND)) == 0)
+        {
+          int wait_status;
+
+          if (waitpid (child_pid, &wait_status, 0) != child_pid)
+            return glnx_throw_errno_prefix (error, "Failed to wait for child process");
+
+          if (WIFEXITED (wait_status))
+            exit (WEXITSTATUS (wait_status));
+
+          if (WIFSIGNALED (wait_status))
+            exit (128 + WTERMSIG (wait_status));
+
+          return glnx_throw (error, "Unknown wait status from waitpid(): %d", wait_status);
+        }
     }
   else
     {

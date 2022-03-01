@@ -1,9 +1,9 @@
 /*
  * Cut-down version of common/flatpak-run-private.h from Flatpak
- * Last updated: Flatpak 1.12.4
+ * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
  *
- * Copyright © 2017-2021 Collabora Ltd.
- * Copyright © 2014-2021 Red Hat, Inc
+ * Copyright © 2017-2022 Collabora Ltd.
+ * Copyright © 2014-2022 Red Hat, Inc
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *

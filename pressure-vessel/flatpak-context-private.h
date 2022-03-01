@@ -1,5 +1,5 @@
 /*
- * Taken from Flatpak, last updated: 1.12.2
+ * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
  * Modified to inline FlatpakPolicy instead of using the
  * header file from xdg-dbus-proxy.
  *

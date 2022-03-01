@@ -198,6 +198,9 @@ Higher 32-bit functionality levels like `i686-linux-gnu` are
 backwards-compatible with `i386-linux-gnu`, and in practice modern
 distributions are usually compiled for `i586` or higher, which is preferred.
 
+Steam does not use or support the `x86_64-linux-gnux32` system type,
+also known as `x32` (`x86_64` instructions with an ILP32 data model).
+
 The dynamic linker needs to be available at its interoperable paths,
 as used on most distributions:
 

@@ -1517,6 +1517,7 @@ assert_vulkan_icds (const SrtObjectList *icds,
                        "1.1.102");
       resolved = srt_vulkan_icd_resolve_library_path (iter->data);
       g_assert_cmpstr (resolved, ==, "libadded.so");
+      g_clear_pointer (&resolved, g_free);
       g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
                        SRT_LOADABLE_ISSUES_NONE);
 
@@ -1720,6 +1721,7 @@ typedef struct
 {
   const gchar *description;
   const gchar *sysroot;
+  const gchar *vk_add_layer_path;
   const gchar *vk_layer_path;
   const gchar *home;
   const gchar *xdg_config_dirs;
@@ -1776,8 +1778,24 @@ static const VulkanLayersTest vulkan_layers_test[] =
     .sysroot = "debian10",
     .home = "/home/debian",
     .xdg_config_dirs = "/usr/local/etc:::",
+    .vk_add_layer_path = "/custom_path",
     .explicit_layers =
     {
+      /* VK_ADD_LAYER_PATH is searched before the default search path */
+      {
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .api_version = "1.2.135",
+        .library_path = "/usr/$LIB/libMangoHud.so",
+        .json_to_compare = "expectations/MangoHud.json",
+      },
+      {
+        .name = "VK_LAYER_LUNARG_overlay",
+        .description = "LunarG HUD layer",
+        .api_version = "1.1.5",
+        .library_path = "vkOverlayLayer.so",
+        .json_to_compare = "custom_path/Single-good-layer.json",
+      },
       {
         .name = "VK_LAYER_MESA_overlay",
         .description = "Mesa Overlay layer",
@@ -1838,6 +1856,8 @@ static const VulkanLayersTest vulkan_layers_test[] =
     .description = "Meta layer",
     .sysroot = "fedora",
     .vk_layer_path = "/custom_path:/custom_path2:/custom_path3",
+    /* /usr/local/etc is not searched because VK_LAYER_PATH "wins" */
+    .vk_add_layer_path = "/usr/local/etc",
     .explicit_layers =
     {
       {
@@ -2061,6 +2081,13 @@ test_layer_vulkan (Fixture *f,
       else
         vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
                                               "VK_LAYER_PATH", test->vk_layer_path,
+                                              TRUE);
+
+      if (test->vk_add_layer_path == NULL)
+        vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "VK_ADD_LAYER_PATH");
+      else
+        vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
+                                              "VK_ADD_LAYER_PATH", test->vk_add_layer_path,
                                               TRUE);
 
       if (test->home == NULL)

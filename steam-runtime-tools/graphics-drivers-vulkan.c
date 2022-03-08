@@ -738,13 +738,19 @@ _srt_load_vulkan_icds (const char *helpers_path,
   g_return_val_if_fail (envp != NULL, NULL);
 
   /* Reference:
-   * https://github.com/KhronosGroup/Vulkan-Loader/blob/sdk-1.2.198.1/docs/LoaderDriverInterface.md#overriding-the-default-driver-discovery
+   * https://github.com/KhronosGroup/Vulkan-Loader/blob/v1.3.207/docs/LoaderDriverInterface.md#overriding-the-default-driver-discovery
+   * https://github.com/KhronosGroup/Vulkan-Loader/pull/873
    */
-  value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
+  value = g_environ_getenv (envp, "VK_DRIVER_FILES");
+
+  if (value == NULL)
+    value = g_environ_getenv (envp, "VK_ICD_FILENAMES");
 
   if (value != NULL)
     {
       gchar **filenames = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
+
+      g_debug ("Vulkan driver search path overridden to: %s", value);
 
       for (i = 0; filenames[i] != NULL; i++)
         vulkan_icd_load_json (sysroot, filenames[i], &ret);
@@ -753,10 +759,25 @@ _srt_load_vulkan_icds (const char *helpers_path,
     }
   else
     {
-      g_auto(GStrv) search_paths = _srt_graphics_get_vulkan_search_paths (sysroot,
-                                                                          envp,
-                                                                          multiarch_tuples,
-                                                                          _SRT_GRAPHICS_VULKAN_ICD_SUFFIX);
+      const gchar *add;
+      g_auto(GStrv) search_paths = NULL;
+
+      add = g_environ_getenv (envp, "VK_ADD_DRIVER_FILES");
+      search_paths = _srt_graphics_get_vulkan_search_paths (sysroot, envp,
+                                                            multiarch_tuples,
+                                                            _SRT_GRAPHICS_VULKAN_ICD_SUFFIX);
+
+      if (add != NULL)
+        {
+          g_auto(GStrv) filenames = g_strsplit (add, G_SEARCHPATH_SEPARATOR_S, -1);
+
+          g_debug ("Vulkan additional driver search path: %s", add);
+
+          for (i = 0; filenames[i] != NULL; i++)
+            vulkan_icd_load_json (sysroot, filenames[i], &ret);
+        }
+
+      g_debug ("Using normal Vulkan driver search path");
       load_json_dirs (sysroot, search_paths, NULL, READDIR_ORDER,
                       vulkan_icd_load_json_cb, &ret);
     }

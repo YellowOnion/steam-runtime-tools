@@ -1,3 +1,29 @@
+steam-runtime-tools (0.20220309.0) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Treat libXNVCtrl as part of graphics stack.
+    MangoHUD uses this to get performance information for older NVIDIA
+    hardware via the NV-CONTROL X extension.
+    This is not technically part of the NVIDIA driver (it's part of the
+    nvidia-settings open-source module), and there's no guarantee that
+    NVIDIA users will have it installed at all, but we're probably more
+    likely to get a version compatible with the user's GPU and drivers if
+    we prefer to take it from the same place as the actual driver.
+    (steam-runtime-tools#82)
+  * pressure-vessel: Update bubblewrap subproject to v0.6.1
+  * pressure-vessel: Update code taken from Flatpak
+    - Cope with WAYLAND_DISPLAY being an absolute path
+  * Update libglnx subproject
+    - Better compatibility with eCryptFS and maybe ZFS (GNOME/libglnx#3)
+    - REUSE: Drop .reuse/dep5 stanza for libglnx, no longer needed.
+      libglnx itself is now REUSE-compliant.
+  * Documentation updates
+    - Add documents introducing the LDLP and container Steam Runtimes
+    - Document some of the assumptions made by the Steam Runtime
+    - Developer mode is available in releases now
+    - Add a cross-reference to SDK documentation
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 09 Mar 2022 16:03:31 +0000
+
 steam-runtime-tools (0.20220131.0) steamrt; urgency=medium
 
   * pressure-vessel: Handle X11 over local abstract or TCP sockets

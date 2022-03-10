@@ -579,7 +579,9 @@ pv_mtree_apply (const char *mtree,
 
                     if (!glnx_file_copy_at (source_files_fd, source, NULL,
                                             parent_fd, base,
-                                            GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOCHOWN,
+                                            (GLNX_FILE_COPY_OVERWRITE
+                                             | GLNX_FILE_COPY_NOCHOWN
+                                             | GLNX_FILE_COPY_NOXATTRS),
                                             NULL, error))
                       return glnx_prefix_error (error,
                                                 "Could not create copy \"%s\" from \"%s/%s\" into \"%s\"",

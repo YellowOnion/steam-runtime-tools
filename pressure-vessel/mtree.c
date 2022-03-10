@@ -571,9 +571,11 @@ pv_mtree_apply (const char *mtree,
                 /* Or if we can copy it, that's fine too */
                 else
                   {
+                    int link_errno = errno;
+
                     g_debug ("Could not create hard link \"%s\" from \"%s/%s\" into \"%s\": %s",
                              entry.name, source_files, source, sysroot,
-                             g_strerror (errno));
+                             g_strerror (link_errno));
 
                     if (!glnx_file_copy_at (source_files_fd, source, NULL,
                                             parent_fd, base,
@@ -584,6 +586,21 @@ pv_mtree_apply (const char *mtree,
                                                 entry.name, source_files,
                                                 source, sysroot);
 
+                    if ((flags & PV_MTREE_APPLY_FLAGS_EXPECT_HARD_LINKS) != 0)
+                      {
+                        g_warning ("Unable to create hard link \"%s/%s\" to "
+                                   "\"%s/%s\": %s",
+                                   sysroot, entry.name, source_files, source,
+                                   g_strerror (link_errno));
+                        g_warning ("Falling back to copying, but this will "
+                                   "take more time and disk space.");
+                        g_warning ("For best results, \"%s\" and \"%s\" "
+                                   "should both be on the same "
+                                   "fully-featured Linux filesystem.",
+                                   source_files, sysroot);
+                        /* Only warn once per tree copied */
+                        flags &= ~PV_MTREE_APPLY_FLAGS_EXPECT_HARD_LINKS;
+                      }
                   }
               }
 

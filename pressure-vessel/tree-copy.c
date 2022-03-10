@@ -83,6 +83,7 @@ copy_tree_helper (const char *fpath,
   g_autofree gchar *target = NULL;
   GError **error = &nftw_data.error;
   gboolean usrmerge;
+  int link_errno = 0;
 
   g_return_val_if_fail (g_str_has_prefix (fpath, nftw_data.source_root), 1);
 
@@ -263,6 +264,8 @@ copy_tree_helper (const char *fpath,
         if (link (fpath, dest) == 0)
           break;
 
+        link_errno = errno;
+
         /* Slow path: fall back to copying.
          *
          * This does a FICLONE or copy_file_range to get btrfs reflinks
@@ -280,6 +283,21 @@ copy_tree_helper (const char *fpath,
             glnx_prefix_error (error, "Unable to copy \"%s\" to \"%s\"",
                                fpath, dest);
             return 1;
+          }
+
+        /* If link() failed but copying succeeded, then we might have
+         * a problem that we need to warn about. */
+        if ((nftw_data.flags & PV_COPY_FLAGS_EXPECT_HARD_LINKS) != 0)
+          {
+            g_warning ("Unable to create hard link \"%s\" to \"%s\": %s",
+                       fpath, dest, g_strerror (link_errno));
+            g_warning ("Falling back to copying, but this will take more "
+                       "time and disk space.");
+            g_warning ("For best results, \"%s\" and \"%s\" should both "
+                       "be on the same fully-featured Linux filesystem.",
+                       nftw_data.source_root, nftw_data.dest_root);
+            /* Only warn once per tree copied */
+            nftw_data.flags &= ~PV_COPY_FLAGS_EXPECT_HARD_LINKS;
           }
         break;
 

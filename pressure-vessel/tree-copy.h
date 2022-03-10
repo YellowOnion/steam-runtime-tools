@@ -36,6 +36,7 @@
 typedef enum
 {
   PV_COPY_FLAGS_USRMERGE = (1 << 0),
+  PV_COPY_FLAGS_EXPECT_HARD_LINKS = (1 << 1),
   PV_COPY_FLAGS_NONE = 0
 } PvCopyFlags;
 

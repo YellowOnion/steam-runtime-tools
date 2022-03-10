@@ -835,7 +835,8 @@ pv_runtime_create_copy (PvRuntime *self,
             }
 
           if (!pv_mtree_apply (usr_mtree, dest_usr, dest_usr_fd,
-                               self->source_files, mtree_flags,
+                               self->source_files,
+                               mtree_flags | PV_MTREE_APPLY_FLAGS_EXPECT_HARD_LINKS,
                                error))
             return FALSE;
         }
@@ -843,7 +844,7 @@ pv_runtime_create_copy (PvRuntime *self,
         {
           /* Fall back to assuming that what's on-disk is correct. */
           if (!pv_cheap_tree_copy (self->source_files, dest_usr,
-                                   PV_COPY_FLAGS_NONE, error))
+                                   PV_COPY_FLAGS_EXPECT_HARD_LINKS, error))
             return FALSE;
         }
     }

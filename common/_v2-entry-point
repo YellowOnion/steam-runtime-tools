@@ -179,6 +179,11 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+if [ -h "${here}/var" ]; then
+    log "Warning: ${here}/var should not be a symbolic link. Removing it"
+    rm -f "${here}/var"
+fi
+
 if [ -n "$log_to_file" ]; then
     app=
     log_filename=

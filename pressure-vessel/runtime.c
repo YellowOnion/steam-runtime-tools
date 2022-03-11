@@ -5032,7 +5032,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
 
       if (!pv_runtime_take_any_from_provider (self, bwrap, lib_locale_path,
                                               "/usr/lib/locale",
-                                              TAKE_FROM_PROVIDER_FLAGS_NONE,
+                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
                                               error))
         return FALSE;
 

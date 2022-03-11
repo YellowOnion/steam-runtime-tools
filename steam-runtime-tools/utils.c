@@ -916,6 +916,7 @@ _srt_file_test_in_sysroot (const char *sysroot,
 
   g_return_val_if_fail (sysroot != NULL, FALSE);
   g_return_val_if_fail (filename != NULL, FALSE);
+  g_return_val_if_fail (test != 0, FALSE);
   /* We reject G_FILE_TEST_IS_SYMLINK because the provided filename is resolved
    * in sysroot, following the eventual symlinks too. So it is not possible for
    * the resolved filename to be a symlink */

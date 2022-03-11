@@ -181,7 +181,7 @@ done
 
 if [ -h "${here}/var" ]; then
     log "Warning: ${here}/var should not be a symbolic link. Removing it"
-    rm -f "${here}/var"
+    rm -f "${here}/var" || true
 fi
 
 if [ -n "$log_to_file" ]; then

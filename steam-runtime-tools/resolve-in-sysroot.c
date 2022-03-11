@@ -130,6 +130,9 @@ _srt_resolve_in_sysroot (int sysroot,
       fd_array_take (fds, &fd);
     }
 
+  if (flags & SRT_RESOLVE_FLAGS_MKDIR_P)
+    flags |= SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY;
+
   remaining = buffer;
 
   while (remaining != NULL)
@@ -271,9 +274,7 @@ _srt_resolve_in_sysroot (int sysroot,
         }
       else  /* Not a symlink, or a symlink but we are returning it anyway. */
         {
-          /* If we are emulating mkdir -p, or if we will go on to open
-           * a member of @fd, then it had better be a directory. */
-          if ((flags & SRT_RESOLVE_FLAGS_MKDIR_P) != 0 ||
+          if ((flags & SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY) != 0 ||
               remaining != NULL)
             {
               struct stat stat_buf;
@@ -290,8 +291,9 @@ _srt_resolve_in_sysroot (int sysroot,
               if (!S_ISDIR (stat_buf.st_mode))
                 {
                   g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_DIRECTORY,
-                               "\"%s/%s\" is not a directory",
-                               current_path->str, next);
+                               "\"%s/%s\" is not a directory (type 0o%o)",
+                               current_path->str, next,
+                               stat_buf.st_mode & S_IFMT);
                   return -1;
                 }
             }
@@ -304,14 +306,14 @@ _srt_resolve_in_sysroot (int sysroot,
         }
     }
 
-  if (flags & (SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY))
+  if (flags & SRT_RESOLVE_FLAGS_READABLE)
     {
       g_autofree char *proc_fd_name = g_strdup_printf ("/proc/self/fd/%d",
                                                        g_array_index (fds, int,
                                                                       fds->len - 1));
       glnx_autofd int fd = -1;
 
-      if (flags & SRT_RESOLVE_FLAGS_DIRECTORY)
+      if (flags & SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY)
         {
           if (!glnx_opendirat (-1, proc_fd_name, TRUE, &fd, error))
             {

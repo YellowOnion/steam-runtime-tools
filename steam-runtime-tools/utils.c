@@ -1346,7 +1346,8 @@ _srt_recursive_list_content (const gchar *sysroot,
 
   top_fd = _srt_resolve_in_sysroot (sysroot_fd,
                                     directory,
-                                    SRT_RESOLVE_FLAGS_DIRECTORY,
+                                    (SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY
+                                     | SRT_RESOLVE_FLAGS_READABLE),
                                     NULL,
                                     &error);
 

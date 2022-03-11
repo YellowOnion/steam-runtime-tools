@@ -26,6 +26,7 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 /* Enabling debug logging for this is rather too verbose, so only
  * enable it when actively debugging this module */
@@ -112,6 +113,14 @@ _srt_resolve_in_sysroot (int sysroot,
   g_return_val_if_fail (descendant != NULL, -1);
   g_return_val_if_fail (real_path_out == NULL || *real_path_out == NULL, -1);
   g_return_val_if_fail (error == NULL || *error == NULL, -1);
+  g_return_val_if_fail (!_srt_all_bits_set (flags,
+                                             SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY
+                                             | SRT_RESOLVE_FLAGS_MUST_BE_REGULAR),
+                        -1);
+  g_return_val_if_fail (!_srt_all_bits_set (flags,
+                                            SRT_RESOLVE_FLAGS_MKDIR_P
+                                            | SRT_RESOLVE_FLAGS_MUST_BE_REGULAR),
+                        -1);
 
     {
       glnx_autofd int fd = -1;
@@ -303,6 +312,29 @@ _srt_resolve_in_sysroot (int sysroot,
 
           g_string_append (current_path, next);
           fd_array_take (fds, &fd);
+        }
+    }
+
+  if ((flags & SRT_RESOLVE_FLAGS_MUST_BE_REGULAR) != 0)
+    {
+      int fd = g_array_index (fds, int, fds->len - 1);
+      struct stat stat_buf;
+
+      if (!glnx_fstatat (fd, "", &stat_buf, AT_EMPTY_PATH, error))
+        {
+          g_prefix_error (error,
+                          "Unable to determine whether \"%s\" "
+                          "is a regular file",
+                          current_path->str);
+          return -1;
+        }
+
+      if (!S_ISREG (stat_buf.st_mode))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_REGULAR_FILE,
+                       "\"%s\" is not a regular file (type 0o%o)",
+                       current_path->str, stat_buf.st_mode & S_IFMT);
+          return -1;
         }
     }
 

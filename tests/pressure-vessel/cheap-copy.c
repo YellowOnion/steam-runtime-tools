@@ -29,10 +29,16 @@
 #include "tree-copy.h"
 #include "utils.h"
 
+static gboolean opt_expect_hard_links = FALSE;
 static gboolean opt_usrmerge = FALSE;
 
 static GOptionEntry options[] =
 {
+  { "expect-hard-links", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_expect_hard_links,
+    "Show a warning if we can't use hard-links.",
+    NULL },
+
   { "usrmerge", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_usrmerge,
     "Assume SOURCE is a sysroot, and carry out the /usr merge in DEST.",
@@ -76,6 +82,9 @@ main (int argc,
 
   if (opt_usrmerge)
     flags |= PV_COPY_FLAGS_USRMERGE;
+
+  if (opt_expect_hard_links)
+    flags |= PV_COPY_FLAGS_EXPECT_HARD_LINKS;
 
   if (!pv_cheap_tree_copy (argv[1], argv[2], flags, error))
     goto out;

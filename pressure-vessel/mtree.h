@@ -32,6 +32,7 @@
 typedef enum
 {
   PV_MTREE_APPLY_FLAGS_GZIP = (1 << 0),
+  PV_MTREE_APPLY_FLAGS_EXPECT_HARD_LINKS = (1 << 1),
   PV_MTREE_APPLY_FLAGS_NONE = 0
 } PvMtreeApplyFlags;
 

@@ -913,6 +913,8 @@ _srt_file_test_in_sysroot (const char *sysroot,
   struct stat stat_buf;
   g_autofree gchar *file_realpath_in_sysroot = NULL;
   g_autoptr(GError) error = NULL;
+  SrtResolveFlags flags = SRT_RESOLVE_FLAGS_NONE;
+  gboolean type_checked = FALSE;
 
   g_return_val_if_fail (sysroot != NULL, FALSE);
   g_return_val_if_fail (filename != NULL, FALSE);
@@ -936,8 +938,24 @@ _srt_file_test_in_sysroot (const char *sysroot,
       sysroot_fd = local_sysroot_fd;
     }
 
-  file_fd = _srt_resolve_in_sysroot (sysroot_fd,
-                                     filename, SRT_RESOLVE_FLAGS_NONE,
+  switch (test & (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_DIR))
+    {
+      case G_FILE_TEST_IS_REGULAR:
+        flags |= SRT_RESOLVE_FLAGS_MUST_BE_REGULAR;
+        type_checked = TRUE;
+        break;
+
+      case G_FILE_TEST_IS_DIR:
+        flags |= SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY;
+        type_checked = TRUE;
+        break;
+
+      default:
+        /* No type check, or more than one type accepted */
+        break;
+    }
+
+  file_fd = _srt_resolve_in_sysroot (sysroot_fd, filename, flags,
                                      &file_realpath_in_sysroot, &error);
 
   if (file_fd < 0)
@@ -947,15 +965,18 @@ _srt_file_test_in_sysroot (const char *sysroot,
       return FALSE;
     }
 
+  if (type_checked)
+    return TRUE;
+
+  if (test & G_FILE_TEST_EXISTS)
+    return TRUE;
+
   if (fstat (file_fd, &stat_buf) != 0)
     {
       g_debug ("fstat %s/%s: %s",
                sysroot, file_realpath_in_sysroot, g_strerror (errno));
       return FALSE;
     }
-
-  if (test & G_FILE_TEST_EXISTS)
-    return TRUE;
 
   if ((test & G_FILE_TEST_IS_EXECUTABLE) && (stat_buf.st_mode & 0111))
     return TRUE;

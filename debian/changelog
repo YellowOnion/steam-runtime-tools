@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220311.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220311.0) steamrt; urgency=medium
 
   * pressure-vessel: Warn if we have to fall back to copying.
     pressure-vessel is designed to use hard-links when preparing the
@@ -29,7 +29,7 @@ steam-runtime-tools (0.20220311.0) UNRELEASED; urgency=medium
     - Developer mode is available in releases now
     - Add a cross-reference to SDK documentation
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 11 Mar 2022 15:37:09 +0000
+ -- Simon McVittie <smcv@collabora.com>  Fri, 11 Mar 2022 16:03:22 +0000
 
 steam-runtime-tools (0.20220131.0) steamrt; urgency=medium
 

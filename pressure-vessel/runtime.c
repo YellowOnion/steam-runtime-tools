@@ -4963,7 +4963,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
    * "/usr/${gnu_tuple}/lib/locale" too, before giving up.
    * The locale directory is actually architecture-independent, so we just
    * arbitrarily prefer to use "x86_64-pc-linux-gnu" over the 32-bit couterpart */
-  const gchar *lib_locale_path[] = {
+  static const gchar * const lib_locale_path[] = {
     "/usr/lib/locale",
 #if defined(__i386__) || defined(__x86_64__)
     "/usr/x86_64-pc-linux-gnu/lib/locale",

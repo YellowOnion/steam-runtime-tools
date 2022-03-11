@@ -4949,6 +4949,28 @@ pv_runtime_finish_lib_data (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_take_misc_data_from_provider (PvRuntime *self,
+                                         FlatpakBwrap *bwrap,
+                                         GError **error)
+{
+  static const char * const pci_ids_paths[] =
+    {
+      "/usr/share/misc/pci.ids",
+      "/usr/share/hwdata/pci.ids",
+      "/usr/share/pci.ids",
+      NULL
+    };
+
+  if (!pv_runtime_take_any_from_provider (self, bwrap, pci_ids_paths,
+                                          "/usr/share/misc/pci.ids",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR,
+                                          error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_finish_libc_family (PvRuntime *self,
                                FlatpakBwrap *bwrap,
                                GHashTable *gconv_in_provider,
@@ -6010,6 +6032,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   if (!pv_runtime_finish_lib_data (self, bwrap, "nvidia", "libGLX_nvidia.so.0",
                                    TRUE, nvidia_data_in_provider, error))
+    return FALSE;
+
+  if (!pv_runtime_take_misc_data_from_provider (self, bwrap, error))
     return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");

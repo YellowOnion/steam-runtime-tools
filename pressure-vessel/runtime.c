@@ -3024,6 +3024,7 @@ typedef enum
   TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS = (1 << 1),
   TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
   TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK = (1 << 3),
+  TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR = (1 << 4),
   TAKE_FROM_PROVIDER_FLAGS_NONE = 0
 } TakeFromProviderFlags;
 
@@ -3063,6 +3064,14 @@ pv_runtime_take_from_provider (PvRuntime *self,
       if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                       self->provider->fd,
                                       source_in_provider, G_FILE_TEST_IS_DIR))
+        return TRUE;
+    }
+
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR)
+    {
+      if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                      self->provider->fd,
+                                      source_in_provider, G_FILE_TEST_IS_REGULAR))
         return TRUE;
     }
 
@@ -3307,6 +3316,12 @@ pv_runtime_take_any_from_provider (PvRuntime *self,
     {
       resolve_flags |= SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY;
       flags &= ~TAKE_FROM_PROVIDER_FLAGS_IF_DIR;
+    }
+
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR)
+    {
+      resolve_flags |= SRT_RESOLVE_FLAGS_MUST_BE_REGULAR;
+      flags &= ~TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR;
     }
 
   for (i = 0; sources_in_provider[i] != NULL; i++)

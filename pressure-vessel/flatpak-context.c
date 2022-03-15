@@ -1,5 +1,5 @@
 /*
- * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
+ * Last updated: Flatpak 1.12.7
  *
  * Copyright © 2014-2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -1996,17 +1996,13 @@ flatpak_context_save_metadata (FlatpakContext *context,
                                         NULL, &value))
         {
           g_warn_if_fail (GPOINTER_TO_INT (value) == FLATPAK_FILESYSTEM_MODE_NONE);
-          if (!flatten)
-            g_ptr_array_add (array, g_strdup ("!host:reset"));
+          g_ptr_array_add (array, g_strdup ("!host:reset"));
         }
 
       g_hash_table_iter_init (&iter, context->filesystems);
       while (g_hash_table_iter_next (&iter, &key, &value))
         {
           FlatpakFilesystemMode mode = GPOINTER_TO_INT (value);
-
-          if (flatten && mode == FLATPAK_FILESYSTEM_MODE_NONE)
-            continue;
 
           /* We already did this */
           if (g_str_equal (key, "host-reset"))

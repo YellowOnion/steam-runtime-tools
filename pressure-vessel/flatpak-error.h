@@ -1,6 +1,6 @@
 /* flatpak-error.c
  * Adapted from Flatpak
- * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
+ * Last updated: Flatpak 1.12.7
  *
  * Copyright (C) 2015 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.0-or-later

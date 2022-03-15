@@ -1,6 +1,6 @@
 /*
  * A cut-down version of common/flatpak-utils from Flatpak
- * Last updated: Flatpak 1.13.x commit 1.12.4-241-gfc94fb7c
+ * Last updated: Flatpak 1.12.7
  *
  * Copyright © 1995-1998 Free Software Foundation, Inc.
  * Copyright © 2014-2019 Red Hat, Inc
@@ -629,53 +629,6 @@ flatpak_get_have_intel_gpu (void)
   return have_intel;
 }
 
-static GHashTable *
-load_kernel_module_list (void)
-{
-  GHashTable *modules = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autofree char *modules_data = NULL;
-  g_autoptr(GError) error = NULL;
-  char *start, *end;
-  
-  if (!g_file_get_contents ("/proc/modules", &modules_data, NULL, &error))
-    {
-      g_debug ("Failed to read /proc/modules: %s", error->message);
-      return modules;
-    }
-
-  /* /proc/modules is a table of modules.
-   * Columns are split by spaces and rows by newlines.
-   * The first column is the name. */
-  start = modules_data;
-  while (TRUE)
-    {
-      end = strchr (start, ' ');
-      if (end == NULL)
-        break;
-
-      g_hash_table_add (modules, g_strndup (start, (end - start)));
-
-      start = strchr (end, '\n');
-      if (start == NULL)
-        break;
-
-      start++;
-    }
-
-  return modules;
-}
-
-static gboolean
-flatpak_get_have_kernel_module (const char *module_name)
-{
-  static GHashTable *kernel_modules = NULL;
-
-  if (g_once_init_enter (&kernel_modules))
-    g_once_init_leave (&kernel_modules, load_kernel_module_list ());
-
-  return g_hash_table_contains (kernel_modules, module_name);
-}
-
 static const char *
 flatpak_get_gtk_theme (void)
 {
@@ -728,28 +681,13 @@ flatpak_enable_fancy_output (void)
 gboolean
 flatpak_fancy_output (void)
 {
-  static gsize fancy_output_once = 0;
-  enum {
-    PLAIN_OUTPUT = 1,
-    FANCY_OUTPUT = 2
-  };
-
   if (fancy_output != -1)
     return fancy_output;
 
-  if (g_once_init_enter (&fancy_output_once))
-    {
-      if (g_strcmp0 (g_getenv ("FLATPAK_FANCY_OUTPUT"), "0") == 0)
-        g_once_init_leave (&fancy_output_once, PLAIN_OUTPUT);
-      else if (getenv ("G_MESSAGES_DEBUG"))
-        g_once_init_leave (&fancy_output_once, PLAIN_OUTPUT);
-      else if (!isatty (STDOUT_FILENO))
-        g_once_init_leave (&fancy_output_once, PLAIN_OUTPUT);
-      else
-        g_once_init_leave (&fancy_output_once, FANCY_OUTPUT);
-    }
+  if (g_strcmp0 (g_getenv ("FLATPAK_FANCY_OUTPUT"), "0") == 0)
+    return FALSE;
 
-  return fancy_output_once == FANCY_OUTPUT;
+  return isatty (STDOUT_FILENO);
 }
 
 const char *
@@ -808,8 +746,7 @@ flatpak_get_allowed_exports (const char     *source_path,
     {
       g_ptr_array_add (allowed_extensions, g_strdup (".xml"));
     }
-  else if (strcmp (source_path, "share/metainfo") == 0 ||
-           strcmp (source_path, "share/appdata") == 0)
+  else if (strcmp (source_path, "share/metainfo") == 0)
     {
       g_ptr_array_add (allowed_extensions, g_strdup (".xml"));
     }
@@ -6105,13 +6042,6 @@ flatpak_extension_matches_reason (const char *extension_id,
           if (flatpak_get_have_intel_gpu ())
             return TRUE;
         }
-      else if (g_str_has_prefix (reason, "have-kernel-module-"))
-        {
-          const char *module_name = reason + strlen ("have-kernel-module-");
-
-          if (flatpak_get_have_kernel_module (module_name))
-            return TRUE;
-        }
       else if (g_str_has_prefix (reason, "on-xdg-desktop-"))
         {
           const char *desktop_name = reason + strlen ("on-xdg-desktop-");
@@ -8529,25 +8459,13 @@ flatpak_get_cursor_pos (int * row, int *col)
 void
 flatpak_hide_cursor (void)
 {
-  const size_t flatpak_hide_cursor_len = strlen (FLATPAK_ANSI_HIDE_CURSOR);
-  const ssize_t write_ret = write (STDOUT_FILENO, FLATPAK_ANSI_HIDE_CURSOR,
-                                   flatpak_hide_cursor_len);
-
-  if (write_ret < 0)
-    g_warning ("write() failed: %zd = write(STDOUT_FILENO, FLATPAK_ANSI_HIDE_CURSOR, %zu)",
-               write_ret, flatpak_hide_cursor_len);
+  write (STDOUT_FILENO, FLATPAK_ANSI_HIDE_CURSOR, strlen (FLATPAK_ANSI_HIDE_CURSOR));
 }
 
 void
 flatpak_show_cursor (void)
 {
-  const size_t flatpak_show_cursor_len = strlen (FLATPAK_ANSI_SHOW_CURSOR);
-  const ssize_t write_ret = write (STDOUT_FILENO, FLATPAK_ANSI_SHOW_CURSOR,
-                                   flatpak_show_cursor_len);
-
-  if (write_ret < 0)
-    g_warning ("write() failed: %zd = write(STDOUT_FILENO, FLATPAK_ANSI_SHOW_CURSOR, %zu)",
-               write_ret, flatpak_show_cursor_len);
+  write (STDOUT_FILENO, FLATPAK_ANSI_SHOW_CURSOR, strlen (FLATPAK_ANSI_SHOW_CURSOR));
 }
 
 void
@@ -9177,51 +9095,6 @@ flatpak_str_is_integer (const char *s)
     }
 
   return TRUE;
-}
-
-gboolean
-flatpak_uri_equal (const char *uri1,
-                   const char *uri2)
-{
-  g_autofree char *uri1_norm = NULL;
-  g_autofree char *uri2_norm = NULL;
-  gsize uri1_len = strlen (uri1);
-  gsize uri2_len = strlen (uri2);
-
-  /* URIs handled by libostree are equivalent with or without a trailing slash,
-   * but this isn't otherwise guaranteed to be the case.
-   */
-  if (g_str_has_prefix (uri1, "oci+") || g_str_has_prefix (uri2, "oci+"))
-    return g_strcmp0 (uri1, uri2) == 0;
-
-  if (g_str_has_suffix (uri1, "/"))
-    uri1_norm = g_strndup (uri1, uri1_len - 1);
-  else
-    uri1_norm = g_strdup (uri1);
-
-  if (g_str_has_suffix (uri2, "/"))
-    uri2_norm = g_strndup (uri2, uri2_len - 1);
-  else
-    uri2_norm = g_strdup (uri2);
-
-  return g_strcmp0 (uri1_norm, uri2_norm) == 0;
-}
-
-gboolean
-running_under_sudo (void)
-{
-  const char *sudo_command_env = g_getenv ("SUDO_COMMAND");
-  g_auto(GStrv) split_command = NULL;
-
-  if (!sudo_command_env)
-    return FALSE;
-
-  /* SUDO_COMMAND could be a value like `/usr/bin/flatpak run foo` */
-  split_command = g_strsplit (sudo_command_env, " ", 2);
-  if (g_str_has_suffix (split_command[0], "flatpak"))
-    return TRUE;
-
-  return FALSE;
 }
 
 #endif

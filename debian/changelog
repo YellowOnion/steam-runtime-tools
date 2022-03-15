@@ -1,3 +1,22 @@
+steam-runtime-tools (0.20220315.0) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Refactoring
+  * pv-runtime: Only consider locale paths if they are directories
+  * pv-runtime: Try to import list of PCI IDs into container.
+    MangoHud wants this, to be able to display the name of a graphics card
+    from its PCI ID. (Resolves: steam-runtime-tools#85)
+  * system-info: Diagnose variables added in Vulkan-Loader 1.3.207
+  * pressure-vessel: Set both VK_DRIVER_FILES and VK_ICD_FILENAMES,
+    for better compatibility with Vulkan-Loader 1.3.207
+  * graphics: Respect VK_DRIVER_FILES, VK_ADD_DRIVER_FILES, VK_ADD_LAYER_PATH
+    for better compatibility with Vulkan-Loader 1.3.207.
+    Note that we are assuming the semantics that are planned for 1.3.208,
+    where VK_DRIVER_FILES overrides VK_ADD_DRIVER_FILES.
+    (Resolves: steamrt/tasks#95)
+  * pressure-vessel: Resync Flatpak-derived code with Flatpak 1.12.7
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 15 Mar 2022 12:54:00 +0000
+
 steam-runtime-tools (0.20220311.0) steamrt; urgency=medium
 
   * pressure-vessel: Warn if we have to fall back to copying.

@@ -3025,6 +3025,7 @@ typedef enum
   TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS = (1 << 1),
   TAKE_FROM_PROVIDER_FLAGS_IF_CONTAINER_COMPATIBLE = (1 << 2),
   TAKE_FROM_PROVIDER_FLAGS_COPY_FALLBACK = (1 << 3),
+  TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR = (1 << 4),
   TAKE_FROM_PROVIDER_FLAGS_NONE = 0
 } TakeFromProviderFlags;
 
@@ -3064,6 +3065,14 @@ pv_runtime_take_from_provider (PvRuntime *self,
       if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                       self->provider->fd,
                                       source_in_provider, G_FILE_TEST_IS_DIR))
+        return TRUE;
+    }
+
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR)
+    {
+      if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
+                                      self->provider->fd,
+                                      source_in_provider, G_FILE_TEST_IS_REGULAR))
         return TRUE;
     }
 
@@ -3259,6 +3268,93 @@ pv_runtime_take_from_provider (PvRuntime *self,
                               NULL);
     }
 
+  return TRUE;
+}
+
+/*
+ * pv_runtime_take_any_from_provider:
+ * @self: the runtime
+ * @bwrap: bubblewrap arguments
+ * @sources_in_provider: (array zero-terminated=1): source paths in the
+ *  graphics stack provider's namespace, either absolute or relative
+ *  to the root
+ * @dest_in_container: destination path in the container we are creating,
+ *  either absolute or relative to the root
+ * @flags: flags affecting how we do it
+ * @error: used to report error
+ *
+ * Try to arrange for one of @sources_in_provider to be made available
+ * at the path @dest_in_container in the container we are creating.
+ *
+ * Note that neither @source_in_provider nor @dest_in_container is
+ * guaranteed to be an absolute path.
+ *
+ * %TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS is implied.
+ */
+static gboolean
+pv_runtime_take_any_from_provider (PvRuntime *self,
+                                   FlatpakBwrap *bwrap,
+                                   const char * const *sources_in_provider,
+                                   const char *dest_in_container,
+                                   TakeFromProviderFlags flags,
+                                   GError **error)
+{
+  SrtResolveFlags resolve_flags = SRT_RESOLVE_FLAGS_NONE;
+  gsize i;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (self->provider != NULL, FALSE);
+  g_return_val_if_fail (bwrap == NULL || !pv_bwrap_was_finished (bwrap), FALSE);
+  g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  /* _srt_resolve_in_sysroot() will only return true if it exists, so we
+   * won't need to check again */
+  flags &= ~TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS;
+
+  /* Delegate responsibility for this to _srt_resolve_in_sysroot() */
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_DIR)
+    {
+      resolve_flags |= SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY;
+      flags &= ~TAKE_FROM_PROVIDER_FLAGS_IF_DIR;
+    }
+
+  if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR)
+    {
+      resolve_flags |= SRT_RESOLVE_FLAGS_MUST_BE_REGULAR;
+      flags &= ~TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR;
+    }
+
+  for (i = 0; sources_in_provider[i] != NULL; i++)
+    {
+      const char *source_in_provider = sources_in_provider[i];
+      glnx_autofd int fd = -1;
+      g_autoptr(GError) local_error = NULL;
+
+      fd = _srt_resolve_in_sysroot (self->provider->fd,
+                                    source_in_provider, resolve_flags,
+                                    NULL, &local_error);
+
+      if (fd < 0)
+        {
+          if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            g_debug ("\"%s/%s\": %s",
+                     self->provider->path_in_current_ns,
+                     source_in_provider, local_error->message);
+
+          continue;
+        }
+
+      if (!pv_runtime_take_from_provider (self, bwrap, source_in_provider,
+                                          dest_in_container, flags, error))
+        return FALSE;
+
+      return TRUE;
+    }
+
+  /* None of the possibilities matched */
+  g_debug ("Did not find a suitable \"%s\" in provider, ignoring",
+           dest_in_container);
   return TRUE;
 }
 
@@ -4854,6 +4950,28 @@ pv_runtime_finish_lib_data (PvRuntime *self,
 }
 
 static gboolean
+pv_runtime_take_misc_data_from_provider (PvRuntime *self,
+                                         FlatpakBwrap *bwrap,
+                                         GError **error)
+{
+  static const char * const pci_ids_paths[] =
+    {
+      "/usr/share/misc/pci.ids",
+      "/usr/share/hwdata/pci.ids",
+      "/usr/share/pci.ids",
+      NULL
+    };
+
+  if (!pv_runtime_take_any_from_provider (self, bwrap, pci_ids_paths,
+                                          "/usr/share/misc/pci.ids",
+                                          TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR,
+                                          error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_finish_libc_family (PvRuntime *self,
                                FlatpakBwrap *bwrap,
                                GHashTable *gconv_in_provider,
@@ -4868,7 +4986,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
    * "/usr/${gnu_tuple}/lib/locale" too, before giving up.
    * The locale directory is actually architecture-independent, so we just
    * arbitrarily prefer to use "x86_64-pc-linux-gnu" over the 32-bit couterpart */
-  const gchar *lib_locale_path[] = {
+  static const gchar * const lib_locale_path[] = {
     "/usr/lib/locale",
 #if defined(__i386__) || defined(__x86_64__)
     "/usr/x86_64-pc-linux-gnu/lib/locale",
@@ -4935,22 +5053,11 @@ pv_runtime_finish_libc_family (PvRuntime *self,
     {
       g_debug ("Making provider locale data visible in container");
 
-      for (i = 0; i < G_N_ELEMENTS (lib_locale_path) - 1; i++)
-        {
-          if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
-                                         self->provider->fd,
-                                         lib_locale_path[i], G_FILE_TEST_EXISTS))
-            {
-              if (!pv_runtime_take_from_provider (self, bwrap,
-                                                  lib_locale_path[i],
-                                                  "/usr/lib/locale",
-                                                  TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
-                                                  error))
-                return FALSE;
-
-              break;
-            }
-        }
+      if (!pv_runtime_take_any_from_provider (self, bwrap, lib_locale_path,
+                                              "/usr/lib/locale",
+                                              TAKE_FROM_PROVIDER_FLAGS_IF_DIR,
+                                              error))
+        return FALSE;
 
       if (!pv_runtime_take_from_provider (self, bwrap,
                                           "/usr/share/i18n",
@@ -5926,6 +6033,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   if (!pv_runtime_finish_lib_data (self, bwrap, "nvidia", "libGLX_nvidia.so.0",
                                    TRUE, nvidia_data_in_provider, error))
+    return FALSE;
+
+  if (!pv_runtime_take_misc_data_from_provider (self, bwrap, error))
     return FALSE;
 
   g_debug ("Setting up EGL ICD JSON...");

@@ -158,3 +158,10 @@ int _srt_set_compatible_resource_limits (pid_t pid);
 
 gboolean _srt_boolean_environment (const gchar *name,
                                    gboolean def);
+
+static inline gboolean
+_srt_all_bits_set (unsigned int flags,
+                   unsigned int bits)
+{
+  return (flags == (flags | bits));
+}

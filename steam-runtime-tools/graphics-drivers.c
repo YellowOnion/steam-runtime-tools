@@ -520,7 +520,8 @@ _srt_get_modules_from_path (int sysroot_fd,
            module_directory_path);
 
   module_dirfd = _srt_resolve_in_sysroot (sysroot_fd, module_directory_path,
-                                          SRT_RESOLVE_FLAGS_DIRECTORY,
+                                          (SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY
+                                           | SRT_RESOLVE_FLAGS_READABLE),
                                           NULL, &error);
 
   if (module_dirfd < 0)

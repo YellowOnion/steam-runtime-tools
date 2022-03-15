@@ -145,19 +145,28 @@ test_resolve_in_sysroot (Fixture *f,
     },
     { { "a/b/c/d", SRT_RESOLVE_FLAGS_MKDIR_P }, { "a/b/c/d" } },
     { { "a/b/c/d", SRT_RESOLVE_FLAGS_READABLE }, { "a/b/c/d" } },
-    { { "a/b/c/d", SRT_RESOLVE_FLAGS_DIRECTORY }, { "a/b/c/d" } },
+    { { "a/b/c/d", SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY }, { "a/b/c/d" } },
+    { { "a/b/c/file", SRT_RESOLVE_FLAGS_MUST_BE_REGULAR }, { "a/b/c/file" } },
     {
-      { "a/b/c/d", SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY },
+      { "a/b/c/d", SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY },
       { "a/b/c/d" }
     },
     { { "a/b/c/file", SRT_RESOLVE_FLAGS_READABLE }, { "a/b/c/file" } },
     { { "a/b/c/file/" }, { NULL, G_IO_ERROR_NOT_DIRECTORY }},
     {
-      { "a/b/c/file", SRT_RESOLVE_FLAGS_DIRECTORY },
+      { "a/b/c/d", SRT_RESOLVE_FLAGS_MUST_BE_REGULAR },
+      { NULL, G_IO_ERROR_NOT_REGULAR_FILE }
+    },
+    {
+      { "a/b/c/file", SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY },
       { NULL, G_IO_ERROR_NOT_DIRECTORY }
     },
     {
-      { "a/b/c/file/", SRT_RESOLVE_FLAGS_DIRECTORY },
+      { "a/b/c/file", SRT_RESOLVE_FLAGS_MKDIR_P },
+      { NULL, G_IO_ERROR_NOT_DIRECTORY }
+    },
+    {
+      { "a/b/c/file/", SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY },
       { NULL, G_IO_ERROR_NOT_DIRECTORY }
     },
     {
@@ -165,7 +174,7 @@ test_resolve_in_sysroot (Fixture *f,
       { NULL, G_IO_ERROR_NOT_DIRECTORY }
     },
     {
-      { "a/b/c/file", SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY },
+      { "a/b/c/file", SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY },
       { NULL, G_IO_ERROR_NOT_DIRECTORY }
     },
     { { "a/b///////.////./././///././c/d" }, { "a/b/c/d" } },
@@ -272,8 +281,11 @@ test_resolve_in_sysroot (Fixture *f,
       if (it->call.flags & SRT_RESOLVE_FLAGS_REJECT_SYMLINKS)
         g_string_append (description, " (not following any symlink)");
 
-      if (it->call.flags & SRT_RESOLVE_FLAGS_DIRECTORY)
+      if (it->call.flags & SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY)
         g_string_append (description, " (must be a directory)");
+
+      if (it->call.flags & SRT_RESOLVE_FLAGS_MUST_BE_REGULAR)
+        g_string_append (description, " (must be a regular file)");
 
       if (it->call.flags & SRT_RESOLVE_FLAGS_READABLE)
         g_string_append (description, " (open for reading)");

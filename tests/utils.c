@@ -85,6 +85,14 @@ test_avoid_gvfs (Fixture *f,
 }
 
 static void
+test_bits_set (Fixture *f,
+               gconstpointer context)
+{
+  g_assert_true (_srt_all_bits_set (0xff, 0x01 | 0x02 | 0x10));
+  g_assert_false (_srt_all_bits_set (0x51, 0x01 | 0x02 | 0x10));
+}
+
+static void
 test_evdev_bits (Fixture *f,
                  gconstpointer context)
 {
@@ -550,6 +558,8 @@ main (int argc,
 
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/utils/avoid-gvfs", Fixture, NULL, setup, test_avoid_gvfs, teardown);
+  g_test_add ("/utils/bits-set", Fixture, NULL,
+              setup, test_bits_set, teardown);
   g_test_add ("/utils/evdev-bits", Fixture, NULL,
               setup, test_evdev_bits, teardown);
   g_test_add ("/utils/test-file-in-sysroot", Fixture, NULL,

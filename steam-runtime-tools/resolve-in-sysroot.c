@@ -26,6 +26,7 @@
 #include "libglnx/libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 /* Enabling debug logging for this is rather too verbose, so only
  * enable it when actively debugging this module */
@@ -112,6 +113,14 @@ _srt_resolve_in_sysroot (int sysroot,
   g_return_val_if_fail (descendant != NULL, -1);
   g_return_val_if_fail (real_path_out == NULL || *real_path_out == NULL, -1);
   g_return_val_if_fail (error == NULL || *error == NULL, -1);
+  g_return_val_if_fail (!_srt_all_bits_set (flags,
+                                             SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY
+                                             | SRT_RESOLVE_FLAGS_MUST_BE_REGULAR),
+                        -1);
+  g_return_val_if_fail (!_srt_all_bits_set (flags,
+                                            SRT_RESOLVE_FLAGS_MKDIR_P
+                                            | SRT_RESOLVE_FLAGS_MUST_BE_REGULAR),
+                        -1);
 
     {
       glnx_autofd int fd = -1;
@@ -129,6 +138,9 @@ _srt_resolve_in_sysroot (int sysroot,
       g_array_set_clear_func (fds, clear_fd);
       fd_array_take (fds, &fd);
     }
+
+  if (flags & SRT_RESOLVE_FLAGS_MKDIR_P)
+    flags |= SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY;
 
   remaining = buffer;
 
@@ -271,9 +283,7 @@ _srt_resolve_in_sysroot (int sysroot,
         }
       else  /* Not a symlink, or a symlink but we are returning it anyway. */
         {
-          /* If we are emulating mkdir -p, or if we will go on to open
-           * a member of @fd, then it had better be a directory. */
-          if ((flags & SRT_RESOLVE_FLAGS_MKDIR_P) != 0 ||
+          if ((flags & SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY) != 0 ||
               remaining != NULL)
             {
               struct stat stat_buf;
@@ -290,8 +300,9 @@ _srt_resolve_in_sysroot (int sysroot,
               if (!S_ISDIR (stat_buf.st_mode))
                 {
                   g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_DIRECTORY,
-                               "\"%s/%s\" is not a directory",
-                               current_path->str, next);
+                               "\"%s/%s\" is not a directory (type 0o%o)",
+                               current_path->str, next,
+                               stat_buf.st_mode & S_IFMT);
                   return -1;
                 }
             }
@@ -304,14 +315,37 @@ _srt_resolve_in_sysroot (int sysroot,
         }
     }
 
-  if (flags & (SRT_RESOLVE_FLAGS_READABLE|SRT_RESOLVE_FLAGS_DIRECTORY))
+  if ((flags & SRT_RESOLVE_FLAGS_MUST_BE_REGULAR) != 0)
+    {
+      int fd = g_array_index (fds, int, fds->len - 1);
+      struct stat stat_buf;
+
+      if (!glnx_fstatat (fd, "", &stat_buf, AT_EMPTY_PATH, error))
+        {
+          g_prefix_error (error,
+                          "Unable to determine whether \"%s\" "
+                          "is a regular file",
+                          current_path->str);
+          return -1;
+        }
+
+      if (!S_ISREG (stat_buf.st_mode))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_REGULAR_FILE,
+                       "\"%s\" is not a regular file (type 0o%o)",
+                       current_path->str, stat_buf.st_mode & S_IFMT);
+          return -1;
+        }
+    }
+
+  if (flags & SRT_RESOLVE_FLAGS_READABLE)
     {
       g_autofree char *proc_fd_name = g_strdup_printf ("/proc/self/fd/%d",
                                                        g_array_index (fds, int,
                                                                       fds->len - 1));
       glnx_autofd int fd = -1;
 
-      if (flags & SRT_RESOLVE_FLAGS_DIRECTORY)
+      if (flags & SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY)
         {
           if (!glnx_opendirat (-1, proc_fd_name, TRUE, &fd, error))
             {

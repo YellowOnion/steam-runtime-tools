@@ -31,10 +31,15 @@
  *  the path is a symlink, return a fd pointing to the symlink itself.
  * @SRT_RESOLVE_FLAGS_REJECT_SYMLINKS: If any component of
  *  the path is a symlink, fail with %G_IO_ERROR_TOO_MANY_LINKS.
+ * @SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY: The last component of the path
+ *  must be a directory or a symlink to a directory.
+ * @SRT_RESOLVE_FLAGS_MUST_BE_REGULAR: The last component of the path
+ *  must be a regular file or a symlink to a regular file.
  * @SRT_RESOLVE_FLAGS_READABLE: Open the last component of the path
  *  for reading, instead of just as `O_PATH`.
- * @SRT_RESOLVE_FLAGS_DIRECTORY: Open the last component of the path
- *  for reading, and it must be a directory.
+ *  With @SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY, it will be opened as
+ *  if via opendir(). Otherwise, it will be opened as if via open(),
+ *  with `O_RDONLY` and `O_NOCTTY`.
  * @SRT_RESOLVE_FLAGS_NONE: No special behaviour.
  *
  * Flags affecting how _srt_resolve_in_sysroot() behaves.
@@ -45,7 +50,8 @@ typedef enum
   SRT_RESOLVE_FLAGS_KEEP_FINAL_SYMLINK = (1 << 1),
   SRT_RESOLVE_FLAGS_REJECT_SYMLINKS = (1 << 2),
   SRT_RESOLVE_FLAGS_READABLE = (1 << 3),
-  SRT_RESOLVE_FLAGS_DIRECTORY = (1 << 4),
+  SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY = (1 << 4),
+  SRT_RESOLVE_FLAGS_MUST_BE_REGULAR = (1 << 5),
   SRT_RESOLVE_FLAGS_NONE = 0
 } SrtResolveFlags;
 

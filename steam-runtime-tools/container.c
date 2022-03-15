@@ -247,7 +247,7 @@ _srt_check_container (int sysroot_fd,
   g_debug ("Finding container info in sysroot %s...", sysroot);
 
   run_host_fd = _srt_resolve_in_sysroot (sysroot_fd, "/run/host",
-                                         SRT_RESOLVE_FLAGS_DIRECTORY,
+                                         SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY,
                                          &run_host_path, NULL);
 
   if (run_host_path != NULL)

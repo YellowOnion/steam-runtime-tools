@@ -59,11 +59,15 @@ endif
 if get_option('man')
   pandoc = find_program('pandoc', required : true)
 
-  if run_command(pandoc, [
-    '-f', 'markdown-smart',
-    '-t', 'man',
-    '/dev/null',
-  ]).returncode() == 0
+  if run_command(
+    pandoc,
+    [
+      '-f', 'markdown-smart',
+      '-t', 'man',
+      '/dev/null',
+    ],
+    check : false
+  ).returncode() == 0
     pandoc_markdown_nosmart = 'markdown-smart'
   else
     pandoc_markdown_nosmart = 'markdown'

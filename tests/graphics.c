@@ -86,6 +86,12 @@ setup (Fixture *f,
     g_error ("chdir %s: %s", f->sysroots, g_strerror (errno));
 
   f->fake_icds_envp = g_get_environ ();
+  f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
+                                          "VK_ADD_DRIVER_FILES");
+  f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
+                                          "VK_DRIVER_FILES");
+  f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
+                                          "VK_ICD_FILENAMES");
 
   if (config != NULL && config->icd_mode == ICD_MODE_FLATPAK)
     {
@@ -146,13 +152,23 @@ setup (Fixture *f,
                                             "/no-library.json",
                                             TRUE);
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
-                                            "VK_ICD_FILENAMES",
+                                            "VK_DRIVER_FILES",
                                             "/not-a-file:"
                                             "/null.json:"
                                             "/false.json:"
                                             "/str.json:"
                                             "/no-library.json:"
                                             "/no-api-version.json",
+                                            TRUE);
+      /* This will be ignored, because VK_DRIVER_FILES "wins" */
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "VK_ICD_FILENAMES",
+                                            "/null.json",
+                                            TRUE);
+      /* This will be ignored, because VK_DRIVER_FILES "wins" */
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "VK_ADD_DRIVER_FILES",
+                                            "/added.json",
                                             TRUE);
     }
   else if (config != NULL && config->icd_mode == ICD_MODE_RELATIVE_FILENAMES)
@@ -171,6 +187,7 @@ setup (Fixture *f,
                                             "fake-icds/not-a-file:"
                                             "fake-icds/no-library.json",
                                             TRUE);
+      /* Exercise the backwards-compatible VK_ICD_FILENAMES here */
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
                                             "VK_ICD_FILENAMES",
                                             "fake-icds/not-a-file:"
@@ -181,13 +198,25 @@ setup (Fixture *f,
                                             "fake-icds/no-library.json:"
                                             "fake-icds/no-api-version.json",
                                             TRUE);
+      /* This will be ignored, because VK_ICD_FILENAMES "wins" */
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "VK_ADD_DRIVER_FILES",
+                                            "fake-icds/added.json",
+                                            TRUE);
+    }
+  else if (config != NULL && config->icd_mode == ICD_MODE_XDG_DIRS)
+    {
+      f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
+                                            "VK_ADD_DRIVER_FILES",
+                                            "/added.json",
+                                            TRUE);
+      f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
+                                              "__EGL_VENDOR_LIBRARY_FILENAMES");
     }
   else
     {
       f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
                                               "__EGL_VENDOR_LIBRARY_FILENAMES");
-      f->fake_icds_envp = g_environ_unsetenv (f->fake_icds_envp,
-                                              "VK_ICD_FILENAMES");
     }
 
   if (config != NULL && config->icd_mode == ICD_MODE_EXPLICIT_DIRS)
@@ -1233,6 +1262,9 @@ assert_vulkan_icds (const SrtObjectList *icds,
     {
       SrtVulkanIcd *other;
 
+      /* We tried to add added.json via VK_ADD_DRIVER_FILES, but
+       * VK_DRIVER_FILES "wins" and so VK_ADD_DRIVER_FILES is ignored */
+
       iter = icds;
       g_assert_nonnull (iter);
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==, "/not-a-file");
@@ -1289,6 +1321,9 @@ assert_vulkan_icds (const SrtObjectList *icds,
   else if (config != NULL && config->icd_mode == ICD_MODE_RELATIVE_FILENAMES)
     {
       const char *path;
+
+      /* We tried to add added.json via VK_ADD_DRIVER_FILES, but
+       * VK_ICD_FILENAMES "wins" and so VK_ADD_DRIVER_FILES is ignored */
 
       iter = icds;
       g_assert_nonnull (iter);
@@ -1471,6 +1506,22 @@ assert_vulkan_icds (const SrtObjectList *icds,
   else if (config != NULL && config->icd_mode == ICD_MODE_XDG_DIRS)
     {
       iter = icds;
+      /* Added via VK_ADD_DRIVER_FILES */
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/added.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "libadded.so");
+      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==,
+                       "1.1.102");
+      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==, "libadded.so");
+      g_clear_pointer (&resolved, g_free);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_NONE);
+
+      iter = iter->next;
       /* Vulkan-Loader >= 1.2.198 respects XDG_CONFIG_HOME */
       g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
                        "/confhome/vulkan/icd.d/invalid.json");
@@ -1670,6 +1721,7 @@ typedef struct
 {
   const gchar *description;
   const gchar *sysroot;
+  const gchar *vk_add_layer_path;
   const gchar *vk_layer_path;
   const gchar *home;
   const gchar *xdg_config_dirs;
@@ -1726,8 +1778,24 @@ static const VulkanLayersTest vulkan_layers_test[] =
     .sysroot = "debian10",
     .home = "/home/debian",
     .xdg_config_dirs = "/usr/local/etc:::",
+    .vk_add_layer_path = "/custom_path",
     .explicit_layers =
     {
+      /* VK_ADD_LAYER_PATH is searched before the default search path */
+      {
+        .name = "VK_LAYER_MANGOHUD_overlay",
+        .description = "Vulkan Hud Overlay",
+        .api_version = "1.2.135",
+        .library_path = "/usr/$LIB/libMangoHud.so",
+        .json_to_compare = "expectations/MangoHud.json",
+      },
+      {
+        .name = "VK_LAYER_LUNARG_overlay",
+        .description = "LunarG HUD layer",
+        .api_version = "1.1.5",
+        .library_path = "vkOverlayLayer.so",
+        .json_to_compare = "custom_path/Single-good-layer.json",
+      },
       {
         .name = "VK_LAYER_MESA_overlay",
         .description = "Mesa Overlay layer",
@@ -1788,6 +1856,8 @@ static const VulkanLayersTest vulkan_layers_test[] =
     .description = "Meta layer",
     .sysroot = "fedora",
     .vk_layer_path = "/custom_path:/custom_path2:/custom_path3",
+    /* /usr/local/etc is not searched because VK_LAYER_PATH "wins" */
+    .vk_add_layer_path = "/usr/local/etc",
     .explicit_layers =
     {
       {
@@ -2011,6 +2081,13 @@ test_layer_vulkan (Fixture *f,
       else
         vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
                                               "VK_LAYER_PATH", test->vk_layer_path,
+                                              TRUE);
+
+      if (test->vk_add_layer_path == NULL)
+        vulkan_layer_envp = g_environ_unsetenv (vulkan_layer_envp, "VK_ADD_LAYER_PATH");
+      else
+        vulkan_layer_envp = g_environ_setenv (vulkan_layer_envp,
+                                              "VK_ADD_LAYER_PATH", test->vk_add_layer_path,
                                               TRUE);
 
       if (test->home == NULL)

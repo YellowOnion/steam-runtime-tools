@@ -539,6 +539,16 @@ with open('fake-icds/no-api-version.json', 'w') as writer:
     "file_format_version": "1.0.0"
 }''')
 
+with open('fake-icds/added.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.1.102",
+        "library_path": "libadded.so"
+    },
+    "file_format_version": "1.0.0"
+}''')
+
 with open('fake-icds/no-library.json', 'w') as writer:
     writer.write('''\
 {

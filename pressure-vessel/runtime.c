@@ -3785,7 +3785,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
  * @seq: Sequence number of @details, used to make unique filenames
- * @search_path: Used to build `$VK_ICD_FILENAMES` or a similar search path
+ * @search_path: Used to build `$VK_DRIVER_FILES` or a similar search path
  * @error: Used to raise an error on failure
  *
  * Make a single Vulkan layer or ICD available in the container.
@@ -3955,7 +3955,7 @@ setup_json_manifest (PvRuntime *self,
  * @details: (element-type IcdDetails): A list of #IcdDetails
  *  holding #SrtVulkanLayer, #SrtVulkanIcd or #SrtEglIcd, as appropriate
  *  for @sub_dir
- * @search_path: Used to build `$VK_ICD_FILENAMES` or a similar search path
+ * @search_path: Used to build `$VK_DRIVER_FILES` or a similar search path
  * @error: Used to raise an error on failure
  *
  * Make a list of Vulkan layers or ICDs available in the container.
@@ -6093,9 +6093,24 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   pv_environ_setenv (container_env, "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS", NULL);
 
   if (vulkan_path->len != 0)
-    pv_environ_setenv (container_env, "VK_ICD_FILENAMES", vulkan_path->str);
+    {
+      /* VK_ICD_FILENAMES is deprecated, VK_DRIVER_FILES takes precedence.
+       * Until all branches of the Steam Runtime have a Vulkan-Loader
+       * that supports VK_DRIVER_FILES, we need to set both:
+       * old Vulkan-Loader versions will use the old variable, while new
+       * versions will use the new one. */
+      pv_environ_setenv (container_env, "VK_DRIVER_FILES", vulkan_path->str);
+      pv_environ_setenv (container_env, "VK_ICD_FILENAMES", vulkan_path->str);
+    }
   else
-    pv_environ_setenv (container_env, "VK_ICD_FILENAMES", NULL);
+    {
+      pv_environ_setenv (container_env, "VK_ICD_FILENAMES", NULL);
+      pv_environ_setenv (container_env, "VK_DRIVER_FILES", NULL);
+    }
+
+  /* Setting VK_DRIVER_FILES now disables this, but that wasn't the case
+   * in Vulkan-Loader 1.3.207, and it seems clearer if we unset it anyway. */
+  pv_environ_setenv (container_env, "VK_ADD_DRIVER_FILES", NULL);
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {

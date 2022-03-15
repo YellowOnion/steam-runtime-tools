@@ -497,11 +497,11 @@ The following environment variables (among others) are read by
 :   Used to locate VDPAU drivers to be made available in the container
     if `--runtime` and `--graphics-provider` are active.
 
-`VK_ICD_FILENAMES`
+`VK_ADD_DRIVER_FILES`, `VK_DRIVER_FILES`, `VK_ICD_FILENAMES`
 :   Used to locate Vulkan ICDs to be made available in the container
     if `--runtime` and `--graphics-provider` are active.
 
-`VK_LAYER_PATH`
+`VK_ADD_LAYER_PATH`, `VK_LAYER_PATH`
 :   Used to locate Vulkan explicit layers
     if `--runtime` and `--graphics-provider` are active.
 
@@ -571,11 +571,11 @@ The following environment variables are set by **pressure-vessel-wrap**(1).
 :   Set to a search path for VDPAU drivers
     if `--runtime` and `--graphics-provider` are active.
 
-`VK_ICD_FILENAMES`
+`VK_DRIVER_FILES`, `VK_ICD_FILENAMES`
 :   Set to a search path for Vulkan ICDs
     if `--runtime` and `--graphics-provider` are active.
 
-`VK_LAYER_PATH`
+`VK_ADD_DRIVER_FILES`, `VK_ADD_LAYER_PATH`, `VK_LAYER_PATH`
 :   Unset if `--runtime` and `--graphics-provider` are active.
 
 `XAUTHORITY`

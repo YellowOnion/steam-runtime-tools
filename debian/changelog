@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220315.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220315.0) steamrt; urgency=medium
 
   * pressure-vessel: Refactoring
   * pv-runtime: Only consider locale paths if they are directories
@@ -14,8 +14,9 @@ steam-runtime-tools (0.20220315.0) UNRELEASED; urgency=medium
     where VK_DRIVER_FILES overrides VK_ADD_DRIVER_FILES.
     (Resolves: steamrt/tasks#95)
   * pressure-vessel: Resync Flatpak-derived code with Flatpak 1.12.7
+  * build: Silence a Meson future-compatibility warning
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 15 Mar 2022 12:54:00 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 15 Mar 2022 14:31:51 +0000
 
 steam-runtime-tools (0.20220311.0) steamrt; urgency=medium
 

@@ -250,10 +250,16 @@ _srt_check_container (int sysroot_fd,
                                          SRT_RESOLVE_FLAGS_MUST_BE_DIRECTORY,
                                          &run_host_path, NULL);
 
-  if (run_host_path != NULL)
+  g_debug ("/run/host resolved to %s", run_host_path ?: "(null)");
+
+  /* Toolbx 0.0.99.3 makes /run/host a symlink to .. on the host system,
+   * meaning the resolved path relative to the sysroot is ".".
+   * We don't want that to be interpreted as being a container. */
+  if (run_host_path != NULL && !g_str_equal (run_host_path, "."))
     host_directory = g_build_filename (sysroot, run_host_path, NULL);
 
-  if (_srt_file_get_contents_in_sysroot (sysroot_fd,
+  if (host_directory != NULL &&
+      _srt_file_get_contents_in_sysroot (sysroot_fd,
                                          "/run/host/container-manager",
                                          &contents, NULL, NULL))
     {
@@ -320,7 +326,7 @@ _srt_check_container (int sysroot_fd,
       g_clear_pointer (&contents, g_free);
     }
 
-  if (run_host_fd >= 0)
+  if (host_directory != NULL)
     {
       g_debug ("Unknown container technology based on /run/host");
       type = SRT_CONTAINER_TYPE_UNKNOWN;

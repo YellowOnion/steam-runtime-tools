@@ -315,6 +315,10 @@ _srt_resolve_in_sysroot (int sysroot,
         }
     }
 
+  /* Avoid returning an empty path */
+  if (current_path->len == 0)
+    g_string_append_c (current_path, '.');
+
   if ((flags & SRT_RESOLVE_FLAGS_MUST_BE_REGULAR) != 0)
     {
       int fd = g_array_index (fds, int, fds->len - 1);

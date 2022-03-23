@@ -1125,12 +1125,15 @@ out:
   g_free (opt_socket);
   g_free (opt_socket_directory);
 
-  if (local_error == NULL)
-    server->exit_status = 0;
-  else if (local_error->domain == G_OPTION_ERROR)
-    server->exit_status = EX_USAGE;
-  else
-    server->exit_status = EX_UNAVAILABLE;
+  if (server->exit_status == -1)
+    {
+      if (local_error == NULL)
+        server->exit_status = 0;
+      else if (local_error->domain == G_OPTION_ERROR)
+        server->exit_status = EX_USAGE;
+      else
+        server->exit_status = EX_UNAVAILABLE;
+    }
 
   pv_launcher_server_stop (server);
   result = server->exit_status;

@@ -483,6 +483,169 @@ class TestLauncher(BaseTest):
                 proc.wait()
                 self.assertEqual(proc.returncode, 0)
 
+    def test_wrap(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--socket', os.path.join(temp, 'socket'),
+                    '--',
+                    'printf', 'wrapped printf',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+
+            # The process exits as soon as printf does, which is
+            # almost immediately
+            output, errors = proc.communicate()
+            self.assertEqual(proc.returncode, 0)
+
+            # With a wrapped command but no --info-fd, there is no
+            # extraneous output on stdout
+            self.assertEqual('wrapped printf', output)
+
+    def test_wrap_info_fd(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            proc = subprocess.Popen(
+                [
+                    # subprocess.Popen doesn't let us set arbitrary
+                    # file descriptors, so use a shell to juggle them
+                    'sh', '-euc', 'exec "$@" 3>&1 >&2 2>/dev/null', 'sh',
+                ] + self.launcher + [
+                    '--info-fd=3',
+                    '--socket', os.path.join(temp, 'socket'),
+                    '--',
+                    'cat',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+            )
+
+            socket = ''
+            dbus_address = ''
+
+            # stdout is the launcher's fd 3, which is the info-fd
+            stdout = proc.stdout
+            assert stdout is not None
+            for line in stdout:
+                line = line.rstrip('\n')
+                logger.debug('%s', line)
+
+                if line.startswith('socket='):
+                    socket = line[len('socket='):]
+                elif line.startswith('dbus_address='):
+                    dbus_address = line[len('dbus_address='):]
+
+            self.assertTrue(socket)
+            self.assertTrue(dbus_address)
+
+            # The path has been canonicalized, so it might not
+            # be equal to the input, but the basename will be the same
+            self.assertEqual(os.path.basename(socket), 'socket')
+            left = os.stat(socket)
+            right = os.stat(os.path.join(temp, 'socket'))
+            self.assertEqual(left.st_dev, right.st_dev)
+            self.assertEqual(left.st_ino, right.st_ino)
+
+            # The process exits as soon as cat does
+            _, errors = proc.communicate(input='this goes to stderr')
+            self.assertEqual(proc.returncode, 0)
+            # The wrapped process's stdout has ended up in stderr
+            self.assertIn('this goes to stderr', errors)
+
+    def test_wrap_wait(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+            need_terminate = True
+            proc = subprocess.Popen(
+                [
+                    'sh', '-euc', 'exec "$@" 3>&1 >&2', 'sh',
+                ] + self.launcher + [
+                    '--info-fd=3',
+                    '--socket', os.path.join(temp, 'socket'),
+                    '--',
+                    'sleep', '600',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+            )
+
+            try:
+                socket = ''
+                dbus_address = ''
+
+                # stdout is the launcher's fd 3, which is the info-fd
+                stdout = proc.stdout
+                assert stdout is not None
+                for line in stdout:
+                    line = line.rstrip('\n')
+                    logger.debug('%s', line)
+
+                    if line.startswith('socket='):
+                        socket = line[len('socket='):]
+                    elif line.startswith('dbus_address='):
+                        dbus_address = line[len('dbus_address='):]
+
+                self.assertTrue(socket)
+                self.assertTrue(dbus_address)
+
+                # The path has been canonicalized, so it might not
+                # be equal to the input, but the basename will be the same
+                self.assertEqual(os.path.basename(socket), 'socket')
+                left = os.stat(socket)
+                right = os.stat(os.path.join(temp, 'socket'))
+                self.assertEqual(left.st_dev, right.st_dev)
+                self.assertEqual(left.st_ino, right.st_ino)
+
+                # We can run commands
+                completed = run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--',
+                        'printf', 'hello',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'hello')
+
+                # We can terminate the `sleep` command
+                completed = run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--terminate',
+                        '--',
+                        'printf', 'world',
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'world')
+                need_terminate = False
+            finally:
+                if need_terminate:
+                    proc.terminate()
+
+                proc.wait()
+                self.assertEqual(proc.returncode, 0)
+
+            # It really stopped
+            completed = run_subprocess(
+                self.launch + [
+                    '--socket', socket,
+                    '--',
+                    'printf', 'hello',
+                ],
+                stdout=2,
+                stderr=2,
+            )
+            self.assertEqual(completed.returncode, 125)
+
     def test_session_bus(self) -> None:
         try:
             run_subprocess(

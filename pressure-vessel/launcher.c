@@ -1105,13 +1105,16 @@ main (int argc,
                                   error))
     goto out;
 
+  server->exit_status = EX_UNAVAILABLE;
+
   /* If we're using the bus name method, we can't exit successfully
-   * until we claimed the bus name at least once. Otherwise we're
-   * already content. */
-  if (opt_bus_name != NULL)
-    server->exit_status = EX_UNAVAILABLE;
-  else
-    server->exit_status = 0;
+   * until we claimed the bus name at least once: see on_name_acquired().
+   * Otherwise we're already content. */
+  if (opt_bus_name == NULL)
+    {
+      server->exit_status = 0;
+      pv_portal_listener_close_info_fh (server->listener, NULL);
+    }
 
   g_debug ("Entering main loop");
 

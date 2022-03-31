@@ -490,9 +490,6 @@ pv_portal_listener_listen (PvPortalListener *self,
     fprintf (self->info_fh, "dbus_address=%s\n",
              g_dbus_server_get_client_address (self->server));
 
-  if (opt_bus_name == NULL)
-    pv_portal_listener_close_info_fh (self, NULL);
-
   return TRUE;
 }
 

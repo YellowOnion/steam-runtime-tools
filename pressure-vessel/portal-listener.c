@@ -87,19 +87,26 @@ pv_portal_listener_init (PvPortalListener *self)
 
 /*
  * Divert stdout to stderr, and set up the --info-fd to be the
- * original stdout or a specified fd.
+ * original stdout or a specified fd (if strictly positive).
  */
 gboolean
 pv_portal_listener_set_up_info_fd (PvPortalListener *self,
                                    int fd,
                                    GError **error)
 {
+  /* writing output to fd 0 (stdin) makes no sense */
+  g_return_val_if_fail (fd != STDIN_FILENO, FALSE);
+
   self->original_stdout = _srt_divert_stdout_to_stderr (error);
 
   if (self->original_stdout == NULL)
     return FALSE;
 
-  if (fd > 0)   /* < 0 means unset, and 0 is stdout itself */
+  if (fd == STDOUT_FILENO)
+    {
+      self->info_fh = self->original_stdout;
+    }
+  else if (fd > 0)
     {
       self->info_fh = fdopen (fd, "w");
 
@@ -107,10 +114,6 @@ pv_portal_listener_set_up_info_fd (PvPortalListener *self,
         return glnx_throw_errno_prefix (error,
                                         "Unable to create a stdio wrapper for fd %d",
                                         fd);
-    }
-  else
-    {
-      self->info_fh = self->original_stdout;
     }
 
   return TRUE;
@@ -482,6 +485,9 @@ pv_portal_listener_listen (PvPortalListener *self,
     {
       g_return_val_if_reached (FALSE);
     }
+
+  if (self->info_fh == NULL)
+    return TRUE;
 
   if (self->server_socket != NULL)
     fprintf (self->info_fh, "socket=%s\n", self->server_socket);

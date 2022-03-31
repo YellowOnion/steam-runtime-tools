@@ -1037,6 +1037,10 @@ main (int argc,
     g_warning ("Unable to set normal resource limits: %s",
                g_strerror (-result));
 
+  /* opt_info_fd defaults to stdout */
+  if (opt_info_fd < 0)
+    opt_info_fd = STDOUT_FILENO;
+
   if (!pv_portal_listener_set_up_info_fd (server->listener,
                                           opt_info_fd,
                                           error))

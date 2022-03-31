@@ -525,12 +525,21 @@ pv_portal_listener_close_info_fh (PvPortalListener *self,
 }
 
 void
-pv_portal_listener_release_name (PvPortalListener *self)
+pv_portal_listener_stop_listening (PvPortalListener *self)
 {
   if (self->name_owner_id)
-    g_bus_unown_name (self->name_owner_id);
+    {
+      g_debug ("Releasing bus name");
+      g_bus_unown_name (self->name_owner_id);
+    }
 
   self->name_owner_id = 0;
+
+  if (self->server != NULL && self->server_socket != NULL)
+    unlink (self->server_socket);
+
+  g_clear_object (&self->server);
+  g_clear_object (&self->session_bus);
 }
 
 static void
@@ -539,13 +548,7 @@ pv_portal_listener_dispose (GObject *object)
   PvPortalListener *self = PV_PORTAL_LISTENER (object);
 
   pv_portal_listener_close_info_fh (self, NULL);
-  pv_portal_listener_release_name (self);
-
-  if (self->server != NULL && self->server_socket != NULL)
-    unlink (self->server_socket);
-
-  g_clear_object (&self->server);
-  g_clear_object (&self->session_bus);
+  pv_portal_listener_stop_listening (self);
 
   G_OBJECT_CLASS (pv_portal_listener_parent_class)->dispose (object);
 }

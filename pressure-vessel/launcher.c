@@ -157,7 +157,7 @@ pv_launcher_server_unref_skeleton_in_timeout (PvLauncherServer *self)
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
 
   if (self->listener != NULL)
-    pv_portal_listener_release_name (self->listener);
+    pv_portal_listener_stop_listening (self->listener);
 
   /* After we've lost the name we drop the main ref on the helper
      so that we'll exit when it drops to zero. However, if there are

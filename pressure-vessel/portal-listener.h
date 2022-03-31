@@ -82,6 +82,6 @@ gboolean pv_portal_listener_listen (PvPortalListener *self,
 void pv_portal_listener_close_info_fh (PvPortalListener *self,
                                        const char *bus_name);
 
-void pv_portal_listener_release_name (PvPortalListener *self);
+void pv_portal_listener_stop_listening (PvPortalListener *self);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvPortalListener, g_object_unref)

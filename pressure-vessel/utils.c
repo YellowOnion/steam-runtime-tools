@@ -187,27 +187,6 @@ pv_hash_table_get_arbitrary_key (GHashTable *table)
     return NULL;
 }
 
-/**
- * pv_async_signal_safe_error:
- * @message: A human-readable message
- * @exit_status: Call `_exit` with this status
- *
- * Exit with a fatal error, like g_error(), but async-signal-safe
- * (see signal-safety(7)).
- */
-void
-pv_async_signal_safe_error (const char *message,
-                            int exit_status)
-{
-  if (write (2, message, strlen (message)) < 0)
-    {
-      /* Ignore - there's nothing we can do about it anyway - but
-       * suppress -Wunused-result. */
-    }
-
-  _exit (exit_status);
-}
-
 #define PROC_SYS_KERNEL_RANDOM_UUID "/proc/sys/kernel/random/uuid"
 
 /**

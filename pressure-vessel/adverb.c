@@ -164,14 +164,14 @@ child_setup_cb (gpointer user_data)
    * takes steps not to be. */
   if (opt_exit_with_parent
       && prctl (PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) != 0)
-    pv_async_signal_safe_error ("Failed to set up parent-death signal\n",
-                                LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("Failed to set up parent-death signal\n",
+                                  LAUNCH_EX_FAILED);
 
   /* Unblock all signals */
   sigemptyset (&set);
   if (pthread_sigmask (SIG_SETMASK, &set, NULL) == -1)
-    pv_async_signal_safe_error ("Failed to unblock signals when starting child\n",
-                                LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("Failed to unblock signals when starting child\n",
+                                  LAUNCH_EX_FAILED);
 
   /* Reset the handlers for all signals to their defaults. */
   for (i = 1; i < NSIG; i++)
@@ -184,7 +184,7 @@ child_setup_cb (gpointer user_data)
   if (data != NULL &&
       data->original_stdout_fd > 0 &&
       dup2 (data->original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
-    pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
 
   /* Make the fds we pass through *not* be close-on-exec */
   if (data != NULL && data->pass_fds)
@@ -200,13 +200,13 @@ child_setup_cb (gpointer user_data)
           fd_flags = fcntl (fd, F_GETFD);
 
           if (fd_flags < 0)
-            pv_async_signal_safe_error ("pressure-vessel-adverb: Invalid fd?\n",
-                                        LAUNCH_EX_FAILED);
+            _srt_async_signal_safe_error ("pressure-vessel-adverb: Invalid fd?\n",
+                                          LAUNCH_EX_FAILED);
 
           if ((fd_flags & FD_CLOEXEC) != 0
               && fcntl (fd, F_SETFD, fd_flags & ~FD_CLOEXEC) != 0)
-            pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to clear close-on-exec\n",
-                                        LAUNCH_EX_FAILED);
+            _srt_async_signal_safe_error ("pressure-vessel-adverb: Unable to clear close-on-exec\n",
+                                          LAUNCH_EX_FAILED);
         }
     }
 }

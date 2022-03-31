@@ -1,5 +1,5 @@
 ---
-title: pressure-vessel-launch
+title: steam-runtime-launch-client
 section: 1
 ...
 
@@ -10,11 +10,11 @@ SPDX-License-Identifier: MIT
 
 # NAME
 
-pressure-vessel-launch - client to launch processes in a container
+steam-runtime-launch-client - client to launch processes in a container
 
 # SYNOPSIS
 
-**pressure-vessel-launch**
+**steam-runtime-launch-client**
 [**--clear-env**]
 [**--directory** *DIR*]
 [**--env** _VAR_**=**_VALUE_]
@@ -27,14 +27,14 @@ pressure-vessel-launch - client to launch processes in a container
 [**--**]
 *COMMAND* [*ARGUMENTS...*]
 
-**pressure-vessel-launch**
+**steam-runtime-launch-client**
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 **--terminate**
 
 # DESCRIPTION
 
-**pressure-vessel-launch** connects to an `AF_UNIX` socket established
+**steam-runtime-launch-client** connects to an `AF_UNIX` socket established
 by **pressure-vessel-launcher**(1), and executes an arbitrary command
 as a subprocess of **pressure-vessel-launcher**.
 
@@ -183,7 +183,7 @@ it set, and pass through **FONTS** from the caller.
 The standard output from *COMMAND* is printed on standard output.
 
 The standard error from *COMMAND* is printed on standard error.
-Diagnostic messages from **pressure-vessel-launch** may also be printed
+Diagnostic messages from **steam-runtime-launch-client** may also be printed
 on standard error.
 
 # EXIT STATUS
@@ -195,7 +195,7 @@ The exit status is similar to **env**(1):
     or **--terminate** succeeded.
 
 125
-:   Invalid arguments were given, or **pressure-vessel-launch** failed
+:   Invalid arguments were given, or **steam-runtime-launch-client** failed
     to start.
 
 126
@@ -210,7 +210,7 @@ The exit status is similar to **env**(1):
 :   The *COMMAND* was launched, but its exit status could not be
     determined. This happens if the wait-status was neither
     normal exit nor termination by a signal. It also happens if
-    **pressure-vessel-launch** was disconnected from the D-Bus
+    **steam-runtime-launch-client** was disconnected from the D-Bus
     session bus or the **--socket** before the exit status could be
     determined.
 

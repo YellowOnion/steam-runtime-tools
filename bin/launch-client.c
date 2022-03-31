@@ -1,5 +1,5 @@
 /*
- * pressure-vessel-launch — send IPC requests to create child processes
+ * steam-runtime-launch-client — send IPC requests to create child processes
  *
  * Copyright © 2018 Red Hat, Inc.
  * Copyright © 2020-2021 Collabora Ltd.
@@ -46,7 +46,6 @@
 
 #include "flatpak-portal.h"
 #include "flatpak-session-helper.h"
-#include "utils.h"
 
 typedef enum {
   FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV = 1 << 0,
@@ -738,14 +737,14 @@ main (int argc,
   original_environ = g_get_environ ();
   global_original_environ = (const char * const *) original_environ;
 
-  g_set_prgname ("pressure-vessel-launch");
+  g_set_prgname ("steam-runtime-launch-client");
 
   /* Set up the initial base logging */
   _srt_util_set_glib_log_handler (FALSE);
 
   context = g_option_context_new ("COMMAND [ARG...]");
   g_option_context_set_summary (context,
-                                "Accept IPC requests to create child "
+                                "Send IPC requests to create child "
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);

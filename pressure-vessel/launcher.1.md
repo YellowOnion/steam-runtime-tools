@@ -32,7 +32,7 @@ It inherits standard input, standard output and standard error
 from **pressure-vessel-launcher** itself.
 
 If the *COMMAND* exits, then the launcher will also exit (as though the
-*COMMAND* had been started via **pressure-vessel-launch --terminate**).
+*COMMAND* had been started via **steam-runtime-launch-client --terminate**).
 
 # OPTIONS
 
@@ -114,20 +114,20 @@ The text printed to the **--info-fd** includes one or more of these:
 
 **socket=**PATH
 :   The launcher is listening on *PATH*, and can be contacted by
-    **pressure-vessel-launch --socket** _PATH_
+    **steam-runtime-launch-client --socket** _PATH_
     or by connecting a peer-to-peer D-Bus client to a D-Bus address
     corresponding to _PATH_.
 
 **dbus_address=**ADDRESS
 :   The launcher is listening on *ADDRESS*, and can be contacted by
-    **pressure-vessel-launch --dbus-address** _ADDRESS_,
+    **steam-runtime-launch-client --dbus-address** _ADDRESS_,
     or by connecting another peer-to-peer D-Bus client
     (such as **dbus-send --peer=ADDRESS**) to _ADDRESS_.
 
 **bus_name=**NAME
 :   The launcher is listening on the well-known D-Bus session bus,
     and can be contacted by
-    **pressure-vessel-launch --bus-name** *NAME*,
+    **steam-runtime-launch-client --bus-name** *NAME*,
     or by connecting an ordinary D-Bus client
     (such as **dbus-send --session**) to the session bus and sending
     method calls to _NAME_.
@@ -205,7 +205,7 @@ the IPC connection.
 ## Once per command
 
 For each command that is to be run as part of the game, Steam must
-run **pressure-vessel-launch**(1) with a **--socket**, **--dbus-address**
+run **steam-runtime-launch-client**(1) with a **--socket**, **--dbus-address**
 or **--bus-name** option that indicates how to communicate with the
 launcher. Alternatively, it could do this itself by using D-Bus.
 
@@ -215,10 +215,10 @@ run as part of the game, it can do so in one of two ways:
 * If the environment variable is equally valid for all commands, it can
     be part of the environment of **pressure-vessel-launcher**.
 * If the environment variable is specific to one command, Steam can pass
-    **--env VAR=VALUE** to **pressure-vessel-launch**.
+    **--env VAR=VALUE** to **steam-runtime-launch-client**.
 
 If the command is to be terminated without affecting other commands,
-Steam should send **SIGINT** to **pressure-vessel-launch**.
+Steam should send **SIGINT** to **steam-runtime-launch-client**.
 It must not use **SIGKILL**, because that cannot be forwarded across the
 IPC connection. It should not use **SIGTERM** unless the entire game is
 being terminated, because that's only sent to a single process and not
@@ -236,11 +236,11 @@ Listen on the session bus, and run two commands, and exit:
     launcher_pid="$!"
     gdbus wait --session --bus-name "$name"
 
-    pressure-vessel-launch \
+    steam-runtime-launch-client \
         --bus-name "$name" \
         -- \
         ls -al
-    pressure-vessel-launch \
+    steam-runtime-launch-client \
         --bus-name "$name" \
         -- \
         id
@@ -249,7 +249,7 @@ Listen on the session bus, and run two commands, and exit:
     wait "$launcher_pid"
 
 Listen on a socket in a temporary directory, and use `--exit-with-fd`.
-Production code would be more likely to invoke **pressure-vessel-launch**
+Production code would be more likely to invoke **steam-runtime-launch-client**
 from C, C++ or Python code rather than a shell script, and use pipes
 instead of fifos.
 
@@ -274,15 +274,15 @@ instead of fifos.
     # Wait for EOF so we know the socket is available
     cat "${tmpdir}/ready-fifo" > /dev/null
 
-    pressure-vessel-launch \
+    steam-runtime-launch-client \
         --socket="${tmpdir}/launcher" \
         -- \
         ls -al
-    pressure-vessel-launch \
+    steam-runtime-launch-client \
         --socket="${tmpdir}/launcher" \
         -- \
         id
-    pressure-vessel-launch \
+    steam-runtime-launch-client \
         --socket="${tmpdir}/launcher" \
         -- \
         sleep infinity &

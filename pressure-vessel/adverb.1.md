@@ -313,7 +313,7 @@ more like this:
     /path/to/pressure-vessel-launcher ...
 
 so that when the **pressure-vessel-launcher** is terminated by
-**pressure-vessel-launch --terminate**, or when the **bwrap** process
+**steam-runtime-launch-client --terminate**, or when the **bwrap** process
 receives a fatal signal, the **pressure-vessel-adverb** process will
 gracefully terminate any remaining child/descendant processes before
 exiting itself.

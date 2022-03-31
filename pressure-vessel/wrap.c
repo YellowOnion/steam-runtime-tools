@@ -1933,7 +1933,7 @@ main (int argc,
       else
         {
           g_assert (flatpak_subsandbox != NULL);
-          /* pressure-vessel-launch currently hard-codes this */
+          /* steam-runtime-launch-client currently hard-codes this */
           g_warning ("Process ID namespace is always shared when using a "
                      "Flatpak subsandbox");
         }

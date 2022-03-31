@@ -29,10 +29,6 @@
 
 #include "missing.h"
 
-#define DBUS_NAME_DBUS "org.freedesktop.DBus"
-#define DBUS_INTERFACE_DBUS DBUS_NAME_DBUS
-#define DBUS_PATH_DBUS "/org/freedesktop/DBus"
-
 void pv_search_path_append (GString *search_path,
                             const gchar *item);
 

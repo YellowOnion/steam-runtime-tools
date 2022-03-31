@@ -15,9 +15,10 @@ pressure-vessel-launcher - server to launch processes in a container
 # SYNOPSIS
 
 **pressure-vessel-launcher**
+[**--exit-on-readable**] *FD*
+[**--info-fd**] *N*
 [**--replace**]
 [**--verbose**]
-[**--info-fd**] *N*
 {**--bus-name** *NAME*|**--socket** *SOCKET*|**--socket-directory** *PATH*}
 
 # DESCRIPTION
@@ -92,6 +93,8 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 structured text on the file descriptor specified by **--info-fd**,
 and then closes both the **--info-fd** and standard output. The default
 **--info-fd** is standard output.
+
+The text printed to the **--info-fd** includes one or more of these:
 
 **socket=**PATH
 :   The launcher is listening on *PATH*, and can be contacted by

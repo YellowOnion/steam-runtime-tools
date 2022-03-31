@@ -1,4 +1,4 @@
-
+/*<private_header>*/
 /*
  * pressure-vessel-launcher — accept IPC requests to create child processes
  *
@@ -31,7 +31,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
-#include "launcher1.h"
+#include "steam-runtime-tools/launcher1.h"
 
 #define LAUNCHER_IFACE "com.steampowered.PressureVessel.Launcher1"
 #define LAUNCHER_PATH "/com/steampowered/PressureVessel/Launcher1"

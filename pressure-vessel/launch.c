@@ -39,13 +39,13 @@
 #include <gio/gunixfdlist.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-portal.h"
 #include "flatpak-session-helper.h"
-#include "launcher.h"
 #include "utils.h"
 
 typedef enum {

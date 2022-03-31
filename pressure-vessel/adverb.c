@@ -35,6 +35,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/steam-runtime-tools.h"
@@ -43,7 +44,6 @@
 
 #include "bwrap-lock.h"
 #include "flatpak-utils-base-private.h"
-#include "launcher.h"
 #include "supported-architectures.h"
 #include "utils.h"
 #include "wrap-interactive.h"

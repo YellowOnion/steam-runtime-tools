@@ -43,11 +43,11 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/log-internal.h"
+#include "steam-runtime-tools/portal-listener-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-utils-base-private.h"
-#include "portal-listener.h"
 #include "utils.h"
 
 /* Absence of GConnectFlags; slightly more readable than a magic number */
@@ -56,7 +56,7 @@
 typedef struct
 {
   GObject parent;
-  PvPortalListener *listener;
+  SrtPortalListener *listener;
   GHashTable *client_pid_data_hash;
   GMainLoop *main_loop;
   PvLauncher1 *launcher;
@@ -159,7 +159,7 @@ pv_launcher_server_unref_skeleton_in_timeout (PvLauncherServer *self)
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
 
   if (self->listener != NULL)
-    pv_portal_listener_stop_listening (self->listener);
+    _srt_portal_listener_stop_listening (self->listener);
 
   /* After we've lost the name we drop the main ref on the helper
      so that we'll exit when it drops to zero. However, if there are
@@ -683,7 +683,7 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
     }
 
   self->exit_status = 0;
-  pv_portal_listener_close_info_fh (self->listener, bus_name);
+  _srt_portal_listener_close_info_fh (self->listener, bus_name);
   return TRUE;
 }
 
@@ -727,7 +727,7 @@ pv_launcher_server_export (PvLauncherServer *self,
 }
 
 static void
-on_bus_acquired (PvPortalListener *listener,
+on_bus_acquired (SrtPortalListener *listener,
                  GDBusConnection *connection,
                  gpointer user_data)
 {
@@ -756,7 +756,7 @@ on_bus_acquired (PvPortalListener *listener,
 }
 
 static void
-on_name_acquired (PvPortalListener *listener,
+on_name_acquired (SrtPortalListener *listener,
                   GDBusConnection *connection,
                   const gchar *name,
                   gpointer user_data)
@@ -779,7 +779,7 @@ on_name_acquired (PvPortalListener *listener,
 }
 
 static void
-on_name_lost (PvPortalListener *listener,
+on_name_lost (SrtPortalListener *listener,
               GDBusConnection *connection,
               const gchar *name,
               gpointer user_data)
@@ -808,7 +808,7 @@ peer_connection_closed_cb (GDBusConnection *connection,
 }
 
 static gboolean
-new_connection_cb (PvPortalListener *listener,
+new_connection_cb (SrtPortalListener *listener,
                    GDBusConnection *connection,
                    gpointer user_data)
 {
@@ -1074,7 +1074,7 @@ main (int argc,
   PvLauncherServer *server = g_object_new (PV_TYPE_LAUNCHER_SERVER, NULL);
 
   server->exit_status = EX_USAGE;
-  server->listener = pv_portal_listener_new ();
+  server->listener = _srt_portal_listener_new ();
   server->main_loop = g_main_loop_new (NULL, FALSE);
 
   setlocale (LC_ALL, "");
@@ -1159,9 +1159,9 @@ main (int argc,
   if (server->wrapped_command == NULL && opt_info_fd < 0)
     opt_info_fd = STDOUT_FILENO;
 
-  if (!pv_portal_listener_set_up_info_fd (server->listener,
-                                          opt_info_fd,
-                                          error))
+  if (!_srt_portal_listener_set_up_info_fd (server->listener,
+                                            opt_info_fd,
+                                            error))
     {
       server->exit_status = EX_OSERR;
       goto out;
@@ -1194,11 +1194,11 @@ main (int argc,
   server->client_pid_data_hash = g_hash_table_new_full (NULL, NULL, NULL,
                                                         (GDestroyNotify) pid_data_free);
 
-  if (!pv_portal_listener_check_socket_arguments (server->listener,
-                                                  opt_bus_name,
-                                                  opt_socket,
-                                                  opt_socket_directory,
-                                                  error))
+  if (!_srt_portal_listener_check_socket_arguments (server->listener,
+                                                    opt_bus_name,
+                                                    opt_socket,
+                                                    opt_socket_directory,
+                                                    error))
     goto out;
 
   /* Exit with this status until we know otherwise */
@@ -1222,12 +1222,12 @@ main (int argc,
   if (opt_replace)
     flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
 
-  if (!pv_portal_listener_listen (server->listener,
-                                  opt_bus_name,
-                                  flags,
-                                  opt_socket,
-                                  opt_socket_directory,
-                                  error))
+  if (!_srt_portal_listener_listen (server->listener,
+                                    opt_bus_name,
+                                    flags,
+                                    opt_socket,
+                                    opt_socket_directory,
+                                    error))
     goto out;
 
   server->exit_status = EX_UNAVAILABLE;

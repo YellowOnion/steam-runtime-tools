@@ -95,6 +95,8 @@ libsteamrt_internals = [
     'log.c',
     'os-internal.h',
     'os.c',
+    'portal-listener.c',
+    'portal-listener-internal.h',
     'profiling-internal.h',
     'profiling.c',
     'resolve-in-sysroot-internal.h',

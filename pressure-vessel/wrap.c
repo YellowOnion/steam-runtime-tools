@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
@@ -1159,7 +1160,7 @@ tristate_environment (const gchar *name)
   return TRISTATE_MAYBE;
 }
 
-#define usage_error(...) pv_log_failure (__VA_ARGS__)
+#define usage_error(...) _srt_log_failure (__VA_ARGS__)
 
 int
 main (int argc,
@@ -1202,7 +1203,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-wrap");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   g_info ("pressure-vessel version %s", VERSION);
 
@@ -1288,7 +1289,7 @@ main (int argc,
     goto out;
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   /* Specifying either one of these mutually-exclusive options as a
    * command-line option disables use of the environment variable for
@@ -2550,7 +2551,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
+    _srt_log_failure ("%s", local_error->message);
 
   g_clear_pointer (&opt_preload_modules, g_array_unref);
   g_clear_pointer (&adverb_preload_argv, g_ptr_array_unref);

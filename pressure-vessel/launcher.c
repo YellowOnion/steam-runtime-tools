@@ -41,6 +41,7 @@
 #include <gio/gunixfdlist.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -552,7 +553,7 @@ on_bus_acquired (PvPortalListener *listener,
 
   if (!export_launcher (connection, &error))
     {
-      pv_log_failure ("Unable to export object: %s", error->message);
+      _srt_log_failure ("Unable to export object: %s", error->message);
       *ret = EX_SOFTWARE;
       g_main_loop_quit (main_loop);
     }
@@ -669,7 +670,7 @@ connect_to_signals (void)
 
   if (sfd < 0)
     {
-      pv_log_failure ("Unable to watch signals: %s", g_strerror (errno));
+      _srt_log_failure ("Unable to watch signals: %s", g_strerror (errno));
       return 0;
     }
 
@@ -853,7 +854,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-launcher");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   context = g_option_context_new ("");
   g_option_context_set_summary (context,
@@ -880,7 +881,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   if ((result = _srt_set_compatible_resource_limits (0)) < 0)
     g_warning ("Unable to set normal resource limits: %s",
@@ -984,7 +985,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
+    _srt_log_failure ("%s", local_error->message);
 
   if (exit_on_readable_id > 0)
     g_source_remove (exit_on_readable_id);

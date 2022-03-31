@@ -43,9 +43,6 @@
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
 
-static int my_pid = -1;
-static const gchar *my_prgname = NULL;
-
 /**
  * pv_get_current_dirs:
  * @cwd_p: (out) (transfer full) (optional): Used to return the
@@ -795,117 +792,6 @@ pv_current_namespace_path_to_host_path (const gchar *current_env_path)
     path_on_host = g_strdup (current_env_path);
 
   return path_on_host;
-}
-
-static const char *
-get_level_prefix (GLogLevelFlags log_level)
-{
-  if (log_level & (G_LOG_FLAG_RECURSION
-                   | G_LOG_FLAG_FATAL
-                   | G_LOG_LEVEL_ERROR
-                   | G_LOG_LEVEL_CRITICAL))
-    return "Internal error";
-
-  if (log_level & PV_LOG_LEVEL_FAILURE)
-    return "E";
-
-  if (log_level & G_LOG_LEVEL_WARNING)
-    return "W";
-
-  if (log_level & G_LOG_LEVEL_MESSAGE)
-    return "N";   /* consistent with apt, which calls this a "notice" */
-
-  if (log_level & G_LOG_LEVEL_INFO)
-    return "I";
-
-  if (log_level & G_LOG_LEVEL_DEBUG)
-    return "D";
-
-  return "?!";
-}
-
-/**
- * log_handler_with_timestamp:
- * @log_domain: the log domain of the message
- * @log_level: the log level of the message
- * @message: the message to process
- * @user_data: not used
- */
-static void
-pv_log_to_stderr_with_timestamp (const gchar *log_domain,
-                                 GLogLevelFlags log_level,
-                                 const gchar *message,
-                                 gpointer user_data)
-{
-  g_autoptr(GDateTime) date_time = g_date_time_new_now_local ();
-
-  /* We can't use the format specifier "%f" for microseconds because it
-   * was introduced in GLib 2.66 and we are targeting an older version */
-  g_autofree gchar *timestamp = g_date_time_format (date_time, "%T");
-
-  g_printerr ("%s.%06i: %s[%d]: %s: %s\n", timestamp,
-              g_date_time_get_microsecond (date_time),
-              my_prgname, my_pid, get_level_prefix (log_level), message);
-
-  if (log_level & (G_LOG_FLAG_RECURSION
-                   | G_LOG_FLAG_FATAL
-                   | G_LOG_LEVEL_ERROR))
-    G_BREAKPOINT ();
-}
-
-/**
- * pv_log_to_stderr:
- * @log_domain: the log domain of the message
- * @log_level: the log level of the message
- * @message: the message to process
- * @user_data: not used
- */
-static void
-pv_log_to_stderr (const gchar *log_domain,
-                  GLogLevelFlags log_level,
-                  const gchar *message,
-                  gpointer user_data)
-{
-  g_printerr ("%s[%d]: %s: %s\n",
-              my_prgname, my_pid, get_level_prefix (log_level), message);
-
-  if (log_level & (G_LOG_FLAG_RECURSION
-                   | G_LOG_FLAG_FATAL
-                   | G_LOG_LEVEL_ERROR))
-    G_BREAKPOINT ();
-}
-
-/**
- * pv_set_up_logging:
- * @opt_verbose: If the log should be more verbose
- */
-void
-pv_set_up_logging (gboolean opt_verbose)
-{
-  GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
-                               | G_LOG_LEVEL_CRITICAL
-                               | PV_LOG_LEVEL_FAILURE
-                               | G_LOG_LEVEL_WARNING
-                               | G_LOG_LEVEL_MESSAGE);
-  gboolean opt_timestamp = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
-                                                     FALSE);
-  gboolean opt_info = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
-
-  my_pid = getpid ();
-  my_prgname = g_get_prgname ();
-
-  if (opt_info)
-    log_levels |= G_LOG_LEVEL_INFO;
-
-  if (opt_verbose)
-    {
-      log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
-      _srt_profiling_enable ();
-    }
-
-  g_log_set_handler (G_LOG_DOMAIN, log_levels,
-                     opt_timestamp ? pv_log_to_stderr_with_timestamp : pv_log_to_stderr,
-                     NULL);
 }
 
 /**

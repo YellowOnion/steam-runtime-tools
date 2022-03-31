@@ -22,6 +22,7 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/libdl-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
@@ -141,7 +142,7 @@ check_bwrap (const char *tools_dir,
        * try anything else. */
       g_info ("Using bubblewrap from environment: %s", tmp);
 
-      if (!only_prepare && !test_bwrap_executable (tmp, PV_LOG_LEVEL_FAILURE))
+      if (!only_prepare && !test_bwrap_executable (tmp, SRT_LOG_LEVEL_FAILURE))
         return NULL;
 
       return g_strdup (tmp);
@@ -161,14 +162,14 @@ check_bwrap (const char *tools_dir,
   /* Try the system copy: if it exists, then it should work, so print failure
    * messages if it doesn't work. */
   if (system_bwrap != NULL
-      && test_bwrap_executable (system_bwrap, PV_LOG_LEVEL_FAILURE))
+      && test_bwrap_executable (system_bwrap, SRT_LOG_LEVEL_FAILURE))
     return g_steal_pointer (&system_bwrap);
 
   /* If there was no system copy, try the local copy again. We expect
    * this to fail, and are really just doing this to print error messages
    * at the appropriate severity - but if it somehow works, great,
    * I suppose? */
-  if (test_bwrap_executable (local_bwrap, PV_LOG_LEVEL_FAILURE))
+  if (test_bwrap_executable (local_bwrap, SRT_LOG_LEVEL_FAILURE))
     {
       g_warning ("Local bwrap executable didn't work first time but "
                  "worked second time?");

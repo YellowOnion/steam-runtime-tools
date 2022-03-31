@@ -33,11 +33,6 @@
 #define DBUS_INTERFACE_DBUS DBUS_NAME_DBUS
 #define DBUS_PATH_DBUS "/org/freedesktop/DBus"
 
-#define PV_LOG_LEVEL_FAILURE (1 << G_LOG_LEVEL_USER_SHIFT)
-
-#define pv_log_failure(...) \
-  g_log (G_LOG_DOMAIN, PV_LOG_LEVEL_FAILURE, __VA_ARGS__)
-
 void pv_get_current_dirs (gchar **cwd_p,
                           gchar **cwd_l);
 
@@ -66,8 +61,6 @@ gboolean pv_terminate_all_child_processes (GTimeSpan wait_period,
                                            GError **error);
 
 gchar *pv_current_namespace_path_to_host_path (const gchar *current_env_path);
-
-void pv_set_up_logging (gboolean opt_verbose);
 
 void pv_delete_dangling_symlink (int dirfd,
                                  const char *debug_path,

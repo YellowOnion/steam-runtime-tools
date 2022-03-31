@@ -35,6 +35,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/steam-runtime-tools.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -1073,7 +1074,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-adverb");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -1107,7 +1108,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 
@@ -1523,7 +1524,7 @@ out:
   g_clear_pointer (&opt_preload_modules, g_array_unref);
 
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
+    _srt_log_failure ("%s", local_error->message);
 
   global_original_environ = NULL;
   g_debug ("Exiting with status %d", ret);

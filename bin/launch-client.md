@@ -35,8 +35,8 @@ steam-runtime-launch-client - client to launch processes in a container
 # DESCRIPTION
 
 **steam-runtime-launch-client** connects to an `AF_UNIX` socket established
-by **pressure-vessel-launcher**(1), and executes an arbitrary command
-as a subprocess of **pressure-vessel-launcher**.
+by **steam-runtime-launcher-service**(1), and executes an arbitrary command
+as a subprocess of **steam-runtime-launcher-service**.
 
 # OPTIONS
 
@@ -58,7 +58,7 @@ as a subprocess of **pressure-vessel-launcher**.
 **--bus-name** *NAME*
 :   Connect to the well-known D-Bus session bus and send commands to
     the given *NAME*, which is normally assumed to be owned by
-    **pressure-vessel-launcher**.
+    **steam-runtime-launcher-service**.
 
     As a special case, if the *NAME* is
     **org.freedesktop.Flatpak**, then it is assumed to be
@@ -90,13 +90,13 @@ as a subprocess of **pressure-vessel-launcher**.
 :   The *COMMAND* runs in an empty environment, apart from any environment
     variables set by **--env** and similar options.
     By default, it inherits environment variables from
-    **pressure-vessel-launcher**, with **--env** and
+    **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
 
 **--directory** *DIR*
 :   Arrange for the *COMMAND* to run in *DIR*.
     By default, it inherits the current working directory from
-    **pressure-vessel-launcher**.
+    **steam-runtime-launcher-service**.
 
 **--forward-fd** *FD*
 :   Arrange for the *COMMAND* to receive file descriptor number *FD*
@@ -165,7 +165,7 @@ it set, and pass through **FONTS** from the caller.
 # ENVIRONMENT
 
 `PWD`
-:   **pressure-vessel-launcher**(1) sets this to the current working
+:   **steam-runtime-launcher-service**(1) sets this to the current working
     directory (as specified by **--directory**, or inherited from the
     launcher) for each command executed inside the container,
     overriding the environment options shown above.
@@ -224,6 +224,6 @@ Any value less than 128
 
 # EXAMPLES
 
-See **pressure-vessel-launcher**(1).
+See **steam-runtime-launcher-service**(1).
 
 <!-- vim:set sw=4 sts=4 et: -->

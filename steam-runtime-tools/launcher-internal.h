@@ -1,6 +1,6 @@
 /*<private_header>*/
 /*
- * pressure-vessel-launcher — accept IPC requests to create child processes
+ * steam-runtime-launcher-service — accept IPC requests to create child processes
  *
  * Copyright © 2020 Collabora Ltd.
  *

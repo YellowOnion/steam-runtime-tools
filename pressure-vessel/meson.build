@@ -124,27 +124,6 @@ executable(
   install_rpath : pv_rpath,
 )
 
-executable(
-  'pressure-vessel-launcher',
-  sources: [
-    'launcher.c',
-  ],
-  c_args : pv_c_args,
-  dependencies : [
-    launcher_codegen_dep,
-    pressure_vessel_utils_dep,
-    threads,
-    gio_unix,
-    libglnx_dep,
-    json_glib,
-  ],
-  include_directories : pv_include_dirs,
-  install : true,
-  install_dir : pv_bindir,
-  build_rpath : pv_rpath,
-  install_rpath : pv_rpath,
-)
-
 pressure_vessel_wrap_lib = static_library(
   'pressure-vessel-wrap-lib',
   sources : [
@@ -267,7 +246,6 @@ endif
 if get_option('man')
   foreach tool : [
     'adverb',
-    'launcher',
     'locale-gen',
     'test-ui',
     'try-setlocale',

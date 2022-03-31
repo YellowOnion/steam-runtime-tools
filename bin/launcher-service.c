@@ -1,5 +1,5 @@
 /*
- * pressure-vessel-launcher — accept IPC requests to create child processes
+ * steam-runtime-launcher-service — accept IPC requests to create child processes
  *
  * Copyright © 2018 Red Hat, Inc.
  * Copyright © 2020 Collabora Ltd.
@@ -48,7 +48,6 @@
 #include "libglnx/libglnx.h"
 
 #include "flatpak-utils-base-private.h"
-#include "utils.h"
 
 /* Absence of GConnectFlags; slightly more readable than a magic number */
 #define CONNECT_FLAGS_NONE (0)
@@ -1079,7 +1078,7 @@ main (int argc,
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("pressure-vessel-launcher");
+  g_set_prgname ("steam-runtime-launcher-service");
 
   /* Set up the initial base logging */
   _srt_util_set_glib_log_handler (FALSE);

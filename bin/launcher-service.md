@@ -1,5 +1,5 @@
 ---
-title: pressure-vessel-launcher
+title: steam-runtime-launcher-service
 section: 1
 ...
 
@@ -10,11 +10,11 @@ SPDX-License-Identifier: MIT
 
 # NAME
 
-pressure-vessel-launcher - server to launch processes in a container
+steam-runtime-launcher-service - server to launch processes in a container
 
 # SYNOPSIS
 
-**pressure-vessel-launcher**
+**steam-runtime-launcher-service**
 [**--exit-on-readable**] *FD*
 [**--info-fd**] *N*
 [**--replace**]
@@ -24,12 +24,12 @@ pressure-vessel-launcher - server to launch processes in a container
 
 # DESCRIPTION
 
-**pressure-vessel-launcher** listens on an `AF_UNIX` socket or the
+**steam-runtime-launcher-service** listens on an `AF_UNIX` socket or the
 D-Bus session bus, and executes arbitrary commands as subprocesses.
 
 If a *COMMAND* is specified, it is run as an additional subprocess.
 It inherits standard input, standard output and standard error
-from **pressure-vessel-launcher** itself.
+from **steam-runtime-launcher-service** itself.
 
 If the *COMMAND* exits, then the launcher will also exit (as though the
 *COMMAND* had been started via **steam-runtime-launch-client --terminate**).
@@ -44,7 +44,7 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     An absolute path indicates a filesystem-based socket, which is
     associated with the filesystem and can be shared between filesystem
     namespaces by bind-mounting.
-    The path must not exist before **pressure-vessel-launcher** is run.
+    The path must not exist before **steam-runtime-launcher-service** is run.
     `@` indicates an an abstract socket, which is associated with a
     network namespace, is shared between all containers that are in
     the same network namespace, and cannot be shared across network
@@ -76,7 +76,7 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 
 **--replace**
 :   When used with **--bus-name**, allow other
-    **pressure-vessel-launcher** processes to take over the bus name,
+    **steam-runtime-launcher-service** processes to take over the bus name,
     and exit with status 0 if that happens. This option is ignored
     if **--bus-name** is not used.
 
@@ -99,7 +99,7 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 
 # OUTPUT
 
-**pressure-vessel-launcher** prints zero or more lines of
+**steam-runtime-launcher-service** prints zero or more lines of
 structured text on the file descriptor specified by **--info-fd**,
 and then closes the **--info-fd**.
 
@@ -160,7 +160,7 @@ Other nonzero values
 
 ## Once per game launch
 
-When a game is launched, run one **pressure-vessel-launcher** per game
+When a game is launched, run one **steam-runtime-launcher-service** per game
 (whatever that means in practice - probably one per app-ID) as an
 asynchronous child process, wrapped in **pressure-vessel-wrap**
 (either directly or by using **run-in-steamrt** or **run-in-scout**),
@@ -213,7 +213,7 @@ If Steam needs to set environment variables for the commands that are
 run as part of the game, it can do so in one of two ways:
 
 * If the environment variable is equally valid for all commands, it can
-    be part of the environment of **pressure-vessel-launcher**.
+    be part of the environment of **steam-runtime-launcher-service**.
 * If the environment variable is specific to one command, Steam can pass
     **--env VAR=VALUE** to **steam-runtime-launch-client**.
 
@@ -232,7 +232,7 @@ Listen on the session bus, and run two commands, and exit:
     pressure-vessel-wrap \
         ... \
         -- \
-        pressure-vessel-launcher --bus-name "$name" &
+        steam-runtime-launcher-service --bus-name "$name" &
     launcher_pid="$!"
     gdbus wait --session --bus-name "$name"
 
@@ -261,7 +261,7 @@ instead of fifos.
         --pass-fd=3
         ... \
         -- \
-        pressure-vessel-launcher \
+        steam-runtime-launcher-service \
             --exit-on-readable=0 \
             --info-fd=3 \
             --socket="${tmpdir}/launcher" \
@@ -288,7 +288,7 @@ instead of fifos.
         sleep infinity &
     launch_sleep_pid="$!"
 
-    # Make pressure-vessel-launcher's stdin become readable, which
+    # Make steam-runtime-launcher-service's stdin become readable, which
     # will make it exit due to --exit-on-readable
     kill "$sleep_pid"
     wait "$launcher_pid" || echo "launcher exit status: $?"

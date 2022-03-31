@@ -964,7 +964,7 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_launcher,
     "Instead of specifying a command with its arguments to execute, all the "
     "elements after '--' will be used as arguments for "
-    "'pressure-vessel-launcher'. All the environment variables that are "
+    "'steam-runtime-launcher-service'. All the environment variables that are "
     "edited by pressure-vessel, or that are known to be wrong in the new "
     "container, or that needs to inherit the value from the host system, "
     "will be locked. This option implies --batch.", NULL },
@@ -2427,11 +2427,11 @@ main (int argc,
     {
       g_autoptr(FlatpakBwrap) launcher_argv =
         flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      g_autofree gchar *pressure_vessel_launcher = g_build_filename (tools_dir,
-                                                                     "pressure-vessel-launcher",
-                                                                     NULL);
-      g_debug ("Adding pressure-vessel-launcher '%s'...", pressure_vessel_launcher);
-      flatpak_bwrap_add_arg (launcher_argv, pressure_vessel_launcher);
+      g_autofree gchar *launcher_service = g_build_filename (tools_dir,
+                                                             "steam-runtime-launcher-service",
+                                                             NULL);
+      g_debug ("Adding steam-runtime-launcher-service '%s'...", launcher_service);
+      flatpak_bwrap_add_arg (launcher_argv, launcher_service);
 
       if (opt_verbose)
         flatpak_bwrap_add_arg (launcher_argv, "--verbose");

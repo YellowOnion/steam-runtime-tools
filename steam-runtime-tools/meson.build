@@ -144,7 +144,7 @@ launcher1 = gnome.gdbus_codegen(
 )
 
 launcher_codegen = static_library(
-  'pressure-vessel-launcher-codegen',
+  'steam-runtime-launcher-service-codegen',
   sources : launcher1,
   dependencies : [
     gio_unix,

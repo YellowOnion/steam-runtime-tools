@@ -41,8 +41,8 @@ class TestLauncher(BaseTest):
             self.launcher = self.command_prefix + [
                 os.path.join(
                     self.top_builddir,
-                    'pressure-vessel',
-                    'pressure-vessel-launcher'
+                    'bin',
+                    'steam-runtime-launcher-service'
                 ),
             ]
             self.launch = self.command_prefix + [

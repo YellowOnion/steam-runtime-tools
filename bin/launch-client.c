@@ -1118,7 +1118,7 @@ main (int argc,
 
       /* The host portal doesn't support options, so we always have to do
        * this the hard way. The subsandbox portal supports unset-env in
-       * versions >= 5. pressure-vessel-launcher always supports it. */
+       * versions >= 5. steam-runtime-launcher-service always supports it. */
       if (api == &launcher_api
           || (api == &subsandbox_api && get_portal_version () >= 5))
         {

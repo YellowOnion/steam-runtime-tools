@@ -601,6 +601,16 @@ name_owner_changed (GDBusConnection *connection,
 }
 
 static gboolean
+pv_launcher_server_finish_startup (PvLauncherServer *self,
+                                   const char *bus_name,
+                                   GError **error)
+{
+  self->exit_status = 0;
+  pv_portal_listener_close_info_fh (self->listener, bus_name);
+  return TRUE;
+}
+
+static gboolean
 pv_launcher_server_export (PvLauncherServer *self,
                            GDBusConnection *connection,
                            GError **error)
@@ -680,8 +690,13 @@ on_name_acquired (PvPortalListener *listener,
   /* If exporting the launcher didn't fail, then we are now happy */
   if (server->exit_status == EX_UNAVAILABLE)
     {
-      server->exit_status = 0;
-      pv_portal_listener_close_info_fh (server->listener, name);
+      g_autoptr(GError) error = NULL;
+
+      if (!pv_launcher_server_finish_startup (server, name, &error))
+        {
+          _srt_log_failure ("%s", error->message);
+          g_main_loop_quit (server->main_loop);
+        }
     }
 }
 
@@ -1112,8 +1127,8 @@ main (int argc,
    * Otherwise we're already content. */
   if (opt_bus_name == NULL)
     {
-      server->exit_status = 0;
-      pv_portal_listener_close_info_fh (server->listener, NULL);
+      if (!pv_launcher_server_finish_startup (server, NULL, error))
+        goto out;
     }
 
   g_debug ("Entering main loop");

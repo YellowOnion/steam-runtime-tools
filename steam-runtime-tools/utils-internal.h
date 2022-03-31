@@ -171,3 +171,5 @@ void _srt_async_signal_safe_error (const char *message,
 
 void _srt_get_current_dirs (gchar **cwd_p,
                             gchar **cwd_l);
+
+gchar *_srt_get_random_uuid (GError **error);

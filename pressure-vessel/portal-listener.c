@@ -464,7 +464,7 @@ pv_portal_listener_listen (PvPortalListener *self,
        * by an attacker seeking to deny service by using the name we
        * intended to use; so we don't need a retry loop for alternative
        * names in the same directory. */
-      unique = pv_get_random_uuid (error);
+      unique = _srt_get_random_uuid (error);
 
       if (unique == NULL)
         return FALSE;

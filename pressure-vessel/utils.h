@@ -44,8 +44,6 @@ gboolean pv_run_sync (const char * const * argv,
 
 gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);
 
-gchar *pv_get_random_uuid (GError **error);
-
 gboolean pv_wait_for_child_processes (pid_t main_process,
                                       int *wait_status_out,
                                       GError **error);

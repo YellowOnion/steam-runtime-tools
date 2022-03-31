@@ -82,7 +82,7 @@ void
 pv_portal_listener_init (PvPortalListener *self)
 {
   self->original_environ = g_get_environ ();
-  pv_get_current_dirs (NULL, &self->original_cwd_l);
+  _srt_get_current_dirs (NULL, &self->original_cwd_l);
 }
 
 /*

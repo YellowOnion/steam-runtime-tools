@@ -1564,3 +1564,40 @@ _srt_async_signal_safe_error (const char *message,
 
   _exit (exit_status);
 }
+
+/**
+ * _srt_get_current_dirs:
+ * @cwd_p: (out) (transfer full) (optional): Used to return the
+ *  current physical working directory, equivalent to `$(pwd -P)`
+ *  in a shell
+ * @cwd_l: (out) (transfer full) (optional): Used to return the
+ *  current logical working directory, equivalent to `$(pwd -L)`
+ *  in a shell
+ *
+ * Return the physical and/or logical working directory.
+ */
+void
+_srt_get_current_dirs (gchar **cwd_p,
+                       gchar **cwd_l)
+{
+  g_autofree gchar *cwd = NULL;
+  const gchar *pwd;
+
+  g_return_if_fail (cwd_p == NULL || *cwd_p == NULL);
+  g_return_if_fail (cwd_l == NULL || *cwd_l == NULL);
+
+  cwd = g_get_current_dir ();
+
+  if (cwd_p != NULL)
+    *cwd_p = g_canonicalize_filename (cwd, NULL);
+
+  if (cwd_l != NULL)
+    {
+      pwd = g_getenv ("PWD");
+
+      if (pwd != NULL && _srt_is_same_file (pwd, cwd))
+        *cwd_l = g_strdup (pwd);
+      else
+        *cwd_l = g_strdup (cwd);
+    }
+}

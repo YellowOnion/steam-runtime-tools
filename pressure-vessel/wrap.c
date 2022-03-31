@@ -1552,7 +1552,7 @@ main (int argc,
         }
     }
 
-  pv_get_current_dirs (&cwd_p, &cwd_l);
+  _srt_get_current_dirs (&cwd_p, &cwd_l);
 
   if (opt_verbose)
     {

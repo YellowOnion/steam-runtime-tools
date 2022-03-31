@@ -60,8 +60,10 @@ typedef struct
   GHashTable *client_pid_data_hash;
   GMainLoop *main_loop;
   PvLauncher1 *launcher;
+  char **wrapped_command;
   guint exit_on_readable_id;
   guint signals_id;
+  gboolean ever_exported_launcher;
   int exit_status;
 } PvLauncherServer;
 
@@ -163,9 +165,19 @@ pv_launcher_server_unref_skeleton_in_timeout (PvLauncherServer *self)
      so that we'll exit when it drops to zero. However, if there are
      outstanding calls these will keep the refcount up during the
      execution of them. We do the unref on a timeout to make sure
-     we're completely draining the queue of (stale) requests. */
-  g_timeout_add_full (G_PRIORITY_DEFAULT, 500, unref_skeleton_in_timeout_cb,
-                      g_object_ref (self), g_object_unref);
+     we're completely draining the queue of (stale) requests.
+
+     If we are exiting because a wrapped command exited, and we are
+     listening on a custom GDBusServer rather than on the session bus,
+     then it is possible that we never even exported the skeleton. If
+     that's the case, then we can short-cut this and just stop the
+     main loop - and in fact, we must do that, because skeleton_died_cb()
+     will never happen. */
+  if (self->ever_exported_launcher)
+    g_timeout_add_full (G_PRIORITY_DEFAULT, 500, unref_skeleton_in_timeout_cb,
+                        g_object_ref (self), g_object_unref);
+  else if (self->main_loop != NULL)
+    g_main_loop_quit (self->main_loop);
 }
 
 typedef struct
@@ -217,14 +229,18 @@ child_watch_died (GPid     pid,
 
   g_debug ("Child %d died: wait status %d", pid_data->pid, status);
 
-  signal_variant = g_variant_ref_sink (g_variant_new ("(uu)", pid, status));
-  g_dbus_connection_emit_signal (pid_data->connection,
-                                 pid_data->client,
-                                 LAUNCHER_PATH,
-                                 LAUNCHER_IFACE,
-                                 "ProcessExited",
-                                 signal_variant,
-                                 NULL);
+  if (pid_data->connection != NULL)
+    {
+      /* Note that pid_data->client can be NULL on peer-to-peer sockets. */
+      signal_variant = g_variant_ref_sink (g_variant_new ("(uu)", pid, status));
+      g_dbus_connection_emit_signal (pid_data->connection,
+                                     pid_data->client,
+                                     LAUNCHER_PATH,
+                                     LAUNCHER_IFACE,
+                                     "ProcessExited",
+                                     signal_variant,
+                                     NULL);
+    }
 
   /* This frees the pid_data, so be careful */
   g_hash_table_remove (self->client_pid_data_hash, GUINT_TO_POINTER (pid_data->pid));
@@ -248,6 +264,7 @@ typedef struct
 {
   FdMapEntry *fd_map;
   int         fd_map_len;
+  gboolean    keep_tty_session;
 } ChildSetupData;
 
 static void
@@ -303,8 +320,11 @@ child_setup_func (gpointer user_data)
 
   /* We become our own session and process group, because it never makes sense
      to share the flatpak-session-helper dbus activated process group */
-  setsid ();
-  setpgid (0, 0);
+  if (!data->keep_tty_session)
+    {
+      setsid ();
+      setpgid (0, 0);
+    }
 }
 
 static gboolean
@@ -585,7 +605,7 @@ name_owner_changed (GDBusConnection *connection,
         {
           pid_data = value;
 
-          if (g_str_equal (pid_data->client, name))
+          if (g_strcmp0 (pid_data->client, name) == 0)
             list = g_list_prepend (list, pid_data);
         }
 
@@ -605,6 +625,63 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
                                    const char *bus_name,
                                    GError **error)
 {
+
+  if (self->wrapped_command != NULL)
+    {
+      ChildSetupData child_setup_data = { NULL };
+      g_autofree FdMapEntry *fd_map = NULL;
+      GPid pid = -1;
+      PidData *pid_data;
+
+      /* Map our original stdout back to the child */
+      fd_map = g_new0 (FdMapEntry, 1);
+      fd_map[0].from = fileno (self->listener->original_stdout);
+      fd_map[0].to = STDOUT_FILENO;
+      fd_map[0].final = STDOUT_FILENO;
+
+      g_debug ("Map stdout %d -> %d -> %d",
+               fd_map[0].from, fd_map[0].to, fd_map[0].final);
+      child_setup_data.fd_map = fd_map;
+      child_setup_data.fd_map_len = 1;
+      child_setup_data.keep_tty_session = TRUE;
+
+      /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see
+       * flatpak_close_fds_workaround */
+      if (!g_spawn_async_with_pipes (NULL,
+                                     self->wrapped_command,
+                                     NULL,
+                                     (G_SPAWN_SEARCH_PATH
+                                      | G_SPAWN_DO_NOT_REAP_CHILD
+                                      | G_SPAWN_LEAVE_DESCRIPTORS_OPEN
+                                      | G_SPAWN_CHILD_INHERITS_STDIN),
+                                     child_setup_func, &child_setup_data,
+                                     &pid,
+                                     NULL,
+                                     NULL,
+                                     NULL,
+                                     error))
+        {
+          g_prefix_error (error, "Unable to start wrapped command: ");
+          return FALSE;
+        }
+
+      pid_data = g_new0 (PidData, 1);
+      pid_data->server = self;
+      pid_data->connection = NULL;
+      pid_data->pid = pid;
+      pid_data->client = NULL;
+      pid_data->terminate_after = TRUE;
+      pid_data->child_watch = g_child_watch_add_full (G_PRIORITY_DEFAULT,
+                                                      pid,
+                                                      child_watch_died,
+                                                      pid_data,
+                                                      NULL);
+      g_debug ("Wrapped command pid is %d", pid_data->pid);
+      g_hash_table_replace (self->client_pid_data_hash,
+                            GUINT_TO_POINTER (pid_data->pid),
+                            pid_data);
+    }
+
   self->exit_status = 0;
   pv_portal_listener_close_info_fh (self->listener, bus_name);
   return TRUE;
@@ -617,6 +694,7 @@ pv_launcher_server_export (PvLauncherServer *self,
 {
   if (self->launcher == NULL)
     {
+      self->ever_exported_launcher = TRUE;
       self->launcher = pv_launcher1_skeleton_new ();
 
       g_object_set_data_full (G_OBJECT (self->launcher), "track-alive",
@@ -1014,11 +1092,23 @@ main (int argc,
   g_option_context_add_main_entries (context, options, NULL);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
+  g_return_val_if_fail (argc >= 1, EX_USAGE);
+  g_return_val_if_fail (argv[argc] == NULL, EX_USAGE);
+
   if (!g_option_context_parse (context, &argc, &argv, error))
     {
       server->exit_status = EX_USAGE;
       goto out;
     }
+
+  if (argc >= 2 && strcmp (argv[1], "--") == 0)
+    {
+      argv++;
+      argc--;
+    }
+
+  if (argc > 1)
+    server->wrapped_command = &argv[1];
 
   if (opt_version)
     {
@@ -1037,8 +1127,36 @@ main (int argc,
     g_warning ("Unable to set normal resource limits: %s",
                g_strerror (-result));
 
-  /* opt_info_fd defaults to stdout */
-  if (opt_info_fd < 0)
+  /* We want to leave stdin open for the child process, and anyway
+   * it's meant to be read-only */
+  if (opt_info_fd == STDIN_FILENO)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --info-fd=%d (standard input)",
+                   STDIN_FILENO);
+      goto out;
+    }
+
+  /* We want to leave stderr open for the child process */
+  if (opt_info_fd == STDERR_FILENO)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --info-fd=%d (standard error)",
+                   STDERR_FILENO);
+      goto out;
+    }
+
+  if (server->wrapped_command != NULL && opt_info_fd == STDOUT_FILENO)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --info-fd=%d with a COMMAND",
+                   STDOUT_FILENO);
+      goto out;
+    }
+
+  /* opt_info_fd defaults to stdout if there is no command, or -1
+   * (meaning do not use) if there is a command */
+  if (server->wrapped_command == NULL && opt_info_fd < 0)
     opt_info_fd = STDOUT_FILENO;
 
   if (!pv_portal_listener_set_up_info_fd (server->listener,
@@ -1072,18 +1190,6 @@ main (int argc,
     }
 
   _srt_setenv_disable_gio_modules ();
-
-  if (argc >= 2 && strcmp (argv[1], "--") == 0)
-    {
-      argv++;
-      argc--;
-    }
-
-  if (argc != 1)
-    {
-      glnx_throw (error, "Usage: %s [OPTIONS]", g_get_prgname ());
-      goto out;
-    }
 
   server->client_pid_data_hash = g_hash_table_new_full (NULL, NULL, NULL,
                                                         (GDestroyNotify) pid_data_free);

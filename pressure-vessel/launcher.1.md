@@ -20,11 +20,19 @@ pressure-vessel-launcher - server to launch processes in a container
 [**--replace**]
 [**--verbose**]
 {**--bus-name** *NAME*|**--socket** *SOCKET*|**--socket-directory** *PATH*}
+[**--** *COMMAND* *ARGUMENTS*]
 
 # DESCRIPTION
 
 **pressure-vessel-launcher** listens on an `AF_UNIX` socket or the
 D-Bus session bus, and executes arbitrary commands as subprocesses.
+
+If a *COMMAND* is specified, it is run as an additional subprocess.
+It inherits standard input, standard output and standard error
+from **pressure-vessel-launcher** itself.
+
+If the *COMMAND* exits, then the launcher will also exit (as though the
+*COMMAND* had been started via **pressure-vessel-launch --terminate**).
 
 # OPTIONS
 
@@ -62,7 +70,9 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 **--info-fd** *FD*
 :   Print details of the server on *FD* (see **OUTPUT** below).
     This fd will be closed (reach end-of-file) when the server is ready.
-    The default is standard output, equivalent to **--info-fd=1**.
+    If a *COMMAND* is not specified, the default is standard output,
+    equivalent to **--info-fd=1**.
+    If a *COMMAND* is specified, there is no default.
 
 **--replace**
 :   When used with **--bus-name**, allow other
@@ -91,8 +101,14 @@ D-Bus session bus, and executes arbitrary commands as subprocesses.
 
 **pressure-vessel-launcher** prints zero or more lines of
 structured text on the file descriptor specified by **--info-fd**,
-and then closes both the **--info-fd** and standard output. The default
-**--info-fd** is standard output.
+and then closes the **--info-fd**.
+
+If a *COMMAND* is specified, standard output is used for that command's
+standard output, and there is no default **--info-fd**.
+
+Otherwise, standard output acts as the default **--info-fd**, and will
+be closed at the same time that the **--info-fd** is closed (even if
+different).
 
 The text printed to the **--info-fd** includes one or more of these:
 
@@ -116,15 +132,15 @@ The text printed to the **--info-fd** includes one or more of these:
     (such as **dbus-send --session**) to the session bus and sending
     method calls to _NAME_.
 
-Clients must wait until after either the **--info-fd** or standard output
-has been closed, or wait for the bus name to appear, before connecting
-by bus name.
+Before connecting, clients must wait until after at least one of these:
 
-Clients must wait until after either the **--info-fd** or standard output
-has been closed before connecting by socket name.
+* the **--info-fd** or standard output has been closed
+* the bus name (if used) has appeared
+* the *COMMAND* (if used) has started
 
 Unstructured diagnostic messages are printed on standard error,
-which remains open throughout.
+which remains open throughout. If a *COMMAND* is specified, it also
+inherits standard error.
 
 # EXIT STATUS
 

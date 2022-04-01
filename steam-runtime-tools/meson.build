@@ -95,6 +95,8 @@ libsteamrt_internals = [
     'log.c',
     'os-internal.h',
     'os.c',
+    'portal-listener.c',
+    'portal-listener-internal.h',
     'profiling-internal.h',
     'profiling.c',
     'resolve-in-sysroot-internal.h',
@@ -134,9 +136,53 @@ configure_file(
 
 srt_c_args = ['-include', 'steam-runtime-tools/_srt-config.h']
 
+launcher1 = gnome.gdbus_codegen(
+  'launcher1',
+  sources : 'com.steampowered.PressureVessel.Launcher1.xml',
+  interface_prefix : 'com.steampowered.PressureVessel.',
+  namespace : 'Pv',
+)
+
+launcher_codegen = static_library(
+  'steam-runtime-launcher-service-codegen',
+  sources : launcher1,
+  dependencies : [
+    gio_unix,
+  ],
+  c_args : silence_gdbus_codegen_warnings + srt_c_args,
+  include_directories : project_include_dirs,
+  install: false,
+)
+launcher_codegen_dep = declare_dependency(
+  link_with : launcher_codegen,
+  sources : launcher1[1],
+)
+
+systemd_dbus = gnome.gdbus_codegen(
+  'flatpak-systemd-dbus-generated',
+  sources : 'org.freedesktop.systemd1.xml',
+  interface_prefix : 'org.freedesktop.systemd1.',
+  namespace : 'Systemd',
+)
+
+systemd_codegen = static_library(
+  'pressure-vessel-systemd-codegen',
+  sources : systemd_dbus,
+  dependencies : [
+    gio_unix,
+  ],
+  c_args : silence_gdbus_codegen_warnings + srt_c_args,
+  include_directories : project_include_dirs,
+  install: false,
+)
+systemd_codegen_dep = declare_dependency(
+  link_with : systemd_codegen,
+  sources : systemd_dbus[1],
+)
+
 libsteamrt_generated_headers_dep = declare_dependency(
   include_directories : project_include_dirs,
-  sources : [enums[1]],
+  sources : [enums[1], launcher1[1], systemd_dbus[1]],
 )
 libsteamrt_static = static_library(
   'steam-runtime-tools-internal',

@@ -1,5 +1,5 @@
 /*
- * pressure-vessel-launcher — accept IPC requests to create child processes
+ * steam-runtime-launcher-service — accept IPC requests to create child processes
  *
  * Copyright © 2018 Red Hat, Inc.
  * Copyright © 2020 Collabora Ltd.
@@ -41,49 +41,147 @@
 #include <gio/gunixfdlist.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/launcher-internal.h"
+#include "steam-runtime-tools/log-internal.h"
+#include "steam-runtime-tools/portal-listener-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-utils-base-private.h"
-#include "launcher.h"
-#include "portal-listener.h"
-#include "utils.h"
 
-static PvPortalListener *global_listener;
+/* Absence of GConnectFlags; slightly more readable than a magic number */
+#define CONNECT_FLAGS_NONE (0)
 
-static GHashTable *client_pid_data_hash = NULL;
-static GMainLoop *main_loop;
-static PvLauncher1 *launcher;
+typedef struct
+{
+  GObject parent;
+  SrtPortalListener *listener;
+  GHashTable *client_pid_data_hash;
+  GMainLoop *main_loop;
+  PvLauncher1 *launcher;
+  char **wrapped_command;
+  guint exit_on_readable_id;
+  guint signals_id;
+  gboolean ever_exported_launcher;
+  int exit_status;
+} PvLauncherServer;
+
+typedef struct
+{
+  GObjectClass parent;
+} PvLauncherServerClass;
+
+#define PV_TYPE_LAUNCHER_SERVER (pv_launcher_server_get_type ())
+#define PV_LAUNCHER_SERVER(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), PV_TYPE_LAUNCHER_SERVER, PvLauncherServer))
+#define PV_LAUNCHER_SERVER_CLASS(cls) (G_TYPE_CHECK_CLASS_CAST ((cls), PV_TYPE_LAUNCHER_SERVER, PvLauncherServerClass))
+#define PV_IS_LAUNCHER_SERVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), PV_TYPE_LAUNCHER_SERVER))
+#define PV_IS_LAUNCHER_SERVER_CLASS(cls) (G_TYPE_CHECK_CLASS_TYPE ((cls), PV_TYPE_LAUNCHER_SERVER))
+#define PV_LAUNCHER_SERVER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), PV_TYPE_LAUNCHER_SERVER, PvLauncherServerClass)
+GType pv_launcher_server_get_type (void);
+
+G_DEFINE_TYPE (PvLauncherServer, pv_launcher_server, G_TYPE_OBJECT)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvLauncherServer, g_object_unref)
+
+static void
+pv_launcher_server_init (PvLauncherServer *self)
+{
+  g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
+  self->exit_status = -1;
+}
+
+static void
+pv_launcher_server_stop (PvLauncherServer *self)
+{
+  if (self->exit_on_readable_id > 0)
+    {
+      g_source_remove (self->exit_on_readable_id);
+      self->exit_on_readable_id = 0;
+    }
+
+  if (self->signals_id > 0)
+    {
+      g_source_remove (self->signals_id);
+      self->signals_id = 0;
+    }
+}
+
+static void
+pv_launcher_server_dispose (GObject *object)
+{
+  PvLauncherServer *self = PV_LAUNCHER_SERVER (object);
+
+  pv_launcher_server_stop (self);
+  g_clear_object (&self->listener);
+  g_clear_pointer (&self->client_pid_data_hash, g_hash_table_unref);
+  g_clear_pointer (&self->main_loop, g_main_loop_unref);
+  g_clear_object (&self->launcher);
+
+  G_OBJECT_CLASS (pv_launcher_server_parent_class)->dispose (object);
+}
+
+static void
+pv_launcher_server_class_init (PvLauncherServerClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->dispose = pv_launcher_server_dispose;
+}
 
 static void
 skeleton_died_cb (gpointer data)
 {
+  PvLauncherServer *self = data;
+
+  g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
   g_debug ("skeleton finalized, exiting");
-  g_main_loop_quit (main_loop);
+
+  if (self->main_loop != NULL)
+    g_main_loop_quit (self->main_loop);
+
+  /* paired with ref in pv_launcher_server_export */
+  g_object_unref (self);
 }
 
 static gboolean
 unref_skeleton_in_timeout_cb (gpointer user_data)
 {
-  g_clear_object (&launcher);
+  PvLauncherServer *self = user_data;
+
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self), G_SOURCE_REMOVE);
+  g_clear_object (&self->launcher);
   return G_SOURCE_REMOVE;
 }
 
 static void
-unref_skeleton_in_timeout (void)
+pv_launcher_server_unref_skeleton_in_timeout (PvLauncherServer *self)
 {
-  pv_portal_listener_release_name (global_listener);
+  g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
+
+  if (self->listener != NULL)
+    _srt_portal_listener_stop_listening (self->listener);
 
   /* After we've lost the name we drop the main ref on the helper
      so that we'll exit when it drops to zero. However, if there are
      outstanding calls these will keep the refcount up during the
      execution of them. We do the unref on a timeout to make sure
-     we're completely draining the queue of (stale) requests. */
-  g_timeout_add (500, unref_skeleton_in_timeout_cb, NULL);
+     we're completely draining the queue of (stale) requests.
+
+     If we are exiting because a wrapped command exited, and we are
+     listening on a custom GDBusServer rather than on the session bus,
+     then it is possible that we never even exported the skeleton. If
+     that's the case, then we can short-cut this and just stop the
+     main loop - and in fact, we must do that, because skeleton_died_cb()
+     will never happen. */
+  if (self->ever_exported_launcher)
+    g_timeout_add_full (G_PRIORITY_DEFAULT, 500, unref_skeleton_in_timeout_cb,
+                        g_object_ref (self), g_object_unref);
+  else if (self->main_loop != NULL)
+    g_main_loop_quit (self->main_loop);
 }
 
 typedef struct
 {
+  PvLauncherServer *server;   /* (unowned) to avoid circular ref */
   GDBusConnection *connection;
   GPid pid;
   gchar *client;
@@ -100,7 +198,8 @@ pid_data_free (PidData *data)
 }
 
 static void
-terminate_children (int signum)
+pv_launcher_server_terminate_children (PvLauncherServer *self,
+                                       int signum)
 {
   GHashTableIter iter;
   PidData *pid_data = NULL;
@@ -108,7 +207,7 @@ terminate_children (int signum)
 
   /* pass the signal on to each process group led by one of our
    * child processes */
-  g_hash_table_iter_init (&iter, client_pid_data_hash);
+  g_hash_table_iter_init (&iter, self->client_pid_data_hash);
 
   while (g_hash_table_iter_next (&iter, NULL, &value))
     {
@@ -123,28 +222,33 @@ child_watch_died (GPid     pid,
                   gpointer user_data)
 {
   PidData *pid_data = user_data;
+  g_autoptr(PvLauncherServer) self = g_object_ref (pid_data->server);
   g_autoptr(GVariant) signal_variant = NULL;
   gboolean terminate_after = pid_data->terminate_after;
 
   g_debug ("Child %d died: wait status %d", pid_data->pid, status);
 
-  signal_variant = g_variant_ref_sink (g_variant_new ("(uu)", pid, status));
-  g_dbus_connection_emit_signal (pid_data->connection,
-                                 pid_data->client,
-                                 LAUNCHER_PATH,
-                                 LAUNCHER_IFACE,
-                                 "ProcessExited",
-                                 signal_variant,
-                                 NULL);
+  if (pid_data->connection != NULL)
+    {
+      /* Note that pid_data->client can be NULL on peer-to-peer sockets. */
+      signal_variant = g_variant_ref_sink (g_variant_new ("(uu)", pid, status));
+      g_dbus_connection_emit_signal (pid_data->connection,
+                                     pid_data->client,
+                                     LAUNCHER_PATH,
+                                     LAUNCHER_IFACE,
+                                     "ProcessExited",
+                                     signal_variant,
+                                     NULL);
+    }
 
   /* This frees the pid_data, so be careful */
-  g_hash_table_remove (client_pid_data_hash, GUINT_TO_POINTER (pid_data->pid));
+  g_hash_table_remove (self->client_pid_data_hash, GUINT_TO_POINTER (pid_data->pid));
 
   if (terminate_after)
     {
       g_debug ("Main pid %d died, terminating...", pid);
-      terminate_children (SIGTERM);
-      unref_skeleton_in_timeout ();
+      pv_launcher_server_terminate_children (self, SIGTERM);
+      pv_launcher_server_unref_skeleton_in_timeout (self);
     }
 }
 
@@ -159,6 +263,7 @@ typedef struct
 {
   FdMapEntry *fd_map;
   int         fd_map_len;
+  gboolean    keep_tty_session;
 } ChildSetupData;
 
 static void
@@ -180,8 +285,8 @@ child_setup_func (gpointer user_data)
   /* Unblock all signals */
   sigemptyset (&set);
   if (pthread_sigmask (SIG_SETMASK, &set, NULL) == -1)
-    pv_async_signal_safe_error ("Failed to unblock signals when starting child\n",
-                                LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("Failed to unblock signals when starting child\n",
+                                  LAUNCH_EX_FAILED);
 
   /* Reset the handlers for all signals to their defaults. */
   for (i = 1; i < NSIG; i++)
@@ -214,8 +319,11 @@ child_setup_func (gpointer user_data)
 
   /* We become our own session and process group, because it never makes sense
      to share the flatpak-session-helper dbus activated process group */
-  setsid ();
-  setpgid (0, 0);
+  if (!data->keep_tty_session)
+    {
+      setsid ();
+      setpgid (0, 0);
+    }
 }
 
 static gboolean
@@ -227,7 +335,8 @@ handle_launch (PvLauncher1           *object,
                GVariant              *arg_fds,
                GVariant              *arg_envs,
                guint                  arg_flags,
-               GVariant              *arg_options)
+               GVariant              *arg_options,
+               PvLauncherServer      *self)
 {
   g_autoptr(GError) error = NULL;
   ChildSetupData child_setup_data = { NULL };
@@ -241,6 +350,9 @@ handle_launch (PvLauncher1           *object,
   g_auto(GStrv) unset_env = NULL;
   gint32 max_fd;
   gboolean terminate_after = FALSE;
+
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self),
+                        G_DBUS_METHOD_INVOCATION_UNHANDLED);
 
   if (fd_list != NULL)
     fds = g_unix_fd_list_peek_fds (fd_list, &fds_len);
@@ -330,7 +442,7 @@ handle_launch (PvLauncher1           *object,
     }
   else
     {
-      env = g_strdupv (global_listener->original_environ);
+      env = g_strdupv (self->listener->original_environ);
     }
 
   n_envs = g_variant_n_children (arg_envs);
@@ -360,7 +472,7 @@ handle_launch (PvLauncher1           *object,
     }
 
   if (arg_cwd_path == NULL)
-    env = g_environ_setenv (env, "PWD", global_listener->original_cwd_l,
+    env = g_environ_setenv (env, "PWD", self->listener->original_cwd_l,
                             TRUE);
   else
     env = g_environ_setenv (env, "PWD", arg_cwd_path, TRUE);
@@ -391,6 +503,7 @@ handle_launch (PvLauncher1           *object,
     }
 
   pid_data = g_new0 (PidData, 1);
+  pid_data->server = self;
   pid_data->connection = g_object_ref (g_dbus_method_invocation_get_connection (invocation));
   pid_data->pid = pid;
   pid_data->client = g_strdup (g_dbus_method_invocation_get_sender (invocation));
@@ -403,7 +516,8 @@ handle_launch (PvLauncher1           *object,
 
   g_debug ("Client Pid is %d", pid_data->pid);
 
-  g_hash_table_replace (client_pid_data_hash, GUINT_TO_POINTER (pid_data->pid),
+  g_hash_table_replace (self->client_pid_data_hash,
+                        GUINT_TO_POINTER (pid_data->pid),
                         pid_data);
 
   pv_launcher1_complete_launch (object, invocation, NULL, pid);
@@ -415,13 +529,17 @@ handle_send_signal (PvLauncher1           *object,
                     GDBusMethodInvocation *invocation,
                     guint                  arg_pid,
                     guint                  arg_signal,
-                    gboolean               arg_to_process_group)
+                    gboolean               arg_to_process_group,
+                    PvLauncherServer      *self)
 {
   PidData *pid_data = NULL;
 
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self),
+                        G_DBUS_METHOD_INVOCATION_UNHANDLED);
   g_debug ("SendSignal(%d, %d)", arg_pid, arg_signal);
 
-  pid_data = g_hash_table_lookup (client_pid_data_hash, GUINT_TO_POINTER (arg_pid));
+  pid_data = g_hash_table_lookup (self->client_pid_data_hash,
+                                  GUINT_TO_POINTER (arg_pid));
   if (pid_data == NULL ||
       pid_data->connection != g_dbus_method_invocation_get_connection (invocation) ||
       g_strcmp0 (pid_data->client, g_dbus_method_invocation_get_sender (invocation)) != 0)
@@ -439,18 +557,21 @@ handle_send_signal (PvLauncher1           *object,
   else
     kill (pid_data->pid, arg_signal);
 
-  pv_launcher1_complete_send_signal (launcher, invocation);
+  pv_launcher1_complete_send_signal (self->launcher, invocation);
 
   return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
 static gboolean
 handle_terminate (PvLauncher1           *object,
-                  GDBusMethodInvocation *invocation)
+                  GDBusMethodInvocation *invocation,
+                  PvLauncherServer      *self)
 {
-  terminate_children (SIGTERM);
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self),
+                        G_DBUS_METHOD_INVOCATION_UNHANDLED);
+  pv_launcher_server_terminate_children (self, SIGTERM);
   pv_launcher1_complete_terminate (object, invocation);
-  unref_skeleton_in_timeout ();
+  pv_launcher_server_unref_skeleton_in_timeout (self);
   return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
@@ -463,8 +584,10 @@ name_owner_changed (GDBusConnection *connection,
                     GVariant        *parameters,
                     gpointer         user_data)
 {
+  PvLauncherServer *self = user_data;
   const char *name, *from, *to;
 
+  g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
   g_variant_get (parameters, "(&s&s&s)", &name, &from, &to);
 
   if (name[0] == ':' &&
@@ -476,12 +599,12 @@ name_owner_changed (GDBusConnection *connection,
       gpointer value = NULL;
       GList *list = NULL, *l;
 
-      g_hash_table_iter_init (&iter, client_pid_data_hash);
+      g_hash_table_iter_init (&iter, self->client_pid_data_hash);
       while (g_hash_table_iter_next (&iter, NULL, &value))
         {
           pid_data = value;
 
-          if (g_str_equal (pid_data->client, name))
+          if (g_strcmp0 (pid_data->client, name) == 0)
             list = g_list_prepend (list, pid_data);
         }
 
@@ -497,30 +620,103 @@ name_owner_changed (GDBusConnection *connection,
 }
 
 static gboolean
-export_launcher (GDBusConnection *connection,
-                 GError **error)
+pv_launcher_server_finish_startup (PvLauncherServer *self,
+                                   const char *bus_name,
+                                   GError **error)
 {
-  if (launcher == NULL)
+
+  if (self->wrapped_command != NULL)
     {
-      launcher = pv_launcher1_skeleton_new ();
+      ChildSetupData child_setup_data = { NULL };
+      g_autofree FdMapEntry *fd_map = NULL;
+      GPid pid = -1;
+      PidData *pid_data;
 
-      g_object_set_data_full (G_OBJECT (launcher), "track-alive",
-                              launcher,   /* an arbitrary non-NULL pointer */
-                              skeleton_died_cb);
+      /* Map our original stdout back to the child */
+      fd_map = g_new0 (FdMapEntry, 1);
+      fd_map[0].from = fileno (self->listener->original_stdout);
+      fd_map[0].to = STDOUT_FILENO;
+      fd_map[0].final = STDOUT_FILENO;
 
-      pv_launcher1_set_version (PV_LAUNCHER1 (launcher), 0);
-      pv_launcher1_set_supported_launch_flags (PV_LAUNCHER1 (launcher),
-                                               PV_LAUNCH_FLAGS_MASK);
+      g_debug ("Map stdout %d -> %d -> %d",
+               fd_map[0].from, fd_map[0].to, fd_map[0].final);
+      child_setup_data.fd_map = fd_map;
+      child_setup_data.fd_map_len = 1;
+      child_setup_data.keep_tty_session = TRUE;
 
-      g_signal_connect (launcher, "handle-launch",
-                        G_CALLBACK (handle_launch), NULL);
-      g_signal_connect (launcher, "handle-send-signal",
-                        G_CALLBACK (handle_send_signal), NULL);
-      g_signal_connect (launcher, "handle-terminate",
-                        G_CALLBACK (handle_terminate), NULL);
+      /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see
+       * flatpak_close_fds_workaround */
+      if (!g_spawn_async_with_pipes (NULL,
+                                     self->wrapped_command,
+                                     NULL,
+                                     (G_SPAWN_SEARCH_PATH
+                                      | G_SPAWN_DO_NOT_REAP_CHILD
+                                      | G_SPAWN_LEAVE_DESCRIPTORS_OPEN
+                                      | G_SPAWN_CHILD_INHERITS_STDIN),
+                                     child_setup_func, &child_setup_data,
+                                     &pid,
+                                     NULL,
+                                     NULL,
+                                     NULL,
+                                     error))
+        {
+          g_prefix_error (error, "Unable to start wrapped command: ");
+          return FALSE;
+        }
+
+      pid_data = g_new0 (PidData, 1);
+      pid_data->server = self;
+      pid_data->connection = NULL;
+      pid_data->pid = pid;
+      pid_data->client = NULL;
+      pid_data->terminate_after = TRUE;
+      pid_data->child_watch = g_child_watch_add_full (G_PRIORITY_DEFAULT,
+                                                      pid,
+                                                      child_watch_died,
+                                                      pid_data,
+                                                      NULL);
+      g_debug ("Wrapped command pid is %d", pid_data->pid);
+      g_hash_table_replace (self->client_pid_data_hash,
+                            GUINT_TO_POINTER (pid_data->pid),
+                            pid_data);
     }
 
-  if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (launcher),
+  self->exit_status = 0;
+  _srt_portal_listener_close_info_fh (self->listener, bus_name);
+  return TRUE;
+}
+
+static gboolean
+pv_launcher_server_export (PvLauncherServer *self,
+                           GDBusConnection *connection,
+                           GError **error)
+{
+  if (self->launcher == NULL)
+    {
+      self->ever_exported_launcher = TRUE;
+      self->launcher = pv_launcher1_skeleton_new ();
+
+      g_object_set_data_full (G_OBJECT (self->launcher), "track-alive",
+                              /* paired with unref in skeleton_died_cb */
+                              g_object_ref (self),
+                              skeleton_died_cb);
+
+      pv_launcher1_set_version (PV_LAUNCHER1 (self->launcher), 0);
+      pv_launcher1_set_supported_launch_flags (PV_LAUNCHER1 (self->launcher),
+                                               PV_LAUNCH_FLAGS_MASK);
+
+      g_signal_connect_object (self->launcher, "handle-launch",
+                               G_CALLBACK (handle_launch), self,
+                               CONNECT_FLAGS_NONE);
+      g_signal_connect_object (self->launcher, "handle-send-signal",
+                               G_CALLBACK (handle_send_signal), self,
+                               CONNECT_FLAGS_NONE);
+      g_signal_connect_object (self->launcher, "handle-terminate",
+                               G_CALLBACK (handle_terminate), self,
+                               CONNECT_FLAGS_NONE);
+    }
+
+  if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (self->launcher),
                                          connection,
                                          LAUNCHER_PATH,
                                          error))
@@ -530,12 +726,12 @@ export_launcher (GDBusConnection *connection,
 }
 
 static void
-on_bus_acquired (PvPortalListener *listener,
+on_bus_acquired (SrtPortalListener *listener,
                  GDBusConnection *connection,
                  gpointer user_data)
 {
+  PvLauncherServer *server = user_data;
   g_autoptr(GError) error = NULL;
-  int *ret = user_data;
 
   g_debug ("Bus acquired, creating skeleton");
 
@@ -548,42 +744,50 @@ on_bus_acquired (PvPortalListener *listener,
                                       NULL,
                                       G_DBUS_SIGNAL_FLAGS_NONE,
                                       name_owner_changed,
-                                      NULL, NULL);
+                                      server, NULL);
 
-  if (!export_launcher (connection, &error))
+  if (!pv_launcher_server_export (server, connection, &error))
     {
-      pv_log_failure ("Unable to export object: %s", error->message);
-      *ret = EX_SOFTWARE;
-      g_main_loop_quit (main_loop);
+      _srt_log_failure ("Unable to export object: %s", error->message);
+      server->exit_status = EX_SOFTWARE;
+      g_main_loop_quit (server->main_loop);
     }
 }
 
 static void
-on_name_acquired (PvPortalListener *listener,
+on_name_acquired (SrtPortalListener *listener,
                   GDBusConnection *connection,
                   const gchar *name,
                   gpointer user_data)
 {
-  int *ret = user_data;
+  PvLauncherServer *server = user_data;
 
   g_debug ("Name acquired");
 
   /* If exporting the launcher didn't fail, then we are now happy */
-  if (*ret == EX_UNAVAILABLE)
+  if (server->exit_status == EX_UNAVAILABLE)
     {
-      *ret = 0;
-      pv_portal_listener_close_info_fh (global_listener, name);
+      g_autoptr(GError) error = NULL;
+
+      if (!pv_launcher_server_finish_startup (server, name, &error))
+        {
+          _srt_log_failure ("%s", error->message);
+          g_main_loop_quit (server->main_loop);
+        }
     }
 }
 
 static void
-on_name_lost (PvPortalListener *listener,
+on_name_lost (SrtPortalListener *listener,
               GDBusConnection *connection,
               const gchar *name,
               gpointer user_data)
 {
+  PvLauncherServer *server = user_data;
+
+  g_return_if_fail (PV_IS_LAUNCHER_SERVER (server));
   g_debug ("Name lost");
-  unref_skeleton_in_timeout ();
+  pv_launcher_server_unref_skeleton_in_timeout (server);
 }
 
 /*
@@ -595,23 +799,29 @@ peer_connection_closed_cb (GDBusConnection *connection,
                            GError *error,
                            gpointer user_data)
 {
+  PvLauncherServer *server = user_data;
+
+  g_return_if_fail (PV_IS_LAUNCHER_SERVER (server));
   /* Paired with g_object_ref() in new_connection_cb() */
   g_object_unref (connection);
 }
 
 static gboolean
-new_connection_cb (PvPortalListener *listener,
+new_connection_cb (SrtPortalListener *listener,
                    GDBusConnection *connection,
                    gpointer user_data)
 {
+  PvLauncherServer *server = user_data;
   GError *error = NULL;
 
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (server), G_DBUS_METHOD_INVOCATION_HANDLED);
   /* Paired with g_object_unref() in peer_connection_closed_cb() */
   g_object_ref (connection);
-  g_signal_connect (connection, "closed",
-                    G_CALLBACK (peer_connection_closed_cb), NULL);
+  g_signal_connect_object (connection, "closed",
+                           G_CALLBACK (peer_connection_closed_cb), server,
+                           CONNECT_FLAGS_NONE);
 
-  if (!export_launcher (connection, &error))
+  if (!pv_launcher_server_export (server, connection, &error))
     {
       g_warning ("Unable to export object: %s", error->message);
       g_dbus_connection_close (connection, NULL, NULL, NULL);
@@ -624,10 +834,13 @@ new_connection_cb (PvPortalListener *listener,
 static gboolean
 signal_handler (int sfd,
                 G_GNUC_UNUSED GIOCondition condition,
-                G_GNUC_UNUSED gpointer data)
+                gpointer data)
 {
+  PvLauncherServer *server = data;
   struct signalfd_siginfo info;
   ssize_t size;
+
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (server), G_SOURCE_CONTINUE);
 
   size = read (sfd, &info, sizeof (info));
 
@@ -645,21 +858,25 @@ signal_handler (int sfd,
     }
   else
     {
-      terminate_children (info.ssi_signo);
-      g_main_loop_quit (main_loop);
+      pv_launcher_server_terminate_children (server, info.ssi_signo);
+
+      if (server->main_loop != NULL)
+        g_main_loop_quit (server->main_loop);
     }
 
   return G_SOURCE_CONTINUE;
 }
 
-static guint
-connect_to_signals (void)
+static gboolean
+pv_launcher_server_connect_to_signals (PvLauncherServer *self,
+                                       GError **error)
 {
   static int signals[] = { SIGHUP, SIGINT, SIGTERM };
   sigset_t mask;
   guint i;
   int sfd;
 
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self), FALSE);
   sigemptyset (&mask);
 
   for (i = 0; i < G_N_ELEMENTS (signals); i++)
@@ -669,8 +886,8 @@ connect_to_signals (void)
 
   if (sfd < 0)
     {
-      pv_log_failure ("Unable to watch signals: %s", g_strerror (errno));
-      return 0;
+      glnx_throw_errno_prefix (error, "Unable to watch signals");
+      return FALSE;
     }
 
   /*
@@ -685,7 +902,10 @@ connect_to_signals (void)
    */
   pthread_sigmask (SIG_BLOCK, &mask, NULL);
 
-  return g_unix_fd_add (sfd, G_IO_IN, signal_handler, NULL);
+  self->signals_id = g_unix_fd_add_full (G_PRIORITY_DEFAULT, sfd, G_IO_IN,
+                                         signal_handler,
+                                         g_object_ref (self), g_object_unref);
+  return TRUE;
 }
 
 /*
@@ -751,22 +971,26 @@ exit_on_readable_cb (int fd,
                      GIOCondition condition,
                      gpointer user_data)
 {
-  guint *id_p = user_data;
+  PvLauncherServer *server = user_data;
 
-  terminate_children (SIGTERM);
-  g_main_loop_quit (main_loop);
-  *id_p = 0;
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (server), G_SOURCE_REMOVE);
+  pv_launcher_server_terminate_children (server, SIGTERM);
+
+  if (server->main_loop != NULL)
+    g_main_loop_quit (server->main_loop);
+
+  server->exit_on_readable_id = 0;
   return G_SOURCE_REMOVE;
 }
 
 static gboolean
-set_up_exit_on_readable (int fd,
-                         guint *id_p,
-                         GError **error)
+pv_launcher_server_set_up_exit_on_readable (PvLauncherServer *server,
+                                            int fd,
+                                            GError **error)
 {
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (server), FALSE);
   g_return_val_if_fail (fd >= 0, FALSE);
-  g_return_val_if_fail (id_p != NULL, FALSE);
-  g_return_val_if_fail (*id_p == 0, FALSE);
+  g_return_val_if_fail (server->exit_on_readable_id == 0, FALSE);
 
   if (fd == STDOUT_FILENO || fd == STDERR_FILENO)
     {
@@ -779,7 +1003,11 @@ set_up_exit_on_readable (int fd,
   if (fd < 0)
     return FALSE;
 
-  *id_p = g_unix_fd_add (fd, G_IO_IN|G_IO_ERR|G_IO_HUP, exit_on_readable_cb, id_p);
+  server->exit_on_readable_id = g_unix_fd_add_full (G_PRIORITY_DEFAULT,
+                                                    fd, G_IO_IN|G_IO_ERR|G_IO_HUP,
+                                                    exit_on_readable_cb,
+                                                    g_object_ref (server),
+                                                    g_object_unref);
   return TRUE;
 }
 
@@ -838,22 +1066,22 @@ main (int argc,
       char *argv[])
 {
   g_autoptr(GOptionContext) context = NULL;
-  guint signals_id = 0;
-  guint exit_on_readable_id = 0;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
-  int ret = EX_USAGE;
   GBusNameOwnerFlags flags;
   int result;
+  PvLauncherServer *server = g_object_new (PV_TYPE_LAUNCHER_SERVER, NULL);
 
-  global_listener = pv_portal_listener_new ();
+  server->exit_status = EX_USAGE;
+  server->listener = _srt_portal_listener_new ();
+  server->main_loop = g_main_loop_new (NULL, FALSE);
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("pressure-vessel-launcher");
+  g_set_prgname ("steam-runtime-launcher-service");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   context = g_option_context_new ("");
   g_option_context_set_summary (context,
@@ -863,11 +1091,23 @@ main (int argc,
   g_option_context_add_main_entries (context, options, NULL);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
+  g_return_val_if_fail (argc >= 1, EX_USAGE);
+  g_return_val_if_fail (argv[argc] == NULL, EX_USAGE);
+
   if (!g_option_context_parse (context, &argc, &argv, error))
     {
-      ret = EX_USAGE;
+      server->exit_status = EX_USAGE;
       goto out;
     }
+
+  if (argc >= 2 && strcmp (argv[1], "--") == 0)
+    {
+      argv++;
+      argc--;
+    }
+
+  if (argc > 1)
+    server->wrapped_command = &argv[1];
 
   if (opt_version)
     {
@@ -875,31 +1115,64 @@ main (int argc,
                " Package: pressure-vessel\n"
                " Version: %s\n",
                g_get_prgname (), VERSION);
-      ret = 0;
+      server->exit_status = 0;
       goto out;
     }
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   if ((result = _srt_set_compatible_resource_limits (0)) < 0)
     g_warning ("Unable to set normal resource limits: %s",
                g_strerror (-result));
 
-  if (!pv_portal_listener_set_up_info_fd (global_listener,
-                                          opt_info_fd,
-                                          error))
+  /* We want to leave stdin open for the child process, and anyway
+   * it's meant to be read-only */
+  if (opt_info_fd == STDIN_FILENO)
     {
-      ret = EX_OSERR;
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --info-fd=%d (standard input)",
+                   STDIN_FILENO);
+      goto out;
+    }
+
+  /* We want to leave stderr open for the child process */
+  if (opt_info_fd == STDERR_FILENO)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --info-fd=%d (standard error)",
+                   STDERR_FILENO);
+      goto out;
+    }
+
+  if (server->wrapped_command != NULL && opt_info_fd == STDOUT_FILENO)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --info-fd=%d with a COMMAND",
+                   STDOUT_FILENO);
+      goto out;
+    }
+
+  /* opt_info_fd defaults to stdout if there is no command, or -1
+   * (meaning do not use) if there is a command */
+  if (server->wrapped_command == NULL && opt_info_fd < 0)
+    opt_info_fd = STDOUT_FILENO;
+
+  if (!_srt_portal_listener_set_up_info_fd (server->listener,
+                                            opt_info_fd,
+                                            error))
+    {
+      server->exit_status = EX_OSERR;
       goto out;
     }
 
   if (opt_exit_on_readable_fd >= 0)
     {
-      if (!set_up_exit_on_readable (opt_exit_on_readable_fd,
-                                    &exit_on_readable_id, error))
+      if (!pv_launcher_server_set_up_exit_on_readable (server,
+                                                       opt_exit_on_readable_fd,
+                                                       error))
         {
-          ret = EX_OSERR;
+          server->exit_status = EX_OSERR;
           goto out;
         }
     }
@@ -909,103 +1182,91 @@ main (int argc,
    * the signal mask is per-thread. We need all threads to have the same
    * mask, otherwise a thread that doesn't have the mask will receive
    * process-directed signals, causing the whole process to exit. */
-  signals_id = connect_to_signals ();
-
-  if (signals_id == 0)
+  if (!pv_launcher_server_connect_to_signals (server, error))
     {
-      ret = EX_OSERR;
+      server->exit_status = EX_OSERR;
       goto out;
     }
 
   _srt_setenv_disable_gio_modules ();
 
-  if (argc >= 2 && strcmp (argv[1], "--") == 0)
-    {
-      argv++;
-      argc--;
-    }
+  server->client_pid_data_hash = g_hash_table_new_full (NULL, NULL, NULL,
+                                                        (GDestroyNotify) pid_data_free);
 
-  if (argc != 1)
-    {
-      glnx_throw (error, "Usage: %s [OPTIONS]", g_get_prgname ());
-      goto out;
-    }
-
-  client_pid_data_hash = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) pid_data_free);
-
-  if (!pv_portal_listener_check_socket_arguments (global_listener,
-                                                  opt_bus_name,
-                                                  opt_socket,
-                                                  opt_socket_directory,
-                                                  error))
+  if (!_srt_portal_listener_check_socket_arguments (server->listener,
+                                                    opt_bus_name,
+                                                    opt_socket,
+                                                    opt_socket_directory,
+                                                    error))
     goto out;
 
   /* Exit with this status until we know otherwise */
-  ret = EX_SOFTWARE;
+  server->exit_status = EX_SOFTWARE;
 
-  g_signal_connect (global_listener,
-                    "new-peer-connection", G_CALLBACK (new_connection_cb),
-                    NULL);
-  g_signal_connect (global_listener,
-                    "session-bus-connected", G_CALLBACK (on_bus_acquired),
-                    &ret);
-  g_signal_connect (global_listener,
-                    "session-bus-name-acquired", G_CALLBACK (on_name_acquired),
-                    &ret);
-  g_signal_connect (global_listener,
-                    "session-bus-name-lost", G_CALLBACK (on_name_lost),
-                    NULL);
+  g_signal_connect_object (server->listener,
+                           "new-peer-connection", G_CALLBACK (new_connection_cb),
+                           server, CONNECT_FLAGS_NONE);
+  g_signal_connect_object (server->listener,
+                           "session-bus-connected", G_CALLBACK (on_bus_acquired),
+                           server, CONNECT_FLAGS_NONE);
+  g_signal_connect_object (server->listener,
+                           "session-bus-name-acquired", G_CALLBACK (on_name_acquired),
+                           server, CONNECT_FLAGS_NONE);
+  g_signal_connect_object (server->listener,
+                           "session-bus-name-lost", G_CALLBACK (on_name_lost),
+                           server, CONNECT_FLAGS_NONE);
 
   flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
 
   if (opt_replace)
     flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
 
-  if (!pv_portal_listener_listen (global_listener,
-                                  opt_bus_name,
-                                  flags,
-                                  opt_socket,
-                                  opt_socket_directory,
-                                  error))
+  if (!_srt_portal_listener_listen (server->listener,
+                                    opt_bus_name,
+                                    flags,
+                                    opt_socket,
+                                    opt_socket_directory,
+                                    error))
     goto out;
 
+  server->exit_status = EX_UNAVAILABLE;
+
   /* If we're using the bus name method, we can't exit successfully
-   * until we claimed the bus name at least once. Otherwise we're
-   * already content. */
-  if (opt_bus_name != NULL)
-    ret = EX_UNAVAILABLE;
-  else
-    ret = 0;
+   * until we claimed the bus name at least once: see on_name_acquired().
+   * Otherwise we're already content. */
+  if (opt_bus_name == NULL)
+    {
+      if (!pv_launcher_server_finish_startup (server, NULL, error))
+        goto out;
+    }
 
   g_debug ("Entering main loop");
 
-  main_loop = g_main_loop_new (NULL, FALSE);
-  g_main_loop_run (main_loop);
+  g_main_loop_run (server->main_loop);
 
 out:
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
-
-  if (exit_on_readable_id > 0)
-    g_source_remove (exit_on_readable_id);
-
-  if (signals_id > 0)
-    g_source_remove (signals_id);
+    _srt_log_failure ("%s", local_error->message);
 
   g_free (opt_bus_name);
   g_free (opt_socket);
   g_free (opt_socket_directory);
-  g_clear_object (&global_listener);
 
-  if (local_error == NULL)
-    ret = 0;
-  else if (local_error->domain == G_OPTION_ERROR)
-    ret = EX_USAGE;
-  else
-    ret = EX_UNAVAILABLE;
+  if (server->exit_status == -1)
+    {
+      if (local_error == NULL)
+        server->exit_status = 0;
+      else if (local_error->domain == G_OPTION_ERROR)
+        server->exit_status = EX_USAGE;
+      else
+        server->exit_status = EX_UNAVAILABLE;
+    }
 
+  pv_launcher_server_stop (server);
+  result = server->exit_status;
+  g_clear_object (&server);
   g_clear_error (&local_error);
 
-  g_debug ("Exiting with status %d", ret);
-  return ret;
+  g_debug ("Exiting with status %d", result);
+  return result;
 }

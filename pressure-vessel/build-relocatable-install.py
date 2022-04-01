@@ -101,11 +101,11 @@ SCRIPTS = [
 ]
 EXECUTABLES = [
     'pressure-vessel-adverb',
-    'pressure-vessel-launch',
-    'pressure-vessel-launcher',
     'pressure-vessel-try-setlocale',
     'pressure-vessel-wrap',
     'pv-bwrap',
+    'steam-runtime-launch-client',
+    'steam-runtime-launcher-service',
     'steam-runtime-system-info',
 ]
 

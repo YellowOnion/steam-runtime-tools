@@ -1,6 +1,6 @@
-
+/*<private_header>*/
 /*
- * pressure-vessel-launcher — accept IPC requests to create child processes
+ * steam-runtime-launcher-service — accept IPC requests to create child processes
  *
  * Copyright © 2020 Collabora Ltd.
  *
@@ -31,7 +31,11 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "libglnx/libglnx.h"
 
-#include "launcher1.h"
+#include "steam-runtime-tools/launcher1.h"
+
+#define DBUS_NAME_DBUS "org.freedesktop.DBus"
+#define DBUS_INTERFACE_DBUS DBUS_NAME_DBUS
+#define DBUS_PATH_DBUS "/org/freedesktop/DBus"
 
 #define LAUNCHER_IFACE "com.steampowered.PressureVessel.Launcher1"
 #define LAUNCHER_PATH "/com/steampowered/PressureVessel/Launcher1"

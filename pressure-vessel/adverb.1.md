@@ -298,7 +298,7 @@ to preserve Steam's traditional behaviour for native Linux games (where
 all background processes must exit before the game is considered to have
 exited).
 
-When running **pressure-vessel-launcher** in a container, the adverb looks
+When running **steam-runtime-launcher-service** in a container, the adverb looks
 more like this:
 
     bwrap \
@@ -310,10 +310,10 @@ more like this:
         --subreaper \
         --terminate-timeout=10 \
         -- \
-    /path/to/pressure-vessel-launcher ...
+    /path/to/steam-runtime-launcher-service ...
 
-so that when the **pressure-vessel-launcher** is terminated by
-**pressure-vessel-launch --terminate**, or when the **bwrap** process
+so that when the **steam-runtime-launcher-service** is terminated by
+**steam-runtime-launch-client --terminate**, or when the **bwrap** process
 receives a fatal signal, the **pressure-vessel-adverb** process will
 gracefully terminate any remaining child/descendant processes before
 exiting itself.

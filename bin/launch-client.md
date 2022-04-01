@@ -1,5 +1,5 @@
 ---
-title: pressure-vessel-launch
+title: steam-runtime-launch-client
 section: 1
 ...
 
@@ -10,11 +10,11 @@ SPDX-License-Identifier: MIT
 
 # NAME
 
-pressure-vessel-launch - client to launch processes in a container
+steam-runtime-launch-client - client to launch processes in a container
 
 # SYNOPSIS
 
-**pressure-vessel-launch**
+**steam-runtime-launch-client**
 [**--clear-env**]
 [**--directory** *DIR*]
 [**--env** _VAR_**=**_VALUE_]
@@ -27,16 +27,16 @@ pressure-vessel-launch - client to launch processes in a container
 [**--**]
 *COMMAND* [*ARGUMENTS...*]
 
-**pressure-vessel-launch**
+**steam-runtime-launch-client**
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 **--terminate**
 
 # DESCRIPTION
 
-**pressure-vessel-launch** connects to an `AF_UNIX` socket established
-by **pressure-vessel-launcher**(1), and executes an arbitrary command
-as a subprocess of **pressure-vessel-launcher**.
+**steam-runtime-launch-client** connects to an `AF_UNIX` socket established
+by **steam-runtime-launcher-service**(1), and executes an arbitrary command
+as a subprocess of **steam-runtime-launcher-service**.
 
 # OPTIONS
 
@@ -58,7 +58,7 @@ as a subprocess of **pressure-vessel-launcher**.
 **--bus-name** *NAME*
 :   Connect to the well-known D-Bus session bus and send commands to
     the given *NAME*, which is normally assumed to be owned by
-    **pressure-vessel-launcher**.
+    **steam-runtime-launcher-service**.
 
     As a special case, if the *NAME* is
     **org.freedesktop.Flatpak**, then it is assumed to be
@@ -90,13 +90,13 @@ as a subprocess of **pressure-vessel-launcher**.
 :   The *COMMAND* runs in an empty environment, apart from any environment
     variables set by **--env** and similar options.
     By default, it inherits environment variables from
-    **pressure-vessel-launcher**, with **--env** and
+    **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
 
 **--directory** *DIR*
 :   Arrange for the *COMMAND* to run in *DIR*.
     By default, it inherits the current working directory from
-    **pressure-vessel-launcher**.
+    **steam-runtime-launcher-service**.
 
 **--forward-fd** *FD*
 :   Arrange for the *COMMAND* to receive file descriptor number *FD*
@@ -165,7 +165,7 @@ it set, and pass through **FONTS** from the caller.
 # ENVIRONMENT
 
 `PWD`
-:   **pressure-vessel-launcher**(1) sets this to the current working
+:   **steam-runtime-launcher-service**(1) sets this to the current working
     directory (as specified by **--directory**, or inherited from the
     launcher) for each command executed inside the container,
     overriding the environment options shown above.
@@ -183,7 +183,7 @@ it set, and pass through **FONTS** from the caller.
 The standard output from *COMMAND* is printed on standard output.
 
 The standard error from *COMMAND* is printed on standard error.
-Diagnostic messages from **pressure-vessel-launch** may also be printed
+Diagnostic messages from **steam-runtime-launch-client** may also be printed
 on standard error.
 
 # EXIT STATUS
@@ -195,7 +195,7 @@ The exit status is similar to **env**(1):
     or **--terminate** succeeded.
 
 125
-:   Invalid arguments were given, or **pressure-vessel-launch** failed
+:   Invalid arguments were given, or **steam-runtime-launch-client** failed
     to start.
 
 126
@@ -210,7 +210,7 @@ The exit status is similar to **env**(1):
 :   The *COMMAND* was launched, but its exit status could not be
     determined. This happens if the wait-status was neither
     normal exit nor termination by a signal. It also happens if
-    **pressure-vessel-launch** was disconnected from the D-Bus
+    **steam-runtime-launch-client** was disconnected from the D-Bus
     session bus or the **--socket** before the exit status could be
     determined.
 
@@ -224,6 +224,6 @@ Any value less than 128
 
 # EXAMPLES
 
-See **pressure-vessel-launcher**(1).
+See **steam-runtime-launcher-service**(1).
 
 <!-- vim:set sw=4 sts=4 et: -->

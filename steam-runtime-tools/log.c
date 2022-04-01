@@ -33,7 +33,39 @@
 
 #include <libglnx.h>
 
+#include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+
+/*
+ * SRT_LOG_LEVEL_FAILURE:
+ *
+ * A log level for logging fatal errors that do not indicate a programming
+ * error, for example an invalid command-line option, or being asked to
+ * open a file that does not exist.
+ *
+ * Only use this in programs that have called
+ * _srt_util_set_glib_log_handler().
+ *
+ * This is functionally equivalent to %G_LOG_LEVEL_MESSAGE, but
+ * the handler set up by _srt_util_set_glib_log_handler() prints it
+ * as though it was a fatal error. Use it in command-line utilities
+ * to log a GError that will cause program termination.
+ *
+ * Unlike %G_LOG_LEVEL_ERROR, this is not considered to indicate a
+ * programming error, and does not cause a core dump.
+ */
+
+/*
+ * _srt_log_failure:
+ * @...: format string and arguments, as for g_message()
+ *
+ * Convenience macro to log at level %SRT_LOG_LEVEL_FAILURE.
+ * Only use this in programs that have called
+ * _srt_util_set_glib_log_handler().
+ *
+ * This is functionally equivalent to g_message(), but with a different
+ * log level.
+ */
 
 typedef void *AutoLibraryHandle;
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC (AutoLibraryHandle, dlclose, NULL);
@@ -199,4 +231,132 @@ _srt_util_set_up_logging (const char *identifier)
       if (!_srt_stdio_to_journal (identifier, STDERR_FILENO, LOG_NOTICE, &local_error))
         g_warning ("%s: %s", identifier, local_error->message);
     }
+}
+
+static int my_pid = -1;
+static const gchar *my_prgname = NULL;
+
+/*
+ * get_level_prefix:
+ * @log_level: A GLib log level, which should normally only have one bit set
+ *
+ * Returns: A short prefix for log messages, for example "W" for warnings
+ *  or "Internal error" for assertion failures.
+ */
+static const char *
+get_level_prefix (GLogLevelFlags log_level)
+{
+  if (log_level & (G_LOG_FLAG_RECURSION
+                   | G_LOG_FLAG_FATAL
+                   | G_LOG_LEVEL_ERROR
+                   | G_LOG_LEVEL_CRITICAL))
+    return "Internal error";
+
+  if (log_level & SRT_LOG_LEVEL_FAILURE)
+    return "E";
+
+  if (log_level & G_LOG_LEVEL_WARNING)
+    return "W";
+
+  if (log_level & G_LOG_LEVEL_MESSAGE)
+    return "N";   /* consistent with apt, which calls this a "notice" */
+
+  if (log_level & G_LOG_LEVEL_INFO)
+    return "I";
+
+  if (log_level & G_LOG_LEVEL_DEBUG)
+    return "D";
+
+  return "?!";
+}
+
+/*
+ * log_to_stderr_with_timestamp:
+ * @log_domain: the log domain of the message
+ * @log_level: the log level of the message
+ * @message: the message to process
+ * @user_data: not used
+ */
+static void
+log_to_stderr_with_timestamp (const gchar *log_domain,
+                              GLogLevelFlags log_level,
+                              const gchar *message,
+                              gpointer user_data)
+{
+  g_autoptr(GDateTime) date_time = g_date_time_new_now_local ();
+
+  /* We can't use the format specifier "%f" for microseconds because it
+   * was introduced in GLib 2.66 and we are targeting an older version */
+  g_autofree gchar *timestamp = g_date_time_format (date_time, "%T");
+
+  g_printerr ("%s.%06i: %s[%d]: %s: %s\n", timestamp,
+              g_date_time_get_microsecond (date_time),
+              my_prgname, my_pid, get_level_prefix (log_level), message);
+
+  if (log_level & (G_LOG_FLAG_RECURSION
+                   | G_LOG_FLAG_FATAL
+                   | G_LOG_LEVEL_ERROR))
+    G_BREAKPOINT ();
+}
+
+/*
+ * log_to_stderr:
+ * @log_domain: the log domain of the message
+ * @log_level: the log level of the message
+ * @message: the message to process
+ * @user_data: not used
+ */
+static void
+log_to_stderr (const gchar *log_domain,
+               GLogLevelFlags log_level,
+               const gchar *message,
+               gpointer user_data)
+{
+  g_printerr ("%s[%d]: %s: %s\n",
+              my_prgname, my_pid, get_level_prefix (log_level), message);
+
+  if (log_level & (G_LOG_FLAG_RECURSION
+                   | G_LOG_FLAG_FATAL
+                   | G_LOG_LEVEL_ERROR))
+    G_BREAKPOINT ();
+}
+
+/*
+ * _srt_util_set_glib_log_handler:
+ * @opt_verbose: If %TRUE, enable g_debug() messages and profiling
+ *
+ * Configure GLib to log to stderr with a message format suitable for
+ * command-line programs, for example
+ *
+ * ```
+ * my-program[123]: W: Resonance cascade scenario occurred
+ * ```
+ */
+void
+_srt_util_set_glib_log_handler (gboolean opt_verbose)
+{
+  GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
+                               | G_LOG_LEVEL_CRITICAL
+                               | SRT_LOG_LEVEL_FAILURE
+                               | G_LOG_LEVEL_WARNING
+                               | G_LOG_LEVEL_MESSAGE);
+  gboolean opt_timestamp = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
+                                                     FALSE);
+  gboolean opt_info = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
+
+  my_pid = getpid ();
+  my_prgname = g_get_prgname ();
+
+  if (opt_info)
+    log_levels |= G_LOG_LEVEL_INFO;
+
+  if (opt_verbose)
+    {
+      log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
+      _srt_profiling_enable ();
+    }
+
+  g_log_set_handler (G_LOG_DOMAIN, log_levels,
+                     opt_timestamp ? log_to_stderr_with_timestamp : log_to_stderr,
+                     NULL);
 }

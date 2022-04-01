@@ -32,7 +32,7 @@ get_subsandbox_adverb (const char *launch_executable)
   FlatpakBwrap *ret = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
   flatpak_bwrap_add_arg (ret, launch_executable);
-  /* Tell pressure-vessel-launch to send its whole environment
+  /* Tell steam-runtime-launch-client to send its whole environment
    * to the subsandbox, except for the parts that we edit later.
    * This effectively matches bwrap's behaviour. */
   flatpak_bwrap_add_arg (ret, "--pass-env-matching=*");
@@ -88,7 +88,7 @@ pv_wrap_check_flatpak (const char *tools_dir,
     g_info ("Running under Flatpak, version %s", flatpak_version);
 
   launch_executable = g_build_filename (tools_dir,
-                                        "pressure-vessel-launch",
+                                        "steam-runtime-launch-client",
                                         NULL);
 
   if (flatpak_version != NULL && strverscmp (flatpak_version, "1.11.0") >= 0)

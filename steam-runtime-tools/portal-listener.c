@@ -24,7 +24,7 @@
  *       Alexander Larsson <alexl@redhat.com>
  */
 
-#include "config.h"
+#include "steam-runtime-tools/portal-listener-internal.h"
 
 #include <errno.h>
 #include <locale.h>
@@ -40,12 +40,9 @@
 #include <gio/gunixfdlist.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
-
-#include "launcher.h"
-#include "portal-listener.h"
-#include "utils.h"
 
 typedef GCredentials AutoCredentials;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoCredentials, g_object_unref)
@@ -56,16 +53,16 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusAuthObserver, g_object_unref)
 typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
-struct _PvPortalListenerClass
+struct _SrtPortalListenerClass
 {
   GObjectClass parent;
 
-  gboolean (*new_peer_connection) (PvPortalListener *self,
+  gboolean (*new_peer_connection) (SrtPortalListener *self,
                                    GDBusConnection *connection,
                                    gpointer user_data);
 };
 
-G_DEFINE_TYPE (PvPortalListener, pv_portal_listener, G_TYPE_OBJECT)
+G_DEFINE_TYPE (SrtPortalListener, _srt_portal_listener, G_TYPE_OBJECT)
 
 enum
 {
@@ -79,27 +76,34 @@ enum
 static guint signal_ids[N_SIGNALS] = { 0 };
 
 void
-pv_portal_listener_init (PvPortalListener *self)
+_srt_portal_listener_init (SrtPortalListener *self)
 {
   self->original_environ = g_get_environ ();
-  pv_get_current_dirs (NULL, &self->original_cwd_l);
+  _srt_get_current_dirs (NULL, &self->original_cwd_l);
 }
 
 /*
  * Divert stdout to stderr, and set up the --info-fd to be the
- * original stdout or a specified fd.
+ * original stdout or a specified fd (if strictly positive).
  */
 gboolean
-pv_portal_listener_set_up_info_fd (PvPortalListener *self,
+_srt_portal_listener_set_up_info_fd (SrtPortalListener *self,
                                    int fd,
                                    GError **error)
 {
+  /* writing output to fd 0 (stdin) makes no sense */
+  g_return_val_if_fail (fd != STDIN_FILENO, FALSE);
+
   self->original_stdout = _srt_divert_stdout_to_stderr (error);
 
   if (self->original_stdout == NULL)
     return FALSE;
 
-  if (fd > 0)   /* < 0 means unset, and 0 is stdout itself */
+  if (fd == STDOUT_FILENO)
+    {
+      self->info_fh = self->original_stdout;
+    }
+  else if (fd > 0)
     {
       self->info_fh = fdopen (fd, "w");
 
@@ -108,20 +112,16 @@ pv_portal_listener_set_up_info_fd (PvPortalListener *self,
                                         "Unable to create a stdio wrapper for fd %d",
                                         fd);
     }
-  else
-    {
-      self->info_fh = self->original_stdout;
-    }
 
   return TRUE;
 }
 
 gboolean
-pv_portal_listener_check_socket_arguments (PvPortalListener *listener,
-                                           const char *opt_bus_name,
-                                           const char *opt_socket,
-                                           const char *opt_socket_directory,
-                                           GError **error)
+_srt_portal_listener_check_socket_arguments (SrtPortalListener *listener,
+                                             const char *opt_bus_name,
+                                             const char *opt_socket,
+                                             const char *opt_socket_directory,
+                                             GError **error)
 {
   gsize i;
 
@@ -165,7 +165,7 @@ on_bus_acquired (GDBusConnection *connection,
                  const gchar *name,
                  gpointer user_data)
 {
-  PvPortalListener *self = user_data;
+  SrtPortalListener *self = user_data;
 
   g_signal_emit (self, signal_ids[SESSION_BUS_CONNECTED], 0, connection);
 }
@@ -175,7 +175,7 @@ on_name_acquired (GDBusConnection *connection,
                   const gchar *name,
                   gpointer user_data)
 {
-  PvPortalListener *self = user_data;
+  SrtPortalListener *self = user_data;
 
   g_signal_emit (self, signal_ids[SESSION_BUS_NAME_ACQUIRED], 0,
                  connection, name);
@@ -186,7 +186,7 @@ on_name_lost (GDBusConnection *connection,
               const gchar *name,
               gpointer user_data)
 {
-  PvPortalListener *self = user_data;
+  SrtPortalListener *self = user_data;
 
   g_signal_emit (self, signal_ids[SESSION_BUS_NAME_LOST], 0,
                  connection, name);
@@ -324,7 +324,7 @@ new_connection_cb (GDBusServer *server,
                    GDBusConnection *connection,
                    gpointer user_data)
 {
-  PvPortalListener *self = user_data;
+  SrtPortalListener *self = user_data;
   g_autoptr(GError) error = NULL;
   gboolean handled;
 
@@ -344,7 +344,7 @@ new_connection_cb (GDBusServer *server,
 }
 
 static GDBusServer *
-listen_on_address (PvPortalListener *self,
+listen_on_address (SrtPortalListener *self,
                    const char *address,
                    GError **error)
 {
@@ -374,7 +374,7 @@ listen_on_address (PvPortalListener *self,
 }
 
 static GDBusServer *
-listen_on_socket (PvPortalListener *self,
+listen_on_socket (SrtPortalListener *self,
                   GError **error)
 {
   g_autofree gchar *address = NULL;
@@ -401,12 +401,12 @@ listen_on_socket (PvPortalListener *self,
 }
 
 gboolean
-pv_portal_listener_listen (PvPortalListener *self,
-                           const char *opt_bus_name,
-                           GBusNameOwnerFlags flags,
-                           const char *opt_socket,
-                           const char *opt_socket_directory,
-                           GError **error)
+_srt_portal_listener_listen (SrtPortalListener *self,
+                             const char *opt_bus_name,
+                             GBusNameOwnerFlags flags,
+                             const char *opt_socket,
+                             const char *opt_socket_directory,
+                             GError **error)
 {
   g_return_val_if_fail ((opt_bus_name != NULL)
                         + (opt_socket != NULL)
@@ -464,7 +464,7 @@ pv_portal_listener_listen (PvPortalListener *self,
        * by an attacker seeking to deny service by using the name we
        * intended to use; so we don't need a retry loop for alternative
        * names in the same directory. */
-      unique = pv_get_random_uuid (error);
+      unique = _srt_get_random_uuid (error);
 
       if (unique == NULL)
         return FALSE;
@@ -483,15 +483,15 @@ pv_portal_listener_listen (PvPortalListener *self,
       g_return_val_if_reached (FALSE);
     }
 
+  if (self->info_fh == NULL)
+    return TRUE;
+
   if (self->server_socket != NULL)
     fprintf (self->info_fh, "socket=%s\n", self->server_socket);
 
   if (self->server != NULL)
     fprintf (self->info_fh, "dbus_address=%s\n",
              g_dbus_server_get_client_address (self->server));
-
-  if (opt_bus_name == NULL)
-    pv_portal_listener_close_info_fh (self, NULL);
 
   return TRUE;
 }
@@ -502,8 +502,8 @@ pv_portal_listener_listen (PvPortalListener *self,
  * close the --info-fd, and also close standard output (if different).
  */
 void
-pv_portal_listener_close_info_fh (PvPortalListener *self,
-                                  const char *bus_name)
+_srt_portal_listener_close_info_fh (SrtPortalListener *self,
+                                    const char *bus_name)
 {
   if (self->info_fh != NULL)
     {
@@ -522,59 +522,62 @@ pv_portal_listener_close_info_fh (PvPortalListener *self,
 }
 
 void
-pv_portal_listener_release_name (PvPortalListener *self)
+_srt_portal_listener_stop_listening (SrtPortalListener *self)
 {
   if (self->name_owner_id)
-    g_bus_unown_name (self->name_owner_id);
+    {
+      g_debug ("Releasing bus name");
+      g_bus_unown_name (self->name_owner_id);
+    }
 
   self->name_owner_id = 0;
-}
-
-static void
-pv_portal_listener_dispose (GObject *object)
-{
-  PvPortalListener *self = PV_PORTAL_LISTENER (object);
-
-  pv_portal_listener_close_info_fh (self, NULL);
-  pv_portal_listener_release_name (self);
 
   if (self->server != NULL && self->server_socket != NULL)
     unlink (self->server_socket);
 
   g_clear_object (&self->server);
   g_clear_object (&self->session_bus);
-
-  G_OBJECT_CLASS (pv_portal_listener_parent_class)->dispose (object);
 }
 
 static void
-pv_portal_listener_finalize (GObject *object)
+_srt_portal_listener_dispose (GObject *object)
 {
-  PvPortalListener *self = PV_PORTAL_LISTENER (object);
+  SrtPortalListener *self = _SRT_PORTAL_LISTENER (object);
+
+  _srt_portal_listener_close_info_fh (self, NULL);
+  _srt_portal_listener_stop_listening (self);
+
+  G_OBJECT_CLASS (_srt_portal_listener_parent_class)->dispose (object);
+}
+
+static void
+_srt_portal_listener_finalize (GObject *object)
+{
+  SrtPortalListener *self = _SRT_PORTAL_LISTENER (object);
 
   g_clear_pointer (&self->server_socket, g_free);
   g_clear_pointer (&self->original_environ, g_strfreev);
   g_clear_pointer (&self->original_cwd_l, g_free);
 
-  G_OBJECT_CLASS (pv_portal_listener_parent_class)->finalize (object);
+  G_OBJECT_CLASS (_srt_portal_listener_parent_class)->finalize (object);
 }
 
 static void
-pv_portal_listener_class_init (PvPortalListenerClass *cls)
+_srt_portal_listener_class_init (SrtPortalListenerClass *cls)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (cls);
 
-  object_class->dispose = pv_portal_listener_dispose;
-  object_class->finalize = pv_portal_listener_finalize;
+  object_class->dispose = _srt_portal_listener_dispose;
+  object_class->finalize = _srt_portal_listener_finalize;
 
   /*
    * Basically the same as GDBusServer::new-connection
    */
   signal_ids[NEW_PEER_CONNECTION] =
     g_signal_new ("new-peer-connection",
-                  PV_TYPE_PORTAL_LISTENER,
+                  _SRT_TYPE_PORTAL_LISTENER,
                   G_SIGNAL_RUN_LAST,
-                  G_STRUCT_OFFSET (PvPortalListenerClass, new_peer_connection),
+                  G_STRUCT_OFFSET (SrtPortalListenerClass, new_peer_connection),
                   g_signal_accumulator_true_handled, NULL,
                   NULL,
                   G_TYPE_BOOLEAN,
@@ -583,7 +586,7 @@ pv_portal_listener_class_init (PvPortalListenerClass *cls)
 
   signal_ids[SESSION_BUS_CONNECTED] =
     g_signal_new ("session-bus-connected",
-                  PV_TYPE_PORTAL_LISTENER,
+                  _SRT_TYPE_PORTAL_LISTENER,
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL,
                   NULL,
@@ -593,7 +596,7 @@ pv_portal_listener_class_init (PvPortalListenerClass *cls)
 
   signal_ids[SESSION_BUS_NAME_ACQUIRED] =
     g_signal_new ("session-bus-name-acquired",
-                  PV_TYPE_PORTAL_LISTENER,
+                  _SRT_TYPE_PORTAL_LISTENER,
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL,
                   NULL,
@@ -604,7 +607,7 @@ pv_portal_listener_class_init (PvPortalListenerClass *cls)
 
   signal_ids[SESSION_BUS_NAME_LOST] =
     g_signal_new ("session-bus-name-lost",
-                  PV_TYPE_PORTAL_LISTENER,
+                  _SRT_TYPE_PORTAL_LISTENER,
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL,
                   NULL,
@@ -614,9 +617,9 @@ pv_portal_listener_class_init (PvPortalListenerClass *cls)
                   G_TYPE_STRING);
 }
 
-PvPortalListener *
-pv_portal_listener_new (void)
+SrtPortalListener *
+_srt_portal_listener_new (void)
 {
-  return g_object_new (PV_TYPE_PORTAL_LISTENER,
+  return g_object_new (_SRT_TYPE_PORTAL_LISTENER,
                        NULL);
 }

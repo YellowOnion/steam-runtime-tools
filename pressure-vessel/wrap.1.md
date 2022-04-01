@@ -107,7 +107,7 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 `--launcher`
 :   Instead of specifying a command with its arguments to execute, all the
     elements after `--` will be used as arguments for
-    `pressure-vessel-launcher`. This option implies `--batch`.
+    `steam-runtime-launcher-service`. This option implies `--batch`.
 
 `--ld-audit` *MODULE*
 :   Add *MODULE* from the current execution environment to `LD_AUDIT`

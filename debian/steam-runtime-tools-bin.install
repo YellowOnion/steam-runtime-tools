@@ -1,4 +1,6 @@
 usr/bin/steam-runtime-check-requirements
 usr/bin/steam-runtime-input-monitor
+usr/bin/steam-runtime-launch-client
+usr/bin/steam-runtime-launcher-service
 usr/bin/steam-runtime-system-info
 usr/share/man/man1/steam-runtime-*

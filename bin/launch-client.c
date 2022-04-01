@@ -1,5 +1,5 @@
 /*
- * pressure-vessel-launch — send IPC requests to create child processes
+ * steam-runtime-launch-client — send IPC requests to create child processes
  *
  * Copyright © 2018 Red Hat, Inc.
  * Copyright © 2020-2021 Collabora Ltd.
@@ -39,13 +39,13 @@
 #include <gio/gunixfdlist.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/launcher-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
 
 #include "flatpak-portal.h"
 #include "flatpak-session-helper.h"
-#include "launcher.h"
-#include "utils.h"
 
 typedef enum {
   FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV = 1 << 0,
@@ -737,14 +737,14 @@ main (int argc,
   original_environ = g_get_environ ();
   global_original_environ = (const char * const *) original_environ;
 
-  g_set_prgname ("pressure-vessel-launch");
+  g_set_prgname ("steam-runtime-launch-client");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   context = g_option_context_new ("COMMAND [ARG...]");
   g_option_context_set_summary (context,
-                                "Accept IPC requests to create child "
+                                "Send IPC requests to create child "
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);
@@ -766,7 +766,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 
@@ -1118,7 +1118,7 @@ main (int argc,
 
       /* The host portal doesn't support options, so we always have to do
        * this the hard way. The subsandbox portal supports unset-env in
-       * versions >= 5. pressure-vessel-launcher always supports it. */
+       * versions >= 5. steam-runtime-launcher-service always supports it. */
       if (api == &launcher_api
           || (api == &subsandbox_api && get_portal_version () >= 5))
         {
@@ -1249,7 +1249,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
+    _srt_log_failure ("%s", local_error->message);
 
   if (signal_source > 0)
     g_source_remove (signal_source);

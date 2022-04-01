@@ -66,6 +66,46 @@ executable(
 )
 
 executable(
+  'steam-runtime-launch-client',
+  sources: [
+    'launch-client.c',
+  ],
+  c_args : srt_c_args,
+  dependencies : [
+    threads,
+    gio_unix,
+    libglnx_dep,
+    libsteamrt_static_dep,
+  ],
+  # Needs pv_include_dirs for flatpak-*.h
+  include_directories : pv_include_dirs,
+  install : true,
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
+executable(
+  'steam-runtime-launcher-service',
+  sources: [
+    'launcher-service.c',
+    '../pressure-vessel/flatpak-utils-base.c',
+  ],
+  c_args : srt_c_args,
+  dependencies : [
+    launcher_codegen_dep,
+    threads,
+    gio_unix,
+    libglnx_dep,
+    libsteamrt_static_dep,
+  ],
+  # Needs pv_include_dirs for flatpak-*.h
+  include_directories : pv_include_dirs,
+  install : true,
+  build_rpath : bin_rpath,
+  install_rpath : bin_rpath,
+)
+
+executable(
   'steam-runtime-steam-remote',
   'steam-remote.c',
   c_args : srt_c_args,
@@ -92,6 +132,8 @@ if get_option('man')
     'check-requirements',
     'identify-library-abi',
     'input-monitor',
+    'launch-client',
+    'launcher-service',
     'steam-remote',
     'system-info',
     'urlopen',

@@ -1543,3 +1543,92 @@ _srt_boolean_environment (const gchar *name,
 
   return def;
 }
+
+/*
+ * _srt_async_signal_safe_error:
+ * @message: A human-readable message
+ * @exit_status: Call `_exit` with this status
+ *
+ * Exit with a fatal error, like g_error(), but async-signal-safe
+ * (see signal-safety(7)).
+ */
+void
+_srt_async_signal_safe_error (const char *message,
+                              int exit_status)
+{
+  if (write (2, message, strlen (message)) < 0)
+    {
+      /* Ignore - there's nothing we can do about it anyway - but
+       * suppress -Wunused-result. */
+    }
+
+  _exit (exit_status);
+}
+
+/**
+ * _srt_get_current_dirs:
+ * @cwd_p: (out) (transfer full) (optional): Used to return the
+ *  current physical working directory, equivalent to `$(pwd -P)`
+ *  in a shell
+ * @cwd_l: (out) (transfer full) (optional): Used to return the
+ *  current logical working directory, equivalent to `$(pwd -L)`
+ *  in a shell
+ *
+ * Return the physical and/or logical working directory.
+ */
+void
+_srt_get_current_dirs (gchar **cwd_p,
+                       gchar **cwd_l)
+{
+  g_autofree gchar *cwd = NULL;
+  const gchar *pwd;
+
+  g_return_if_fail (cwd_p == NULL || *cwd_p == NULL);
+  g_return_if_fail (cwd_l == NULL || *cwd_l == NULL);
+
+  cwd = g_get_current_dir ();
+
+  if (cwd_p != NULL)
+    *cwd_p = g_canonicalize_filename (cwd, NULL);
+
+  if (cwd_l != NULL)
+    {
+      pwd = g_getenv ("PWD");
+
+      if (pwd != NULL && _srt_is_same_file (pwd, cwd))
+        *cwd_l = g_strdup (pwd);
+      else
+        *cwd_l = g_strdup (cwd);
+    }
+}
+
+#define PROC_SYS_KERNEL_RANDOM_UUID "/proc/sys/kernel/random/uuid"
+
+/**
+ * _srt_get_random_uuid:
+ * @error: Used to raise an error on failure
+ *
+ * Return a random UUID (RFC 4122 version 4) as a string.
+ * It is a 128-bit quantity, with 122 bits of entropy, and 6 fixed bits
+ * indicating the "variant" (type, 0b10) and "version" (subtype, 0b0100).
+ *
+ * Returns: (transfer full): A random UUID, or %NULL on error
+ */
+gchar *
+_srt_get_random_uuid (GError **error)
+{
+  g_autofree gchar *contents = NULL;
+
+  if (!g_file_get_contents (PROC_SYS_KERNEL_RANDOM_UUID,
+                            &contents, NULL, error))
+    return NULL;
+
+  g_strchomp (contents);    /* delete trailing newline */
+
+  /* Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
+  if (strlen (contents) != 36)
+    return glnx_null_throw (error, "%s not in expected format",
+                            PROC_SYS_KERNEL_RANDOM_UUID);
+
+  return g_steal_pointer (&contents);
+}

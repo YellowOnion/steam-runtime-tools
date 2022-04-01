@@ -35,6 +35,8 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/launcher-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/steam-runtime-tools.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -42,7 +44,6 @@
 
 #include "bwrap-lock.h"
 #include "flatpak-utils-base-private.h"
-#include "launcher.h"
 #include "supported-architectures.h"
 #include "utils.h"
 #include "wrap-interactive.h"
@@ -163,14 +164,14 @@ child_setup_cb (gpointer user_data)
    * takes steps not to be. */
   if (opt_exit_with_parent
       && prctl (PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) != 0)
-    pv_async_signal_safe_error ("Failed to set up parent-death signal\n",
-                                LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("Failed to set up parent-death signal\n",
+                                  LAUNCH_EX_FAILED);
 
   /* Unblock all signals */
   sigemptyset (&set);
   if (pthread_sigmask (SIG_SETMASK, &set, NULL) == -1)
-    pv_async_signal_safe_error ("Failed to unblock signals when starting child\n",
-                                LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("Failed to unblock signals when starting child\n",
+                                  LAUNCH_EX_FAILED);
 
   /* Reset the handlers for all signals to their defaults. */
   for (i = 1; i < NSIG; i++)
@@ -183,7 +184,7 @@ child_setup_cb (gpointer user_data)
   if (data != NULL &&
       data->original_stdout_fd > 0 &&
       dup2 (data->original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
-    pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
+    _srt_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
 
   /* Make the fds we pass through *not* be close-on-exec */
   if (data != NULL && data->pass_fds)
@@ -199,13 +200,13 @@ child_setup_cb (gpointer user_data)
           fd_flags = fcntl (fd, F_GETFD);
 
           if (fd_flags < 0)
-            pv_async_signal_safe_error ("pressure-vessel-adverb: Invalid fd?\n",
-                                        LAUNCH_EX_FAILED);
+            _srt_async_signal_safe_error ("pressure-vessel-adverb: Invalid fd?\n",
+                                          LAUNCH_EX_FAILED);
 
           if ((fd_flags & FD_CLOEXEC) != 0
               && fcntl (fd, F_SETFD, fd_flags & ~FD_CLOEXEC) != 0)
-            pv_async_signal_safe_error ("pressure-vessel-adverb: Unable to clear close-on-exec\n",
-                                        LAUNCH_EX_FAILED);
+            _srt_async_signal_safe_error ("pressure-vessel-adverb: Unable to clear close-on-exec\n",
+                                          LAUNCH_EX_FAILED);
         }
     }
 }
@@ -1073,7 +1074,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-adverb");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -1107,7 +1108,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 
@@ -1523,7 +1524,7 @@ out:
   g_clear_pointer (&opt_preload_modules, g_array_unref);
 
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
+    _srt_log_failure ("%s", local_error->message);
 
   global_original_environ = NULL;
   g_debug ("Exiting with status %d", ret);

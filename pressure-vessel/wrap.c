@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx/libglnx.h"
@@ -963,7 +964,7 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_launcher,
     "Instead of specifying a command with its arguments to execute, all the "
     "elements after '--' will be used as arguments for "
-    "'pressure-vessel-launcher'. All the environment variables that are "
+    "'steam-runtime-launcher-service'. All the environment variables that are "
     "edited by pressure-vessel, or that are known to be wrong in the new "
     "container, or that needs to inherit the value from the host system, "
     "will be locked. This option implies --batch.", NULL },
@@ -1159,7 +1160,7 @@ tristate_environment (const gchar *name)
   return TRISTATE_MAYBE;
 }
 
-#define usage_error(...) pv_log_failure (__VA_ARGS__)
+#define usage_error(...) _srt_log_failure (__VA_ARGS__)
 
 int
 main (int argc,
@@ -1202,7 +1203,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-wrap");
 
   /* Set up the initial base logging */
-  pv_set_up_logging (FALSE);
+  _srt_util_set_glib_log_handler (FALSE);
 
   g_info ("pressure-vessel version %s", VERSION);
 
@@ -1288,7 +1289,7 @@ main (int argc,
     goto out;
 
   if (opt_verbose)
-    pv_set_up_logging (opt_verbose);
+    _srt_util_set_glib_log_handler (opt_verbose);
 
   /* Specifying either one of these mutually-exclusive options as a
    * command-line option disables use of the environment variable for
@@ -1551,7 +1552,7 @@ main (int argc,
         }
     }
 
-  pv_get_current_dirs (&cwd_p, &cwd_l);
+  _srt_get_current_dirs (&cwd_p, &cwd_l);
 
   if (opt_verbose)
     {
@@ -1932,7 +1933,7 @@ main (int argc,
       else
         {
           g_assert (flatpak_subsandbox != NULL);
-          /* pressure-vessel-launch currently hard-codes this */
+          /* steam-runtime-launch-client currently hard-codes this */
           g_warning ("Process ID namespace is always shared when using a "
                      "Flatpak subsandbox");
         }
@@ -2426,11 +2427,11 @@ main (int argc,
     {
       g_autoptr(FlatpakBwrap) launcher_argv =
         flatpak_bwrap_new (flatpak_bwrap_empty_env);
-      g_autofree gchar *pressure_vessel_launcher = g_build_filename (tools_dir,
-                                                                     "pressure-vessel-launcher",
-                                                                     NULL);
-      g_debug ("Adding pressure-vessel-launcher '%s'...", pressure_vessel_launcher);
-      flatpak_bwrap_add_arg (launcher_argv, pressure_vessel_launcher);
+      g_autofree gchar *launcher_service = g_build_filename (tools_dir,
+                                                             "steam-runtime-launcher-service",
+                                                             NULL);
+      g_debug ("Adding steam-runtime-launcher-service '%s'...", launcher_service);
+      flatpak_bwrap_add_arg (launcher_argv, launcher_service);
 
       if (opt_verbose)
         flatpak_bwrap_add_arg (launcher_argv, "--verbose");
@@ -2550,7 +2551,7 @@ main (int argc,
 
 out:
   if (local_error != NULL)
-    pv_log_failure ("%s", local_error->message);
+    _srt_log_failure ("%s", local_error->message);
 
   g_clear_pointer (&opt_preload_modules, g_array_unref);
   g_clear_pointer (&adverb_preload_argv, g_ptr_array_unref);

@@ -201,22 +201,6 @@ executable(
   install_dir : pv_bindir,
 )
 
-# We'd like to use bubblewrap as a Meson subproject, but then we wouldn't
-# be able to set its RPATH, which we need...
-executable(
-  'pv-bwrap',
-  'bwrap-main.c',
-  c_args : [
-    '-DPACKAGE_STRING="modified bubblewrap from ' + meson.project_name() + ' ' + meson.project_version() + '"',
-  ],
-  dependencies: [libcap_dep, libselinux_dep],
-  include_directories : project_include_dirs,
-  install : true,
-  install_dir : pv_bindir,
-  build_rpath : pv_rpath,
-  install_rpath : pv_rpath,
-)
-
 if get_option('srcdir') != ''
   conf_data = configuration_data()
   conf_data.set('prefix', get_option('prefix'))
@@ -276,5 +260,16 @@ if get_option('man')
     )
   endforeach
 endif
+
+subproject(
+  'bubblewrap',
+  default_options : [
+    'build_rpath=' + pv_rpath,
+    'bwrapdir=' + pv_bindir,
+    'install_rpath=' + pv_rpath,
+    'program_prefix=pv-',
+  ],
+)
+
 
 # vim:set sw=2 sts=2 et:

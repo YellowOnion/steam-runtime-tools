@@ -35,6 +35,7 @@ cd "$G_TEST_SRCDIR/.."
 
 n=0
 for shell_script in \
+        ./bin/*.sh \
         ./pressure-vessel/pressure-vessel-locale-gen \
         ./pressure-vessel/pressure-vessel-unruntime \
         ./tests/*.sh \

@@ -98,6 +98,7 @@ SCRIPTS = [
     'pressure-vessel-locale-gen',
     'pressure-vessel-test-ui',
     'pressure-vessel-unruntime',
+    'steam-runtime-launch-options',
 ]
 EXECUTABLES = [
     'pressure-vessel-adverb',
@@ -298,10 +299,12 @@ def main():
             )
 
         for script in SCRIPTS:
-            install_exe(
-                os.path.join(args.pv_dir, 'bin', script),
-                os.path.join(installation, 'bin'),
-            )
+            path = os.path.join(args.pv_dir, 'bin', script)
+
+            if not os.path.exists(path):
+                path = os.path.join(args.prefix, 'bin', script)
+
+            install_exe(path, os.path.join(installation, 'bin'))
 
         for exe in EXECUTABLES:
             path = os.path.join(args.pv_dir, 'bin', exe)
@@ -325,6 +328,19 @@ def main():
             'libexec',
             'steam-runtime-tools-0',
         )
+
+        path = os.path.join(
+            args.prefix, 'libexec', 'steam-runtime-tools-0',
+        )
+
+        if not os.path.exists(path):
+            path = '/usr/libexec/steam-runtime-tools-0'
+
+        for tool in ['launch-options.py']:
+            install_exe(
+                os.path.join(path, tool),
+                os.path.join(inst_pkglibexecdir, tool),
+            )
 
         for arch in architectures:
             path = os.path.join(

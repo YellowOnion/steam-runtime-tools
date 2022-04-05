@@ -46,6 +46,7 @@ fi
 if [ "${PYFLAKES}" = false ] || [ -z "$(command -v "$PYFLAKES")" ]; then
     echo "1..0 # SKIP pyflakes not found"
 elif "${PYFLAKES}" \
+    ./bin/*.py \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \

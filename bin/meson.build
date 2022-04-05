@@ -127,12 +127,38 @@ executable(
   install_rpath : bin_rpath,
 )
 
+sh_scripts = [
+  'launch-options',
+]
+
+foreach script : sh_scripts
+  install_data(
+    script + '.sh',
+    rename : ['steam-runtime-' + script],
+    install_dir : get_option('bindir'),
+    install_mode : 'rwxr-xr-x',
+  )
+endforeach
+
+libexec_scripts = [
+  'launch-options.py',
+]
+
+foreach script : libexec_scripts
+  install_data(
+    script,
+    install_dir : pkglibexecdir,
+    install_mode : 'rwxr-xr-x',
+  )
+endforeach
+
 if get_option('man')
   foreach bin_name : [
     'check-requirements',
     'identify-library-abi',
     'input-monitor',
     'launch-client',
+    'launch-options',
     'launcher-service',
     'steam-remote',
     'system-info',

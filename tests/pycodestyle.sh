@@ -47,6 +47,7 @@ echo "1..1"
 
 if "${PYCODESTYLE}" \
     --ignore=E402,W503 \
+    ./bin/*.py \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \

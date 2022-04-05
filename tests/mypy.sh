@@ -37,6 +37,7 @@ export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
 
 i=0
 for script in \
+    ./bin/*.py \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \

@@ -48,7 +48,7 @@
 #include "flatpak-error.h"
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 /* To keep this more similar to the original file, we explicitly disable
  * this warning rather than fixing it */

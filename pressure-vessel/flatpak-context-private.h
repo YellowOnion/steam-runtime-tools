@@ -26,7 +26,7 @@
 #ifndef __FLATPAK_CONTEXT_H__
 #define __FLATPAK_CONTEXT_H__
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 typedef enum {
   FLATPAK_POLICY_NONE,

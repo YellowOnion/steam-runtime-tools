@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include <gio/gio.h>
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 /* To keep this more similar to the original file, we explicitly disable
  * this warning rather than fixing it */

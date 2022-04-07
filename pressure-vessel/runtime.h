@@ -24,7 +24,7 @@
 #include <glib-object.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "environ.h"
 #include "flatpak-bwrap-private.h"

@@ -28,7 +28,7 @@
 #include <glib/gstdio.h>
 #include <gio/gio.h>
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "flatpak-bwrap-private.h"

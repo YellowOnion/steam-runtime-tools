@@ -27,7 +27,7 @@
 #include <glib.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 typedef enum
 {

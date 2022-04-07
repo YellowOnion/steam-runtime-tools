@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-exports-private.h"
 #include "steam-runtime-tools/glib-backports-internal.h"

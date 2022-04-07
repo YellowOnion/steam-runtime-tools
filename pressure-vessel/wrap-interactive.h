@@ -22,7 +22,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-bwrap-private.h"
 #include "steam-runtime-tools/glib-backports-internal.h"

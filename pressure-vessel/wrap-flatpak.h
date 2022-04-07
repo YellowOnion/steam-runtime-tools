@@ -21,7 +21,7 @@
 
 #include <glib.h>
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-bwrap-private.h"
 

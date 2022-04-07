@@ -42,7 +42,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 typedef GCredentials AutoCredentials;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoCredentials, g_object_unref)

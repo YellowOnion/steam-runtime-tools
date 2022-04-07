@@ -27,7 +27,7 @@
 
 #include <string.h>
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 #include <flatpak-common-types-private.h>
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>

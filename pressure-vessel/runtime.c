@@ -27,7 +27,7 @@
  * G_DEFINE_AUTOPTR_CLEANUP_FUNC will be visible to it */
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/json-glib-backports-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 

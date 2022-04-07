@@ -35,7 +35,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 typedef struct _SrtPortalListener SrtPortalListener;
 typedef struct _SrtPortalListenerClass SrtPortalListenerClass;

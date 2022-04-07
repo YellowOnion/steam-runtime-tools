@@ -42,7 +42,7 @@
 #include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-portal.h"
 #include "flatpak-session-helper.h"

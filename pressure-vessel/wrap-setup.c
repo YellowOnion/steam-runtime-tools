@@ -24,7 +24,7 @@
 #include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include <string.h>
 

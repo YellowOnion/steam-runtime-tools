@@ -70,7 +70,7 @@
 #endif
 
 #include <gio/gio.h>
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-utils-base-private.h"
 #include "flatpak-utils-private.h"

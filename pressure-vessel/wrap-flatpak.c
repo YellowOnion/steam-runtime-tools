@@ -19,7 +19,7 @@
 
 #include "wrap-flatpak.h"
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-run-private.h"
 #include "utils.h"

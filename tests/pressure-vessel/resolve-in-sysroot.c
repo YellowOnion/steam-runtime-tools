@@ -32,7 +32,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "tests/test-utils.h"
 #include "utils.h"

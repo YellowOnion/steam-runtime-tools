@@ -29,7 +29,7 @@
 #include <gio/gio.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "steam-runtime-tools/launcher1.h"
 

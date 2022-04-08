@@ -323,15 +323,11 @@ libdl = c_compiler.find_library('dl', required : false)
 
 libglnx_dep = subproject('libglnx').get_variable('libglnx_dep')
 
-project_include_dirs = include_directories(
-  '.',
-  'subprojects',
-)
+project_include_dirs = include_directories('.')
 
 pv_include_dirs = include_directories(
     '.',
     'pressure-vessel',
-    'subprojects',
 )
 
 # Relative path from get_option('prefix') to our private library directory

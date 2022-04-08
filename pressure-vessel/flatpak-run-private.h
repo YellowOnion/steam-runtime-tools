@@ -30,7 +30,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-common-types-private.h"
 #include "flatpak-context-private.h"

@@ -39,7 +39,7 @@
 #include <gio/gunixfdlist.h>
 
 #include <gio/gio.h>
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-exports-private.h"
 #include "flatpak-run-private.h"

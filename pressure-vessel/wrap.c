@@ -34,7 +34,7 @@
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/profiling-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "bwrap.h"
 #include "bwrap-lock.h"

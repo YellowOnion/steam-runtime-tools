@@ -33,7 +33,7 @@
 #include <glib.h>
 
 /* for its backports of g_test_skip(), etc. */
-#include <libglnx/libglnx.h>
+#include <libglnx.h>
 
 #ifndef g_assert_true
 #define g_assert_true(x) g_assert ((x))

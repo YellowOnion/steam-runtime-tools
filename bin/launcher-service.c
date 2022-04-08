@@ -45,7 +45,7 @@
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/portal-listener-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
-#include "libglnx/libglnx.h"
+#include "libglnx.h"
 
 #include "flatpak-utils-base-private.h"
 

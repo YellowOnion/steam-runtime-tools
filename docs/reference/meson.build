@@ -36,6 +36,10 @@ gnome.gtkdoc(
   mode : 'none',
   src_dir : ['steam-runtime-tools'],
   dependencies : libsteamrt_dep,
+  ignore_headers : [
+    'flatpak-systemd-dbus-generated.h',
+    'launcher1.h',
+  ],
   install: true,
   scan_args : [
     '--rebuild-sections',

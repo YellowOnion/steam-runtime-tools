@@ -1,3 +1,17 @@
+steam-runtime-tools (0.20220411.0) UNRELEASED; urgency=medium
+
+  * system-info: Don't consider a symlink /run/host -> .. to be a container.
+    In particular, Toolbx 0.0.99.3 sets up this situation.
+    (steamrt/steam-runtime-tools!427)
+  * s-r-launch-client: Rename from pv-launch and move it to bin/
+  * s-r-launcher-service: Rename from pv-launcher and move it to bin/
+  * s-r-launcher-service: Add the ability to wrap an arbitrary command
+    (steamrt/steam-runtime-tools!428)
+  * build: Consistently include libglnx header as "libglnx.h"
+  * pressure-vessel, s-r-launch-client, s-r-launcher-service: Refactoring
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 11 Apr 2022 13:20:24 +0100
+
 steam-runtime-tools (0.20220315.0) steamrt; urgency=medium
 
   * pressure-vessel: Refactoring

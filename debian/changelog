@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220411.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220420.0) steamrt; urgency=medium
 
   * system-info: Don't consider a symlink /run/host -> .. to be a container.
     In particular, Toolbx 0.0.99.3 sets up this situation.
@@ -7,10 +7,17 @@ steam-runtime-tools (0.20220411.0) UNRELEASED; urgency=medium
   * s-r-launcher-service: Rename from pv-launcher and move it to bin/
   * s-r-launcher-service: Add the ability to wrap an arbitrary command
     (steamrt/steam-runtime-tools!428)
+  * bin: Add steam-runtime-launch-options script.
+    This is an experimental replacement for, and generalization of,
+    PRESSURE_VESSEL_WRAP_GUI=1. When it is included in a scout runtime
+    shipped with Steam, it will allow developers and testers to swap
+    between runtimes by setting the Steam launch options for a game to:
+        steam-runtime-launch-options -- %command%
   * build: Consistently include libglnx header as "libglnx.h"
+  * build: Exclude generated code from gtk-doc documentation
   * pressure-vessel, s-r-launch-client, s-r-launcher-service: Refactoring
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 11 Apr 2022 13:20:24 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 20 Apr 2022 18:08:40 +0100
 
 steam-runtime-tools (0.20220315.0) steamrt; urgency=medium
 

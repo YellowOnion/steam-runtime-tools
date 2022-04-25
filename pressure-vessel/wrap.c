@@ -523,7 +523,6 @@ static gboolean opt_batch = FALSE;
 static gboolean opt_copy_runtime = FALSE;
 static gboolean opt_devel = FALSE;
 static char **opt_env_if_host = NULL;
-static char *opt_fake_home = NULL;
 static char **opt_filesystems = NULL;
 static char *opt_freedesktop_app_id = NULL;
 static char *opt_steam_app_id = NULL;
@@ -1189,6 +1188,7 @@ main (int argc,
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
+  g_autofree gchar *private_home = NULL;
   const gchar *home;
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
@@ -1449,7 +1449,7 @@ main (int argc,
   else if (opt_home)
     {
       home_mode = PV_HOME_MODE_PRIVATE;
-      opt_fake_home = g_strdup (opt_home);
+      private_home = g_strdup (opt_home);
     }
   else if (opt_share_home == TRISTATE_MAYBE)
     {
@@ -1458,21 +1458,21 @@ main (int argc,
   else if (opt_freedesktop_app_id)
     {
       home_mode = PV_HOME_MODE_PRIVATE;
-      opt_fake_home = g_build_filename (home, ".var", "app",
-                                        opt_freedesktop_app_id, NULL);
+      private_home = g_build_filename (home, ".var", "app",
+                                       opt_freedesktop_app_id, NULL);
     }
   else if (steam_app_id != NULL)
     {
       home_mode = PV_HOME_MODE_PRIVATE;
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 steam_app_id);
-      opt_fake_home = g_build_filename (home, ".var", "app",
-                                        opt_freedesktop_app_id, NULL);
+      private_home = g_build_filename (home, ".var", "app",
+                                       opt_freedesktop_app_id, NULL);
     }
   else if (opt_batch)
     {
       home_mode = PV_HOME_MODE_TRANSIENT;
-      opt_fake_home = NULL;
+      private_home = NULL;
       g_info ("Unsharing the home directory without choosing a valid "
               "candidate, using tmpfs as a fallback");
     }
@@ -1484,9 +1484,9 @@ main (int argc,
     }
 
   if (home_mode == PV_HOME_MODE_PRIVATE)
-    g_assert (opt_fake_home != NULL);
+    g_assert (private_home != NULL);
   else
-    g_assert (opt_fake_home == NULL);
+    g_assert (private_home == NULL);
 
   if (opt_env_if_host != NULL)
     {
@@ -1921,10 +1921,10 @@ main (int argc,
           else
             {
               g_assert (home_mode == PV_HOME_MODE_PRIVATE);
-              g_assert (opt_fake_home != NULL);
+              g_assert (private_home != NULL);
 
               if (!use_fake_home (exports, bwrap_home_arguments,
-                                  container_env, opt_fake_home,
+                                  container_env, private_home,
                                   error))
                 goto out;
             }
@@ -2568,7 +2568,6 @@ out:
   g_clear_pointer (&opt_freedesktop_app_id, g_free);
   g_clear_pointer (&opt_steam_app_id, g_free);
   g_clear_pointer (&opt_home, g_free);
-  g_clear_pointer (&opt_fake_home, g_free);
   g_clear_pointer (&opt_runtime, g_free);
   g_clear_pointer (&opt_runtime_archive, g_free);
   g_clear_pointer (&opt_runtime_base, g_free);

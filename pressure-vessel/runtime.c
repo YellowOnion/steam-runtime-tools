@@ -2309,9 +2309,11 @@ pv_runtime_capture_libraries (PvRuntime *self,
 }
 
 /*
- * @sequence_number: numbered directory to use to disambiguate between
+ * @starting_sequence_number: numbered directory to use to disambiguate between
  *  colliding files with the same basename
  * @requested_subdir: (not nullable):
+ * @details_arr: (array length=n_details):
+ * @n_details: Number of entries in @details_arr
  * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
  *  numbered subdirectory per ICD, for the rare case where not all
  *  drivers have a unique basename or where order matters
@@ -2320,178 +2322,199 @@ pv_runtime_capture_libraries (PvRuntime *self,
  * @search_path: (nullable): Add the parent directory of the resulting
  *  ICD to this search path if necessary
  *
- * Bind the provided @details ICD without its dependencies, and update
- * @dependency_patterns with @details dependency pattern.
+ * For each driver in @details_arr that is an absolute path, put a symlink
+ * in `${libdir}/${requested_subdir}` or `${libdir}/${requested_subdir}/${n}`.
+ *
+ * For each driver in @details_arr that is a SONAME, put a symlink in
+ * `${libdir}` instead.
+ *
+ * In either case, add patterns to @dependency_patterns that will capture
+ * its dependencies into `${libdir}`.
+ *
+ * Change `details->kinds[multiarch_index]` from %ICD_KIND_NONEXISTENT
+ * to %ICD_KIND_ABSOLUTE, %ICD_KIND_SONAME or %ICD_KIND_NONEXISTENT
+ * as appropriate.
  */
 static gboolean
-bind_icd (PvRuntime *self,
-          RuntimeArchitecture *arch,
-          gsize sequence_number,
-          const char *requested_subdir,
-          IcdDetails *details,
-          gboolean *use_numbered_subdirs,
-          GPtrArray *dependency_patterns,
-          GString *search_path,
-          GError **error)
+bind_icds (PvRuntime *self,
+           RuntimeArchitecture *arch,
+           gsize starting_sequence_number,
+           const char *requested_subdir,
+           IcdDetails **details_arr,
+           gsize n_details,
+           gboolean *use_numbered_subdirs,
+           GPtrArray *dependency_patterns,
+           GString *search_path,
+           GError **error)
 {
   static const char options[] = "if-exists:if-same-abi";
-  g_autofree gchar *in_current_namespace = NULL;
-  g_autofree gchar *pattern = NULL;
-  g_autofree gchar *dependency_pattern = NULL;
-  g_autofree gchar *seq_str = NULL;
-  g_autofree gchar *final_path = NULL;
-  const char *base;
-  const char *mode;
-  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize multiarch_index;
-  g_autoptr(GDir) dir = NULL;
-  gsize dir_elements_before = 0;
-  gsize dir_elements_after = 0;
-  const gchar *subdir = requested_subdir;
+  gsize i;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
-  g_return_val_if_fail (subdir != NULL, FALSE);
-  g_return_val_if_fail (details != NULL, FALSE);
-  multiarch_index = arch->multiarch_index;
-  g_return_val_if_fail (details->resolved_libraries[multiarch_index] != NULL,
-                        FALSE);
-  g_return_val_if_fail (details->kinds[multiarch_index] == ICD_KIND_NONEXISTENT,
-                        FALSE);
-  g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
-                        FALSE);
+  g_return_val_if_fail (requested_subdir != NULL, FALSE);
+  g_return_val_if_fail (n_details == 0 || details_arr != NULL, FALSE);
   g_return_val_if_fail (use_numbered_subdirs != NULL, FALSE);
   g_return_val_if_fail (dependency_patterns != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  g_info ("Capturing loadable module: %s",
-          details->resolved_libraries[multiarch_index]);
+  multiarch_index = arch->multiarch_index;
 
-  if (g_path_is_absolute (details->resolved_libraries[multiarch_index]))
+  for (i = 0; i < n_details; i++)
     {
-      details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
-      mode = "path";
-    }
-  else
-    {
-      details->kinds[multiarch_index] = ICD_KIND_SONAME;
-      mode = "soname";
-      /* If we have just a SONAME, we do not want to place the library
-       * under a subdir, otherwise ld.so will not be able to find it */
-      subdir = "";
-    }
+      IcdDetails *details = details_arr[i];
+      g_autofree gchar *in_current_namespace = NULL;
+      g_autofree gchar *pattern = NULL;
+      g_autofree gchar *dependency_pattern = NULL;
+      g_autofree gchar *seq_str = NULL;
+      g_autofree gchar *final_path = NULL;
+      const char *base;
+      const char *mode;
+      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+      g_autoptr(GDir) dir = NULL;
+      gsize dir_elements_before = 0;
+      gsize dir_elements_after = 0;
+      const char *subdir = requested_subdir;
 
-  in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                           subdir, NULL);
+      g_return_val_if_fail (details != NULL, FALSE);
 
-  if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
-    return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                    in_current_namespace);
+      g_return_val_if_fail (details->resolved_libraries[multiarch_index] != NULL,
+                            FALSE);
+      g_return_val_if_fail (details->kinds[multiarch_index] == ICD_KIND_NONEXISTENT,
+                            FALSE);
+      g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
+                            FALSE);
 
-  base = glnx_basename (details->resolved_libraries[multiarch_index]);
+      g_info ("Capturing loadable module: %s",
+              details->resolved_libraries[multiarch_index]);
 
-  /* Check whether we can get away with avoiding the sequence number.
-   * Depending on the type of ICD, we might want to use the sequence
-   * number to force a specific load order. */
-  if (!*use_numbered_subdirs)
-    {
-      g_autofree gchar *path = NULL;
+      if (g_path_is_absolute (details->resolved_libraries[multiarch_index]))
+        {
+          details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
+          mode = "path";
+        }
+      else
+        {
+          details->kinds[multiarch_index] = ICD_KIND_SONAME;
+          mode = "soname";
+          /* If we have just a SONAME, we do not want to place the library
+           * under a subdir, otherwise ld.so will not be able to find it */
+          subdir = "";
+        }
 
-      path = g_build_filename (in_current_namespace, base, NULL);
-
-      /* No, we can't: the ICD would collide with one that we already
-       * set up */
-      if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
-        *use_numbered_subdirs = TRUE;
-    }
-
-  /* If we can't avoid the numbered subdirectory, or want to use one
-   * to force a specific load order, create it. */
-  if (*use_numbered_subdirs && subdir[0] != '\0')
-    {
-      seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, sequence_number);
-      g_clear_pointer (&in_current_namespace, g_free);
       in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                               subdir, seq_str, NULL);
+                                               subdir, NULL);
 
       if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
         return glnx_throw_errno_prefix (error, "Unable to create %s",
                                         in_current_namespace);
-    }
 
-  final_path = g_build_filename (in_current_namespace, base, NULL);
-  if (g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
-    {
-      g_info ("\"%s\" is already present, skipping", final_path);
-      return TRUE;
-    }
+      base = glnx_basename (details->resolved_libraries[multiarch_index]);
 
-  dir = g_dir_open (in_current_namespace, 0, error);
-  if (dir == NULL)
-    return FALSE;
+      /* Check whether we can get away with avoiding the sequence number.
+       * Depending on the type of ICD, we might want to use the sequence
+       * number to force a specific load order. */
+      if (!*use_numbered_subdirs)
+        {
+          g_autofree gchar *path = NULL;
 
-  /* Number of elements before trying to capture the library */
-  while (g_dir_read_name (dir))
-    dir_elements_before++;
+          path = g_build_filename (in_current_namespace, base, NULL);
 
-  pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
-                             options, mode, details->resolved_libraries[multiarch_index]);
-  dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
-                                        options, mode, details->resolved_libraries[multiarch_index]);
+          /* No, we can't: the ICD would collide with one that we already
+           * set up */
+          if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
+            *use_numbered_subdirs = TRUE;
+        }
 
-  if (!pv_runtime_provide_container_access (self, error))
-    return FALSE;
+      /* If we can't avoid the numbered subdirectory, or want to use one
+       * to force a specific load order, create it. */
+      if (*use_numbered_subdirs && subdir[0] != '\0')
+        {
+          seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, starting_sequence_number + i);
+          g_clear_pointer (&in_current_namespace, g_free);
+          in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
+                                                   subdir, seq_str, NULL);
 
-  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-  flatpak_bwrap_add_args (temp_bwrap,
-                          "--dest", in_current_namespace,
-                          pattern,
-                          NULL);
-  flatpak_bwrap_finish (temp_bwrap);
+          if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
+            return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                            in_current_namespace);
+        }
 
-  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-    return FALSE;
+      final_path = g_build_filename (in_current_namespace, base, NULL);
+      if (g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
+        {
+          g_info ("\"%s\" is already present, skipping", final_path);
+          continue;
+        }
 
-  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+      dir = g_dir_open (in_current_namespace, 0, error);
+      if (dir == NULL)
+        return FALSE;
 
-  g_dir_rewind (dir);
-  while (g_dir_read_name (dir))
-    dir_elements_after++;
+      /* Number of elements before trying to capture the library */
+      while (g_dir_read_name (dir))
+        dir_elements_before++;
 
-  if (dir_elements_before == dir_elements_after)
-    {
-      /* If we have the same number of elements it means that we didn't
-       * create a symlink to the ICD itself (it must have been nonexistent
-       * or for a different ABI). When this happens we set the kinds to
-       * "NONEXISTENT" and return early without trying to capture the
-       * dependencies. */
-      details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
-      /* If the directory is empty we can also remove it */
-      g_rmdir (in_current_namespace);
-      return TRUE;
-    }
+      pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
+                                 options, mode, details->resolved_libraries[multiarch_index]);
+      dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
+                                            options, mode, details->resolved_libraries[multiarch_index]);
 
-  /* Only add the numbered subdirectories to the search path. Their
-   * parent is expected to be there already. */
-  if (search_path != NULL && seq_str != NULL)
-    {
-      g_autofree gchar *in_container = NULL;
+      if (!pv_runtime_provide_container_access (self, error))
+        return FALSE;
 
-      in_container = g_build_filename (arch->libdir_in_container,
-                                       subdir, seq_str, NULL);
-      pv_search_path_append (search_path, in_container);
-    }
+      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+      flatpak_bwrap_add_args (temp_bwrap,
+                              "--dest", in_current_namespace,
+                              pattern,
+                              NULL);
+      flatpak_bwrap_finish (temp_bwrap);
 
-  g_ptr_array_add (dependency_patterns, g_steal_pointer (&dependency_pattern));
+      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+        return FALSE;
 
-  if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
-    {
-      g_assert (in_current_namespace != NULL);
-      details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
-                                                                       subdir,
-                                                                       seq_str ? seq_str : "",
-                                                                       glnx_basename (details->resolved_libraries[multiarch_index]),
-                                                                       NULL);
+      g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
+
+      g_dir_rewind (dir);
+      while (g_dir_read_name (dir))
+        dir_elements_after++;
+
+      if (dir_elements_before == dir_elements_after)
+        {
+          /* If we have the same number of elements it means that we didn't
+           * create a symlink to the ICD itself (it must have been nonexistent
+           * or for a different ABI). When this happens we set the kinds to
+           * "NONEXISTENT" and return early without trying to capture the
+           * dependencies. */
+          details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
+          /* If the directory is empty we can also remove it */
+          g_rmdir (in_current_namespace);
+          continue;
+        }
+
+      /* Only add the numbered subdirectories to the search path. Their
+       * parent is expected to be there already. */
+      if (search_path != NULL && seq_str != NULL)
+        {
+          g_autofree gchar *in_container = NULL;
+
+          in_container = g_build_filename (arch->libdir_in_container,
+                                           subdir, seq_str, NULL);
+          pv_search_path_append (search_path, in_container);
+        }
+
+      g_ptr_array_add (dependency_patterns, g_steal_pointer (&dependency_pattern));
+
+      if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
+        {
+          g_assert (in_current_namespace != NULL);
+          details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
+                                                                           subdir,
+                                                                           seq_str ? seq_str : "",
+                                                                           glnx_basename (details->resolved_libraries[multiarch_index]),
+                                                                           NULL);
+        }
     }
 
   return TRUE;
@@ -4089,8 +4112,8 @@ collect_vulkan_layers (PvRuntime *self,
             }
         }
 
-      if (!bind_icd (self, arch, j, dir_name, details, &use_numbered_subdirs,
-                     dependency_patterns, NULL, error))
+      if (!bind_icds (self, arch, j, dir_name, &details, 1, &use_numbered_subdirs,
+                      dependency_patterns, NULL, error))
         return FALSE;
     }
 
@@ -5271,8 +5294,8 @@ collect_egl_drivers (PvRuntime *self,
       details->resolved_libraries[multiarch_index] = srt_egl_icd_resolve_library_path (icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
-      if (!bind_icd (self, arch, j, "glvnd", details,
-                     &use_numbered_subdirs, patterns, NULL, error))
+      if (!bind_icds (self, arch, j, "glvnd", &details, 1,
+                      &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
 
@@ -5313,7 +5336,7 @@ collect_egl_ext_platforms (PvRuntime *self,
       details->resolved_libraries[multiarch_index] = srt_egl_external_platform_resolve_library_path (ext);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
-      if (!bind_icd (self, arch, j, "egl_external_platform", details,
+      if (!bind_icds (self, arch, j, "egl_external_platform", &details, 1,
                      &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
@@ -5355,8 +5378,8 @@ collect_vulkan_icds (PvRuntime *self,
       details->resolved_libraries[multiarch_index] = srt_vulkan_icd_resolve_library_path (icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
 
-      if (!bind_icd (self, arch, j, "vulkan", details,
-                     &use_numbered_subdirs, patterns, NULL, error))
+      if (!bind_icds (self, arch, j, "vulkan", &details, 1,
+                      &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
     }
 
@@ -5406,8 +5429,8 @@ collect_vdpau_drivers (PvRuntime *self,
        * because they can only be located in a single directory,
        * so by definition we can't have collisions. Anything that
        * ends up in a numbered subdirectory won't get used. */
-      if (!bind_icd (self, arch, j, "vdpau", details,
-                     &use_numbered_subdirs, patterns, NULL, error))
+      if (!bind_icds (self, arch, j, "vdpau", &details, 1,
+                      &use_numbered_subdirs, patterns, NULL, error))
         return FALSE;
 
       /* Because the path is always absolute, ICD_KIND_SONAME makes
@@ -5459,8 +5482,8 @@ collect_dri_drivers (PvRuntime *self,
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
-      if (!bind_icd (self, arch, j, "dri", details,
-                     &use_numbered_subdirs, patterns, dri_path, error))
+      if (!bind_icds (self, arch, j, "dri", &details, 1,
+                      &use_numbered_subdirs, patterns, dri_path, error))
         return FALSE;
 
       /* Because the path is always absolute, ICD_KIND_SONAME makes
@@ -5512,8 +5535,8 @@ collect_va_api_drivers (PvRuntime *self,
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
 
-      if (!bind_icd (self, arch, j, "dri", details,
-                     &use_numbered_subdirs, patterns, va_api_path, error))
+      if (!bind_icds (self, arch, j, "dri", &details, 1,
+                      &use_numbered_subdirs, patterns, va_api_path, error))
         return FALSE;
 
       /* Because the path is always absolute, ICD_KIND_SONAME makes

@@ -4,7 +4,7 @@
  * Contains code taken from Flatpak.
  *
  * Copyright © 2014-2019 Red Hat, Inc
- * Copyright © 2017-2021 Collabora Ltd.
+ * Copyright © 2017-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -47,6 +47,7 @@
 #include "runtime.h"
 #include "utils.h"
 #include "wrap-flatpak.h"
+#include "wrap-home.h"
 #include "wrap-interactive.h"
 #include "wrap-setup.h"
 
@@ -212,7 +213,7 @@ static const char * const steam_api_subdirs[] =
 
 static gboolean expose_steam (FlatpakExports *exports,
                               FlatpakFilesystemMode mode,
-                              gboolean is_home_shared,
+                              PvHomeMode home_mode,
                               const char *real_home,
                               const char *fake_home,
                               GError **error);
@@ -265,8 +266,8 @@ use_tmpfs_home (FlatpakExports *exports,
   pv_environ_setenv (container_env, "XDG_CONFIG_HOME", config);
   pv_environ_setenv (container_env, "XDG_DATA_HOME", data);
 
-  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY, FALSE,
-                       real_home, NULL, error);
+  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                       PV_HOME_MODE_TRANSIENT, real_home, NULL, error);
 }
 
 static gboolean
@@ -351,14 +352,14 @@ use_fake_home (FlatpakExports *exports,
                                    FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                    fake_home);
 
-  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY, FALSE,
-                       real_home, fake_home, error);
+  return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                       PV_HOME_MODE_PRIVATE, real_home, fake_home, error);
 }
 
 static gboolean
 expose_steam (FlatpakExports *exports,
               FlatpakFilesystemMode mode,
-              gboolean is_home_shared,
+              PvHomeMode home_mode,
               const char *real_home,
               const char *fake_home,
               GError **error)
@@ -374,7 +375,7 @@ expose_steam (FlatpakExports *exports,
   /* We need ~/.steam to be visible in the container, even if it's a
    * symlink to somewhere outside $HOME. (It's better not to do this; use
    * a separate Steam library instead, or use bind-mounts.) */
-  if (!is_home_shared)
+  if (home_mode != PV_HOME_MODE_SHARED)
     {
       flatpak_exports_add_path_expose (exports, mode, dot_steam);
     }
@@ -1175,7 +1176,7 @@ main (int argc,
   g_auto(GStrv) original_environ = NULL;
   int original_argc = argc;
   gboolean is_flatpak_env = g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR);
-  gboolean is_home_shared = TRUE;
+  PvHomeMode home_mode;
   g_autoptr(FlatpakBwrap) flatpak_subsandbox = NULL;
   g_autoptr(PvEnviron) container_env = NULL;
   g_autoptr(FlatpakBwrap) bwrap = NULL;
@@ -1443,26 +1444,26 @@ main (int argc,
 
   if (opt_share_home == TRISTATE_YES)
     {
-      is_home_shared = TRUE;
+      home_mode = PV_HOME_MODE_SHARED;
     }
   else if (opt_home)
     {
-      is_home_shared = FALSE;
+      home_mode = PV_HOME_MODE_PRIVATE;
       opt_fake_home = g_strdup (opt_home);
     }
   else if (opt_share_home == TRISTATE_MAYBE)
     {
-      is_home_shared = TRUE;
+      home_mode = PV_HOME_MODE_SHARED;
     }
   else if (opt_freedesktop_app_id)
     {
-      is_home_shared = FALSE;
+      home_mode = PV_HOME_MODE_PRIVATE;
       opt_fake_home = g_build_filename (home, ".var", "app",
                                         opt_freedesktop_app_id, NULL);
     }
   else if (steam_app_id != NULL)
     {
-      is_home_shared = FALSE;
+      home_mode = PV_HOME_MODE_PRIVATE;
       opt_freedesktop_app_id = g_strdup_printf ("com.steampowered.App%s",
                                                 steam_app_id);
       opt_fake_home = g_build_filename (home, ".var", "app",
@@ -1470,7 +1471,7 @@ main (int argc,
     }
   else if (opt_batch)
     {
-      is_home_shared = FALSE;
+      home_mode = PV_HOME_MODE_TRANSIENT;
       opt_fake_home = NULL;
       g_info ("Unsharing the home directory without choosing a valid "
               "candidate, using tmpfs as a fallback");
@@ -1481,6 +1482,11 @@ main (int argc,
                    "or $SteamAppId is required");
       goto out;
     }
+
+  if (home_mode == PV_HOME_MODE_PRIVATE)
+    g_assert (opt_fake_home != NULL);
+  else
+    g_assert (opt_fake_home == NULL);
 
   if (opt_env_if_host != NULL)
     {
@@ -1862,7 +1868,7 @@ main (int argc,
 
   if (flatpak_subsandbox != NULL)
     {
-      if (is_home_shared)
+      if (home_mode == PV_HOME_MODE_SHARED)
         {
           /* Nothing special to do here: we'll use the same home directory
            * and exports that the parent Flatpak sandbox used. */
@@ -1883,7 +1889,7 @@ main (int argc,
       g_assert (bwrap_filesystem_arguments != NULL);
       g_assert (exports != NULL);
 
-      if (is_home_shared)
+      if (home_mode == PV_HOME_MODE_SHARED)
         {
           flatpak_exports_add_path_expose (exports,
                                            FLATPAK_FILESYSTEM_MODE_READ_WRITE,
@@ -1899,14 +1905,14 @@ main (int argc,
            * should have a future "compat level" in which it's read-only,
            * like it already is when using a per-game home directory. */
           if (!expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                             TRUE, home, NULL, error))
+                             home_mode, home, NULL, error))
             goto out;
         }
       else
         {
           bwrap_home_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
-          if (opt_fake_home == NULL)
+          if (home_mode == PV_HOME_MODE_TRANSIENT)
             {
               if (!use_tmpfs_home (exports, bwrap_home_arguments,
                                    container_env, error))
@@ -1914,6 +1920,9 @@ main (int argc,
             }
           else
             {
+              g_assert (home_mode == PV_HOME_MODE_PRIVATE);
+              g_assert (opt_fake_home != NULL);
+
               if (!use_fake_home (exports, bwrap_home_arguments,
                                   container_env, opt_fake_home,
                                   error))

@@ -226,10 +226,14 @@ adjust_exports (FlatpakBwrap *bwrap,
 
       g_assert (opt != NULL);
 
-      if (g_str_equal (opt, "--symlink"))
+      if (g_str_equal (opt, "--bind-data") ||
+          g_str_equal (opt, "--chmod") ||
+          g_str_equal (opt, "--ro-bind-data") ||
+          g_str_equal (opt, "--file") ||
+          g_str_equal (opt, "--symlink"))
         {
           g_assert (i + 3 <= bwrap->argv->len);
-          /* pdata[i + 1] is the target: unchanged. */
+          /* pdata[i + 1] is the target, fd or permissions: unchanged. */
           /* pdata[i + 2] is a path in the final container: unchanged. */
           g_debug ("%s %s %s",
                    opt,
@@ -237,18 +241,28 @@ adjust_exports (FlatpakBwrap *bwrap,
                    (const char *) bwrap->argv->pdata[i + 2]);
           i += 3;
         }
-      else if (g_str_equal (opt, "--dir") ||
+      else if (g_str_equal (opt, "--dev") ||
+               g_str_equal (opt, "--dir") ||
+               g_str_equal (opt, "--mqueue") ||
+               g_str_equal (opt, "--perms") ||
+               g_str_equal (opt, "--proc") ||
+               g_str_equal (opt, "--remount-ro") ||
                g_str_equal (opt, "--tmpfs"))
         {
           g_assert (i + 2 <= bwrap->argv->len);
-          /* pdata[i + 1] is a path in the final container: unchanged. */
+          /* pdata[i + 1] is a path in the final container, or a non-path:
+           * unchanged. */
           g_debug ("%s %s",
                    opt,
                    (const char *) bwrap->argv->pdata[i + 1]);
           i += 2;
         }
-      else if (g_str_equal (opt, "--ro-bind") ||
-               g_str_equal (opt, "--bind"))
+      else if (g_str_equal (opt, "--bind") ||
+               g_str_equal (opt, "--bind-try") ||
+               g_str_equal (opt, "--dev-bind") ||
+               g_str_equal (opt, "--dev-bind-try") ||
+               g_str_equal (opt, "--ro-bind") ||
+               g_str_equal (opt, "--ro-bind-try"))
         {
           g_autofree gchar *src = NULL;
 

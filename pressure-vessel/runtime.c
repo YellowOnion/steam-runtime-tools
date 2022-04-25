@@ -2309,8 +2309,6 @@ pv_runtime_capture_libraries (PvRuntime *self,
 }
 
 /*
- * @starting_sequence_number: numbered directory to use to disambiguate between
- *  colliding files with the same basename
  * @requested_subdir: (not nullable):
  * @details_arr: (array length=n_details):
  * @n_details: Number of entries in @details_arr
@@ -2338,7 +2336,6 @@ pv_runtime_capture_libraries (PvRuntime *self,
 static gboolean
 bind_icds (PvRuntime *self,
            RuntimeArchitecture *arch,
-           gsize starting_sequence_number,
            const char *requested_subdir,
            IcdDetails **details_arr,
            gsize n_details,
@@ -2379,8 +2376,9 @@ bind_icds (PvRuntime *self,
 
       g_return_val_if_fail (details != NULL, FALSE);
 
-      g_return_val_if_fail (details->resolved_libraries[multiarch_index] != NULL,
-                            FALSE);
+      if (details->resolved_libraries[multiarch_index] == NULL)
+        continue;
+
       g_return_val_if_fail (details->kinds[multiarch_index] == ICD_KIND_NONEXISTENT,
                             FALSE);
       g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
@@ -2431,7 +2429,7 @@ bind_icds (PvRuntime *self,
        * to force a specific load order, create it. */
       if (*use_numbered_subdirs && subdir[0] != '\0')
         {
-          seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, starting_sequence_number + i);
+          seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, i);
           g_clear_pointer (&in_current_namespace, g_free);
           in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
                                                    subdir, seq_str, NULL);
@@ -4025,6 +4023,10 @@ collect_vulkan_layers (PvRuntime *self,
                        const gchar *dir_name,
                        GError **error)
 {
+  /* We don't have to use multiple directories unless there are
+   * filename collisions, because the order of the JSON manifests
+   * might matter, but the order of the actual libraries does not. */
+  gboolean use_numbered_subdirs = FALSE;
   gsize j;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
     _srt_profiling_start ("Collecting Vulkan %s layers", dir_name);
@@ -4040,12 +4042,10 @@ collect_vulkan_layers (PvRuntime *self,
       SrtLibraryIssues issues;
       IcdDetails *details = g_ptr_array_index (layer_details, j);
       SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
-      /* We don't have to use multiple directories unless there are
-       * filename collisions, because the order of the JSON manifests
-       * might matter, but the order of the actual libraries does not. */
-      gboolean use_numbered_subdirs = FALSE;
       const char *resolved_library;
       const gsize multiarch_index = arch->multiarch_index;
+
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
 
       if (!srt_vulkan_layer_check_error (layer, NULL))
         continue;
@@ -4060,7 +4060,6 @@ collect_vulkan_layers (PvRuntime *self,
       /* If the library_path is relative to the JSON file, turn it into an
        * absolute path. If it's already absolute, or if it's a basename to be
        * looked up in the system library search path, use it as-is. */
-      g_assert (details->resolved_libraries[multiarch_index] == NULL);
       details->resolved_libraries[multiarch_index] = srt_vulkan_layer_resolve_library_path (layer);
       resolved_library = details->resolved_libraries[multiarch_index];
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
@@ -4094,6 +4093,7 @@ collect_vulkan_layers (PvRuntime *self,
                 {
                   g_info ("Unable to load library %s: %s", resolved_library,
                           srt_library_get_messages (library));
+                  g_clear_pointer (&details->resolved_libraries[multiarch_index], g_free);
                   continue;
                 }
 
@@ -4107,15 +4107,19 @@ collect_vulkan_layers (PvRuntime *self,
             {
               /* Sorry, we can't know how to load this. */
               g_info ("Cannot support ld.so special tokens, e.g. ${LIB}, when provider "
-                      "is not the root filesystem");
+                      "is not the root filesystem: ignoring %s",
+                      resolved_library);
+              g_clear_pointer (&details->resolved_libraries[multiarch_index], g_free);
               continue;
             }
         }
-
-      if (!bind_icds (self, arch, j, dir_name, &details, 1, &use_numbered_subdirs,
-                      dependency_patterns, NULL, error))
-        return FALSE;
     }
+
+  if (!bind_icds (self, arch, dir_name,
+                  (IcdDetails **) layer_details->pdata,
+                  layer_details->len,
+                  &use_numbered_subdirs, dependency_patterns, NULL, error))
+    return FALSE;
 
   return TRUE;
 }
@@ -5287,17 +5291,20 @@ collect_egl_drivers (PvRuntime *self,
       IcdDetails *details = g_ptr_array_index (egl_icd_details, j);
       SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
 
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+
       if (!srt_egl_icd_check_error (icd, NULL))
         continue;
 
-      g_assert (details->resolved_libraries[multiarch_index] == NULL);
       details->resolved_libraries[multiarch_index] = srt_egl_icd_resolve_library_path (icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
-
-      if (!bind_icds (self, arch, j, "glvnd", &details, 1,
-                      &use_numbered_subdirs, patterns, NULL, error))
-        return FALSE;
     }
+
+  if (!bind_icds (self, arch, "glvnd",
+                  (IcdDetails **) egl_icd_details->pdata,
+                  egl_icd_details->len,
+                  &use_numbered_subdirs, patterns, NULL, error))
+    return FALSE;
 
   return TRUE;
 }
@@ -5329,17 +5336,20 @@ collect_egl_ext_platforms (PvRuntime *self,
       IcdDetails *details = g_ptr_array_index (egl_ext_platform_details, j);
       SrtEglExternalPlatform *ext = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
 
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+
       if (!srt_egl_external_platform_check_error (ext, NULL))
         continue;
 
-      g_assert (details->resolved_libraries[multiarch_index] == NULL);
       details->resolved_libraries[multiarch_index] = srt_egl_external_platform_resolve_library_path (ext);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
-
-      if (!bind_icds (self, arch, j, "egl_external_platform", &details, 1,
-                     &use_numbered_subdirs, patterns, NULL, error))
-        return FALSE;
     }
+
+  if (!bind_icds (self, arch, "egl_external_platform",
+                  (IcdDetails **) egl_ext_platform_details->pdata,
+                  egl_ext_platform_details->len,
+                  &use_numbered_subdirs, patterns, NULL, error))
+    return FALSE;
 
   return TRUE;
 }
@@ -5371,17 +5381,20 @@ collect_vulkan_icds (PvRuntime *self,
       IcdDetails *details = g_ptr_array_index (vulkan_icd_details, j);
       SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
 
+      g_assert (details->resolved_libraries[multiarch_index] == NULL);
+
       if (!srt_vulkan_icd_check_error (icd, NULL))
         continue;
 
-      g_assert (details->resolved_libraries[multiarch_index] == NULL);
       details->resolved_libraries[multiarch_index] = srt_vulkan_icd_resolve_library_path (icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
-
-      if (!bind_icds (self, arch, j, "vulkan", &details, 1,
-                      &use_numbered_subdirs, patterns, NULL, error))
-        return FALSE;
     }
+
+  if (!bind_icds (self, arch, "vulkan",
+                  (IcdDetails **) vulkan_icd_details->pdata,
+                  vulkan_icd_details->len,
+                  &use_numbered_subdirs, patterns, NULL, error))
+    return FALSE;
 
   return TRUE;
 }
@@ -5398,6 +5411,7 @@ collect_vdpau_drivers (PvRuntime *self,
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
     _srt_profiling_start ("Collecting VDPAU drivers");
+  g_autoptr(GPtrArray) details_arr = NULL;
   g_autoptr(SrtObjectList) vdpau_drivers = NULL;
   /* The VDPAU loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
@@ -5416,6 +5430,9 @@ collect_vdpau_drivers (PvRuntime *self,
                                                           SRT_DRIVER_FLAGS_NONE);
     }
 
+  details_arr = g_ptr_array_new_full (g_list_length (vdpau_drivers),
+                                      (GDestroyNotify) G_CALLBACK (icd_details_free));
+
   for (icd_iter = vdpau_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
       g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
@@ -5424,14 +5441,22 @@ collect_vdpau_drivers (PvRuntime *self,
       details->resolved_libraries[multiarch_index] = srt_vdpau_driver_resolve_library_path (details->icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
+      g_ptr_array_add (details_arr, g_steal_pointer (&details));
+    }
 
-      /* In practice we won't actually use the sequence number for VDPAU
-       * because they can only be located in a single directory,
-       * so by definition we can't have collisions. Anything that
-       * ends up in a numbered subdirectory won't get used. */
-      if (!bind_icds (self, arch, j, "vdpau", &details, 1,
-                      &use_numbered_subdirs, patterns, NULL, error))
-        return FALSE;
+  /* In practice we won't actually use the sequence number for VDPAU
+   * because they can only be located in a single directory,
+   * so by definition we can't have collisions. Anything that
+   * ends up in a numbered subdirectory won't get used. */
+  if (!bind_icds (self, arch, "vdpau",
+                  (IcdDetails **) details_arr->pdata,
+                  details_arr->len,
+                  &use_numbered_subdirs, patterns, NULL, error))
+    return FALSE;
+
+  for (j = 0; j < details_arr->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (details_arr, j);
 
       /* Because the path is always absolute, ICD_KIND_SONAME makes
        * no sense */
@@ -5454,6 +5479,7 @@ collect_dri_drivers (PvRuntime *self,
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
     _srt_profiling_start ("Collecting DRI drivers");
+  g_autoptr(GPtrArray) details_arr = NULL;
   g_autoptr(SrtObjectList) dri_drivers = NULL;
   /* The DRI loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
@@ -5473,6 +5499,9 @@ collect_dri_drivers (PvRuntime *self,
                                                       SRT_DRIVER_FLAGS_NONE);
     }
 
+  details_arr = g_ptr_array_new_full (g_list_length (dri_drivers),
+                                      (GDestroyNotify) G_CALLBACK (icd_details_free));
+
   for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
       g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
@@ -5481,10 +5510,18 @@ collect_dri_drivers (PvRuntime *self,
       details->resolved_libraries[multiarch_index] = srt_dri_driver_resolve_library_path (details->icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
+      g_ptr_array_add (details_arr, g_steal_pointer (&details));
+    }
 
-      if (!bind_icds (self, arch, j, "dri", &details, 1,
-                      &use_numbered_subdirs, patterns, dri_path, error))
-        return FALSE;
+  if (!bind_icds (self, arch, "dri",
+                  (IcdDetails **) details_arr->pdata,
+                  details_arr->len,
+                  &use_numbered_subdirs, patterns, dri_path, error))
+    return FALSE;
+
+  for (j = 0; j < details_arr->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (details_arr, j);
 
       /* Because the path is always absolute, ICD_KIND_SONAME makes
        * no sense */
@@ -5507,6 +5544,7 @@ collect_va_api_drivers (PvRuntime *self,
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
     _srt_profiling_start ("Collecting VA-API drivers");
+  g_autoptr(GPtrArray) details_arr = NULL;
   g_autoptr(SrtObjectList) va_api_drivers = NULL;
   /* The VA-API loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
@@ -5526,6 +5564,9 @@ collect_va_api_drivers (PvRuntime *self,
                                                             SRT_DRIVER_FLAGS_NONE);
     }
 
+  details_arr = g_ptr_array_new_full (g_list_length (va_api_drivers),
+                                      (GDestroyNotify) G_CALLBACK (icd_details_free));
+
   for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
       g_autoptr(IcdDetails) details = icd_details_new (icd_iter->data);
@@ -5534,10 +5575,18 @@ collect_va_api_drivers (PvRuntime *self,
       details->resolved_libraries[multiarch_index] = srt_va_api_driver_resolve_library_path (details->icd);
       g_assert (details->resolved_libraries[multiarch_index] != NULL);
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
+      g_ptr_array_add (details_arr, g_steal_pointer (&details));
+    }
 
-      if (!bind_icds (self, arch, j, "dri", &details, 1,
-                      &use_numbered_subdirs, patterns, va_api_path, error))
-        return FALSE;
+  if (!bind_icds (self, arch, "dri",
+                  (IcdDetails **) details_arr->pdata,
+                  details_arr->len,
+                  &use_numbered_subdirs, patterns, va_api_path, error))
+    return FALSE;
+
+  for (j = 0; j < details_arr->len; j++)
+    {
+      IcdDetails *details = g_ptr_array_index (details_arr, j);
 
       /* Because the path is always absolute, ICD_KIND_SONAME makes
        * no sense */

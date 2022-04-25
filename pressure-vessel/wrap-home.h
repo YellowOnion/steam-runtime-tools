@@ -22,6 +22,10 @@
 
 #include <glib.h>
 
+#include "environ.h"
+#include "flatpak-bwrap-private.h"
+#include "flatpak-exports-private.h"
+
 /**
  * PvHomeMode:
  * @PV_HOME_MODE_TRANSIENT: The home directory in the container will be
@@ -37,3 +41,11 @@ typedef enum
   PV_HOME_MODE_PRIVATE,
   PV_HOME_MODE_SHARED,
 } PvHomeMode;
+
+gboolean pv_wrap_use_home (PvHomeMode mode,
+                           const char *real_home,
+                           const char *private_home,
+                           FlatpakExports *exports,
+                           FlatpakBwrap *bwrap_home_arguments,
+                           PvEnviron *container_env,
+                           GError **error);

@@ -2369,9 +2369,6 @@ bind_icds (PvRuntime *self,
       const char *base;
       const char *mode;
       g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-      g_autoptr(GDir) dir = NULL;
-      gsize dir_elements_before = 0;
-      gsize dir_elements_after = 0;
       const char *subdir = requested_subdir;
 
       g_return_val_if_fail (details != NULL, FALSE);
@@ -2446,14 +2443,6 @@ bind_icds (PvRuntime *self,
           continue;
         }
 
-      dir = g_dir_open (in_current_namespace, 0, error);
-      if (dir == NULL)
-        return FALSE;
-
-      /* Number of elements before trying to capture the library */
-      while (g_dir_read_name (dir))
-        dir_elements_before++;
-
       pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
                                  options, mode, details->resolved_libraries[multiarch_index]);
       dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
@@ -2474,19 +2463,14 @@ bind_icds (PvRuntime *self,
 
       g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-      g_dir_rewind (dir);
-      while (g_dir_read_name (dir))
-        dir_elements_after++;
-
-      if (dir_elements_before == dir_elements_after)
+      if (!g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
         {
-          /* If we have the same number of elements it means that we didn't
-           * create a symlink to the ICD itself (it must have been nonexistent
-           * or for a different ABI). When this happens we set the kinds to
-           * "NONEXISTENT" and return early without trying to capture the
-           * dependencies. */
+          /* capsule-capture-libs didn't actually create the symlink,
+           * which means the ICD is nonexistent or the wrong architecture.
+           * We don't need to capture the dependencies in this case. */
           details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
-          /* If the directory is empty we can also remove it */
+          /* If the directory is empty we can also remove it.
+           * This is opportunistic, so ignore ENOTEMPTY. */
           g_rmdir (in_current_namespace);
           continue;
         }

@@ -2361,6 +2361,8 @@ bind_icds (PvRuntime *self,
            GError **error)
 {
   static const char options[] = "if-exists:if-same-abi";
+  g_autoptr(GHashTable) basename_set = NULL;
+  g_autofree const char **basenames = NULL;
   g_autofree gchar *subdir_in_current_namespace = NULL;
   gsize multiarch_index;
   gsize i;
@@ -2424,8 +2426,47 @@ bind_icds (PvRuntime *self,
     return glnx_throw_errno_prefix (error, "Unable to create %s",
                                     subdir_in_current_namespace);
 
-  /* If there are ICD_KIND_ABSOLUTE drivers, do the rest of the processing
-   * for them, which is a bit more complicated. */
+  /* Decide whether we need to use numbered subdirectories.
+   * If there are file collisions, then the answer is yes we do:
+   * .../glvnd/0/libEGL_example.so -> /usr/.../libEGL_example.so,
+   * .../glvnd/1/libEGL_example.so -> /opt/.../libEGL_example.so,
+   * and so on. If not (common case), we can use a single directory:
+   * .../glvnd/libEGL_one.so -> /usr/.../libEGL_one.so,
+   * .../glvnd/libEGL_two.so -> /opt/.../libEGL_two.so,
+   * and so on. */
+  basename_set = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+  basenames = g_new0 (const char *, n_details);
+
+  for (i = 0; i < n_details && !*use_numbered_subdirs; i++)
+    {
+      IcdDetails *details = details_arr[i];
+      const char *base;
+
+      if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
+        continue;
+
+      base = glnx_basename (details->resolved_libraries[multiarch_index]);
+      basenames[i] = base;
+
+      if (g_hash_table_contains (basename_set, base))
+        {
+          /* The ICD is (at least potentially) going to collide with
+           * another from this batch */
+          *use_numbered_subdirs = TRUE;
+        }
+      else
+        {
+          g_autofree gchar *path = g_build_filename (subdir_in_current_namespace,
+                                                     base, NULL);
+
+          g_hash_table_add (basename_set, (char *) base);
+
+          /* The ICD would collide with one that we already set up */
+          if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
+            *use_numbered_subdirs = TRUE;
+        }
+    }
+
   for (i = 0; i < n_details; i++)
     {
       IcdDetails *details = details_arr[i];
@@ -2440,22 +2481,10 @@ bind_icds (PvRuntime *self,
       if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
         continue;
 
-      base = glnx_basename (details->resolved_libraries[multiarch_index]);
+      base = basenames[i];
 
-      /* Check whether we can get away with avoiding the sequence number.
-       * Depending on the type of ICD, we might want to use the sequence
-       * number to force a specific load order. */
-      if (!*use_numbered_subdirs)
-        {
-          g_autofree gchar *path = NULL;
-
-          path = g_build_filename (subdir_in_current_namespace, base, NULL);
-
-          /* No, we can't: the ICD would collide with one that we already
-           * set up */
-          if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
-            *use_numbered_subdirs = TRUE;
-        }
+      if (base == NULL)
+        base = glnx_basename (details->resolved_libraries[multiarch_index]);
 
       /* If we can't avoid the numbered subdirectory, or want to use one
        * to force a specific load order, create it. */

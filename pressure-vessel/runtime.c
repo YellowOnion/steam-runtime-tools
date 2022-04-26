@@ -2159,6 +2159,14 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   return ret;
 }
 
+static gboolean pv_runtime_capture_libraries (PvRuntime *self,
+                                              RuntimeArchitecture *arch,
+                                              const char *destination,
+                                              const char *profiling_message,
+                                              const char * const *patterns,
+                                              gsize n_patterns,
+                                              GError **error);
+
 static gboolean
 collect_s2tc (PvRuntime *self,
               RuntimeArchitecture *arch,
@@ -2175,23 +2183,14 @@ collect_s2tc (PvRuntime *self,
 
   if (g_file_test (s2tc_in_current_namespace, G_FILE_TEST_EXISTS))
     {
-      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       g_autofree gchar *expr = NULL;
 
       g_debug ("Collecting s2tc \"%s\" and its dependencies...", s2tc);
       expr = g_strdup_printf ("path-match:%s", s2tc);
 
-      if (!pv_runtime_provide_container_access (self, error))
-        return FALSE;
-
-      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              "--dest", arch->libdir_in_current_namespace,
-                              expr,
-                              NULL);
-      flatpak_bwrap_finish (temp_bwrap);
-
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+      if (!pv_runtime_capture_libraries (self, arch,
+                                         arch->libdir_in_current_namespace, expr,
+                                         (const char * const *) &expr, 1, error))
         return FALSE;
     }
 
@@ -2271,25 +2270,42 @@ icd_details_free (IcdDetails *self)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
 
 /*
- * @destination: (not nullable): where to capture the libraries
- * @patterns: (not nullable): array of patterns for capsule-capture-libs
+ * pv_runtime_capture_libraries:
+ * @self: (not nullable): The runtime
+ * @arch: (not nullable): An architecture
+ * @destination: (not nullable): Where to capture the libraries
+ * @profiling_message: (nullable): Description of this operation, for
+ *  profiling. If %NULL, the profiling timer is not used.
+ * @patterns: (not nullable) (array length=n_patterns): Patterns for capsule-capture-libs
+ * @n_patterns: Number of patterns in @patterns, which must be greater than 0
+ * @error: Used to return an error on failure
+ *
+ * Use capsule-capture-libs to capture libraries for architecture @arch
+ * matching @patterns, creating symlinks in @destination.
+ *
+ * Returns: %TRUE on success
  */
 static gboolean
 pv_runtime_capture_libraries (PvRuntime *self,
                               RuntimeArchitecture *arch,
                               const gchar *destination,
-                              GPtrArray *patterns,
+                              const char *profiling_message,
+                              const char * const *patterns,
+                              gsize n_patterns,
                               GError **error)
 {
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
-  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) libc_timer =
-    _srt_profiling_start ("Main capsule-capture-libs call");
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   gsize i;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
   g_return_val_if_fail (destination != NULL, FALSE);
+  g_return_val_if_fail (n_patterns > 0, FALSE);
   g_return_val_if_fail (patterns != NULL, FALSE);
+
+  if (profiling_message != NULL)
+    timer = _srt_profiling_start ("%s", profiling_message);
 
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
@@ -2297,8 +2313,8 @@ pv_runtime_capture_libraries (PvRuntime *self,
   temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
   flatpak_bwrap_add_args (temp_bwrap, "--dest", destination, NULL);
 
-  for (i = 0; i < patterns->len; i++)
-    flatpak_bwrap_add_arg (temp_bwrap, (gchar *)g_ptr_array_index (patterns, i));
+  for (i = 0; i < n_patterns; i++)
+    flatpak_bwrap_add_arg (temp_bwrap, patterns[i]);
 
   flatpak_bwrap_finish (temp_bwrap);
 
@@ -2368,7 +2384,6 @@ bind_icds (PvRuntime *self,
       g_autofree gchar *final_path = NULL;
       const char *base;
       const char *mode;
-      g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
       const char *subdir = requested_subdir;
 
       g_return_val_if_fail (details != NULL, FALSE);
@@ -2448,20 +2463,9 @@ bind_icds (PvRuntime *self,
       dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
                                             options, mode, details->resolved_libraries[multiarch_index]);
 
-      if (!pv_runtime_provide_container_access (self, error))
+      if (!pv_runtime_capture_libraries (self, arch, in_current_namespace, pattern,
+                                         (const char * const *) &pattern, 1, error))
         return FALSE;
-
-      temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-      flatpak_bwrap_add_args (temp_bwrap,
-                              "--dest", in_current_namespace,
-                              pattern,
-                              NULL);
-      flatpak_bwrap_finish (temp_bwrap);
-
-      if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
-        return FALSE;
-
-      g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
       if (!g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
         {
@@ -4314,7 +4318,14 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                 GHashTable *gconv_in_provider,
                                 GError **error)
 {
-  g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
+  static const char * const patterns[] =
+  {
+    "if-exists:libidn2.so.0",
+    "if-exists:even-if-older:soname-match:libnss_compat.so.*",
+    "if-exists:even-if-older:soname-match:libnss_db.so.*",
+    "if-exists:even-if-older:soname-match:libnss_dns.so.*",
+    "if-exists:even-if-older:soname-match:libnss_files.so.*",
+  };
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) libc_timer =
     _srt_profiling_start ("glibc");
   g_autofree char *libc_target = NULL;
@@ -4327,22 +4338,9 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                             bwrap, error))
     return FALSE;
 
-  /* Collect miscellaneous libraries that libc might dlopen. */
-  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-  flatpak_bwrap_add_args (temp_bwrap,
-                          "--dest", arch->libdir_in_current_namespace,
-                          "if-exists:libidn2.so.0",
-                          "if-exists:even-if-older:soname-match:libnss_compat.so.*",
-                          "if-exists:even-if-older:soname-match:libnss_db.so.*",
-                          "if-exists:even-if-older:soname-match:libnss_dns.so.*",
-                          "if-exists:even-if-older:soname-match:libnss_files.so.*",
-                          NULL);
-  flatpak_bwrap_finish (temp_bwrap);
-
-  if (!pv_bwrap_run_sync (temp_bwrap, NULL, error))
+  if (!pv_runtime_capture_libraries (self, arch, arch->libdir_in_current_namespace,
+                                     NULL, patterns, G_N_ELEMENTS (patterns), error))
     return FALSE;
-
-  g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
   libc_target = glnx_readlinkat_malloc (-1, libc_symlink, NULL, NULL);
   if (libc_target != NULL)
@@ -5910,9 +5908,18 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                        va_api_path, error))
             return FALSE;
 
+          /* We always have at least one pattern, because
+           * collect_graphics_libraries_patterns() unconditionally
+           * adds some, so we don't need to conditionalize this call
+           * to capsule-capture-libs */
+          g_assert (patterns->len > 0);
+          g_assert (patterns->pdata != NULL);
+
           if (!pv_runtime_capture_libraries (self, arch,
                                              arch->libdir_in_current_namespace,
-                                             patterns, error))
+                                             "Main capsule-capture-libs call",
+                                             (const char * const *) patterns->pdata,
+                                             patterns->len, error))
             return FALSE;
 
           libc_symlink = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);

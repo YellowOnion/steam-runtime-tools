@@ -2505,13 +2505,6 @@ bind_icds (PvRuntime *self,
           dest_in_current_namespace = subdir_in_current_namespace;
         }
 
-      final_path = g_build_filename (dest_in_current_namespace, base, NULL);
-      if (g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
-        {
-          g_info ("\"%s\" is already present, skipping", final_path);
-          continue;
-        }
-
       pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
                                  options,
                                  details->resolved_libraries[multiarch_index]);
@@ -2522,6 +2515,8 @@ bind_icds (PvRuntime *self,
       if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
                                          (const char * const *) &pattern, 1, error))
         return FALSE;
+
+      final_path = g_build_filename (dest_in_current_namespace, base, NULL);
 
       if (!g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
         {

@@ -2467,11 +2467,42 @@ bind_icds (PvRuntime *self,
         }
     }
 
+  /* If we've decided there are no collisions, then we can process all
+   * drivers as a single batch, because they're all going to the same
+   * place. */
+  if (!*use_numbered_subdirs)
+    {
+      g_autoptr(GPtrArray) patterns = g_ptr_array_new_full (n_details, g_free);
+
+      for (i = 0; i < n_details; i++)
+        {
+          IcdDetails *details = details_arr[i];
+          g_autofree gchar *pattern = NULL;
+
+          if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
+            continue;
+
+          pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
+                                     options,
+                                     details->resolved_libraries[multiarch_index]);
+          g_ptr_array_add (patterns, g_steal_pointer (&pattern));
+        }
+
+      if (patterns->len > 0
+          && !pv_runtime_capture_libraries (self, arch, subdir_in_current_namespace,
+                                            subdir_in_current_namespace,
+                                            (const char * const *) patterns->pdata,
+                                            patterns->len, error))
+        return FALSE;
+    }
+
+  /* Finish the per-driver processing. If we're using numbered
+   * subdirectories, this includes the actual captures; if not, this
+   * is just cleanup. */
   for (i = 0; i < n_details; i++)
     {
       IcdDetails *details = details_arr[i];
       g_autofree gchar *numbered_subdir = NULL;
-      g_autofree gchar *pattern = NULL;
       g_autofree gchar *dependency_pattern = NULL;
       g_autofree gchar *seq_str = NULL;
       g_autofree gchar *final_path = NULL;
@@ -2490,6 +2521,8 @@ bind_icds (PvRuntime *self,
        * to force a specific load order, create it. */
       if (*use_numbered_subdirs && subdir[0] != '\0')
         {
+          g_autofree gchar *pattern = NULL;
+
           seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, i);
           numbered_subdir = g_build_filename (subdir_in_current_namespace,
                                               seq_str, NULL);
@@ -2499,19 +2532,18 @@ bind_icds (PvRuntime *self,
                                             numbered_subdir);
 
           dest_in_current_namespace = numbered_subdir;
+          pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
+                                     options,
+                                     details->resolved_libraries[multiarch_index]);
+
+          if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
+                                             (const char * const *) &pattern, 1, error))
+            return FALSE;
         }
       else
         {
           dest_in_current_namespace = subdir_in_current_namespace;
         }
-
-      pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
-                                 options,
-                                 details->resolved_libraries[multiarch_index]);
-
-      if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
-                                         (const char * const *) &pattern, 1, error))
-        return FALSE;
 
       final_path = g_build_filename (dest_in_current_namespace, base, NULL);
 

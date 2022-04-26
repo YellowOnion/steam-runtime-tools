@@ -2508,9 +2508,6 @@ bind_icds (PvRuntime *self,
       pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
                                  options,
                                  details->resolved_libraries[multiarch_index]);
-      dependency_pattern = g_strdup_printf ("only-dependencies:%s:path:%s",
-                                            options,
-                                            details->resolved_libraries[multiarch_index]);
 
       if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
                                          (const char * const *) &pattern, 1, error))
@@ -2543,6 +2540,9 @@ bind_icds (PvRuntime *self,
           pv_search_path_append (search_path, in_container);
         }
 
+      dependency_pattern = g_strdup_printf ("only-dependencies:%s:path:%s",
+                                            options,
+                                            details->resolved_libraries[multiarch_index]);
       g_ptr_array_add (libdir_patterns, g_steal_pointer (&dependency_pattern));
 
       details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,

@@ -2361,6 +2361,7 @@ bind_icds (PvRuntime *self,
            GError **error)
 {
   static const char options[] = "if-exists:if-same-abi";
+  g_autofree gchar *subdir_in_current_namespace = NULL;
   gsize multiarch_index;
   gsize i;
 
@@ -2374,15 +2375,11 @@ bind_icds (PvRuntime *self,
 
   multiarch_index = arch->multiarch_index;
 
+  /* Iterate through the drivers to classify them into ABSOLUTE, SONAME
+   * or missing. Add the SONAMEs to @patterns. */
   for (i = 0; i < n_details; i++)
     {
       IcdDetails *details = details_arr[i];
-      g_autofree gchar *in_current_namespace = NULL;
-      g_autofree gchar *pattern = NULL;
-      g_autofree gchar *dependency_pattern = NULL;
-      g_autofree gchar *seq_str = NULL;
-      g_autofree gchar *final_path = NULL;
-      const char *base;
 
       g_return_val_if_fail (details != NULL, FALSE);
 
@@ -2399,6 +2396,8 @@ bind_icds (PvRuntime *self,
 
       if (!g_path_is_absolute (details->resolved_libraries[multiarch_index]))
         {
+          g_autofree gchar *pattern = NULL;
+
           details->kinds[multiarch_index] = ICD_KIND_SONAME;
 
           pattern = g_strdup_printf ("even-if-older:%s:soname:%s",
@@ -2409,12 +2408,37 @@ bind_icds (PvRuntime *self,
         }
 
       details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
-      in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                               subdir, NULL);
 
-      if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
-        return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                        in_current_namespace);
+      /* We set subdir_in_current_namespace non-NULL if and only if at least
+       * one driver is ICD_KIND_ABSOLUTE */
+      if (subdir_in_current_namespace == NULL)
+        subdir_in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
+                                                        subdir, NULL);
+    }
+
+  /* If no driver was ICD_KIND_ABSOLUTE, then there is nothing more to do */
+  if (subdir_in_current_namespace == NULL)
+    return TRUE;
+
+  if (g_mkdir_with_parents (subdir_in_current_namespace, 0700) != 0)
+    return glnx_throw_errno_prefix (error, "Unable to create %s",
+                                    subdir_in_current_namespace);
+
+  /* If there are ICD_KIND_ABSOLUTE drivers, do the rest of the processing
+   * for them, which is a bit more complicated. */
+  for (i = 0; i < n_details; i++)
+    {
+      IcdDetails *details = details_arr[i];
+      g_autofree gchar *numbered_subdir = NULL;
+      g_autofree gchar *pattern = NULL;
+      g_autofree gchar *dependency_pattern = NULL;
+      g_autofree gchar *seq_str = NULL;
+      g_autofree gchar *final_path = NULL;
+      const char *dest_in_current_namespace = NULL;
+      const char *base;
+
+      if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
+        continue;
 
       base = glnx_basename (details->resolved_libraries[multiarch_index]);
 
@@ -2425,7 +2449,7 @@ bind_icds (PvRuntime *self,
         {
           g_autofree gchar *path = NULL;
 
-          path = g_build_filename (in_current_namespace, base, NULL);
+          path = g_build_filename (subdir_in_current_namespace, base, NULL);
 
           /* No, we can't: the ICD would collide with one that we already
            * set up */
@@ -2438,16 +2462,21 @@ bind_icds (PvRuntime *self,
       if (*use_numbered_subdirs && subdir[0] != '\0')
         {
           seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, i);
-          g_clear_pointer (&in_current_namespace, g_free);
-          in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                                   subdir, seq_str, NULL);
+          numbered_subdir = g_build_filename (subdir_in_current_namespace,
+                                              seq_str, NULL);
 
-          if (g_mkdir_with_parents (in_current_namespace, 0700) != 0)
+          if (g_mkdir_with_parents (numbered_subdir, 0700) != 0)
             return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                            in_current_namespace);
+                                            numbered_subdir);
+
+          dest_in_current_namespace = numbered_subdir;
+        }
+      else
+        {
+          dest_in_current_namespace = subdir_in_current_namespace;
         }
 
-      final_path = g_build_filename (in_current_namespace, base, NULL);
+      final_path = g_build_filename (dest_in_current_namespace, base, NULL);
       if (g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
         {
           g_info ("\"%s\" is already present, skipping", final_path);
@@ -2461,7 +2490,7 @@ bind_icds (PvRuntime *self,
                                             options,
                                             details->resolved_libraries[multiarch_index]);
 
-      if (!pv_runtime_capture_libraries (self, arch, in_current_namespace, pattern,
+      if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
                                          (const char * const *) &pattern, 1, error))
         return FALSE;
 
@@ -2473,7 +2502,9 @@ bind_icds (PvRuntime *self,
           details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
           /* If the directory is empty we can also remove it.
            * This is opportunistic, so ignore ENOTEMPTY. */
-          g_rmdir (in_current_namespace);
+          if (numbered_subdir != NULL)
+            g_rmdir (numbered_subdir);
+
           continue;
         }
 
@@ -2490,15 +2521,11 @@ bind_icds (PvRuntime *self,
 
       g_ptr_array_add (libdir_patterns, g_steal_pointer (&dependency_pattern));
 
-      if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
-        {
-          g_assert (in_current_namespace != NULL);
-          details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
-                                                                           subdir,
-                                                                           seq_str ? seq_str : "",
-                                                                           glnx_basename (details->resolved_libraries[multiarch_index]),
-                                                                           NULL);
-        }
+      details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
+                                                                       subdir,
+                                                                       seq_str ? seq_str : "",
+                                                                       glnx_basename (details->resolved_libraries[multiarch_index]),
+                                                                       NULL);
     }
 
   return TRUE;

@@ -2331,19 +2331,19 @@ pv_runtime_capture_libraries (PvRuntime *self,
  * @use_numbered_subdirs: (inout) (not optional): if %TRUE, use a
  *  numbered subdirectory per ICD, for the rare case where not all
  *  drivers have a unique basename or where order matters
- * @dependency_patterns: (inout) (not nullable): array of patterns for
- *  capsule-capture-libs
+ * @libdir_patterns: (inout) (not nullable): array of patterns for
+ *  capsule-capture-libs whose destination will be `${libdir}`
  * @search_path: (nullable): Add the parent directory of the resulting
  *  ICD to this search path if necessary
  *
  * For each driver in @details_arr that is an absolute path, put a symlink
  * in `${libdir}/${requested_subdir}` or `${libdir}/${requested_subdir}/${n}`.
- *
- * For each driver in @details_arr that is a SONAME, put a symlink in
- * `${libdir}` instead.
- *
- * In either case, add patterns to @dependency_patterns that will capture
+ * Also add a pattern to @libdir_patterns that will capture
  * its dependencies into `${libdir}`.
+ *
+ * For each driver in @details_arr that is a SONAME, instead add a pattern
+ * to @libdir_patterns that will capture the driver and its dependencies
+ * into `${libdir}`.
  *
  * Change `details->kinds[multiarch_index]` from %ICD_KIND_NONEXISTENT
  * to %ICD_KIND_ABSOLUTE, %ICD_KIND_SONAME or %ICD_KIND_NONEXISTENT
@@ -2352,11 +2352,11 @@ pv_runtime_capture_libraries (PvRuntime *self,
 static gboolean
 bind_icds (PvRuntime *self,
            RuntimeArchitecture *arch,
-           const char *requested_subdir,
+           const char *subdir,
            IcdDetails **details_arr,
            gsize n_details,
            gboolean *use_numbered_subdirs,
-           GPtrArray *dependency_patterns,
+           GPtrArray *libdir_patterns,
            GString *search_path,
            GError **error)
 {
@@ -2366,10 +2366,10 @@ bind_icds (PvRuntime *self,
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
-  g_return_val_if_fail (requested_subdir != NULL, FALSE);
+  g_return_val_if_fail (subdir != NULL, FALSE);
   g_return_val_if_fail (n_details == 0 || details_arr != NULL, FALSE);
   g_return_val_if_fail (use_numbered_subdirs != NULL, FALSE);
-  g_return_val_if_fail (dependency_patterns != NULL, FALSE);
+  g_return_val_if_fail (libdir_patterns != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
   multiarch_index = arch->multiarch_index;
@@ -2383,8 +2383,6 @@ bind_icds (PvRuntime *self,
       g_autofree gchar *seq_str = NULL;
       g_autofree gchar *final_path = NULL;
       const char *base;
-      const char *mode;
-      const char *subdir = requested_subdir;
 
       g_return_val_if_fail (details != NULL, FALSE);
 
@@ -2399,20 +2397,18 @@ bind_icds (PvRuntime *self,
       g_info ("Capturing loadable module: %s",
               details->resolved_libraries[multiarch_index]);
 
-      if (g_path_is_absolute (details->resolved_libraries[multiarch_index]))
-        {
-          details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
-          mode = "path";
-        }
-      else
+      if (!g_path_is_absolute (details->resolved_libraries[multiarch_index]))
         {
           details->kinds[multiarch_index] = ICD_KIND_SONAME;
-          mode = "soname";
-          /* If we have just a SONAME, we do not want to place the library
-           * under a subdir, otherwise ld.so will not be able to find it */
-          subdir = "";
+
+          pattern = g_strdup_printf ("even-if-older:%s:soname:%s",
+                                     options,
+                                     details->resolved_libraries[multiarch_index]);
+          g_ptr_array_add (libdir_patterns, g_steal_pointer (&pattern));
+          continue;
         }
 
+      details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
       in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
                                                subdir, NULL);
 
@@ -2458,10 +2454,12 @@ bind_icds (PvRuntime *self,
           continue;
         }
 
-      pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
-                                 options, mode, details->resolved_libraries[multiarch_index]);
-      dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
-                                            options, mode, details->resolved_libraries[multiarch_index]);
+      pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
+                                 options,
+                                 details->resolved_libraries[multiarch_index]);
+      dependency_pattern = g_strdup_printf ("only-dependencies:%s:path:%s",
+                                            options,
+                                            details->resolved_libraries[multiarch_index]);
 
       if (!pv_runtime_capture_libraries (self, arch, in_current_namespace, pattern,
                                          (const char * const *) &pattern, 1, error))
@@ -2490,7 +2488,7 @@ bind_icds (PvRuntime *self,
           pv_search_path_append (search_path, in_container);
         }
 
-      g_ptr_array_add (dependency_patterns, g_steal_pointer (&dependency_pattern));
+      g_ptr_array_add (libdir_patterns, g_steal_pointer (&dependency_pattern));
 
       if (details->kinds[multiarch_index] == ICD_KIND_ABSOLUTE)
         {
@@ -4006,7 +4004,7 @@ setup_each_json_manifest (PvRuntime *self,
 static gboolean
 collect_vulkan_layers (PvRuntime *self,
                        const GPtrArray *layer_details,
-                       GPtrArray *dependency_patterns,
+                       GPtrArray *libdir_patterns,
                        RuntimeArchitecture *arch,
                        const gchar *dir_name,
                        GError **error)
@@ -4021,7 +4019,7 @@ collect_vulkan_layers (PvRuntime *self,
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (layer_details != NULL, FALSE);
-  g_return_val_if_fail (dependency_patterns != NULL, FALSE);
+  g_return_val_if_fail (libdir_patterns != NULL, FALSE);
   g_return_val_if_fail (dir_name != NULL, FALSE);
 
   for (j = 0; j < layer_details->len; j++)
@@ -4106,7 +4104,7 @@ collect_vulkan_layers (PvRuntime *self,
   if (!bind_icds (self, arch, dir_name,
                   (IcdDetails **) layer_details->pdata,
                   layer_details->len,
-                  &use_numbered_subdirs, dependency_patterns, NULL, error))
+                  &use_numbered_subdirs, libdir_patterns, NULL, error))
     return FALSE;
 
   return TRUE;

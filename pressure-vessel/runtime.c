@@ -2524,7 +2524,7 @@ bind_icds (PvRuntime *self,
       details->paths_in_container[multiarch_index] = g_build_filename (arch->libdir_in_container,
                                                                        subdir,
                                                                        seq_str ? seq_str : "",
-                                                                       glnx_basename (details->resolved_libraries[multiarch_index]),
+                                                                       base,
                                                                        NULL);
     }
 

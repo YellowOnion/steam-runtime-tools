@@ -210,11 +210,12 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
  * @home: The home directory
  *
  * Adjust arguments in @bwrap to cope with potentially running in a
- * container.
+ * container or interpreter.
  */
 static void
 adjust_exports (FlatpakBwrap *bwrap,
-                const char *home)
+                const char *home,
+                const char *interpreter_root)
 {
   gsize i = 0;
 
@@ -269,6 +270,20 @@ adjust_exports (FlatpakBwrap *bwrap,
           g_assert (i + 3 <= bwrap->argv->len);
           src = g_steal_pointer (&bwrap->argv->pdata[i + 1]);
           /* pdata[i + 2] is a path in the final container: unchanged. */
+
+          /* If we're using FEX-Emu or similar, Flatpak code might think it
+           * has found a particular file either because it's in the rootfs,
+           * or because it's in the real root filesystem.
+           * bwrap's mount(2) calls are not subject to that remapping,
+           * so we need to supply it with the file's real location. */
+          if (interpreter_root != NULL
+              && _srt_file_test_in_sysroot (interpreter_root, -1,
+                                            src, G_FILE_TEST_EXISTS))
+            {
+              g_autofree gchar *old = g_steal_pointer (&src);
+
+              src = g_build_filename (interpreter_root, old, NULL);
+            }
 
           /* Paths in the home directory might need adjusting.
            * Paths outside the home directory do not: if they're part of
@@ -1917,7 +1932,7 @@ main (int argc,
         }
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-      adjust_exports (exports_bwrap, home);
+      adjust_exports (exports_bwrap, home, interpreter_root);
       g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
       flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
 
@@ -1938,6 +1953,7 @@ main (int argc,
                                              (runtime != NULL),
                                              is_flatpak_env);
       g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
+      adjust_exports (sharing_bwrap, home, interpreter_root);
       flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
     }
   else if (flatpak_subsandbox != NULL)

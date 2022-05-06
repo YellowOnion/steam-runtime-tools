@@ -75,3 +75,5 @@ void pv_wrap_append_preload (GPtrArray *argv,
                              FlatpakExports *exports);
 
 gboolean pv_wrap_maybe_load_nvidia_modules (GError **error);
+
+gchar *pv_wrap_detect_interpreter_root (void);

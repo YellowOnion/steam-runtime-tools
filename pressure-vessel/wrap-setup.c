@@ -24,6 +24,7 @@
 #include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/virtualization-internal.h"
 #include "libglnx.h"
 
 #include <string.h>
@@ -1056,4 +1057,33 @@ pv_wrap_maybe_load_nvidia_modules (GError **error)
     return pv_run_sync (nvidia_modprobe_argv, NULL, NULL, NULL, error);
 
   return TRUE;
+}
+
+/**
+ * pv_wrap_detect_interpreter_root:
+ *
+ * If we appear to be running under an interpreter/emulator like FEX-Emu
+ * that uses an overlay to provide x86 libraries, then return the absolute
+ * path to that overlay. Otherwise, return %NULL.
+ */
+gchar *
+pv_wrap_detect_interpreter_root (void)
+{
+  g_autoptr(SrtVirtualizationInfo) virt_info = NULL;
+  const char *val;
+
+  /* At the moment we only care about FEX-Emu here, which we happen to
+   * know implements CPUID, so it's faster to skip the filesystem-based
+   * checks */
+  virt_info = _srt_check_virtualization (NULL, NULL, -1);
+
+  val = srt_virtualization_info_get_interpreter_root (virt_info);
+
+  /* We happen to know that the way _srt_check_virtualization() gets
+   * this information guarantees a canonicalized path, so we don't need
+   * to canonicalize it again. */
+  if (val != NULL)
+    return g_strdup (val);
+
+  return NULL;
 }

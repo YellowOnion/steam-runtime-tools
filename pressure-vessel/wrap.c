@@ -969,6 +969,7 @@ main (int argc,
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
+  g_autofree gchar *interpreter_root = NULL;
   g_autofree gchar *private_home = NULL;
   const gchar *home;
   g_autofree gchar *tools_dir = NULL;
@@ -1072,6 +1073,8 @@ main (int argc,
 
   if (opt_verbose)
     _srt_util_set_glib_log_handler (opt_verbose);
+
+  interpreter_root = pv_wrap_detect_interpreter_root ();
 
   /* Specifying either one of these mutually-exclusive options as a
    * command-line option disables use of the environment variable for

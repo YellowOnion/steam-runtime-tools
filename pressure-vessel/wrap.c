@@ -1593,6 +1593,9 @@ main (int argc,
       if (flatpak_subsandbox != NULL)
         flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
 
+      if (interpreter_root != NULL)
+        flags |= PV_RUNTIME_FLAGS_INTERPRETER_ROOT;
+
       if (opt_runtime != NULL)
         {
           /* already checked for mutually exclusive options */

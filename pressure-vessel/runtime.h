@@ -44,6 +44,8 @@
  * @PV_RUNTIME_FLAGS_UNPACK_ARCHIVE: Source is an archive, not a deployment
  * @PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX: The runtime will be used in a
  *  Flatpak subsandbox
+ * @PV_RUNTIME_FLAGS_INTERPRETER_ROOT: The runtime is being set up as a
+ *  root filesystem overlay for an interpreter like FEX-Emu
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -58,6 +60,7 @@ typedef enum
   PV_RUNTIME_FLAGS_COPY_RUNTIME = (1 << 5),
   PV_RUNTIME_FLAGS_UNPACK_ARCHIVE = (1 << 6),
   PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX = (1 << 7),
+  PV_RUNTIME_FLAGS_INTERPRETER_ROOT = (1 << 8),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -70,6 +73,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_COPY_RUNTIME \
    | PV_RUNTIME_FLAGS_UNPACK_ARCHIVE \
    | PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX \
+   | PV_RUNTIME_FLAGS_INTERPRETER_ROOT \
    )
 
 typedef struct _PvRuntime PvRuntime;

@@ -412,7 +412,13 @@ export_root_dirs_like_filesystem_host (FlatpakExports *exports,
   g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  dir = g_dir_open ("/", 0, error);
+  /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
+   * first, and only use the real root if the corresponding file
+   * doesn't exist in the "rootfs". We actively don't want this, because
+   * we're inspecting these paths here in order to pass them to bwrap,
+   * which will use them to set up bind-mounts, which are not subject to
+   * FEX-Emu's rewriting; so bypass it here. */
+  dir = g_dir_open ("/proc/self/root", 0, error);
 
   if (dir == NULL)
     return FALSE;
@@ -460,7 +466,8 @@ export_contents_of_run (FlatpakBwrap *bwrap,
   g_return_val_if_fail (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR),
                         FALSE);
 
-  dir = g_dir_open ("/run", 0, error);
+  /* Avoid FEX-Emu's path rewriting: see export_root_dirs_like_filesystem_host() */
+  dir = g_dir_open ("/proc/self/root/run", 0, error);
 
   if (dir == NULL)
     return FALSE;
@@ -510,8 +517,10 @@ pv_wrap_use_host_os (FlatpakExports *exports,
   for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
     {
       const char *dir = export_os_mutable[i];
+      /* Avoid FEX-Emu's path rewriting: see export_contents_of_run() */
+      g_autofree char *really = g_strdup_printf ("/proc/self/root%s", dir);
 
-      if (g_file_test (dir, G_FILE_TEST_EXISTS))
+      if (g_file_test (really, G_FILE_TEST_EXISTS))
         flatpak_bwrap_add_args (bwrap, "--bind", dir, dir, NULL);
     }
 

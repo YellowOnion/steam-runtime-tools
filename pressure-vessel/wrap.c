@@ -1424,12 +1424,25 @@ main (int argc,
 
   if (flatpak_subsandbox == NULL)
     {
+      glnx_autofd int root_fd = -1;
+
       /* Start with an empty environment and populate it later */
       bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       g_assert (bwrap_executable != NULL);
       flatpak_bwrap_add_arg (bwrap, bwrap_executable);
       bwrap_filesystem_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       exports = flatpak_exports_new ();
+
+      /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
+       * first, and only use the real root if the corresponding file
+       * doesn't exist in the "rootfs". We actively don't want this, because
+       * the FlatpakExports is inspecting these paths in order to pass them
+       * to bwrap, which will use them to set up bind-mounts, which are not
+       * subject to FEX-Emu's rewriting; so bypass it here. */
+      if (!glnx_opendirat (AT_FDCWD, "/proc/self/root", TRUE, &root_fd, error))
+        goto out;
+
+      flatpak_exports_take_host_fd (exports, glnx_steal_fd (&root_fd));
     }
   else
     {

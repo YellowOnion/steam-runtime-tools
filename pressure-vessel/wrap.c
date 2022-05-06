@@ -1133,7 +1133,10 @@ main (int argc,
 
       if (value == TRISTATE_MAYBE)
         {
-          opt_graphics_provider = g_strdup ("/");
+          if (interpreter_root != NULL)
+            opt_graphics_provider = g_strdup (interpreter_root);
+          else
+            opt_graphics_provider = g_strdup ("/");
         }
       else
         {
@@ -1142,6 +1145,8 @@ main (int argc,
 
           if (value == TRISTATE_NO)
             opt_graphics_provider = g_strdup ("");
+          else if (interpreter_root != NULL)
+            opt_graphics_provider = g_strdup (interpreter_root);
           else if (g_file_test ("/run/host/usr", G_FILE_TEST_IS_DIR)
                    && g_file_test ("/run/host/etc", G_FILE_TEST_IS_DIR))
             opt_graphics_provider = g_strdup ("/run/host");

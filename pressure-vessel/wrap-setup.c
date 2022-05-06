@@ -213,9 +213,8 @@ pv_wrap_check_bwrap (const char *tools_dir,
  * execution environment with the host system, in particular Wayland,
  * X11 and PulseAudio sockets.
  */
-void
-pv_wrap_share_sockets (FlatpakBwrap *bwrap,
-                       PvEnviron *container_env,
+FlatpakBwrap *
+pv_wrap_share_sockets (PvEnviron *container_env,
                        const GStrv original_environ,
                        gboolean using_a_runtime,
                        gboolean is_flatpak_env)
@@ -225,8 +224,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   g_auto(GStrv) envp = NULL;
   gsize i;
 
-  g_return_if_fail (bwrap != NULL);
-  g_return_if_fail (container_env != NULL);
+  g_return_val_if_fail (container_env != NULL, NULL);
 
   /* If these are set by flatpak_run_add_x11_args(), etc., we'll
    * change them from unset to set later.
@@ -272,7 +270,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
       flatpak_run_add_session_dbus_args (sharing_bwrap);
       flatpak_run_add_system_dbus_args (sharing_bwrap);
       flatpak_run_add_resolved_args (sharing_bwrap);
-      flatpak_run_add_journal_args (bwrap);
+      flatpak_run_add_journal_args (sharing_bwrap);
       pv_wrap_add_pipewire_args (sharing_bwrap, container_env);
     }
 
@@ -327,7 +325,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   pv_wrap_set_icons_env_vars (container_env, original_environ);
 
   g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
-  flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+  return g_steal_pointer (&sharing_bwrap);
 }
 
 /*

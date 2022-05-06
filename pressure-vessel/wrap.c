@@ -1909,12 +1909,20 @@ main (int argc,
     }
 
   if (bwrap != NULL)
-    pv_wrap_share_sockets (bwrap, container_env,
-                           original_environ,
-                           (runtime != NULL),
-                           is_flatpak_env);
+    {
+      g_autoptr(FlatpakBwrap) sharing_bwrap = NULL;
+
+      sharing_bwrap = pv_wrap_share_sockets (container_env,
+                                             original_environ,
+                                             (runtime != NULL),
+                                             is_flatpak_env);
+      g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
+      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+    }
   else if (flatpak_subsandbox != NULL)
-    pv_wrap_set_icons_env_vars (container_env, original_environ);
+    {
+      pv_wrap_set_icons_env_vars (container_env, original_environ);
+    }
 
   if (runtime != NULL)
     {

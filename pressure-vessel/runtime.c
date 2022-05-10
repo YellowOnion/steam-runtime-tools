@@ -5541,9 +5541,10 @@ collect_dri_drivers (PvRuntime *self,
                      GError **error)
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
-    _srt_profiling_start ("Collecting DRI drivers");
+    _srt_profiling_start ("Collecting DRI and VA-API drivers");
   g_autoptr(GPtrArray) details_arr = NULL;
   g_autoptr(SrtObjectList) dri_drivers = NULL;
+  g_autoptr(SrtObjectList) va_api_drivers = NULL;
   /* The DRI loader looks up drivers by name, not by readdir(),
    * so order doesn't matter unless there are name collisions. */
   gboolean use_numbered_subdirs = FALSE;
@@ -5562,7 +5563,18 @@ collect_dri_drivers (PvRuntime *self,
                                                       SRT_DRIVER_FLAGS_NONE);
     }
 
-  details_arr = g_ptr_array_new_full (g_list_length (dri_drivers),
+  g_debug ("Enumerating %s VA-API drivers on provider...",
+           arch->details->tuple);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating VA-API drivers");
+
+      va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                            arch->details->tuple,
+                                                            SRT_DRIVER_FLAGS_NONE);
+    }
+
+  details_arr = g_ptr_array_new_full (g_list_length (dri_drivers) + g_list_length (va_api_drivers),
                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
 
   for (icd_iter = dri_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
@@ -5575,60 +5587,6 @@ collect_dri_drivers (PvRuntime *self,
       g_assert (g_path_is_absolute (details->resolved_libraries[multiarch_index]));
       g_ptr_array_add (details_arr, g_steal_pointer (&details));
     }
-
-  if (!bind_icds (self, arch, "dri",
-                  (IcdDetails **) details_arr->pdata,
-                  details_arr->len,
-                  &use_numbered_subdirs, patterns, dri_path, error))
-    return FALSE;
-
-  for (j = 0; j < details_arr->len; j++)
-    {
-      IcdDetails *details = g_ptr_array_index (details_arr, j);
-
-      /* Because the path is always absolute, ICD_KIND_SONAME makes
-       * no sense */
-      g_assert (details->kinds[multiarch_index] != ICD_KIND_SONAME);
-    }
-
-  return TRUE;
-}
-
-/*
- * @patterns: (element-type filename):
- */
-static gboolean
-collect_va_api_drivers (PvRuntime *self,
-                        SrtSystemInfo *system_info,
-                        RuntimeArchitecture *arch,
-                        GPtrArray *patterns,
-                        GString *va_api_path,
-                        GError **error)
-{
-  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
-    _srt_profiling_start ("Collecting VA-API drivers");
-  g_autoptr(GPtrArray) details_arr = NULL;
-  g_autoptr(SrtObjectList) va_api_drivers = NULL;
-  /* The VA-API loader looks up drivers by name, not by readdir(),
-   * so order doesn't matter unless there are name collisions. */
-  gboolean use_numbered_subdirs = FALSE;
-  const GList *icd_iter;
-  gsize j;
-  const gsize multiarch_index = arch->multiarch_index;
-
-  g_debug ("Enumerating %s VA-API drivers on provider...",
-           arch->details->tuple);
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
-        _srt_profiling_start ("Enumerating VA-API drivers");
-
-      va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
-                                                            arch->details->tuple,
-                                                            SRT_DRIVER_FLAGS_NONE);
-    }
-
-  details_arr = g_ptr_array_new_full (g_list_length (va_api_drivers),
-                                      (GDestroyNotify) G_CALLBACK (icd_details_free));
 
   for (icd_iter = va_api_drivers, j = 0; icd_iter != NULL; icd_iter = icd_iter->next, j++)
     {
@@ -5644,7 +5602,7 @@ collect_va_api_drivers (PvRuntime *self,
   if (!bind_icds (self, arch, "dri",
                   (IcdDetails **) details_arr->pdata,
                   details_arr->len,
-                  &use_numbered_subdirs, patterns, va_api_path, error))
+                  &use_numbered_subdirs, patterns, dri_path, error))
     return FALSE;
 
   for (j = 0; j < details_arr->len; j++)
@@ -5985,10 +5943,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                     dri_path, error))
             return FALSE;
 
-          if (!collect_va_api_drivers (self, arch_system_info, arch, patterns,
-                                       va_api_path, error))
-            return FALSE;
-
           /* We always have at least one pattern, because
            * collect_graphics_libraries_patterns() unconditionally
            * adds some, so we don't need to conditionalize this call
@@ -6214,9 +6168,15 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   if (dri_path->len != 0)
-    pv_environ_setenv (container_env, "LIBGL_DRIVERS_PATH", dri_path->str);
+    {
+      pv_environ_setenv (container_env, "LIBGL_DRIVERS_PATH", dri_path->str);
+      pv_environ_setenv (container_env, "LIBVA_DRIVERS_PATH", dri_path->str);
+    }
   else
-    pv_environ_setenv (container_env, "LIBGL_DRIVERS_PATH", NULL);
+    {
+      pv_environ_setenv (container_env, "LIBGL_DRIVERS_PATH", NULL);
+      pv_environ_setenv (container_env, "LIBVA_DRIVERS_PATH", NULL);
+    }
 
   if (egl_path->len != 0)
     pv_environ_setenv (container_env, "__EGL_VENDOR_LIBRARY_FILENAMES",
@@ -6283,12 +6243,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         }
       pv_environ_setenv (container_env, "VK_LAYER_PATH", NULL);
     }
-
-  if (va_api_path->len != 0)
-    pv_environ_setenv (container_env, "LIBVA_DRIVERS_PATH",
-                       va_api_path->str);
-  else
-    pv_environ_setenv (container_env, "LIBVA_DRIVERS_PATH", NULL);
 
   /* We binded the VDPAU drivers in "%{libdir}/vdpau".
    * Unfortunately VDPAU_DRIVER_PATH can hold just a single path, so we can't

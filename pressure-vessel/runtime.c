@@ -2361,6 +2361,7 @@ bind_icds (PvRuntime *self,
   g_autoptr(GHashTable) basename_set = NULL;
   g_autofree const char **basenames = NULL;
   g_autofree gchar *subdir_in_current_namespace = NULL;
+  glnx_autofd int subdir_fd = -1;
   gsize multiarch_index;
   gsize i;
 
@@ -2422,6 +2423,10 @@ bind_icds (PvRuntime *self,
   if (g_mkdir_with_parents (subdir_in_current_namespace, 0700) != 0)
     return glnx_throw_errno_prefix (error, "Unable to create %s",
                                     subdir_in_current_namespace);
+
+  if (!glnx_opendirat (-1, subdir_in_current_namespace, TRUE,
+                       &subdir_fd, error))
+    return FALSE;
 
   /* Decide whether we need to use numbered subdirectories.
    * If there are file collisions, then the answer is yes we do:
@@ -2502,9 +2507,11 @@ bind_icds (PvRuntime *self,
       g_autofree gchar *numbered_subdir = NULL;
       g_autofree gchar *dependency_pattern = NULL;
       g_autofree gchar *seq_str = NULL;
-      g_autofree gchar *final_path = NULL;
+      glnx_autofd int numbered_subdir_fd = -1;
       const char *dest_in_current_namespace = NULL;
       const char *base;
+      int dest_fd;
+      struct stat stat_buf;
 
       if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
         continue;
@@ -2524,11 +2531,19 @@ bind_icds (PvRuntime *self,
           numbered_subdir = g_build_filename (subdir_in_current_namespace,
                                               seq_str, NULL);
 
-          if (g_mkdir_with_parents (numbered_subdir, 0700) != 0)
-            return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                            numbered_subdir);
+          if (!glnx_ensure_dir (subdir_fd, seq_str, 0700, error))
+            {
+              g_prefix_error (error, "Unable to create \"%s\": ",
+                              numbered_subdir);
+              return FALSE;
+            }
+
+          if (!glnx_opendirat (subdir_fd, seq_str, TRUE,
+                               &numbered_subdir_fd, error))
+            return FALSE;
 
           dest_in_current_namespace = numbered_subdir;
+          dest_fd = numbered_subdir_fd;
           pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
                                      options,
                                      details->resolved_libraries[multiarch_index]);
@@ -2540,12 +2555,14 @@ bind_icds (PvRuntime *self,
       else
         {
           dest_in_current_namespace = subdir_in_current_namespace;
+          dest_fd = subdir_fd;
         }
 
-      final_path = g_build_filename (dest_in_current_namespace, base, NULL);
-
-      if (!g_file_test (final_path, G_FILE_TEST_IS_SYMLINK))
+      if (fstatat (dest_fd, base, &stat_buf, 0) < 0
+          || !S_ISLNK (stat_buf.st_mode))
         {
+          g_debug ("\"%s/%s\" was not created", dest_in_current_namespace, base);
+
           /* capsule-capture-libs didn't actually create the symlink,
            * which means the ICD is nonexistent or the wrong architecture.
            * We don't need to capture the dependencies in this case. */

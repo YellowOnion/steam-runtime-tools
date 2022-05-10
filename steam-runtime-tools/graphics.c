@@ -1256,7 +1256,8 @@ out:
  * @output: (inout) (transfer full): The output collected from the helper
  * @child_stderr: (inout) (transfer full): The stderr collected from the helper
  * @argv: (transfer none): The helper and arguments to run
- * @wait_status: (out) (transfer full): The wait status of the helper
+ * @wait_status: (out) (transfer full): The wait status of the helper,
+ *   or -1 if it could not be run at all
  * @exit_status: (out) (transfer full): Exit status of helper(s) executed.
  *   0 on success, positive on unsuccessful exit(), -1 if killed by a signal or
  *   not run at all
@@ -1299,6 +1300,9 @@ _srt_run_helper (GStrv *my_environ,
   *output = NULL;
   g_free(*child_stderr);
   *child_stderr = NULL;
+  *wait_status = -1;
+  *exit_status = -1;
+  *terminating_signal = 0;
 
   if (!g_spawn_sync (NULL,    /* working directory */
                      (gchar **) argv->pdata,
@@ -1316,8 +1320,7 @@ _srt_run_helper (GStrv *my_environ,
       g_clear_error (&error);
       issues |= non_zero_wait_status_issue;
     }
-
-  if (*wait_status != 0)
+  else if (*wait_status != 0)
     {
       g_debug ("... wait status %d", *wait_status);
       issues |= non_zero_wait_status_issue;

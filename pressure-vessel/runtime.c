@@ -2212,14 +2212,11 @@ typedef struct
    * (type SrtDriDriver) */
   gpointer icd;
   /* Either SONAME, or absolute path in the provider's namespace.
-   * Last entry is always NONEXISTENT; keyed by the index of a multiarch
-   * tuple in multiarch_tuples. */
-  gchar *resolved_libraries[PV_N_SUPPORTED_ARCHITECTURES + 1];
-  /* Last entry is always NONEXISTENT; keyed by the index of a multiarch
-   * tuple in multiarch_tuples. */
-  IcdKind kinds[PV_N_SUPPORTED_ARCHITECTURES + 1];
-  /* Last entry is always NULL */
-  gchar *paths_in_container[PV_N_SUPPORTED_ARCHITECTURES + 1];
+   * Keyed by the index of a multiarch tuple in multiarch_tuples. */
+  gchar *resolved_libraries[PV_N_SUPPORTED_ARCHITECTURES];
+  /* Keyed by the index of a multiarch tuple in multiarch_tuples. */
+  IcdKind kinds[PV_N_SUPPORTED_ARCHITECTURES];
+  gchar *paths_in_container[PV_N_SUPPORTED_ARCHITECTURES];
 } IcdDetails;
 
 static IcdDetails *
@@ -2241,7 +2238,7 @@ icd_details_new (gpointer icd)
   self = g_slice_new0 (IcdDetails);
   self->icd = g_object_ref (icd);
 
-  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES + 1; i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
       self->resolved_libraries[i] = NULL;
       self->kinds[i] = ICD_KIND_NONEXISTENT;
@@ -2258,7 +2255,7 @@ icd_details_free (IcdDetails *self)
 
   g_object_unref (self->icd);
 
-  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES + 1; i++)
+  for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
       g_free (self->resolved_libraries[i]);
       g_free (self->paths_in_container[i]);

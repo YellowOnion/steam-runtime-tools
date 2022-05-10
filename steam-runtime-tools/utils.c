@@ -340,7 +340,11 @@ _srt_get_helper (const char *helpers_path,
 
   argv = g_ptr_array_new_with_free_func (g_free);
 
-  if (flags & SRT_HELPER_FLAGS_TIME_OUT)
+  if (g_getenv ("SNAP_DESKTOP_RUNTIME") != NULL)
+    {
+      g_debug ("Working around https://github.com/canonical/steam-snap/issues/17 by not using timeout(1)");
+    }
+  else if (flags & SRT_HELPER_FLAGS_TIME_OUT)
     {
       g_ptr_array_add (argv, g_strdup ("timeout"));
       g_ptr_array_add (argv, g_strdup ("--signal=TERM"));

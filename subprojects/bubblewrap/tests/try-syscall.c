@@ -24,11 +24,11 @@
 #include <sys/types.h>
 
 #if defined(_MIPS_SIM)
-# if _MIPS_SIM == _MIPS_SIM_ABI32
+# if _MIPS_SIM == _ABIO32
 #   define MISSING_SYSCALL_BASE 4000
-# elif _MIPS_SIM == _MIPS_SIM_ABI64
+# elif _MIPS_SIM == _ABI64
 #   define MISSING_SYSCALL_BASE 5000
-# elif _MIPS_SIM == _MIPS_SIM_NABI32
+# elif _MIPS_SIM == _ABIN32
 #   define MISSING_SYSCALL_BASE 6000
 # else
 #   error "Unknown MIPS ABI"
@@ -70,6 +70,10 @@
  * An invalid pointer that will cause syscalls to fail with EFAULT
  */
 #define WRONG_POINTER ((char *) 1)
+
+#ifndef PR_GET_CHILD_SUBREAPER
+#define PR_GET_CHILD_SUBREAPER 37
+#endif
 
 int
 main (int argc, char **argv)

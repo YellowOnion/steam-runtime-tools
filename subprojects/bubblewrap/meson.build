@@ -1,7 +1,7 @@
 project(
   'bubblewrap',
   'c',
-  version : '0.6.1',
+  version : '0.6.2',
   meson_version : '>=0.49.0',
   default_options : [
     'warning_level=2',
@@ -101,12 +101,14 @@ configure_file(
   configuration : cdata,
 )
 
-if meson.is_subproject()
-  bwrapdir = get_option('libexecdir')
+if meson.is_subproject() and get_option('program_prefix') == ''
+  error('program_prefix option must be set when bwrap is a subproject')
+endif
 
-  if get_option('program_prefix') == ''
-    error('program_prefix option must be set when bwrap is a subproject')
-  endif
+if get_option('bwrapdir') != ''
+  bwrapdir = get_option('bwrapdir')
+elif meson.is_subproject()
+  bwrapdir = get_option('libexecdir')
 else
   bwrapdir = get_option('bindir')
 endif
@@ -124,9 +126,24 @@ bwrap = executable(
   dependencies : [selinux_dep, libcap_dep],
 )
 
+manpages_xsl = 'http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl'
 xsltproc = find_program('xsltproc', required : get_option('man'))
+build_man_page = false
 
 if xsltproc.found() and not meson.is_subproject()
+  if run_command([
+    xsltproc, '--nonet', manpages_xsl,
+  ], check : false).returncode() == 0
+    message('Docbook XSL found, man page enabled')
+    build_man_page = true
+  elif get_option('man').enabled()
+    error('Man page requested, but Docbook XSL stylesheets not found')
+  else
+    message('Docbook XSL not found, man page disabled automatically')
+  endif
+endif
+
+if build_man_page
   custom_target(
     'bwrap.1',
     output : 'bwrap.1',
@@ -140,7 +157,7 @@ if xsltproc.found() and not meson.is_subproject()
       '--stringparam', 'man.authors.section.enabled', '0',
       '--stringparam', 'man.copyright.section.enabled', '0',
       '-o', '@OUTPUT@',
-      'http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl',
+      manpages_xsl,
       '@INPUT@',
     ],
     install : true,
@@ -152,4 +169,6 @@ if not meson.is_subproject()
   subdir('completions')
 endif
 
-subdir('tests')
+if get_option('tests')
+  subdir('tests')
+endif

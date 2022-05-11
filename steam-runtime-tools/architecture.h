@@ -34,6 +34,26 @@
 #include <steam-runtime-tools/macros.h>
 
 /**
+ * SrtMachineType:
+ * @SRT_MACHINE_TYPE_UNKNOWN: An unknown or unspecified CPU (`EM_NONE`)
+ * @SRT_MACHINE_TYPE_386: i386 (IA-32, 32-bit x86; `EM_386`)
+ * @SRT_MACHINE_TYPE_X86_64: x86_64 (amd64, x64, Intel 64, 64-bit x86; `EM_X86_64`)
+ * @SRT_MACHINE_TYPE_AARCH64: AArch64 (64-bit ARM; `EM_AARCH64`)
+ *
+ * A type of machine.
+ *
+ * Values of this enum are numerically equal to ELF machine types, although
+ * only a small subset of ELF machine types are represented here.
+ */
+typedef enum
+{
+  SRT_MACHINE_TYPE_UNKNOWN = 0,
+  SRT_MACHINE_TYPE_386 = 3,
+  SRT_MACHINE_TYPE_X86_64 = 62,
+  SRT_MACHINE_TYPE_AARCH64 = 183,
+} SrtMachineType;
+
+/**
  * SRT_ABI_I386:
  *
  * The multiarch tuple for the i386 (IA-32) ABI normally used on

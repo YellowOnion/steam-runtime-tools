@@ -130,6 +130,11 @@ G_DEFINE_TYPE_WITH_CODE (PvRuntime, pv_runtime, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 pv_runtime_initable_iface_init))
 
+static gboolean pv_runtime_symlinkat (const gchar *target,
+                                      int destination_dirfd,
+                                      const gchar *destination,
+                                      GError **error);
+
 /*
  * Return whether @path is likely to be visible as-is in the container.
  */
@@ -2322,6 +2327,28 @@ pv_runtime_capture_libraries (PvRuntime *self,
 }
 
 /*
+ * GHashFunc for struct stat.
+ */
+static guint
+struct_stat_hash (gconstpointer p)
+{
+  const struct stat *s = p;
+
+  return (guint) (s->st_dev ^ s->st_ino);
+}
+
+/*
+ * GEqualFunc for struct stat, comparing for equality by device number
+ * and inode number.
+ */
+static gboolean
+struct_stat_equal (gconstpointer p1,
+                   gconstpointer p2)
+{
+  return _srt_is_same_stat (p1, p2);
+}
+
+/*
  * @requested_subdir: (not nullable):
  * @details_arr: (array length=n_details):
  * @n_details: Number of entries in @details_arr
@@ -2359,7 +2386,15 @@ bind_icds (PvRuntime *self,
 {
   static const char options[] = "if-exists:if-same-abi";
   g_autoptr(GHashTable) basename_set = NULL;
+  /* If details_arr[i]->kinds[multiarch_index] is ICD_KIND_ABSOLUTE,
+   * then basenames[i] is the basename of the file; otherwise %NULL. */
   g_autofree const char **basenames = NULL;
+  /* If details_arr[i] will not be passed to capsule-capture-libs because
+   * it represents an ICD_KIND_ABSOLUTE driver that is a hard link or
+   * symlink to a driver that was already seen at position j < i,
+   * then captured_instead[i] == j.
+   * Otherwise captured_instead[i] = G_MAXSIZE. */
+  g_autofree gsize *captured_instead = NULL;
   g_autofree gchar *subdir_in_current_namespace = NULL;
   glnx_autofd int subdir_fd = -1;
   gsize multiarch_index;
@@ -2475,14 +2510,64 @@ bind_icds (PvRuntime *self,
   if (!*use_numbered_subdirs)
     {
       g_autoptr(GPtrArray) patterns = g_ptr_array_new_full (n_details, g_free);
+      /* (element-type (struct stat) gsize)
+       * Key: Identity of a file
+       * Value: Index of first ICD_KIND_ABSOLUTE in details_arr[] and
+       *  basenames[] that is a symlink or hard link to that file */
+      g_autoptr(GHashTable) unique_drivers = NULL;
+
+      unique_drivers = g_hash_table_new_full (struct_stat_hash,
+                                              struct_stat_equal,
+                                              g_free,
+                                              NULL);
+      captured_instead = g_new (gsize, n_details);
+
+      for (i = 0; i < n_details; i++)
+        captured_instead[i] = G_MAXSIZE;
 
       for (i = 0; i < n_details; i++)
         {
           IcdDetails *details = details_arr[i];
           g_autofree gchar *pattern = NULL;
+          struct stat stat_buf;
+          glnx_autofd int fd;
 
           if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
             continue;
+
+          fd = _srt_resolve_in_sysroot (self->provider->fd,
+                                        details->resolved_libraries[multiarch_index],
+                                        SRT_RESOLVE_FLAGS_NONE,
+                                        NULL, NULL);
+
+          if (fd >= 0 && fstat (fd, &stat_buf) == 0)
+            {
+              gpointer value;
+
+              if (g_hash_table_lookup_extended (unique_drivers, &stat_buf,
+                                                NULL, &value))
+                {
+                  gsize other = GPOINTER_TO_SIZE (value);
+
+                  /* @details points to a different name (hard link or
+                   * symlink) for the same file as @driver, so we can
+                   * capture it just once (with the name driver->captured_as),
+                   * and then duplicate that symlink for the other items
+                   * of driver->other_names. */
+                  g_assert (other < i);
+                  captured_instead[i] = other;
+                  continue;
+                }
+
+              g_hash_table_replace (unique_drivers,
+                                    g_memdup2 (&stat_buf, sizeof (struct stat)),
+                                    GSIZE_TO_POINTER (i));
+            }
+          else
+            {
+              g_warning ("Unable to look up resolved path \"%s\" in provider",
+                         details->resolved_libraries[multiarch_index]);
+            }
 
           pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
                                      options,
@@ -2519,7 +2604,57 @@ bind_icds (PvRuntime *self,
       base = basenames[i];
 
       if (base == NULL)
-        base = glnx_basename (details->resolved_libraries[multiarch_index]);
+        {
+          base = glnx_basename (details->resolved_libraries[multiarch_index]);
+          basenames[i] = base;
+        }
+
+      if (captured_instead != NULL)
+        {
+          gsize other = captured_instead[i];
+
+          /* We only do this if all the basenames are unique, and therefore
+           * we are not using numbered subdirectories */
+          g_assert (!*use_numbered_subdirs);
+
+          /* If icd_details[i] is a hard link or symlink to the same
+           * ICD_KIND_ABSOLUTE file as icd_details[other], then we can
+           * treat it as equivalent. We don't need to run capsule-capture-libs
+           * again, because it would create a symlink for icd_details[i]
+           * if and only if it would have done so for icd_details[other]. */
+          if (other != G_MAXSIZE)
+            {
+              g_autofree gchar *target = NULL;
+
+              g_assert (other < i);
+              g_assert (basenames[other] != NULL);
+              g_debug ("\"%s\" is the same driver as \"%s\"",
+                       base, basenames[other]);
+              target = glnx_readlinkat_malloc (subdir_fd,
+                                               basenames[other],
+                                               NULL, NULL);
+
+              if (target == NULL)
+                {
+                  g_debug ("\"%s\" was not created: not creating \"%s\" either",
+                           basenames[other], base);
+                  details->kinds[multiarch_index] = ICD_KIND_NONEXISTENT;
+                }
+              else
+                {
+                  g_debug ("\"%s\" was created: making \"%s\" equivalent",
+                           basenames[other], base);
+
+                  if (!pv_runtime_symlinkat (target, subdir_fd, base, error))
+                    return FALSE;
+                }
+
+              /* We don't need to capture the dependencies of icd_details[i],
+               * because we are already going to capture the dependencies of
+               * icd_details[other], and they are the same file */
+              continue;
+            }
+        }
 
       /* If we can't avoid the numbered subdirectory, or want to use one
        * to force a specific load order, create it. */

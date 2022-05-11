@@ -79,6 +79,7 @@ _srt_cpuid_data_free (gpointer self)
 #if defined(__x86_64__) || defined(__i386__)
 G_GNUC_INTERNAL
 gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
+                         gboolean force,
                          guint leaf,
                          guint *eax,
                          guint *ebx,

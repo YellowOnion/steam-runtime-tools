@@ -51,6 +51,10 @@
  * _srt_x86_cpuid:
  * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
+ * @force: if %TRUE, use low-level `__cpuid()`, a thin wrapper around the
+ *  CPUID instruction. If %FALSE, use `__get_cpuid()`, which does
+ *  capability checking but only works in the 0x0xxxxxxx and 0x8xxxxxxx
+ *  ranges.
  * @leaf: CPUID leaf to return
  * @eax: (out) (not optional): used to return part of the given CPUID leaf
  * @ebx: (out) (not optional): used to return part of the given CPUID leaf
@@ -62,6 +66,7 @@
  * Returns: %TRUE on success
  */
 gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
+                         gboolean force,
                          guint leaf,
                          guint *eax,
                          guint *ebx,
@@ -84,7 +89,19 @@ gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
     }
   else
     {
-      return (__get_cpuid (leaf, eax, ebx, ecx, edx) == 1);
+      *eax = *ebx = *ecx = *edx = 0;
+
+      if (force)
+        {
+          /* __cpuid takes lvalues as parameters, and takes their addresses
+           * internally, so this is right even though it looks wrong. */
+          __cpuid (leaf, (*eax), (*ebx), (*ecx), (*edx));
+          return TRUE;
+        }
+      else
+        {
+          return (__get_cpuid (leaf, eax, ebx, ecx, edx) == 1);
+        }
     }
 }
 #endif
@@ -115,7 +132,7 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
   guint edx = 0;
 
   /* Get the list of basic features (leaf 1) */
-  if (_srt_x86_cpuid (mock_cpuid, 1, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, 1, &eax, &ebx, &ecx, &edx))
     {
       *known |= (SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_SSE3);
 
@@ -131,7 +148,7 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
       return present;
     }
 
-  if (_srt_x86_cpuid (mock_cpuid, 0x80000001, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, 0x80000001, &eax, &ebx, &ecx, &edx))
     {
       *known |= SRT_X86_FEATURE_X86_64;
 

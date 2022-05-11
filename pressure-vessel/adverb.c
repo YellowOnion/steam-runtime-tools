@@ -581,21 +581,19 @@ run_helper_sync (const char *cwd,
   return ret;
 }
 
-static gboolean
-generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
-                        GError **error)
+static LibTempDirs *
+lib_temp_dirs_new (GError **error)
 {
+  g_autoptr(LibTempDirs) lib_temp_dirs = g_new0 (LibTempDirs, 1);
   g_autoptr(SrtSystemInfo) info = NULL;
   gsize abi;
-
-  g_return_val_if_fail (lib_temp_dirs != NULL, FALSE);
 
   info = srt_system_info_new (NULL);
 
   lib_temp_dirs->root_path = g_dir_make_tmp ("pressure-vessel-libs-XXXXXX", error);
   if (lib_temp_dirs->root_path == NULL)
-    return glnx_prefix_error (error,
-                              "Cannot create temporary directory for platform specific libraries");
+    return glnx_prefix_error_null (error,
+                                   "Cannot create temporary directory for platform specific libraries");
 
   lib_temp_dirs->platform_token_path = g_build_filename (lib_temp_dirs->root_path,
                                                          "${PLATFORM}", NULL);
@@ -623,19 +621,19 @@ generate_lib_temp_dirs (LibTempDirs *lib_temp_dirs,
                                                                pv_multiarch_details[abi].tuple,
                                                                error);
           if (!libdl_platform)
-            return glnx_prefix_error (error,
-                                      "Unknown expansion of the dl string token $PLATFORM");
+            return glnx_prefix_error_null (error,
+                                           "Unknown expansion of the dl string token $PLATFORM");
         }
 
       abi_path = g_build_filename (lib_temp_dirs->root_path, libdl_platform, NULL);
 
       if (g_mkdir (abi_path, 0700) != 0)
-        return glnx_throw_errno_prefix (error, "Unable to create \"%s\"", abi_path);
+        return glnx_null_throw_errno_prefix (error, "Unable to create \"%s\"", abi_path);
 
       lib_temp_dirs->abi_paths[abi] = g_steal_pointer (&abi_path);
     }
 
-  return TRUE;
+  return g_steal_pointer (&lib_temp_dirs);
 }
 
 static gboolean
@@ -1045,8 +1043,7 @@ main (int argc,
   sigset_t mask;
   struct sigaction terminate_child_action = {};
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
-  g_autoptr(LibTempDirs) lib_temp_dirs = g_new0 (LibTempDirs, 1);
-  gboolean all_abi_paths_created = TRUE;
+  g_autoptr(LibTempDirs) lib_temp_dirs = NULL;
   gsize i;
 
   sigemptyset (&mask);
@@ -1214,9 +1211,10 @@ main (int argc,
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
   flatpak_bwrap_finish (wrapped_command);
 
-  if (!generate_lib_temp_dirs (lib_temp_dirs, error))
+  lib_temp_dirs = lib_temp_dirs_new (error);
+
+  if (lib_temp_dirs == NULL)
     {
-      all_abi_paths_created = FALSE;
       g_warning ("%s", local_error->message);
       g_clear_error (error);
     }
@@ -1251,7 +1249,7 @@ main (int argc,
 
           /* If we were not able to create the temporary library
            * directories, we simply avoid any adjustment and try to continue */
-          if (!all_abi_paths_created)
+          if (lib_temp_dirs == NULL)
             {
               g_ptr_array_add (search_path, g_strdup (preload));
               continue;

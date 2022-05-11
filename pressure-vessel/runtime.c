@@ -96,6 +96,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   int variable_dir_fd;
   int mutable_sysroot_fd;
+  int host_fd;
   gboolean any_libc_from_provider;
   gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
@@ -314,6 +315,7 @@ pv_runtime_init (PvRuntime *self)
   self->all_libc_from_provider = FALSE;
   self->variable_dir_fd = -1;
   self->mutable_sysroot_fd = -1;
+  self->host_fd = -1;
   self->is_flatpak_env = g_file_test ("/.flatpak-info",
                                       G_FILE_TEST_IS_REGULAR);
 }
@@ -1711,6 +1713,10 @@ pv_runtime_initable_init (GInitable *initable,
   else
     self->host_in_current_namespace = "/";
 
+  if (!glnx_opendirat (-1, self->host_in_current_namespace, TRUE,
+                       &self->host_fd, error))
+    return FALSE;
+
   return TRUE;
 }
 
@@ -1754,6 +1760,7 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  glnx_close_fd (&self->host_fd);
   g_strfreev (self->original_environ);
   g_free (self->libcapsule_knowledge);
   g_free (self->runtime_abi_json);
@@ -2914,7 +2921,7 @@ bind_runtime_base (PvRuntime *self,
   /* If we are in a Flatpak environment, we need to test if these files are
    * available in the host, and not in the current environment, because we will
    * run bwrap in the host system */
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, self->host_fd,
                                  "/etc/machine-id", G_FILE_TEST_EXISTS))
     {
       flatpak_bwrap_add_args (bwrap,
@@ -2926,7 +2933,7 @@ bind_runtime_base (PvRuntime *self,
   /* We leave this for completeness but in practice we do not expect to have
    * access to the "/var" host directory because Flatpak usually just binds
    * the host's "etc" and "usr". */
-  else if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+  else if (_srt_file_test_in_sysroot (self->host_in_current_namespace, self->host_fd,
                                       "/var/lib/dbus/machine-id",
                                       G_FILE_TEST_EXISTS))
     {
@@ -2942,7 +2949,7 @@ bind_runtime_base (PvRuntime *self,
     {
       const char *item = from_host[i];
 
-      if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+      if (_srt_file_test_in_sysroot (self->host_in_current_namespace, self->host_fd,
                                      item, G_FILE_TEST_EXISTS))
         flatpak_bwrap_add_args (bwrap,
                                 "--ro-bind", item, item,
@@ -3216,7 +3223,7 @@ bind_runtime_finish (PvRuntime *self,
    * non-existing targets), in which case we don't want to attempt to create
    * bogus symlinks or bind mounts, as that will cause flatpak run to fail.
    */
-  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, -1,
+  if (_srt_file_test_in_sysroot (self->host_in_current_namespace, self->host_fd,
                                  "/etc/localtime", G_FILE_TEST_EXISTS))
     {
       g_autofree char *target = NULL;

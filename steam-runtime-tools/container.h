@@ -50,11 +50,12 @@ GType srt_container_info_get_type (void);
  * SrtContainerType:
  * @SRT_CONTAINER_TYPE_UNKNOWN: Unknown container type
  * @SRT_CONTAINER_TYPE_NONE: No container detected
- * @SRT_CONTAINER_TYPE_FLATPAK: Running in a Flatpak app
+ * @SRT_CONTAINER_TYPE_FLATPAK: Running in a Flatpak app (see flatpak.org)
  * @SRT_CONTAINER_TYPE_PRESSURE_VESSEL: Running in a Steam Runtime container
  *  using pressure-vessel
- * @SRT_CONTAINER_TYPE_DOCKER: Running in a Docker container
- * @SRT_CONTAINER_TYPE_PODMAN: Running in a Podman container
+ * @SRT_CONTAINER_TYPE_DOCKER: Running in a Docker container (see docker.com)
+ * @SRT_CONTAINER_TYPE_PODMAN: Running in a Podman container (see podman.io)
+ * @SRT_CONTAINER_TYPE_SNAP: Running in a Snap app (see snapcraft.io)
  *
  * A type of container.
  */
@@ -65,6 +66,7 @@ typedef enum
   SRT_CONTAINER_TYPE_PRESSURE_VESSEL,
   SRT_CONTAINER_TYPE_DOCKER,
   SRT_CONTAINER_TYPE_PODMAN,
+  SRT_CONTAINER_TYPE_SNAP,
   SRT_CONTAINER_TYPE_UNKNOWN = -1
 } SrtContainerType;
 

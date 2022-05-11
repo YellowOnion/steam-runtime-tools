@@ -731,8 +731,7 @@ _srt_check_library_presence (const char *helpers_path,
       g_debug ("An error occurred calling the helper: %s", error->message);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
     }
-
-  if (wait_status != 0)
+  else if (wait_status != 0)
     {
       g_debug ("... wait status %d", wait_status);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;

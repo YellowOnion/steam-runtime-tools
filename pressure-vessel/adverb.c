@@ -44,6 +44,7 @@
 
 #include "bwrap-lock.h"
 #include "flatpak-utils-base-private.h"
+#include "per-arch-dirs.h"
 #include "supported-architectures.h"
 #include "utils.h"
 #include "wrap-interactive.h"
@@ -74,14 +75,6 @@ typedef struct
   int original_stdout_fd;
   int *pass_fds;
 } ChildSetupData;
-
-typedef struct
-{
-  gchar *root_path;
-  gchar *platform_token_path;
-  /* Same order as pv_multiarch_details */
-  gchar *abi_paths[PV_N_SUPPORTED_ARCHITECTURES];
-} LibTempDirs;
 
 typedef enum
 {
@@ -129,25 +122,6 @@ ptr_array_add_unique (GPtrArray *arr,
   if (!g_ptr_array_find_with_equal_func (arr, item, equal_func, NULL))
     g_ptr_array_add (arr, copy_func ((gpointer) item));
 }
-
-static void
-lib_temp_dirs_free (LibTempDirs *lib_temp_dirs)
-{
-  gsize abi;
-
-  if (lib_temp_dirs->root_path != NULL)
-    _srt_rm_rf (lib_temp_dirs->root_path);
-
-  g_clear_pointer (&lib_temp_dirs->root_path, g_free);
-  g_clear_pointer (&lib_temp_dirs->platform_token_path, g_free);
-
-  for (abi = 0; abi < G_N_ELEMENTS (lib_temp_dirs->abi_paths); abi++)
-    g_clear_pointer (&lib_temp_dirs->abi_paths[abi], g_free);
-
-  g_free (lib_temp_dirs);
-}
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (LibTempDirs, lib_temp_dirs_free)
 
 static void
 child_setup_cb (gpointer user_data)
@@ -581,61 +555,6 @@ run_helper_sync (const char *cwd,
   return ret;
 }
 
-static LibTempDirs *
-lib_temp_dirs_new (GError **error)
-{
-  g_autoptr(LibTempDirs) lib_temp_dirs = g_new0 (LibTempDirs, 1);
-  g_autoptr(SrtSystemInfo) info = NULL;
-  gsize abi;
-
-  info = srt_system_info_new (NULL);
-
-  lib_temp_dirs->root_path = g_dir_make_tmp ("pressure-vessel-libs-XXXXXX", error);
-  if (lib_temp_dirs->root_path == NULL)
-    return glnx_prefix_error_null (error,
-                                   "Cannot create temporary directory for platform specific libraries");
-
-  lib_temp_dirs->platform_token_path = g_build_filename (lib_temp_dirs->root_path,
-                                                         "${PLATFORM}", NULL);
-
-  for (abi = 0; abi < PV_N_SUPPORTED_ARCHITECTURES; abi++)
-    {
-      g_autofree gchar *libdl_platform = NULL;
-      g_autofree gchar *abi_path = NULL;
-
-      if (g_getenv ("PRESSURE_VESSEL_TEST_STANDARDIZE_PLATFORM") != NULL)
-        {
-          /* In unit tests it isn't straightforward to find the real
-           * ${PLATFORM}, so we use a predictable mock implementation:
-           * for x86 we use whichever platform happens to be listed first
-           * and for all the other cases we simply use "mock". */
-#if defined(__i386__) || defined(__x86_64__)
-          libdl_platform = g_strdup (pv_multiarch_details[abi].platforms[0]);
-#else
-          libdl_platform = g_strdup("mock");
-#endif
-        }
-      else
-        {
-          libdl_platform = srt_system_info_dup_libdl_platform (info,
-                                                               pv_multiarch_details[abi].tuple,
-                                                               error);
-          if (!libdl_platform)
-            return glnx_prefix_error_null (error,
-                                           "Unknown expansion of the dl string token $PLATFORM");
-        }
-
-      abi_path = g_build_filename (lib_temp_dirs->root_path, libdl_platform, NULL);
-
-      if (g_mkdir (abi_path, 0700) != 0)
-        return glnx_null_throw_errno_prefix (error, "Unable to create \"%s\"", abi_path);
-
-      lib_temp_dirs->abi_paths[abi] = g_steal_pointer (&abi_path);
-    }
-
-  return g_steal_pointer (&lib_temp_dirs);
-}
-
 static gboolean
 regenerate_ld_so_cache (const GPtrArray *ld_so_cache_paths,
                         const char *dir,
@@ -1043,7 +962,7 @@ main (int argc,
   sigset_t mask;
   struct sigaction terminate_child_action = {};
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
-  g_autoptr(LibTempDirs) lib_temp_dirs = NULL;
+  g_autoptr(PvPerArchDirs) lib_temp_dirs = NULL;
   gsize i;
 
   sigemptyset (&mask);
@@ -1211,7 +1130,7 @@ main (int argc,
   flatpak_bwrap_append_argsv (wrapped_command, &argv[1], argc - 1);
   flatpak_bwrap_finish (wrapped_command);
 
-  lib_temp_dirs = lib_temp_dirs_new (error);
+  lib_temp_dirs = pv_per_arch_dirs_new (error);
 
   if (lib_temp_dirs == NULL)
     {
@@ -1286,7 +1205,7 @@ main (int argc,
 
               g_debug ("Module %s is for %s",
                        preload, pv_multiarch_details[abi_index].tuple);
-              platform_path = g_build_filename (lib_temp_dirs->platform_token_path,
+              platform_path = g_build_filename (lib_temp_dirs->libdl_token_path,
                                                 base, NULL);
               link = g_build_filename (lib_temp_dirs->abi_paths[abi_index],
                                        base, NULL);

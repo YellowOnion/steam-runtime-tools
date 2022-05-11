@@ -32,6 +32,9 @@ typedef struct
 {
   const char *multiarch_tuple;
   const char *interoperable_runtime_linker;
+  guint16 machine_type;
+  guint8 elf_class;
+  guint8 elf_encoding;
 } SrtKnownArchitecture;
 
 G_GNUC_INTERNAL const SrtKnownArchitecture *_srt_architecture_get_known (void);

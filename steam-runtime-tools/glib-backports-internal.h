@@ -168,4 +168,7 @@ guint my_g_string_replace (GString *string,
                            const gchar *find,
                            const gchar *replace,
                            guint limit);
+#define g_memdup2(m, b) my_g_memdup2 (m, b)
+gpointer my_g_memdup2 (gconstpointer mem,
+                       gsize byte_size);
 #endif

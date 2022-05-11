@@ -71,10 +71,9 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
 {
   JsonObject *json_sub_obj;
   JsonObject *json_host_obj = NULL;
-  const gchar *type_string = NULL;
   const gchar *flatpak_version = NULL;
   const gchar *host_path = NULL;
-  SrtContainerType type = SRT_CONTAINER_TYPE_UNKNOWN;
+  int type = SRT_CONTAINER_TYPE_UNKNOWN;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
 
@@ -85,17 +84,8 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
       if (json_sub_obj == NULL)
         goto out;
 
-      if (json_object_has_member (json_sub_obj, "type"))
-        {
-          type_string = json_object_get_string_member (json_sub_obj, "type");
-          G_STATIC_ASSERT (sizeof (SrtContainerType) == sizeof (gint));
-          if (!srt_enum_from_nick (SRT_TYPE_CONTAINER_TYPE, type_string, (gint *) &type, NULL))
-            {
-              g_debug ("The parsed container type '%s' is not a known element", type_string);
-              type = SRT_CONTAINER_TYPE_UNKNOWN;
-            }
-        }
-
+      _srt_json_object_get_enum_member (json_sub_obj, "type",
+                                        SRT_TYPE_CONTAINER_TYPE, &type);
       flatpak_version = json_object_get_string_member_with_default (json_sub_obj,
                                                                     "flatpak_version",
                                                                     NULL);

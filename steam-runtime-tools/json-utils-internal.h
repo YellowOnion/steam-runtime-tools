@@ -65,3 +65,8 @@ void _srt_json_builder_add_string_force_utf8 (JsonBuilder *builder,
 gboolean _srt_json_object_get_hex_uint32_member (JsonObject *object,
                                                  const gchar *member_name,
                                                  guint32 *value_out);
+
+gboolean _srt_json_object_get_enum_member (JsonObject *object,
+                                           const gchar *member_name,
+                                           GType type,
+                                           int *value_out);

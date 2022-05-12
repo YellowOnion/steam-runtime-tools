@@ -44,6 +44,16 @@ static inline SrtVirtualizationInfo *_srt_virtualization_info_new (SrtMachineTyp
                                                                    const gchar *interpreter_root,
                                                                    SrtVirtualizationType type);
 
+/*
+ * _srt_virtualization_info_new_empty:
+ *
+ * Inline convenience function to create a new empty SrtVirtualizationInfo.
+ * This is not part of the public API.
+ *
+ * Returns: (transfer full): A new #SrtVirtualizationInfo
+ */
+static inline SrtVirtualizationInfo *_srt_virtualization_info_new_empty (void);
+
 #ifndef __GTK_DOC_IGNORE__
 static inline SrtVirtualizationInfo *
 _srt_virtualization_info_new (SrtMachineType host_machine,
@@ -55,6 +65,12 @@ _srt_virtualization_info_new (SrtMachineType host_machine,
                        "interpreter-root", interpreter_root,
                        "type", type,
                        NULL);
+}
+
+static inline SrtVirtualizationInfo *
+_srt_virtualization_info_new_empty (void)
+{
+  return g_object_new (SRT_TYPE_VIRTUALIZATION_INFO, NULL);
 }
 #endif
 

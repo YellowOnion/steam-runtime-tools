@@ -48,6 +48,7 @@
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/system-info-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/virtualization-internal.h"
 #include "steam-runtime-tools/xdg-portal-internal.h"
 
 #include <errno.h>
@@ -120,6 +121,7 @@ struct _SrtSystemInfo
   gboolean immutable_values;
   GHashTable *cached_hidden_deps;
   SrtContainerInfo *container_info;
+  SrtVirtualizationInfo *virtualization_info;
   SrtSteam *steam_data;
   SrtXdgPortal *xdg_portal_data;
   struct
@@ -563,6 +565,8 @@ srt_system_info_finalize (GObject *object)
   glnx_close_fd (&self->sysroot_fd);
   g_strfreev (self->env);
   g_clear_pointer (&self->cached_driver_environment, g_strfreev);
+  g_clear_object (&self->virtualization_info);
+
   if (self->cached_hidden_deps)
     g_hash_table_unref (self->cached_hidden_deps);
 
@@ -2054,6 +2058,7 @@ srt_system_info_set_sysroot (SrtSystemInfo *self,
   forget_locales (self);
   forget_os (self);
   forget_overrides (self);
+  g_clear_object (&self->virtualization_info);
   g_free (self->sysroot);
   glnx_close_fd (&self->sysroot_fd);
 
@@ -3900,6 +3905,34 @@ srt_system_info_dup_container_host_directory (SrtSystemInfo *self)
 
   ensure_container_info (self);
   return g_strdup (srt_container_info_get_container_host_directory (self->container_info));
+}
+
+/**
+ * srt_system_info_check_virtualization:
+ * @self: The #SrtSystemInfo object
+ *
+ * Gather and return information about the virtualization, emulation or
+ * hypervisor in use.
+ *
+ * Returns: (transfer full): An #SrtVirtualizationInfo object.
+ *  Free with g_object_unref().
+ */
+SrtVirtualizationInfo *
+srt_system_info_check_virtualization (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+
+  if (self->virtualization_info == NULL)
+    {
+      /* If we don't know already, then we never will */
+      if (self->immutable_values)
+        self->virtualization_info = _srt_virtualization_info_new_empty ();
+      else
+        self->virtualization_info = _srt_check_virtualization (NULL, NULL,
+                                                               self->sysroot_fd);
+    }
+
+  return g_object_ref (self->virtualization_info);
 }
 
 static void

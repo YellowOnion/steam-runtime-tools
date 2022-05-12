@@ -665,6 +665,42 @@ jsonify_os_release (JsonBuilder *builder,
 }
 
 static void
+jsonify_virtualization (JsonBuilder *builder,
+                        SrtSystemInfo *info)
+{
+  g_autoptr(SrtVirtualizationInfo) virt_info = srt_system_info_check_virtualization (info);
+  SrtVirtualizationType type = SRT_VIRTUALIZATION_TYPE_UNKNOWN;
+  SrtMachineType host_machine = SRT_MACHINE_TYPE_UNKNOWN;
+  const gchar *interpreter_root = NULL;
+
+  type = srt_virtualization_info_get_virtualization_type (virt_info);
+  host_machine = srt_virtualization_info_get_host_machine (virt_info);
+  interpreter_root = srt_virtualization_info_get_interpreter_root (virt_info);
+
+  json_builder_set_member_name (builder, "virtualization");
+  json_builder_begin_object (builder);
+    {
+      json_builder_set_member_name (builder, "type");
+      jsonify_enum (builder, SRT_TYPE_VIRTUALIZATION_TYPE, type);
+
+      if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU
+          || host_machine != SRT_MACHINE_TYPE_UNKNOWN)
+        {
+          json_builder_set_member_name (builder, "host-machine");
+          jsonify_enum (builder, SRT_TYPE_MACHINE_TYPE, host_machine);
+        }
+
+      if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU
+          || interpreter_root != NULL)
+        {
+          json_builder_set_member_name (builder, "interpreter-root");
+          json_builder_add_string_value (builder, interpreter_root);
+        }
+    }
+  json_builder_end_object (builder);
+}
+
+static void
 jsonify_container (JsonBuilder *builder,
                    SrtSystemInfo *info)
 {
@@ -1064,6 +1100,7 @@ main (int argc,
   json_builder_end_object (builder);
 
   jsonify_os_release (builder, info);
+  jsonify_virtualization (builder, info);
   jsonify_container (builder, info);
 
   driver_environment = srt_system_info_list_driver_environment (info);

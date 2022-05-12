@@ -40,6 +40,7 @@
 #include <steam-runtime-tools/macros.h>
 #include <steam-runtime-tools/runtime.h>
 #include <steam-runtime-tools/steam.h>
+#include <steam-runtime-tools/virtualization.h>
 #include <steam-runtime-tools/xdg-portal.h>
 
 /**
@@ -104,6 +105,8 @@ _SRT_PUBLIC
 SrtContainerType srt_system_info_get_container_type (SrtSystemInfo *self);
 _SRT_PUBLIC
 gchar *srt_system_info_dup_container_host_directory (SrtSystemInfo *self);
+_SRT_PUBLIC
+SrtVirtualizationInfo *srt_system_info_check_virtualization (SrtSystemInfo *self);
 
 _SRT_PUBLIC
 gboolean srt_system_info_can_write_to_uinput (SrtSystemInfo *self);

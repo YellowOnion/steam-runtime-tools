@@ -40,9 +40,11 @@
 #include "steam-runtime-tools/runtime.h"
 #include "steam-runtime-tools/simple-input-device-internal.h"
 #include "steam-runtime-tools/steam.h"
+#include "steam-runtime-tools/virtualization.h"
 
 gboolean _srt_architecture_can_run_from_report (JsonObject *json_obj);
 SrtContainerInfo *_srt_container_info_get_from_report (JsonObject *json_obj);
+SrtVirtualizationInfo *_srt_virtualization_info_get_from_report (JsonObject *json_obj);
 SrtX86FeatureFlags _srt_feature_get_x86_flags_from_report (JsonObject *json_obj,
                                                            SrtX86FeatureFlags *known);
 GList *_srt_get_steam_desktop_entries_from_json_report (JsonObject *json_obj);

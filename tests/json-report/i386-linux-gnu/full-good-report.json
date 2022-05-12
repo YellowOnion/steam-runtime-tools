@@ -41,6 +41,11 @@
     "pretty_name" : "Arch Linux",
     "build_id" : "rolling"
   },
+  "virtualization" : {
+    "type" : "fex-emu",
+    "host-machine" : "aarch64",
+    "interpreter-root" : "/home/me/rootfs"
+  },
   "container" : {
     "type" : "docker",
     "host" : {

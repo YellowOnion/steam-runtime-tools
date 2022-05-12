@@ -1,4 +1,8 @@
 {
+  "virtualization" : {
+    "type" : "thought-experiment",
+    "host-machine" : "human-brain"
+  },
   "container" : {
     "type" : "better_docker"
   },

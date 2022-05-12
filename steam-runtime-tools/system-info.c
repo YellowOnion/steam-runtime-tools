@@ -855,6 +855,7 @@ srt_system_info_new_from_json (const char *path,
   _srt_os_release_populate_from_report (json_obj, &info->os_release);
 
   info->container_info = _srt_container_info_get_from_report (json_obj);
+  info->virtualization_info = _srt_virtualization_info_get_from_report (json_obj);
 
   info->cached_driver_environment = _srt_system_info_driver_environment_from_report (json_obj);
 

@@ -1,4 +1,7 @@
 {
+  "virtualization" : {
+    "type" : "microsoft"
+  },
   "container" : {
     "type" : "flatpak",
     "flatpak_version" : "1.10.2",

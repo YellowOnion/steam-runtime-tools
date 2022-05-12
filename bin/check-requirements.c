@@ -144,7 +144,7 @@ main (int argc,
 
   _srt_unblock_signals ();
 
-  x86_features = _srt_feature_get_x86_flags (&known);
+  x86_features = _srt_feature_get_x86_flags (NULL, &known);
 
   if (!check_x86_features (x86_features))
     {

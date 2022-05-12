@@ -3963,7 +3963,8 @@ ensure_x86_features_cached (SrtSystemInfo *self)
   if (self->cpu_features.x86_known != SRT_X86_FEATURE_NONE)
     return;
 
-  self->cpu_features.x86_features = _srt_feature_get_x86_flags (&self->cpu_features.x86_known);
+  self->cpu_features.x86_features = _srt_feature_get_x86_flags (NULL,
+                                                                &self->cpu_features.x86_known);
 }
 
 /**

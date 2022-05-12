@@ -213,12 +213,12 @@ class TestContainers(BaseTest):
             )
 
             for exe in (
-                'pressure-vessel-wrap',
-                'pv-bwrap',
+                'pressure-vessel/pressure-vessel-wrap',
+                'subprojects/bubblewrap/pv-bwrap',
             ):
                 cls.copy2(
-                    os.path.join(cls.top_builddir, 'pressure-vessel', exe),
-                    os.path.join(cls.pv_dir, 'bin', exe),
+                    os.path.join(cls.top_builddir, exe),
+                    os.path.join(cls.pv_dir, 'bin', os.path.basename(exe)),
                 )
 
             for exe in (

@@ -31,7 +31,7 @@ user namespaces.  Emphasis on subset - specifically relevant to the
 above CVE, bubblewrap does not allow control over iptables.
 
 The original bubblewrap code existed before user namespaces - it inherits code from
-[xdg-app helper](https://cgit.freedesktop.org/xdg-app/xdg-app/tree/common/xdg-app-helper.c)
+[xdg-app helper](https://cgit.freedesktop.org/xdg-app/xdg-app/tree/common/xdg-app-helper.c?id=4c3bf179e2e4a2a298cd1db1d045adaf3f564532)
 which in turn distantly derives from
 [linux-user-chroot](https://git.gnome.org/browse/linux-user-chroot).
 
@@ -61,6 +61,30 @@ We would also like to see this be available in Kubernetes/OpenShift
 clusters.  Having the ability for unprivileged users to use container
 features would make it significantly easier to do interactive
 debugging scenarios and the like.
+
+Installation
+------------
+
+bubblewrap is available in the package repositories of the most Linux distributions
+and can be installed from there.
+
+If you need to build bubblewrap from source, you can do this with meson or autotools.
+
+meson:
+
+```
+meson _builddir
+meson compile -C _builddir
+meson install -C _builddir
+```
+
+autotools:
+
+```
+./autogen.sh
+make
+sudo make install
+```
 
 Usage
 -----

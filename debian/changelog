@@ -1,3 +1,15 @@
+steam-runtime-tools (0.20220512.0) UNRELEASED; urgency=medium
+
+  * system-info: Work around diagnostic tools failing in a Snap app
+  * system-info: Show Snap app as a container
+  * pressure-vessel: Speed up detection of host graphics drivers,
+    particularly Mesa DRI and VA-API
+  * pressure-vessel: Refactoring
+  * pressure-vessel: Update bubblewrap subproject to 0.6.2
+  * Update libglnx subproject
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 12 May 2022 15:24:41 +0100
+
 steam-runtime-tools (0.20220420.0) steamrt; urgency=medium
 
   * system-info: Don't consider a symlink /run/host -> .. to be a container.

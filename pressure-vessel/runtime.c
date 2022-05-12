@@ -1271,13 +1271,8 @@ enumerate_indep (gpointer data)
   EnumerationThreadInputs *inputs = data;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
     _srt_profiling_start ("Enumerating cross-architecture ICDs in thread");
-  g_autoptr(SrtSystemInfo) system_info = srt_system_info_new (NULL);
-
-  srt_system_info_set_sysroot (system_info,
-                               inputs->provider->path_in_current_ns);
-  _srt_system_info_set_check_flags (system_info,
-                                    (SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
-                                     | SRT_CHECK_FLAGS_SKIP_EXTRAS));
+  g_autoptr(SrtSystemInfo) system_info =
+    pv_graphics_provider_create_system_info (inputs->provider);
 
   if (g_cancellable_is_cancelled (inputs->cancellable))
     goto out;

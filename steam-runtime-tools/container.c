@@ -311,6 +311,22 @@ _srt_check_container (int sysroot_fd,
       goto out;
     }
 
+  /* The canonical way to detect Snap is to look for $SNAP, but it's
+   * plausible that someone sets that variable for an unrelated reason,
+   * so check for more than one variable. This is the same thing
+   * WebKitGTK does. */
+  if (g_getenv("SNAP") != NULL
+      && g_getenv("SNAP_NAME") != NULL
+      && g_getenv("SNAP_REVISION") != NULL)
+    {
+      type = SRT_CONTAINER_TYPE_SNAP;
+      g_debug ("Snap based on $SNAP, $SNAP_NAME, $SNAP_REVISION");
+      /* The way Snap works means that most of the host filesystem is
+       * available in the root directory; but we're not allowed to access
+       * it, so it wouldn't be useful to set host_directory to "/". */
+      goto out;
+    }
+
   if (_srt_file_get_contents_in_sysroot (sysroot_fd, "/proc/1/cgroup",
                                          &contents, NULL, NULL))
     {

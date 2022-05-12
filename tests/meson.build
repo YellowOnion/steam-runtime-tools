@@ -50,6 +50,7 @@ tests = [
   {'name': 'locale'},
   {'name': 'system-info'},
   {'name': 'utils', 'static': true},
+  {'name': 'virtualization', 'static': true},
   {'name': 'xdg-portal'},
 ]
 

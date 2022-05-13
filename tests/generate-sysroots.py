@@ -118,6 +118,7 @@ fedora/usr/lib64/dri
 fedora/usr/lib64/vdpau
 fedora/usr/share/vulkan/implicit_layer.d
 fedora/run/systemd
+fedora/sys/class/dmi/id
 flatpak-example/usr/lib/dri
 flatpak-example/usr/lib/x86_64-mock-abi/GL/lib/dri
 flatpak-example/usr/lib/x86_64-mock-abi/dri
@@ -151,6 +152,7 @@ ubuntu16/usr/lib/dri
 ubuntu16/usr/lib/x86_64-mock-ubuntu/dri
 ubuntu16/usr/lib/x86_64-mock-ubuntu/mesa
 ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau
+ubuntu16/sys/class/dmi/id
 '''
 
 for name in dirs.split():
@@ -1089,6 +1091,9 @@ BUG_REPORT_URL="https://bugs.debian.org/"
 with open('fedora/run/systemd/container', 'w') as writer:
     writer.write('docker\n')
 
+with open('fedora/sys/class/dmi/id/product_name', 'w') as writer:
+    writer.write('VirtualBox machine\n')
+
 with open('invalid-os-release/usr/lib/os-release', 'w') as writer:
     writer.write('''\
 ID=steamrt
@@ -1143,3 +1148,6 @@ with open('steamrt-unofficial/proc/1/cgroup', 'w') as writer:
 1:name=systemd:/docker/9999999999999999999999999999999999999999999999999999999999999999
 0::/system.slice/docker.service
 ''')
+
+with open('ubuntu16/sys/class/dmi/id/sys_vendor', 'w') as writer:
+    writer.write('QEMU\n')

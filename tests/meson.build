@@ -32,6 +32,7 @@ no_activation_session_conf = files('session.conf')
 tests = [
   {'name': 'architecture'},
   {'name': 'container'},
+  {'name': 'cpu-feature', 'static': true},
   {'name': 'desktop-entry'},
   {'name': 'graphics'},
   {
@@ -49,6 +50,7 @@ tests = [
   {'name': 'locale'},
   {'name': 'system-info'},
   {'name': 'utils', 'static': true},
+  {'name': 'virtualization', 'static': true},
   {'name': 'xdg-portal'},
 ]
 

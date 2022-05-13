@@ -403,3 +403,43 @@ _srt_json_object_get_hex_uint32_member (JsonObject *object,
 
   return TRUE;
 }
+
+/*
+ * _srt_json_object_get_enum_member:
+ * @object: A JSON object
+ * @member_name: A member of @object
+ * @type: An enum type
+ * @value_out: (out) (optional): Used to return the value
+ *  of `object[member_name]`
+ *
+ * Try to parse `object[member_name]` as the nickname of a possible value
+ * of @type.
+ *
+ * Returns: %TRUE if `object[member_name]` can be parsed; %FALSE without
+ *  altering `*value_out` if not
+ */
+gboolean
+_srt_json_object_get_enum_member (JsonObject *object,
+                                  const gchar *member_name,
+                                  GType type,
+                                  int *value_out)
+{
+  const char *value;
+  int parsed;
+
+  if (!json_object_has_member (object, member_name))
+    return FALSE;
+
+  value = json_object_get_string_member (object, member_name);
+
+  if (!srt_enum_from_nick (type, value, &parsed, NULL))
+    {
+      g_debug ("Not a known %s: '%s'", g_type_name (type), value);
+      return FALSE;
+    }
+
+  if (value_out)
+    *value_out = parsed;
+
+  return TRUE;
+}

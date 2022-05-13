@@ -41,6 +41,7 @@ libsteamrt_sources = [
     'steam.c',
     'system-info.c',
     'utils.c',
+    'virtualization.c',
     'xdg-portal.c',
 ]
 
@@ -65,6 +66,7 @@ libsteamrt_public_headers = [
     'steam.h',
     'system-info.h',
     'utils.h',
+    'virtualization.h',
     'xdg-portal.h',
 ]
 
@@ -109,6 +111,7 @@ libsteamrt_internals = [
     'udev-input-device-internal.h',
     'udev-input-device.c',
     'utils-internal.h',
+    'virtualization-internal.h',
 ]
 
 enums = gnome.mkenums_simple(

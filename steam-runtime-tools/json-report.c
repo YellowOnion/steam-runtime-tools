@@ -36,6 +36,7 @@
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/steam-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/virtualization-internal.h"
 
 /**
  * _srt_architecture_can_run_from_report:
@@ -71,10 +72,9 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
 {
   JsonObject *json_sub_obj;
   JsonObject *json_host_obj = NULL;
-  const gchar *type_string = NULL;
   const gchar *flatpak_version = NULL;
   const gchar *host_path = NULL;
-  SrtContainerType type = SRT_CONTAINER_TYPE_UNKNOWN;
+  int type = SRT_CONTAINER_TYPE_UNKNOWN;
 
   g_return_val_if_fail (json_obj != NULL, NULL);
 
@@ -85,17 +85,8 @@ _srt_container_info_get_from_report (JsonObject *json_obj)
       if (json_sub_obj == NULL)
         goto out;
 
-      if (json_object_has_member (json_sub_obj, "type"))
-        {
-          type_string = json_object_get_string_member (json_sub_obj, "type");
-          G_STATIC_ASSERT (sizeof (SrtContainerType) == sizeof (gint));
-          if (!srt_enum_from_nick (SRT_TYPE_CONTAINER_TYPE, type_string, (gint *) &type, NULL))
-            {
-              g_debug ("The parsed container type '%s' is not a known element", type_string);
-              type = SRT_CONTAINER_TYPE_UNKNOWN;
-            }
-        }
-
+      _srt_json_object_get_enum_member (json_sub_obj, "type",
+                                        SRT_TYPE_CONTAINER_TYPE, &type);
       flatpak_version = json_object_get_string_member_with_default (json_sub_obj,
                                                                     "flatpak_version",
                                                                     NULL);
@@ -616,4 +607,46 @@ out:
                          bin32_path,
                          steamscript_path,
                          steamscript_version);
+}
+
+/**
+ * _srt_system_info_get_virtualization_info_from_report:
+ * @json_obj: (not nullable): A JSON Object used to search for the
+ *  "virtualization" property
+ *
+ * If the provided @json_obj doesn't have a "virtualization" member,
+ * %SRT_VIRTUALIZATION_TYPE_UNKNOWN will be returned.
+ *
+ * Returns: Information about virtualization, hypervisor or emulation
+ */
+SrtVirtualizationInfo *
+_srt_virtualization_info_get_from_report (JsonObject *json_obj)
+{
+  JsonObject *json_sub_obj;
+  const gchar *interpreter_root = NULL;
+  int type = SRT_CONTAINER_TYPE_UNKNOWN;
+  int host_machine = SRT_MACHINE_TYPE_UNKNOWN;
+
+  g_return_val_if_fail (json_obj != NULL, NULL);
+
+  if (json_object_has_member (json_obj, "virtualization"))
+    {
+      json_sub_obj = json_object_get_object_member (json_obj, "virtualization");
+
+      if (json_sub_obj == NULL)
+        goto out;
+
+      _srt_json_object_get_enum_member (json_sub_obj, "type",
+                                        SRT_TYPE_VIRTUALIZATION_TYPE, &type);
+      _srt_json_object_get_enum_member (json_sub_obj, "host-machine",
+                                        SRT_TYPE_MACHINE_TYPE, &host_machine);
+      interpreter_root = json_object_get_string_member_with_default (json_sub_obj,
+                                                                     "interpreter-root",
+                                                                     NULL);
+    }
+
+out:
+  return _srt_virtualization_info_new (host_machine,
+                                       interpreter_root,
+                                       type);
 }

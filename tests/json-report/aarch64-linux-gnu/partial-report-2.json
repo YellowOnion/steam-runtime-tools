@@ -18,6 +18,9 @@
   "os-release" : {
     "id" : "arch"
   },
+  "virtualization" : {
+    "type" : "none"
+  },
   "container" : {
     "type" : "docker"
   },

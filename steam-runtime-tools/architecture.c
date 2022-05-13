@@ -55,26 +55,43 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(Elf, elf_end);
 #define EM_AARCH64	183	/* ARM AARCH64 */
 #endif
 
+G_STATIC_ASSERT (SRT_MACHINE_TYPE_UNKNOWN == EM_NONE);
+G_STATIC_ASSERT (SRT_MACHINE_TYPE_386 == EM_386);
+G_STATIC_ASSERT (SRT_MACHINE_TYPE_X86_64 == EM_X86_64);
+G_STATIC_ASSERT (SRT_MACHINE_TYPE_AARCH64 == EM_AARCH64);
+
 static const SrtKnownArchitecture known_architectures[] =
 {
     {
       .multiarch_tuple = SRT_ABI_X86_64,
       .interoperable_runtime_linker = "/lib64/ld-linux-x86-64.so.2",
+      .machine_type = EM_X86_64,
+      .elf_class = ELFCLASS64,
+      .elf_encoding = ELFDATA2LSB,
     },
 
     {
       .multiarch_tuple = SRT_ABI_I386,
       .interoperable_runtime_linker = "/lib/ld-linux.so.2",
+      .machine_type = EM_386,
+      .elf_class = ELFCLASS32,
+      .elf_encoding = ELFDATA2LSB,
     },
 
     {
       .multiarch_tuple = "x86_64-linux-gnux32",
       .interoperable_runtime_linker = "/libx32/ld-linux-x32.so.2",
+      .machine_type = EM_X86_64,
+      .elf_class = ELFCLASS32,
+      .elf_encoding = ELFDATA2LSB,
     },
 
     {
       .multiarch_tuple = SRT_ABI_AARCH64,
       .interoperable_runtime_linker = "/lib/ld-linux-aarch64.so.1",
+      .machine_type = EM_AARCH64,
+      .elf_class = ELFCLASS64,
+      .elf_encoding = ELFDATA2LSB,
     },
 
     { NULL }
@@ -299,25 +316,24 @@ _srt_architecture_guess_from_elf (int dfd,
   guint8 cls = ELFCLASSNONE;
   guint8 data_encoding = ELFDATANONE;
   guint16 machine = EM_NONE;
-  const gchar *identifier = NULL;
+  gsize i;
 
   g_return_val_if_fail (file_path != NULL, FALSE);
 
   if (!_srt_architecture_read_elf (dfd, file_path, &cls, &data_encoding, &machine, error))
     return NULL;
 
-  if (cls == ELFCLASS32 && machine == EM_386)
-    identifier = "i386-linux-gnu";
-  else if (cls == ELFCLASS32 && machine == EM_X86_64)
-    identifier = "x86_64-linux-gnux32";
-  else if (cls == ELFCLASS64 && machine == EM_X86_64)
-    identifier = "x86_64-linux-gnu";
-  else if (cls == ELFCLASS64 && machine == EM_AARCH64 && data_encoding == ELFDATA2LSB)
-    identifier = "aarch64-linux-gnu";
-  else
-    g_set_error (error, SRT_ARCHITECTURE_ERROR, SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
-                 "ELF class, data encoding and machine (%u,%u,%u) are unknown",
-                 cls, data_encoding, machine);
+  for (i = 0; i < G_N_ELEMENTS (known_architectures); i++)
+    {
+      if (known_architectures[i].multiarch_tuple != NULL
+          && machine == known_architectures[i].machine_type
+          && cls == known_architectures[i].elf_class
+          && data_encoding == known_architectures[i].elf_encoding)
+        return known_architectures[i].multiarch_tuple;
+    }
 
-  return identifier;
+  g_set_error (error, SRT_ARCHITECTURE_ERROR, SRT_ARCHITECTURE_ERROR_NO_INFORMATION,
+               "ELF class, data encoding and machine (%u,%u,%u) are unknown",
+               cls, data_encoding, machine);
+  return NULL;
 }

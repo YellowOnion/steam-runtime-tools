@@ -2462,6 +2462,13 @@ typedef struct
 
 typedef struct
 {
+  SrtMachineType host_machine;
+  const gchar *interpreter_root;
+  SrtVirtualizationType type;
+} VirtTest;
+
+typedef struct
+{
   const gchar *library_path;
   const gchar *library_link;
   const gchar *library_soname;
@@ -2598,6 +2605,7 @@ typedef struct
   RuntimeTest runtime;
   OsReleaseTest os_release;
   ContTest container;
+  VirtTest virt;
   const gchar *driver_environment[5];
   ArchitectureTest architecture[G_N_ELEMENTS (multiarch_tuples)];
   SrtLocaleIssues locale_issues;
@@ -2649,6 +2657,13 @@ static JsonTest json_test[] =
       .name = "Arch Linux",
       .pretty_name = "Arch Linux",
       .build_id = "rolling",
+    },
+
+    .virt =
+    {
+      .host_machine = SRT_MACHINE_TYPE_AARCH64,
+      .interpreter_root = "/home/me/rootfs",
+      .type = SRT_VIRTUALIZATION_TYPE_FEX_EMU,
     },
 
     .container =
@@ -2918,6 +2933,12 @@ static JsonTest json_test[] =
     {
       .issues = SRT_RUNTIME_ISSUES_UNKNOWN,
     },
+    .virt =
+    {
+      .host_machine = SRT_MACHINE_TYPE_UNKNOWN,
+      .interpreter_root = NULL,
+      .type = SRT_VIRTUALIZATION_TYPE_MICROSOFT,
+    },
     .container =
     {
       .type = SRT_CONTAINER_TYPE_FLATPAK,
@@ -3055,6 +3076,12 @@ static JsonTest json_test[] =
     {
       .id = "arch",
     },
+    .virt =
+    {
+      .host_machine = SRT_MACHINE_TYPE_UNKNOWN,
+      .interpreter_root = NULL,
+      .type = SRT_VIRTUALIZATION_TYPE_NONE,
+    },
     .container =
     {
       .type = SRT_CONTAINER_TYPE_DOCKER,
@@ -3102,6 +3129,12 @@ static JsonTest json_test[] =
     {
       .issues = SRT_RUNTIME_ISSUES_UNKNOWN,
     },
+    .virt =
+    {
+      .host_machine = SRT_MACHINE_TYPE_UNKNOWN,
+      .interpreter_root = NULL,
+      .type = SRT_VIRTUALIZATION_TYPE_UNKNOWN,
+    },
     .container =
     {
       .type = SRT_CONTAINER_TYPE_UNKNOWN,
@@ -3136,6 +3169,12 @@ static JsonTest json_test[] =
     .runtime =
     {
       .issues = SRT_RUNTIME_ISSUES_UNKNOWN,
+    },
+    .virt =
+    {
+      .host_machine = SRT_MACHINE_TYPE_UNKNOWN,
+      .interpreter_root = NULL,
+      .type = SRT_VIRTUALIZATION_TYPE_UNKNOWN,
     },
     .container =
     {
@@ -3486,6 +3525,7 @@ json_parsing (Fixture *f,
       g_autoptr(SrtObjectList) explicit_layers = NULL;
       g_autoptr(SrtObjectList) implicit_layers = NULL;
       g_autoptr(SrtContainerInfo) container = NULL;
+      g_autoptr(SrtVirtualizationInfo) virt = NULL;
       g_autofree gchar *portal_messages = NULL;
       g_autofree gchar *steamscript_path = NULL;
       g_autofree gchar *steamscript_version = NULL;
@@ -3547,6 +3587,14 @@ json_parsing (Fixture *f,
       g_assert_cmpstr (t->container.host_path, ==, host_directory);
       g_assert_cmpstr (t->container.flatpak_version, ==,
                        srt_container_info_get_flatpak_version (container));
+
+      virt = srt_system_info_check_virtualization (info);
+      g_assert_cmpint (t->virt.type, ==,
+                       srt_virtualization_info_get_virtualization_type (virt));
+      g_assert_cmpint (t->virt.host_machine, ==,
+                       srt_virtualization_info_get_host_machine (virt));
+      g_assert_cmpstr (t->virt.interpreter_root, ==,
+                       srt_virtualization_info_get_interpreter_root (virt));
 
       driver_environment_list = srt_system_info_list_driver_environment (info);
       assert_equal_strings_arrays (t->driver_environment,

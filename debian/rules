@@ -18,15 +18,15 @@ ifeq ($(DEB_DISTRIBUTION),UNRELEASED)
 meson_options += --werror
 endif
 
-gtk_doc_has_cflags := $(shell \
+gtk_doc_with_cflags := $(shell \
 	if gtkdoc-scangobj --help 2>&1 | grep '[-]-cflags' >/dev/null; then \
-		echo true; \
+		echo enabled; \
 	else \
-		echo false; \
+		echo disabled; \
 	fi \
 )
 dh_options :=
-ifeq ($(gtk_doc_has_cflags),false)
+ifeq ($(gtk_doc_with_cflags),disabled)
 dh_options += -Nlibsteam-runtime-tools-0-doc
 endif
 
@@ -53,9 +53,9 @@ override_dh_auto_configure:
 		--prefix=/usr \
 		--libexecdir=$(libexecdir) \
 		--libdir=$(libdir) \
-		-Dgtk_doc=$(gtk_doc_has_cflags) \
-		-Dintrospection=false \
-		-Dman=true \
+		-Dgtk_doc=$(gtk_doc_with_cflags) \
+		-Dintrospection=disabled \
+		-Dman=enabled \
 		-Dmultiarch_tuple=$(DEB_HOST_MULTIARCH) \
 		-Dsrcdir=src \
 		-Dversion=$(DEB_VERSION) \

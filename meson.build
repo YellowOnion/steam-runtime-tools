@@ -56,9 +56,12 @@ else
   )
 endif
 
-if get_option('man')
-  pandoc = find_program('pandoc', required : true)
+# If -Dman=disabled, this behaves as though pandoc was not found, which is
+# what we want.
+pandoc = find_program('pandoc', required : get_option('man'))
+build_man_pages = pandoc.found()
 
+if pandoc.found()
   if run_command(
     pandoc,
     [
@@ -73,6 +76,19 @@ if get_option('man')
     pandoc_markdown_nosmart = 'markdown'
   endif
 endif
+
+gtk_doc_dep = dependency(
+  'gtk-doc',
+  version : '>= 1.19',
+  required : get_option('gtk_doc'),
+)
+build_gtk_doc = gtk_doc_dep.found()
+
+gobject_introspection_dep = dependency(
+  'gobject-introspection-1.0',
+  required : get_option('introspection'),
+)
+build_gir = gobject_introspection_dep.found()
 
 dbus_run_session = find_program('dbus-run-session', required : false)
 glslang_validator = find_program('glslangValidator', required : true)

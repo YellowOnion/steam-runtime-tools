@@ -127,7 +127,7 @@ build:devel:
 
             mkdir -p _build
             meson \
-                -Dman=true \
+                -Dman=enabled \
                 --werror \
                 _build/devel
             ninja -C _build/devel
@@ -162,9 +162,13 @@ build:clang:
             export CC=clang
             export CXX=clang++
 
+            # gtk-doc doesn't play nicely with AddressSanitizer, so
+            # disable it here (it's also rather slow, so only use it
+            # for one build, the 'devel' build above)
             meson \
                 -Db_lundef=false \
                 -Db_sanitize=address,undefined \
+                -Dgtk_doc=disabled \
                 --werror \
                 _build/clang-asan
             ninja -C _build/clang-asan

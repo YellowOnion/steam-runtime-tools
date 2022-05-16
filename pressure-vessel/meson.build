@@ -231,7 +231,7 @@ if get_option('srcdir') != ''
   )
 endif
 
-if get_option('man')
+if build_man_pages
   foreach tool : [
     'adverb',
     'locale-gen',

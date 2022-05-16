@@ -245,7 +245,7 @@ libsteamrt_compilation = declare_dependency(
   compile_args : ['-D_SRT_COMPILATION'],
 )
 
-if get_option('introspection')
+if build_gir
   gnome.generate_gir(
     libsteamrt,
     dependencies : libsteamrt_compilation,

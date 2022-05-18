@@ -152,7 +152,7 @@ foreach script : libexec_scripts
   )
 endforeach
 
-if get_option('man')
+if build_man_pages
   foreach bin_name : [
     'check-requirements',
     'identify-library-abi',

@@ -10,8 +10,8 @@ option(
 
 option(
   'gtk_doc',
-  type : 'boolean',
-  value : false,
+  type : 'feature',
+  value : 'auto',
   description : 'use gtk-doc to build documentation',
 )
 
@@ -24,15 +24,15 @@ option(
 
 option(
   'introspection',
-  type : 'boolean',
-  value : false,
+  type : 'feature',
+  value : 'auto',
   description : 'enable GObject-Introspection',
 )
 
 option(
   'man',
-  type : 'boolean',
-  value : true,
+  type : 'feature',
+  value : 'auto',
   description : 'enable man pages',
 )
 

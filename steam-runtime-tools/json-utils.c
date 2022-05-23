@@ -204,6 +204,36 @@ _srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
 }
 
 /**
+ * _srt_json_object_get_string_member:
+ * @object: (not nullable): A JSON object
+ * @member_name: (not nullable): The name of the member
+ *
+ * Convenience function that retrieves the string value stored in
+ * @member_name from the JSON @object.
+ *
+ * Returns: (type UTF-8) (nullable): The string value stored inside the JSON
+ *  object @member_name node. %NULL will be returned if @member_name doesn't
+ *  exist, or the node @member_name doesn't hold a value or the node isn't
+ *  a string.
+ */
+const gchar *
+_srt_json_object_get_string_member (JsonObject *object,
+                                    const char *member_name)
+{
+  JsonNode *node;
+
+  g_return_val_if_fail (object != NULL, FALSE);
+  g_return_val_if_fail (member_name != NULL, FALSE);
+
+  node = json_object_get_member (object, member_name);
+
+  if (node == NULL || !JSON_NODE_HOLDS_VALUE (node))
+    return NULL;
+
+  return json_node_get_string (node);
+}
+
+/**
  * _srt_json_builder_add_array_of_lines:
  * @builder: (not nullable): A JSON builder to which the provided @value
  *  will be added

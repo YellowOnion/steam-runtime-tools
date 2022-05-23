@@ -46,9 +46,13 @@ gchar ** _srt_json_object_dup_strv_member (JsonObject *json_obj,
 
 gchar *_srt_json_object_dup_array_of_lines_member (JsonObject *json_obj,
                                                    const gchar *array_member);
-void   _srt_json_builder_add_array_of_lines       (JsonBuilder *builder,
-                                                   const char *name,
-                                                   const char *value);
+
+const gchar *_srt_json_object_get_string_member (JsonObject *object,
+                                                 const char *member_name);
+
+void _srt_json_builder_add_array_of_lines (JsonBuilder *builder,
+                                           const char *name,
+                                           const char *value);
 
 void _srt_json_builder_add_strv_value (JsonBuilder *builder,
                                        const gchar *array_name,

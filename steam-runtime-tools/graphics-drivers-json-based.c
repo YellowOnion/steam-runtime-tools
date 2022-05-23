@@ -758,24 +758,13 @@ load_json (GType type,
 
   object = json_node_get_object (node);
 
-  subnode = json_object_get_member (object, "file_format_version");
-
-  if (subnode == NULL
-      || !JSON_NODE_HOLDS_VALUE (subnode))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "file_format_version in \"%s\" missing or not a value",
-                   path);
-      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
-      goto out;
-    }
-
-  file_format_version = json_node_get_string (subnode);
-
+  file_format_version = _srt_json_object_get_string_member (object,
+                                                            "file_format_version");
   if (file_format_version == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "file_format_version in \"%s\" not a string", path);
+                   "file_format_version in \"%s\" is either missing or not a string",
+                   path);
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
@@ -837,47 +826,23 @@ load_json (GType type,
 
   if (type == SRT_TYPE_VULKAN_ICD)
     {
-      subnode = json_object_get_member (icd_object, "api_version");
-
-      if (subnode == NULL
-          || !JSON_NODE_HOLDS_VALUE (subnode))
+      api_version = _srt_json_object_get_string_member (icd_object, "api_version");
+      if (api_version == NULL)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "ICD.api_version in \"%s\" missing or not a value",
+                       "ICD.api_version in \"%s\" is either missing or not a string",
                        path);
           issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
           goto out;
         }
-
-      api_version = json_node_get_string (subnode);
-
-      if (api_version == NULL)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "ICD.api_version in \"%s\" not a string", path);
-          issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
     }
 
-  subnode = json_object_get_member (icd_object, "library_path");
-
-  if (subnode == NULL
-      || !JSON_NODE_HOLDS_VALUE (subnode))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "ICD.library_path in \"%s\" missing or not a value",
-                   path);
-      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
-      goto out;
-    }
-
-  library_path = json_node_get_string (subnode);
-
+  library_path = _srt_json_object_get_string_member (icd_object, "library_path");
   if (library_path == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "ICD.library_path in \"%s\" not a string", path);
+                   "ICD.library_path in \"%s\" is either missing or not a string",
+                   path);
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }

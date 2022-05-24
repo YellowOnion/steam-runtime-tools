@@ -122,6 +122,8 @@ typedef enum
  * @SRT_LOADABLE_ISSUES_DUPLICATED: This loadable, and another one, have a
  *  library path that points to the same library, and, if available, also the
  *  same name
+ * @SRT_LOADABLE_ISSUES_API_SUBSET: This driver is not fully compliant with
+ *  the API spec, for example a Vulkan 1.3 portability driver
  *
  * A bitfield with flags representing problems with the loadables, or
  * %SRT_LOADABLE_ISSUES_NONE (which is numerically zero) if no problems
@@ -136,6 +138,7 @@ typedef enum
   SRT_LOADABLE_ISSUES_UNSUPPORTED = (1 << 1),
   SRT_LOADABLE_ISSUES_CANNOT_LOAD = (1 << 2),
   SRT_LOADABLE_ISSUES_DUPLICATED = (1 << 3),
+  SRT_LOADABLE_ISSUES_API_SUBSET = (1 << 4),
 } SrtLoadableIssues;
 
 /**

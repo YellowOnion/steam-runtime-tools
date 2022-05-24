@@ -158,7 +158,8 @@ setup (Fixture *f,
                                             "/false.json:"
                                             "/str.json:"
                                             "/no-library.json:"
-                                            "/no-api-version.json",
+                                            "/no-api-version.json:"
+                                            "/partial.json",
                                             TRUE);
       /* This will be ignored, because VK_DRIVER_FILES "wins" */
       f->fake_icds_envp = g_environ_setenv (f->fake_icds_envp,
@@ -1314,6 +1315,21 @@ assert_vulkan_icds (const SrtObjectList *icds,
       g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
                        SRT_LOADABLE_ISSUES_CANNOT_LOAD);
       assert_vulkan_icd_has_error (iter->data);
+
+      iter = iter->next;
+      g_assert_nonnull (iter);
+      g_assert_cmpstr (srt_vulkan_icd_get_json_path (iter->data), ==,
+                       "/partial.json");
+      assert_vulkan_icd_no_error (iter->data);
+      g_assert_cmpstr (srt_vulkan_icd_get_library_path (iter->data), ==,
+                       "libpartial.so");
+      g_assert_cmpstr (srt_vulkan_icd_get_api_version (iter->data), ==,
+                       "1.2.101");
+      resolved = srt_vulkan_icd_resolve_library_path (iter->data);
+      g_assert_cmpstr (resolved, ==, "libpartial.so");
+      g_clear_pointer (&resolved, g_free);
+      g_assert_cmpint (srt_vulkan_icd_get_issues (iter->data), ==,
+                       SRT_LOADABLE_ISSUES_API_SUBSET);
 
       iter = iter->next;
       g_assert_null (iter);

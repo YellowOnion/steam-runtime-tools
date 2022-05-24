@@ -300,6 +300,7 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
               const gchar *library_path = NULL;
               const gchar *api_version = NULL;
               const gchar *implementation_version = NULL;
+              gboolean portability_driver = FALSE;
               g_auto(GStrv) component_layers = NULL;
               SrtVulkanLayer *layer = NULL;
               SrtLoadableIssues issues;
@@ -345,6 +346,9 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
               api_version = json_object_get_string_member_with_default (json_elem_obj,
                                                                         "api_version",
                                                                         NULL);
+              portability_driver = json_object_get_boolean_member_with_default (json_elem_obj,
+                                                                                "is_portability_driver",
+                                                                                FALSE);
               issues = srt_get_flags_from_json_array (SRT_TYPE_LOADABLE_ISSUES,
                                                       json_elem_obj,
                                                       "issues",
@@ -390,6 +394,7 @@ get_driver_loadables_from_json_report (JsonObject *json_obj,
                     driver_info = g_list_prepend (driver_info, srt_vulkan_icd_new (json_path,
                                                                                    api_version,
                                                                                    library_path,
+                                                                                   portability_driver,
                                                                                    issues));
                   else
                     g_return_val_if_reached (NULL);

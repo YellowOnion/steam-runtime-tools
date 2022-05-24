@@ -66,6 +66,7 @@ typedef struct
   gchar *implementation_version;
   gchar *description;
   GStrv component_layers;
+  gboolean portability_driver;
   /* Standard name => dlsym() name to call instead
    * (element-type utf8 utf8) */
   GHashTable *functions;

@@ -2854,6 +2854,12 @@ static JsonTest json_test[] =
         .library_path = "/usr/lib/amdvlk64.so",
         .api_version = "1.2.136",
       },
+      {
+        .json_path = "/usr/share/vulkan/icd.d/amd_icd_partial.json",
+        .library_path = "/usr/lib/amdicdpartial.so",
+        .api_version = "1.1.130",
+        .issues = SRT_LOADABLE_ISSUES_API_SUBSET,
+      },
     },
 
     .vulkan_explicit_layer =

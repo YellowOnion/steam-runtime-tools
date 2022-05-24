@@ -71,6 +71,7 @@ enum
   VULKAN_ICD_PROP_JSON_PATH,
   VULKAN_ICD_PROP_LIBRARY_PATH,
   VULKAN_ICD_PROP_RESOLVED_LIBRARY_PATH,
+  VULKAN_ICD_PROP_PORTABILITY_DRIVER,
   N_VULKAN_ICD_PROPERTIES
 };
 
@@ -115,6 +116,10 @@ srt_vulkan_icd_get_property (GObject *object,
         g_value_take_string (value, srt_vulkan_icd_resolve_library_path (self));
         break;
 
+      case VULKAN_ICD_PROP_PORTABILITY_DRIVER:
+        g_value_set_boolean (value, self->icd.portability_driver);
+        break;
+
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -155,6 +160,10 @@ srt_vulkan_icd_set_property (GObject *object,
       case VULKAN_ICD_PROP_LIBRARY_PATH:
         g_return_if_fail (self->icd.library_path == NULL);
         self->icd.library_path = g_value_dup_string (value);
+        break;
+
+      case VULKAN_ICD_PROP_PORTABILITY_DRIVER:
+        self->icd.portability_driver = g_value_get_boolean (value);
         break;
 
       default:
@@ -260,6 +269,13 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
                          NULL,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
+  vulkan_icd_properties[VULKAN_ICD_PROP_PORTABILITY_DRIVER] =
+    g_param_spec_boolean ("portability-driver", "Is a portability driver?",
+                          "TRUE if the ICD is for a portability driver",
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+
   g_object_class_install_properties (object_class, N_VULKAN_ICD_PROPERTIES,
                                      vulkan_icd_properties);
 }
@@ -269,6 +285,7 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
  * @json_path: (transfer none): the absolute path to the JSON file
  * @api_version: (transfer none): the API version
  * @library_path: (transfer none): the path to the library
+ * @portability_driver: Whether the ICD is a portability driver or not
  * @issues: problems with this ICD
  *
  * Returns: (transfer full): a new ICD
@@ -277,6 +294,7 @@ SrtVulkanIcd *
 srt_vulkan_icd_new (const gchar *json_path,
                     const gchar *api_version,
                     const gchar *library_path,
+                    gboolean portability_driver,
                     SrtLoadableIssues issues)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
@@ -287,6 +305,7 @@ srt_vulkan_icd_new (const gchar *json_path,
                        "api-version", api_version,
                        "json-path", json_path,
                        "library-path", library_path,
+                       "portability-driver", portability_driver,
                        "issues", issues,
                        NULL);
 }
@@ -496,6 +515,7 @@ srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
   return srt_vulkan_icd_new (self->icd.json_path,
                              self->icd.api_version,
                              path,
+                             self->icd.portability_driver,
                              self->icd.issues);
 }
 

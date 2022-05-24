@@ -153,19 +153,18 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   builder = json_builder_new ();
   json_builder_begin_object (builder);
     {
-      if (which == SRT_TYPE_EGL_ICD
-          || which == SRT_TYPE_VULKAN_ICD
-          || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+      if (which == SRT_TYPE_VULKAN_ICD)
         {
           json_builder_set_member_name (builder, "file_format_version");
+
           /* We parse and store all the information defined in file format
-           * version 1.0.0, but nothing beyond that, so we use this version
-           * in our output instead of quoting whatever was in the input.
-           *
-           * We don't currently need to distinguish between EGL and Vulkan here
-           * because the file format version we understand happens to be the
-           * same for both. */
-           json_builder_add_string_value (builder, "1.0.0");
+           * version 1.0.0 and 1.0.1. We use the file format 1.0.1 only if
+           * the field "is_portability_driver" is set, because that is the
+           * only change that has been introduced with 1.0.1. */
+          if (self->portability_driver)
+            json_builder_add_string_value (builder, "1.0.1");
+          else
+            json_builder_add_string_value (builder, "1.0.0");
 
            json_builder_set_member_name (builder, member);
            json_builder_begin_object (builder);
@@ -173,12 +172,31 @@ srt_loadable_write_to_file (const SrtLoadable *self,
               json_builder_set_member_name (builder, "library_path");
               json_builder_add_string_value (builder, self->library_path);
 
-              /* In the EGL cases, we don't have the "api_version" field. */
-              if (which == SRT_TYPE_VULKAN_ICD)
+              json_builder_set_member_name (builder, "api_version");
+              json_builder_add_string_value (builder, self->api_version);
+
+              if (self->portability_driver)
                 {
-                  json_builder_set_member_name (builder, "api_version");
-                  json_builder_add_string_value (builder, self->api_version);
+                  json_builder_set_member_name (builder, "is_portability_driver");
+                  json_builder_add_boolean_value (builder, self->portability_driver);
                 }
+            }
+           json_builder_end_object (builder);
+        }
+      else if (which == SRT_TYPE_EGL_ICD
+               || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+        {
+          /* We parse and store all the information defined in file format
+           * version 1.0.0, but nothing beyond that, so we use this version
+           * in our output instead of quoting whatever was in the input. */
+          json_builder_set_member_name (builder, "file_format_version");
+          json_builder_add_string_value (builder, "1.0.0");
+
+           json_builder_set_member_name (builder, member);
+           json_builder_begin_object (builder);
+            {
+              json_builder_set_member_name (builder, "library_path");
+              json_builder_add_string_value (builder, self->library_path);
             }
            json_builder_end_object (builder);
         }
@@ -717,6 +735,7 @@ load_icd_from_json (GType type,
   const char *file_format_version;
   const char *api_version = NULL;
   const char *library_path = NULL;
+  gboolean portability_driver = FALSE;
   SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
 
   g_return_if_fail (type == SRT_TYPE_VULKAN_ICD
@@ -832,6 +851,11 @@ load_icd_from_json (GType type,
           issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
           goto out;
         }
+      portability_driver = json_object_get_boolean_member_with_default (icd_object,
+                                                                        "is_portability_driver",
+                                                                        FALSE);
+      if (portability_driver)
+        issues |= SRT_LOADABLE_ISSUES_API_SUBSET;
     }
 
   library_path = _srt_json_object_get_string_member (icd_object, "library_path");
@@ -849,7 +873,8 @@ out:
     {
       if (error == NULL)
         *list = g_list_prepend (*list, srt_vulkan_icd_new (filename, api_version,
-                                                           library_path, issues));
+                                                           library_path, portability_driver,
+                                                           issues));
       else
         *list = g_list_prepend (*list, srt_vulkan_icd_new_error (filename, issues, error));
     }

@@ -368,6 +368,7 @@ SrtVulkanIcd *srt_vulkan_icd_new_error (const gchar *json_path,
 SrtVulkanIcd *srt_vulkan_icd_new (const gchar *json_path,
                                   const gchar *api_version,
                                   const gchar *library_path,
+                                  gboolean portability_driver,
                                   SrtLoadableIssues issues);
 SrtVulkanLayer *srt_vulkan_layer_new_error (const gchar *json_path,
                                             SrtLoadableIssues issues,

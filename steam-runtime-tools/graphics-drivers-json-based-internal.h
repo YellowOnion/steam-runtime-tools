@@ -132,12 +132,10 @@ void load_json_dirs (const char *sysroot,
                      GCompareFunc sort,
                      void (*load_json_cb) (const char *, const char *, void *),
                      void *user_data);
-gboolean load_json (GType type,
-                    const char *path,
-                    gchar **api_version_out,
-                    gchar **library_path_out,
-                    SrtLoadableIssues *issues_out,
-                    GError **error);
+void load_icd_from_json (GType type,
+                         const char *sysroot,
+                         const char *filename,
+                         GList **list);
 
 void _srt_egl_external_platform_set_is_duplicated (SrtEglExternalPlatform *self,
                                                    gboolean is_duplicated);

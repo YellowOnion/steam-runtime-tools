@@ -499,65 +499,12 @@ srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
                              self->icd.issues);
 }
 
-/*
- * vulkan_icd_load_json:
- * @sysroot: (not nullable): The root directory, usually `/`
- * @filename: The filename of the metadata
- * @list: (element-type SrtVulkanIcd) (inout): Prepend the
- *  resulting #SrtVulkanIcd to this list
- *
- * Load a single ICD metadata file.
- */
-static void
-vulkan_icd_load_json (const char *sysroot,
-                      const char *filename,
-                      GList **list)
-{
-  g_autoptr(GError) error = NULL;
-  g_autofree gchar *canon = NULL;
-  g_autofree gchar *in_sysroot = NULL;
-  g_autofree gchar *api_version = NULL;
-  g_autofree gchar *library_path = NULL;
-  SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
-
-  g_return_if_fail (list != NULL);
-
-  if (!g_path_is_absolute (filename))
-    {
-      canon = g_canonicalize_filename (filename, NULL);
-      filename = canon;
-    }
-
-  in_sysroot = g_build_filename (sysroot, filename, NULL);
-
-  if (load_json (SRT_TYPE_VULKAN_ICD, in_sysroot,
-                 &api_version, &library_path, &issues, &error))
-    {
-      g_assert (api_version != NULL);
-      g_assert (library_path != NULL);
-      g_assert (error == NULL);
-      *list = g_list_prepend (*list,
-                              srt_vulkan_icd_new (filename,
-                                                  api_version,
-                                                  library_path,
-                                                  issues));
-    }
-  else
-    {
-      g_assert (api_version == NULL);
-      g_assert (library_path == NULL);
-      g_assert (error != NULL);
-      *list = g_list_prepend (*list,
-                              srt_vulkan_icd_new_error (filename, issues, error));
-    }
-}
-
 static void
 vulkan_icd_load_json_cb (const char *sysroot,
                          const char *filename,
                          void *user_data)
 {
-  vulkan_icd_load_json (sysroot, filename, user_data);
+  load_icd_from_json (SRT_TYPE_VULKAN_ICD, sysroot, filename, user_data);
 }
 
 /*
@@ -753,7 +700,7 @@ _srt_load_vulkan_icds (const char *helpers_path,
       g_debug ("Vulkan driver search path overridden to: %s", value);
 
       for (i = 0; filenames[i] != NULL; i++)
-        vulkan_icd_load_json (sysroot, filenames[i], &ret);
+        load_icd_from_json (SRT_TYPE_VULKAN_ICD, sysroot, filenames[i], &ret);
 
       g_strfreev (filenames);
     }
@@ -774,7 +721,7 @@ _srt_load_vulkan_icds (const char *helpers_path,
           g_debug ("Vulkan additional driver search path: %s", add);
 
           for (i = 0; filenames[i] != NULL; i++)
-            vulkan_icd_load_json (sysroot, filenames[i], &ret);
+            load_icd_from_json (SRT_TYPE_VULKAN_ICD, sysroot, filenames[i], &ret);
         }
 
       g_debug ("Using normal Vulkan driver search path");

@@ -3024,6 +3024,7 @@ static JsonTest json_test[] =
         .error_domain = "g-io-error-quark", /* Default domain */
         .error_code = G_IO_ERROR_FAILED, /* Default error code */
         .error_message = "Something went wrong",
+        .issues = SRT_LOADABLE_ISSUES_CANNOT_LOAD,
       },
     },
     .vulkan_explicit_layer =
@@ -3808,6 +3809,7 @@ json_parsing (Fixture *f,
         {
           error = NULL;
           g_assert_cmpstr (t->vulkan_icd[j].json_path, ==, srt_vulkan_icd_get_json_path (iter->data));
+          g_assert_cmpint (t->vulkan_icd[j].issues, ==, srt_vulkan_icd_get_issues (iter->data));
           if (srt_vulkan_icd_check_error (iter->data, &error))
             {
               g_assert_cmpstr (t->vulkan_icd[j].library_path, ==,

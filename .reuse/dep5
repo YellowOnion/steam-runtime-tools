@@ -20,46 +20,5 @@ License: MIT
 
 Files:
  build-aux/git-version-gen
- subprojects/libcapsule/build-aux/git-version-gen
 Copyright: 2007-2017 Free Software Foundation, Inc.
 License: GPL-3.0-or-later
-
-Files:
- subprojects/bubblewrap/*
-Copyright:
- 2016-2017 Alexander Larsson
- 2017-2021 Colin Walters
- 2019-2021 Collabora Ltd.
- 2021 Simon McVittie
-License: LGPL-2.0-or-later
-
-Files:
- subprojects/bubblewrap/m4/attributes.m4
-Copyright:
- 2006-2008 Diego Pettenò
- 2012 Lucas De Marchi
- 2006-2008 xine project
-License: GPL-2.0-or-later WITH LicenseRef-autoconf-macro-exception
-
-Files:
- subprojects/bubblewrap/git.mk
- subprojects/libcapsule/m4/ax_is_release.m4
-Copyright:
- 2009 Red Hat, Inc.
- 2010-2013 Behdad Esfahbod
- 2015 Philip Withnall
- 2016 Collabora Ltd.
-License: FSFAP
-
-Files:
- subprojects/libcapsule/.gitignore
- subprojects/libcapsule/AUTHORS
- subprojects/libcapsule/data/*
- subprojects/libcapsule/doc/*
- subprojects/libcapsule/debian/*
- subprojects/libcapsule/examples/*
- subprojects/libcapsule/tests/*.map
- subprojects/libcapsule/tests/*/*.map
- subprojects/libcapsule/tests/*/*.symbols
-Copyright: 2017-2020 Collabora Ltd.
-License: LGPL-2.1-or-later

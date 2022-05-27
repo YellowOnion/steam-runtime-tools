@@ -42,6 +42,12 @@ version of Steam Runtime 1 'scout' by unpacking a `steam-runtime.tar.xz`
 into the `SteamLinuxRuntime/steam-runtime/` directory, so that you have
 files like `SteamLinuxRuntime/steam-runtime/run.sh`.
 
+If you have `SteamLinuxRuntime` and `SteamLinuxRuntime_soldier` installed
+in the same Steam library, you can use `run-in-scout-on-soldier` to test
+commands in the scout-on-soldier environment, for example:
+
+    .../steamapps/common/SteamLinuxRuntime/run-in-scout-on-soldier -- xterm
+
 Licensing and copyright
 -----------------------
 

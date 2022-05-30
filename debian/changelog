@@ -15,10 +15,13 @@ steam-runtime-tools (0.20220512.0) UNRELEASED; urgency=medium
     man pages
 
   [ Ludovico de Nittis ]
+  * system-info: Indicate Vulkan "portability drivers", a new flag in
+    recent versions indicating drivers implementing an API subset
+  * system-info: Refactoring
   * Remove unnecessary REUSE license info for subprojects.
     Please see the subprojects' own license info instead.
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 30 May 2022 19:00:36 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 30 May 2022 19:06:35 +0100
 
 steam-runtime-tools (0.20220420.0) steamrt; urgency=medium
 

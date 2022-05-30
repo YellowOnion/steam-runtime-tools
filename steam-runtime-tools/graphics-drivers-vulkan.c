@@ -71,6 +71,7 @@ enum
   VULKAN_ICD_PROP_JSON_PATH,
   VULKAN_ICD_PROP_LIBRARY_PATH,
   VULKAN_ICD_PROP_RESOLVED_LIBRARY_PATH,
+  VULKAN_ICD_PROP_PORTABILITY_DRIVER,
   N_VULKAN_ICD_PROPERTIES
 };
 
@@ -115,6 +116,10 @@ srt_vulkan_icd_get_property (GObject *object,
         g_value_take_string (value, srt_vulkan_icd_resolve_library_path (self));
         break;
 
+      case VULKAN_ICD_PROP_PORTABILITY_DRIVER:
+        g_value_set_boolean (value, self->icd.portability_driver);
+        break;
+
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -155,6 +160,10 @@ srt_vulkan_icd_set_property (GObject *object,
       case VULKAN_ICD_PROP_LIBRARY_PATH:
         g_return_if_fail (self->icd.library_path == NULL);
         self->icd.library_path = g_value_dup_string (value);
+        break;
+
+      case VULKAN_ICD_PROP_PORTABILITY_DRIVER:
+        self->icd.portability_driver = g_value_get_boolean (value);
         break;
 
       default:
@@ -260,6 +269,13 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
                          NULL,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
+  vulkan_icd_properties[VULKAN_ICD_PROP_PORTABILITY_DRIVER] =
+    g_param_spec_boolean ("portability-driver", "Is a portability driver?",
+                          "TRUE if the ICD is for a portability driver",
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+
   g_object_class_install_properties (object_class, N_VULKAN_ICD_PROPERTIES,
                                      vulkan_icd_properties);
 }
@@ -269,6 +285,7 @@ srt_vulkan_icd_class_init (SrtVulkanIcdClass *cls)
  * @json_path: (transfer none): the absolute path to the JSON file
  * @api_version: (transfer none): the API version
  * @library_path: (transfer none): the path to the library
+ * @portability_driver: Whether the ICD is a portability driver or not
  * @issues: problems with this ICD
  *
  * Returns: (transfer full): a new ICD
@@ -277,6 +294,7 @@ SrtVulkanIcd *
 srt_vulkan_icd_new (const gchar *json_path,
                     const gchar *api_version,
                     const gchar *library_path,
+                    gboolean portability_driver,
                     SrtLoadableIssues issues)
 {
   g_return_val_if_fail (json_path != NULL, NULL);
@@ -287,6 +305,7 @@ srt_vulkan_icd_new (const gchar *json_path,
                        "api-version", api_version,
                        "json-path", json_path,
                        "library-path", library_path,
+                       "portability-driver", portability_driver,
                        "issues", issues,
                        NULL);
 }
@@ -496,60 +515,8 @@ srt_vulkan_icd_new_replace_library_path (SrtVulkanIcd *self,
   return srt_vulkan_icd_new (self->icd.json_path,
                              self->icd.api_version,
                              path,
+                             self->icd.portability_driver,
                              self->icd.issues);
-}
-
-/*
- * vulkan_icd_load_json:
- * @sysroot: (not nullable): The root directory, usually `/`
- * @filename: The filename of the metadata
- * @list: (element-type SrtVulkanIcd) (inout): Prepend the
- *  resulting #SrtVulkanIcd to this list
- *
- * Load a single ICD metadata file.
- */
-static void
-vulkan_icd_load_json (const char *sysroot,
-                      const char *filename,
-                      GList **list)
-{
-  g_autoptr(GError) error = NULL;
-  g_autofree gchar *canon = NULL;
-  g_autofree gchar *in_sysroot = NULL;
-  g_autofree gchar *api_version = NULL;
-  g_autofree gchar *library_path = NULL;
-  SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
-
-  g_return_if_fail (list != NULL);
-
-  if (!g_path_is_absolute (filename))
-    {
-      canon = g_canonicalize_filename (filename, NULL);
-      filename = canon;
-    }
-
-  in_sysroot = g_build_filename (sysroot, filename, NULL);
-
-  if (load_json (SRT_TYPE_VULKAN_ICD, in_sysroot,
-                 &api_version, &library_path, &issues, &error))
-    {
-      g_assert (api_version != NULL);
-      g_assert (library_path != NULL);
-      g_assert (error == NULL);
-      *list = g_list_prepend (*list,
-                              srt_vulkan_icd_new (filename,
-                                                  api_version,
-                                                  library_path,
-                                                  issues));
-    }
-  else
-    {
-      g_assert (api_version == NULL);
-      g_assert (library_path == NULL);
-      g_assert (error != NULL);
-      *list = g_list_prepend (*list,
-                              srt_vulkan_icd_new_error (filename, issues, error));
-    }
 }
 
 static void
@@ -557,7 +524,7 @@ vulkan_icd_load_json_cb (const char *sysroot,
                          const char *filename,
                          void *user_data)
 {
-  vulkan_icd_load_json (sysroot, filename, user_data);
+  load_icd_from_json (SRT_TYPE_VULKAN_ICD, sysroot, filename, user_data);
 }
 
 /*
@@ -753,7 +720,7 @@ _srt_load_vulkan_icds (const char *helpers_path,
       g_debug ("Vulkan driver search path overridden to: %s", value);
 
       for (i = 0; filenames[i] != NULL; i++)
-        vulkan_icd_load_json (sysroot, filenames[i], &ret);
+        load_icd_from_json (SRT_TYPE_VULKAN_ICD, sysroot, filenames[i], &ret);
 
       g_strfreev (filenames);
     }
@@ -774,7 +741,7 @@ _srt_load_vulkan_icds (const char *helpers_path,
           g_debug ("Vulkan additional driver search path: %s", add);
 
           for (i = 0; filenames[i] != NULL; i++)
-            vulkan_icd_load_json (sysroot, filenames[i], &ret);
+            load_icd_from_json (SRT_TYPE_VULKAN_ICD, sysroot, filenames[i], &ret);
         }
 
       g_debug ("Using normal Vulkan driver search path");

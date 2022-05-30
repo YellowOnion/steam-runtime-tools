@@ -563,6 +563,17 @@ with open('fake-icds/no-library.json', 'w') as writer:
 with open('fake-icds/null.json', 'w') as writer:
     writer.write('''null''')
 
+with open('fake-icds/partial.json', 'w') as writer:
+    writer.write('''\
+{
+    "ICD": {
+        "api_version": "1.2.101",
+        "library_path": "libpartial.so",
+        "is_portability_driver": true
+    },
+    "file_format_version": "1.0.1"
+}''')
+
 with open('fake-icds/str.json', 'w') as writer:
     writer.write('''"hello, world!"''')
 

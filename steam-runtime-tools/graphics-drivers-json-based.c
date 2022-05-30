@@ -153,19 +153,18 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   builder = json_builder_new ();
   json_builder_begin_object (builder);
     {
-      if (which == SRT_TYPE_EGL_ICD
-          || which == SRT_TYPE_VULKAN_ICD
-          || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+      if (which == SRT_TYPE_VULKAN_ICD)
         {
           json_builder_set_member_name (builder, "file_format_version");
+
           /* We parse and store all the information defined in file format
-           * version 1.0.0, but nothing beyond that, so we use this version
-           * in our output instead of quoting whatever was in the input.
-           *
-           * We don't currently need to distinguish between EGL and Vulkan here
-           * because the file format version we understand happens to be the
-           * same for both. */
-           json_builder_add_string_value (builder, "1.0.0");
+           * version 1.0.0 and 1.0.1. We use the file format 1.0.1 only if
+           * the field "is_portability_driver" is set, because that is the
+           * only change that has been introduced with 1.0.1. */
+          if (self->portability_driver)
+            json_builder_add_string_value (builder, "1.0.1");
+          else
+            json_builder_add_string_value (builder, "1.0.0");
 
            json_builder_set_member_name (builder, member);
            json_builder_begin_object (builder);
@@ -173,12 +172,31 @@ srt_loadable_write_to_file (const SrtLoadable *self,
               json_builder_set_member_name (builder, "library_path");
               json_builder_add_string_value (builder, self->library_path);
 
-              /* In the EGL cases, we don't have the "api_version" field. */
-              if (which == SRT_TYPE_VULKAN_ICD)
+              json_builder_set_member_name (builder, "api_version");
+              json_builder_add_string_value (builder, self->api_version);
+
+              if (self->portability_driver)
                 {
-                  json_builder_set_member_name (builder, "api_version");
-                  json_builder_add_string_value (builder, self->api_version);
+                  json_builder_set_member_name (builder, "is_portability_driver");
+                  json_builder_add_boolean_value (builder, self->portability_driver);
                 }
+            }
+           json_builder_end_object (builder);
+        }
+      else if (which == SRT_TYPE_EGL_ICD
+               || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+        {
+          /* We parse and store all the information defined in file format
+           * version 1.0.0, but nothing beyond that, so we use this version
+           * in our output instead of quoting whatever was in the input. */
+          json_builder_set_member_name (builder, "file_format_version");
+          json_builder_add_string_value (builder, "1.0.0");
+
+           json_builder_set_member_name (builder, member);
+           json_builder_begin_object (builder);
+            {
+              json_builder_set_member_name (builder, "library_path");
+              json_builder_add_string_value (builder, self->library_path);
             }
            json_builder_end_object (builder);
         }
@@ -690,31 +708,25 @@ load_json_dirs (const char *sysroot,
 }
 
 /*
- * load_json:
+ * load_icd_from_json:
  * @type: %SRT_TYPE_EGL_ICD or %SRT_TYPE_EGL_EXTERNAL_PLATFORM or %SRT_TYPE_VULKAN_ICD
- * @path: (type filename) (transfer none): Path of JSON file
- * @api_version_out: (out) (type utf8) (transfer full): Used to return
- *  API version for %SRT_TYPE_VULKAN_ICD
- * @library_path_out: (out) (type utf8) (transfer full): Used to return
- *  shared library path
- * @issues_out: (out) (optional): Used to return problems with this ICD.
- *  Note that this is set even if this function fails.
- * @error: Used to raise an error on failure
+ * @sysroot: (not nullable): The root directory, usually `/`
+ * @filename: The filename of the metadata
+ * @list: (element-type GObject) (transfer full) (inout): Prepend the
+ *  resulting #SrtEglIcd or #SrtEglExternalPlatform or #SrtVulkanIcd to this list
  *
- * Try to load an EGL or Vulkan ICD from a JSON file.
- *
- * Returns: %TRUE if the JSON file was loaded successfully
+ * Load an EGL or Vulkan ICD from a JSON metadata file.
  */
-gboolean
-load_json (GType type,
-           const char *path,
-           gchar **api_version_out,
-           gchar **library_path_out,
-           SrtLoadableIssues *issues_out,
-           GError **error)
+void
+load_icd_from_json (GType type,
+                    const char *sysroot,
+                    const char *filename,
+                    GList **list)
 {
-  JsonParser *parser = NULL;
-  gboolean ret = FALSE;
+  g_autoptr(JsonParser) parser = NULL;
+  g_autofree gchar *canon = NULL;
+  g_autofree gchar *path = NULL;
+  g_autoptr(GError) error = NULL;
   /* These are all borrowed from the parser */
   JsonNode *node;
   JsonObject *object;
@@ -722,25 +734,29 @@ load_json (GType type,
   JsonObject *icd_object;
   const char *file_format_version;
   const char *api_version = NULL;
-  const char *library_path;
+  const char *library_path = NULL;
+  gboolean portability_driver = FALSE;
   SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
 
-  g_return_val_if_fail (type == SRT_TYPE_VULKAN_ICD
-                        || type == SRT_TYPE_EGL_ICD
-                        || type == SRT_TYPE_EGL_EXTERNAL_PLATFORM,
-                        FALSE);
-  g_return_val_if_fail (path != NULL, FALSE);
-  g_return_val_if_fail (api_version_out == NULL || *api_version_out == NULL,
-                        FALSE);
-  g_return_val_if_fail (library_path_out == NULL || *library_path_out == NULL,
-                        FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_return_if_fail (type == SRT_TYPE_VULKAN_ICD
+                    || type == SRT_TYPE_EGL_ICD
+                    || type == SRT_TYPE_EGL_EXTERNAL_PLATFORM);
+  g_return_if_fail (sysroot != NULL);
+  g_return_if_fail (list != NULL);
+
+  if (!g_path_is_absolute (filename))
+    {
+      canon = g_canonicalize_filename (filename, NULL);
+      filename = canon;
+    }
+
+  path = g_build_filename (sysroot, filename, NULL);
 
   g_debug ("Attempting to load %s from %s", g_type_name (type), path);
 
   parser = json_parser_new ();
 
-  if (!json_parser_load_from_file (parser, path, error))
+  if (!json_parser_load_from_file (parser, path, &error))
     {
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
@@ -750,7 +766,7 @@ load_json (GType type,
 
   if (node == NULL || !JSON_NODE_HOLDS_OBJECT (node))
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Expected to find a JSON object in \"%s\"", path);
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
@@ -758,24 +774,13 @@ load_json (GType type,
 
   object = json_node_get_object (node);
 
-  subnode = json_object_get_member (object, "file_format_version");
-
-  if (subnode == NULL
-      || !JSON_NODE_HOLDS_VALUE (subnode))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "file_format_version in \"%s\" missing or not a value",
-                   path);
-      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
-      goto out;
-    }
-
-  file_format_version = json_node_get_string (subnode);
-
+  file_format_version = _srt_json_object_get_string_member (object,
+                                                            "file_format_version");
   if (file_format_version == NULL)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "file_format_version in \"%s\" not a string", path);
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "file_format_version in \"%s\" is either missing or not a string",
+                   path);
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
@@ -795,7 +800,7 @@ load_json (GType type,
        */
       if (!g_str_has_prefix (file_format_version, "1.0."))
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+          g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Vulkan file_format_version in \"%s\" is not 1.0.x",
                        path);
           issues |= SRT_LOADABLE_ISSUES_UNSUPPORTED;
@@ -814,7 +819,7 @@ load_json (GType type,
        */
       if (!g_str_has_prefix (file_format_version, "1.0."))
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+          g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "EGL file_format_version in \"%s\" is not 1.0.x",
                        path);
           issues |= SRT_LOADABLE_ISSUES_UNSUPPORTED;
@@ -827,7 +832,7 @@ load_json (GType type,
   if (subnode == NULL
       || !JSON_NODE_HOLDS_OBJECT (subnode))
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "No \"ICD\" object in \"%s\"", path);
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
@@ -837,64 +842,60 @@ load_json (GType type,
 
   if (type == SRT_TYPE_VULKAN_ICD)
     {
-      subnode = json_object_get_member (icd_object, "api_version");
-
-      if (subnode == NULL
-          || !JSON_NODE_HOLDS_VALUE (subnode))
+      api_version = _srt_json_object_get_string_member (icd_object, "api_version");
+      if (api_version == NULL)
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "ICD.api_version in \"%s\" missing or not a value",
+          g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "ICD.api_version in \"%s\" is either missing or not a string",
                        path);
           issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
           goto out;
         }
-
-      api_version = json_node_get_string (subnode);
-
-      if (api_version == NULL)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "ICD.api_version in \"%s\" not a string", path);
-          issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
-          goto out;
-        }
+      portability_driver = json_object_get_boolean_member_with_default (icd_object,
+                                                                        "is_portability_driver",
+                                                                        FALSE);
+      if (portability_driver)
+        issues |= SRT_LOADABLE_ISSUES_API_SUBSET;
     }
 
-  subnode = json_object_get_member (icd_object, "library_path");
-
-  if (subnode == NULL
-      || !JSON_NODE_HOLDS_VALUE (subnode))
+  library_path = _srt_json_object_get_string_member (icd_object, "library_path");
+  if (library_path == NULL)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "ICD.library_path in \"%s\" missing or not a value",
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "ICD.library_path in \"%s\" is either missing or not a string",
                    path);
       issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
-  library_path = json_node_get_string (subnode);
-
-  if (library_path == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "ICD.library_path in \"%s\" not a string", path);
-      issues |= SRT_LOADABLE_ISSUES_CANNOT_LOAD;
-      goto out;
-    }
-
-  if (api_version_out != NULL)
-    *api_version_out = g_strdup (api_version);
-
-  if (library_path_out != NULL)
-    *library_path_out = g_strdup (library_path);
-
-  ret = TRUE;
-
 out:
-  g_clear_object (&parser);
-
-  if (issues_out != NULL)
-    *issues_out = issues;
-
-  return ret;
+  if (type == SRT_TYPE_VULKAN_ICD)
+    {
+      if (error == NULL)
+        *list = g_list_prepend (*list, srt_vulkan_icd_new (filename, api_version,
+                                                           library_path, portability_driver,
+                                                           issues));
+      else
+        *list = g_list_prepend (*list, srt_vulkan_icd_new_error (filename, issues, error));
+    }
+  else if (type == SRT_TYPE_EGL_ICD)
+    {
+      if (error == NULL)
+        *list = g_list_prepend (*list, srt_egl_icd_new (filename, library_path, issues));
+      else
+        *list = g_list_prepend (*list, srt_egl_icd_new_error (filename, issues, error));
+    }
+  else if (type == SRT_TYPE_EGL_EXTERNAL_PLATFORM)
+    {
+      if (error == NULL)
+        *list = g_list_prepend (*list, srt_egl_external_platform_new (filename, library_path,
+                                                                      issues));
+      else
+        *list = g_list_prepend (*list, srt_egl_external_platform_new_error (filename, issues,
+                                                                            error));
+    }
+  else
+    {
+      g_return_if_reached ();
+    }
 }

@@ -372,13 +372,9 @@ static unsigned long
 get_json_hex_member (JsonObject *obj,
                      const gchar *name)
 {
-  JsonNode *node = json_object_get_member (obj, name);
   const char *s;
 
-  if (node == NULL)
-    return 0;
-
-  s = json_node_get_string (node);
+  s = _srt_json_object_get_string_member (obj, name);
 
   if (s == NULL)
     return 0;
@@ -413,7 +409,6 @@ get_json_evdev_caps (JsonObject *obj,
                      unsigned long *longs,
                      size_t n_longs)
 {
-  JsonNode *node = json_object_get_member (obj, name);
   /* The first pointer that is out of bounds for longs */
   unsigned char *limit = (unsigned char *) &longs[n_longs];
   /* The output position in longs */
@@ -422,10 +417,7 @@ get_json_evdev_caps (JsonObject *obj,
   const char *iter;
   size_t i;
 
-  if (node == NULL)
-    return;
-
-  iter = json_node_get_string (node);
+  iter = _srt_json_object_get_string_member (obj, name);
 
   if (iter == NULL)
     return;

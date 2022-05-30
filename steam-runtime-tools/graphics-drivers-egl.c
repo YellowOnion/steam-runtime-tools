@@ -788,64 +788,6 @@ _srt_egl_icd_set_is_duplicated (SrtEglIcd *self,
     self->icd.issues &= ~SRT_LOADABLE_ISSUES_DUPLICATED;
 }
 
-/*
- * egl_thing_load_json:
- * @sysroot: (not nullable): The root directory, usually `/`
- * @filename: The filename of the metadata
- * @list: (type GObject) (inout): Prepend the
- *  resulting #SrtEglIcd or #SrtEglExternalPlatform to this list
- *
- * Load a single ICD metadata file.
- */
-static void
-egl_thing_load_json (GType which,
-                     const char *sysroot,
-                     const char *filename,
-                     GList **list)
-{
-  g_autoptr(GError) error = NULL;
-  g_autofree gchar *canon = NULL;
-  g_autofree gchar *in_sysroot = NULL;
-  g_autofree gchar *library_path = NULL;
-  SrtLoadableIssues issues = SRT_LOADABLE_ISSUES_NONE;
-
-  g_return_if_fail (which == SRT_TYPE_EGL_ICD
-                    || which == SRT_TYPE_EGL_EXTERNAL_PLATFORM);
-  g_return_if_fail (sysroot != NULL);
-  g_return_if_fail (list != NULL);
-
-  if (!g_path_is_absolute (filename))
-    {
-      canon = g_canonicalize_filename (filename, NULL);
-      filename = canon;
-    }
-
-  in_sysroot = g_build_filename (sysroot, filename, NULL);
-
-  if (load_json (which, in_sysroot, NULL, &library_path, &issues, &error))
-    {
-      g_assert (library_path != NULL);
-      g_assert (error == NULL);
-      *list = g_list_prepend (*list,
-                              g_object_new (which,
-                                            "json-path", filename,
-                                            "library-path", library_path,
-                                            "issues", issues,
-                                            NULL));
-    }
-  else
-    {
-      g_assert (library_path == NULL);
-      g_assert (error != NULL);
-      *list = g_list_prepend (*list,
-                              g_object_new (which,
-                                            "error", error,
-                                            "json-path", filename,
-                                            "issues", issues,
-                                            NULL));
-    }
-}
-
 /**
  * srt_egl_icd_resolve_library_path:
  * @self: An ICD
@@ -927,7 +869,7 @@ egl_icd_load_json_cb (const char *sysroot,
                       const char *filename,
                       void *user_data)
 {
-  egl_thing_load_json (SRT_TYPE_EGL_ICD, sysroot, filename, user_data);
+  load_icd_from_json (SRT_TYPE_EGL_ICD, sysroot, filename, user_data);
 }
 
 static void
@@ -935,7 +877,7 @@ egl_external_platform_load_json_cb (const char *sysroot,
                                     const char *filename,
                                     void *user_data)
 {
-  egl_thing_load_json (SRT_TYPE_EGL_EXTERNAL_PLATFORM, sysroot, filename, user_data);
+  load_icd_from_json (SRT_TYPE_EGL_EXTERNAL_PLATFORM, sysroot, filename, user_data);
 }
 
 #define EGL_VENDOR_SUFFIX "glvnd/egl_vendor.d"
@@ -1051,7 +993,7 @@ _srt_load_egl_things (GType which,
       g_auto(GStrv) filenames = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
 
       for (i = 0; filenames[i] != NULL; i++)
-        egl_thing_load_json (which, sysroot, filenames[i], &ret);
+        load_icd_from_json (which, sysroot, filenames[i], &ret);
     }
   else
     {

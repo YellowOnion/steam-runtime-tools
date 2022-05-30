@@ -117,6 +117,9 @@ get_vk_error_string (VkResult error_code)
 #if VK_HEADER_VERSION < 140
         STR(RESULT_RANGE_SIZE);
 #endif
+#if VK_HEADER_VERSION >= 213
+        STR(ERROR_COMPRESSION_EXHAUSTED_EXT);
+#endif
         STR(RESULT_MAX_ENUM);
 #undef STR
       default:

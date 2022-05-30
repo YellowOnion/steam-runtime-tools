@@ -1,5 +1,6 @@
 steam-runtime-tools (0.20220512.0) UNRELEASED; urgency=medium
 
+  [ Simon McVittie ]
   * system-info: Work around diagnostic tools failing in a Snap app
   * system-info: Show Snap app as a container
   * system-info: Detect several virtual machine managers, hypervisors and
@@ -10,8 +11,14 @@ steam-runtime-tools (0.20220512.0) UNRELEASED; urgency=medium
   * pressure-vessel: Update bubblewrap subproject to 0.6.2
   * Update libglnx subproject
   * tests: Add test coverage for x86 CPU feature identification
+  * build: Use Meson feature options for gtk-doc, GObject-Introspection,
+    man pages
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 13 May 2022 12:12:38 +0100
+  [ Ludovico de Nittis ]
+  * Remove unnecessary REUSE license info for subprojects.
+    Please see the subprojects' own license info instead.
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 30 May 2022 19:00:36 +0100
 
 steam-runtime-tools (0.20220420.0) steamrt; urgency=medium
 

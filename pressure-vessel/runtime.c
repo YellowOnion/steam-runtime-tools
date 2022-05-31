@@ -2688,10 +2688,10 @@ bind_icds (PvRuntime *self,
           dest_fd = subdir_fd;
         }
 
-      if (fstatat (dest_fd, base, &stat_buf, AT_SYMLINK_NOFOLLOW) < 0
-          || !S_ISLNK (stat_buf.st_mode))
+      if (fstatat (dest_fd, base, &stat_buf, AT_SYMLINK_NOFOLLOW) < 0)
         {
-          g_debug ("\"%s/%s\" was not created", dest_in_current_namespace, base);
+          g_debug ("\"%s/%s\" was not created: %s",
+                   dest_in_current_namespace, base, g_strerror (errno));
 
           /* capsule-capture-libs didn't actually create the symlink,
            * which means the ICD is nonexistent or the wrong architecture.
@@ -2703,6 +2703,13 @@ bind_icds (PvRuntime *self,
             g_rmdir (numbered_subdir);
 
           continue;
+        }
+      else if (!S_ISLNK (stat_buf.st_mode))
+        {
+          /* This is unexpected! capsule-capture-libs creates symlinks,
+           * not any other sort of file */
+          g_warning ("\"%s/%s\" was created but not as a symlink (%o)",
+                     dest_in_current_namespace, base, stat_buf.st_mode);
         }
 
       /* Only add the numbered subdirectories to the search path. Their

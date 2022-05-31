@@ -2688,7 +2688,7 @@ bind_icds (PvRuntime *self,
           dest_fd = subdir_fd;
         }
 
-      if (fstatat (dest_fd, base, &stat_buf, 0) < 0
+      if (fstatat (dest_fd, base, &stat_buf, AT_SYMLINK_NOFOLLOW) < 0
           || !S_ISLNK (stat_buf.st_mode))
         {
           g_debug ("\"%s/%s\" was not created", dest_in_current_namespace, base);

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220512.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220601.0) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * system-info: Work around diagnostic tools failing in a Snap app
@@ -21,7 +21,7 @@ steam-runtime-tools (0.20220512.0) UNRELEASED; urgency=medium
   * Remove unnecessary REUSE license info for subprojects.
     Please see the subprojects' own license info instead.
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 30 May 2022 19:06:35 +0100
+ -- Simon McVittie <smcv@collabora.com>  Wed, 01 Jun 2022 12:15:49 +0100
 
 steam-runtime-tools (0.20220420.0) steamrt; urgency=medium
 

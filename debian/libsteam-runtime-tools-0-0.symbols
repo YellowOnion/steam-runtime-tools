@@ -136,6 +136,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_locale_get_type@Base 0.20190909.0
  srt_locale_is_utf8@Base 0.20190909.0
  srt_locale_issues_get_type@Base 0.20190909.0
+ srt_machine_type_get_type@Base 0.20220601.0
  srt_rendering_interface_get_type@Base 0.20190822.0
  srt_runtime_issues_get_type@Base 0.20190816.0
  srt_steam_get_bin32_path@Base 0.20200415.0
@@ -155,6 +156,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_system_info_check_library@Base 0.20190802.0
  srt_system_info_check_locale@Base 0.20190909.0
  srt_system_info_check_runtime_linker@Base 0.20201124.0
+ srt_system_info_check_virtualization@Base 0.20220601.0
  srt_system_info_dup_container_host_directory@Base 0.20200306.0
  srt_system_info_dup_expected_runtime_version@Base 0.20190816.0
  srt_system_info_dup_libdl_lib@Base 0.20210430.0
@@ -221,6 +223,11 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_vdpau_driver_get_type@Base 0.20200306.0
  srt_vdpau_driver_is_extra@Base 0.20200306.0
  srt_vdpau_driver_resolve_library_path@Base 0.20200331.1
+ srt_virtualization_info_get_host_machine@Base 0.20220601.0
+ srt_virtualization_info_get_interpreter_root@Base 0.20220601.0
+ srt_virtualization_info_get_type@Base 0.20220601.0
+ srt_virtualization_info_get_virtualization_type@Base 0.20220601.0
+ srt_virtualization_type_get_type@Base 0.20220601.0
  srt_vk_physical_device_type_get_type@Base 0.20210201.0
  srt_vulkan_icd_check_error@Base 0.20190926.0
  srt_vulkan_icd_get_api_version@Base 0.20190926.0

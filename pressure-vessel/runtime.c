@@ -2525,7 +2525,7 @@ bind_icds (PvRuntime *self,
           IcdDetails *details = details_arr[i];
           g_autofree gchar *pattern = NULL;
           struct stat stat_buf;
-          glnx_autofd int fd;
+          glnx_autofd int fd = -1;
 
           if (details->kinds[multiarch_index] != ICD_KIND_ABSOLUTE)
             continue;

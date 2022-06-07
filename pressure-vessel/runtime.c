@@ -303,6 +303,35 @@ pv_runtime_make_symlink_in_container (PvRuntime *self,
     dest = alloc_dest = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
                                           path, NULL);
 
+  if (_srt_get_path_after (path, "usr") != NULL)
+    {
+      if (self->mutable_sysroot_fd >= 0)
+        {
+          g_autofree gchar *parent = g_path_get_dirname (path);
+          const char *base = glnx_basename (path);
+          glnx_autofd int parent_fd = -1;
+
+          parent_fd = _srt_resolve_in_sysroot (self->mutable_sysroot_fd,
+                                               parent,
+                                               SRT_RESOLVE_FLAGS_MKDIR_P,
+                                               NULL, error);
+
+          if (parent_fd < 0)
+            goto error;
+
+          if (!pv_runtime_symlinkat (target, parent_fd, base, error))
+            goto error;
+
+          return TRUE;
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_READ_ONLY,
+                       "Cannot modify /usr when not copying runtime");
+          goto error;
+        }
+    }
+
   if (bwrap != NULL
       && path_mutable_in_container_namespace (path))
     {
@@ -318,6 +347,7 @@ pv_runtime_make_symlink_in_container (PvRuntime *self,
 
   g_set_error (error, G_IO_ERROR, G_IO_ERROR_READ_ONLY,
                "Not modifiable in current configuration");
+error:
   g_prefix_error (error, "Not making \"%s\" a symlink to \"%s\": ",
                   dest, target);
   return FALSE;

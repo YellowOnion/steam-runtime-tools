@@ -3495,6 +3495,21 @@ bind_runtime_ld_so (PvRuntime *self,
             g_warning ("%s", local_error->message);
         }
 
+      /* Similar, but for ld.so.conf, for example on Solus. */
+      for (i = 0; pv_other_ld_so_conf[i] != NULL; i++)
+        {
+          g_autoptr(GError) local_error = NULL;
+          const char *path = pv_other_ld_so_conf[i];
+
+          if (!pv_runtime_make_symlink_in_container (self,
+                                                     bwrap,
+                                                     mutable_conf_path,
+                                                     path,
+                                                     MAKE_SYMLINK_FLAGS_INTERPRETER_ROOT,
+                                                     &local_error))
+            g_warning ("%s", local_error->message);
+        }
+
       /* glibc from some distributions will want to load the ld.so cache from
        * a distribution- and architecture-specific path, e.g. Exherbo
        * does this. Again, for simplicity we direct all these to the same path:

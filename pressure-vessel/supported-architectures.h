@@ -62,6 +62,7 @@ typedef struct
 extern const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES];
 
 extern const char * const pv_other_ld_so_cache[];
+extern const char * const pv_other_ld_so_conf[];
 
 /*
  * PvMultiarchLibdirsFlags:

@@ -143,6 +143,47 @@ static gboolean pv_runtime_symlinkat (const gchar *target,
                                       GError **error);
 
 /*
+ * Return whether @path is expected to be a mutable directory in
+ * the container.
+ */
+static gboolean
+path_mutable_in_container_namespace (const char *path)
+{
+  static const char * const no[] =
+  {
+    "run/gfx",
+    "run/host",
+  };
+  static const char * const yes[] =
+  {
+    "etc",
+    "overrides",
+    "run",
+    "tmp",
+    "var",
+    "usr",
+  };
+  gsize i;
+
+  while (path[0] == '/')
+    path++;
+
+  for (i = 0; i < G_N_ELEMENTS (no); i++)
+    {
+      if (_srt_get_path_after (path, no[i]) != NULL)
+        return FALSE;
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (yes); i++)
+    {
+      if (_srt_get_path_after (path, yes[i]) != NULL)
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
+/*
  * Return whether @path is likely to be visible as-is in the container.
  */
 static gboolean
@@ -262,7 +303,8 @@ pv_runtime_make_symlink_in_container (PvRuntime *self,
     dest = alloc_dest = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
                                           path, NULL);
 
-  if (bwrap != NULL)
+  if (bwrap != NULL
+      && path_mutable_in_container_namespace (path))
     {
       /* Note that "--symlink foo bar" is equivalent to "--symlink foo /bar":
        * both end up creating the symlink at /newroot/bar */

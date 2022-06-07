@@ -220,6 +220,67 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
   return FALSE;
 }
 
+typedef enum
+{
+  MAKE_SYMLINK_FLAGS_INTERPRETER_ROOT = (1 << 0),
+  MAKE_SYMLINK_FLAGS_NONE = 0
+} MakeSymlinkFlags;
+
+/*
+ * pv_runtime_make_symlink_in_container:
+ * @self: the runtime
+ * @bwrap: the arguments for bubblewrap
+ * @target: target of the symlink
+ * @path: absolute or root-relative path in the container
+ * @error: you know how this works
+ *
+ * Try to make @path a symlink to @target in the container, by whichever
+ * mechanism seems best: either editing the mutable sysroot in-place,
+ * or telling bubblewrap to create a symlink in a transient directory
+ * like /etc, /run, /var.
+ *
+ * Returns: %TRUE on success
+ */
+static gboolean
+pv_runtime_make_symlink_in_container (PvRuntime *self,
+                                      FlatpakBwrap *bwrap,
+                                      const char *target,
+                                      const char *path,
+                                      MakeSymlinkFlags flags,
+                                      GError **error)
+{
+  g_autofree char *alloc_dest = NULL;
+  const char *dest = path;
+
+  g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
+  g_return_val_if_fail (target != NULL, FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if ((flags & MAKE_SYMLINK_FLAGS_INTERPRETER_ROOT)
+      && (self->flags & PV_RUNTIME_FLAGS_INTERPRETER_ROOT))
+    dest = alloc_dest = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
+                                          path, NULL);
+
+  if (bwrap != NULL)
+    {
+      /* Note that "--symlink foo bar" is equivalent to "--symlink foo /bar":
+       * both end up creating the symlink at /newroot/bar */
+      flatpak_bwrap_add_args (bwrap,
+                              "--symlink",
+                              target,
+                              dest,
+                              NULL);
+      return TRUE;
+    }
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_READ_ONLY,
+               "Not modifiable in current configuration");
+  g_prefix_error (error, "Not making \"%s\" a symlink to \"%s\": ",
+                  dest, target);
+  return FALSE;
+}
+
 typedef struct
 {
   gsize multiarch_index;
@@ -2919,21 +2980,17 @@ bind_runtime_base (PvRuntime *self,
 
   if (self->mutable_sysroot != NULL)
     {
+      g_autoptr(GError) local_error = NULL;
+
       g_assert (self->overrides_in_container[0] == '/');
       g_assert (g_strcmp0 (self->overrides_in_container, "/overrides") != 0);
 
-      if (self->flags & PV_RUNTIME_FLAGS_INTERPRETER_ROOT)
-        flatpak_bwrap_add_args (bwrap,
-                                "--symlink",
-                                &self->overrides_in_container[1],
-                                PV_RUNTIME_PATH_INTERPRETER_ROOT "/overrides",
-                                NULL);
-      else
-        flatpak_bwrap_add_args (bwrap,
-                                "--symlink",
-                                &self->overrides_in_container[1],
-                                "/overrides",
-                                NULL);
+      if (!pv_runtime_make_symlink_in_container (self, bwrap,
+                                                 &self->overrides_in_container[1],
+                                                 "/overrides",
+                                                 MAKE_SYMLINK_FLAGS_INTERPRETER_ROOT,
+                                                 &local_error))
+        g_warning ("%s", local_error->message);
 
       /* Also make a matching symbolic link on disk, to make it easier
        * to inspect the sysroot. */
@@ -3354,20 +3411,16 @@ bind_runtime_ld_so (PvRuntime *self,
        * symlinks, so that we only have to populate the cache in one place. */
       for (i = 0; pv_other_ld_so_cache[i] != NULL; i++)
         {
-          g_autofree char *alloc_dest = NULL;
+          g_autoptr(GError) local_error = NULL;
           const char *path = pv_other_ld_so_cache[i];
-          const char *dest = path;
 
-          if (self->flags & PV_RUNTIME_FLAGS_INTERPRETER_ROOT)
-            {
-              alloc_dest = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
-                                             path, NULL);
-              dest = alloc_dest;
-            }
-
-          flatpak_bwrap_add_args (bwrap,
-                                  "--symlink", mutable_cache_path, dest,
-                                  NULL);
+          if (!pv_runtime_make_symlink_in_container (self,
+                                                     bwrap,
+                                                     mutable_cache_path,
+                                                     path,
+                                                     MAKE_SYMLINK_FLAGS_INTERPRETER_ROOT,
+                                                     &local_error))
+            g_warning ("%s", local_error->message);
         }
 
       /* glibc from some distributions will want to load the ld.so cache from
@@ -3382,19 +3435,21 @@ bind_runtime_ld_so (PvRuntime *self,
           for (j = 0; j < G_N_ELEMENTS (details->other_ld_so_cache); j++)
             {
               const char *base = details->other_ld_so_cache[j];
+              g_autoptr(GError) local_error = NULL;
               g_autofree gchar *path = NULL;
 
               if (base == NULL)
                 break;
 
-              if (self->flags & PV_RUNTIME_FLAGS_INTERPRETER_ROOT)
-                path = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT, "etc", base, NULL);
-              else
-                path = g_build_filename ("/etc", base, NULL);
+              path = g_build_filename ("etc", base, NULL);
 
-              flatpak_bwrap_add_args (bwrap,
-                                      "--symlink", mutable_cache_path, path,
-                                      NULL);
+              if (!pv_runtime_make_symlink_in_container (self,
+                                                         bwrap,
+                                                         mutable_cache_path,
+                                                         path,
+                                                         MAKE_SYMLINK_FLAGS_INTERPRETER_ROOT,
+                                                         &local_error))
+                g_warning ("%s", local_error->message);
             }
         }
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright © 2019-2021 Collabora Ltd.
+# Copyright © 2019-2022 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -834,6 +834,45 @@ class Main:
                     'Expected {} to be an empty regular file'.format(path)
                 )
 
+    @staticmethod
+    def prune_runtime(directory: Path) -> None:
+        """
+        Remove files that are considered to be unnecessary
+        """
+
+        usr_share = directory / 'files' / 'share'
+        doc = usr_share / 'doc'
+
+        # This is a fairly generic list of files that are safe to be removed.
+        # Please keep it in sync with prune_files() of steam-runtime.git's
+        # build-runtime.py
+        paths: list[Path] = [
+            # Nvidia cg toolkit manuals, tutorials and documentation
+            doc / 'nvidia-cg-toolkit' / 'html',
+            *doc.glob('nvidia-cg-toolkit/*.pdf.gz'),
+            # Sample code
+            *doc.glob('**/examples'),
+            # Debian bug reporting scripts
+            usr_share / 'bug',
+            # Debian documentation metadata
+            usr_share / 'doc-base',
+            # Debian QA metadata
+            usr_share / 'lintian',
+            # Programs and utilities manuals
+            usr_share / 'man',
+            # Remove the localized messages that are likely never going to be
+            # seen. Keep only "en", because that's the default language we are
+            # using.
+            *[x for x in usr_share.glob('locale/*') if x.name != 'en'],
+        ]
+
+        for path in paths:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                with suppress(FileNotFoundError):
+                    path.unlink()
+
     def do_container_runtime(self) -> None:
         pv_version = ComponentVersion('pressure-vessel')
 
@@ -979,6 +1018,7 @@ class Main:
                 ]
                 logger.info('%r', argv)
                 subprocess.run(argv, check=True)
+                self.prune_runtime(Path(dest))
                 self.write_lookaside(dest)
 
                 if self.minimize:
@@ -1012,6 +1052,7 @@ class Main:
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
+                    self.prune_runtime(Path(dest))
                     self.write_lookaside(dest)
 
                     if self.minimize:

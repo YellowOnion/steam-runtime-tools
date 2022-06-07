@@ -417,6 +417,7 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
             }
           else
             {
+              /* Note that pressure-vessel assumes this is canonicalized. */
               interpreter_root = glnx_readlinkat_malloc (AT_FDCWD, proc_path,
                                                          NULL, NULL);
             }

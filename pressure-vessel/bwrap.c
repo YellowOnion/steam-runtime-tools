@@ -374,7 +374,7 @@ pv_bwrap_add_api_filesystems (FlatpakBwrap *bwrap,
 
   if (g_strcmp0 (link, "/run/shm") == 0)
     {
-      if (g_file_test ("/run/shm", G_FILE_TEST_IS_DIR))
+      if (g_file_test ("/proc/self/root/run/shm", G_FILE_TEST_IS_DIR))
         flatpak_bwrap_add_args (bwrap,
                                 "--bind", "/run/shm", "/run/shm",
                                 NULL);

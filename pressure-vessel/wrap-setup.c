@@ -24,6 +24,7 @@
 #include "steam-runtime-tools/libdl-internal.h"
 #include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/virtualization-internal.h"
 #include "libglnx.h"
 
 #include <string.h>
@@ -213,9 +214,8 @@ pv_wrap_check_bwrap (const char *tools_dir,
  * execution environment with the host system, in particular Wayland,
  * X11 and PulseAudio sockets.
  */
-void
-pv_wrap_share_sockets (FlatpakBwrap *bwrap,
-                       PvEnviron *container_env,
+FlatpakBwrap *
+pv_wrap_share_sockets (PvEnviron *container_env,
                        const GStrv original_environ,
                        gboolean using_a_runtime,
                        gboolean is_flatpak_env)
@@ -225,8 +225,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   g_auto(GStrv) envp = NULL;
   gsize i;
 
-  g_return_if_fail (bwrap != NULL);
-  g_return_if_fail (container_env != NULL);
+  g_return_val_if_fail (container_env != NULL, NULL);
 
   /* If these are set by flatpak_run_add_x11_args(), etc., we'll
    * change them from unset to set later.
@@ -272,7 +271,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
       flatpak_run_add_session_dbus_args (sharing_bwrap);
       flatpak_run_add_system_dbus_args (sharing_bwrap);
       flatpak_run_add_resolved_args (sharing_bwrap);
-      flatpak_run_add_journal_args (bwrap);
+      flatpak_run_add_journal_args (sharing_bwrap);
       pv_wrap_add_pipewire_args (sharing_bwrap, container_env);
     }
 
@@ -327,7 +326,7 @@ pv_wrap_share_sockets (FlatpakBwrap *bwrap,
   pv_wrap_set_icons_env_vars (container_env, original_environ);
 
   g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
-  flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+  return g_steal_pointer (&sharing_bwrap);
 }
 
 /*
@@ -413,7 +412,13 @@ export_root_dirs_like_filesystem_host (FlatpakExports *exports,
   g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  dir = g_dir_open ("/", 0, error);
+  /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
+   * first, and only use the real root if the corresponding file
+   * doesn't exist in the "rootfs". We actively don't want this, because
+   * we're inspecting these paths here in order to pass them to bwrap,
+   * which will use them to set up bind-mounts, which are not subject to
+   * FEX-Emu's rewriting; so bypass it here. */
+  dir = g_dir_open ("/proc/self/root", 0, error);
 
   if (dir == NULL)
     return FALSE;
@@ -461,7 +466,8 @@ export_contents_of_run (FlatpakBwrap *bwrap,
   g_return_val_if_fail (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR),
                         FALSE);
 
-  dir = g_dir_open ("/run", 0, error);
+  /* Avoid FEX-Emu's path rewriting: see export_root_dirs_like_filesystem_host() */
+  dir = g_dir_open ("/proc/self/root/run", 0, error);
 
   if (dir == NULL)
     return FALSE;
@@ -511,8 +517,10 @@ pv_wrap_use_host_os (FlatpakExports *exports,
   for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
     {
       const char *dir = export_os_mutable[i];
+      /* Avoid FEX-Emu's path rewriting: see export_contents_of_run() */
+      g_autofree char *really = g_strdup_printf ("/proc/self/root%s", dir);
 
-      if (g_file_test (dir, G_FILE_TEST_EXISTS))
+      if (g_file_test (really, G_FILE_TEST_EXISTS))
         flatpak_bwrap_add_args (bwrap, "--bind", dir, dir, NULL);
     }
 
@@ -1058,4 +1066,33 @@ pv_wrap_maybe_load_nvidia_modules (GError **error)
     return pv_run_sync (nvidia_modprobe_argv, NULL, NULL, NULL, error);
 
   return TRUE;
+}
+
+/**
+ * pv_wrap_detect_interpreter_root:
+ *
+ * If we appear to be running under an interpreter/emulator like FEX-Emu
+ * that uses an overlay to provide x86 libraries, then return the absolute
+ * path to that overlay. Otherwise, return %NULL.
+ */
+gchar *
+pv_wrap_detect_interpreter_root (void)
+{
+  g_autoptr(SrtVirtualizationInfo) virt_info = NULL;
+  const char *val;
+
+  /* At the moment we only care about FEX-Emu here, which we happen to
+   * know implements CPUID, so it's faster to skip the filesystem-based
+   * checks */
+  virt_info = _srt_check_virtualization (NULL, NULL, -1);
+
+  val = srt_virtualization_info_get_interpreter_root (virt_info);
+
+  /* We happen to know that the way _srt_check_virtualization() gets
+   * this information guarantees a canonicalized path, so we don't need
+   * to canonicalize it again. */
+  if (val != NULL)
+    return g_strdup (val);
+
+  return NULL;
 }

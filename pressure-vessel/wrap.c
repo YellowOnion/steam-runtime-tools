@@ -210,11 +210,12 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
  * @home: The home directory
  *
  * Adjust arguments in @bwrap to cope with potentially running in a
- * container.
+ * container or interpreter.
  */
 static void
 adjust_exports (FlatpakBwrap *bwrap,
-                const char *home)
+                const char *home,
+                const char *interpreter_root)
 {
   gsize i = 0;
 
@@ -226,10 +227,14 @@ adjust_exports (FlatpakBwrap *bwrap,
 
       g_assert (opt != NULL);
 
-      if (g_str_equal (opt, "--symlink"))
+      if (g_str_equal (opt, "--bind-data") ||
+          g_str_equal (opt, "--chmod") ||
+          g_str_equal (opt, "--ro-bind-data") ||
+          g_str_equal (opt, "--file") ||
+          g_str_equal (opt, "--symlink"))
         {
           g_assert (i + 3 <= bwrap->argv->len);
-          /* pdata[i + 1] is the target: unchanged. */
+          /* pdata[i + 1] is the target, fd or permissions: unchanged. */
           /* pdata[i + 2] is a path in the final container: unchanged. */
           g_debug ("%s %s %s",
                    opt,
@@ -237,24 +242,48 @@ adjust_exports (FlatpakBwrap *bwrap,
                    (const char *) bwrap->argv->pdata[i + 2]);
           i += 3;
         }
-      else if (g_str_equal (opt, "--dir") ||
+      else if (g_str_equal (opt, "--dev") ||
+               g_str_equal (opt, "--dir") ||
+               g_str_equal (opt, "--mqueue") ||
+               g_str_equal (opt, "--perms") ||
+               g_str_equal (opt, "--proc") ||
+               g_str_equal (opt, "--remount-ro") ||
                g_str_equal (opt, "--tmpfs"))
         {
           g_assert (i + 2 <= bwrap->argv->len);
-          /* pdata[i + 1] is a path in the final container: unchanged. */
+          /* pdata[i + 1] is a path in the final container, or a non-path:
+           * unchanged. */
           g_debug ("%s %s",
                    opt,
                    (const char *) bwrap->argv->pdata[i + 1]);
           i += 2;
         }
-      else if (g_str_equal (opt, "--ro-bind") ||
-               g_str_equal (opt, "--bind"))
+      else if (g_str_equal (opt, "--bind") ||
+               g_str_equal (opt, "--bind-try") ||
+               g_str_equal (opt, "--dev-bind") ||
+               g_str_equal (opt, "--dev-bind-try") ||
+               g_str_equal (opt, "--ro-bind") ||
+               g_str_equal (opt, "--ro-bind-try"))
         {
           g_autofree gchar *src = NULL;
 
           g_assert (i + 3 <= bwrap->argv->len);
           src = g_steal_pointer (&bwrap->argv->pdata[i + 1]);
           /* pdata[i + 2] is a path in the final container: unchanged. */
+
+          /* If we're using FEX-Emu or similar, Flatpak code might think it
+           * has found a particular file either because it's in the rootfs,
+           * or because it's in the real root filesystem.
+           * bwrap's mount(2) calls are not subject to that remapping,
+           * so we need to supply it with the file's real location. */
+          if (interpreter_root != NULL
+              && _srt_file_test_in_sysroot (interpreter_root, -1,
+                                            src, G_FILE_TEST_EXISTS))
+            {
+              g_autofree gchar *old = g_steal_pointer (&src);
+
+              src = g_build_filename (interpreter_root, old, NULL);
+            }
 
           /* Paths in the home directory might need adjusting.
            * Paths outside the home directory do not: if they're part of
@@ -955,6 +984,7 @@ main (int argc,
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
+  g_autofree gchar *interpreter_root = NULL;
   g_autofree gchar *private_home = NULL;
   const gchar *home;
   g_autofree gchar *tools_dir = NULL;
@@ -1059,6 +1089,8 @@ main (int argc,
   if (opt_verbose)
     _srt_util_set_glib_log_handler (opt_verbose);
 
+  interpreter_root = pv_wrap_detect_interpreter_root ();
+
   /* Specifying either one of these mutually-exclusive options as a
    * command-line option disables use of the environment variable for
    * the other one */
@@ -1116,7 +1148,10 @@ main (int argc,
 
       if (value == TRISTATE_MAYBE)
         {
-          opt_graphics_provider = g_strdup ("/");
+          if (interpreter_root != NULL)
+            opt_graphics_provider = g_strdup (interpreter_root);
+          else
+            opt_graphics_provider = g_strdup ("/");
         }
       else
         {
@@ -1125,6 +1160,8 @@ main (int argc,
 
           if (value == TRISTATE_NO)
             opt_graphics_provider = g_strdup ("");
+          else if (interpreter_root != NULL)
+            opt_graphics_provider = g_strdup (interpreter_root);
           else if (g_file_test ("/run/host/usr", G_FILE_TEST_IS_DIR)
                    && g_file_test ("/run/host/etc", G_FILE_TEST_IS_DIR))
             opt_graphics_provider = g_strdup ("/run/host");
@@ -1407,12 +1444,25 @@ main (int argc,
 
   if (flatpak_subsandbox == NULL)
     {
+      glnx_autofd int root_fd = -1;
+
       /* Start with an empty environment and populate it later */
       bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       g_assert (bwrap_executable != NULL);
       flatpak_bwrap_add_arg (bwrap, bwrap_executable);
       bwrap_filesystem_arguments = flatpak_bwrap_new (flatpak_bwrap_empty_env);
       exports = flatpak_exports_new ();
+
+      /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
+       * first, and only use the real root if the corresponding file
+       * doesn't exist in the "rootfs". We actively don't want this, because
+       * the FlatpakExports is inspecting these paths in order to pass them
+       * to bwrap, which will use them to set up bind-mounts, which are not
+       * subject to FEX-Emu's rewriting; so bypass it here. */
+      if (!glnx_opendirat (AT_FDCWD, "/proc/self/root", TRUE, &root_fd, error))
+        goto out;
+
+      flatpak_exports_take_host_fd (exports, glnx_steal_fd (&root_fd));
     }
   else
     {
@@ -1542,6 +1592,9 @@ main (int argc,
 
       if (flatpak_subsandbox != NULL)
         flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
+
+      if (interpreter_root != NULL)
+        flags |= PV_RUNTIME_FLAGS_INTERPRETER_ROOT;
 
       if (opt_runtime != NULL)
         {
@@ -1882,7 +1935,7 @@ main (int argc,
         }
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-      adjust_exports (exports_bwrap, home);
+      adjust_exports (exports_bwrap, home, interpreter_root);
       g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
       flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
 
@@ -1895,12 +1948,21 @@ main (int argc,
     }
 
   if (bwrap != NULL)
-    pv_wrap_share_sockets (bwrap, container_env,
-                           original_environ,
-                           (runtime != NULL),
-                           is_flatpak_env);
+    {
+      g_autoptr(FlatpakBwrap) sharing_bwrap = NULL;
+
+      sharing_bwrap = pv_wrap_share_sockets (container_env,
+                                             original_environ,
+                                             (runtime != NULL),
+                                             is_flatpak_env);
+      g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
+      adjust_exports (sharing_bwrap, home, interpreter_root);
+      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+    }
   else if (flatpak_subsandbox != NULL)
-    pv_wrap_set_icons_env_vars (container_env, original_environ);
+    {
+      pv_wrap_set_icons_env_vars (container_env, original_environ);
+    }
 
   if (runtime != NULL)
     {

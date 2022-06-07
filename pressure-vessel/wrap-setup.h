@@ -32,11 +32,10 @@
 gchar *pv_wrap_check_bwrap (const char *tools_dir,
                             gboolean only_prepare);
 
-void pv_wrap_share_sockets (FlatpakBwrap *bwrap,
-                            PvEnviron *container_env,
-                            const GStrv original_environ,
-                            gboolean using_a_runtime,
-                            gboolean is_flatpak_env);
+FlatpakBwrap *pv_wrap_share_sockets (PvEnviron *container_env,
+                                     const GStrv original_environ,
+                                     gboolean using_a_runtime,
+                                     gboolean is_flatpak_env);
 
 void pv_wrap_set_icons_env_vars (PvEnviron *container_env,
                                  const GStrv original_environ);
@@ -76,3 +75,5 @@ void pv_wrap_append_preload (GPtrArray *argv,
                              FlatpakExports *exports);
 
 gboolean pv_wrap_maybe_load_nvidia_modules (GError **error);
+
+gchar *pv_wrap_detect_interpreter_root (void);

@@ -24,7 +24,6 @@ for shell_script in \
         common/_v2-entry-point \
         debian/tests/depot \
         runtimes/scout-on-soldier/_v2-entry-point \
-        runtimes/scout-on-soldier/apply-search-cwd.sh \
         runtimes/scout-on-soldier/scout-on-soldier-entry-point-v2 \
         tests/*.sh \
         ; do

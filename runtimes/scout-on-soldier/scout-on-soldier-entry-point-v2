@@ -242,17 +242,6 @@ main () {
     # Steam client itself, but let's try keeping 32-bit games consistent
     # with 64-bit games.
 
-    # If run.sh doesn't apply search-cwd, we will!
-    # Do this after run.sh, to get the correct precedence with respect
-    # to the LD_LIBRARY_PATH entries added by run.sh itself.
-    if [ -n "${STEAM_COMPAT_INSTALL_PATH-}" ] && [ -n "${STEAM_COMPAT_FLAGS-}" ]; then
-        case ",$STEAM_COMPAT_FLAGS," in
-            (*,search-cwd,*)
-                set -- "${here}/apply-search-cwd.sh" "$@"
-                ;;
-        esac
-    fi
-
     if [ -n "$saved_ld_preload" ]; then
         case "$1" in
             (*=*)

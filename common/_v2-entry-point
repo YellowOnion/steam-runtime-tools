@@ -11,6 +11,7 @@ me="${me##*/}"
 # Don't rely on it.
 
 is_main=yes
+launcher_service=
 suite=
 verbose=
 log_to_file=
@@ -276,6 +277,37 @@ for word in $ld_preload; do
     fi
 done
 IFS="$old_IFS"
+
+case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
+    (container-runtime)
+        launcher_service=yes
+        ;;
+esac
+
+if [ -n "$launcher_service" ]; then
+    unset STEAM_COMPAT_LAUNCHER_SERVICE
+    appid="${STEAM_COMPAT_APP_ID-"${SteamAppId-0}"}"
+    launch_client="$here/pressure-vessel/bin/steam-runtime-launch-client"
+    launcher_service_address="--bus-name=com.steampowered.App${appid}"
+
+    container_args+=("--launcher")
+    # In this mode, arguments after "pressure-vessel-wrap --" go to
+    # s-r-launcher-service, and arguments after "s-r-launcher-service --"
+    # are in turn the actual command to run.
+    set -- "$launcher_service_address" --replace -- "$@"
+
+    echo "Starting program with command-launcher service." >&2
+    echo >&2
+    echo "To inject commands into the container, use a command like:" >&2
+    echo >&2
+    echo "$launch_client \\" >&2
+    echo "    $launcher_service_address \\" >&2
+    # --directory='' means keep using the game's working directory
+    echo "    --directory='' \\"
+    echo "    -- \\"
+    echo "    xterm"
+    echo >&2
+fi
 
 unset LD_LIBRARY_PATH
 unset STEAM_RUNTIME

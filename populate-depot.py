@@ -26,6 +26,11 @@
 """
 Build the steam-container-runtime (aka SteamLinuxRuntime) depot, either
 from just-built files or by downloading a previous build.
+
+The oldest distribution we are currently testing with the CI is Ubuntu
+18.04, that is shipping with Python 3.6.5.
+In order to keep the compatibility with Ubuntu 18.04, this Python script
+should not require a Python version newer than the 3.6.
 """
 
 import argparse

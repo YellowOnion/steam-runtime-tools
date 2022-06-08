@@ -1117,10 +1117,20 @@ class Gui:
                     and os.path.exists(os.path.join(path, 'run'))
                     and path not in self.container_runtimes
                 ):
+                    # Note that SteamLinuxRuntime (1070560) also has a
+                    # _v2-entry-point, so we can't use that to detect
+                    # complete container runtimes; but we should prefer
+                    # to use it to run container runtimes, to be more like
+                    # what Steam would do in the absence of this script.
+                    exe = os.path.join(path, '_v2-entry-point')
+
+                    if not os.path.exists(exe):
+                        exe = os.path.join(path, 'run')
+
                     container_runtime = ContainerRuntimeDepot(
                         path=path,
                         home=self.home,
-                        argv=[os.path.join(path, 'run'), '--'],
+                        argv=[exe, '--'],
                     )
                     logger.debug(
                         'Discovered container runtime depot: %s', path,

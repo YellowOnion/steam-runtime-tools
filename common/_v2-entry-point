@@ -22,6 +22,13 @@ ld_preload=
 # Arguments for pressure-vessel-wrap
 declare -a container_args=()
 
+# Will be edited by a script, be careful
+this_compat_tool_appid=
+
+if [ -f "${here}/steam_appid.txt" ]; then
+    this_compat_tool_appid="$(< "${here}/steam_appid.txt")"
+fi
+
 if [ -n "${LD_PRELOAD-}" ]; then
     container_args+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
     ld_preload="$LD_PRELOAD"
@@ -279,7 +286,10 @@ done
 IFS="$old_IFS"
 
 case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
-    (container-runtime)
+    ("")
+        ;;
+
+    ("$this_compat_tool_appid" | container-runtime)
         launcher_service=yes
         ;;
 esac

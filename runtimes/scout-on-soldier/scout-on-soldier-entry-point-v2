@@ -12,6 +12,9 @@ unset LD_PRELOAD
 me="$(readlink -f "$0")"
 here="${me%/*}"
 
+# Will be edited by a script, be careful
+this_compat_tool_appid=
+
 log () {
     printf '%s\n' "${me}[$$]: $*" >&2 || :
 }
@@ -102,8 +105,15 @@ main () {
         esac
     done
 
+    if [ -f "${here}/steam_appid.txt" ]; then
+        this_compat_tool_appid="$(< "${here}/steam_appid.txt")"
+    fi
+
     case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
-        (scout-in-container | scout-on-soldier)
+        ("")
+            ;;
+
+        ("$this_compat_tool_appid" | scout-in-container | scout-on-soldier)
             launcher_service=yes
             ;;
     esac

@@ -250,7 +250,7 @@ case "${STEAM_RUNTIME-}" in
             if [ "${path}" == "${STEAM_RUNTIME}" ]; then
                 # path is exactly the ${STEAM_RUNTIME}; ignore
                 continue
-            elif [ "${path#${STEAM_RUNTIME}/}" != "${path}" ]; then
+            elif [ "${path#"${STEAM_RUNTIME}/"}" != "${path}" ]; then
                 # path is ${STEAM_RUNTIME}/...; ignore
                 continue
             else

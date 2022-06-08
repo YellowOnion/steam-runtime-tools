@@ -387,6 +387,15 @@ class TestInsideRuntime(BaseTest):
             cache, Path('/etc/ld-i686-pc-linux-gnu.cache').resolve()
         )
 
+    def test_ld_so_conf(self) -> None:
+        conf = Path('/etc/ld.so.conf').resolve()
+
+        # Solus
+        if os.getenv('TEST_INSIDE_RUNTIME_IS_COPY'):
+            self.assertEqual(
+                conf, Path('/usr/share/defaults/etc/ld.so.conf').resolve()
+            )
+
     def is_loadable_duplicated(self, srsi_parsed, key, sub_key) -> bool:
         if srsi_parsed is None:
             return False

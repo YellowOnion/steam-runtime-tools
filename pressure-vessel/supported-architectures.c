@@ -93,6 +93,16 @@ const char * const pv_other_ld_so_cache[] =
   NULL
 };
 
+/* Architecture-independent ld.so.conf filenames, other than the
+ * conventional filename /etc/ld.so.conf used upstream and in Debian
+ * (we assume this is also what's used in our runtimes). */
+const char * const pv_other_ld_so_conf[] =
+{
+  /* Solus */
+  "/usr/share/defaults/etc/ld.so.conf",
+  NULL
+};
+
 /*
  * Get the library directories associated with @self, most important or
  * unambiguous first.

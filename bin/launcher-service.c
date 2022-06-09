@@ -255,7 +255,11 @@ child_watch_died (GPid     pid,
 
   if (terminate_after)
     {
-      g_debug ("Main pid %d died, terminating...", pid);
+      if (pid == self->main_pid)
+        g_debug ("Main pid %d died, terminating...", pid);
+      else
+        g_debug ("Process %d died and --terminate was requested, terminating...", pid);
+
       pv_launcher_server_terminate_children (self, SIGTERM);
       pv_launcher_server_unref_skeleton_in_timeout (self);
     }

@@ -85,9 +85,28 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 
 # ENVIRONMENT
 
+## Variables set for the command
+
+Some variables will be set programmatically in the subprocesses started
+by **steam-runtime-launcher-service** when a command is sent to it by
+**steam-runtime-launch-client**:
+
+`MAINPID`
+:   If **steam-runtime-launcher-service** was run as a wrapper around a
+    *COMMAND* (for example as
+    **steam-runtime-launcher-service --bus-name=... -- my-game**),
+    and the initial process of the wrapped *COMMAND* is still running,
+    then this variable is set to its process ID (for example, the process
+    ID of **my-game**). Otherwise, this variable is cleared.
+
 `PWD`
 :   Set to the current working directory for each command executed
     inside the container.
+
+Additionally, **steam-runtime-launch-client** has several options that
+manipulate environment variables on a per-command basis.
+
+## Variables read by steam-runtime-launcher-service
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
 :   If set to `1`, increase the log verbosity up to the info level.

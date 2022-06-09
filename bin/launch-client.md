@@ -166,11 +166,29 @@ it set, and pass through **FONTS** from the caller.
 
 # ENVIRONMENT
 
+## Variables set for the command
+
+Some variables will be set programmatically by
+**steam-runtime-launcher-service** when the *COMMAND* is launched:
+
+`MAINPID`
+:   If **steam-runtime-launcher-service**(1) was run as a wrapper around a
+    command (for example as
+    **steam-runtime-launcher-service --bus-name=... -- my-game**),
+    and the initial process of the wrapped command is still running,
+    then this variable is set to its process ID (for example, the process
+    ID of **my-game**). Otherwise, this variable is cleared.
+    The environment options shown above will override this behaviour.
+
 `PWD`
 :   **steam-runtime-launcher-service**(1) sets this to the current working
     directory (as specified by **--directory**, or inherited from the
     launcher) for each command executed inside the container,
     overriding the environment options shown above.
+
+## Variables read by steam-runtime-launch-client
+
+Some variables affect the behaviour of **steam-runtime-launch-client**:
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
 :   If set to `1`, increase the log verbosity up to the info level.

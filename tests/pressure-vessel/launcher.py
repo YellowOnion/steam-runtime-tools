@@ -632,6 +632,50 @@ class TestLauncher(BaseTest):
             # The wrapped process's stdout has ended up in stderr
             self.assertIn('this goes to stderr', errors)
 
+    def test_wrap_mainpid(self) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_mainpid'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+            socket = os.path.join(temp, 'socket')
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--socket', socket,
+                    '--',
+                    'sh', '-euc', 'printf "%s" "$$"; exec cat >&2',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            stdout = proc.stdout
+            assert stdout is not None
+
+            # Wait long enough for it to be listening: the wrapped command
+            # runs after the socket is already up, and prints $$ first
+            shell_pid = stdout.readline().rstrip('\n')
+
+            # We can run commands
+            get_mainpid = run_subprocess(
+                self.launch + [
+                    '--socket', socket,
+                    '--',
+                    'sh', '-euc', 'printf "%s" "$MAINPID"',
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+
+            output, errors = proc.communicate(input='', timeout=10)
+            self.assertEqual(proc.returncode, 0)
+            self.assertEqual(shell_pid, get_mainpid.stdout)
+            self.assertEqual(output, '')
+
     def test_wrap_wait(self) -> None:
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.show_location('test_wrap_wait'))

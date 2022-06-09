@@ -60,6 +60,12 @@ typedef struct
   GMainLoop *main_loop;
   PvLauncher1 *launcher;
   char **wrapped_command;
+  /* Non-NULL if and only if the main PID is still running */
+  char *main_pid_str;
+  /* Positive if and only if the main PID has ever been launched.
+   * Be careful: if main_pid_str is NULL then this PID might have been
+   * reused for an unrelated process. */
+  GPid main_pid;
   guint exit_on_readable_id;
   guint signals_id;
   gboolean ever_exported_launcher;
@@ -243,6 +249,9 @@ child_watch_died (GPid     pid,
 
   /* This frees the pid_data, so be careful */
   g_hash_table_remove (self->client_pid_data_hash, GUINT_TO_POINTER (pid_data->pid));
+
+  if (self->main_pid_str != NULL && pid == self->main_pid)
+    g_clear_pointer (&self->main_pid_str, g_free);
 
   if (terminate_after)
     {
@@ -445,6 +454,11 @@ handle_launch (PvLauncher1           *object,
       env = g_strdupv (self->listener->original_environ);
     }
 
+  if (self->main_pid_str != NULL)
+    env = g_environ_setenv (env, "MAINPID", self->main_pid_str, TRUE);
+  else
+    env = g_environ_unsetenv (env, "MAINPID");
+
   n_envs = g_variant_n_children (arg_envs);
   for (i = 0; i < n_envs; i++)
     {
@@ -632,6 +646,9 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
       GPid pid = -1;
       PidData *pid_data;
 
+      g_warn_if_fail (self->main_pid == 0);
+      g_warn_if_fail (self->main_pid_str == NULL);
+
       /* Map our original stdout back to the child */
       fd_map = g_new0 (FdMapEntry, 1);
       fd_map[0].from = fileno (self->listener->original_stdout);
@@ -663,6 +680,9 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
           g_prefix_error (error, "Unable to start wrapped command: ");
           return FALSE;
         }
+
+      self->main_pid = pid;
+      self->main_pid_str = g_strdup_printf ("%d", pid);
 
       pid_data = g_new0 (PidData, 1);
       pid_data->server = self;

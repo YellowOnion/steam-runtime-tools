@@ -96,7 +96,7 @@ pv_launcher_server_init (PvLauncherServer *self)
 }
 
 static void
-pv_launcher_server_stop (PvLauncherServer *self)
+pv_launcher_server_cancel_event_sources (PvLauncherServer *self)
 {
   if (self->exit_on_readable_id > 0)
     {
@@ -116,7 +116,7 @@ pv_launcher_server_dispose (GObject *object)
 {
   PvLauncherServer *self = PV_LAUNCHER_SERVER (object);
 
-  pv_launcher_server_stop (self);
+  pv_launcher_server_cancel_event_sources (self);
   g_clear_object (&self->listener);
   g_clear_pointer (&self->client_pid_data_hash, g_hash_table_unref);
   g_clear_pointer (&self->main_loop, g_main_loop_unref);
@@ -1286,7 +1286,7 @@ out:
         server->exit_status = EX_UNAVAILABLE;
     }
 
-  pv_launcher_server_stop (server);
+  pv_launcher_server_cancel_event_sources (server);
   result = server->exit_status;
   g_clear_object (&server);
   g_clear_error (&local_error);

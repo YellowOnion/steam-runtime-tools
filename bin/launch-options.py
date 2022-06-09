@@ -786,6 +786,48 @@ class Gui:
         self.grid.attach(self.vulkan_layers_combo, 1, row, 2, 1)
         row += 1
 
+        label = Gtk.Label.new('Command injection')
+        self.grid.attach(label, 0, row, 1, 1)
+
+        self.launcher_service_combo = Gtk.ComboBoxText.new()
+        self.launcher_service_combo.append(None, "Don't override")
+        self.launcher_service_combo.append(
+            'container-runtime', 'any container runtime',
+        )
+        self.launcher_service_combo.append(
+            'proton', 'any Proton version',
+        )
+        self.launcher_service_combo.append(
+            'scout-in-container', 'any layered scout-on-* runtime',
+        )
+        self.launcher_service_combo.append(
+            '1391110', 'SteamLinuxRuntime_soldier (1391110)',
+        )
+        self.launcher_service_combo.append(
+            '1628350', 'SteamLinuxRuntime_sniper (1628350)',
+        )
+        self.launcher_service_combo.append(
+            '1493710', 'Proton - experimental (1493710)',
+        )
+        self.launcher_service_combo.append(
+            '1887720', 'Proton 7.0 (1887720)',
+        )
+        # No support for Proton 6.3 or 5.13 here, on the assumption that
+        # steam-runtime-launcher-service integration won't be backported
+        self.launcher_service_combo.append(
+            '1070560', 'SteamLinuxRuntime (1070560)',
+        )
+        self.launcher_service_combo.append(
+            '', 'None',
+        )
+        self.launcher_service_combo.set_active(0)
+        self.launcher_service_combo.connect(
+            'changed', self._something_changed_cb,
+        )
+        self.grid.attach(self.launcher_service_combo, 1, row, 2, 1)
+
+        row += 1
+
         label = Gtk.Label.new('Interactive terminal')
         self.grid.attach(label, 0, row, 1, 1)
 
@@ -1799,6 +1841,11 @@ class Gui:
 
                 if value is not None:
                     environ['PRESSURE_VESSEL_IMPORT_VULKAN_LAYERS'] = value
+
+                value = self.launcher_service_combo.get_active_id()
+
+                if value is not None:
+                    environ['STEAM_COMPAT_LAUNCHER_SERVICE'] = value
 
                 value = self.terminal_combo.get_active_id()
 

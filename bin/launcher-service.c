@@ -52,12 +52,31 @@
 /* Absence of GConnectFlags; slightly more readable than a magic number */
 #define CONNECT_FLAGS_NONE (0)
 
+/*
+ * ExportState:
+ * @EXPORT_STATE_STARTING: service is starting up and cannot exit yet
+ * @EXPORT_STATE_LISTENING: service is listening on a private socket but
+ *  has not yet exported its D-Bus interface on any connections
+ * @EXPORT_STATE_EXPORTED: service has exported its D-Bus interface on a
+ *  connection, either the session bus or a connection to a private socket
+ * @EXPORT_STATE_GONE: service is no longer exporting its D-Bus interface
+ *  and will shut down
+ *
+ * The valid state transitions are from any earlier state to any later state.
+ */
+typedef enum
+{
+  EXPORT_STATE_STARTING = 0,
+  EXPORT_STATE_LISTENING,
+  EXPORT_STATE_EXPORTED,
+  EXPORT_STATE_GONE
+} ExportState;
+
 typedef struct
 {
   GObject parent;
   SrtPortalListener *listener;
   GHashTable *client_pid_data_hash;
-  GMainLoop *main_loop;
   PvLauncher1 *launcher;
   char **wrapped_command;
   /* Non-NULL if and only if the main PID is still running */
@@ -68,7 +87,7 @@ typedef struct
   GPid main_pid;
   guint exit_on_readable_id;
   guint signals_id;
-  gboolean ever_exported_launcher;
+  ExportState export_state;
   int exit_status;
 } PvLauncherServer;
 
@@ -88,11 +107,28 @@ GType pv_launcher_server_get_type (void);
 G_DEFINE_TYPE (PvLauncherServer, pv_launcher_server, G_TYPE_OBJECT)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvLauncherServer, g_object_unref)
 
+static void pv_launcher_server_terminate_children (PvLauncherServer *self,
+                                                   int signum);
+
 static void
 pv_launcher_server_init (PvLauncherServer *self)
 {
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
   self->exit_status = -1;
+}
+
+static gboolean
+pv_launcher_server_still_alive (PvLauncherServer *self)
+{
+  /* Don't exit as long as we have subprocesses */
+  if (self->client_pid_data_hash != NULL
+      && g_hash_table_size (self->client_pid_data_hash) > 0)
+    return TRUE;
+
+  if (self->export_state != EXPORT_STATE_GONE)
+    return TRUE;
+
+  return FALSE;
 }
 
 static void
@@ -119,7 +155,6 @@ pv_launcher_server_dispose (GObject *object)
   pv_launcher_server_cancel_event_sources (self);
   g_clear_object (&self->listener);
   g_clear_pointer (&self->client_pid_data_hash, g_hash_table_unref);
-  g_clear_pointer (&self->main_loop, g_main_loop_unref);
   g_clear_object (&self->launcher);
 
   G_OBJECT_CLASS (pv_launcher_server_parent_class)->dispose (object);
@@ -139,10 +174,8 @@ skeleton_died_cb (gpointer data)
   PvLauncherServer *self = data;
 
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
-  g_debug ("skeleton finalized, exiting");
-
-  if (self->main_loop != NULL)
-    g_main_loop_quit (self->main_loop);
+  g_debug ("skeleton finalized");
+  self->export_state = EXPORT_STATE_GONE;
 
   /* paired with ref in pv_launcher_server_export */
   g_object_unref (self);
@@ -159,9 +192,13 @@ unref_skeleton_in_timeout_cb (gpointer user_data)
 }
 
 static void
-pv_launcher_server_unref_skeleton_in_timeout (PvLauncherServer *self)
+pv_launcher_server_stop (PvLauncherServer *self,
+                         int terminate_children)
 {
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (self));
+
+  if (terminate_children)
+    pv_launcher_server_terminate_children (self, terminate_children);
 
   if (self->listener != NULL)
     _srt_portal_listener_stop_listening (self->listener);
@@ -178,11 +215,11 @@ pv_launcher_server_unref_skeleton_in_timeout (PvLauncherServer *self)
      that's the case, then we can short-cut this and just stop the
      main loop - and in fact, we must do that, because skeleton_died_cb()
      will never happen. */
-  if (self->ever_exported_launcher)
+  if (self->export_state == EXPORT_STATE_EXPORTED)
     g_timeout_add_full (G_PRIORITY_DEFAULT, 500, unref_skeleton_in_timeout_cb,
                         g_object_ref (self), g_object_unref);
-  else if (self->main_loop != NULL)
-    g_main_loop_quit (self->main_loop);
+  else
+    self->export_state = EXPORT_STATE_GONE;
 }
 
 typedef struct
@@ -292,8 +329,7 @@ child_watch_died (GPid     pid,
       else
         g_debug ("Process %d died and --terminate was requested, terminating...", pid);
 
-      pv_launcher_server_terminate_children (self, SIGTERM);
-      pv_launcher_server_unref_skeleton_in_timeout (self);
+      pv_launcher_server_stop (self, SIGTERM);
     }
 }
 
@@ -625,9 +661,8 @@ handle_terminate (PvLauncher1           *object,
 {
   g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self),
                         G_DBUS_METHOD_INVOCATION_UNHANDLED);
-  pv_launcher_server_terminate_children (self, SIGTERM);
   pv_launcher1_complete_terminate (object, invocation);
-  pv_launcher_server_unref_skeleton_in_timeout (self);
+  pv_launcher_server_stop (self, SIGTERM);
   return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
@@ -747,6 +782,9 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
                             pid_data);
     }
 
+  if (self->export_state < EXPORT_STATE_LISTENING)
+    self->export_state = EXPORT_STATE_LISTENING;
+
   self->exit_status = 0;
   _srt_portal_listener_close_info_fh (self->listener, bus_name);
   return TRUE;
@@ -759,7 +797,9 @@ pv_launcher_server_export (PvLauncherServer *self,
 {
   if (self->launcher == NULL)
     {
-      self->ever_exported_launcher = TRUE;
+      if (self->export_state < EXPORT_STATE_EXPORTED)
+        self->export_state = EXPORT_STATE_EXPORTED;
+
       self->launcher = pv_launcher1_skeleton_new ();
 
       g_object_set_data_full (G_OBJECT (self->launcher), "track-alive",
@@ -816,7 +856,9 @@ on_bus_acquired (SrtPortalListener *listener,
     {
       _srt_log_failure ("Unable to export object: %s", error->message);
       server->exit_status = EX_SOFTWARE;
-      g_main_loop_quit (server->main_loop);
+      /* We probably don't have any child processes yet, but if we
+       * somehow do, send SIGTERM to them */
+      pv_launcher_server_stop (server, SIGTERM);
     }
 }
 
@@ -838,7 +880,9 @@ on_name_acquired (SrtPortalListener *listener,
       if (!pv_launcher_server_finish_startup (server, name, &error))
         {
           _srt_log_failure ("%s", error->message);
-          g_main_loop_quit (server->main_loop);
+          /* We probably don't have any child processes yet, but if we
+           * somehow do, send SIGTERM to them */
+          pv_launcher_server_stop (server, SIGTERM);
         }
     }
 }
@@ -853,7 +897,9 @@ on_name_lost (SrtPortalListener *listener,
 
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (server));
   g_debug ("Name lost");
-  pv_launcher_server_unref_skeleton_in_timeout (server);
+  /* We don't terminate child processes in this case, which means we
+   * won't *actually* stop until they have all exited. */
+  pv_launcher_server_stop (server, 0);
 }
 
 /*
@@ -924,10 +970,7 @@ signal_handler (int sfd,
     }
   else
     {
-      pv_launcher_server_terminate_children (server, info.ssi_signo);
-
-      if (server->main_loop != NULL)
-        g_main_loop_quit (server->main_loop);
+      pv_launcher_server_stop (server, info.ssi_signo);
     }
 
   return G_SOURCE_CONTINUE;
@@ -1040,11 +1083,7 @@ exit_on_readable_cb (int fd,
   PvLauncherServer *server = user_data;
 
   g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (server), G_SOURCE_REMOVE);
-  pv_launcher_server_terminate_children (server, SIGTERM);
-
-  if (server->main_loop != NULL)
-    g_main_loop_quit (server->main_loop);
-
+  pv_launcher_server_stop (server, SIGTERM);
   server->exit_on_readable_id = 0;
   return G_SOURCE_REMOVE;
 }
@@ -1140,7 +1179,6 @@ main (int argc,
 
   server->exit_status = EX_USAGE;
   server->listener = _srt_portal_listener_new ();
-  server->main_loop = g_main_loop_new (NULL, FALSE);
 
   setlocale (LC_ALL, "");
 
@@ -1308,7 +1346,8 @@ main (int argc,
 
   g_debug ("Entering main loop");
 
-  g_main_loop_run (server->main_loop);
+  while (pv_launcher_server_still_alive (server))
+    g_main_context_iteration (NULL, TRUE);
 
 out:
   if (local_error != NULL)

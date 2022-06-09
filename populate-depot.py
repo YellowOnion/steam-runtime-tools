@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright © 2019-2021 Collabora Ltd.
+# Copyright © 2019-2022 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -26,6 +26,11 @@
 """
 Build the steam-container-runtime (aka SteamLinuxRuntime) depot, either
 from just-built files or by downloading a previous build.
+
+The oldest distribution we are currently testing with the CI is Ubuntu
+18.04, that is shipping with Python 3.6.5.
+In order to keep the compatibility with Ubuntu 18.04, this Python script
+should not require a Python version newer than the 3.6.
 """
 
 import argparse
@@ -40,11 +45,11 @@ import shlex
 import shutil
 import stat
 import subprocess
-import tarfile
 import tempfile
 import urllib.parse
 import urllib.request
 from contextlib import suppress
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -834,6 +839,45 @@ class Main:
                     'Expected {} to be an empty regular file'.format(path)
                 )
 
+    @staticmethod
+    def prune_runtime(directory: Path) -> None:
+        """
+        Remove files that are considered to be unnecessary
+        """
+
+        usr_share = directory / 'files' / 'share'
+        doc = usr_share / 'doc'
+
+        # This is a fairly generic list of files that are safe to be removed.
+        # Please keep it in sync with prune_files() of steam-runtime.git's
+        # build-runtime.py
+        paths: list[Path] = [
+            # Nvidia cg toolkit manuals, tutorials and documentation
+            doc / 'nvidia-cg-toolkit' / 'html',
+            *doc.glob('nvidia-cg-toolkit/*.pdf.gz'),
+            # Sample code
+            *doc.glob('**/examples'),
+            # Debian bug reporting scripts
+            usr_share / 'bug',
+            # Debian documentation metadata
+            usr_share / 'doc-base',
+            # Debian QA metadata
+            usr_share / 'lintian',
+            # Programs and utilities manuals
+            usr_share / 'man',
+            # Remove the localized messages that are likely never going to be
+            # seen. Keep only "en", because that's the default language we are
+            # using.
+            *[x for x in usr_share.glob('locale/*') if x.name != 'en'],
+        ]
+
+        for path in paths:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                with suppress(FileNotFoundError):
+                    path.unlink()
+
     def do_container_runtime(self) -> None:
         pv_version = ComponentVersion('pressure-vessel')
 
@@ -979,10 +1023,8 @@ class Main:
                 ]
                 logger.info('%r', argv)
                 subprocess.run(argv, check=True)
-                self.write_lookaside(
-                    os.path.join(self.cache, runtime.tarball),
-                    dest,
-                )
+                self.prune_runtime(Path(dest))
+                self.write_lookaside(dest)
 
                 if self.minimize:
                     self.minimize_runtime(dest)
@@ -1015,10 +1057,8 @@ class Main:
                     ]
                     logger.info('%r', argv)
                     subprocess.run(argv, check=True)
-                    self.write_lookaside(
-                        os.path.join(self.cache, runtime.sdk_tarball),
-                        dest,
-                    )
+                    self.prune_runtime(Path(dest))
+                    self.write_lookaside(dest)
 
                     if self.minimize:
                         self.minimize_runtime(dest)
@@ -1476,31 +1516,26 @@ class Main:
 
         return True
 
-    def write_lookaside(self, archive: str, dest: str) -> None:
-        with tarfile.open(
-            archive, mode='r'
-        ) as unarchiver, gzip.open(
-            os.path.join(dest, 'usr-mtree.txt.gz'), 'wt'
-        ) as writer:
+    def write_lookaside(self, runtime: str) -> None:
+        with tempfile.TemporaryDirectory(prefix='slr-mtree-') as temp:
             lc_names = {}                   # type: Dict[str, str]
             differ_only_by_case = set()     # type: Set[str]
             not_windows_friendly = set()    # type: Set[str]
-            sha256 = {}                     # type: Dict[str, str]
-            sizes = {}                      # type: Dict[str, int]
+            sha256 = {}                     # type: Dict[Tuple[int, int], str]
+            paths = {}                      # type: Dict[Tuple[int, int], str]
+
+            writer = gzip.open(os.path.join(temp, 'usr-mtree.txt.gz'), 'wt')
 
             writer.write('#mtree\n')
             writer.write('. type=dir\n')
 
-            for member in unarchiver:
-                name = member.name
+            for member in Path(runtime).rglob("*"):
+                relative_path = member.relative_to(runtime)
 
-                if name.startswith('./'):
-                    name = name[len('./'):]
-
-                if not name.startswith('files/'):
+                try:
+                    name = str(relative_path.relative_to('files'))
+                except ValueError:
                     continue
-
-                name = name[len('files/'):]
 
                 if not self.filename_is_windows_friendly(name):
                     not_windows_friendly.add(name)
@@ -1513,62 +1548,58 @@ class Main:
 
                 fields = ['./' + self.octal_escape(name)]
 
-                if member.isfile() or member.islnk():
+                stat_info = os.lstat(member)
+
+                if stat.S_ISREG(stat_info.st_mode):
                     fields.append('type=file')
-                    fields.append('mode=%o' % member.mode)
+                    fields.append('mode=%o' % stat_info.st_mode)
 
-                    # We only store mtime to 1-second precision for now,
-                    # but some mtree implementations require the dot.
-                    #
-                    # If we add sub-second precision, note that some
-                    # versions of mtree use the part after the dot
-                    # as integer nanoseconds, so "1.234" is actually
-                    # 1 second + 234 nanoseconds, or what normal people
-                    # would write as 1.000000234 - we can be compatible
-                    # with both by always showing the time in %d.%09d format.
-                    fields.append('time=%d.0' % member.mtime)
+                    # With sub-second precision, note that some versions
+                    # of mtree use the part after the dot as integer
+                    # nanoseconds, so "1.234" is actually 1 sec + 234 ns,
+                    # or what normal people would write as 1.000000234.
+                    # To be compatible with both, we always show the time
+                    # with 9 digits after the decimal point.
+                    fields.append(f'time={stat_info.st_mtime:.9f}')
 
-                    if member.islnk():
-                        writer.write(
-                            '# hard link to {}\n'.format(
-                                self.octal_escape(member.linkname),
-                            ),
-                        )
-                        assert member.linkname in sizes
-                        fields.append('size=%d' % sizes[member.linkname])
-
-                        if sizes[member.linkname] > 0:
-                            assert member.linkname in sha256
-                            fields.append('sha256=' + sha256[member.linkname])
-                    else:
-                        fields.append('size=%d' % member.size)
-                        sizes[member.name] = member.size
-
-                        if member.size > 0:
+                    fields.append(f'size={stat_info.st_size}')
+                    file_id = (stat_info.st_dev, stat_info.st_ino)
+                    if stat_info.st_size > 0:
+                        if file_id not in sha256:
                             hasher = hashlib.sha256()
-                            extract = unarchiver.extractfile(member)
-                            assert extract is not None
-                            with extract:
+                            with open(member, 'rb') as f:
                                 while True:
-                                    blob = extract.read(4096)
+                                    blob = f.read(4096)
 
                                     if not blob:
                                         break
 
                                     hasher.update(blob)
 
-                            fields.append('sha256=' + hasher.hexdigest())
-                            sha256[member.name] = hasher.hexdigest()
+                            sha256[file_id] = hasher.hexdigest()
 
-                elif member.issym():
+                        fields.append(f'sha256={sha256[file_id]}')
+
+                    if stat_info.st_nlink > 1:
+                        if file_id in paths:
+                            writer.write(
+                                '# hard link to {}\n'.format(
+                                    self.octal_escape(paths[file_id]),
+                                ),
+                            )
+                        else:
+                            paths[file_id] = str(relative_path)
+
+                elif stat.S_ISLNK(stat_info.st_mode):
                     fields.append('type=link')
-                    fields.append('link=' + self.octal_escape(member.linkname))
-                elif member.isdir():
+                    fields.append(
+                        f'link={self.octal_escape(os.readlink(member))}')
+                elif stat.S_ISDIR(stat_info.st_mode):
                     fields.append('type=dir')
                 else:
                     writer.write(
                         '# unknown file type: {}\n'.format(
-                            self.octal_escape(member.name),
+                            self.octal_escape(name),
                         ),
                     )
                     continue
@@ -1591,6 +1622,11 @@ class Main:
 
                 for name in sorted(not_windows_friendly):
                     writer.write('# {}\n'.format(self.octal_escape(name)))
+
+            # We need to close the gzip before copying it, otherwise we
+            # will end up with a corrupted file
+            writer.close()
+            shutil.copy2(writer.name, runtime)
 
     def minimize_runtime(self, root: str) -> None:
         '''

@@ -971,6 +971,9 @@ main (int argc,
       if (local_error != NULL)
         g_dbus_error_strip_remote_error (local_error);
 
+      if (reply != NULL)
+        launch_exit_status = 0;
+
       goto out;
     }
 

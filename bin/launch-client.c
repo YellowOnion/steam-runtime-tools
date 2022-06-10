@@ -312,7 +312,7 @@ name_owner_changed (G_GNUC_UNUSED GDBusConnection *connection,
 
   g_return_if_fail (api != NULL);
 
-  g_variant_get (parameters, "(sss)", &name, &from, &to);
+  g_variant_get (parameters, "(&s&s&s)", &name, &from, &to);
 
   /* Check if the service dies, then we exit, because we can't track it anymore */
   if (strcmp (name, api->service_bus_name) == 0 &&

@@ -852,6 +852,82 @@ class TestLauncher(BaseTest):
             proc.wait(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
+    def test_session_bus_replace(self) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                self.show_location('test_session_bus_replace')
+            )
+            self.needs_dbus()
+            unique = '_' + uuid.uuid4().hex
+            well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+
+            first_server = subprocess.Popen(
+                self.launcher + [
+                    '--bus-name', well_known_name,
+                    '--exit-on-readable=0',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(first_server))
+
+            stdout = first_server.stdout
+            assert stdout is not None
+            # Read until EOF
+            stdout.read()
+
+            cat = subprocess.Popen(
+                self.launch + [
+                    '--bus-name', well_known_name,
+                    '--',
+                    'cat',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(cat))
+
+            second_server = subprocess.Popen(
+                self.launcher + [
+                    '--bus-name', well_known_name,
+                    '--exit-on-readable=0',
+                    '--replace',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(second_server))
+
+            stdout = second_server.stdout
+            assert stdout is not None
+            # Read until EOF
+            stdout.read()
+
+            # The first server and the bridge are both still running
+            second_server.send_signal(0)
+            cat.send_signal(0)
+
+            # We can still communicate with a subprocess of the first,
+            # even after it has lost its name
+            output, _ = cat.communicate(input='nyan', timeout=10)
+            self.assertEqual(output, 'nyan')
+            self.assertEqual(cat.returncode, 0)
+
+            # The first server shuts down after the name has been
+            # lost and the cat subprocess has finished
+            first_server.wait(timeout=10)
+            self.assertEqual(first_server.returncode, 0)
+
+            # The second server shuts down on --exit-on-readable
+            second_server.communicate(input='', timeout=10)
+            self.assertEqual(second_server.returncode, 0)
+
     def test_exit_on_readable(self, use_stdin=False) -> None:
         with contextlib.ExitStack() as stack:
             stack.enter_context(

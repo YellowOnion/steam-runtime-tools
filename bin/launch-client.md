@@ -22,6 +22,7 @@ steam-runtime-launch-client - client to launch processes in a container
 [**--pass-env** *VAR*]
 [**--pass-env-matching** *WILDCARD*]
 [**--unset-env** *VAR*]
+[**--terminate**]
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 [**--**]
@@ -212,7 +213,7 @@ The exit status is similar to **env**(1):
 
 0
 :   The *COMMAND* exited successfully with status 0,
-    or **--terminate** succeeded.
+    or there was no *COMMAND* and **--terminate** succeeded.
 
 125
 :   Invalid arguments were given, or **steam-runtime-launch-client** failed

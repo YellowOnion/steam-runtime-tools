@@ -88,7 +88,9 @@ as a subprocess of **steam-runtime-launcher-service**.
 
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment
-    variables set by **--env** and similar options.
+    variables set by **--env** and similar options, and environment
+    variables such as `PWD` that are set programmatically (see
+    **ENVIRONMENT** section, below).
     By default, it inherits environment variables from
     **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.

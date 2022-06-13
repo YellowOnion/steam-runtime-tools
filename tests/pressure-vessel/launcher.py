@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+import contextlib
 import logging
 import os
 import shutil
@@ -724,7 +725,11 @@ class TestLauncher(BaseTest):
             self.assertEqual(proc.returncode, 0)
 
     def test_exit_on_readable(self, use_stdin=False) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+
             if not use_stdin:
                 read_end, write_end = os.pipe2(os.O_CLOEXEC)
                 pass_fds = [read_end]
@@ -732,7 +737,8 @@ class TestLauncher(BaseTest):
             else:
                 pass_fds = []
                 fd = 0
-                read_end = 0
+                read_end = -1
+                write_end = -1
 
             proc = subprocess.Popen(
                 self.launcher + [
@@ -747,14 +753,13 @@ class TestLauncher(BaseTest):
             )
             stdin = proc.stdin
             assert stdin is not None
-            os.close(read_end)
 
-            if use_stdin:
-                stdin.close()
-            else:
+            if not use_stdin:
+                os.close(read_end)
                 os.close(write_end)
 
-            proc.wait()
+            # this closes stdin
+            proc.communicate(input='')
             self.assertEqual(proc.returncode, 0)
 
     def test_exit_on_stdin(self) -> None:

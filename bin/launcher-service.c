@@ -203,6 +203,34 @@ pid_data_free (PidData *data)
   g_free (data);
 }
 
+static gboolean
+kill_process_group_or_process (pid_t pid,
+                               int signum,
+                               GError **error)
+{
+  g_return_val_if_fail (pid > 0, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  if (killpg (pid, signum) == 0)
+    return TRUE;
+
+  if (errno == ESRCH)
+    {
+      /* Either @pid is a process that no longer exists, or it is a process
+       * that exists but is not a process group leader. Try killing just
+       * the process, instead; if that works, assume all is OK. */
+      if (kill (pid, signum) == 0)
+        return TRUE;
+
+      return glnx_throw_errno_prefix (error,
+                                      "killpg(%d, %d): no such process group; "
+                                      "kill(%d, %d)",
+                                      pid, signum, pid, signum);
+    }
+
+  return glnx_throw_errno_prefix (error, "killpg(%d, %d)", pid, signum);
+}
+
 static void
 pv_launcher_server_terminate_children (PvLauncherServer *self,
                                        int signum)
@@ -217,8 +245,12 @@ pv_launcher_server_terminate_children (PvLauncherServer *self,
 
   while (g_hash_table_iter_next (&iter, NULL, &value))
     {
+      g_autoptr(GError) local_error = NULL;
+
       pid_data = value;
-      killpg (pid_data->pid, signum);
+
+      if (!kill_process_group_or_process (pid_data->pid, signum, &local_error))
+        g_debug ("%s", local_error->message);
     }
 }
 
@@ -550,6 +582,7 @@ handle_send_signal (PvLauncher1           *object,
                     gboolean               arg_to_process_group,
                     PvLauncherServer      *self)
 {
+  g_autoptr(GError) local_error = NULL;
   PidData *pid_data = NULL;
 
   g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (self),
@@ -571,9 +604,14 @@ handle_send_signal (PvLauncher1           *object,
   g_debug ("Sending signal %d to client pid %d", arg_signal, arg_pid);
 
   if (arg_to_process_group)
-    killpg (pid_data->pid, arg_signal);
+    {
+      if (!kill_process_group_or_process (pid_data->pid, arg_signal, &local_error))
+        g_debug ("%s", local_error->message);
+    }
   else
-    kill (pid_data->pid, arg_signal);
+    {
+      kill (pid_data->pid, arg_signal);
+    }
 
   pv_launcher1_complete_send_signal (self->launcher, invocation);
 
@@ -628,9 +666,13 @@ name_owner_changed (GDBusConnection *connection,
 
       for (l = list; l; l = l->next)
         {
+          g_autoptr(GError) local_error = NULL;
+
           pid_data = l->data;
           g_debug ("%s dropped off the bus, killing %d", pid_data->client, pid_data->pid);
-          killpg (pid_data->pid, SIGINT);
+
+          if (!kill_process_group_or_process (pid_data->pid, SIGINT, &local_error))
+            g_debug ("%s", local_error->message);
         }
 
       g_list_free (list);

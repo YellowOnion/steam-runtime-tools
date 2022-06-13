@@ -639,6 +639,7 @@ class TestLauncher(BaseTest):
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
             socket = os.path.join(temp, 'socket')
+            logger.debug('Starting launcher to test MAINPID')
             proc = subprocess.Popen(
                 self.launcher + [
                     '--socket', socket,
@@ -659,6 +660,7 @@ class TestLauncher(BaseTest):
             shell_pid = stdout.readline().rstrip('\n')
 
             # We can run commands
+            logger.debug('Retrieving MAINPID')
             get_mainpid = run_subprocess(
                 self.launch + [
                     '--socket', socket,
@@ -682,17 +684,16 @@ class TestLauncher(BaseTest):
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
+            socket = os.path.join(temp, 'socket')
             need_terminate = True
             logger.debug('Starting launcher to wait for a main command')
             proc = subprocess.Popen(
-                [
-                    'sh', '-euc', 'exec "$@" 3>&1 >&2', 'sh',
-                ] + self.launcher + [
-                    '--info-fd=3',
-                    '--socket', os.path.join(temp, 'socket'),
+                self.launcher + [
+                    '--socket', socket,
                     '--',
-                    'sleep', '600',
+                    'cat',
                 ],
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
@@ -700,31 +701,19 @@ class TestLauncher(BaseTest):
             stack.enter_context(ensure_terminated(proc))
 
             try:
-                socket = ''
-                dbus_address = ''
-
-                # stdout is the launcher's fd 3, which is the info-fd
+                stdin = proc.stdin
+                assert stdin is not None
                 stdout = proc.stdout
                 assert stdout is not None
-                for line in stdout:
-                    line = line.rstrip('\n')
-                    logger.debug('%s', line)
 
-                    if line.startswith('socket='):
-                        socket = line[len('socket='):]
-                    elif line.startswith('dbus_address='):
-                        dbus_address = line[len('dbus_address='):]
-
-                self.assertTrue(socket)
-                self.assertTrue(dbus_address)
-
-                # The path has been canonicalized, so it might not
-                # be equal to the input, but the basename will be the same
-                self.assertEqual(os.path.basename(socket), 'socket')
-                left = os.stat(socket)
-                right = os.stat(os.path.join(temp, 'socket'))
-                self.assertEqual(left.st_dev, right.st_dev)
-                self.assertEqual(left.st_ino, right.st_ino)
+                # Wait for cat(1) to have started, which only happens
+                # when the launcher is also open for business
+                logger.debug(
+                    'Waiting to be able to get a newline back from cat(1)',
+                )
+                stdin.write('\n')
+                stdin.flush()
+                self.assertEqual(stdout.read(1), '\n')
 
                 # We can run commands
                 logger.debug('Sending command')
@@ -740,7 +729,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'hello')
 
-                # We can terminate the `sleep` command
+                # We can terminate the `cat` command
                 logger.debug('Terminating main command')
                 completed = run_subprocess(
                     self.launch + [
@@ -755,6 +744,11 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'world')
                 need_terminate = False
+
+                # The `cat` command terminates promptly, even though it has
+                # not seen EOF on its stdin
+                logger.debug('Waiting for EOF on stdout...')
+                stdout.read()
             finally:
                 if need_terminate:
                     proc.terminate()

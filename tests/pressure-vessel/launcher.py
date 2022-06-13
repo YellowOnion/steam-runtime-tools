@@ -81,8 +81,15 @@ class TestLauncher(BaseTest):
         else:
             self.skipTest('Not available as an installed-test')
 
+    @contextlib.contextmanager
+    def show_location(self, location):
+        logger.debug('enter: %s', location)
+        yield
+        logger.debug('exit: %s', location)
+
     def test_socket_directory(self) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_socket_directory'))
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
@@ -330,6 +337,7 @@ class TestLauncher(BaseTest):
 
     def test_socket(self) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_socket'))
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
@@ -520,6 +528,7 @@ class TestLauncher(BaseTest):
 
     def test_wrap(self) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap'))
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
@@ -546,6 +555,7 @@ class TestLauncher(BaseTest):
 
     def test_wrap_info_fd(self) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_info_fd'))
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
@@ -604,6 +614,7 @@ class TestLauncher(BaseTest):
 
     def test_wrap_wait(self) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_wait'))
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
@@ -716,6 +727,7 @@ class TestLauncher(BaseTest):
 
     def test_session_bus(self) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_session_bus'))
             self.needs_dbus()
             unique = '_' + uuid.uuid4().hex
             well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
@@ -777,6 +789,9 @@ class TestLauncher(BaseTest):
 
     def test_exit_on_readable(self, use_stdin=False) -> None:
         with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                self.show_location('test_exit_on_readable(%r)' % use_stdin)
+            )
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )

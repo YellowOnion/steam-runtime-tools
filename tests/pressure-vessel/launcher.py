@@ -34,6 +34,31 @@ LAUNCHER_IFACE = "com.steampowered.PressureVessel.Launcher1"
 LAUNCHER_PATH = "/com/steampowered/PressureVessel/Launcher1"
 
 
+@contextlib.contextmanager
+def ensure_terminated(proc):
+    try:
+        yield proc
+    finally:
+        logger.debug('Cleaning up subprocess if necessary')
+
+        with proc:
+            for fh in proc.stdin, proc.stdout, proc.stderr:
+                if fh is not None:
+                    fh.close()
+
+            if proc.returncode is None:
+                logger.debug('Subprocess still running')
+                proc.terminate()
+
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.debug('Waiting for subprocess timed out')
+                    proc.kill()
+            else:
+                logger.debug('Subprocess already exited %d', proc.returncode)
+
+
 class TestLauncher(BaseTest):
     def setUp(self) -> None:
         super().setUp()
@@ -57,7 +82,10 @@ class TestLauncher(BaseTest):
             self.skipTest('Not available as an installed-test')
 
     def test_socket_directory(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             need_terminate = True
             printf_symlink = os.path.join(temp, 'printf=symlink')
             printf = shutil.which('printf')
@@ -75,6 +103,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             try:
                 socket = ''
@@ -261,6 +290,7 @@ class TestLauncher(BaseTest):
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
+                stack.enter_context(ensure_terminated(launch))
                 launch.send_signal(signal.SIGINT)
                 self.assertIn(
                     launch.wait(),
@@ -299,7 +329,10 @@ class TestLauncher(BaseTest):
             self.assertEqual(completed.returncode, 125)
 
     def test_socket(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             need_terminate = True
             proc = subprocess.Popen(
                 self.launcher + [
@@ -309,6 +342,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             try:
                 socket = ''
@@ -485,7 +519,10 @@ class TestLauncher(BaseTest):
                 self.assertEqual(proc.returncode, 0)
 
     def test_wrap(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             proc = subprocess.Popen(
                 self.launcher + [
                     '--socket', os.path.join(temp, 'socket'),
@@ -496,6 +533,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             # The process exits as soon as printf does, which is
             # almost immediately
@@ -507,7 +545,10 @@ class TestLauncher(BaseTest):
             self.assertEqual('wrapped printf', output)
 
     def test_wrap_info_fd(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             proc = subprocess.Popen(
                 [
                     # subprocess.Popen doesn't let us set arbitrary
@@ -524,6 +565,7 @@ class TestLauncher(BaseTest):
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             socket = ''
             dbus_address = ''
@@ -558,7 +600,10 @@ class TestLauncher(BaseTest):
             self.assertIn('this goes to stderr', errors)
 
     def test_wrap_wait(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             need_terminate = True
             proc = subprocess.Popen(
                 [
@@ -573,6 +618,7 @@ class TestLauncher(BaseTest):
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             try:
                 socket = ''
@@ -666,19 +712,20 @@ class TestLauncher(BaseTest):
             self.skipTest('D-Bus session bus not available')
 
     def test_session_bus(self) -> None:
-        self.needs_dbus()
-        unique = '_' + uuid.uuid4().hex
+        with contextlib.ExitStack() as stack:
+            self.needs_dbus()
+            unique = '_' + uuid.uuid4().hex
+            well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--bus-name', well_known_name,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
 
-        proc = subprocess.Popen(
-            self.launcher + [
-                '--bus-name', 'com.steampowered.PressureVessel.Test.' + unique,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=2,
-            universal_newlines=True,
-        )
-
-        try:
             bus_name = ''
 
             stdout = proc.stdout
@@ -721,7 +768,6 @@ class TestLauncher(BaseTest):
             )
             self.assertEqual(completed.stdout, b'hello')
 
-        finally:
             proc.terminate()
             proc.wait()
             self.assertEqual(proc.returncode, 0)
@@ -753,6 +799,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
             stdin = proc.stdin
             assert stdin is not None
 

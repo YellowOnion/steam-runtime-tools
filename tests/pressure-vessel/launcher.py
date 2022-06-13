@@ -647,7 +647,7 @@ class TestLauncher(BaseTest):
             )
             self.assertEqual(completed.returncode, 125)
 
-    def test_session_bus(self) -> None:
+    def needs_dbus(self) -> None:
         try:
             run_subprocess(
                 [
@@ -665,6 +665,8 @@ class TestLauncher(BaseTest):
         except Exception:
             self.skipTest('D-Bus session bus not available')
 
+    def test_session_bus(self) -> None:
+        self.needs_dbus()
         unique = '_' + uuid.uuid4().hex
 
         proc = subprocess.Popen(

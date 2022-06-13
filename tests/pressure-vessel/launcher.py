@@ -33,6 +33,10 @@ logger = logging.getLogger('test-launcher')
 LAUNCHER_IFACE = "com.steampowered.PressureVessel.Launcher1"
 LAUNCHER_PATH = "/com/steampowered/PressureVessel/Launcher1"
 
+DBUS_NAME_DBUS = "org.freedesktop.DBus"
+DBUS_INTERFACE_DBUS = DBUS_NAME_DBUS
+DBUS_PATH_DBUS = "/org/freedesktop/DBus"
+
 
 @contextlib.contextmanager
 def ensure_terminated(proc):
@@ -815,10 +819,11 @@ class TestLauncher(BaseTest):
                 if line.startswith('bus_name='):
                     bus_name = line[len('bus_name='):]
 
-            self.assertEqual(
-                bus_name,
-                'com.steampowered.PressureVessel.Test.' + unique,
-            )
+            # With neither --stop-on-name-loss nor --no-stop-on-name-loss,
+            # it is unspecified which behaviour we have
+            # (implementation detail: there's an environment variable)
+            if not bus_name.startswith(':'):
+                self.assertEqual(bus_name, well_known_name)
 
             logger.debug('Should be able to ping %s', bus_name)
             run_subprocess(
@@ -852,19 +857,37 @@ class TestLauncher(BaseTest):
             proc.wait(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
-    def test_session_bus_replace(self) -> None:
+    def test_session_bus_replace_stop(self) -> None:
+        self.test_session_bus_replace(stop_on_name_loss=True)
+
+    def test_session_bus_replace(self, stop_on_name_loss=False) -> None:
         with contextlib.ExitStack() as stack:
             stack.enter_context(
-                self.show_location('test_session_bus_replace')
+                self.show_location(
+                    'test_session_bus_replace(stop_on_name_loss=%r)'
+                    % stop_on_name_loss
+                )
             )
             self.needs_dbus()
             unique = '_' + uuid.uuid4().hex
             well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
 
+            try:
+                from gi.repository import GLib, Gio
+            except ImportError as e:
+                self.skipTest(str(e))
+
+            if stop_on_name_loss:
+                stop_on_name_loss_arg = '--stop-on-name-loss'
+            else:
+                stop_on_name_loss_arg = '--no-stop-on-name-loss'
+
+            logger.debug('Starting first server on %s', well_known_name)
             first_server = subprocess.Popen(
                 self.launcher + [
                     '--bus-name', well_known_name,
                     '--exit-on-readable=0',
+                    stop_on_name_loss_arg,
                 ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -873,14 +896,44 @@ class TestLauncher(BaseTest):
             )
             stack.enter_context(ensure_terminated(first_server))
 
+            logger.debug('Waiting for its bus name')
             stdout = first_server.stdout
             assert stdout is not None
-            # Read until EOF
-            stdout.read()
+            for line in stdout:
+                line = line.rstrip('\n')
+                logger.debug('%s', line)
 
+                if line.startswith('bus_name='):
+                    bus_name = line[len('bus_name='):]
+
+                    if stop_on_name_loss:
+                        if not bus_name.startswith(':'):
+                            self.assertEqual(bus_name, well_known_name)
+
+                        session_bus = Gio.bus_get_sync(
+                            Gio.BusType.SESSION, None,
+                        )
+                        reply = session_bus.call_sync(
+                            DBUS_NAME_DBUS,
+                            DBUS_PATH_DBUS,
+                            DBUS_INTERFACE_DBUS,
+                            'GetNameOwner',
+                            GLib.Variant('(s)', (bus_name,)),
+                            GLib.VariantType('(s)'),
+                            Gio.DBusCallFlags.NONE,
+                            -1,
+                            None,
+                        )
+                        self.assertEqual(len(reply), 1)
+                        first_unique_name = str(reply[0])
+                    else:
+                        self.assertTrue(bus_name.startswith(':'), bus_name)
+                        first_unique_name = bus_name
+
+            logger.debug('Starting cat(1) subprocess')
             cat = subprocess.Popen(
                 self.launch + [
-                    '--bus-name', well_known_name,
+                    '--bus-name', bus_name,
                     '--',
                     'cat',
                 ],
@@ -891,6 +944,7 @@ class TestLauncher(BaseTest):
             )
             stack.enter_context(ensure_terminated(cat))
 
+            logger.debug('Starting second server to --replace the first')
             second_server = subprocess.Popen(
                 self.launcher + [
                     '--bus-name', well_known_name,
@@ -904,29 +958,109 @@ class TestLauncher(BaseTest):
             )
             stack.enter_context(ensure_terminated(second_server))
 
+            logger.debug('Waiting for second server to be ready')
             stdout = second_server.stdout
             assert stdout is not None
             # Read until EOF
             stdout.read()
 
-            # The first server and the bridge are both still running
+            logger.debug('Checking all three processes are running')
+            first_server.send_signal(0)
             second_server.send_signal(0)
             cat.send_signal(0)
 
-            # We can still communicate with a subprocess of the first,
-            # even after it has lost its name
+            # We can still communicate with a subprocess of the
+            # first, even after it has lost its name
+            logger.debug('Checking cat(1) is still responding')
             output, _ = cat.communicate(input='nyan', timeout=10)
             self.assertEqual(output, 'nyan')
             self.assertEqual(cat.returncode, 0)
 
-            # The first server shuts down after the name has been
-            # lost and the cat subprocess has finished
-            first_server.wait(timeout=10)
-            self.assertEqual(first_server.returncode, 0)
+            if stop_on_name_loss:
+                logger.debug('Waiting for first server to exit')
+                first_server.wait(timeout=10)
+                self.assertEqual(first_server.returncode, 0)
+            else:
+                logger.debug('Checking that first server did not stop')
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', first_unique_name,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
 
             # The second server shuts down on --exit-on-readable
+            logger.debug('Stopping second server')
             second_server.communicate(input='', timeout=10)
             self.assertEqual(second_server.returncode, 0)
+
+            if not stop_on_name_loss:
+                # The first server is still in the queue for the name,
+                # so it gets the well-known name back (atomically)
+                # after the dbus-daemon has detected the change in
+                # status.
+                session_bus = Gio.bus_get_sync(
+                    Gio.BusType.SESSION, None,
+                )
+                reply = None
+
+                # It might take a short time for the dbus-daemon to
+                # detect that the second service's connection has closed.
+                # Until then, it will think the second service still
+                # has the name.
+                for attempt in range(50):
+                    logger.debug(
+                        'Waiting for first server to get name back',
+                    )
+                    reply = session_bus.call_sync(
+                        DBUS_NAME_DBUS,
+                        DBUS_PATH_DBUS,
+                        DBUS_INTERFACE_DBUS,
+                        'GetNameOwner',
+                        GLib.Variant('(s)', (bus_name,)),
+                        GLib.VariantType('(s)'),
+                        Gio.DBusCallFlags.NONE,
+                        -1,
+                        None,
+                    )
+                    assert reply is not None
+                    self.assertEqual(len(reply), 1)
+                    owner = str(reply[0])
+
+                    if owner == first_unique_name:
+                        logger.debug(
+                            'First server %s got its name back',
+                            first_unique_name,
+                        )
+                        break
+                    else:
+                        logger.debug('Name owned by %s', owner)
+
+                    time.sleep(0.1)
+                else:
+                    raise AssertionError(
+                        'Timed out waiting for name to go back to '
+                        'first service'
+                    )
+
+                logger.debug('Asking first server to exit')
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', first_unique_name,
+                        '--terminate',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                # The first server terminates when asked
+                logger.debug('Waiting for it')
+                first_server.communicate(input='', timeout=10)
+                self.assertEqual(first_server.returncode, 0)
 
     def test_exit_on_readable(self, use_stdin=False) -> None:
         with contextlib.ExitStack() as stack:

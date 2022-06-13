@@ -72,6 +72,12 @@ typedef enum
   EXPORT_STATE_GONE
 } ExportState;
 
+typedef enum
+{
+  PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS = (1 << 0),
+  PV_LAUNCHER_SERVER_FLAGS_NONE = 0,
+} PvLauncherServerFlags;
+
 typedef struct
 {
   GObject parent;
@@ -89,6 +95,7 @@ typedef struct
   guint signals_id;
   ExportState export_state;
   int exit_status;
+  PvLauncherServerFlags flags;
 } PvLauncherServer;
 
 typedef struct
@@ -876,8 +883,14 @@ on_name_acquired (SrtPortalListener *listener,
   if (server->exit_status == EX_UNAVAILABLE)
     {
       g_autoptr(GError) error = NULL;
+      const char *advertised_name;
 
-      if (!pv_launcher_server_finish_startup (server, name, &error))
+      if (server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS)
+        advertised_name = name;
+      else
+        advertised_name = g_dbus_connection_get_unique_name (connection);
+
+      if (!pv_launcher_server_finish_startup (server, advertised_name, &error))
         {
           _srt_log_failure ("%s", error->message);
           /* We probably don't have any child processes yet, but if we
@@ -896,10 +909,12 @@ on_name_lost (SrtPortalListener *listener,
   PvLauncherServer *server = user_data;
 
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (server));
-  g_debug ("Name lost");
+  g_debug ("Name lost, will stop: %c",
+           server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS ? 'y' : 'n');
   /* We don't terminate child processes in this case, which means we
    * won't *actually* stop until they have all exited. */
-  pv_launcher_server_stop (server, 0);
+  if (server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS)
+    pv_launcher_server_stop (server, 0);
 }
 
 /*
@@ -1122,6 +1137,7 @@ static gint opt_info_fd = -1;
 static gboolean opt_replace = FALSE;
 static gchar *opt_socket = NULL;
 static gchar *opt_socket_directory = NULL;
+static gboolean opt_stop_on_name_loss = TRUE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 
@@ -1150,6 +1166,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Listen on this AF_UNIX socket.",
     "ABSPATH|@ABSTRACT" },
+  { "stop-on-name-loss", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_stop_on_name_loss,
+    "Stop when the --bus-name is lost [default].",
+    NULL, },
+  { "no-stop-on-name-loss", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_stop_on_name_loss,
+    "Continue to run after the --bus-name is lost.",
+    NULL, },
   { "socket-directory", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_socket_directory,
     "Listen on an arbitrary AF_UNIX socket in this directory. "
@@ -1193,6 +1217,7 @@ main (int argc,
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);
+  opt_stop_on_name_loss = _srt_boolean_environment ("SRT_LAUNCH_SERVER_STOP_ON_NAME_LOSS", TRUE);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   g_return_val_if_fail (argc >= 1, EX_USAGE);
@@ -1225,6 +1250,9 @@ main (int argc,
 
   if (opt_verbose)
     _srt_util_set_glib_log_handler (opt_verbose);
+
+  if (opt_stop_on_name_loss)
+    server->flags |= PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS;
 
   if ((result = _srt_set_compatible_resource_limits (0)) < 0)
     g_warning ("Unable to set normal resource limits: %s",

@@ -18,6 +18,7 @@ steam-runtime-launcher-service - server to launch processes in a container
 [**--exit-on-readable**] *FD*
 [**--info-fd**] *N*
 [**--replace**]
+[**--[no-]stop-on-name-loss**]
 [**--verbose**]
 {**--bus-name** *NAME*|**--socket** *SOCKET*|**--socket-directory** *PATH*}
 [**--** *COMMAND* *ARGUMENTS*]
@@ -80,6 +81,19 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     The other **steam-runtime-launcher-service** will exit.
     This option is ignored if **--bus-name** is not used.
 
+**--[no-]stop-on-name-loss**
+:   With **--bus-name** and **--stop-on-name-loss**, the server will
+    prepare to exit when the well-known bus name *NAME* used with
+    **--bus-name** is lost, most likely because another server was
+    run with **--replace** and took over ownership.
+    If other launched processes are active, it will wait for them to exit
+    before terminating.
+    This is the default.
+
+    With **--bus-name** and **--no-stop-on-name-loss**, do not do this:
+    the server will still be contactable via D-Bus using its unique bus name.
+    These parameters have no effect if **--bus-name** is not used.
+
 **--verbose**
 :   Be more verbose.
 
@@ -115,6 +129,11 @@ manipulate environment variables on a per-command basis.
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
 :   If set to `1`, prepend the log entries with a timestamp.
     If set to `0`, no effect.
+
+`SRT_LAUNCH_SERVER_STOP_ON_NAME_LOSS` (boolean)
+:   If set to `0`, the default behaviour changes to be equivalent to
+    **--no-stop-on-name-loss**, unless overridden by **--stop-on-name-loss**.
+    If set to `1`, no effect.
 
 # OUTPUT
 

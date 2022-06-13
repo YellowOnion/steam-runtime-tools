@@ -293,7 +293,7 @@ class TestLauncher(BaseTest):
                 stack.enter_context(ensure_terminated(launch))
                 launch.send_signal(signal.SIGINT)
                 self.assertIn(
-                    launch.wait(),
+                    launch.wait(timeout=10),
                     (128 + signal.SIGINT, -signal.SIGINT),
                 )
 
@@ -314,7 +314,7 @@ class TestLauncher(BaseTest):
                 if need_terminate:
                     proc.terminate()
 
-                proc.wait()
+                proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
             completed = run_subprocess(
@@ -515,7 +515,7 @@ class TestLauncher(BaseTest):
                 if need_terminate:
                     proc.terminate()
 
-                proc.wait()
+                proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
     def test_wrap(self) -> None:
@@ -537,7 +537,7 @@ class TestLauncher(BaseTest):
 
             # The process exits as soon as printf does, which is
             # almost immediately
-            output, errors = proc.communicate()
+            output, errors = proc.communicate(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
             # With a wrapped command but no --info-fd, there is no
@@ -594,7 +594,10 @@ class TestLauncher(BaseTest):
             self.assertEqual(left.st_ino, right.st_ino)
 
             # The process exits as soon as cat does
-            _, errors = proc.communicate(input='this goes to stderr')
+            _, errors = proc.communicate(
+                input='this goes to stderr',
+                timeout=10,
+            )
             self.assertEqual(proc.returncode, 0)
             # The wrapped process's stdout has ended up in stderr
             self.assertIn('this goes to stderr', errors)
@@ -678,7 +681,7 @@ class TestLauncher(BaseTest):
                 if need_terminate:
                     proc.terminate()
 
-                proc.wait()
+                proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
             # It really stopped
@@ -769,7 +772,7 @@ class TestLauncher(BaseTest):
             self.assertEqual(completed.stdout, b'hello')
 
             proc.terminate()
-            proc.wait()
+            proc.wait(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
     def test_exit_on_readable(self, use_stdin=False) -> None:
@@ -808,7 +811,7 @@ class TestLauncher(BaseTest):
                 os.close(write_end)
 
             # this closes stdin
-            proc.communicate(input='')
+            proc.communicate(input='', timeout=10)
             self.assertEqual(proc.returncode, 0)
 
     def test_exit_on_stdin(self) -> None:

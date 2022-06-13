@@ -658,6 +658,8 @@ class TestLauncher(BaseTest):
                     'org.freedesktop.DBus.Peer.Ping',
                 ],
                 check=True,
+                stdout=2,
+                stderr=2,
             )
         except Exception:
             self.skipTest('D-Bus session bus not available')

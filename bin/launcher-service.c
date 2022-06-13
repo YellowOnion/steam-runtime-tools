@@ -75,6 +75,7 @@ typedef enum
 typedef enum
 {
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS = (1 << 0),
+  PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT = (1 << 1),
   PV_LAUNCHER_SERVER_FLAGS_NONE = 0,
 } PvLauncherServerFlags;
 
@@ -777,7 +778,10 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
       pid_data->connection = NULL;
       pid_data->pid = pid;
       pid_data->client = NULL;
-      pid_data->terminate_after = TRUE;
+
+      if (self->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT)
+        pid_data->terminate_after = TRUE;
+
       pid_data->child_watch = g_child_watch_add_full (G_PRIORITY_DEFAULT,
                                                       pid,
                                                       child_watch_died,
@@ -1137,6 +1141,7 @@ static gint opt_info_fd = -1;
 static gboolean opt_replace = FALSE;
 static gchar *opt_socket = NULL;
 static gchar *opt_socket_directory = NULL;
+static gboolean opt_stop_on_exit = TRUE;
 static gboolean opt_stop_on_name_loss = TRUE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
@@ -1166,6 +1171,14 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
     "Listen on this AF_UNIX socket.",
     "ABSPATH|@ABSTRACT" },
+  { "stop-on-exit", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_stop_on_exit,
+    "Stop when the wrapped command exits [default].",
+    NULL, },
+  { "no-stop-on-exit", '\0',
+    G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &opt_stop_on_exit,
+    "Continue to run after the wrapped command exits.",
+    NULL, },
   { "stop-on-name-loss", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_stop_on_name_loss,
     "Stop when the --bus-name is lost [default].",
@@ -1217,6 +1230,7 @@ main (int argc,
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);
+  opt_stop_on_exit = _srt_boolean_environment ("SRT_LAUNCH_SERVER_STOP_ON_EXIT", TRUE);
   opt_stop_on_name_loss = _srt_boolean_environment ("SRT_LAUNCH_SERVER_STOP_ON_NAME_LOSS", TRUE);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
@@ -1250,6 +1264,9 @@ main (int argc,
 
   if (opt_verbose)
     _srt_util_set_glib_log_handler (opt_verbose);
+
+  if (opt_stop_on_exit)
+    server->flags |= PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT;
 
   if (opt_stop_on_name_loss)
     server->flags |= PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS;

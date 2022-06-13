@@ -78,8 +78,26 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 **--replace**
 :   When used with **--bus-name**, take over the bus name from
     another **steam-runtime-launcher-service** process if any.
-    The other **steam-runtime-launcher-service** will exit.
+    The other **steam-runtime-launcher-service** will either exit
+    or continue to run, depending on whether the **--[no-]stop-on-name-loss**
+    options were used.
     This option is ignored if **--bus-name** is not used.
+
+**--[no-]stop-on-exit**
+:   With **--stop-on-exit** and a *COMMAND*, the server will terminate
+    other launched processes and prepare to exit when the *COMMAND* exits.
+    If other launched processes continue to run after receiving the
+    **SIGTERM** signal, the server will still wait for them to exit
+    before terminating.
+    This is the default.
+
+    With **--no-stop-on-name-loss** and a *COMMAND*, do not do this:
+    the server will still be contactable via D-Bus using its unique bus name
+    until it is terminated, for example with **SIGTERM** or
+    **steam-runtime-launch-client --bus-name=:1.xx --terminate**.
+    Note that if the wrapped *COMMAND* is a Steam game, then Steam will
+    still consider the game to be running until the
+    **steam-runtime-launcher-service** is terminated.
 
 **--[no-]stop-on-name-loss**
 :   With **--bus-name** and **--stop-on-name-loss**, the server will
@@ -129,6 +147,11 @@ manipulate environment variables on a per-command basis.
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
 :   If set to `1`, prepend the log entries with a timestamp.
     If set to `0`, no effect.
+
+`SRT_LAUNCH_SERVER_STOP_ON_EXIT` (boolean)
+:   If set to `0`, the default behaviour changes to be equivalent to
+    **--no-stop-on-exit**, unless overridden by **--stop-on-exit**.
+    If set to `1`, no effect.
 
 `SRT_LAUNCH_SERVER_STOP_ON_NAME_LOSS` (boolean)
 :   If set to `0`, the default behaviour changes to be equivalent to

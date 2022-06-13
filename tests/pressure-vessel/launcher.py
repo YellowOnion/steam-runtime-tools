@@ -69,6 +69,7 @@ class TestLauncher(BaseTest):
 
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             self.launcher = self.command_prefix + [
+                'env', '-u', 'SRT_LAUNCH_SERVER_STOP_ON_EXIT',
                 os.path.join(
                     self.top_builddir,
                     'bin',
@@ -548,16 +549,29 @@ class TestLauncher(BaseTest):
                 proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
-    def test_wrap(self) -> None:
+    def test_wrap_stop_on_exit(self) -> None:
+        self.test_wrap(stop_on_exit=True)
+
+    def test_wrap(self, stop_on_exit=False) -> None:
         with contextlib.ExitStack() as stack:
-            stack.enter_context(self.show_location('test_wrap'))
+            stack.enter_context(
+                self.show_location('test_wrap(stop_on_exit=%r)' % stop_on_exit)
+            )
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
+            socket = os.path.join(temp, 'socket')
+
+            if stop_on_exit:
+                stop_on_exit_arg = '--stop-on-exit'
+            else:
+                stop_on_exit_arg = '--no-stop-on-exit'
+
             logger.debug('Running launcher wrapping short-lived command')
             proc = subprocess.Popen(
                 self.launcher + [
-                    '--socket', os.path.join(temp, 'socket'),
+                    '--socket', socket,
+                    stop_on_exit_arg,
                     '--',
                     'printf', 'wrapped printf',
                 ],
@@ -567,14 +581,45 @@ class TestLauncher(BaseTest):
             )
             stack.enter_context(ensure_terminated(proc))
 
-            # The process exits as soon as printf does, which is
+            stdout = proc.stdout
+            assert stdout is not None
+            # Wait for the wrapped process to have started, which only happens
+            # when the launcher is also open for business
+            output = stdout.read()
+
+            if not stop_on_exit:
+                # Check that the server did not stop
+                logger.debug('Launcher should still be alive')
+                run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                logger.debug('Launcher should exit after this')
+                run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--terminate',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+            # else the process exits as soon as printf does, which is
             # almost immediately
-            output, errors = proc.communicate(timeout=10)
+
+            more_output, errors = proc.communicate(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
             # With a wrapped command but no --info-fd, there is no
             # extraneous output on stdout
             self.assertEqual('wrapped printf', output)
+            self.assertEqual('', more_output)
 
     def test_wrap_info_fd(self) -> None:
         with contextlib.ExitStack() as stack:

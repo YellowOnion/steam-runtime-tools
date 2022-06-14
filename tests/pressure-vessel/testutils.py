@@ -61,18 +61,20 @@ def run_subprocess(
     """
 
     popen = subprocess.Popen(args, **kwargs)    # type: ignore
-    out, err = popen.communicate(input=input, timeout=timeout)
-    completed = MyCompletedProcess(
-        args=args,
-        returncode=popen.returncode,
-        stdout=out,
-        stderr=err,
-    )
 
-    if check:
-        completed.check_returncode()
+    with popen:
+        out, err = popen.communicate(input=input, timeout=timeout)
+        completed = MyCompletedProcess(
+            args=args,
+            returncode=popen.returncode,
+            stdout=out,
+            stderr=err,
+        )
 
-    return completed
+        if check:
+            completed.check_returncode()
+
+        return completed
 
 
 class BaseTest(unittest.TestCase):

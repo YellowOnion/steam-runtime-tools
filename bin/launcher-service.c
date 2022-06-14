@@ -724,10 +724,8 @@ name_owner_changed (GDBusConnection *connection,
 
 static gboolean
 pv_launcher_server_finish_startup (PvLauncherServer *self,
-                                   const char *bus_name,
                                    GError **error)
 {
-
   if (self->wrapped_command != NULL)
     {
       ChildSetupData child_setup_data = { NULL };
@@ -797,7 +795,7 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
     self->export_state = EXPORT_STATE_LISTENING;
 
   self->exit_status = 0;
-  _srt_portal_listener_close_info_fh (self->listener, bus_name);
+  _srt_portal_listener_close_info_fh (self->listener, TRUE);
   return TRUE;
 }
 
@@ -873,28 +871,21 @@ on_bus_acquired (SrtPortalListener *listener,
     }
 }
 
-static void
-on_name_acquired (SrtPortalListener *listener,
-                  GDBusConnection *connection,
-                  const gchar *name,
-                  gpointer user_data)
+static gboolean
+portal_listener_ready_cb (SrtPortalListener *listener,
+                          gpointer user_data)
 {
   PvLauncherServer *server = user_data;
 
-  g_debug ("Name acquired");
+  g_return_val_if_fail (PV_IS_LAUNCHER_SERVER (server),
+                        G_DBUS_METHOD_INVOCATION_UNHANDLED);
 
   /* If exporting the launcher didn't fail, then we are now happy */
   if (server->exit_status == EX_UNAVAILABLE)
     {
       g_autoptr(GError) error = NULL;
-      const char *advertised_name;
 
-      if (server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS)
-        advertised_name = name;
-      else
-        advertised_name = g_dbus_connection_get_unique_name (connection);
-
-      if (!pv_launcher_server_finish_startup (server, advertised_name, &error))
+      if (!pv_launcher_server_finish_startup (server, &error))
         {
           _srt_log_failure ("%s", error->message);
           /* We probably don't have any child processes yet, but if we
@@ -902,6 +893,8 @@ on_name_acquired (SrtPortalListener *listener,
           pv_launcher_server_stop (server, SIGTERM);
         }
     }
+
+  return G_DBUS_METHOD_INVOCATION_HANDLED;
 }
 
 static void
@@ -913,7 +906,8 @@ on_name_lost (SrtPortalListener *listener,
   PvLauncherServer *server = user_data;
 
   g_return_if_fail (PV_IS_LAUNCHER_SERVER (server));
-  g_debug ("Name lost, will stop: %c",
+  g_debug ("Name \"%s\" lost, will stop: %c",
+           name,
            server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS ? 'y' : 'n');
   /* We don't terminate child processes in this case, which means we
    * won't *actually* stop until they have all exited. */
@@ -1135,7 +1129,7 @@ pv_launcher_server_set_up_exit_on_readable (PvLauncherServer *server,
   return TRUE;
 }
 
-static gchar *opt_bus_name = NULL;
+static gchar **opt_bus_names = NULL;
 static gint opt_exit_on_readable_fd = -1;
 static gint opt_info_fd = -1;
 static gboolean opt_replace = FALSE;
@@ -1149,8 +1143,8 @@ static gboolean opt_version = FALSE;
 static GOptionEntry options[] =
 {
   { "bus-name", '\0',
-    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_bus_name,
-    "Use this well-known name on the D-Bus session bus.",
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_bus_names,
+    "Use this well-known name on the D-Bus session bus. [may repeat]",
     "NAME" },
   { "exit-on-readable", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_exit_on_readable_fd,
@@ -1270,6 +1264,8 @@ main (int argc,
 
   if (opt_stop_on_name_loss)
     server->flags |= PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS;
+  else
+    server->listener->flags |= SRT_PORTAL_LISTENER_FLAGS_PREFER_UNIQUE_NAME;
 
   if ((result = _srt_set_compatible_resource_limits (0)) < 0)
     g_warning ("Unable to set normal resource limits: %s",
@@ -1343,7 +1339,7 @@ main (int argc,
                                                         (GDestroyNotify) pid_data_free);
 
   if (!_srt_portal_listener_check_socket_arguments (server->listener,
-                                                    opt_bus_name,
+                                                    (const char * const *) opt_bus_names,
                                                     opt_socket,
                                                     opt_socket_directory,
                                                     error))
@@ -1359,10 +1355,10 @@ main (int argc,
                            "session-bus-connected", G_CALLBACK (on_bus_acquired),
                            server, CONNECT_FLAGS_NONE);
   g_signal_connect_object (server->listener,
-                           "session-bus-name-acquired", G_CALLBACK (on_name_acquired),
+                           "session-bus-name-lost", G_CALLBACK (on_name_lost),
                            server, CONNECT_FLAGS_NONE);
   g_signal_connect_object (server->listener,
-                           "session-bus-name-lost", G_CALLBACK (on_name_lost),
+                           "ready", G_CALLBACK (portal_listener_ready_cb),
                            server, CONNECT_FLAGS_NONE);
 
   flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
@@ -1370,24 +1366,20 @@ main (int argc,
   if (opt_replace)
     flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
 
+  /* Exit with this status until we know otherwise */
+  server->exit_status = EX_UNAVAILABLE;
+
+  /* This emits SrtPortalListener::ready if we were not asked to listen
+   * on any bus names but are now successfully listening on a socket.
+   * If that has happened, then pv_launcher_server_finish_startup()
+   * will already have been called before this returns. */
   if (!_srt_portal_listener_listen (server->listener,
-                                    opt_bus_name,
+                                    (const char * const *) opt_bus_names,
                                     flags,
                                     opt_socket,
                                     opt_socket_directory,
                                     error))
     goto out;
-
-  server->exit_status = EX_UNAVAILABLE;
-
-  /* If we're using the bus name method, we can't exit successfully
-   * until we claimed the bus name at least once: see on_name_acquired().
-   * Otherwise we're already content. */
-  if (opt_bus_name == NULL)
-    {
-      if (!pv_launcher_server_finish_startup (server, NULL, error))
-        goto out;
-    }
 
   g_debug ("Entering main loop");
 
@@ -1398,7 +1390,7 @@ out:
   if (local_error != NULL)
     _srt_log_failure ("%s", local_error->message);
 
-  g_free (opt_bus_name);
+  g_strfreev (opt_bus_names);
   g_free (opt_socket);
   g_free (opt_socket_directory);
 

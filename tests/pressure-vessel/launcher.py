@@ -916,6 +916,8 @@ class TestLauncher(BaseTest):
             self.needs_dbus()
             unique = '_' + uuid.uuid4().hex
             well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+            only_first_well_known_name = well_known_name + '.First'
+            only_second_well_known_name = well_known_name + '.Second'
 
             try:
                 from gi.repository import GLib, Gio
@@ -931,6 +933,7 @@ class TestLauncher(BaseTest):
             first_server = subprocess.Popen(
                 self.launcher + [
                     '--bus-name', well_known_name,
+                    '--bus-name', only_first_well_known_name,
                     '--exit-on-readable=0',
                     stop_on_name_loss_arg,
                 ],
@@ -989,10 +992,23 @@ class TestLauncher(BaseTest):
             )
             stack.enter_context(ensure_terminated(cat))
 
+            logger.debug('Secondary bus name should also work')
+            run_subprocess(
+                self.launch + [
+                    '--bus-name', only_first_well_known_name,
+                    '--',
+                    'true',
+                ],
+                check=True,
+                stdout=2,
+                stderr=2,
+            )
+
             logger.debug('Starting second server to --replace the first')
             second_server = subprocess.Popen(
                 self.launcher + [
                     '--bus-name', well_known_name,
+                    '--bus-name', only_second_well_known_name,
                     '--exit-on-readable=0',
                     '--replace',
                 ],
@@ -1014,6 +1030,36 @@ class TestLauncher(BaseTest):
             second_server.send_signal(0)
             cat.send_signal(0)
 
+            logger.debug('Secondary bus name should also work')
+            run_subprocess(
+                self.launch + [
+                    '--bus-name', only_second_well_known_name,
+                    '--',
+                    'true',
+                ],
+                check=True,
+                stdout=2,
+                stderr=2,
+            )
+
+            if not stop_on_name_loss:
+                logger.debug(
+                    'First server secondary bus name should also work',
+                )
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', only_first_well_known_name,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                # else: because the cat(1) subprocess is still running, the
+                # first server is still running, but it has released its
+                # well-known names so we can no longer talk to it that way
+
             # We can still communicate with a subprocess of the
             # first, even after it has lost its name
             logger.debug('Checking cat(1) is still responding')
@@ -1030,6 +1076,16 @@ class TestLauncher(BaseTest):
                 run_subprocess(
                     self.launch + [
                         '--bus-name', first_unique_name,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', only_first_well_known_name,
                         '--',
                         'true',
                     ],

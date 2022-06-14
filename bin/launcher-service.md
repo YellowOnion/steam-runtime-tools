@@ -20,7 +20,7 @@ steam-runtime-launcher-service - server to launch processes in a container
 [**--replace**]
 [**--[no-]stop-on-name-loss**]
 [**--verbose**]
-{**--bus-name** *NAME*|**--socket** *SOCKET*|**--socket-directory** *PATH*}
+{**--bus-name** *NAME*...|**--socket** *SOCKET*|**--socket-directory** *PATH*}
 [**--** *COMMAND* *ARGUMENTS*]
 
 # DESCRIPTION
@@ -62,6 +62,11 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 **--bus-name** *NAME*
 :   Connect to the well-known D-Bus session bus, request the given name
     and listen for commands there.
+    This option may be used more than once.
+    If it is, each of the names will be requested in the order given.
+    If at least one name cannot be acquired or is subsequently lost,
+    **steam-runtime-launcher-service** will behave according to the
+    **--[no-]stop-on-exit** options.
 
 **--exit-on-readable** *FD*
 :   Exit when file descriptor *FD* (typically 0, for **stdin**) becomes
@@ -101,7 +106,7 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 
 **--[no-]stop-on-name-loss**
 :   With **--bus-name** and **--stop-on-name-loss**, the server will
-    prepare to exit when the well-known bus name *NAME* used with
+    prepare to exit when any of the well-known bus names *NAME* used with
     **--bus-name** is lost, most likely because another server was
     run with **--replace** and took over ownership.
     If other launched processes are active, it will wait for them to exit
@@ -110,6 +115,7 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 
     With **--bus-name** and **--no-stop-on-name-loss**, do not do this:
     the server will still be contactable via D-Bus using its unique bus name.
+
     These parameters have no effect if **--bus-name** is not used.
 
 **--verbose**

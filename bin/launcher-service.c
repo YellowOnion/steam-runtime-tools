@@ -1130,6 +1130,7 @@ pv_launcher_server_set_up_exit_on_readable (PvLauncherServer *server,
 }
 
 static gchar **opt_bus_names = NULL;
+static gboolean opt_exec_fallback = FALSE;
 static gint opt_exit_on_readable_fd = -1;
 static gint opt_info_fd = -1;
 static gboolean opt_replace = FALSE;
@@ -1162,6 +1163,10 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &opt_bus_names,
     "Use this well-known name on the D-Bus session bus. [may repeat]",
     "NAME" },
+  { "exec-fallback", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_exec_fallback,
+    "If unable to set up the IPC service, run the wrapped command instead.",
+    NULL },
   { "exit-on-readable", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_exit_on_readable_fd,
     "Exit when data is available for reading or when end-of-file is "
@@ -1228,6 +1233,10 @@ main (int argc,
   GBusNameOwnerFlags flags;
   int result;
   PvLauncherServer *server = g_object_new (PV_TYPE_LAUNCHER_SERVER, NULL);
+  GPid main_pid;
+  char **wrapped_command = NULL;
+  FILE *info_fh = NULL;
+  FILE *original_stdout = NULL;
 
   server->exit_status = EX_USAGE;
   server->listener = _srt_portal_listener_new ();
@@ -1265,7 +1274,7 @@ main (int argc,
     }
 
   if (argc > 1)
-    server->wrapped_command = &argv[1];
+    wrapped_command = server->wrapped_command = &argv[1];
 
   if (opt_version)
     {
@@ -1291,6 +1300,13 @@ main (int argc,
   if ((result = _srt_set_compatible_resource_limits (0)) < 0)
     g_warning ("Unable to set normal resource limits: %s",
                g_strerror (-result));
+
+  if (opt_exec_fallback && wrapped_command == NULL)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   "Cannot use --exec-fallback without a COMMAND");
+      goto out;
+    }
 
   /* We want to leave stdin open for the child process, and anyway
    * it's meant to be read-only */
@@ -1460,8 +1476,62 @@ out:
 
   pv_launcher_server_cancel_event_sources (server);
   result = server->exit_status;
+  main_pid = server->main_pid;
+
+  if (opt_exec_fallback && main_pid == 0 && wrapped_command != NULL)
+    {
+      info_fh = g_steal_pointer (&server->listener->info_fh);
+      original_stdout = g_steal_pointer (&server->listener->original_stdout);
+    }
+
   g_clear_object (&server);
   g_clear_error (&local_error);
+
+  /* If we never actually started the wrapped command, optionally do so now. */
+  if (opt_exec_fallback && main_pid == 0 && wrapped_command != NULL)
+    {
+      FdMapEntry fd_map =
+      {
+        .from = -1,
+        .to = STDOUT_FILENO,
+        .final = STDOUT_FILENO,
+      };
+      ChildSetupData data =
+      {
+        .fd_map = NULL,
+        .fd_map_len = 0,
+        .keep_tty_session = TRUE,
+      };
+      int saved_errno;
+
+      g_warning ("Failed to start IPC server, running wrapped command instead");
+
+      /* Make sure we don't leak the info file descriptor down into the
+       * child process, but instead just close it */
+      if (info_fh != original_stdout && info_fh != NULL)
+        _srt_fd_set_close_on_exec (fileno (info_fh), TRUE, NULL);
+
+      /* Restore the original stdout */
+      if (original_stdout != NULL)
+        fd_map.from = fileno (original_stdout);
+
+      if (fd_map.from >= 0)
+        {
+          data.fd_map = &fd_map;
+          data.fd_map_len = 1;
+        }
+
+      /* Replace current process with the wrapped command */
+      child_setup_func (&data);
+      execvp (wrapped_command[0], wrapped_command);
+      saved_errno = errno;
+      _srt_log_failure ("execvp: %s", g_strerror (saved_errno));
+
+      if (saved_errno == ENOENT)
+        return LAUNCH_EX_NOT_FOUND;
+
+      return LAUNCH_EX_CANNOT_INVOKE;
+    }
 
   g_debug ("Exiting with status %d", result);
   return result;

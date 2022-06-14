@@ -1657,3 +1657,26 @@ _srt_get_steam_app_id (void)
 
   return NULL;
 }
+
+gboolean
+_srt_fd_set_close_on_exec (int fd,
+                           gboolean close_on_exec,
+                           GError **error)
+{
+  int old_flags = fcntl (fd, F_GETFD);
+  int new_flags;
+
+  if (old_flags < 0)
+    return glnx_throw_errno_prefix (error, "Cannot get file descriptor %d flags", fd);
+
+  if (close_on_exec)
+    new_flags = old_flags | FD_CLOEXEC;
+  else
+    new_flags = old_flags & ~FD_CLOEXEC;
+
+  if (old_flags != new_flags
+      && fcntl (fd, F_SETFD, new_flags) < 0)
+    return glnx_throw_errno_prefix (error, "Cannot set file descriptor %d flags", fd);
+
+  return TRUE;
+}

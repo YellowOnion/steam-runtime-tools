@@ -727,6 +727,71 @@ class TestLauncher(BaseTest):
             self.assertEqual(shell_pid, get_mainpid.stdout)
             self.assertEqual(output, '')
 
+    def test_wrap_exec_fallback(self) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_exec_fallback'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+            socket = os.path.join(temp, 'nope', 'socket')
+
+            logger.debug('Running a server that will fail fast')
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--socket', socket,
+                    '--',
+                    'printf', 'this never happens',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            output, errors = proc.communicate(timeout=10)
+            self.assertEqual(output, '')
+
+            logger.debug('Running a server that will fail but continue')
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--info-fd=0',
+                    '--socket', socket,
+                    '--exec-fallback',
+                    '--',
+                    'printf', 'ran this anyway',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            output, errors = proc.communicate(timeout=10)
+            self.assertEqual(output, 'ran this anyway')
+
+            logger.debug('Different info fd')
+            read_end, write_end = os.pipe2(os.O_CLOEXEC)
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--info-fd=%d' % write_end,
+                    '--socket', socket,
+                    '--exec-fallback',
+                    '--',
+                    'printf', 'ran this anyway',
+                ],
+                pass_fds=[write_end],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            os.close(write_end)
+
+            with open(read_end, 'r') as reader:
+                output = reader.read()
+                self.assertEqual(output, '')
+
+            output, errors = proc.communicate(timeout=10)
+            self.assertEqual(output, 'ran this anyway')
+
     def test_wrap_wait(self) -> None:
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.show_location('test_wrap_wait'))

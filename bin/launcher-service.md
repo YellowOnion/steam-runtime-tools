@@ -15,6 +15,7 @@ steam-runtime-launcher-service - server to launch processes in a container
 # SYNOPSIS
 
 **steam-runtime-launcher-service**
+[**--exec-fallback**]
 [**--exit-on-readable**] *FD*
 [**--info-fd**] *N*
 [**--replace**]
@@ -67,6 +68,15 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     If at least one name cannot be acquired or is subsequently lost,
     **steam-runtime-launcher-service** will behave according to the
     **--[no-]stop-on-exit** options.
+
+**--exec-fallback**
+:   If unable to set up the **--socket**, **--socket-directory**,
+    **--bus-name** or **--session**, fall back to executing the
+    *COMMAND* directly (replacing the **steam-runtime-launcher-service**
+    process, similar to **env**(1)).
+    This option is only allowed if a *COMMAND* is specified.
+    It is useful if running the *COMMAND* is more important than the ability
+    to insert additional commands into its execution environment.
 
 **--exit-on-readable** *FD*
 :   Exit when file descriptor *FD* (typically 0, for **stdin**) becomes

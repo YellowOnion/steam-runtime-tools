@@ -75,10 +75,10 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     If a *COMMAND* is specified, there is no default.
 
 **--replace**
-:   When used with **--bus-name**, allow other
-    **steam-runtime-launcher-service** processes to take over the bus name,
-    and exit with status 0 if that happens. This option is ignored
-    if **--bus-name** is not used.
+:   When used with **--bus-name**, take over the bus name from
+    another **steam-runtime-launcher-service** process if any.
+    The other **steam-runtime-launcher-service** will exit.
+    This option is ignored if **--bus-name** is not used.
 
 **--verbose**
 :   Be more verbose.

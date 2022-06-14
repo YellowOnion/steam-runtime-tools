@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+import contextlib
 import logging
 import os
 import shutil
@@ -33,6 +34,31 @@ LAUNCHER_IFACE = "com.steampowered.PressureVessel.Launcher1"
 LAUNCHER_PATH = "/com/steampowered/PressureVessel/Launcher1"
 
 
+@contextlib.contextmanager
+def ensure_terminated(proc):
+    try:
+        yield proc
+    finally:
+        logger.debug('Cleaning up subprocess if necessary')
+
+        with proc:
+            for fh in proc.stdin, proc.stdout, proc.stderr:
+                if fh is not None:
+                    fh.close()
+
+            if proc.returncode is None:
+                logger.debug('Subprocess still running')
+                proc.terminate()
+
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.debug('Waiting for subprocess timed out')
+                    proc.kill()
+            else:
+                logger.debug('Subprocess already exited %d', proc.returncode)
+
+
 class TestLauncher(BaseTest):
     def setUp(self) -> None:
         super().setUp()
@@ -55,14 +81,25 @@ class TestLauncher(BaseTest):
         else:
             self.skipTest('Not available as an installed-test')
 
+    @contextlib.contextmanager
+    def show_location(self, location):
+        logger.debug('enter: %s', location)
+        yield
+        logger.debug('exit: %s', location)
+
     def test_socket_directory(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_socket_directory'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             need_terminate = True
             printf_symlink = os.path.join(temp, 'printf=symlink')
             printf = shutil.which('printf')
             assert printf is not None
             os.symlink(printf, printf_symlink)
 
+            logger.debug('Starting launcher with socket directory')
             proc = subprocess.Popen(
                 [
                     'env',
@@ -74,6 +111,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             try:
                 socket = ''
@@ -100,6 +138,7 @@ class TestLauncher(BaseTest):
                 self.assertEqual(left.st_dev, right.st_dev)
                 self.assertEqual(left.st_ino, right.st_ino)
 
+                logger.debug('launch-client -- true should succeed')
                 completed = run_subprocess(
                     self.launch + [
                         '--socket', socket,
@@ -112,6 +151,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'')
 
+                logger.debug('launch-client -- printf hello should succeed')
                 completed = run_subprocess(
                     self.launch + [
                         '--socket', socket,
@@ -124,6 +164,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'hello')
 
+                logger.debug('launch-client -- sh -euc ... should succeed')
                 completed = run_subprocess(
                     self.launch + [
                         '--dbus-address', dbus_address,
@@ -137,6 +178,7 @@ class TestLauncher(BaseTest):
                 self.assertEqual(completed.stdout, b'hello')
                 self.assertIn(b'WORLD', completed.stderr)
 
+                logger.debug('Checking env not inherited from launch-client')
                 completed = run_subprocess(
                     [
                         'env',
@@ -152,6 +194,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'from-launcher')
 
+                logger.debug('Checking env propagation options')
                 completed = run_subprocess(
                     [
                         'env',
@@ -177,6 +220,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'clearedonetwo')
 
+                logger.debug('Checking precedence of environment options')
                 completed = run_subprocess(
                     [
                         'env', '-u', 'PV_TEST_VAR',
@@ -193,6 +237,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'cleared')
 
+                logger.debug('Checking precedence of environment options (2)')
                 completed = run_subprocess(
                     self.launch + [
                         '--env=PV_TEST_VAR=nope',
@@ -207,6 +252,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'cleared')
 
+                logger.debug('Checking inadvisable executable name')
                 completed = run_subprocess(
                     self.launch + [
                         '--unset-env=PV_TEST_VAR',
@@ -220,6 +266,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'hello')
 
+                logger.debug('Checking --clear-env')
                 completed = run_subprocess(
                     self.launch + [
                         '--clear-env',
@@ -233,6 +280,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'cleared')
 
+                logger.debug('Checking --env precedence')
                 completed = run_subprocess(
                     [
                         'env',
@@ -251,6 +299,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'overridden')
 
+                logger.debug('Checking we can deliver a signal')
                 launch = subprocess.Popen(
                     self.launch + [
                         '--socket', socket,
@@ -260,12 +309,14 @@ class TestLauncher(BaseTest):
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
+                stack.enter_context(ensure_terminated(launch))
                 launch.send_signal(signal.SIGINT)
                 self.assertIn(
-                    launch.wait(),
+                    launch.wait(timeout=10),
                     (128 + signal.SIGINT, -signal.SIGINT),
                 )
 
+                logger.debug('Checking we can terminate the server')
                 completed = run_subprocess(
                     self.launch + [
                         '--socket', socket,
@@ -283,9 +334,10 @@ class TestLauncher(BaseTest):
                 if need_terminate:
                     proc.terminate()
 
-                proc.wait()
+                proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
+            logger.debug('Checking server really terminated (expect error)')
             completed = run_subprocess(
                 self.launch + [
                     '--dbus-address', dbus_address,
@@ -298,8 +350,13 @@ class TestLauncher(BaseTest):
             self.assertEqual(completed.returncode, 125)
 
     def test_socket(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_socket'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             need_terminate = True
+            logger.debug('Starting launcher with socket')
             proc = subprocess.Popen(
                 self.launcher + [
                     '--socket', os.path.join(temp, 'socket'),
@@ -308,6 +365,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             try:
                 socket = ''
@@ -337,6 +395,7 @@ class TestLauncher(BaseTest):
                 self.assertEqual(left.st_dev, right.st_dev)
                 self.assertEqual(left.st_ino, right.st_ino)
 
+                logger.debug('launch-client should succeed')
                 completed = run_subprocess(
                     self.launch + [
                         '--socket', socket,
@@ -349,6 +408,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'hello')
 
+                logger.debug('stdout, stderr should work')
                 completed = run_subprocess(
                     self.launch + [
                         '--dbus-address', dbus_address,
@@ -362,6 +422,7 @@ class TestLauncher(BaseTest):
                 self.assertEqual(completed.stdout, b'hello')
                 self.assertIn(b'WORLD', completed.stderr)
 
+                logger.debug('direct D-Bus connection should work')
                 with self.subTest('direct D-Bus connection'):
                     try:
                         from gi.repository import GLib, Gio
@@ -480,11 +541,16 @@ class TestLauncher(BaseTest):
                 if need_terminate:
                     proc.terminate()
 
-                proc.wait()
+                proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
     def test_wrap(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+            logger.debug('Running launcher wrapping short-lived command')
             proc = subprocess.Popen(
                 self.launcher + [
                     '--socket', os.path.join(temp, 'socket'),
@@ -495,10 +561,11 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             # The process exits as soon as printf does, which is
             # almost immediately
-            output, errors = proc.communicate()
+            output, errors = proc.communicate(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
             # With a wrapped command but no --info-fd, there is no
@@ -506,7 +573,12 @@ class TestLauncher(BaseTest):
             self.assertEqual('wrapped printf', output)
 
     def test_wrap_info_fd(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_info_fd'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+            logger.debug('Starting launcher with --info-fd')
             proc = subprocess.Popen(
                 [
                     # subprocess.Popen doesn't let us set arbitrary
@@ -523,6 +595,7 @@ class TestLauncher(BaseTest):
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             socket = ''
             dbus_address = ''
@@ -551,14 +624,22 @@ class TestLauncher(BaseTest):
             self.assertEqual(left.st_ino, right.st_ino)
 
             # The process exits as soon as cat does
-            _, errors = proc.communicate(input='this goes to stderr')
+            _, errors = proc.communicate(
+                input='this goes to stderr',
+                timeout=10,
+            )
             self.assertEqual(proc.returncode, 0)
             # The wrapped process's stdout has ended up in stderr
             self.assertIn('this goes to stderr', errors)
 
     def test_wrap_wait(self) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_wait'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
             need_terminate = True
+            logger.debug('Starting launcher to wait for a main command')
             proc = subprocess.Popen(
                 [
                     'sh', '-euc', 'exec "$@" 3>&1 >&2', 'sh',
@@ -572,6 +653,7 @@ class TestLauncher(BaseTest):
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
 
             try:
                 socket = ''
@@ -601,6 +683,7 @@ class TestLauncher(BaseTest):
                 self.assertEqual(left.st_ino, right.st_ino)
 
                 # We can run commands
+                logger.debug('Sending command')
                 completed = run_subprocess(
                     self.launch + [
                         '--socket', socket,
@@ -614,6 +697,7 @@ class TestLauncher(BaseTest):
                 self.assertEqual(completed.stdout, b'hello')
 
                 # We can terminate the `sleep` command
+                logger.debug('Terminating main command')
                 completed = run_subprocess(
                     self.launch + [
                         '--socket', socket,
@@ -631,10 +715,11 @@ class TestLauncher(BaseTest):
                 if need_terminate:
                     proc.terminate()
 
-                proc.wait()
+                proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
             # It really stopped
+            logger.debug('Checking it really stopped (expect an error)...')
             completed = run_subprocess(
                 self.launch + [
                     '--socket', socket,
@@ -646,7 +731,7 @@ class TestLauncher(BaseTest):
             )
             self.assertEqual(completed.returncode, 125)
 
-    def test_session_bus(self) -> None:
+    def needs_dbus(self) -> None:
         try:
             run_subprocess(
                 [
@@ -658,22 +743,29 @@ class TestLauncher(BaseTest):
                     'org.freedesktop.DBus.Peer.Ping',
                 ],
                 check=True,
+                stdout=2,
+                stderr=2,
             )
         except Exception:
             self.skipTest('D-Bus session bus not available')
 
-        unique = '_' + uuid.uuid4().hex
+    def test_session_bus(self) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_session_bus'))
+            self.needs_dbus()
+            unique = '_' + uuid.uuid4().hex
+            well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+            logger.debug('Starting launcher on D-Bus name %s', well_known_name)
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--bus-name', well_known_name,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
 
-        proc = subprocess.Popen(
-            self.launcher + [
-                '--bus-name', 'com.steampowered.PressureVessel.Test.' + unique,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=2,
-            universal_newlines=True,
-        )
-
-        try:
             bus_name = ''
 
             stdout = proc.stdout
@@ -690,6 +782,7 @@ class TestLauncher(BaseTest):
                 'com.steampowered.PressureVessel.Test.' + unique,
             )
 
+            logger.debug('Should be able to ping %s', bus_name)
             run_subprocess(
                 [
                     'dbus-send',
@@ -704,6 +797,7 @@ class TestLauncher(BaseTest):
                 stderr=2,
             )
 
+            logger.debug('Should be able to launch command via %s', bus_name)
             completed = run_subprocess(
                 self.launch + [
                     '--bus-name', bus_name,
@@ -716,13 +810,19 @@ class TestLauncher(BaseTest):
             )
             self.assertEqual(completed.stdout, b'hello')
 
-        finally:
             proc.terminate()
-            proc.wait()
+            proc.wait(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
     def test_exit_on_readable(self, use_stdin=False) -> None:
-        with tempfile.TemporaryDirectory(prefix='test-') as temp:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                self.show_location('test_exit_on_readable(%r)' % use_stdin)
+            )
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+
             if not use_stdin:
                 read_end, write_end = os.pipe2(os.O_CLOEXEC)
                 pass_fds = [read_end]
@@ -730,8 +830,13 @@ class TestLauncher(BaseTest):
             else:
                 pass_fds = []
                 fd = 0
-                read_end = 0
+                read_end = -1
+                write_end = -1
 
+            logger.debug(
+                'Starting service that will exit when fd %d becomes readable',
+                fd,
+            )
             proc = subprocess.Popen(
                 self.launcher + [
                     '--socket', os.path.join(temp, 'socket'),
@@ -743,16 +848,18 @@ class TestLauncher(BaseTest):
                 stderr=2,
                 universal_newlines=True,
             )
+            stack.enter_context(ensure_terminated(proc))
             stdin = proc.stdin
             assert stdin is not None
-            os.close(read_end)
 
-            if use_stdin:
-                stdin.close()
-            else:
+            if not use_stdin:
+                logger.debug('Closing pipe')
+                os.close(read_end)
                 os.close(write_end)
 
-            proc.wait()
+            # this closes stdin
+            logger.debug('Waiting for exit')
+            proc.communicate(input='', timeout=10)
             self.assertEqual(proc.returncode, 0)
 
     def test_exit_on_stdin(self) -> None:

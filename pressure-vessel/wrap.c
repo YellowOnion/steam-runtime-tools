@@ -1242,7 +1242,10 @@ main (int argc,
       argc--;
     }
 
-  steam_app_id = pv_wrap_get_steam_app_id (opt_steam_app_id);
+  if (opt_steam_app_id != NULL)
+    steam_app_id = opt_steam_app_id;
+  else
+    steam_app_id = _srt_get_steam_app_id ();
 
   home = g_get_home_dir ();
 

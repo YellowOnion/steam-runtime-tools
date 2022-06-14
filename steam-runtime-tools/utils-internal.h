@@ -173,3 +173,5 @@ void _srt_get_current_dirs (gchar **cwd_p,
                             gchar **cwd_l);
 
 gchar *_srt_get_random_uuid (GError **error);
+
+const char *_srt_get_steam_app_id (void);

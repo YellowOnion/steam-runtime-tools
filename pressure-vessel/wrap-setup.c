@@ -552,23 +552,6 @@ pv_wrap_use_host_os (FlatpakExports *exports,
   return TRUE;
 }
 
-const char *
-pv_wrap_get_steam_app_id (const char *from_command_line)
-{
-  const char *value;
-
-  if (from_command_line != NULL)
-    return from_command_line;
-
-  if ((value = g_getenv ("STEAM_COMPAT_APP_ID")) != NULL)
-    return value;
-
-  if ((value = g_getenv ("SteamAppId")) != NULL)
-    return value;
-
-  return NULL;
-}
-
 /*
  * Try to move the current process into a scope defined by the given
  * Steam app ID. If that's not possible, ignore.

@@ -1636,3 +1636,24 @@ _srt_get_random_uuid (GError **error)
 
   return g_steal_pointer (&contents);
 }
+
+/**
+ * _srt_get_steam_app_id:
+ *
+ * Attempt to determine the Steam app-ID of the current process.
+ *
+ * Returns: either @cli_override or a global environment variable
+ */
+const char *
+_srt_get_steam_app_id (void)
+{
+  const char *value;
+
+  if ((value = g_getenv ("STEAM_COMPAT_APP_ID")) != NULL)
+    return value;
+
+  if ((value = g_getenv ("SteamAppId")) != NULL)
+    return value;
+
+  return NULL;
+}

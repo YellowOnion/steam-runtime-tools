@@ -1140,6 +1140,22 @@ static gboolean opt_stop_on_name_loss = TRUE;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 
+static gboolean
+opt_session_cb (const gchar *option_name G_GNUC_UNUSED,
+                const gchar *value G_GNUC_UNUSED,
+                gpointer data G_GNUC_UNUSED,
+                GError **error G_GNUC_UNUSED)
+{
+  /* We use opt_bus_names != NULL as the signal that we will be connecting
+   * to the session bus, so we can allocate an empty array here.
+   * Allocate it with space for the automatically-chosen bus name,
+   * plus NULL, so that the g_realloc_n() later will be a no-op. */
+  if (opt_bus_names == NULL)
+    opt_bus_names = g_new0 (gchar *, 2);
+
+  return TRUE;
+}
+
 static GOptionEntry options[] =
 {
   { "bus-name", '\0',
@@ -1160,6 +1176,11 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_replace,
     "Replace a previous instance with the same bus name. "
     "Ignored if --bus-name is not used.",
+    NULL },
+  { "session", '\0',
+    G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_session_cb,
+    "Like --bus-name, but automatically select a unique or well-known "
+    "name on the D-Bus session bus.",
     NULL },
   { "socket", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_socket,
@@ -1337,6 +1358,39 @@ main (int argc,
 
   server->client_pid_data_hash = g_hash_table_new_full (NULL, NULL, NULL,
                                                         (GDestroyNotify) pid_data_free);
+
+  /* Choose a bus name automatically for --session */
+  if (opt_bus_names != NULL && opt_bus_names[0] == NULL)
+    {
+      const char *steam_appid = _srt_get_steam_app_id ();
+
+      opt_bus_names = g_realloc_n (opt_bus_names, 2, sizeof (gchar *));
+
+      if (steam_appid == NULL)
+        steam_appid = "0";
+
+      opt_bus_names[0] = g_strdup_printf ("com.steampowered.App%s", steam_appid);
+
+      /* Force it to be a valid bus name if necessary */
+      if (G_UNLIKELY (!g_dbus_is_name (opt_bus_names[0])))
+        {
+          char *p;
+
+          for (p = opt_bus_names[0] + strlen ("com.steampowered.App");
+               *p != '\0';
+               p++)
+            {
+              if (!g_ascii_isalnum (*p))
+                *p = '_';
+
+              if (p - opt_bus_names[0] > 255)
+                {
+                  *p = '\0';
+                  break;
+                }
+            }
+        }
+    }
 
   if (!_srt_portal_listener_check_socket_arguments (server->listener,
                                                     (const char * const *) opt_bus_names,

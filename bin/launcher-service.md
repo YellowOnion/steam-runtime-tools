@@ -20,7 +20,7 @@ steam-runtime-launcher-service - server to launch processes in a container
 [**--replace**]
 [**--[no-]stop-on-name-loss**]
 [**--verbose**]
-{**--bus-name** *NAME*...|**--socket** *SOCKET*|**--socket-directory** *PATH*}
+{**--session**|**--bus-name** *NAME*...|**--socket** *SOCKET*|**--socket-directory** *PATH*}
 [**--** *COMMAND* *ARGUMENTS*]
 
 # DESCRIPTION
@@ -87,6 +87,16 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     or continue to run, depending on whether the **--[no-]stop-on-name-loss**
     options were used.
     This option is ignored if **--bus-name** is not used.
+
+**--session**
+:   Equivalent to **--bus-name** *NAME*, but *NAME* is chosen automatically.
+    The current implementation is that if a Steam app ID (game ID) can
+    be discovered from the environment, then the *NAME* is
+    **com.steampowered.App** followed by the app ID.
+    Otherwise, **com.steampowered.App0** is used.
+
+    If both **--session** and **--bus-name** are used, then **--session**
+    has no effect.
 
 **--[no-]stop-on-exit**
 :   With **--stop-on-exit** and a *COMMAND*, the server will terminate
@@ -163,6 +173,13 @@ manipulate environment variables on a per-command basis.
 :   If set to `0`, the default behaviour changes to be equivalent to
     **--no-stop-on-name-loss**, unless overridden by **--stop-on-name-loss**.
     If set to `1`, no effect.
+
+`STEAM_COMPAT_APP_ID` (integer)
+:   Used by **--session** to identify the Steam app ID (game ID).
+
+`SteamAppId` (integer)
+:   Used by **--session** to identify the Steam app ID (game ID),
+    if `STEAM_COMPAT_APP_ID` is not also set.
 
 # OUTPUT
 

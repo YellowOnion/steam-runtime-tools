@@ -836,16 +836,33 @@ class TestLauncher(BaseTest):
         except Exception:
             self.skipTest('D-Bus session bus not available')
 
-    def test_session_bus(self) -> None:
+    def test_session_bus_invalid_name(self) -> None:
+        self.test_session_bus(invalid_name=True)
+
+    def test_session_bus(self, invalid_name=False) -> None:
         with contextlib.ExitStack() as stack:
-            stack.enter_context(self.show_location('test_session_bus'))
+            stack.enter_context(
+                self.show_location(
+                    'test_session_bus(invalid_name=%r)' % invalid_name
+                )
+            )
             self.needs_dbus()
-            unique = '_' + uuid.uuid4().hex
-            well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+            unique = str(uuid.uuid4())
+
+            if invalid_name:
+                unique = unique.replace('-', '.')
+                well_known_name = 'com.steampowered.App' + unique.replace(
+                    '.', '_',
+                )
+            else:
+                well_known_name = 'com.steampowered.App' + unique
+
             logger.debug('Starting launcher on D-Bus name %s', well_known_name)
             proc = subprocess.Popen(
-                self.launcher + [
-                    '--bus-name', well_known_name,
+                [
+                    'env', 'STEAM_COMPAT_APP_ID=' + unique,
+                ] + self.launcher + [
+                    '--session',
                 ],
                 stdout=subprocess.PIPE,
                 stderr=2,

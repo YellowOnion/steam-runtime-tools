@@ -76,6 +76,7 @@ typedef enum
 {
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS = (1 << 0),
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT = (1 << 1),
+  PV_LAUNCHER_SERVER_FLAGS_STARTED = (1 << 2),
   PV_LAUNCHER_SERVER_FLAGS_NONE = 0,
 } PvLauncherServerFlags;
 
@@ -881,9 +882,12 @@ portal_listener_ready_cb (SrtPortalListener *listener,
                         G_DBUS_METHOD_INVOCATION_UNHANDLED);
 
   /* If exporting the launcher didn't fail, then we are now happy */
-  if (server->exit_status == EX_UNAVAILABLE)
+  if (server->exit_status == EX_UNAVAILABLE
+      && server->export_state != EXPORT_STATE_GONE)
     {
       g_autoptr(GError) error = NULL;
+
+      server->flags |= PV_LAUNCHER_SERVER_FLAGS_STARTED;
 
       if (!pv_launcher_server_finish_startup (server, &error))
         {
@@ -911,8 +915,17 @@ on_name_lost (SrtPortalListener *listener,
            server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS ? 'y' : 'n');
   /* We don't terminate child processes in this case, which means we
    * won't *actually* stop until they have all exited. */
+
   if (server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS)
-    pv_launcher_server_stop (server, 0);
+    {
+      pv_launcher_server_stop (server, 0);
+
+      if (!(server->flags & PV_LAUNCHER_SERVER_FLAGS_STARTED))
+        {
+          _srt_log_failure ("Unable to acquire bus name \"%s\"", name);
+          server->export_state = EXPORT_STATE_GONE;
+        }
+    }
 }
 
 /*
